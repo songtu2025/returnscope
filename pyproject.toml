@@ -1,0 +1,16 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+extend-exclude = ["tmp", "runtime", "output", "web-prototype"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = ["B017"]
+"scripts/generate_sk001_gold_sample.py" = ["E402"]
+"scripts/run_return_semantics.py" = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

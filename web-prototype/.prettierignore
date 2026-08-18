@@ -1,0 +1,8 @@
+dist
+node_modules
+coverage
+public
+package-lock.json
+.pytest_cache
+.openai
+*.md

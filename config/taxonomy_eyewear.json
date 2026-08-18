@@ -1,0 +1,84 @@
+{
+  "version": "eyewear-2026-08-10-v1",
+  "agent_family": "眼镜智能体",
+  "product_context": "婴儿眼镜、儿童眼镜或成人骑行眼镜",
+  "allowed_parts": [
+    "FRAME",
+    "LENS",
+    "NOSE_PAD",
+    "TEMPLE",
+    "HINGE",
+    "STRAP",
+    "UNSPECIFIED"
+  ],
+  "instructions": [
+    "婴儿眼镜适用0至2岁，儿童眼镜适用3至8岁，骑行眼镜主要面向成人。",
+    "年龄适配只依据结构化品类和评论明示内容，不得从评论语气猜测年龄。",
+    "镜片起雾、视野、清晰度和镜架佩戴问题必须分开表达。"
+  ],
+  "labels": [
+    {
+      "code": "EYEWEAR_FIT_TIGHT",
+      "name": "夹头或偏紧",
+      "group": "尺码与适配",
+      "description": "镜架、镜腿或绑带过紧并产生夹压",
+      "allowed_sentiments": ["NEGATIVE"]
+    },
+    {
+      "code": "EYEWEAR_FIT_LOOSE",
+      "name": "偏松或易滑落",
+      "group": "尺码与适配",
+      "description": "眼镜偏松、下滑或无法稳定佩戴",
+      "allowed_sentiments": ["NEGATIVE"]
+    },
+    {
+      "code": "EYEWEAR_AGE_MISMATCH",
+      "name": "年龄段不适配",
+      "group": "尺码与适配",
+      "description": "评论明确表示商品不适合标定年龄段",
+      "allowed_sentiments": ["NEGATIVE"]
+    },
+    {
+      "code": "EYEWEAR_NOSE_COMFORT",
+      "name": "鼻托不适",
+      "group": "舒适性",
+      "description": "鼻托压迫、疼痛、留下痕迹或位置不适",
+      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+    },
+    {
+      "code": "EYEWEAR_LENS_VISIBILITY",
+      "name": "镜片与视野",
+      "group": "功能表现",
+      "description": "镜片清晰度、畸变、视野或遮挡问题",
+      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+    },
+    {
+      "code": "EYEWEAR_FOGGING",
+      "name": "镜片起雾",
+      "group": "功能表现",
+      "description": "使用时镜片起雾或防雾表现",
+      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+    },
+    {
+      "code": "EYEWEAR_QUALITY",
+      "name": "材料与做工",
+      "group": "材料与做工",
+      "description": "镜架、镜片、铰链或绑带的质量和耐用问题",
+      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+    },
+    {
+      "code": "EYEWEAR_APPEARANCE",
+      "name": "外观与预期",
+      "group": "外观与预期",
+      "description": "颜色、造型或实物外观与预期不符",
+      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+    },
+    {
+      "code": "EYEWEAR_BUYER_REASON",
+      "name": "买家原因",
+      "group": "其他原因",
+      "description": "误购、多买、不再需要或计划改变",
+      "allowed_sentiments": ["NEGATIVE", "NEUTRAL"]
+    }
+  ]
+}

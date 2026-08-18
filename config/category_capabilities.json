@@ -1,0 +1,101 @@
+{
+  "version": "category-capabilities-2026-08-10-v1",
+  "families": [
+    {
+      "key": "headwear",
+      "agent_family": "帽类智能体",
+      "logic_version": "headwear-semantic-2026-08-10-v1",
+      "taxonomy": "taxonomy_headwear.json",
+      "model_policy": {
+        "version": "headwear-model-policy-2026-08-10-v1",
+        "first_pass_role": "cheap",
+        "review_role": "primary"
+      },
+      "variants": [
+        {
+          "category_a": "遮阳帽",
+          "category_b": "儿童渔夫帽",
+          "attributes": {"audience": "儿童"}
+        },
+        {
+          "category_a": "棉帽",
+          "category_b": "棉帽",
+          "attributes": {"scene": "保暖"}
+        }
+      ]
+    },
+    {
+      "key": "eyewear",
+      "agent_family": "眼镜智能体",
+      "logic_version": "eyewear-semantic-2026-08-10-v1",
+      "taxonomy": "taxonomy_eyewear.json",
+      "model_policy": {
+        "version": "eyewear-model-policy-2026-08-10-v1",
+        "first_pass_role": "primary",
+        "review_role": "secondary"
+      },
+      "variants": [
+        {
+          "category_a": "眼镜",
+          "category_b": "婴儿眼镜",
+          "attributes": {"age_range": "0-2岁"}
+        },
+        {
+          "category_a": "眼镜",
+          "category_b": "儿童眼镜",
+          "attributes": {"age_range": "3-8岁"}
+        },
+        {
+          "category_a": "眼镜",
+          "category_b": "骑行眼镜",
+          "attributes": {"audience": "主要成人"}
+        }
+      ]
+    },
+    {
+      "key": "footwear",
+      "agent_family": "鞋履智能体",
+      "logic_version": "footwear-semantic-2026-08-10-v1",
+      "taxonomy": "taxonomy_water_shoes.json",
+      "model_policy": {
+        "version": "footwear-model-policy-2026-08-10-v1",
+        "first_pass_role": "cheap",
+        "review_role": "secondary"
+      },
+      "variants": [
+        {"category_a": "水鞋", "category_b": "薄底水鞋"},
+        {"category_a": "水鞋", "category_b": "厚底水鞋"},
+        {"category_a": "水鞋", "category_b": "溯溪水鞋"},
+        {"category_a": "水鞋", "category_b": "儿童水鞋"},
+        {"category_a": "水鞋", "category_b": "儿童溯溪水鞋"},
+        {"category_a": "水鞋", "category_b": "休闲运动水鞋"},
+        {"category_a": "水鞋", "category_b": "儿童休闲运动水鞋"},
+        {"category_a": "凉鞋", "category_b": "儿童凉鞋"}
+      ]
+    },
+    {
+      "key": "gloves",
+      "agent_family": "手套智能体",
+      "logic_version": "gloves-semantic-2026-08-10-v1",
+      "taxonomy": "taxonomy_gloves.json",
+      "model_policy": {
+        "version": "gloves-model-policy-2026-08-10-v1",
+        "first_pass_role": "primary",
+        "review_role": "primary"
+      },
+      "variants": [
+        {"category_a": "手套", "category_b": "冬季手套_抓绒薄款"},
+        {"category_a": "手套", "category_b": "冬季手套_抓绒薄款_儿童"},
+        {"category_a": "手套", "category_b": "健身手套"},
+        {"category_a": "手套", "category_b": "抓绒手套"},
+        {"category_a": "手套", "category_b": "滑雪手套"},
+        {"category_a": "手套", "category_b": "骑行手套"},
+        {"category_a": "手套", "category_b": "冬季手套_休闲厚款"},
+        {"category_a": "手套", "category_b": "冬季手套_3M厚款"},
+        {"category_a": "手套", "category_b": "冬季手套_加厚款"},
+        {"category_a": "手套", "category_b": "冬季手套_3M厚款_儿童"},
+        {"category_a": "手套", "category_b": "冬季手套3M薄款"}
+      ]
+    }
+  ]
+}

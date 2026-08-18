@@ -1,0 +1,91 @@
+{
+  "version": "gloves-2026-08-10-v1",
+  "agent_family": "手套智能体",
+  "product_context": "冬季、滑雪、骑行或健身手套",
+  "allowed_parts": [
+    "CUFF",
+    "PALM",
+    "FINGER",
+    "THUMB",
+    "LINING",
+    "CLOSURE",
+    "UNSPECIFIED"
+  ],
+  "instructions": [
+    "手套整体尺码和单独的指长问题必须分开表达。",
+    "保暖、防水、抓握和灵活性是不同功能，不得互相推断。",
+    "只有评论明确指出掌心、手指、拇指、袖口、内衬或闭合结构时才使用对应部位。"
+  ],
+  "labels": [
+    {
+      "code": "GLOVE_FIT_SMALL",
+      "name": "偏小或偏紧",
+      "group": "尺码与适配",
+      "description": "手套整体偏小、偏紧或限制手部活动",
+      "allowed_sentiments": ["NEGATIVE"]
+    },
+    {
+      "code": "GLOVE_FIT_LARGE",
+      "name": "偏大或偏松",
+      "group": "尺码与适配",
+      "description": "手套整体偏大、偏松或容易脱落",
+      "allowed_sentiments": ["NEGATIVE"]
+    },
+    {
+      "code": "GLOVE_FINGER_LENGTH",
+      "name": "指长不合适",
+      "group": "尺码与适配",
+      "description": "手指或拇指部位过长、过短或位置不合适",
+      "allowed_sentiments": ["NEGATIVE"]
+    },
+    {
+      "code": "GLOVE_WARMTH",
+      "name": "保暖表现",
+      "group": "功能表现",
+      "description": "手套保暖或防寒能力",
+      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+    },
+    {
+      "code": "GLOVE_WATER_RESISTANCE",
+      "name": "防水表现",
+      "group": "功能表现",
+      "description": "手套防水、渗水或湿冷表现",
+      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+    },
+    {
+      "code": "GLOVE_GRIP",
+      "name": "抓握表现",
+      "group": "功能表现",
+      "description": "掌心防滑、握持或器械抓握表现",
+      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+    },
+    {
+      "code": "GLOVE_DEXTERITY",
+      "name": "灵活性",
+      "group": "功能表现",
+      "description": "手指活动、精细操作或触屏使用灵活性",
+      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+    },
+    {
+      "code": "GLOVE_COMFORT",
+      "name": "佩戴舒适性",
+      "group": "舒适性",
+      "description": "内衬、缝线、压迫或整体佩戴感受",
+      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+    },
+    {
+      "code": "GLOVE_QUALITY",
+      "name": "材料与做工",
+      "group": "材料与做工",
+      "description": "开线、破损、掉毛、脱胶或材料质量问题",
+      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+    },
+    {
+      "code": "GLOVE_BUYER_REASON",
+      "name": "买家原因",
+      "group": "其他原因",
+      "description": "误购、多买、不再需要或计划改变",
+      "allowed_sentiments": ["NEGATIVE", "NEUTRAL"]
+    }
+  ]
+}

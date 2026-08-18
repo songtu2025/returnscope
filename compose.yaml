@@ -1,0 +1,93 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      WEBAPP_PRODUCTION: "true"
+      WEBAPP_DATA_DIR: /app/runtime
+      WEBAPP_DATABASE_PATH: /app/runtime/app.db
+      WEBAPP_SESSION_DAYS: ${WEBAPP_SESSION_DAYS:-14}
+      WEBAPP_TASK_WORKERS: ${WEBAPP_TASK_WORKERS:-15}
+      WEBAPP_BOOTSTRAP_EMAIL: ${WEBAPP_BOOTSTRAP_EMAIL}
+      WEBAPP_BOOTSTRAP_NAME: ${WEBAPP_BOOTSTRAP_NAME}
+      WEBAPP_BOOTSTRAP_PASSWORD: ${WEBAPP_BOOTSTRAP_PASSWORD}
+      WEBAPP_ENCRYPTION_KEY: ${WEBAPP_ENCRYPTION_KEY}
+      WEBAPP_SECURE_COOKIES: "true"
+    volumes:
+      - app_data:/app/runtime
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  backup:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      WEBAPP_DATA_DIR: /app/runtime
+      WEBAPP_DATABASE_PATH: /app/runtime/app.db
+      WEBAPP_BACKUP_DIR: /app/backups
+      WEBAPP_BACKUP_RETENTION_DAYS: ${WEBAPP_BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - app_data:/app/runtime
+      - backup_data:/app/backups
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["while true; do python -m web_backend.backup; sleep 86400; done"]
+
+  migrate:
+    profiles: ["migration"]
+    build: .
+    volumes:
+      - type: bind
+        source: ${WEBAPP_MIGRATION_SOURCE:?必须设置 WEBAPP_MIGRATION_SOURCE}
+        target: /source
+        read_only: true
+      - app_data:/app/runtime
+      - backup_data:/app/backups
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    entrypoint: ["python", "-m", "web_backend.production_migration"]
+    command:
+      - --source
+      - /source
+      - --target
+      - /app/runtime
+      - --backup-dir
+      - /app/backups
+      - --app-stopped
+
+volumes:
+  app_data:
+  backup_data:
+  caddy_data:
+  caddy_config:

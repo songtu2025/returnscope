@@ -1,0 +1,11 @@
+{
+  "version": "listing-claims-registry-2026-08-10-v1",
+  "entries": [
+    {
+      "store": "SEEKWAY:US",
+      "listing": "SK001",
+      "capability_key": "footwear",
+      "path": "listing_claims_sk001.json"
+    }
+  ]
+}

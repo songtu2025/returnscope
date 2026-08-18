@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.py[cod]
+output/
+outputs/
+tmp/
+cache/
+runtime/
+input_data/
+design-qa.md
+web-prototype/node_modules/
+web-prototype/dist/
+web-prototype/*.log

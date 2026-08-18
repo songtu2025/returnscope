@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="mark" x1="12" y1="10" x2="52" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0f7a56" />
+      <stop offset="0.52" stop-color="#0b5f45" />
+      <stop offset="1" stop-color="#103128" />
+    </linearGradient>
+    <linearGradient id="facet" x1="13" y1="44" x2="53" y2="22" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#37a46f" stop-opacity="0.82" />
+      <stop offset="1" stop-color="#5dc08c" stop-opacity="0.34" />
+    </linearGradient>
+  </defs>
+  <path
+    fill="url(#mark)"
+    fill-rule="evenodd"
+    d="M32 4.5c2.4 0 4.8.62 6.94 1.85l14.1 8.15A13.88 13.88 0 0 1 60 26.53v10.94c0 4.96-2.65 9.55-6.96 12.03l-14.1 8.15a13.88 13.88 0 0 1-13.88 0l-14.1-8.15A13.88 13.88 0 0 1 4 37.47V26.53c0-4.96 2.65-9.55 6.96-12.03l14.1-8.15A13.88 13.88 0 0 1 32 4.5Zm0 16.5 9.53 5.5v11L32 43l-9.53-5.5v-11L32 21Z"
+  />
+  <path
+    fill="url(#facet)"
+    d="M9.9 41.25 22.47 34v3.5L32 43l9.53-5.5v-11L53.8 19.4A8.9 8.9 0 0 1 56 25.2v10.7c0 3.56-1.9 6.85-4.98 8.63L38.32 51.86a12.6 12.6 0 0 1-12.64 0l-12.7-7.33a8.9 8.9 0 0 1-3.08-3.28Z"
+    opacity=".72"
+  />
+</svg>

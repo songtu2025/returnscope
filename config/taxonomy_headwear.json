@@ -1,0 +1,68 @@
+{
+  "version": "headwear-2026-08-10-v1",
+  "agent_family": "帽类智能体",
+  "product_context": "遮阳帽或保暖帽",
+  "allowed_parts": [
+    "CROWN",
+    "BRIM",
+    "CHIN_STRAP",
+    "SIZE_ADJUSTER",
+    "LINING",
+    "UNSPECIFIED"
+  ],
+  "instructions": [
+    "只有评论明确提到帽檐、帽冠、下巴带、调节扣或内衬时才使用对应部位。",
+    "儿童渔夫帽的松紧、遮阳和固定问题必须分开表达。"
+  ],
+  "labels": [
+    {
+      "code": "HEADWEAR_FIT_TIGHT",
+      "name": "偏紧",
+      "group": "尺码与适配",
+      "description": "帽围偏小、夹头或佩戴过紧",
+      "allowed_sentiments": ["NEGATIVE"]
+    },
+    {
+      "code": "HEADWEAR_FIT_LOOSE",
+      "name": "偏松",
+      "group": "尺码与适配",
+      "description": "帽围偏大、容易滑落或无法固定",
+      "allowed_sentiments": ["NEGATIVE"]
+    },
+    {
+      "code": "HEADWEAR_SUN_PROTECTION",
+      "name": "遮阳表现",
+      "group": "功能表现",
+      "description": "帽檐覆盖、遮阳范围或防晒使用体验",
+      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+    },
+    {
+      "code": "HEADWEAR_COMFORT",
+      "name": "佩戴舒适性",
+      "group": "舒适性",
+      "description": "闷热、刺痒、压迫或舒适体验",
+      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+    },
+    {
+      "code": "HEADWEAR_QUALITY",
+      "name": "材料与做工",
+      "group": "材料与做工",
+      "description": "开线、破损、变形或材料质量问题",
+      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+    },
+    {
+      "code": "HEADWEAR_APPEARANCE",
+      "name": "外观与预期",
+      "group": "外观与预期",
+      "description": "颜色、款式或实物外观与预期不符",
+      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+    },
+    {
+      "code": "HEADWEAR_BUYER_REASON",
+      "name": "买家原因",
+      "group": "其他原因",
+      "description": "误购、多买、不再需要或计划改变",
+      "allowed_sentiments": ["NEGATIVE", "NEUTRAL"]
+    }
+  ]
+}

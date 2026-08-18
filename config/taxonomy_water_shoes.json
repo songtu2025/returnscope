@@ -1,0 +1,380 @@
+{
+  "version": "water-shoes-2026-08-05-v1",
+  "agent_family": "鞋履智能体",
+  "product_context": "水鞋、溯溪鞋、休闲运动水鞋或儿童凉鞋",
+  "allowed_parts": [
+    "OUTSOLE",
+    "TOE",
+    "HEEL",
+    "INSOLE",
+    "OPENING",
+    "UPPER",
+    "SOLE_UPPER_SEAM",
+    "HEEL_TAB",
+    "ARCH",
+    "WHOLE_SHOE",
+    "UNSPECIFIED"
+  ],
+  "instructions": [
+    "slip要区分鞋底打滑、鞋从脚上滑落和slip-on穿脱结构。",
+    "hole要区分质量破洞和设计上的排水孔。",
+    "wet不等于不速干或不防水，必须有排水或干燥时间证据。",
+    "Need smaller size 表示收到的商品偏大；Need bigger size 表示收到的商品偏小，并标记 implicit。",
+    "只说不喜欢material或fabric时不能推断材料廉价，应写入unknown_semantics。",
+    "只说鞋底薄时不能关联保护承诺，必须明确提到岩石、尖锐物、热沙或保护不足。"
+  ],
+  "labels": [
+    {
+      "code": "FIT_TOO_LARGE",
+      "name": "偏大",
+      "group": "尺码与合脚",
+      "description": "整体尺码明显偏大",
+      "allowed_sentiments": ["NEGATIVE"],
+      "allowed_claim_ids": ["CLM_SIZE_01"]
+    },
+    {
+      "code": "FIT_TOO_SMALL",
+      "name": "偏小",
+      "group": "尺码与合脚",
+      "description": "整体尺码明显偏小",
+      "allowed_sentiments": ["NEGATIVE"],
+      "allowed_claim_ids": ["CLM_SIZE_01"]
+    },
+    {
+      "code": "FIT_TOO_LONG",
+      "name": "偏长",
+      "group": "尺码与合脚",
+      "description": "鞋的长度过长",
+      "allowed_sentiments": ["NEGATIVE"],
+      "allowed_claim_ids": ["CLM_SIZE_01"]
+    },
+    {
+      "code": "FIT_TOO_SHORT",
+      "name": "偏短",
+      "group": "尺码与合脚",
+      "description": "鞋的长度过短或脚趾顶到鞋头",
+      "allowed_sentiments": ["NEGATIVE"],
+      "allowed_claim_ids": ["CLM_SIZE_01"]
+    },
+    {
+      "code": "FIT_TOO_TIGHT_NARROW",
+      "name": "偏紧窄",
+      "group": "尺码与合脚",
+      "description": "鞋整体或具体部位过紧、过窄或挤压",
+      "allowed_sentiments": ["NEGATIVE"],
+      "allowed_claim_ids": ["CLM_SIZE_02", "CLM_COMFORT_01"]
+    },
+    {
+      "code": "FIT_TOO_LOOSE_WIDE",
+      "name": "偏松宽",
+      "group": "尺码与合脚",
+      "description": "鞋整体或具体部位过松、过宽",
+      "allowed_sentiments": ["NEGATIVE"],
+      "allowed_claim_ids": ["CLM_COMFORT_01"]
+    },
+    {
+      "code": "FIT_UNSPECIFIED",
+      "name": "不合脚但方向不明",
+      "group": "尺码与合脚",
+      "description": "明确表示不合脚，但没有说明偏大、偏小、偏紧或偏松",
+      "allowed_sentiments": ["NEGATIVE"],
+      "allowed_claim_ids": ["CLM_COMFORT_01"]
+    },
+    {
+      "code": "FIT_SLIPS_OFF",
+      "name": "容易脱脚",
+      "group": "尺码与合脚",
+      "description": "鞋从脚跟或脚上滑落，穿着时不跟脚",
+      "allowed_sentiments": ["NEGATIVE"],
+      "allowed_claim_ids": ["CLM_RETENTION_01", "CLM_COMFORT_01"]
+    },
+    {
+      "code": "FIT_GOOD",
+      "name": "合脚",
+      "group": "尺码与合脚",
+      "description": "明确表示尺码合适或鞋很跟脚",
+      "allowed_sentiments": ["POSITIVE"],
+      "allowed_claim_ids": ["CLM_SIZE_02", "CLM_COMFORT_01", "CLM_RETENTION_01"]
+    },
+    {
+      "code": "SIZE_GUIDANCE_CONFUSING",
+      "name": "尺码选择或尺码表问题",
+      "group": "尺码与合脚",
+      "description": "尺码表、尺码跨度或选码说明造成困惑或不准确",
+      "allowed_sentiments": ["NEGATIVE"],
+      "allowed_claim_ids": ["CLM_SIZE_01"]
+    },
+    {
+      "code": "FUNCTION_PROTECTION",
+      "name": "保护性",
+      "group": "功能",
+      "description": "对岩石、碎石、贝壳、尖锐物或热沙的足部保护",
+      "allowed_sentiments": ["NEGATIVE", "POSITIVE"],
+      "allowed_claim_ids": ["CLM_PROTECT_01"]
+    },
+    {
+      "code": "FUNCTION_SUPPORT_CUSHION",
+      "name": "支撑与缓冲",
+      "group": "功能",
+      "description": "足弓支撑、缓冲或减震表现",
+      "allowed_sentiments": ["NEGATIVE", "POSITIVE"],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "FUNCTION_DRY_DRAINAGE",
+      "name": "速干与排水",
+      "group": "功能",
+      "description": "排水速度、积水或使用后的干燥速度，不表示防水",
+      "allowed_sentiments": ["NEGATIVE", "POSITIVE"],
+      "allowed_claim_ids": ["CLM_DRY_01"]
+    },
+    {
+      "code": "FUNCTION_BREATHABILITY",
+      "name": "透气性",
+      "group": "功能",
+      "description": "鞋面透气或鞋内闷热表现",
+      "allowed_sentiments": ["NEGATIVE", "POSITIVE"],
+      "allowed_claim_ids": ["CLM_BREATH_01"]
+    },
+    {
+      "code": "FUNCTION_HEAT_INSULATION",
+      "name": "隔热性",
+      "group": "功能",
+      "description": "热沙或热地面对脚部的隔热保护",
+      "allowed_sentiments": ["NEGATIVE", "POSITIVE"],
+      "allowed_claim_ids": ["CLM_PROTECT_01"]
+    },
+    {
+      "code": "FUNCTION_GRIP",
+      "name": "防滑性",
+      "group": "功能",
+      "description": "鞋底在湿滑或其他表面的抓地和打滑表现",
+      "allowed_sentiments": ["NEGATIVE", "POSITIVE"],
+      "allowed_claim_ids": ["CLM_SLIP_01"]
+    },
+    {
+      "code": "FUNCTION_ON_OFF",
+      "name": "穿脱便利性",
+      "group": "功能",
+      "description": "鞋是否容易穿上或脱下",
+      "allowed_sentiments": ["NEGATIVE", "POSITIVE"],
+      "allowed_claim_ids": ["CLM_ONOFF_01"]
+    },
+    {
+      "code": "FUNCTION_CLEANING",
+      "name": "清洗便利性",
+      "group": "功能",
+      "description": "鞋是否容易清洗或清洁",
+      "allowed_sentiments": ["NEGATIVE", "POSITIVE"],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "FUNCTION_FLEXIBILITY",
+      "name": "弹性",
+      "group": "功能",
+      "description": "鞋体柔软、弹性或活动自由度",
+      "allowed_sentiments": ["NEGATIVE", "POSITIVE"],
+      "allowed_claim_ids": ["CLM_FLEX_01"]
+    },
+    {
+      "code": "QUALITY_HOLE_WEAR",
+      "name": "破洞或磨损",
+      "group": "质量",
+      "description": "出现非设计性破洞、异常磨损或磨穿",
+      "allowed_sentiments": ["NEGATIVE"],
+      "allowed_claim_ids": ["CLM_DURABLE_01"]
+    },
+    {
+      "code": "QUALITY_STITCH_TEAR",
+      "name": "开线或撕裂",
+      "group": "质量",
+      "description": "开线、缝线问题、撕裂或散架",
+      "allowed_sentiments": ["NEGATIVE"],
+      "allowed_claim_ids": ["CLM_DURABLE_01"]
+    },
+    {
+      "code": "QUALITY_SHEDDING_PILLING",
+      "name": "掉毛或起球",
+      "group": "质量",
+      "description": "材料掉毛、起球或表面异常脱落",
+      "allowed_sentiments": ["NEGATIVE"],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "QUALITY_SEPARATION",
+      "name": "鞋底与鞋面分离",
+      "group": "质量",
+      "description": "鞋底与鞋面脱胶、开裂或分离",
+      "allowed_sentiments": ["NEGATIVE"],
+      "allowed_claim_ids": ["CLM_DURABLE_01"]
+    },
+    {
+      "code": "QUALITY_DURABILITY",
+      "name": "不耐用",
+      "group": "质量",
+      "description": "明确表示寿命短、很快损坏或不耐用，但没有更具体缺陷",
+      "allowed_sentiments": ["NEGATIVE"],
+      "allowed_claim_ids": ["CLM_DURABLE_01"]
+    },
+    {
+      "code": "QUALITY_CHEAP_MATERIAL",
+      "name": "材料廉价",
+      "group": "质量",
+      "description": "明确表示材料廉价、薄弱或质感差",
+      "allowed_sentiments": ["NEGATIVE"],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "QUALITY_COLOR_BLEED",
+      "name": "掉色",
+      "group": "质量",
+      "description": "颜色脱落、褪色或染到其他物品",
+      "allowed_sentiments": ["NEGATIVE"],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "QUALITY_GENERAL",
+      "name": "整体质量",
+      "group": "质量",
+      "description": "只有笼统的质量好或质量差，没有具体缺陷",
+      "allowed_sentiments": ["NEGATIVE", "POSITIVE"],
+      "allowed_claim_ids": ["CLM_DURABLE_01"]
+    },
+    {
+      "code": "EXPERIENCE_CHAFING_BLISTER",
+      "name": "磨脚或起泡",
+      "group": "体感",
+      "description": "鞋造成摩擦、磨脚、红肿或起泡",
+      "allowed_sentiments": ["NEGATIVE"],
+      "allowed_claim_ids": ["CLM_CHAFE_01", "CLM_COMFORT_01"]
+    },
+    {
+      "code": "EXPERIENCE_SAND_ENTRY",
+      "name": "进沙",
+      "group": "体感",
+      "description": "穿着时沙子进入鞋内",
+      "allowed_sentiments": ["NEGATIVE"],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EXPERIENCE_ITCHING",
+      "name": "发痒",
+      "group": "体感",
+      "description": "鞋或材料造成脚部发痒",
+      "allowed_sentiments": ["NEGATIVE"],
+      "allowed_claim_ids": ["CLM_COMFORT_01"]
+    },
+    {
+      "code": "EXPERIENCE_INSOLE_MOVEMENT",
+      "name": "鞋垫移位",
+      "group": "体感",
+      "description": "鞋垫滑动、卷起、脱出或不能保持位置",
+      "allowed_sentiments": ["NEGATIVE"],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EXPERIENCE_THIN",
+      "name": "偏薄",
+      "group": "体感",
+      "description": "鞋底、鞋面或整体过薄，部位不明确时使用 UNSPECIFIED",
+      "allowed_sentiments": ["NEGATIVE"],
+      "allowed_claim_ids": ["CLM_PROTECT_01"]
+    },
+    {
+      "code": "EXPERIENCE_ODOR",
+      "name": "异味",
+      "group": "体感",
+      "description": "鞋或材料存在明显异味",
+      "allowed_sentiments": ["NEGATIVE"],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EXPERIENCE_DISCOMFORT",
+      "name": "其他不舒服",
+      "group": "体感",
+      "description": "明确表示疼痛或不舒服，但无法映射到更具体的体感问题",
+      "allowed_sentiments": ["NEGATIVE"],
+      "allowed_claim_ids": ["CLM_COMFORT_01"]
+    },
+    {
+      "code": "EXPERIENCE_COMFORT_LIGHTWEIGHT",
+      "name": "舒服或轻便",
+      "group": "体感",
+      "description": "明确表示舒适、轻便或穿着感受良好",
+      "allowed_sentiments": ["POSITIVE"],
+      "allowed_claim_ids": ["CLM_COMFORT_01"]
+    },
+    {
+      "code": "APPEARANCE_COLOR_DISLIKE",
+      "name": "不喜欢颜色",
+      "group": "外观",
+      "description": "不喜欢颜色或实物颜色表现",
+      "allowed_sentiments": ["NEGATIVE"],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "APPEARANCE_OTHER_DISLIKE",
+      "name": "不喜欢其他外观",
+      "group": "外观",
+      "description": "不喜欢款式、造型或其他外观特征",
+      "allowed_sentiments": ["NEGATIVE"],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "APPEARANCE_LIKE",
+      "name": "喜欢外观",
+      "group": "外观",
+      "description": "明确喜欢颜色、款式或整体外观",
+      "allowed_sentiments": ["POSITIVE"],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "OTHER_WRONG_ITEM_QUANTITY",
+      "name": "发错货或数量不符",
+      "group": "其他原因",
+      "description": "收到错误商品、错误尺码、错误颜色或数量不符",
+      "allowed_sentiments": ["NEGATIVE"],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "OTHER_USE_SCENARIO",
+      "name": "适用场景",
+      "group": "其他原因",
+      "description": "明确说明适用或不适用于某个使用场景",
+      "allowed_sentiments": ["NEGATIVE", "POSITIVE"],
+      "allowed_claim_ids": ["CLM_USE_01"]
+    },
+    {
+      "code": "OTHER_NOT_AS_EXPECTED",
+      "name": "实物与描述或预期不符",
+      "group": "其他原因",
+      "description": "只明确表示不符合描述或预期，没有足够证据判断具体问题",
+      "allowed_sentiments": ["NEGATIVE"],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "OTHER_LOGISTICS_SERVICE",
+      "name": "物流或服务",
+      "group": "其他原因",
+      "description": "配送、到货时间、包装或客服问题",
+      "allowed_sentiments": ["NEGATIVE"],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "OTHER_BUYER_CHANGED_MIND",
+      "name": "买家原因",
+      "group": "其他原因",
+      "description": "误购、多买、计划改变、不再需要或已找到替代品",
+      "allowed_sentiments": ["NEGATIVE", "NEUTRAL"],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "OVERALL_POSITIVE",
+      "name": "整体正面评价",
+      "group": "其他原因",
+      "description": "笼统表达商品不错或喜欢商品，没有更具体的正面属性",
+      "allowed_sentiments": ["POSITIVE"],
+      "allowed_claim_ids": []
+    }
+  ]
+}
