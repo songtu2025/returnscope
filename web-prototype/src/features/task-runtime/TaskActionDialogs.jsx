@@ -3,7 +3,7 @@ import { X } from "@phosphor-icons/react";
 
 import { Modal } from "../../components/SharedUi";
 
-export function SegmentRetryDialog({ task, segment, onClose, onSave }) {
+export function SegmentRetryDialog({ task, segment, error, onClose, onSave }) {
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   const submit = async (event) => {
@@ -25,6 +25,11 @@ export function SegmentRetryDialog({ task, segment, onClose, onSave }) {
         <p className="form-hint">
           将按当前任务快照重新排队片段“{segment.segment_key}”；未知品类不能直接重试。
         </p>
+        {error && (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        )}
         <label>
           重试原因
           <textarea

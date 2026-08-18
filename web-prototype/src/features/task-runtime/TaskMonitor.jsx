@@ -9,6 +9,7 @@ import {
 } from "../../components/SharedUi";
 import { classNames, formatTime } from "../../lib/presentation";
 import { TaskDetail } from "./TaskDetail";
+import { isLegacyResult, isPublishedResult } from "./taskSegmentPolicy";
 
 const FINISHED_TASK_STATUSES = [
   "completed",
@@ -22,6 +23,18 @@ const ACTIVE_TASK_STATUSES = ["queued", "running", "paused"];
 function taskStatusLabel(task) {
   if (task.status === "cancelled" && task.result_file_path) {
     return "已取消（有部分结果）";
+  }
+  const executableSegments =
+    task.segments?.filter((segment) => segment.agent_key !== "unknown") ?? [];
+  const allListingsDelivered =
+    executableSegments.length > 0 &&
+    executableSegments.every(
+      (segment) =>
+        ["completed", "completed_with_errors"].includes(segment.status) &&
+        (isPublishedResult(segment) || isLegacyResult(segment)),
+    );
+  if (task.status === "partial" && allListingsDelivered) {
+    return "已交付（待治理）";
   }
   const executionPlan = task.snapshot?.execution_plan;
   const isPartialQueue =
@@ -383,6 +396,8 @@ export function TaskMonitor({
                     if (error.status === 409) {
                       setActionError("任务版本已变化，请查看刷新后的片段状态再操作。");
                       await loadSelected();
+                    } else {
+                      setActionError(error.message);
                     }
                     notify(error.message, "error");
                     return false;

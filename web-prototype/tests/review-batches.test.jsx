@@ -227,11 +227,20 @@ test("产品快照字段缺失时明确显示未提供且不用品类兜底", as
 
 test("确认原结果只提交当前记录 revision 和必填原因", async () => {
   reviewBatchApiMock.updateReviewBatchRecord.mockResolvedValue({
-    ...baseRecord,
+    id: baseRecord.id,
     workflow_status: "resolved",
     revision: 2,
   });
-  render(page());
+  const resolvedRecord = {
+    ...baseRecord,
+    workflow_status: "resolved",
+    revision: 2,
+  };
+  const view = page();
+  reviewBatchApiMock.reviewBatchRecords
+    .mockResolvedValueOnce({ items: [baseRecord], total: 1, page: 1, page_size: 20 })
+    .mockResolvedValue({ items: [resolvedRecord], total: 1, page: 1, page_size: 20 });
+  render(view);
 
   await userEvent.click(await screen.findByRole("button", { name: "处理" }));
   await userEvent.type(
@@ -252,6 +261,12 @@ test("确认原结果只提交当前记录 revision 和必填原因", async () =
       },
     ),
   );
+  const drawer = await screen.findByRole("dialog", {
+    name: "ORDER-001、ORDER-002",
+  });
+  expect(within(drawer).getByText("产品表名称")).toBeVisible();
+  expect(within(drawer).getByText("PRODUCT-SKU-1")).toBeVisible();
+  expect(within(drawer).getByText("2")).toBeVisible();
 });
 
 test("可选择本页待处理记录并批量排除", async () => {

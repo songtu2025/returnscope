@@ -136,13 +136,19 @@ export function TaskDetail({
   );
   const remainingSegments =
     waitingSegments + activeSegments.length + publishingSegments.length;
+  const deliveredWithIssues =
+    task.status === "partial" &&
+    remainingSegments === 0 &&
+    deliveredSegments.some((segment) => segment.status === "completed_with_errors");
   const nextAction =
     {
       queued: "等待后台领取",
       running: "后台继续执行，需要时可安全暂停",
       paused: "继续全部后恢复执行",
       blocked: "重新预检后继续",
-      partial: "重新预检并处理未完成 Listing",
+      partial: deliveredWithIssues
+        ? "处理待复核与模型异常记录"
+        : "重新预检并处理未完成 Listing",
       completed: "查看或下载分类结果",
       failed: "检查失败片段后重试",
       cancelled: hasUnfinishedSegments ? "重新排队未完成 Listing" : "查看部分结果",
@@ -168,7 +174,8 @@ export function TaskDetail({
               {task.status === "cancelled" ? "下载部分结果" : "下载结果"}
             </a>
           )}
-          {["blocked", "partial"].includes(task.status) && (
+          {(task.status === "blocked" ||
+            (task.status === "partial" && remainingSegments > 0)) && (
             <button className="primary-button" onClick={() => setReplanOpen(true)}>
               <ArrowClockwise size={17} />
               重新预检 / 规划
@@ -208,7 +215,7 @@ export function TaskDetail({
           </button>
         </div>
       </header>
-      {actionError && (
+      {actionError && !retrySegment && (
         <div className="task-action-error" role="alert">
           <WarningCircle size={18} />
           <span>{actionError}</span>
@@ -280,7 +287,10 @@ export function TaskDetail({
       <SegmentBoard
         task={task}
         focusSegmentId={focusSegmentId}
-        onRetry={(segment) => setRetrySegment(segment)}
+        onRetry={(segment) => {
+          onClearActionError();
+          setRetrySegment(segment);
+        }}
         onRetryPublish={onRetryResultPublish}
         onCancel={(segment) => setCancelSegment(segment)}
         onAction={onSegmentAction}
@@ -463,6 +473,7 @@ export function TaskDetail({
         <SegmentRetryDialog
           task={task}
           segment={retrySegment}
+          error={actionError}
           onClose={() => setRetrySegment(null)}
           onSave={async (payload) => {
             const saved = await onRetrySegment(retrySegment.segment_key, payload);

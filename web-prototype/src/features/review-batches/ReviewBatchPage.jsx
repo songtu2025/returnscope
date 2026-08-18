@@ -553,13 +553,16 @@ function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
       );
       setReason("");
       setConflict(null);
-      await Promise.all([loadBatch(), loadRecords()]);
+      const [, latestPage] = await Promise.all([loadBatch(), loadRecords()]);
       if (advance && nextPending) {
         openRecord(nextPending);
       } else if (advance) {
         setSelected(null);
       } else {
-        setSelected(value);
+        const latestRecord = latestPage.items?.find(
+          (item) => itemId(item) === itemId(value),
+        );
+        setSelected(latestRecord || null);
       }
       const messages = {
         confirm: "已确认原分类结果",

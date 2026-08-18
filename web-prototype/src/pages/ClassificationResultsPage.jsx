@@ -305,6 +305,21 @@ function ClassificationResultDetail({ route, updateRoute, notify, userId }) {
   const reviewRecords = summary?.quality?.find((item) =>
     ["review_required", "needs_review"].includes(item.quality_status),
   )?.record_count;
+  const excludedRecords = summary?.quality?.find(
+    (item) => item.quality_status === "excluded",
+  )?.record_count;
+  const unusableRecords = summary?.quality?.find(
+    (item) => item.quality_status === "unusable",
+  )?.record_count;
+  const modelErrorRecords = summary?.processing_statuses?.find(
+    (item) => item.processing_status === "MODEL_ERROR",
+  )?.record_count;
+  const accountedRecords =
+    Number(readyRecords || 0) +
+    Number(reviewRecords || 0) +
+    Number(excludedRecords || 0) +
+    Number(unusableRecords || 0);
+  const totalRecords = Number(result.record_count || 0);
   const policy = resultActionPolicy(result, {
     taskId: route.taskId,
     activeBatch: result.review_batch_id
@@ -479,7 +494,26 @@ function ClassificationResultDetail({ route, updateRoute, notify, userId }) {
             <SummaryMetric label="分类单元" value={result.unit_count} />
             <SummaryMetric label="可用记录" value={readyRecords ?? 0} tone="green" />
             <SummaryMetric label="需复核记录" value={reviewRecords ?? 0} tone="amber" />
+            <SummaryMetric label="已忽略记录" value={excludedRecords ?? 0} />
+            <SummaryMetric
+              label="不可用记录"
+              value={unusableRecords ?? 0}
+              note={`其中模型异常 ${Number(modelErrorRecords || 0).toLocaleString()} 条`}
+              tone="red"
+            />
           </section>
+          <p
+            className={`result-accounting-note ${accountedRecords === totalRecords ? "is-balanced" : "is-warning"}`}
+            role="status"
+          >
+            记录对账：{totalRecords.toLocaleString()} ={" "}
+            {Number(readyRecords || 0).toLocaleString()} 可用 +{" "}
+            {Number(reviewRecords || 0).toLocaleString()} 需复核 +{" "}
+            {Number(excludedRecords || 0).toLocaleString()} 已忽略 +{" "}
+            {Number(unusableRecords || 0).toLocaleString()} 不可用
+            {accountedRecords !== totalRecords &&
+              `；仍有 ${Math.abs(totalRecords - accountedRecords).toLocaleString()} 条未对齐`}
+          </p>
 
           <section className="result-drilldown-card">
             <header>
@@ -638,11 +672,12 @@ function ClassificationResultDetail({ route, updateRoute, notify, userId }) {
   );
 }
 
-function SummaryMetric({ label, value, tone = "" }) {
+function SummaryMetric({ label, value, note = "", tone = "" }) {
   return (
     <div className={tone ? `is-${tone}` : ""}>
       <span>{label}</span>
       <b>{Number(value || 0).toLocaleString()}</b>
+      {note && <small>{note}</small>}
     </div>
   );
 }

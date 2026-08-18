@@ -568,6 +568,14 @@ test("看板详情聚焦退货原因洞察并保留证据与版本入口", async
   expect(screen.getByText(/已分析 2,000\/2,300 条/)).toBeVisible();
   expect(screen.getByText("具体退货原因")).toBeVisible();
   expect(screen.getByText("偏小原因占比趋势")).toBeVisible();
+  const replaceState = vi.spyOn(window.history, "replaceState");
+  await user.click(screen.getByRole("button", { name: /偏小.*55/ }));
+  expect(replaceState).toHaveBeenCalledWith(
+    null,
+    "",
+    expect.stringContaining("problem=FIT_TOO_SMALL"),
+  );
+  replaceState.mockRestore();
   await waitFor(() =>
     expect(dashboardApiMock.analysisDashboardInsights).toHaveBeenCalledWith(
       "dashboard-1",

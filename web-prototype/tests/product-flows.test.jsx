@@ -1668,6 +1668,8 @@ describe("关键用户流程", () => {
           id: "segment-review-required",
           segment_key: "SEEKWAY:US/REVIEW/footwear",
           scope: { store: "SEEKWAY:US", listing: "REVIEW" },
+          status: "completed_with_errors",
+          model_failures: 3,
           result_publish_status: "published",
           result_quality_status: "review_required",
           result_version_id: "classification-version-review",
@@ -1737,6 +1739,9 @@ describe("关键用户流程", () => {
     expect(
       within(reviewRow).getByRole("button", { name: "查看分类结果" }),
     ).toBeEnabled();
+    expect(
+      within(reviewRow).queryByRole("button", { name: "重试" }),
+    ).not.toBeInTheDocument();
 
     const unusableRow = screen.getByRole("row", { name: /UNUSABLE/ });
     expect(within(unusableRow).getByText("不可用")).toBeVisible();
@@ -1744,6 +1749,62 @@ describe("关键用户流程", () => {
     expect(
       within(unusableRow).getByRole("button", { name: "查看分类结果" }),
     ).toBeEnabled();
+  });
+
+  test("全部 Listing 已交付但存在模型异常时引导进入结果治理", async () => {
+    const task = {
+      id: "task-delivered-with-errors",
+      title: "已交付异常任务",
+      status: "partial",
+      stage: "任务结束",
+      message: "分类结果已发布，部分记录需要治理",
+      revision: 3,
+      progress_percent: 100,
+      progress_current: 8,
+      progress_total: 8,
+      owner_name: "管理员",
+      created_at: "2026-08-18T08:00:00Z",
+      metrics: { review_count: 3, review_resolved: 0 },
+      snapshot: { execution_plan: { unresolved_policy: "run_ready" } },
+      segments: [
+        {
+          id: "segment-delivered-with-errors",
+          segment_key: "SEEKWAY:US/SK002/footwear",
+          agent_key: "footwear",
+          agent_family: "鞋履智能体",
+          scope: { store: "SEEKWAY:US", listing: "SK002" },
+          status: "completed_with_errors",
+          result_publish_status: "published",
+          result_quality_status: "review_required",
+          result_version_id: "classification-version-sk002",
+          record_count: 8,
+          unique_comments: 8,
+          progress_current: 8,
+          progress_total: 8,
+          model_calls: 1,
+          model_failures: 3,
+          cache_hits: 0,
+          variants: [],
+        },
+      ],
+    };
+    apiMock.tasks.mockResolvedValue([task]);
+    apiMock.task.mockResolvedValue(task);
+
+    render(
+      <TaskMonitor
+        notify={vi.fn()}
+        onNavigate={vi.fn()}
+        onChanged={vi.fn()}
+        focusId={task.id}
+      />,
+    );
+
+    expect(await screen.findByText("已交付（待治理）")).toBeVisible();
+    expect(screen.getByText("下一步：处理待复核与模型异常记录")).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "重新预检 / 规划" }),
+    ).not.toBeInTheDocument();
   });
 
   test("旧 Listing 没有结果版本引用时只提供旧结果下载", async () => {

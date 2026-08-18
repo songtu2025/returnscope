@@ -60,7 +60,7 @@ function selectedSemanticUnit(record, labelCode) {
 
 export function ReturnReasonInsights({
   route,
-  updateRoute,
+  updateRoute: replaceRoute,
   data,
   loading,
   onEvidence,
@@ -90,6 +90,7 @@ export function ReturnReasonInsights({
   const includedCount = Number(summary.record_count || data.total_record_count || 0);
   const totalCount = Number(summary.total_record_count ?? includedCount);
   const pendingCount = Number(summary.pending_review_record_count || 0);
+  const updateRoute = (changes) => replaceRoute(changes, { replace: true });
 
   const updateFilters = (changes) =>
     updateRoute({

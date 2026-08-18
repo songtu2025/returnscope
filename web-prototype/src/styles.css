@@ -8875,7 +8875,7 @@ label small {
 }
 .result-summary-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 14px;
 }
@@ -8888,6 +8888,12 @@ label small {
 .result-summary-grid span,
 .result-summary-grid b {
   display: block;
+}
+.result-summary-grid small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
 }
 .result-summary-grid span {
   color: var(--muted);
@@ -8904,6 +8910,18 @@ label small {
 .result-summary-grid .is-amber {
   border-color: #ebcda7;
   background: #fffaf1;
+}
+.result-summary-grid .is-red {
+  border-color: #e7bdb8;
+  background: #fff7f6;
+}
+.result-accounting-note {
+  margin: -5px 0 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.result-accounting-note.is-warning {
+  color: var(--red);
 }
 .result-drilldown-card,
 .result-record-card {

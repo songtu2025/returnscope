@@ -206,6 +206,38 @@ test("分类结果工作区整合结果版本、待复核和复核记录", async
   expect(window.location.hash).toBe("#classification-results?view=reviews");
 });
 
+test("分类结果摘要完整展示记录去向并可对账", async () => {
+  apiMock.classificationResult.mockResolvedValue({
+    ...resultVersion,
+    record_count: 50,
+    unit_count: 45,
+  });
+  apiMock.classificationResultSummary.mockResolvedValue({
+    version_id: resultVersion.version_id,
+    quality: [
+      { quality_status: "ready", record_count: 41, unit_count: 36 },
+      { quality_status: "review_required", record_count: 6, unit_count: 6 },
+      { quality_status: "excluded", record_count: 1, unit_count: 1 },
+      { quality_status: "unusable", record_count: 2, unit_count: 2 },
+    ],
+    processing_statuses: [
+      { processing_status: "MODEL_ERROR", record_count: 2, unit_count: 2 },
+    ],
+    top_problems: [],
+  });
+  window.location.hash =
+    "classification-results?result_version_id=classification-version-1";
+
+  render(<ClassificationResultsPage notify={vi.fn()} />);
+
+  expect(await screen.findByText("已忽略记录")).toBeVisible();
+  expect(screen.getByText("不可用记录")).toBeVisible();
+  expect(screen.getByText("其中模型异常 2 条")).toBeVisible();
+  expect(
+    screen.getByText("记录对账：50 = 41 可用 + 6 需复核 + 1 已忽略 + 2 不可用"),
+  ).toBeVisible();
+});
+
 afterEach(() => cleanup());
 
 test("结果池使用服务端筛选并展示多产品名称", async () => {

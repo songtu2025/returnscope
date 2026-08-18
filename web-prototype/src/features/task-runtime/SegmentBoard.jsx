@@ -53,6 +53,7 @@ function shortPublishError(value) {
 function canRetrySegment(task, segment) {
   if (["queued", "running"].includes(task.status)) return false;
   if (segment.agent_key === "unknown" || segment.status === "blocked") return false;
+  if (isPublishedResult(segment)) return false;
   if (!RETRYABLE_SEGMENT_STATUSES.includes(segment.status)) return false;
   const blockedExists = task.segments?.some((item) => item.status === "blocked");
   const policy = task.snapshot?.execution_plan?.unresolved_policy ?? "block_all";
