@@ -7,10 +7,13 @@ from return_semantics.task_plan import build_category_execution_plan
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_real_seekway_us_data_matches_business_baseline() -> None:
+def test_real_seekway_us_data_matches_business_baseline(
+    seekway_business_baseline_files: tuple[Path, Path],
+) -> None:
+    returns_path, products_path = seekway_business_baseline_files
     dataset = load_return_dataset(
-        PROJECT_ROOT / "input_data" / "SEEKWAY_US_.csv",
-        PROJECT_ROOT / "input_data" / "产品信息_20231103.xlsx",
+        returns_path,
+        products_path,
         store="SEEKWAY:US",
     )
 

@@ -341,9 +341,10 @@ def _run_task_segments(
     return segment_ids
 
 
-def test_real_seekway_plan_matches_exact_product_snapshot() -> None:
-    returns_path = PROJECT_ROOT / "input_data" / "SEEKWAY_US_.csv"
-    products_path = PROJECT_ROOT / "input_data" / "产品信息_20231103.xlsx"
+def test_real_seekway_plan_matches_exact_product_snapshot(
+    seekway_business_baseline_files: tuple[Path, Path],
+) -> None:
+    returns_path, products_path = seekway_business_baseline_files
     dataset = load_return_dataset(returns_path, products_path, "SEEKWAY:US")
     registry = load_capability_registry(
         PROJECT_ROOT / "config/category_capabilities.json"

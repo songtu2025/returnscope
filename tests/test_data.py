@@ -31,10 +31,13 @@ def test_return_csv_supports_utf8_cp1252_and_gb18030(tmp_path: Path) -> None:
     assert read_return_csv(gb18030_path).iloc[0]["comment"] == "鞋子太大"
 
 
-def test_real_sk001_data_matches_business_baseline() -> None:
+def test_real_sk001_data_matches_business_baseline(
+    seekway_business_baseline_files: tuple[Path, Path],
+) -> None:
+    returns_path, products_path = seekway_business_baseline_files
     dataset = load_return_dataset(
-        PROJECT_ROOT / "input_data" / "SEEKWAY_US_.csv",
-        PROJECT_ROOT / "input_data" / "产品信息_20231103.xlsx",
+        returns_path,
+        products_path,
         store="SEEKWAY:US",
         listing="SK001",
     )
