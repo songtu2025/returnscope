@@ -15,6 +15,7 @@ def create_classification_result_router(
     current_user: Callable[..., dict[str, Any]],
 ) -> APIRouter:
     router = APIRouter()
+
     @router.get(
         "/api/classification-results",
         dependencies=[Depends(current_user)],

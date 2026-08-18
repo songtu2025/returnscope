@@ -252,8 +252,9 @@ def test_review_batch_publishes_immutable_complete_v2_without_model(
             "comment",
         ):
             assert revised[field] == original[field]
-        assert revised["classification"]["semantic_units"][0]["evidence"] == (
-            original["classification"]["semantic_units"][0]["evidence"]
+        assert (
+            revised["classification"]["semantic_units"][0]["evidence"]
+            == (original["classification"]["semantic_units"][0]["evidence"])
         )
         assert revised["processing_status"] == "MANUAL_RESOLVED"
 
@@ -297,9 +298,12 @@ def test_review_batch_publishes_immutable_complete_v2_without_model(
             "重复发布",
         )
     with context.database.connect() as connection:
-        assert connection.execute(
-            "SELECT COUNT(*) FROM classification_result_versions"
-        ).fetchone()[0] == 2
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM classification_result_versions"
+            ).fetchone()[0]
+            == 2
+        )
         actions = {
             row["action"]
             for row in connection.execute(
@@ -351,9 +355,7 @@ def test_review_batch_api_and_version_history_contract(tmp_path: Path) -> None:
         json={"expected_revision": current["revision"], "reason": "API 发布"},
     )
     assert published.status_code == 200
-    history = client.get(
-        f"/api/classification-results/{base['version_id']}/versions"
-    )
+    history = client.get(f"/api/classification-results/{base['version_id']}/versions")
     assert history.status_code == 200
     assert [item["version"] for item in history.json()] == [2, 1]
 
@@ -377,9 +379,7 @@ def test_bulk_exclusion_is_auditable_and_does_not_block_publication(
         f"/api/classification-results/{base['version_id']}/review-batches",
         json={"reason": "验证批量排除"},
     ).json()
-    record = client.get(
-        f"/api/review-batches/{batch['id']}/records"
-    ).json()["items"][0]
+    record = client.get(f"/api/review-batches/{batch['id']}/records").json()["items"][0]
 
     updated = client.patch(
         f"/api/review-batches/{batch['id']}/records",
@@ -400,9 +400,9 @@ def test_bulk_exclusion_is_auditable_and_does_not_block_publication(
     assert current_batch["excluded_count"] == 1
     assert current_batch["resolved_count"] == 0
     assert current_batch["remaining_count"] == 0
-    excluded = client.get(
-        f"/api/review-batches/{batch['id']}/records"
-    ).json()["items"][0]
+    excluded = client.get(f"/api/review-batches/{batch['id']}/records").json()["items"][
+        0
+    ]
     assert excluded["workflow_status"] == "excluded"
     assert excluded["classification"] == record["classification"]
 
@@ -421,9 +421,7 @@ def test_bulk_exclusion_is_auditable_and_does_not_block_publication(
         page_size=200,
     )
     assert derived_records["total"] == 3
-    assert {
-        item["quality_status"] for item in derived_records["items"]
-    } == {"excluded"}
+    assert {item["quality_status"] for item in derived_records["items"]} == {"excluded"}
     assert result_service.drilldown(derived["version_id"], "problem")["total"] == 0
 
     plan = DashboardService(context.database).preflight(
@@ -679,20 +677,29 @@ def test_initialize_migrates_legacy_review_schema_before_batch_index(
     assert index["name"] == "idx_review_records_batch"
     assert review_service.list()[0]["legacy"] is True
     with context.database.connect() as connection:
-        assert connection.execute(
-            "SELECT COUNT(*) FROM review_revisions WHERE id = 'legacy-revision'"
-        ).fetchone()[0] == 1
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM review_revisions WHERE id = 'legacy-revision'"
+            ).fetchone()[0]
+            == 1
+        )
 
     context.database.initialize()
 
     with context.database.connect() as connection:
-        assert connection.execute(
-            "SELECT COUNT(*) FROM review_records WHERE id = 'legacy-review'"
-        ).fetchone()[0] == 1
-        assert connection.execute(
-            "SELECT COUNT(*) FROM review_batches WHERE id = ?",
-            (batch_id,),
-        ).fetchone()[0] == 1
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM review_records WHERE id = 'legacy-review'"
+            ).fetchone()[0]
+            == 1
+        )
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM review_batches WHERE id = ?",
+                (batch_id,),
+            ).fetchone()[0]
+            == 1
+        )
     assert client.get(f"/api/review-batches/{batch_id}").status_code == 200
 
 
@@ -769,9 +776,7 @@ def test_review_schema_migration_rolls_back_atomically_on_index_failure(
             WHERE type = 'table' AND name LIKE 'legacy_review_%'
             """
         ).fetchall()
-        foreign_keys_enabled = connection.execute(
-            "PRAGMA foreign_keys"
-        ).fetchone()[0]
+        foreign_keys_enabled = connection.execute("PRAGMA foreign_keys").fetchone()[0]
     assert after_schema == before_schema
     assert after_records == before_records
     assert after_revisions == before_revisions
@@ -791,12 +796,18 @@ def test_review_schema_migration_rolls_back_atomically_on_index_failure(
                 "PRAGMA table_info(review_records)"
             ).fetchall()
         }
-        assert connection.execute(
-            "SELECT COUNT(*) FROM review_records WHERE id = 'legacy-review'"
-        ).fetchone()[0] == 1
-        assert connection.execute(
-            "SELECT COUNT(*) FROM review_revisions WHERE id = 'legacy-revision'"
-        ).fetchone()[0] == 1
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM review_records WHERE id = 'legacy-review'"
+            ).fetchone()[0]
+            == 1
+        )
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM review_revisions WHERE id = 'legacy-revision'"
+            ).fetchone()[0]
+            == 1
+        )
     assert {"batch_id", "base_result_version_id"}.issubset(columns)
 
 

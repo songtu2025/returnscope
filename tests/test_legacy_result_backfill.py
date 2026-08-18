@@ -89,9 +89,12 @@ def test_preview_and_apply_publish_legacy_v1_without_model_and_are_idempotent(
     assert service.preview()["preview_hash"] == preview["preview_hash"]
     assert "classification_keys" not in json.dumps(preview, ensure_ascii=False)
     with context.database.connect() as connection:
-        assert connection.execute(
-            "SELECT COUNT(*) FROM classification_result_versions"
-        ).fetchone()[0] == 0
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM classification_result_versions"
+            ).fetchone()[0]
+            == 0
+        )
 
     applied = service.apply(preview["preview_hash"])
     assert applied["counts"] == {"success": 1, "failed": 0, "skipped": 0}
@@ -101,12 +104,18 @@ def test_preview_and_apply_publish_legacy_v1_without_model_and_are_idempotent(
     assert replay["counts"] == {"success": 0, "failed": 0, "skipped": 1}
 
     with context.database.connect() as connection:
-        assert connection.execute(
-            "SELECT COUNT(*) FROM classification_result_versions"
-        ).fetchone()[0] == 1
-        assert connection.execute(
-            "SELECT COUNT(*) FROM classification_result_records"
-        ).fetchone()[0] == 3
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM classification_result_versions"
+            ).fetchone()[0]
+            == 1
+        )
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM classification_result_records"
+            ).fetchone()[0]
+            == 3
+        )
         segment = connection.execute(
             """
             SELECT result_publish_status, result_version_id, model_calls
@@ -132,7 +141,9 @@ def test_preview_and_apply_publish_legacy_v1_without_model_and_are_idempotent(
     assert event["actor_id"] == SYSTEM_ACTOR_ID
     assert json_value(event["data_json"], {})["preview_hash"] == preview["preview_hash"]
     assert audit["actor_id"] == SYSTEM_ACTOR_ID
-    assert json_value(audit["after_json"], {})["preview_hash"] == preview["preview_hash"]
+    assert (
+        json_value(audit["after_json"], {})["preview_hash"] == preview["preview_hash"]
+    )
 
 
 def test_preview_rejects_missing_incomplete_and_stale_checkpoint(
@@ -157,9 +168,12 @@ def test_preview_rejects_missing_incomplete_and_stale_checkpoint(
     applied = service.apply(preview["preview_hash"])
     assert applied["counts"] == {"success": 0, "failed": 0, "skipped": 2}
     with context.database.connect() as connection:
-        assert connection.execute(
-            "SELECT COUNT(*) FROM classification_result_versions"
-        ).fetchone()[0] == 0
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM classification_result_versions"
+            ).fetchone()[0]
+            == 0
+        )
 
     ready = _clone_publishable_segment(context, "stale")
     checkpoint = tmp_path / "stale.json"
@@ -220,9 +234,12 @@ def test_preview_hash_tracks_execution_scope_changes(
     with pytest.raises(LegacyResultBackfillConflict, match="已经变化"):
         service.apply(preview["preview_hash"])
     with context.database.connect() as connection:
-        assert connection.execute(
-            "SELECT COUNT(*) FROM classification_result_versions"
-        ).fetchone()[0] == 0
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM classification_result_versions"
+            ).fetchone()[0]
+            == 0
+        )
 
 
 def test_apply_failure_does_not_block_later_segment(
@@ -269,12 +286,15 @@ def test_apply_failure_does_not_block_later_segment(
             """,
             (second.segment_id,),
         ).fetchone()
-        assert connection.execute(
-            """
+        assert (
+            connection.execute(
+                """
             SELECT COUNT(*) FROM audit_logs
             WHERE action = 'legacy_result_backfill_prepare'
             """
-        ).fetchone()[0] == 2
+            ).fetchone()[0]
+            == 2
+        )
     assert first["result_publish_status"] == "failed"
     assert second_row["result_publish_status"] == "published"
     assert second_row["result_version_id"]

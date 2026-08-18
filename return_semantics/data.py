@@ -118,9 +118,9 @@ def load_product_dimensions(
 ) -> pd.DataFrame:
     products = _read_product_dimensions(product_path)
     listing_mask = products["Listing"].eq(listing) if listing is not None else True
-    return products.loc[
-        products["店铺/站点"].eq(store) & listing_mask
-    ].reset_index(drop=True)
+    return products.loc[products["店铺/站点"].eq(store) & listing_mask].reset_index(
+        drop=True
+    )
 
 
 def _read_product_dimensions(product_path: Path) -> pd.DataFrame:
@@ -138,7 +138,9 @@ def _read_product_dimensions(product_path: Path) -> pd.DataFrame:
     for column in PRODUCT_DETAIL_COLUMNS:
         if column not in products.columns:
             products[column] = ""
-    selected_columns = PRODUCT_COLUMNS + PRODUCT_DETAIL_COLUMNS + PRODUCT_CATEGORY_COLUMNS
+    selected_columns = (
+        PRODUCT_COLUMNS + PRODUCT_DETAIL_COLUMNS + PRODUCT_CATEGORY_COLUMNS
+    )
     products = products[selected_columns].copy()
     for column in selected_columns:
         products[column] = products[column].astype(str).str.strip()
@@ -153,9 +155,7 @@ def _product_category_lookup(products: pd.DataFrame) -> pd.DataFrame:
     conflicts = category_rows.groupby("MSKU")[["品类A", "品类B"]].nunique()
     conflicts = conflicts.loc[conflicts.max(axis=1).gt(1)]
     if not conflicts.empty:
-        raise ValueError(
-            f"MSKU 对应多个品类: {conflicts.index.tolist()[:10]}"
-        )
+        raise ValueError(f"MSKU 对应多个品类: {conflicts.index.tolist()[:10]}")
     return category_rows.drop_duplicates(subset=["MSKU"]).set_index("MSKU")
 
 
@@ -260,11 +260,7 @@ def _finalize_return_dataset(
     classification_scope = category_scope
     if scope_mode == "auto":
         classification_scope = (
-            records["store"]
-            + "\x1d"
-            + records["listing"]
-            + "\x1d"
-            + category_scope
+            records["store"] + "\x1d" + records["listing"] + "\x1d" + category_scope
         )
     records.loc[has_text, "classification_key"] = (
         classification_scope.loc[has_text]
@@ -335,9 +331,7 @@ def load_return_dataset(
         records["store"] = records["input_store"]
     else:
         records["store"] = store
-    valid_pairs = frozenset(
-        zip(products["店铺/站点"], products["MSKU"], strict=True)
-    )
+    valid_pairs = frozenset(zip(products["店铺/站点"], products["MSKU"], strict=True))
     records = resolve_sku_aliases(records, valid_pairs)
     if listing is not None:
         records = records.loc[records["sku"].isin(mskus)].copy()
@@ -366,8 +360,8 @@ def load_return_dataset(
         how="left",
         validate="many_to_one",
     )
-    records["product_match_status"] = records["matched_msku"].notna().map(
-        {True: "matched", False: "unmatched"}
+    records["product_match_status"] = (
+        records["matched_msku"].notna().map({True: "matched", False: "unmatched"})
     )
     return _finalize_return_dataset(
         records,
@@ -388,9 +382,9 @@ def load_return_dataset_auto(
     records = _prepare_return_records(return_path)
 
     store_scores: dict[str, int] = {}
-    for explicit_store, count in records.loc[
-        records["input_store"].ne(""), "input_store"
-    ].value_counts().items():
+    for explicit_store, count in (
+        records.loc[records["input_store"].ne(""), "input_store"].value_counts().items()
+    ):
         store_scores[str(explicit_store)] = int(count)
     ordered_scores = sorted(store_scores.items(), key=lambda item: (-item[1], item[0]))
     primary_store = ""
@@ -400,9 +394,7 @@ def load_return_dataset_auto(
         primary_store = ordered_scores[0][0]
 
     records["store"] = records["input_store"]
-    valid_pairs = frozenset(
-        zip(products["店铺/站点"], products["MSKU"], strict=True)
-    )
+    valid_pairs = frozenset(zip(products["店铺/站点"], products["MSKU"], strict=True))
     records = resolve_sku_aliases(records, valid_pairs)
     lookup_rows = products[
         [
@@ -438,8 +430,8 @@ def load_return_dataset_auto(
         how="left",
         validate="many_to_one",
     )
-    records["product_match_status"] = records["matched_msku"].notna().map(
-        {True: "matched", False: "unmatched"}
+    records["product_match_status"] = (
+        records["matched_msku"].notna().map({True: "matched", False: "unmatched"})
     )
     return _finalize_return_dataset(
         records,

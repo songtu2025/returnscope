@@ -145,15 +145,18 @@ def test_report_generation_is_versioned_and_evidence_backed(tmp_path) -> None:
         "reason.FIT_TOO_SMALL",
         "scope",
     ]
-    assert completed["content"]["findings"][0]["evidence_ids"] == completed[
-        "evidence"
-    ]["blueprint"]["findings"][0]["evidence_ids"]
-    assert completed["content"]["actions"][0]["evidence_ids"] == completed[
-        "evidence"
-    ]["blueprint"]["actions"][0]["evidence_ids"]
-    assert completed["evidence"]["analysis"]["diagnostics"][0][
-        "reason_code"
-    ] == "FIT_TOO_SMALL"
+    assert (
+        completed["content"]["findings"][0]["evidence_ids"]
+        == completed["evidence"]["blueprint"]["findings"][0]["evidence_ids"]
+    )
+    assert (
+        completed["content"]["actions"][0]["evidence_ids"]
+        == completed["evidence"]["blueprint"]["actions"][0]["evidence_ids"]
+    )
+    assert (
+        completed["evidence"]["analysis"]["diagnostics"][0]["reason_code"]
+        == "FIT_TOO_SMALL"
+    )
     assert completed["usage"] == {"input_tokens": 100, "output_tokens": 50}
     assert completed["resolved_model"] == "model-primary-20260815"
     assert captured["model"] == "model-primary"
@@ -163,8 +166,7 @@ def test_report_generation_is_versioned_and_evidence_backed(tmp_path) -> None:
     assert len(service.list(dashboard_id, dashboard_version_id)) == 1
     workbench = WorkbenchService(_context.database).summary(limit=20)
     output = next(
-        item for item in workbench["recent_outputs"]
-        if item["type"] == "insight_report"
+        item for item in workbench["recent_outputs"] if item["type"] == "insight_report"
     )
     assert output["version_no"] == 1
     assert output["target"]["report_id"] == report_id
@@ -195,8 +197,7 @@ def test_failed_report_can_be_requeued(tmp_path) -> None:
     assert "模型暂时不可用" in technical_error
     workbench = WorkbenchService(_context.database).summary(limit=20)
     failed_action = next(
-        item for item in workbench["actions"]
-        if item["type"] == "report_failed"
+        item for item in workbench["actions"] if item["type"] == "report_failed"
     )
     assert failed_action["target"]["report_id"] == report_id
     assert "不会占用报告版本号" in failed_action["reason"]
@@ -386,9 +387,7 @@ def test_untrusted_product_mapping_blocks_product_level_actions() -> None:
     assert evidence["analysis"]["product_reason_matrix"] == []
     assert evidence["analysis"]["diagnostics"][0]["hotspots"] == []
     assert evidence["analysis"]["diagnostics"][0]["samples"] == []
-    assert evidence["analysis"]["diagnostics"][0]["semantic_profile"][
-        "opinions"
-    ] == []
+    assert evidence["analysis"]["diagnostics"][0]["semantic_profile"]["opinions"] == []
     actions = evidence["blueprint"]["actions"]
     assert actions[0]["id"] == "action.text_quality"
     assert actions[0]["priority"] == "P0"
@@ -452,9 +451,7 @@ def test_live_quality_gate_sanitizes_existing_report() -> None:
                         }
                     ],
                     "semantic_profile": {
-                        "opinions": [
-                            {"opinion": "Didn稚 fit", "record_count": 12}
-                        ]
+                        "opinions": [{"opinion": "Didn稚 fit", "record_count": 12}]
                     },
                 }
             ],
@@ -486,8 +483,7 @@ def test_live_quality_gate_sanitizes_existing_report() -> None:
     assert all(item["kind"] != "diagnostic" for item in content["findings"])
     assert content["executive_summary"][0]["title"] == "评论文本质量未通过"
     assert all(
-        "SK001-701" not in item["statement"]
-        for item in content["executive_summary"]
+        "SK001-701" not in item["statement"] for item in content["executive_summary"]
     )
     action_ids = [item["id"] for item in content["actions"]]
     assert action_ids[:2] == ["action.text_quality", "action.mapping"]

@@ -135,6 +135,7 @@ class AgentRunner:
                 base_cache_hits + (run.cache_hits if run else 0),
                 base_model_failures + (run.model_failures if run else 0),
             )
+
         try:
             snapshot = json_value(task.get("snapshot_json"), {})
             scope_mode = str(snapshot.get("scope", {}).get("mode", "manual"))
@@ -146,17 +147,16 @@ class AgentRunner:
                 scope_mode,
             )
             all_keys = {
-                str(key)
-                for key in json_value(segment["classification_keys_json"], [])
+                str(key) for key in json_value(segment["classification_keys_json"], [])
             }
             existing_results = {
                 key: value for key, value in existing_results.items() if key in all_keys
             }
             remaining_keys = all_keys - set(existing_results)
             selected = dataset.unique_comments.loc[
-                dataset.unique_comments["classification_key"].astype(str).isin(
-                    remaining_keys
-                )
+                dataset.unique_comments["classification_key"]
+                .astype(str)
+                .isin(remaining_keys)
             ].reset_index(drop=True)
 
             capability = next(
@@ -240,9 +240,7 @@ class AgentRunner:
                     taxonomy=taxonomy,
                     claims=runtime.claims,
                     client=runtime.client,
-                    cache=self._get_cache(
-                        f"{task['id']}-{task['config_version_id']}"
-                    ),
+                    cache=self._get_cache(f"{task['id']}-{task['config_version_id']}"),
                     secondary_model=runtime.secondary_model,
                     model_policy_version=str(runtime.model_policy["version"]),
                     secondary_is_fallback=bool(
@@ -432,9 +430,7 @@ class AgentRunner:
         results = {key: value for key, value in checkpoint.items() if key in all_keys}
         if set(results) != all_keys:
             missing_count = len(all_keys - set(results))
-            raise IncompleteResultCheckpoint(
-                f"分类检查点缺少 {missing_count} 个分类键"
-            )
+            raise IncompleteResultCheckpoint(f"分类检查点缺少 {missing_count} 个分类键")
         capability = next(
             (
                 item
@@ -477,8 +473,7 @@ class AgentRunner:
         results: dict[str, ValidatedClassification],
     ) -> bool:
         if any(
-            value.status == ProcessingStatus.MODEL_ERROR
-            for value in results.values()
+            value.status == ProcessingStatus.MODEL_ERROR for value in results.values()
         ):
             return True
         has_semantics = any(
@@ -486,8 +481,7 @@ class AgentRunner:
             for value in results.values()
         )
         has_review_result = any(
-            value.status.value in REVIEW_STATUSES
-            for value in results.values()
+            value.status.value in REVIEW_STATUSES for value in results.values()
         )
         return bool(results) and has_review_result and not has_semantics
 
@@ -1167,6 +1161,7 @@ class AgentRunner:
                             now,
                         ),
                     )
+
     def _record_parent_result_error(
         self,
         task_id: str,
@@ -1222,16 +1217,17 @@ class AgentRunner:
                 )
             segment_results = self._load_checkpoint(Path(str(path_text)))
             segment_keys = {
-                str(key)
-                for key in json_value(segment["classification_keys_json"], [])
+                str(key) for key in json_value(segment["classification_keys_json"], [])
             }
             if not segment_keys.issubset(segment_results):
-                raise ValueError(
-                    f"已完成 Listing {segment['segment_key']} 结果不完整"
-                )
+                raise ValueError(f"已完成 Listing {segment['segment_key']} 结果不完整")
             completed_keys.update(segment_keys)
             results.update(
-                {key: value for key, value in segment_results.items() if key in segment_keys}
+                {
+                    key: value
+                    for key, value in segment_results.items()
+                    if key in segment_keys
+                }
             )
         partial_dataset = self._subset_dataset(dataset, completed_keys)
         taxonomy = self.capability_registry.combined_taxonomy()
@@ -1269,8 +1265,12 @@ class AgentRunner:
             "excluded_records": int(plan_summary.get("excluded_record_count", 0)),
             "review_count": review_count,
             "statuses": dict(statuses),
-            "model_calls": sum(int(segment["model_calls"]) for segment in persisted_segments),
-            "cache_hits": sum(int(segment["cache_hits"]) for segment in persisted_segments),
+            "model_calls": sum(
+                int(segment["model_calls"]) for segment in persisted_segments
+            ),
+            "cache_hits": sum(
+                int(segment["cache_hits"]) for segment in persisted_segments
+            ),
             "category_registry_version": self.capability_registry.version,
             "category_segments": [
                 self._public_segment(segment) for segment in persisted_segments
@@ -1390,9 +1390,7 @@ class AgentRunner:
                         "effort": base_settings.reasoning_effort,
                     },
                     "first_pass": {
-                        "role": (
-                            "cheap" if base_settings.cheap_model else "primary"
-                        ),
+                        "role": ("cheap" if base_settings.cheap_model else "primary"),
                         "model": base_settings.cheap_model or base_settings.model,
                         "effort": (
                             base_settings.cheap_reasoning_effort
@@ -1426,16 +1424,12 @@ class AgentRunner:
                 model=str(primary["model"]),
                 reasoning_effort=str(primary["effort"]),
                 cheap_model=(
-                    str(first_pass["model"])
-                    if first_pass["role"] == "cheap"
-                    else None
+                    str(first_pass["model"]) if first_pass["role"] == "cheap" else None
                 ),
                 cheap_reasoning_effort=str(first_pass["effort"]),
                 secondary_model=(str(review["model"]) if review else None),
                 secondary_reasoning_effort=(
-                    str(review["effort"])
-                    if review
-                    else str(primary["effort"])
+                    str(review["effort"]) if review else str(primary["effort"])
                 ),
             )
         else:
@@ -1495,8 +1489,7 @@ class AgentRunner:
         results: dict[str, ValidatedClassification],
     ) -> None:
         serialized = {
-            key: value.model_dump(mode="json")
-            for key, value in results.items()
+            key: value.model_dump(mode="json") for key, value in results.items()
         }
         temporary = path.with_suffix(f"{path.suffix}.tmp")
         temporary.write_text(

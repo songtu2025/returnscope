@@ -88,7 +88,9 @@ class CapabilityRegistry:
             for variant in capability.variants:
                 key = (variant.category_a, variant.category_b)
                 if key in self._variants:
-                    raise ValueError(f"品类映射重复: {variant.category_a}/{variant.category_b}")
+                    raise ValueError(
+                        f"品类映射重复: {variant.category_a}/{variant.category_b}"
+                    )
                 self._variants[key] = capability
 
     def resolve(

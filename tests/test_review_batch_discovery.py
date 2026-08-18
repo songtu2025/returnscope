@@ -17,9 +17,7 @@ def _client(context, service: ReviewService) -> TestClient:
     def current_user() -> dict[str, str]:
         return {"id": "user-1"}
 
-    app.include_router(
-        create_review_router(service, context.database, current_user)
-    )
+    app.include_router(create_review_router(service, context.database, current_user))
     return TestClient(app)
 
 
@@ -49,14 +47,20 @@ def test_review_batch_list_discovery_conflict_and_derived_summary(
     )
     assert duplicate.status_code == 409
     with context.database.connect() as connection:
-        assert connection.execute(
-            "SELECT COUNT(*) FROM review_batches WHERE base_result_version_id = ?",
-            (base_id,),
-        ).fetchone()[0] == 1
-        assert connection.execute(
-            "SELECT COUNT(*) FROM review_records WHERE batch_id = ?",
-            (batch["id"],),
-        ).fetchone()[0] == records_before
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM review_batches WHERE base_result_version_id = ?",
+                (base_id,),
+            ).fetchone()[0]
+            == 1
+        )
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM review_records WHERE batch_id = ?",
+                (batch["id"],),
+            ).fetchone()[0]
+            == records_before
+        )
         result_id = connection.execute(
             "SELECT result_id FROM classification_result_versions WHERE id = ?",
             (base_id,),
@@ -104,15 +108,16 @@ def test_review_batch_list_discovery_conflict_and_derived_summary(
     assert paged.status_code == 200
     assert paged.json()["total"] == 2
     assert len(paged.json()["items"]) == 1
-    assert client.get(
-        "/api/review-batches", params={"q": "batch-published"}
-    ).json()["total"] == 1
-    assert client.get(
-        "/api/review-batches", params={"q": "user-2"}
-    ).json()["total"] == 1
-    assert client.get(
-        "/api/review-batches", params={"q": "L1"}
-    ).json()["total"] == 2
+    assert (
+        client.get("/api/review-batches", params={"q": "batch-published"}).json()[
+            "total"
+        ]
+        == 1
+    )
+    assert (
+        client.get("/api/review-batches", params={"q": "user-2"}).json()["total"] == 1
+    )
+    assert client.get("/api/review-batches", params={"q": "L1"}).json()["total"] == 2
 
     review = service.batch_records(batch["id"])["items"][0]
     service.update_batch_record(
@@ -195,14 +200,20 @@ def test_review_batch_records_aggregate_business_fields_and_filter_without_n_plu
     )
     assert combined.status_code == 200
     assert combined.json()["total"] == 1
-    assert client.get(
-        f"/api/review-batches/{batch['id']}/records",
-        params={"q": "RETURN-MSKU-B"},
-    ).json()["total"] == 1
-    assert client.get(
-        f"/api/review-batches/{batch['id']}/records",
-        params={"q": "not-present"},
-    ).json()["total"] == 0
+    assert (
+        client.get(
+            f"/api/review-batches/{batch['id']}/records",
+            params={"q": "RETURN-MSKU-B"},
+        ).json()["total"]
+        == 1
+    )
+    assert (
+        client.get(
+            f"/api/review-batches/{batch['id']}/records",
+            params={"q": "not-present"},
+        ).json()["total"]
+        == 0
+    )
 
     statements: list[str] = []
     original_connect = context.database.connect

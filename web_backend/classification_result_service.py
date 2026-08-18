@@ -725,10 +725,7 @@ class ClassificationResultService:
                     "quality_status": _classification_quality(result),
                 }
             )
-        scopes = {
-            (value["store_site"], value["listing"])
-            for value in records
-        }
+        scopes = {(value["store_site"], value["listing"]) for value in records}
         store_site, listing = next(iter(scopes)) if len(scopes) == 1 else (None, None)
         return {
             "units": units,
@@ -746,9 +743,7 @@ class ClassificationResultService:
         records: list[dict[str, Any]],
     ) -> str:
         hasher = hashlib.sha256()
-        hasher.update(
-            f"{dataset_version_id}\x1f{product_version_id}\n".encode("utf-8")
-        )
+        hasher.update(f"{dataset_version_id}\x1f{product_version_id}\n".encode("utf-8"))
         for values in (units, records):
             for value in values:
                 canonical = json.dumps(

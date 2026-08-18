@@ -163,9 +163,7 @@ class WorkbenchService:
                     "result_version_id": None,
                     "title": f"{item['task_title']} / {listing}",
                     "reason": (
-                        item["error"]
-                        or item["result_publish_error"]
-                        or item["status"]
+                        item["error"] or item["result_publish_error"] or item["status"]
                     ),
                     "status": item["status"],
                     "actor": WorkbenchService._actor(item),
@@ -180,9 +178,7 @@ class WorkbenchService:
         for row in result_rows:
             item = dict(row)
             title = " / ".join(
-                value
-                for value in (item["store_site"], item["listing"])
-                if value
+                value for value in (item["store_site"], item["listing"]) if value
             ) or str(item["id"])
             output.append(
                 {
@@ -237,9 +233,7 @@ class WorkbenchService:
                         "name": item["display_name"],
                     },
                     "updated_at": (
-                        item["completed_at"]
-                        or item["started_at"]
-                        or item["created_at"]
+                        item["completed_at"] or item["started_at"] or item["created_at"]
                     ),
                     "target": {
                         "route": "analysis-dashboards",
@@ -298,7 +292,9 @@ class WorkbenchService:
         for row in result_rows:
             item = dict(row)
             output_type = (
-                "derived_result" if item["parent_version_id"] else "classification_result"
+                "derived_result"
+                if item["parent_version_id"]
+                else "classification_result"
             )
             title = " / ".join(
                 value for value in (item["store_site"], item["listing"]) if value

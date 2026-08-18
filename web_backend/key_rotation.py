@@ -61,9 +61,7 @@ def rotate_api_config_keys(
     old_box = SecretBox("" if from_development_key else clean_old_key)
     development_box = SecretBox("")
     if not from_development_key and _keys_match(old_box, development_box):
-        raise KeyRotationError(
-            "从开发默认密钥迁移必须传入 --from-development-key"
-        )
+        raise KeyRotationError("从开发默认密钥迁移必须传入 --from-development-key")
     if _keys_match(old_box, new_box):
         raise KeyRotationError("新旧加密密钥不能相同")
 

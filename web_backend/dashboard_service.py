@@ -486,9 +486,7 @@ class DashboardService:
                 and not runtime_filters
                 and not clean_date_from
                 and not clean_date_to
-                and not {
-                    key for key in context["filters"] if key != "quality_status"
-                }
+                and not {key for key in context["filters"] if key != "quality_status"}
             )
 
             date_range = dict(
@@ -526,9 +524,7 @@ class DashboardService:
                 ).fetchone()[0]
             )
             if unit_rollup:
-                source_placeholders = ",".join(
-                    "?" for _ in context["source_ids"]
-                )
+                source_placeholders = ",".join("?" for _ in context["source_ids"])
                 subject_rows = connection.execute(
                     f"""
                     WITH unit_subjects AS (
@@ -573,9 +569,7 @@ class DashboardService:
             subject_breakdown = [
                 {
                     "value": str(row["value"]),
-                    "label": SUBJECT_LABELS.get(
-                        str(row["value"]), str(row["value"])
-                    ),
+                    "label": SUBJECT_LABELS.get(str(row["value"]), str(row["value"])),
                     "record_count": int(row["record_count"]),
                     "semantic_unit_count": int(row["semantic_unit_count"]),
                     "percentage": self._percentage(
@@ -733,9 +727,7 @@ class DashboardService:
                     **dict(row),
                     "record_count": int(row["record_count"]),
                     "primary_record_count": (
-                        None
-                        if report_mode
-                        else int(row["primary_record_count"] or 0)
+                        None if report_mode else int(row["primary_record_count"] or 0)
                     ),
                     "companion_only_count": (
                         None
@@ -927,10 +919,7 @@ class DashboardService:
                             selected_count, total_records
                         ),
                         "lift": round(
-                            (
-                                int(row["record_count"])
-                                / int(row["total_record_count"])
-                            )
+                            (int(row["record_count"]) / int(row["total_record_count"]))
                             / (selected_count / total_records),
                             2,
                         )
@@ -973,14 +962,10 @@ class DashboardService:
                         ),
                         "lift": round(
                             (int(row["record_count"]) / selected_count)
-                            / (
-                                label_counts.get(str(row["value"]), 0)
-                                / total_records
-                            ),
+                            / (label_counts.get(str(row["value"]), 0) / total_records),
                             2,
                         )
-                        if total_records
-                        and label_counts.get(str(row["value"]), 0)
+                        if total_records and label_counts.get(str(row["value"]), 0)
                         else 0.0,
                     }
                     for row in co_reason_rows
@@ -1144,9 +1129,7 @@ class DashboardService:
             ],
             "total_record_count": total_records,
             "labeled_record_count": labeled_record_count,
-            "label_coverage": self._percentage(
-                labeled_record_count, total_records
-            ),
+            "label_coverage": self._percentage(labeled_record_count, total_records),
             "subject_breakdown": subject_breakdown,
             "reasons": reasons,
             "product_reason_matrix": product_reason_matrix,
@@ -1158,9 +1141,7 @@ class DashboardService:
                 "record_count": semantic_record_count,
                 "coverage": self._percentage(
                     semantic_record_count,
-                    int(selected_reason["record_count"])
-                    if selected_reason
-                    else 0,
+                    int(selected_reason["record_count"]) if selected_reason else 0,
                 ),
                 "parts": semantic_parts,
                 "opinions": semantic_opinions,

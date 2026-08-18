@@ -391,9 +391,7 @@ class Sub2APIClient:
         payload: dict[str, Any] = {
             "model": model_name,
             "input": messages,
-            "reasoning": {
-                "effort": reasoning_effort or self.settings.reasoning_effort
-            },
+            "reasoning": {"effort": reasoning_effort or self.settings.reasoning_effort},
         }
         if self.settings.use_fast:
             payload["service_tier"] = "fast"

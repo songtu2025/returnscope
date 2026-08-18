@@ -388,7 +388,9 @@ def test_data_quality_cache_is_bounded_invalidates_and_isolation_safe(
         calls += 1
         return real_loader(*args, **kwargs)
 
-    monkeypatch.setattr(data_quality_module, "load_return_dataset_auto", counting_loader)
+    monkeypatch.setattr(
+        data_quality_module, "load_return_dataset_auto", counting_loader
+    )
     service = DataQualityService(context.database)
     first = service.preflight(returns_id, products_id)
     first_issues = service.issues(returns_id, products_id, q="MISS")

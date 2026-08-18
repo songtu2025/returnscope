@@ -111,17 +111,15 @@ def classify_category_segments(
         ].reset_index(drop=True)
         if allowed_classification_keys is not None:
             selected = selected.loc[
-                selected["classification_key"].isin(
-                    allowed_classification_keys
-                )
+                selected["classification_key"].isin(allowed_classification_keys)
             ].reset_index(drop=True)
         if selected.empty:
             continue
         runtime_segment = {
             **planned_segment,
-            "segment_key": (
-                segment_key_by_agent or {}
-            ).get(capability.key, planned_segment["segment_key"]),
+            "segment_key": (segment_key_by_agent or {}).get(
+                capability.key, planned_segment["segment_key"]
+            ),
         }
         taxonomy = registry.load_taxonomy(capability)
         runtime = (runtimes or {}).get(capability.key)
@@ -132,9 +130,7 @@ def classify_category_segments(
             else ListingClaimsConfig(version=NO_CLAIMS_VERSION, claims=[])
         )
         segment_secondary_model = (
-            runtime.secondary_model
-            if runtime is not None
-            else secondary_model
+            runtime.secondary_model if runtime is not None else secondary_model
         )
         model_policy = runtime.model_policy if runtime is not None else None
         runtime_segment.update(

@@ -302,7 +302,8 @@ def test_rejects_database_without_ciphertext(
             from_development_key=False,
         )
     with database.connect() as connection:
-        assert connection.execute(
-            "SELECT COUNT(*) FROM api_config_versions"
-        ).fetchone()[0] == 0
+        assert (
+            connection.execute("SELECT COUNT(*) FROM api_config_versions").fetchone()[0]
+            == 0
+        )
     assert not list((settings.data_dir / "backups").glob("*.zip"))

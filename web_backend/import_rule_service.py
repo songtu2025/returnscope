@@ -42,9 +42,7 @@ def list_import_rules() -> dict[str, list[dict[str, Any]]]:
             "file_extensions": sorted(ALLOWED_EXTENSIONS["products"]),
             "worksheet": PRODUCT_WORKSHEET,
             "required_columns": list(PRODUCT_COLUMNS),
-            "optional_columns": list(
-                PRODUCT_CATEGORY_COLUMNS + PRODUCT_DETAIL_COLUMNS
-            ),
+            "optional_columns": list(PRODUCT_CATEGORY_COLUMNS + PRODUCT_DETAIL_COLUMNS),
             "match_key": [RETURN_STORE_COLUMN, "MSKU"],
             "notes": [
                 "品类字段影响分类路由",

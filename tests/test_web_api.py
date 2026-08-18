@@ -788,9 +788,7 @@ def test_real_web_task_flow(tmp_path: Path) -> None:
                 },
             )
             assert stale.status_code == 409
-            current_batch = client.get(
-                f"/api/review-batches/{batch['id']}"
-            ).json()
+            current_batch = client.get(f"/api/review-batches/{batch['id']}").json()
             published = client.post(
                 f"/api/review-batches/{batch['id']}/publish",
                 json={

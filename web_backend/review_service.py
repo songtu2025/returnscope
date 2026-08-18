@@ -168,9 +168,7 @@ class ReviewService:
                 (base_result_version_id,),
             ).fetchone()
             if existing_draft is not None:
-                raise ReviewBatchConflict(
-                    "该分类结果版本已有未发布的复核批次"
-                )
+                raise ReviewBatchConflict("该分类结果版本已有未发布的复核批次")
             units = connection.execute(
                 """
                 SELECT classification_key, comment, classification_json
@@ -376,7 +374,7 @@ class ReviewService:
                     SELECT 1 FROM classification_result_records filtered
                     WHERE filtered.result_version_id = b.base_result_version_id
                       AND filtered.classification_key = r.classification_key
-                      AND {' AND '.join(business_where)}
+                      AND {" AND ".join(business_where)}
                 )
                 """
             )
@@ -913,9 +911,7 @@ class ReviewService:
                         "reason": row["reason"],
                         "comment": row["comment"],
                         "product_match_status": row["product_match_status"],
-                        "quality_status": unit_quality[
-                            str(row["classification_key"])
-                        ],
+                        "quality_status": unit_quality[str(row["classification_key"])],
                     }
                     for row in base_records
                 ]
@@ -1397,9 +1393,7 @@ class ReviewService:
         item["resolved_count"] = int(item.get("resolved_count") or 0)
         item["excluded_count"] = int(item.get("excluded_count") or 0)
         item["remaining_count"] = (
-            item["record_count"]
-            - item["resolved_count"]
-            - item["excluded_count"]
+            item["record_count"] - item["resolved_count"] - item["excluded_count"]
         )
         item["creator"] = {
             "id": item.get("created_by"),

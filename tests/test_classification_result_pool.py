@@ -384,22 +384,12 @@ def test_publish_preserves_product_snapshot_and_duplicate_orders(
     assert version["unit_count"] == 1
     assert version["record_count"] == 3
     assert records["total"] == 3
-    assert {item["classification_key"] for item in records["items"]} == {
-        context.key
-    }
+    assert {item["classification_key"] for item in records["items"]} == {context.key}
     assert [item["order_id"] for item in records["items"]].count("ORDER-DUP") == 2
-    assert {item["product_name"] for item in records["items"]} == {
-        "产品表权威名称"
-    }
-    assert {item["source_sku"] for item in records["items"]} == {
-        "SOURCE-MSKU-1"
-    }
-    assert {item["matched_msku"] for item in records["items"]} == {
-        "SOURCE-MSKU-1"
-    }
-    assert {item["product_sku"] for item in records["items"]} == {
-        "PRODUCT-SKU-1"
-    }
+    assert {item["product_name"] for item in records["items"]} == {"产品表权威名称"}
+    assert {item["source_sku"] for item in records["items"]} == {"SOURCE-MSKU-1"}
+    assert {item["matched_msku"] for item in records["items"]} == {"SOURCE-MSKU-1"}
+    assert {item["product_sku"] for item in records["items"]} == {"PRODUCT-SKU-1"}
     assert [item["source_record_id"] for item in records["items"]] == [
         "version-returns:2",
         "version-returns:3",
@@ -446,9 +436,12 @@ def test_agent_runner_completion_publishes_result_reference(tmp_path: Path) -> N
     assert segment["result_publish_status"] == "published"
     assert version["record_count"] == 3
     with context.database.connect() as connection:
-        assert connection.execute(
-            "SELECT COUNT(*) FROM review_records WHERE batch_id IS NULL"
-        ).fetchone()[0] == 0
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM review_records WHERE batch_id IS NULL"
+            ).fetchone()[0]
+            == 0
+        )
 
 
 def test_product_match_uses_unique_store_asin_alias(
@@ -488,9 +481,7 @@ def test_product_match_uses_unique_store_asin_alias(
 
     dataset = load_return_dataset_auto(returns_path, products_path)
     matched = dataset.records.loc[dataset.records["source_sku"].eq("MATCHED-MSKU")]
-    aliased = dataset.records.loc[
-        dataset.records["source_sku"].eq("ALIAS-NOT-ALLOWED")
-    ]
+    aliased = dataset.records.loc[dataset.records["source_sku"].eq("ALIAS-NOT-ALLOWED")]
 
     assert matched.iloc[0]["matched_msku"] == "MATCHED-MSKU"
     assert matched.iloc[0]["product_name"] == "产品表名称"
@@ -509,12 +500,18 @@ def test_publish_is_idempotent_and_rejects_hash_conflict(tmp_path: Path) -> None
 
     assert first["version_id"] == second["version_id"]
     with context.database.connect() as connection:
-        assert connection.execute(
-            "SELECT COUNT(*) FROM classification_result_versions"
-        ).fetchone()[0] == 1
-        assert connection.execute(
-            "SELECT COUNT(*) FROM classification_result_records"
-        ).fetchone()[0] == 3
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM classification_result_versions"
+            ).fetchone()[0]
+            == 1
+        )
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM classification_result_records"
+            ).fetchone()[0]
+            == 3
+        )
 
     changed = context.results[context.key].model_copy(
         update={"model_name": "different-model"}
@@ -523,9 +520,12 @@ def test_publish_is_idempotent_and_rejects_hash_conflict(tmp_path: Path) -> None
     with pytest.raises(ResultPublicationConflict):
         _publish(context)
     with context.database.connect() as connection:
-        assert connection.execute(
-            "SELECT COUNT(*) FROM classification_result_versions"
-        ).fetchone()[0] == 1
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM classification_result_versions"
+            ).fetchone()[0]
+            == 1
+        )
         event = connection.execute(
             """
             SELECT event_type FROM task_events
@@ -569,7 +569,9 @@ def test_publication_failure_rolls_back_all_result_data(
             "classification_unit_labels",
             "classification_result_records",
         ):
-            assert connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0
+            assert (
+                connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0
+            )
         segment = connection.execute(
             """
             SELECT status, result_version_id, result_publish_status
@@ -788,12 +790,18 @@ def test_retry_result_publish_uses_checkpoint_without_model_call(
     assert segment["model_calls"] == 0
 
     with context.database.connect() as connection:
-        assert connection.execute(
-            "SELECT COUNT(*) FROM classification_result_versions"
-        ).fetchone()[0] == 1
-        assert connection.execute(
-            "SELECT COUNT(*) FROM classification_result_records"
-        ).fetchone()[0] == 3
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM classification_result_versions"
+            ).fetchone()[0]
+            == 1
+        )
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM classification_result_records"
+            ).fetchone()[0]
+            == 3
+        )
         event = connection.execute(
             """
             SELECT actor_id, data_json FROM task_events
@@ -826,9 +834,12 @@ def test_retry_result_publish_uses_checkpoint_without_model_call(
     assert duplicate.status_code == 409
     assert "已经发布" in duplicate.json()["detail"]
     with context.database.connect() as connection:
-        assert connection.execute(
-            "SELECT COUNT(*) FROM classification_result_versions"
-        ).fetchone()[0] == 1
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM classification_result_versions"
+            ).fetchone()[0]
+            == 1
+        )
 
 
 def test_retry_result_publish_rejects_missing_checkpoint_and_publishing(
@@ -885,9 +896,7 @@ def test_retry_result_publish_rejects_missing_checkpoint_and_publishing(
     assert called is False
 
     with context.database.connect() as connection:
-        assert connection.execute(
-            "SELECT COUNT(*) FROM audit_logs"
-        ).fetchone()[0] == 0
+        assert connection.execute("SELECT COUNT(*) FROM audit_logs").fetchone()[0] == 0
 
 
 def test_result_list_product_names_are_unique_sorted_and_empty(

@@ -930,7 +930,9 @@ class Database:
     def _migrate_review_records(connection: sqlite3.Connection) -> None:
         columns = {
             row["name"]
-            for row in connection.execute("PRAGMA table_info(review_records)").fetchall()
+            for row in connection.execute(
+                "PRAGMA table_info(review_records)"
+            ).fetchall()
         }
         table_sql_row = connection.execute(
             """
@@ -939,7 +941,10 @@ class Database:
             """
         ).fetchone()
         table_sql = str(table_sql_row["sql"] or "") if table_sql_row else ""
-        if "batch_id" in columns and "UNIQUE(task_id, classification_key)" not in table_sql:
+        if (
+            "batch_id" in columns
+            and "UNIQUE(task_id, classification_key)" not in table_sql
+        ):
             return
 
         foreign_keys_enabled = bool(
@@ -1217,9 +1222,7 @@ class Database:
                     SELECT * FROM legacy_classification_result_records
                     """
                 )
-                connection.execute(
-                    "DROP TABLE legacy_classification_result_records"
-                )
+                connection.execute("DROP TABLE legacy_classification_result_records")
                 record_index_columns = {
                     "listing": "listing, source_row",
                     "source_row": "source_row, id",

@@ -123,9 +123,7 @@ class TaskPlanService:
             clean_listing,
         )
         missing_category_products = [
-            item
-            for item in unresolved_products
-            if item["issue"] == "missing_category"
+            item for item in unresolved_products if item["issue"] == "missing_category"
         ]
         inputs = {
             "returns": {
@@ -161,16 +159,13 @@ class TaskPlanService:
             "category_completion_required": bool(missing_category_products),
             "missing_category_product_count": len(missing_category_products),
             "missing_category_product_record_count": sum(
-                int(item["record_count"])
-                for item in missing_category_products
+                int(item["record_count"]) for item in missing_category_products
             ),
             "missing_category_comment_count": sum(
-                int(item["comment_count"])
-                for item in missing_category_products
+                int(item["comment_count"]) for item in missing_category_products
             ),
             "unresolved_product_comment_count": sum(
-                int(item["comment_count"])
-                for item in unresolved_products
+                int(item["comment_count"]) for item in unresolved_products
             ),
             "category_options": [
                 {
@@ -211,9 +206,7 @@ class TaskPlanService:
         store: str,
         listing: str | None,
     ) -> list[dict[str, Any]]:
-        unresolved_keys = set(
-            execution_plan.unresolved_classification_keys(dataset)
-        )
+        unresolved_keys = set(execution_plan.unresolved_classification_keys(dataset))
         missing_category_keys = {
             str(row.classification_key)
             for assignment, row in zip(
@@ -253,9 +246,7 @@ class TaskPlanService:
                     scope_listing,
                 )
                 listings = sorted(
-                    value
-                    for value in dimensions["Listing"].unique().tolist()
-                    if value
+                    value for value in dimensions["Listing"].unique().tolist() if value
                 )
                 listing_by_msku = (
                     dimensions.loc[
@@ -281,9 +272,7 @@ class TaskPlanService:
         ):
             scope_store = str(row_store).strip() or fallback_store
             clean_sku = str(sku).strip()
-            store_mskus, listings, listing_by_msku = store_context(
-                scope_store
-            )
+            store_mskus, listings, listing_by_msku = store_context(scope_store)
             category_a = str(rows["category_a"].iloc[0]).strip()
             category_b = str(rows["category_b"].iloc[0]).strip()
             product_names = [
@@ -411,7 +400,9 @@ class TaskPlanService:
                 "SELECT active_version_id FROM api_connections WHERE id = ?",
                 (connection_id,),
             ).fetchone()
-            if active is None or str(active["active_version_id"] or "") != str(config["id"]):
+            if active is None or str(active["active_version_id"] or "") != str(
+                config["id"]
+            ):
                 raise ValueError("请选择当前已发布的模型服务连接")
             for model_key, effort in (
                 (values["cheap_model"], values["cheap_effort"]),
@@ -432,5 +423,7 @@ class TaskPlanService:
                 if row["validation_status"] != "validated":
                     raise ValueError(f"模型 {row['display_name']} 必须先验证通过")
                 if effort not in json.loads(row["supported_efforts_json"]):
-                    raise ValueError(f"模型 {row['display_name']} 不支持 {effort} 推理强度")
+                    raise ValueError(
+                        f"模型 {row['display_name']} 不支持 {effort} 推理强度"
+                    )
         return {**config, **values}

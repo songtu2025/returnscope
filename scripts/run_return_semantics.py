@@ -23,9 +23,7 @@ from return_semantics.taxonomy import (
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="运行涉水鞋退货语义分析批处理"
-    )
+    parser = argparse.ArgumentParser(description="运行涉水鞋退货语义分析批处理")
     parser.add_argument(
         "--returns",
         type=Path,
@@ -175,9 +173,7 @@ def main() -> None:
     print(f"模型路由: {run.routing}")
     print(f"请求指标: {run.request_metrics}")
     print(f"各模型 Token 用量: {run.usage_by_model}")
-    statuses = Counter(
-        result.status.value for result in run.classifications.values()
-    )
+    statuses = Counter(result.status.value for result in run.classifications.values())
     print(f"模型调用数: {run.model_calls}")
     print(f"缓存命中数: {run.cache_hits}")
     print(f"处理状态: {dict(statuses)}")

@@ -45,8 +45,8 @@ def _product_identity_conflicts(frame: pd.DataFrame) -> pd.DataFrame:
     conflict = pd.Series(False, index=values.index)
     for column in compared_columns:
         prefixes = values[column].map(_identifier_prefix)
-        conflict |= listing_prefixes.ne("") & prefixes.ne("") & prefixes.ne(
-            listing_prefixes
+        conflict |= (
+            listing_prefixes.ne("") & prefixes.ne("") & prefixes.ne(listing_prefixes)
         )
     return values.loc[conflict]
 
@@ -90,9 +90,9 @@ def _inspect_returns(path: Path) -> tuple[pd.DataFrame, dict[str, Any]]:
             encoding_anomaly_rows / max(len(frame), 1) * 100,
             2,
         ),
-        "text_encoding_anomaly_examples": comments.loc[
-            encoding_anomaly
-        ].head(5).tolist(),
+        "text_encoding_anomaly_examples": comments.loc[encoding_anomaly]
+        .head(5)
+        .tolist(),
     }
     return frame, quality
 
@@ -126,9 +126,7 @@ def _inspect_products(path: Path) -> tuple[pd.DataFrame, dict[str, Any]]:
         .sum()
     )
     missing_category_columns = [
-        column
-        for column in PRODUCT_CATEGORY_COLUMNS
-        if column not in frame.columns
+        column for column in PRODUCT_CATEGORY_COLUMNS if column not in frame.columns
     ]
     if missing_category_columns:
         category_ready = pd.Series(False, index=frame.index)
@@ -586,7 +584,11 @@ class DatasetService:
         stores = (
             sorted(
                 value
-                for value in frame["店铺/站点"].astype(str).str.strip().unique().tolist()
+                for value in frame["店铺/站点"]
+                .astype(str)
+                .str.strip()
+                .unique()
+                .tolist()
                 if value
             )
             if "店铺/站点" in frame.columns
@@ -603,13 +605,17 @@ class DatasetService:
                     axis=1,
                 )
             )
-            categories = sorted(value for value in category_labels.unique().tolist() if value)
+            categories = sorted(
+                value for value in category_labels.unique().tolist() if value
+            )
         else:
             category_labels = pd.Series("", index=frame.index, dtype=str)
             categories = []
         clean_store = store.strip()
         if clean_store and "店铺/站点" in frame.columns:
-            frame = frame.loc[frame["店铺/站点"].astype(str).str.strip().eq(clean_store)]
+            frame = frame.loc[
+                frame["店铺/站点"].astype(str).str.strip().eq(clean_store)
+            ]
             category_labels = category_labels.loc[frame.index]
         clean_category = category.strip()
         if clean_category:

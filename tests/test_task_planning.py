@@ -316,6 +316,8 @@ def _install_fake_runner(
         "web_backend.agent_runner.export_results",
         fake_export_results,
     )
+
+
 def _run_task_segments(
     database: Database,
     runner: AgentRunner,
@@ -415,8 +417,7 @@ def test_preflight_is_deterministic_and_never_calls_model(
         }
     ]
     assert any(
-        option["category_b"] == "儿童眼镜"
-        for option in first["category_options"]
+        option["category_b"] == "儿童眼镜" for option in first["category_options"]
     )
 
 
@@ -587,9 +588,9 @@ def test_stale_plan_is_rejected_and_segments_are_persisted(tmp_path: Path) -> No
         "segment_order",
         "summary",
     }
-    assert [(segment["agent_key"], segment["status"]) for segment in task["segments"]] == [
-        ("footwear", "queued")
-    ]
+    assert [
+        (segment["agent_key"], segment["status"]) for segment in task["segments"]
+    ] == [("footwear", "queued")]
 
     products = pd.read_excel(products_path, sheet_name="产品信息汇总表").fillna("")
     products.loc[products["MSKU"].eq("SKU-2"), ["品类A", "品类B"]] = [
@@ -640,8 +641,7 @@ def test_task_creation_persists_requested_segment_order(tmp_path: Path) -> None:
         "config-1",
     )
     requested_order = [
-        str(segment["segment_key"])
-        for segment in reversed(preflight["segments"])
+        str(segment["segment_key"]) for segment in reversed(preflight["segments"])
     ]
 
     task = service.create(
@@ -680,7 +680,9 @@ def test_running_task_reorders_waiting_segments_before_next_claim(
             )
             """
         )
-        for position, segment_key in enumerate(("segment-a", "segment-b", "segment-c"), start=1):
+        for position, segment_key in enumerate(
+            ("segment-a", "segment-b", "segment-c"), start=1
+        ):
             connection.execute(
                 """
                 INSERT INTO task_segments(
@@ -711,9 +713,7 @@ def test_running_task_reorders_waiting_segments_before_next_claim(
             "segment-c",
             "segment-b",
         ]
-        assert service.events("task-order")[-1]["event_type"] == (
-            "segments_reordered"
-        )
+        assert service.events("task-order")[-1]["event_type"] == ("segments_reordered")
         assert list_audit(database, "task", "task-order")[0]["action"] == (
             "reorder_segments"
         )
@@ -755,9 +755,9 @@ def test_block_all_stops_when_unknown_category_exists(
     database, _returns_path, _products_path = _database_with_inputs(tmp_path)
     task = _create_task(database, "block_all")
     assert task["status"] == "blocked"
-    assert [(segment["agent_key"], segment["status"]) for segment in task["segments"]] == [
-        ("footwear", "not_started")
-    ]
+    assert [
+        (segment["agent_key"], segment["status"]) for segment in task["segments"]
+    ] == [("footwear", "not_started")]
 
     calls: list[str] = []
     _install_fake_runner(monkeypatch, calls)
@@ -769,9 +769,7 @@ def test_block_all_stops_when_unknown_category_exists(
     result = TaskService(database).get(str(task["id"]))
     assert result["status"] == "blocked"
     assert calls == []
-    assert {segment["agent_key"] for segment in result["segments"]} == {
-        "footwear"
-    }
+    assert {segment["agent_key"] for segment in result["segments"]} == {"footwear"}
 
 
 def test_parent_result_failure_keeps_completed_listing(
@@ -917,9 +915,7 @@ def test_missing_category_is_excluded_without_model_call(
     assert preflight["missing_category_comment_count"] == 1
     assert preflight["unresolved_product_count"] == 1
     assert preflight["unresolved_products"][0]["issue"] == "missing_category"
-    assert [segment["agent_key"] for segment in preflight["segments"]] == [
-        "footwear"
-    ]
+    assert [segment["agent_key"] for segment in preflight["segments"]] == ["footwear"]
 
     with pytest.raises(ValueError, match="品类"):
         _create_task(database, "block_all")
@@ -1004,7 +1000,9 @@ def test_run_ready_completes_ready_segment_with_unknown_excluded(
         "web_backend.agent_runner.classify_comments",
         fake_classify_comments,
     )
-    monkeypatch.setattr("web_backend.agent_runner.Sub2APIClient", lambda *_a, **_k: object())
+    monkeypatch.setattr(
+        "web_backend.agent_runner.Sub2APIClient", lambda *_a, **_k: object()
+    )
     monkeypatch.setattr("web_backend.agent_runner.export_results", fake_export_results)
     settings = _settings(tmp_path)
     settings.ensure_directories()
@@ -1236,19 +1234,18 @@ def test_blocked_task_replans_after_product_category_is_completed(
         "name": "products",
         "sha256": "hash-products-2",
     }
-    assert replanned["snapshot"]["execution_plan"]["plan_hash"] == preflight[
-        "plan_hash"
-    ]
-    assert replanned["snapshot"]["execution_plan"]["unresolved_policy"] == (
-        "run_ready"
+    assert (
+        replanned["snapshot"]["execution_plan"]["plan_hash"] == preflight["plan_hash"]
     )
+    assert replanned["snapshot"]["execution_plan"]["unresolved_policy"] == ("run_ready")
     assert {segment["agent_key"] for segment in replanned["segments"]} == {
         "footwear",
         "eyewear",
     }
-    assert replanned["snapshot"]["execution_plan_history"][0]["plan"] == blocked[
-        "snapshot"
-    ]["execution_plan"]
+    assert (
+        replanned["snapshot"]["execution_plan_history"][0]["plan"]
+        == blocked["snapshot"]["execution_plan"]
+    )
     assert replanned["snapshot"]["execution_plan_history"][0]["reason"] == (
         "已经补充 SKU-2 的儿童眼镜品类"
     )
@@ -1535,8 +1532,7 @@ def test_replan_rebuilds_failed_segment_when_its_scope_changes(
     }
     assert failed_segment["id"] not in {str(row["id"]) for row in rows}
     assert actual_keys == {
-        agent_key: set(keys)
-        for agent_key, keys in expected_keys.items()
+        agent_key: set(keys) for agent_key, keys in expected_keys.items()
     }
     assert actual_keys["footwear"] < old_failed_keys
     assert {str(row["status"]) for row in rows} == {"queued"}
@@ -1565,9 +1561,7 @@ def test_excluded_unknown_has_no_segment_and_completed_cannot_retry(
     database, _returns_path, _products_path = _database_with_inputs(tmp_path)
     task = _create_task(database, "run_ready")
     service = TaskService(database)
-    assert {segment["agent_key"] for segment in task["segments"]} == {
-        "footwear"
-    }
+    assert {segment["agent_key"] for segment in task["segments"]} == {"footwear"}
     with pytest.raises(ValueError, match="片段不存在"):
         service.retry_segment(
             task_id=str(task["id"]),
@@ -1577,9 +1571,7 @@ def test_excluded_unknown_has_no_segment_and_completed_cannot_retry(
             reason="尝试重试未创建的未知品类片段",
         )
     footwear = next(
-        segment
-        for segment in task["segments"]
-        if segment["agent_key"] == "footwear"
+        segment for segment in task["segments"] if segment["agent_key"] == "footwear"
     )
     with database.transaction(immediate=True) as connection:
         connection.execute(
@@ -1642,8 +1634,7 @@ def test_worker_recovers_only_running_segments(tmp_path: Path) -> None:
 
     recovered = service.get(str(task["id"]))
     recovered_segments = {
-        segment["agent_key"]: segment["status"]
-        for segment in recovered["segments"]
+        segment["agent_key"]: segment["status"] for segment in recovered["segments"]
     }
     assert recovered["status"] == "queued"
     assert recovered_segments == {
@@ -1744,8 +1735,7 @@ def test_cancelled_task_delivers_completed_listing_and_resumes_remaining(
     assert completed["status"] == "completed"
     assert resume_calls == ["eyewear-2026-08-10-v1"]
     assert any(
-        event["event_type"] == "resumed"
-        and event["data"]["note"] == "继续剩余 Listing"
+        event["event_type"] == "resumed" and event["data"]["note"] == "继续剩余 Listing"
         for event in service.events(str(task["id"]))
     )
     assert any(
@@ -1872,12 +1862,8 @@ def test_cancelled_queued_task_marks_waiting_segments_not_started(
     )
 
     assert cancelled["status"] == "cancelled"
-    assert all(
-        segment["status"] != "queued" for segment in cancelled["segments"]
-    )
-    assert any(
-        segment["status"] == "cancelled" for segment in cancelled["segments"]
-    )
+    assert all(segment["status"] != "queued" for segment in cancelled["segments"])
+    assert any(segment["status"] == "cancelled" for segment in cancelled["segments"])
 
 
 @pytest.mark.parametrize(
@@ -1901,9 +1887,7 @@ def test_listing_controls_and_parallelism_are_audited(tmp_path: Path) -> None:
     database, _returns_path, _products_path = _database_with_inputs(tmp_path)
     service = TaskService(database)
     task = _create_task(database, "run_ready")
-    segment = next(
-        value for value in task["segments"] if value["status"] == "queued"
-    )
+    segment = next(value for value in task["segments"] if value["status"] == "queued")
 
     changed = service.set_parallelism(
         task_id=str(task["id"]),
@@ -1957,9 +1941,7 @@ def test_listing_controls_and_parallelism_are_audited(tmp_path: Path) -> None:
         if value["segment_key"] == segment["segment_key"]
     )
     assert cancelled_segment["status"] == "cancelled"
-    actions = {
-        item["action"] for item in list_audit(database, "task", str(task["id"]))
-    }
+    actions = {item["action"] for item in list_audit(database, "task", str(task["id"]))}
     assert {
         "parallelism_changed",
         "segment_pause",
@@ -2001,9 +1983,7 @@ def test_resuming_listing_releases_batch_pause_gate(tmp_path: Path) -> None:
     )
 
     assert resumed["pause_requested"] == 0
-    statuses = {
-        value["segment_key"]: value["status"] for value in resumed["segments"]
-    }
+    statuses = {value["segment_key"]: value["status"] for value in resumed["segments"]}
     assert statuses[selected["segment_key"]] == "queued"
     assert all(
         status in {"queued", "paused", "blocked"} for status in statuses.values()
@@ -2018,9 +1998,7 @@ def test_running_listing_pause_recovers_as_paused(tmp_path: Path) -> None:
     database, _returns_path, _products_path = _database_with_inputs(tmp_path)
     service = TaskService(database)
     task = _create_task(database, "run_ready")
-    segment = next(
-        value for value in task["segments"] if value["status"] == "queued"
-    )
+    segment = next(value for value in task["segments"] if value["status"] == "queued")
     with database.transaction(immediate=True) as connection:
         connection.execute(
             "UPDATE tasks SET status = 'running' WHERE id = ?",
@@ -2074,9 +2052,7 @@ def test_restart_finishes_pending_batch_cancel(tmp_path: Path) -> None:
 
     recovered = service.get(str(task["id"]))
     assert recovered["status"] == "cancelled"
-    assert all(
-        segment["status"] == "cancelled" for segment in recovered["segments"]
-    )
+    assert all(segment["status"] == "cancelled" for segment in recovered["segments"])
     assert worker._claim_next_segment() is None
     worker.stop()
 

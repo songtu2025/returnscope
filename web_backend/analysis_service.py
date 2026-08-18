@@ -292,14 +292,10 @@ class AnalysisService:
             if not products.empty:
                 dimensions = set(PRODUCT_DIMENSION_COLUMNS[1:])
                 details = data.details.drop(
-                    columns=[
-                        column for column in dimensions if column in data.details
-                    ],
+                    columns=[column for column in dimensions if column in data.details],
                 ).merge(products, on="sku", how="left", validate="many_to_one")
                 for column in dimensions:
-                    details[column] = (
-                        details[column].fillna("").astype(str).str.strip()
-                    )
+                    details[column] = details[column].fillna("").astype(str).str.strip()
                 data = AnalysisData(
                     details=details,
                     semantics=data.semantics,
@@ -485,9 +481,7 @@ class AnalysisService:
     @staticmethod
     def _quality_gate(frame: pd.DataFrame) -> dict[str, Any]:
         text_records = int(frame["has_text"].sum())
-        labeled_records = int(
-            frame["问题标签"].fillna("").str.strip().ne("").sum()
-        )
+        labeled_records = int(frame["问题标签"].fillna("").str.strip().ne("").sum())
         review_records = int(frame["处理状态"].isin(REVIEW_STATUSES).sum())
         review = frame.loc[
             frame["处理状态"].isin(REVIEW_STATUSES) & frame["分类键"].ne("")
@@ -641,9 +635,7 @@ class AnalysisService:
         unknowns["重复记录数"] = pd.to_numeric(
             unknowns["重复记录数"], errors="coerce"
         ).fillna(0)
-        unknowns = unknowns.sort_values(
-            "重复记录数", ascending=False, kind="stable"
-        )
+        unknowns = unknowns.sort_values("重复记录数", ascending=False, kind="stable")
         review = frame.loc[
             frame["处理状态"].isin(REVIEW_STATUSES) & frame["分类键"].ne("")
         ].drop_duplicates(subset=["分类键"])

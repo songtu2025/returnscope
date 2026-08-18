@@ -45,9 +45,7 @@ class CategoryExecutionPlan:
         ):
             if assignment in {None, "excluded"}:
                 continue
-            output.setdefault(assignment, []).append(
-                str(row.classification_key)
-            )
+            output.setdefault(assignment, []).append(str(row.classification_key))
         return output
 
     def unresolved_classification_keys(
@@ -116,9 +114,7 @@ def build_category_execution_plan(
     for row in unique_comments.itertuples(index=False):
         category_a = str(row.category_a).strip()
         category_b = str(row.category_b).strip()
-        match_status = str(
-            getattr(row, "product_match_status", "matched")
-        ).strip()
+        match_status = str(getattr(row, "product_match_status", "matched")).strip()
         if match_status != "matched":
             assignments_list.append("excluded")
             continue
@@ -282,17 +278,11 @@ def build_category_execution_plan(
         "excluded_categories": _variant_counts(not_analyzed, record_counts),
         "unmatched_product_count": len(unmatched_product),
         "unmatched_product_record_count": int(
-            unmatched_product["classification_key"]
-            .map(record_counts)
-            .fillna(0)
-            .sum()
+            unmatched_product["classification_key"].map(record_counts).fillna(0).sum()
         ),
         "missing_category_count": len(missing_category),
         "missing_category_record_count": int(
-            missing_category["classification_key"]
-            .map(record_counts)
-            .fillna(0)
-            .sum()
+            missing_category["classification_key"].map(record_counts).fillna(0).sum()
         ),
         "missing_categories": _variant_counts(missing_category, record_counts),
         "unknown_category_count": len(unsupported),

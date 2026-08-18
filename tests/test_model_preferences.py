@@ -136,4 +136,7 @@ def test_model_preference_is_personal_and_model_service_is_admin_only(
         assert saved.status_code == 200, saved.text
         assert saved.json()["config_version_id"] == config["id"]
         assert saved.json()["cheap_audit_percent"] == 8
-        assert client.get("/api/model-preferences/me").json()["primary_model"] == "test-model"
+        assert (
+            client.get("/api/model-preferences/me").json()["primary_model"]
+            == "test-model"
+        )

@@ -73,15 +73,9 @@ class TaskService:
             dataset_version_id=str(task["dataset_version_id"]),
             product_version_id=product_version_id,
             store=(
-                None
-                if snapshot_scope.get("mode") == "auto"
-                else str(task["store"])
+                None if snapshot_scope.get("mode") == "auto" else str(task["store"])
             ),
-            listing=(
-                None
-                if snapshot_scope.get("mode") == "auto"
-                else task["listing"]
-            ),
+            listing=(None if snapshot_scope.get("mode") == "auto" else task["listing"]),
             config_version_id=str(task["config_version_id"]),
             model_policy=model_policy,
         )
@@ -109,7 +103,9 @@ class TaskService:
         prepared = self.plan_service.prepare(
             dataset_version_id=str(source["dataset_version_id"]),
             product_version_id=product_version_id,
-            store=(None if source_scope.get("mode") == "auto" else str(source["store"])),
+            store=(
+                None if source_scope.get("mode") == "auto" else str(source["store"])
+            ),
             listing=(None if source_scope.get("mode") == "auto" else source["listing"]),
             config_version_id=str(source["config_version_id"]),
             model_policy=model_policy,
@@ -121,14 +117,10 @@ class TaskService:
             str(segment["segment_key"]): segment
             for segment in prepared.response["segments"]
         }
-        planned_keys = (
-            prepared.execution_plan.classification_keys_by_segment(
-                prepared.dataset
-            )
+        planned_keys = prepared.execution_plan.classification_keys_by_segment(
+            prepared.dataset
         )
-        record_counts = prepared.dataset.records[
-            "classification_key"
-        ].value_counts()
+        record_counts = prepared.dataset.records["classification_key"].value_counts()
         now = utc_now()
         with self.database.transaction(immediate=True) as connection:
             row = connection.execute(
@@ -162,9 +154,7 @@ class TaskService:
                     or segment_key not in planned_segments
                 ):
                     continue
-                keys = set(
-                    json_value(old_segment["classification_keys_json"], [])
-                )
+                keys = set(json_value(old_segment["classification_keys_json"], []))
                 new_keys = set(planned_keys.get(segment_key, []))
                 if old_segment["status"] in {
                     "completed",
@@ -186,16 +176,11 @@ class TaskService:
             for old_segment in preserved.values():
                 preserved_keys_by_segment.setdefault(
                     str(old_segment["segment_key"]), set()
-                ).update(
-                    json_value(old_segment["classification_keys_json"], [])
-                )
+                ).update(json_value(old_segment["classification_keys_json"], []))
 
             has_blocked = int(prepared.response["blocked_count"]) > 0
             next_execution_order = max(
-                (
-                    int(value["execution_order"])
-                    for value in preserved.values()
-                ),
+                (int(value["execution_order"]) for value in preserved.values()),
                 default=0,
             )
             for planned_segment_key, segment in planned_segments.items():
@@ -254,9 +239,7 @@ class TaskService:
                     "reason": clean_reason,
                 }
             )
-            snapshot["products"] = self._dataset_version_snapshot(
-                prepared.products
-            )
+            snapshot["products"] = self._dataset_version_snapshot(prepared.products)
             snapshot["config"] = self._model_config_snapshot(
                 prepared.config,
                 model_policy,
@@ -576,7 +559,9 @@ class TaskService:
                 raise ValueError("Listing 片段不存在")
             publish_status = str(segment["result_publish_status"] or "")
             if publish_status == "publishing":
-                raise TaskResultPublishConflict("Listing 分类结果正在发布，请勿重复提交")
+                raise TaskResultPublishConflict(
+                    "Listing 分类结果正在发布，请勿重复提交"
+                )
             if publish_status == "published" or segment["result_version_id"]:
                 raise TaskResultPublishConflict("Listing 分类结果已经发布")
             if publish_status != "failed":
@@ -1206,7 +1191,9 @@ class TaskService:
         if row is None:
             return None
         item = self._serialize(dict(row))
-        item["segments"] = [self._serialize_segment(dict(value)) for value in segment_rows]
+        item["segments"] = [
+            self._serialize_segment(dict(value)) for value in segment_rows
+        ]
         max_parallel = int(item.get("max_parallel_segments", 3))
         for segment in item["segments"]:
             status = str(segment["status"])
@@ -1717,9 +1704,7 @@ class TaskService:
         classification_keys: list[str],
     ) -> list[dict[str, Any]]:
         selected = dataset.unique_comments.loc[
-            dataset.unique_comments["classification_key"].isin(
-                classification_keys
-            )
+            dataset.unique_comments["classification_key"].isin(classification_keys)
         ]
         variants = []
         for (category_a, category_b), rows in selected.groupby(

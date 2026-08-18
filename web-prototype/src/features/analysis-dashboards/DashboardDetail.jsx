@@ -209,7 +209,8 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
       setReports({ loading: false, error: "", items: reportItems });
       const selected = reportItems.find((item) => item.id === route.reportId);
       const latestPublished = reportItems.find(isPublishedReport);
-      const nextReportId = selected?.id || latestPublished?.id || reportItems[0]?.id || "";
+      const nextReportId =
+        selected?.id || latestPublished?.id || reportItems[0]?.id || "";
       if (nextReportId !== route.reportId) {
         updateRoute({ reportId: nextReportId }, { replace: true });
       }

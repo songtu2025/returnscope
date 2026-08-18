@@ -99,7 +99,9 @@ class InsightReportService:
                 if source.get("listing")
             }
         )
-        scope_name = listings[0] if len(listings) == 1 else f"{len(listings)} 个 Listing"
+        scope_name = (
+            listings[0] if len(listings) == 1 else f"{len(listings)} 个 Listing"
+        )
         dashboard = self.dashboard_service.create(
             name=f"AI 洞察 · {scope_name}",
             description="由分类结果自动创建，用于承载 AI 退货洞察报告。",
@@ -159,10 +161,7 @@ class InsightReportService:
                 dashboard_id,
                 dashboard_version_id,
             )
-        return [
-            self._serialize(dict(row), text_quality=text_quality)
-            for row in rows
-        ]
+        return [self._serialize(dict(row), text_quality=text_quality) for row in rows]
 
     def get(self, report_id: str) -> dict[str, Any]:
         with self.database.connect() as connection:
@@ -849,14 +848,14 @@ class InsightReportService:
                     "data": sample,
                 }
                 if text and text not in seen_samples and len(samples) < 8:
-                    samples.append({**sample, "reason_code": code, "evidence_id": sample_id})
+                    samples.append(
+                        {**sample, "reason_code": code, "evidence_id": sample_id}
+                    )
                     seen_samples.add(text)
         total_record_count = int(
             summary.get("total_record_count") or summary.get("record_count") or 0
         )
-        pending_review_count = int(
-            summary.get("pending_review_record_count") or 0
-        )
+        pending_review_count = int(summary.get("pending_review_record_count") or 0)
         coverage_rate = float(
             summary.get("coverage_rate")
             if summary.get("coverage_rate") is not None
@@ -981,7 +980,9 @@ class InsightReportService:
                 f"（{float(reason.get('percentage') or 0):.1f}%）"
                 for reason in actionable_reasons
             )
-            structure_statement = f"{structure_statement.rstrip('。')}；其中{reason_text}。"
+            structure_statement = (
+                f"{structure_statement.rstrip('。')}；其中{reason_text}。"
+            )
 
         findings = [
             {
@@ -1185,9 +1186,7 @@ class InsightReportService:
             caveats.append(str(text_quality.get("note")))
 
         diagnostic_summary = (
-            findings[1]["conclusion"]
-            if len(findings) > 1
-            else structure_statement
+            findings[1]["conclusion"] if len(findings) > 1 else structure_statement
         )
         return {
             "title": f"{scope_name} 退货问题{'临时' if provisional else ''}诊断报告",
@@ -1349,9 +1348,7 @@ class InsightReportService:
     def _items_by_id(value: Any) -> dict[str, dict[str, Any]]:
         if isinstance(value, dict):
             return {
-                str(key): item
-                for key, item in value.items()
-                if isinstance(item, dict)
+                str(key): item for key, item in value.items() if isinstance(item, dict)
             }
         if not isinstance(value, list):
             return {}
@@ -1422,10 +1419,14 @@ class InsightReportService:
             ) != int(reason.get("record_count") or 0):
                 issues.append(f"诊断原因 {code} 的记录数与分类结果不一致")
             selected_percentage = selected_reason.get("percentage")
-            if selected_percentage is None or abs(
-                float(selected_percentage or 0)
-                - float(reason.get("percentage") or 0)
-            ) > 0.05:
+            if (
+                selected_percentage is None
+                or abs(
+                    float(selected_percentage or 0)
+                    - float(reason.get("percentage") or 0)
+                )
+                > 0.05
+            ):
                 issues.append(f"诊断原因 {code} 的占比与分类结果不一致")
 
         for finding in content.get("findings", []):
@@ -1516,9 +1517,13 @@ class InsightReportService:
                 }
                 for diagnostic in analysis.get("diagnostics", [])
             ]
-            analysis["samples"] = [] if not text_trusted else analysis.get(
-                "samples",
-                [],
+            analysis["samples"] = (
+                []
+                if not text_trusted
+                else analysis.get(
+                    "samples",
+                    [],
+                )
             )
 
         blocked_catalog_markers = []
@@ -1560,8 +1565,7 @@ class InsightReportService:
                 {
                     "title": "评论文本质量未通过",
                     "statement": (
-                        "当前源数据存在疑似编码异常；"
-                        "修复前，本报告只用于定位数据问题。"
+                        "当前源数据存在疑似编码异常；修复前，本报告只用于定位数据问题。"
                     ),
                     "tone": "warning",
                     "evidence_ids": ["text_quality", "scope"],
@@ -1583,8 +1587,7 @@ class InsightReportService:
         actions = [
             action
             for action in content.get("actions", [])
-            if action.get("id") != "action.diagnostic"
-            or product_level_trusted
+            if action.get("id") != "action.diagnostic" or product_level_trusted
         ]
         gate_actions = []
         if not text_trusted:
@@ -1598,21 +1601,17 @@ class InsightReportService:
                         "再重新生成分类结果和 AI 洞察报告。"
                     ),
                     "rationale": (
-                        "评论文本检测到中英文异常混排，"
-                        "语义分类和原始证据可能失真。"
+                        "评论文本检测到中英文异常混排，语义分类和原始证据可能失真。"
                     ),
                     "success_signal": (
-                        "重新导入后不再检测到异常混排，"
-                        "抽样评论与源文件一致。"
+                        "重新导入后不再检测到异常混排，抽样评论与源文件一致。"
                     ),
                     "evidence_ids": ["text_quality", "scope"],
                 }
             )
         if not mapping_trusted:
             actions = [
-                action
-                for action in actions
-                if action.get("id") != "action.mapping"
+                action for action in actions if action.get("id") != "action.mapping"
             ]
             gate_actions.append(
                 {
@@ -1659,10 +1658,7 @@ class InsightReportService:
                 "label": "不可使用",
                 "reason": "报告内部数据不一致，请重新生成报告。",
             }
-        elif (
-            not product_level_trusted
-            or source.get("report_status") == "provisional"
-        ):
+        elif not product_level_trusted or source.get("report_status") == "provisional":
             decision_readiness = {
                 "status": "diagnostic_only",
                 "label": "仅供诊断",

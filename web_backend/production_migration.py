@@ -259,9 +259,7 @@ def migrate_production_data(
                 stored_source_root,
             )
             _validate_staged_database(staged_database)
-            copied_file_count = sum(
-                1 for path in staging.rglob("*") if path.is_file()
-            )
+            copied_file_count = sum(1 for path in staging.rglob("*") if path.is_file())
             for name in ("app.db", *RUNTIME_DIRECTORIES):
                 source = staging / name
                 destination = target_root / name

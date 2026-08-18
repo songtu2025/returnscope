@@ -9,6 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="预览或回填历史 Listing 分类结果到不可变结果池",
@@ -42,11 +43,7 @@ def main() -> int:
         result_service = ClassificationResultService(database)
         runner = AgentRunner(database, settings, object(), result_service)
         service = LegacyResultBackfillService(database, runner)
-        output = (
-            service.apply(args.preview_hash)
-            if args.apply
-            else service.preview()
-        )
+        output = service.apply(args.preview_hash) if args.apply else service.preview()
         print(json.dumps(output, ensure_ascii=False, separators=(",", ":")))
         return 0
     except Exception as exc:

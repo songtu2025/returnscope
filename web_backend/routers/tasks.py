@@ -152,9 +152,7 @@ def create_task_router(
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    @router.post(
-        "/api/tasks/{task_id}/segments/{segment_id}/retry-result-publish"
-    )
+    @router.post("/api/tasks/{task_id}/segments/{segment_id}/retry-result-publish")
     def retry_segment_result_publish(
         task_id: str,
         segment_id: str,

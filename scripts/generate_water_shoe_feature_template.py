@@ -141,9 +141,7 @@ def build_asin_sku_map(source_path: Path) -> dict[str, str]:
                 asin_to_skus[asin].add(sku)
 
     invalid = {
-        asin: sorted(skus)
-        for asin, skus in asin_to_skus.items()
-        if len(skus) != 1
+        asin: sorted(skus) for asin, skus in asin_to_skus.items() if len(skus) != 1
     }
     if invalid:
         raise ValueError(f"ASIN 无法唯一映射规范 SKU: {invalid}")
@@ -353,7 +351,7 @@ def build_workbook(rows: list[dict[str, object]], output_path: Path) -> None:
     )
     sku_sheet.conditional_formatting.add(
         f"I2:O{last_sku_row}",
-        FormulaRule(formula=["I2=\"\""], fill=MISSING_FILL),
+        FormulaRule(formula=['I2=""'], fill=MISSING_FILL),
     )
 
     claim_sheet = workbook.create_sheet("Listing声明")
@@ -417,7 +415,10 @@ def verify_workbook(output_path: Path, expected_rows: int) -> None:
     if headers != SKU_HEADERS:
         raise ValueError("SKU 模板字段与契约不一致")
 
-    sku_values = [sku_sheet.cell(row=row, column=1).value for row in range(2, sku_sheet.max_row + 1)]
+    sku_values = [
+        sku_sheet.cell(row=row, column=1).value
+        for row in range(2, sku_sheet.max_row + 1)
+    ]
     if len(sku_values) != len(set(sku_values)):
         raise ValueError("SKU 模板中存在重复 canonical_sku")
 

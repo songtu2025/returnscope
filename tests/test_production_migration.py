@@ -191,16 +191,22 @@ def test_migrates_to_empty_target_rebases_paths_and_preserves_cache(
         target_ciphertext = connection.execute(
             "SELECT api_key_ciphertext FROM api_config_versions"
         ).fetchone()[0]
-        session_count = connection.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
+        session_count = connection.execute("SELECT COUNT(*) FROM sessions").fetchone()[
+            0
+        ]
     assert all(Path(path).is_relative_to(target) for path in paths)
     assert all(Path(path).is_file() for path in paths)
     assert target_ciphertext == ciphertext
     assert session_count == 0
     with sqlite3.connect(source / "app.db") as connection:
         assert connection.execute("SELECT COUNT(*) FROM sessions").fetchone()[0] == 1
-        assert connection.execute(
-            "SELECT file_path FROM dataset_versions ORDER BY id LIMIT 1"
-        ).fetchone()[0].startswith(OLD_RUNTIME_ROOT)
+        assert (
+            connection.execute(
+                "SELECT file_path FROM dataset_versions ORDER BY id LIMIT 1"
+            )
+            .fetchone()[0]
+            .startswith(OLD_RUNTIME_ROOT)
+        )
 
 
 def test_key_rotation_runs_on_imported_target_before_start(
@@ -234,9 +240,12 @@ def test_key_rotation_runs_on_imported_target_before_start(
         ).fetchone()[0]
     assert SecretBox(new_key).decrypt(target_ciphertext) == "migration-secret"
     with sqlite3.connect(source / "app.db") as connection:
-        assert connection.execute(
-            "SELECT api_key_ciphertext FROM api_config_versions"
-        ).fetchone()[0] == source_ciphertext
+        assert (
+            connection.execute(
+                "SELECT api_key_ciphertext FROM api_config_versions"
+            ).fetchone()[0]
+            == source_ciphertext
+        )
 
 
 def test_refuses_nonempty_target_before_backup(tmp_path: Path) -> None:

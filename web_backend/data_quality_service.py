@@ -98,9 +98,13 @@ class DataQualityService:
                     "reason",
                 ]
             ].apply(
-                lambda column: column.astype(str).str.casefold().str.contains(
-                    clean_query,
-                    regex=False,
+                lambda column: (
+                    column.astype(str)
+                    .str.casefold()
+                    .str.contains(
+                        clean_query,
+                        regex=False,
+                    )
                 )
             )
             issue_frame = issue_frame.loc[searchable.any(axis=1)]
@@ -199,9 +203,7 @@ class DataQualityService:
             "missing_category_records": int(
                 (matched & category_a.eq("") & category_b.eq("")).sum()
             ),
-            "missing_product_name_records": int(
-                (matched & product_name.eq("")).sum()
-            ),
+            "missing_product_name_records": int((matched & product_name.eq("")).sum()),
         }
 
     @staticmethod

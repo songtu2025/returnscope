@@ -13,8 +13,7 @@ def summarize_task_status(statuses: list[str]) -> str:
     if any(status == "paused" for status in statuses):
         return "paused"
     has_deliverable = any(
-        status in {"completed", "completed_with_errors"}
-        for status in statuses
+        status in {"completed", "completed_with_errors"} for status in statuses
     )
     if has_deliverable:
         return "partial"

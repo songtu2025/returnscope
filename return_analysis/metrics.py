@@ -738,9 +738,9 @@ def problem_pair_summary(
         exploded["标签编码"],
     )
     ordered = exploded.sort_values(["_record_id", "标签编码"])
-    rows = ordered[
-        ["_record_id", "标签编码", "显示名称"]
-    ].itertuples(index=False, name=None)
+    rows = ordered[["_record_id", "标签编码", "显示名称"]].itertuples(
+        index=False, name=None
+    )
     pair_counts: Counter[tuple[str, str, str]] = Counter()
     multi_problem_records = 0
     for _, record_rows in groupby(rows, key=itemgetter(0)):
@@ -749,9 +749,7 @@ def problem_pair_summary(
         for left, right in combinations(items, 2):
             if focus_code and focus_code not in {left[0], right[0]}:
                 continue
-            pair_counts[
-                (left[0], right[0], f"{left[1]} + {right[1]}")
-            ] += 1
+            pair_counts[(left[0], right[0], f"{left[1]} + {right[1]}")] += 1
             record_has_pair = True
         if record_has_pair:
             multi_problem_records += 1

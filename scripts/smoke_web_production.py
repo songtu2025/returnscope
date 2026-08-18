@@ -27,9 +27,7 @@ def validate_base_url(value: str, allow_http: bool = False) -> str:
         raise ValueError("服务地址必须是完整域名，且不能包含查询参数")
     if parsed.path not in {"", "/"}:
         raise ValueError("服务地址不能包含路径")
-    if parsed.scheme != "https" and not (
-        allow_http and parsed.scheme == "http"
-    ):
+    if parsed.scheme != "https" and not (allow_http and parsed.scheme == "http"):
         raise ValueError("生产冒烟验收必须使用 HTTPS")
     return base_url
 
@@ -178,9 +176,7 @@ def main() -> None:
         base_url = validate_base_url(args.base_url, args.allow_http)
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
-    password = os.getenv("WEBAPP_SMOKE_PASSWORD") or getpass.getpass(
-        "管理员密码："
-    )
+    password = os.getenv("WEBAPP_SMOKE_PASSWORD") or getpass.getpass("管理员密码：")
     try:
         run_smoke(
             base_url,

@@ -156,18 +156,22 @@ def test_result_pool_api_keeps_pagination_summary_and_download_consistent(
     assert listed.json()["page_size"] == 50
     assert listed.json()["items"][0]["version_id"] == version_id
     assert listed.json()["items"][0]["product_names"] == ["产品表权威名称"]
-    assert client.get(
-        "/api/classification-results",
-        params={"q": "PRODUCT-SKU-1", "store_site": "OTHER"},
-    ).json()["total"] == 0
-    assert client.get(
-        "/api/classification-results",
-        params={"page_size": 201},
-    ).status_code == 422
-
-    first_default = client.get(
-        f"/api/classification-results/{version_id}/records"
+    assert (
+        client.get(
+            "/api/classification-results",
+            params={"q": "PRODUCT-SKU-1", "store_site": "OTHER"},
+        ).json()["total"]
+        == 0
     )
+    assert (
+        client.get(
+            "/api/classification-results",
+            params={"page_size": 201},
+        ).status_code
+        == 422
+    )
+
+    first_default = client.get(f"/api/classification-results/{version_id}/records")
     assert first_default.status_code == 200
     assert first_default.json()["page_size"] == 50
     assert first_default.json()["total"] == 205
@@ -178,10 +182,13 @@ def test_result_pool_api_keeps_pagination_summary_and_download_consistent(
     )
     assert by_product_name.status_code == 200
     assert by_product_name.json()["total"] == 205
-    assert client.get(
-        f"/api/classification-results/{version_id}/records",
-        params={"product_name": "其他产品名称"},
-    ).json()["total"] == 0
+    assert (
+        client.get(
+            f"/api/classification-results/{version_id}/records",
+            params={"product_name": "其他产品名称"},
+        ).json()["total"]
+        == 0
+    )
 
     first = client.get(
         f"/api/classification-results/{version_id}/records",
@@ -197,14 +204,15 @@ def test_result_pool_api_keeps_pagination_summary_and_download_consistent(
     assert len(second["items"]) == 5
     assert [item["source_row"] for item in items] == list(range(2, 207))
     assert len({item["source_record_id"] for item in items}) == 205
-    assert client.get(
-        f"/api/classification-results/{version_id}/records",
-        params={"page_size": 201},
-    ).status_code == 422
+    assert (
+        client.get(
+            f"/api/classification-results/{version_id}/records",
+            params={"page_size": 201},
+        ).status_code
+        == 422
+    )
 
-    summary = client.get(
-        f"/api/classification-results/{version_id}/summary"
-    ).json()
+    summary = client.get(f"/api/classification-results/{version_id}/summary").json()
     assert summary["quality"][0]["record_count"] == 205
     assert summary["top_problems"][0]["record_count"] == 205
     drilldown = client.get(
@@ -214,14 +222,15 @@ def test_result_pool_api_keeps_pagination_summary_and_download_consistent(
     assert drilldown["page_size"] == 50
     assert drilldown["items"][0]["record_count"] == 205
     assert drilldown["items"][0]["unit_count"] == 1
-    assert client.get(
-        f"/api/classification-results/{version_id}/drilldown",
-        params={"group_by": "problem", "page_size": 201},
-    ).status_code == 422
-
-    download = client.get(
-        f"/api/classification-results/{version_id}/download"
+    assert (
+        client.get(
+            f"/api/classification-results/{version_id}/drilldown",
+            params={"group_by": "problem", "page_size": 201},
+        ).status_code
+        == 422
     )
+
+    download = client.get(f"/api/classification-results/{version_id}/download")
     assert download.status_code == 200
     exported = pd.read_excel(BytesIO(download.content), dtype=str).fillna("")
     assert len(exported) == 205

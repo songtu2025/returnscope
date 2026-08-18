@@ -177,10 +177,12 @@ def test_mixed_task_loads_each_family_taxonomy_and_excludes_unknown(
     assert result.pipeline.cache_hits == 4
     assert "unknown" not in result.pipeline.classifications
     assert len(result.segments) == 4
-    assert {
-        segment["agent_family"]
-        for segment in result.segments
-    } == {"帽类智能体", "眼镜智能体", "鞋履智能体", "手套智能体"}
+    assert {segment["agent_family"] for segment in result.segments} == {
+        "帽类智能体",
+        "眼镜智能体",
+        "鞋履智能体",
+        "手套智能体",
+    }
     for segment in result.segments:
         assert "record_count" in segment
         assert "model_calls" in segment

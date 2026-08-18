@@ -25,9 +25,7 @@ def _settings(tmp_path: Path) -> Settings:
 
 
 def test_sk001_claims_load_and_unconfigured_listing_has_no_claims() -> None:
-    resolver = ClaimsResolver(
-        PROJECT_ROOT / "config" / "listing_claims_registry.json"
-    )
+    resolver = ClaimsResolver(PROJECT_ROOT / "config" / "listing_claims_registry.json")
 
     configured = resolver.resolve("SEEKWAY:US", "SK001", "footwear")
     unconfigured = resolver.resolve("SEEKWAY:US", "OTHER", "footwear")
@@ -38,7 +36,9 @@ def test_sk001_claims_load_and_unconfigured_listing_has_no_claims() -> None:
     assert unconfigured.claims == []
 
 
-def test_runner_uses_persisted_claims_and_legacy_snapshot_is_safe(tmp_path: Path) -> None:
+def test_runner_uses_persisted_claims_and_legacy_snapshot_is_safe(
+    tmp_path: Path,
+) -> None:
     runner = AgentRunner(Database(tmp_path / "app.db"), _settings(tmp_path), object())
     base_settings = Sub2APISettings(
         api_key="test-key",

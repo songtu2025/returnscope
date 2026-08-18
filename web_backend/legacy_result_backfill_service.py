@@ -63,9 +63,7 @@ class LegacyResultBackfillService:
                 for item in items
             ],
         }
-        preview_hash = hashlib.sha256(
-            json_text(hash_input).encode("utf-8")
-        ).hexdigest()
+        preview_hash = hashlib.sha256(json_text(hash_input).encode("utf-8")).hexdigest()
         output = {
             "mode": "preview",
             "preview_hash": preview_hash,
@@ -328,11 +326,7 @@ class LegacyResultBackfillService:
                     new_id("audit"),
                     segment_id,
                     json_text(
-                        {
-                            "result_publish_status": segment[
-                                "result_publish_status"
-                            ]
-                        }
+                        {"result_publish_status": segment["result_publish_status"]}
                     ),
                     json_text(
                         {
