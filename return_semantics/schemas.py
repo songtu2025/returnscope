@@ -108,6 +108,7 @@ class LabelDefinition(StrictModel):
     name: str
     group: str
     description: str
+    keywords: list[str] = Field(default_factory=list)
     allowed_sentiments: list[SentimentCode]
     allowed_claim_ids: list[str] = Field(default_factory=list)
 

@@ -161,8 +161,9 @@ class ClassificationResultService:
                             dataset_version_id, product_version_id,
                             store_site, listing, agent_key, agent_family,
                             logic_version, taxonomy_version,
-                            model_policy_version, claims_version, created_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            model_policy_version, standard_version_id,
+                            claims_version, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             result_id,
@@ -177,6 +178,7 @@ class ClassificationResultService:
                             segment["logic_version"],
                             segment["taxonomy_version"],
                             segment["model_policy_version"],
+                            segment["standard_version_id"],
                             segment["claims_version"],
                             now,
                         ),
@@ -931,7 +933,11 @@ class ClassificationResultService:
                    r.dataset_version_id, r.product_version_id,
                    r.store_site, r.listing, r.agent_key, r.agent_family,
                    r.logic_version, r.taxonomy_version,
-                   r.model_policy_version, r.claims_version,
+                   r.model_policy_version, r.standard_version_id,
+                   standard.id AS standard_id,
+                   standard.name AS standard_name,
+                   standard_version.version_no AS standard_version,
+                   r.claims_version,
                    rd.name AS dataset_name, dv.version AS dataset_version,
                    pd.name AS product_dataset_name,
                    pv.version AS product_version,
@@ -953,6 +959,10 @@ class ClassificationResultService:
             JOIN datasets rd ON rd.id = dv.dataset_id
             JOIN dataset_versions pv ON pv.id = r.product_version_id
             JOIN datasets pd ON pd.id = pv.dataset_id
+            LEFT JOIN classification_standard_versions standard_version
+              ON standard_version.id = r.standard_version_id
+            LEFT JOIN classification_standards standard
+              ON standard.id = standard_version.standard_id
             LEFT JOIN users creator ON creator.id = v.created_by
         """
 

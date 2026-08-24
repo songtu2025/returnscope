@@ -24,10 +24,11 @@ describe("应用壳层与路由", () => {
 
   afterEach(() => cleanup());
 
-  test("一级导航只保留五个稳定业务入口并单列系统设置", () => {
+  test("一级导航只保留六个稳定业务入口并单列系统设置", () => {
     expect(PRIMARY_NAV_ITEMS.map((item) => item.label)).toEqual([
       "首页",
       "产品信息",
+      "分类标准",
       "分析任务",
       "分类结果",
       "分析看板",

@@ -6,9 +6,11 @@ from collections import Counter
 from dataclasses import is_dataclass, replace
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
-from return_semantics.capabilities import load_capability_registry
+import pandas as pd
+
+from return_semantics.capabilities import CategoryCapability, load_capability_registry
 from return_semantics.category_pipeline import CategorySegmentRuntime
 from return_semantics.claims import NO_CLAIMS_VERSION, ClaimsResolver
 from return_semantics.data import (
@@ -37,6 +39,7 @@ from web_backend.classification_result_service import (
     ClassificationResultService,
     ResultPublicationError,
 )
+from web_backend.classification_standard_service import ClassificationStandardService
 from web_backend.common import json_text, json_value
 from web_backend.config_service import ConfigService
 from web_backend.database import Database
@@ -56,13 +59,21 @@ class AgentRunner:
         settings: Settings,
         config_service: ConfigService,
         result_service: ClassificationResultService | None = None,
+        standard_service: ClassificationStandardService | None = None,
     ) -> None:
         self.database = database
         self.settings = settings
         self.config_service = config_service
         self.result_service = result_service or ClassificationResultService(database)
-        self.capability_registry = load_capability_registry(
-            PROJECT_ROOT / "config" / "category_capabilities.json"
+        self.standard_service = standard_service or ClassificationStandardService(
+            database
+        )
+        self.capability_registry = (
+            self.standard_service.active_registry()
+            if self.standard_service._tables_exist()
+            else load_capability_registry(
+                PROJECT_ROOT / "config" / "category_capabilities.json"
+            )
         )
         self.claims_resolver = ClaimsResolver(
             PROJECT_ROOT / "config" / "listing_claims_registry.json"
@@ -159,17 +170,8 @@ class AgentRunner:
                 .isin(remaining_keys)
             ].reset_index(drop=True)
 
-            capability = next(
-                (
-                    item
-                    for item in self.capability_registry.capabilities
-                    if item.key == str(segment["agent_key"])
-                ),
-                None,
-            )
-            if capability is None:
-                raise ValueError(f"品类能力不存在: {segment['agent_key']}")
-            taxonomy = self.capability_registry.load_taxonomy(capability)
+            capability = self._capability_for_segment(segment)
+            taxonomy = self._taxonomy_for_segment(segment, capability)
             base_settings = self._snapshot_model_settings(task, snapshot)
             runtime = self._build_segment_runtime(
                 segment,
@@ -353,6 +355,79 @@ class AgentRunner:
                 model_failures,
             )
 
+    def classify_taxonomy_sample(
+        self,
+        *,
+        taxonomy: TaxonomyConfig,
+        samples: list[dict[str, Any]],
+        source: dict[str, Any],
+        progress: Callable[[int, int], None] | None = None,
+    ) -> PipelineRun:
+        unique_comments = pd.DataFrame(
+            [
+                {
+                    "classification_key": str(item["classification_key"]),
+                    "comment_normalized": str(item["comment"]),
+                    "reason": item.get("reason"),
+                    "category_a": str(item.get("category_a") or ""),
+                    "category_b": str(item.get("category_b") or ""),
+                }
+                for item in samples
+            ]
+        )
+        if source.get("kind") == "raw_dataset":
+            config_version_id = str(source["config_version_id"])
+            settings = self.config_service.build_model_settings(config_version_id)
+            claims = self.claims_resolver.resolve(
+                str(source.get("store") or ""),
+                source.get("listing"),
+                str(source["standard_key"]),
+                expected_version=NO_CLAIMS_VERSION,
+            )
+            client = Sub2APIClient(
+                settings,
+                rate_limiter=self._get_rate_limiter(
+                    config_version_id,
+                    settings.requests_per_minute,
+                ),
+            )
+            return classify_comments(
+                unique_comments=unique_comments,
+                taxonomy=taxonomy,
+                claims=claims,
+                client=client,
+                cache=self._get_cache("classification-standard-validation"),
+                secondary_model=settings.secondary_model,
+                progress=progress,
+                model_policy_version=str(source["model_policy_version"]),
+                secondary_is_fallback=False,
+            )
+        task = source["task"]
+        segment = source["segment"]
+        snapshot = json_value(task.get("snapshot_json"), {})
+        base_settings = self._snapshot_model_settings(task, snapshot)
+        runtime = self._build_segment_runtime(
+            segment,
+            base_settings,
+            str(task["config_version_id"]),
+            str(task["store"]),
+            task.get("listing"),
+        )
+        review = runtime.model_policy["actual"].get("review")
+        return classify_comments(
+            unique_comments=unique_comments,
+            taxonomy=taxonomy,
+            claims=runtime.claims,
+            client=runtime.client,
+            cache=self._get_cache("classification-standard-validation"),
+            secondary_model=runtime.secondary_model,
+            progress=progress,
+            model_policy_version=str(runtime.model_policy["version"]),
+            secondary_is_fallback=bool(
+                review and review.get("fallback_from") == "secondary"
+            ),
+        )
+
     def retry_result_publish(
         self,
         task_id: str,
@@ -431,17 +506,8 @@ class AgentRunner:
         if set(results) != all_keys:
             missing_count = len(all_keys - set(results))
             raise IncompleteResultCheckpoint(f"分类检查点缺少 {missing_count} 个分类键")
-        capability = next(
-            (
-                item
-                for item in self.capability_registry.capabilities
-                if item.key == str(segment["agent_key"])
-            ),
-            None,
-        )
-        if capability is None:
-            raise ValueError(f"品类能力不存在: {segment['agent_key']}")
-        taxonomy = self.capability_registry.load_taxonomy(capability)
+        capability = self._capability_for_segment(segment)
+        taxonomy = self._taxonomy_for_segment(segment, capability)
         snapshot = json_value(task.get("snapshot_json"), {})
         dataset = self._cached_dataset(
             str(task["return_file_path"]),
@@ -1230,7 +1296,16 @@ class AgentRunner:
                 }
             )
         partial_dataset = self._subset_dataset(dataset, completed_keys)
-        taxonomy = self.capability_registry.combined_taxonomy()
+        standard_version_ids = [
+            str(segment.get("standard_version_id") or "")
+            for segment in completed_segments
+        ]
+        snapshot_registry = (
+            self.standard_service.registry_for_versions(standard_version_ids)
+            if standard_version_ids and all(standard_version_ids)
+            else self.capability_registry
+        )
+        taxonomy = snapshot_registry.combined_taxonomy()
         result_dir = self.settings.data_dir / "results" / task_id
         result_dir.mkdir(parents=True, exist_ok=True)
         result_version = int(task["result_version"] or 0) + 1
@@ -1271,7 +1346,10 @@ class AgentRunner:
             "cache_hits": sum(
                 int(segment["cache_hits"]) for segment in persisted_segments
             ),
-            "category_registry_version": self.capability_registry.version,
+            "category_registry_version": snapshot.get("execution_plan", {}).get(
+                "registry_version",
+                snapshot_registry.version,
+            ),
             "category_segments": [
                 self._public_segment(segment) for segment in persisted_segments
             ],
@@ -1360,16 +1438,7 @@ class AgentRunner:
         listing: str | None,
     ) -> CategorySegmentRuntime:
         agent_key = str(segment["agent_key"])
-        capability = next(
-            (
-                item
-                for item in self.capability_registry.capabilities
-                if item.key == agent_key
-            ),
-            None,
-        )
-        if capability is None:
-            raise ValueError(f"品类能力不存在: {agent_key}")
+        capability = self._capability_for_segment(segment)
 
         model_policy = json_value(segment.get("model_policy_json"), None)
         if model_policy is None:
@@ -1459,6 +1528,36 @@ class AgentRunner:
             secondary_model=(str(review["model"]) if review else None),
             model_policy=model_policy,
         )
+
+    def _capability_for_segment(
+        self,
+        segment: dict[str, Any],
+    ) -> CategoryCapability:
+        standard_version_id = str(segment.get("standard_version_id") or "")
+        if standard_version_id:
+            return self.standard_service.capability_for_version(standard_version_id)
+        agent_key = str(segment["agent_key"])
+        capability = next(
+            (
+                item
+                for item in self.capability_registry.capabilities
+                if item.key == agent_key
+            ),
+            None,
+        )
+        if capability is None:
+            raise ValueError(f"品类能力不存在: {agent_key}")
+        return capability
+
+    def _taxonomy_for_segment(
+        self,
+        segment: dict[str, Any],
+        capability: CategoryCapability,
+    ) -> TaxonomyConfig:
+        standard_version_id = str(segment.get("standard_version_id") or "")
+        if standard_version_id:
+            return self.standard_service.taxonomy_for_version(standard_version_id)
+        return self.capability_registry.load_taxonomy(capability)
 
     def _load_segments(self, task_id: str) -> list[dict[str, Any]]:
         with self.database.connect() as connection:

@@ -9,6 +9,13 @@ from fastapi.staticfiles import StaticFiles
 from web_backend.agent_runner import AgentRunner
 from web_backend.analysis_service import AnalysisService
 from web_backend.classification_result_service import ClassificationResultService
+from web_backend.classification_standard_service import ClassificationStandardService
+from web_backend.classification_standard_validation_service import (
+    ClassificationStandardValidationService,
+)
+from web_backend.classification_standard_validation_worker import (
+    ClassificationStandardValidationWorker,
+)
 from web_backend.common import new_id
 from web_backend.config_service import ConfigService
 from web_backend.dashboard_service import DashboardService
@@ -23,6 +30,9 @@ from web_backend.review_service import ReviewService
 from web_backend.routers.accounts import SESSION_COOKIE, create_account_router
 from web_backend.routers.classification_results import (
     create_classification_result_router,
+)
+from web_backend.routers.classification_standards import (
+    create_classification_standard_router,
 )
 from web_backend.routers.dashboards import create_dashboard_router
 from web_backend.routers.datasets import create_dataset_router
@@ -40,6 +50,7 @@ from web_backend.security import (
     utc_now,
 )
 from web_backend.settings import PROJECT_ROOT, Settings
+from web_backend.task_plan_service import TaskPlanService
 from web_backend.task_service import TaskService
 from web_backend.worker import TaskWorker
 
@@ -96,6 +107,7 @@ def create_app(
     )
     analysis_service = AnalysisService(database)
     result_service = ClassificationResultService(database)
+    standard_service = ClassificationStandardService(database)
     dashboard_service = DashboardService(database)
     insight_report_service = InsightReportService(
         database,
@@ -105,24 +117,45 @@ def create_app(
     data_quality_service = DataQualityService(database)
     workbench_service = WorkbenchService(database)
     audit_log_service = AuditLogService(database)
-    review_service = ReviewService(database, result_service)
-    runner = AgentRunner(database, settings, config_service, result_service)
+    review_service = ReviewService(database, result_service, standard_service)
+    runner = AgentRunner(
+        database,
+        settings,
+        config_service,
+        result_service,
+        standard_service,
+    )
+    task_plan_service = TaskPlanService(
+        database,
+        standard_service=standard_service,
+    )
     task_service = TaskService(
         database,
+        plan_service=task_plan_service,
         result_publisher=runner.retry_result_publish,
     )
     worker = TaskWorker(database, runner, settings.task_workers)
     insight_report_worker = InsightReportWorker(insight_report_service)
+    standard_validation_service = ClassificationStandardValidationService(
+        database,
+        standard_service,
+        runner,
+    )
+    standard_validation_worker = ClassificationStandardValidationWorker(
+        standard_validation_service
+    )
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         if start_worker:
             worker.start()
             insight_report_worker.start()
+            standard_validation_worker.start()
         yield
         if start_worker:
             worker.stop()
             insight_report_worker.stop()
+            standard_validation_worker.stop()
         validation_executor.shutdown(wait=False, cancel_futures=True)
 
     app = FastAPI(
@@ -192,6 +225,14 @@ def create_app(
     app.include_router(
         create_classification_result_router(
             result_service=result_service,
+            standard_service=standard_service,
+            current_user=current_user,
+        )
+    )
+    app.include_router(
+        create_classification_standard_router(
+            service=standard_service,
+            validation_service=standard_validation_service,
             current_user=current_user,
         )
     )

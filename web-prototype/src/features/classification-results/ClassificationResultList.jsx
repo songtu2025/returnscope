@@ -631,7 +631,10 @@ function ResultPoolRow({ result, onOpen, onPrimary, selectable, selected, onTogg
       </div>
       <div className="result-time-cell">
         <b>{formatTime(result.published_at || result.created_at)}</b>
-        <span>{result.agent_family || "未提供智能体"}</span>
+        <span>
+          {result.standard_name || result.agent_family || "未提供分类标准"}
+          {result.standard_version ? ` · V${result.standard_version}` : ""}
+        </span>
       </div>
       <div className="result-row-actions">
         <button

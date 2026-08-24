@@ -173,12 +173,15 @@ export function ExecutionPlanSummary({
                     ? `${String(executableIndex + 1).padStart(2, "0")} · `
                     : ""}
                   {segment.scope?.listing
-                    ? `${segment.scope.listing} · ${segment.agent_family}`
-                    : segment.agent_family}
+                    ? `${segment.scope.listing} · ${segment.standard_name || segment.agent_family}`
+                    : segment.standard_name || segment.agent_family}
                 </h4>
                 <p>
                   {segment.scope?.store
                     ? `${segment.scope.store} / ${segment.scope.listing || "未识别 Listing"} · `
+                    : ""}
+                  {segment.standard_version
+                    ? `标准 V${segment.standard_version} · `
                     : ""}
                   logic {segment.logic_version || "—"} · taxonomy{" "}
                   {segment.taxonomy_version}

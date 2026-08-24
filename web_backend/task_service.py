@@ -1141,9 +1141,16 @@ class TaskService:
             ).fetchone()
             segment_rows = connection.execute(
                 """
-                SELECT * FROM task_segments
-                WHERE task_id = ?
-                ORDER BY execution_order, segment_key
+                SELECT segment.*, standard.name AS standard_name,
+                       standard.id AS standard_id,
+                       standard_version.version_no AS standard_version
+                FROM task_segments segment
+                LEFT JOIN classification_standard_versions standard_version
+                  ON standard_version.id = segment.standard_version_id
+                LEFT JOIN classification_standards standard
+                  ON standard.id = standard_version.standard_id
+                WHERE segment.task_id = ?
+                ORDER BY segment.execution_order, segment.segment_key
                 """,
                 (task_id,),
             ).fetchall()
@@ -1665,11 +1672,12 @@ class TaskService:
             INSERT INTO task_segments(
                 id, task_id, segment_key, agent_key, agent_family,
                 logic_version, taxonomy_version, model_policy_version,
-                model_policy_json, claims_version, scope_json, status,
+                standard_version_id, model_policy_json, claims_version,
+                scope_json, status,
                 record_count, unique_comments, progress_total,
                 variants_json, classification_keys_json, execution_order,
                 created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 new_id("segment"),
@@ -1680,6 +1688,7 @@ class TaskService:
                 segment["logic_version"],
                 segment["taxonomy_version"],
                 segment["model_policy_version"],
+                segment.get("standard_version_id"),
                 json_text(segment["model_policy"]),
                 segment["claims_version"],
                 json_text(segment.get("scope", {})),

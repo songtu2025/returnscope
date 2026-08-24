@@ -1,4 +1,5 @@
 import { auditApi } from "./shared/api/auditApi";
+import { classificationStandardApi } from "./shared/api/classificationStandardApi";
 import { dataApi } from "./shared/api/dataApi";
 import { dashboardApi } from "./shared/api/dashboardApi";
 import { modelApi } from "./shared/api/modelApi";
@@ -15,6 +16,7 @@ export { ApiError, request };
 // 兼容现有页面；新代码按领域直接导入对应 API。
 export const api = {
   ...auditApi,
+  ...classificationStandardApi,
   ...teamApi,
   ...dataApi,
   ...dashboardApi,

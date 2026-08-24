@@ -6,15 +6,14 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from return_semantics.capabilities import load_capability_registry
 from return_semantics.data import load_return_dataset
 from return_semantics.exporter import export_results
 from return_semantics.schemas import ValidatedClassification
 from web_backend.classification_result_service import ClassificationResultService
+from web_backend.classification_standard_service import ClassificationStandardService
 from web_backend.common import add_audit, json_text, json_value, new_id
 from web_backend.database import Database
 from web_backend.security import utc_now
-from web_backend.settings import PROJECT_ROOT
 
 _TASK_LOCKS: dict[str, threading.Lock] = {}
 _LOCKS_GUARD = threading.Lock()
@@ -69,12 +68,14 @@ class ReviewService:
         self,
         database: Database,
         result_service: ClassificationResultService | None = None,
+        standard_service: ClassificationStandardService | None = None,
     ) -> None:
         self.database = database
         self.result_service = result_service or ClassificationResultService(database)
-        self.capability_registry = load_capability_registry(
-            PROJECT_ROOT / "config" / "category_capabilities.json"
+        self.standard_service = standard_service or ClassificationStandardService(
+            database
         )
+        self.capability_registry = self.standard_service.active_registry()
 
     def list(
         self,
@@ -494,6 +495,7 @@ class ReviewService:
                 before, after = self._update_batch_record_row(
                     connection,
                     row,
+                    result_version_id=str(batch["base_result_version_id"]),
                     expected_revision=expected_revision,
                     actor_id=actor_id,
                     action=resolved_action,
@@ -593,6 +595,7 @@ class ReviewService:
                     before, after = self._update_batch_record_row(
                         connection,
                         row,
+                        result_version_id=str(batch["base_result_version_id"]),
                         expected_revision=expected_by_id[review_id],
                         actor_id=actor_id,
                         action=action,
@@ -661,6 +664,7 @@ class ReviewService:
         connection: Any,
         row: Any,
         *,
+        result_version_id: str,
         expected_revision: int,
         actor_id: str,
         action: str,
@@ -684,6 +688,7 @@ class ReviewService:
                 before,
                 str(row["comment"]),
                 label_code if action == "modify" else None,
+                result_version_id,
             )
         )
         next_revision = expected_revision + 1
@@ -736,8 +741,6 @@ class ReviewService:
         clean_reason = reason.strip()
         if not clean_reason:
             raise ValueError("请填写发布原因")
-        taxonomy = self.capability_registry.combined_taxonomy()
-        label_map = {label.code: label for label in taxonomy.labels}
         now = utc_now()
         try:
             with self.database.transaction(immediate=True) as connection:
@@ -763,6 +766,10 @@ class ReviewService:
                     raise ReviewBatchConflict("复核批次已经发布，不能重复提交")
                 if batch["base_publish_status"] != "published":
                     raise ReviewBatchConflict("基准分类结果版本不可用")
+                taxonomy = self.standard_service.taxonomy_config_for_result_version(
+                    str(batch["base_result_version_id"])
+                )
+                label_map = {label.code: label for label in taxonomy.labels}
                 review_count = int(
                     connection.execute(
                         "SELECT COUNT(*) FROM review_records WHERE batch_id = ?",
@@ -1049,7 +1056,12 @@ class ReviewService:
             if int(row["revision"]) != expected_revision:
                 raise RevisionConflict("记录已被其他用户修改，请刷新后重试")
             before = json_value(str(row["classification_json"]), {})
-            after = self._apply_resolution(before, str(row["comment"]), label_code)
+            after = self._apply_resolution(
+                before,
+                str(row["comment"]),
+                label_code,
+                str(row["base_result_version_id"] or "") or None,
+            )
             next_revision = expected_revision + 1
             revision_id = new_id("revision")
             now = utc_now()
@@ -1135,8 +1147,13 @@ class ReviewService:
         classification: dict[str, Any],
         comment: str,
         label_code: str | None,
+        result_version_id: str | None = None,
     ) -> dict[str, Any]:
-        taxonomy = self.capability_registry.combined_taxonomy()
+        taxonomy = (
+            self.standard_service.taxonomy_config_for_result_version(result_version_id)
+            if result_version_id
+            else self.standard_service.combined_taxonomy()
+        )
         label_codes = {label.code for label in taxonomy.labels}
         selected = (label_code or "").strip()
         updated = dict(classification)
@@ -1221,7 +1238,7 @@ class ReviewService:
                 store=str(task["store"]),
                 listing=task["listing"],
             )
-            taxonomy = self.capability_registry.combined_taxonomy()
+            taxonomy = self.standard_service.combined_taxonomy()
             next_version = int(task["result_version"]) + 1
             result_dir = Path(str(task["result_file_path"])).parent
             next_output = result_dir / f"analysis-v{next_version}.xlsx"

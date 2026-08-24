@@ -8,13 +8,21 @@ from web_backend.classification_result_service import (
     ClassificationResultNotFound,
     ClassificationResultService,
 )
+from web_backend.classification_standard_service import (
+    ClassificationStandardNotFound,
+    ClassificationStandardService,
+)
 
 
 def create_classification_result_router(
     result_service: ClassificationResultService,
     current_user: Callable[..., dict[str, Any]],
+    standard_service: ClassificationStandardService | None = None,
 ) -> APIRouter:
     router = APIRouter()
+    standards = standard_service or ClassificationStandardService(
+        result_service.database
+    )
 
     @router.get(
         "/api/classification-results",
@@ -58,6 +66,16 @@ def create_classification_result_router(
         try:
             return result_service.history(version_id)
         except ClassificationResultNotFound as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @router.get(
+        "/api/classification-results/{version_id}/taxonomy",
+        dependencies=[Depends(current_user)],
+    )
+    def get_result_taxonomy(version_id: str) -> dict[str, Any]:
+        try:
+            return standards.taxonomy_for_result_version(version_id)
+        except ClassificationStandardNotFound as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     @router.get(

@@ -689,9 +689,12 @@ def test_real_web_task_flow(tmp_path: Path) -> None:
             assert current["status"] == "completed", current
             assert current["progress_percent"] == 100
             assert current["metrics"]["top_problem_labels"][0]["name"] == "偏大"
-            assert current["metrics"]["category_registry_version"] == (
-                "category-capabilities-2026-08-10-v1"
+            assert current["metrics"]["category_registry_version"].startswith(
+                "classification-standards-"
             )
+            assert current["segments"][0]["standard_version_id"]
+            assert current["segments"][0]["standard_name"] == "鞋履退货问题标准"
+            assert current["segments"][0]["standard_version"] == 1
             category_segment = current["metrics"]["category_segments"][0]
             assert category_segment["agent_family"] == "鞋履智能体"
             assert category_segment["logic_version"] == (

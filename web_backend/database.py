@@ -7,6 +7,13 @@ from pathlib import Path
 from typing import Iterator
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS app_migrations (
+    migration_id TEXT PRIMARY KEY,
+    checksum TEXT NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('applied', 'baselined')),
+    applied_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     email TEXT NOT NULL UNIQUE,
@@ -74,6 +81,53 @@ CREATE TABLE IF NOT EXISTS dataset_versions (
 );
 CREATE INDEX IF NOT EXISTS idx_dataset_versions_dataset
 ON dataset_versions(dataset_id, version DESC);
+
+CREATE TABLE IF NOT EXISTS classification_standards (
+    id TEXT PRIMARY KEY,
+    standard_key TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('active', 'inactive')),
+    current_version_id TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS classification_standard_versions (
+    id TEXT PRIMARY KEY,
+    standard_id TEXT NOT NULL
+        REFERENCES classification_standards(id) ON DELETE CASCADE,
+    version_no INTEGER NOT NULL,
+    version_key TEXT NOT NULL,
+    logic_version TEXT NOT NULL,
+    taxonomy_version TEXT NOT NULL,
+    model_policy_version TEXT NOT NULL,
+    snapshot_json TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+    version_reason TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL CHECK(status IN ('published', 'inactive')),
+    created_at TEXT NOT NULL,
+    published_at TEXT NOT NULL,
+    UNIQUE(standard_id, version_no),
+    UNIQUE(standard_id, content_hash)
+);
+CREATE INDEX IF NOT EXISTS idx_classification_standard_versions_standard
+ON classification_standard_versions(standard_id, version_no DESC);
+
+CREATE TABLE IF NOT EXISTS classification_standard_drafts (
+    id TEXT PRIMARY KEY,
+    standard_id TEXT NOT NULL UNIQUE
+        REFERENCES classification_standards(id) ON DELETE CASCADE,
+    base_version_id TEXT NOT NULL
+        REFERENCES classification_standard_versions(id),
+    snapshot_json TEXT NOT NULL,
+    revision INTEGER NOT NULL DEFAULT 1,
+    validation_json TEXT NOT NULL DEFAULT '{"blocking":[],"warnings":[]}',
+    change_reason TEXT NOT NULL DEFAULT '',
+    created_by TEXT NOT NULL REFERENCES users(id),
+    created_at TEXT NOT NULL,
+    updated_by TEXT NOT NULL REFERENCES users(id),
+    updated_at TEXT NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS api_connections (
     id TEXT PRIMARY KEY,
@@ -216,6 +270,7 @@ CREATE TABLE IF NOT EXISTS task_segments (
     logic_version TEXT,
     taxonomy_version TEXT NOT NULL,
     model_policy_version TEXT,
+    standard_version_id TEXT REFERENCES classification_standard_versions(id),
     model_policy_json TEXT,
     claims_version TEXT,
     scope_json TEXT NOT NULL DEFAULT '{}',
@@ -266,6 +321,7 @@ CREATE TABLE IF NOT EXISTS classification_results (
     logic_version TEXT,
     taxonomy_version TEXT NOT NULL,
     model_policy_version TEXT,
+    standard_version_id TEXT REFERENCES classification_standard_versions(id),
     claims_version TEXT,
     created_at TEXT NOT NULL
 );
@@ -379,6 +435,45 @@ CREATE INDEX IF NOT EXISTS idx_classification_records_unit
 ON classification_result_records(
     result_version_id, classification_key, quality_status
 );
+
+CREATE TABLE IF NOT EXISTS classification_standard_validation_runs (
+    id TEXT PRIMARY KEY,
+    standard_id TEXT NOT NULL REFERENCES classification_standards(id),
+    draft_id TEXT NOT NULL,
+    draft_revision INTEGER NOT NULL,
+    base_version_id TEXT NOT NULL REFERENCES classification_standard_versions(id),
+    source_result_version_id TEXT NOT NULL,
+    config_version_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'queued'
+        CHECK(status IN ('queued', 'running', 'completed', 'failed')),
+    stage TEXT NOT NULL DEFAULT 'queued',
+    sample_size INTEGER NOT NULL,
+    processed_count INTEGER NOT NULL DEFAULT 0,
+    changed_count INTEGER NOT NULL DEFAULT 0,
+    unknown_count INTEGER NOT NULL DEFAULT 0,
+    review_count INTEGER NOT NULL DEFAULT 0,
+    error_count INTEGER NOT NULL DEFAULT 0,
+    snapshot_json TEXT NOT NULL,
+    source_json TEXT NOT NULL,
+    sample_json TEXT NOT NULL,
+    result_json TEXT NOT NULL DEFAULT '[]',
+    summary_json TEXT NOT NULL DEFAULT '{}',
+    usage_json TEXT NOT NULL DEFAULT '{}',
+    metrics_json TEXT NOT NULL DEFAULT '{}',
+    model_names_json TEXT NOT NULL DEFAULT '[]',
+    error TEXT,
+    published_version_id TEXT REFERENCES classification_standard_versions(id),
+    created_by TEXT NOT NULL REFERENCES users(id),
+    created_at TEXT NOT NULL,
+    started_at TEXT,
+    completed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_standard_validation_runs_draft
+ON classification_standard_validation_runs(
+    draft_id, draft_revision, created_at DESC
+);
+CREATE INDEX IF NOT EXISTS idx_standard_validation_runs_status
+ON classification_standard_validation_runs(status, created_at);
 
 CREATE TABLE IF NOT EXISTS analysis_dashboards (
     id TEXT PRIMARY KEY,
@@ -681,6 +776,10 @@ class Database:
                     connection.execute(
                         f"ALTER TABLE task_segments ADD COLUMN {column_name} TEXT"
                     )
+            if "standard_version_id" not in segment_columns:
+                connection.execute(
+                    "ALTER TABLE task_segments ADD COLUMN standard_version_id TEXT"
+                )
             segment_column_definitions = {
                 "requested_action": "TEXT",
                 "revision": "INTEGER NOT NULL DEFAULT 1",
@@ -718,6 +817,17 @@ class Database:
                         "ALTER TABLE classification_result_versions "
                         f"ADD COLUMN {column_name} {definition}"
                     )
+            result_columns = {
+                row["name"]
+                for row in connection.execute(
+                    "PRAGMA table_info(classification_results)"
+                ).fetchall()
+            }
+            if "standard_version_id" not in result_columns:
+                connection.execute(
+                    "ALTER TABLE classification_results "
+                    "ADD COLUMN standard_version_id TEXT"
+                )
             self._migrate_review_records(connection)
             self._repair_draft_review_batches(connection)
             self._migrate_excluded_quality_status(connection)

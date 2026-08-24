@@ -28,9 +28,10 @@ class CategoryCapability:
     key: str
     agent_family: str
     logic_version: str
-    taxonomy_path: Path
     model_policy: ModelPolicy
     variants: tuple[CategoryVariant, ...]
+    taxonomy_path: Path | None = None
+    taxonomy: TaxonomyConfig | None = None
 
 
 def resolve_model_policy(
@@ -119,6 +120,10 @@ class CapabilityRegistry:
         )
 
     def load_taxonomy(self, capability: CategoryCapability) -> TaxonomyConfig:
+        if capability.taxonomy is not None:
+            return capability.taxonomy
+        if capability.taxonomy_path is None:
+            raise ValueError(f"分类能力 {capability.key} 缺少标签体系")
         return load_taxonomy(capability.taxonomy_path)
 
     def combined_taxonomy(self) -> TaxonomyConfig:

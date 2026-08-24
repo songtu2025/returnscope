@@ -307,7 +307,7 @@ def test_consistency_blocks_information_without_diagnostic() -> None:
     ]
 
 
-def test_untrusted_product_mapping_blocks_product_level_actions() -> None:
+def test_untrusted_quality_signals_preserve_all_report_caveats() -> None:
     analysis = {
         "summary": {
             "record_count": 100,
@@ -394,6 +394,16 @@ def test_untrusted_product_mapping_blocks_product_level_actions() -> None:
     assert actions[1]["id"] == "action.mapping"
     assert actions[1]["priority"] == "P0"
     assert all(item["id"] != "action.diagnostic" for item in actions)
+
+    analysis["review_bias"] = {
+        "status": "concentrated",
+        "note": "待审核记录集中在部分商品。",
+    }
+    evidence = InsightReportService._build_evidence(analysis)
+    content = InsightReportService._assemble_content(evidence, _report_payload())
+
+    assert len(evidence["blueprint"]["caveats"]) == 6
+    assert content.caveats == evidence["blueprint"]["caveats"]
 
 
 def test_live_quality_gate_sanitizes_existing_report() -> None:

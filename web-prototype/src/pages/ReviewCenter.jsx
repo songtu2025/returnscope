@@ -31,10 +31,7 @@ export function ReviewCenter({ notify, onChanged, focus }) {
     );
   }, [status]);
   useEffect(() => {
-    Promise.all([
-      load(),
-      api.taxonomy().then((value) => setLabels(value.labels)),
-    ]).catch((error) => notify(error.message, "error"));
+    load().catch((error) => notify(error.message, "error"));
   }, [load, notify]);
   useEffect(() => {
     if (!focus) return;
@@ -56,6 +53,10 @@ export function ReviewCenter({ notify, onChanged, focus }) {
             "",
         );
         setNote("");
+        return api.reviewTaxonomy(value.base_result_version_id);
+      })
+      .then((value) => {
+        if (value) setLabels(value.labels ?? []);
       })
       .catch((error) => notify(error.message, "error"));
   }, [selectedId, notify]);

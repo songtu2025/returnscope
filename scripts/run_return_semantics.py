@@ -14,15 +14,20 @@ from return_semantics.data import load_return_dataset
 from return_semantics.exporter import export_results
 from return_semantics.model_client import JsonlCache, create_model_client
 from return_semantics.pipeline import classify_comments
-from return_semantics.schemas import ListingClaimsConfig
+from return_semantics.schemas import ListingClaimsConfig, TaxonomyConfig
 from return_semantics.taxonomy import (
     load_listing_claims,
-    load_taxonomy,
     validate_taxonomy_claims,
 )
+from web_backend.classification_standard_service import (
+    ClassificationStandardNotFound,
+    ClassificationStandardService,
+)
+from web_backend.database import Database
+from web_backend.settings import Settings
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="运行涉水鞋退货语义分析批处理")
     parser.add_argument(
         "--returns",
@@ -44,9 +49,20 @@ def parse_args() -> argparse.Namespace:
         help="可选 Listing；不指定时处理店铺全部 Listing",
     )
     parser.add_argument(
-        "--taxonomy",
+        "--database",
         type=Path,
-        default=PROJECT_ROOT / "config" / "taxonomy_water_shoes.json",
+        default=Settings.from_env().database_path,
+        help="分类标准数据库；默认使用 Web 应用数据库",
+    )
+    standard_source = parser.add_mutually_exclusive_group()
+    standard_source.add_argument(
+        "--standard-id",
+        default="classification_standard_footwear",
+        help="使用该分类标准的当前发布版本",
+    )
+    standard_source.add_argument(
+        "--standard-version-id",
+        help="使用指定的不可变分类标准版本",
     )
     parser.add_argument(
         "--claims",
@@ -77,7 +93,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--limit", type=int)
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def validate_args(args: argparse.Namespace) -> None:
@@ -101,6 +117,24 @@ def build_scope_slug(store: str, listing: str | None) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "_", scope).strip("_").lower()
 
 
+def load_standard_taxonomy(
+    database_path: Path,
+    standard_id: str,
+    standard_version_id: str | None,
+) -> tuple[TaxonomyConfig, dict[str, object]]:
+    database = Database(database_path)
+    database.initialize()
+    service = ClassificationStandardService(database)
+    if standard_version_id:
+        version = service.get_version(standard_version_id)
+        if version["status"] != "published":
+            raise ClassificationStandardNotFound("分类标准版本尚未发布")
+    else:
+        version = service.current_version_for_standard(standard_id)
+    taxonomy = service.taxonomy_for_version(str(version["id"]))
+    return taxonomy, version
+
+
 def main() -> None:
     args = parse_args()
     validate_args(args)
@@ -114,7 +148,15 @@ def main() -> None:
         PROJECT_ROOT / "output" / f"{scope_slug}_退货语义分类结果.xlsx"
     )
 
-    taxonomy = load_taxonomy(args.taxonomy)
+    taxonomy, standard_version = load_standard_taxonomy(
+        args.database,
+        args.standard_id,
+        args.standard_version_id,
+    )
+    print(
+        f"分类标准: {standard_version['standard_name']} "
+        f"V{standard_version['version_no']} ({standard_version['id']})"
+    )
     if args.claims is None:
         claims = ListingClaimsConfig(
             version=f"{scope_slug}-no-claims-v1",

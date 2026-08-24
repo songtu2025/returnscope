@@ -184,6 +184,76 @@ class ReviewBatchPublishRequest(BaseModel):
     reason: str = Field(min_length=1, max_length=500)
 
 
+class ClassificationStandardVariantRequest(BaseModel):
+    category_a: str = Field(min_length=1, max_length=100)
+    category_b: str = Field(min_length=1, max_length=100)
+    attributes: dict[str, str] = Field(default_factory=dict)
+
+
+class ClassificationStandardLabelRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=100)
+    name: str = Field(min_length=1, max_length=100)
+    group: str = Field(min_length=1, max_length=100)
+    description: str = Field(min_length=1, max_length=500)
+    keywords: list[str] = Field(default_factory=list, max_length=100)
+    allowed_sentiments: list[str] = Field(min_length=1, max_length=3)
+
+
+class ClassificationStandardDraftContentRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    product_context: str = Field(min_length=1, max_length=500)
+    instructions: list[str] = Field(max_length=100)
+    allowed_parts: list[str] = Field(min_length=1, max_length=50)
+    variants: list[ClassificationStandardVariantRequest] = Field(
+        min_length=1,
+        max_length=200,
+    )
+    labels: list[ClassificationStandardLabelRequest] = Field(
+        max_length=500,
+    )
+
+
+class ClassificationStandardCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    product_context: str = Field(min_length=1, max_length=500)
+    category_a: str = Field(min_length=1, max_length=100)
+    category_b: str = Field(min_length=1, max_length=100)
+
+
+class ClassificationStandardDraftUpdateRequest(BaseModel):
+    expected_revision: int = Field(ge=1)
+    content: ClassificationStandardDraftContentRequest
+    change_reason: str = Field(default="", max_length=500)
+
+
+class ClassificationStandardImportDocument(BaseModel):
+    format: Literal["classification-standard"]
+    format_version: Literal[1]
+    content_hash: str = Field(min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$")
+    snapshot: dict[str, object]
+
+
+class ClassificationStandardDraftImportRequest(BaseModel):
+    expected_revision: int = Field(ge=1)
+    document: ClassificationStandardImportDocument
+    change_reason: str = Field(min_length=1, max_length=500)
+
+
+class ClassificationStandardDraftRevisionRequest(BaseModel):
+    expected_revision: int = Field(ge=1)
+
+
+class ClassificationStandardDraftActionRequest(BaseModel):
+    expected_revision: int = Field(ge=1)
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class ClassificationStandardSampleValidationRequest(BaseModel):
+    expected_revision: int = Field(ge=1)
+    source_result_version_id: str = Field(min_length=1, max_length=120)
+    sample_size: Literal[20, 50, 100] = 20
+
+
 DashboardFilterValue = str | list[str] | None
 
 

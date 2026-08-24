@@ -1333,7 +1333,7 @@ def test_replan_runs_only_failed_segment_and_keeps_completed_result(
     partial = service.get(str(task["id"]))
     assert partial["status"] == "partial"
     assert first_calls == [
-        "water-shoes-2026-08-05-v1",
+        "water-shoes-2026-08-21-v2",
         "eyewear-2026-08-10-v1",
     ]
     partial_segments = {
@@ -1393,7 +1393,7 @@ def test_failed_segment_can_retry_without_repeating_completed_segment(
     _install_fake_runner(
         monkeypatch,
         first_calls,
-        failing_taxonomy="water-shoes-2026-08-05-v1",
+        failing_taxonomy="water-shoes-2026-08-21-v2",
     )
     settings = _settings(tmp_path)
     settings.ensure_directories()
@@ -1418,7 +1418,7 @@ def test_failed_segment_can_retry_without_repeating_completed_segment(
 
     completed = service.get(str(task["id"]))
     assert completed["status"] == "completed"
-    assert retry_calls == ["water-shoes-2026-08-05-v1"]
+    assert retry_calls == ["water-shoes-2026-08-21-v2"]
     event = next(
         value
         for value in service.events(str(task["id"]))
@@ -1465,7 +1465,7 @@ def test_replan_rebuilds_failed_segment_when_its_scope_changes(
     _install_fake_runner(
         monkeypatch,
         failed_calls,
-        failing_taxonomy="water-shoes-2026-08-05-v1",
+        failing_taxonomy="water-shoes-2026-08-21-v2",
     )
     settings = _settings(tmp_path)
     settings.ensure_directories()
@@ -1546,7 +1546,7 @@ def test_replan_rebuilds_failed_segment_when_its_scope_changes(
     assert completed["status"] == "completed"
     assert set(retry_calls) == {
         "eyewear-2026-08-10-v1",
-        "water-shoes-2026-08-05-v1",
+        "water-shoes-2026-08-21-v2",
     }
     checkpoint = json.loads(
         Path(str(completed["results_json_path"])).read_text(encoding="utf-8")
@@ -1684,7 +1684,7 @@ def test_cancelled_task_delivers_completed_listing_and_resumes_remaining(
     _install_fake_runner(monkeypatch, first_calls)
     claimed = _run_task_segments(database, runner, str(task["id"]), limit=1)
     assert len(claimed) == 1
-    assert first_calls == ["water-shoes-2026-08-05-v1"]
+    assert first_calls == ["water-shoes-2026-08-21-v2"]
 
     after_first = service.get(str(task["id"]))
     service.cancel(

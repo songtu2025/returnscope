@@ -1,0 +1,133 @@
+/* 任务链路：把当前状态、关键内容和唯一下一步放在同一阅读节奏中。 */
+.workbench-page .workbench-card {
+  min-height: 286px;
+}
+
+.workbench-page .workbench-action-card {
+  min-width: 0;
+}
+
+.workbench-page .workbench-output-card .empty-state {
+  min-height: 172px;
+}
+
+.task-layout.is-empty {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.task-layout.is-empty .task-list-panel {
+  min-height: 360px;
+}
+
+.task-layout.is-empty .task-list-scroll {
+  display: block;
+  min-height: 292px;
+  padding: 0 14px 14px;
+}
+
+.task-layout.is-empty .empty-state {
+  min-height: 276px;
+}
+
+.task-layout.is-empty .empty-state > .primary-button {
+  min-width: 150px;
+}
+
+.task-data-readiness {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+  max-width: none;
+}
+
+.task-data-readiness .task-data-quality {
+  min-height: 68px;
+  margin-bottom: 0;
+}
+
+.task-data-readiness .snapshot-notice {
+  grid-column: 1 / -1;
+  margin-top: 0;
+}
+
+.task-model-context-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.22fr);
+  gap: 14px;
+}
+
+.task-model-context-grid .task-config-choice {
+  margin-bottom: 14px;
+}
+
+.task-runtime-override {
+  max-width: 360px;
+  margin-top: 2px;
+}
+
+.task-runtime-override .task-config-choice {
+  margin-bottom: 0;
+}
+
+.task-runtime-override input {
+  max-width: 160px;
+}
+
+.data-page .dataset-header {
+  grid-template-columns: minmax(260px, 0.9fr) minmax(360px, 1.1fr) auto;
+}
+
+.data-page .dataset-header > .dataset-actions {
+  gap: 12px;
+}
+
+.dataset-utility-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dataset-utility-actions .text-button {
+  min-height: var(--desktop-compact-height);
+  color: #62736a;
+  white-space: nowrap;
+}
+
+.dataset-utility-actions .text-button:hover {
+  color: var(--green-dark);
+}
+
+@media (max-width: 1180px) {
+  .product-master-page .dataset-header {
+    grid-template-columns: minmax(250px, 1fr) auto;
+  }
+
+  .product-master-page .dataset-summary {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .product-master-page .dataset-summary > span:first-child {
+    border-left: 0;
+    padding-left: 0;
+  }
+
+  .product-master-impact {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 920px) {
+  .task-data-readiness,
+  .task-model-context-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .task-data-readiness .snapshot-notice {
+    grid-column: auto;
+  }
+
+  .dataset-utility-actions {
+    width: 100%;
+  }
+}

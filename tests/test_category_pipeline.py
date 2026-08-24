@@ -170,7 +170,7 @@ def test_mixed_task_loads_each_family_taxonomy_and_excludes_unknown(
     assert loaded_taxonomies == [
         "headwear-2026-08-10-v1",
         "eyewear-2026-08-10-v1",
-        "water-shoes-2026-08-05-v1",
+        "water-shoes-2026-08-21-v2",
         "gloves-2026-08-10-v1",
     ]
     assert result.pipeline.model_calls == 4
@@ -229,7 +229,7 @@ def test_existing_water_shoe_uses_original_taxonomy(registry) -> None:
     assert capability is not None
     taxonomy = registry.load_taxonomy(capability)
     assert capability.agent_family == "鞋履智能体"
-    assert taxonomy.version == "water-shoes-2026-08-05-v1"
+    assert taxonomy.version == "water-shoes-2026-08-21-v2"
     assert taxonomy.labels[0].code == "FIT_TOO_LARGE"
 
 

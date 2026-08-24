@@ -7,7 +7,6 @@ from typing import Any
 
 from return_semantics.capabilities import (
     CapabilityRegistry,
-    load_capability_registry,
 )
 from return_semantics.claims import ClaimsResolver
 from return_semantics.data import (
@@ -20,6 +19,7 @@ from return_semantics.task_plan import (
     CategoryExecutionPlan,
     build_category_execution_plan,
 )
+from web_backend.classification_standard_service import ClassificationStandardService
 from web_backend.database import Database
 from web_backend.settings import PROJECT_ROOT
 
@@ -39,11 +39,13 @@ class TaskPlanService:
         self,
         database: Database,
         registry: CapabilityRegistry | None = None,
+        standard_service: ClassificationStandardService | None = None,
     ) -> None:
         self.database = database
-        self.registry = registry or load_capability_registry(
-            PROJECT_ROOT / "config" / "category_capabilities.json"
+        self.standard_service = standard_service or ClassificationStandardService(
+            database
         )
+        self.registry = registry
         self.claims_resolver = ClaimsResolver(
             PROJECT_ROOT / "config" / "listing_claims_registry.json"
         )
@@ -107,13 +109,39 @@ class TaskPlanService:
             "secondary_model": config["secondary_model"],
             "secondary_effort": config["secondary_effort"],
         }
+        registry = self.registry or self.standard_service.active_registry()
         execution_plan = build_category_execution_plan(
             dataset,
-            self.registry,
+            registry,
             store=clean_store,
             listing=clean_listing,
             model_config=model_config,
             claims_resolver=self.claims_resolver,
+        )
+        standards = self.standard_service.current_version_by_agent()
+        execution_plan = CategoryExecutionPlan(
+            summary={
+                **execution_plan.summary,
+                "segments": [
+                    {
+                        **segment,
+                        "standard_id": standards.get(str(segment["agent_key"]), {}).get(
+                            "standard_id"
+                        ),
+                        "standard_version_id": standards.get(
+                            str(segment["agent_key"]), {}
+                        ).get("standard_version_id"),
+                        "standard_name": standards.get(
+                            str(segment["agent_key"]), {}
+                        ).get("name"),
+                        "standard_version": standards.get(
+                            str(segment["agent_key"]), {}
+                        ).get("version_no"),
+                    }
+                    for segment in execution_plan.summary["segments"]
+                ],
+            },
+            assignments=execution_plan.assignments,
         )
         unresolved_products = self._unresolved_products(
             dataset,
@@ -172,8 +200,16 @@ class TaskPlanService:
                     "category_a": variant.category_a,
                     "category_b": variant.category_b,
                     "agent_family": capability.agent_family,
+                    "standard_id": standards.get(capability.key, {}).get("standard_id"),
+                    "standard_version_id": standards.get(capability.key, {}).get(
+                        "standard_version_id"
+                    ),
+                    "standard_name": standards.get(capability.key, {}).get("name"),
+                    "standard_version": standards.get(capability.key, {}).get(
+                        "version_no"
+                    ),
                 }
-                for capability in self.registry.capabilities
+                for capability in registry.capabilities
                 for variant in capability.variants
             ],
         }

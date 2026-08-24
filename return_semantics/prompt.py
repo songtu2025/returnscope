@@ -4,14 +4,17 @@ import json
 
 from return_semantics.schemas import ListingClaimsConfig, TaxonomyConfig
 
-PROMPT_VERSION = "category-semantic-v1"
+PROMPT_VERSION = "category-semantic-v2"
 
 
 def _label_catalog(taxonomy: TaxonomyConfig) -> str:
     lines = []
     for label in taxonomy.labels:
         sentiments = ",".join(value.value for value in label.allowed_sentiments)
-        lines.append(f"{label.code}|{label.description}|{sentiments}")
+        keywords = ",".join(label.keywords) or "无"
+        lines.append(
+            f"{label.code}|{label.description}|{keywords}|{sentiments}"
+        )
     return "\n".join(lines)
 
 
@@ -71,7 +74,7 @@ claim_relation 只能是 CONTRADICTS、SUPPORTS、RELATED_UNCERTAIN、NONE。
 当前品类规则：
 {_instruction_catalog(taxonomy)}
 
-允许的标签（编码|定义|允许情感）：
+允许的标签（编码|定义|英文关键词|允许情感）：
 {_label_catalog(taxonomy)}
 
 Listing 承诺（编号|文本|允许标签，仅用于关系判断）：

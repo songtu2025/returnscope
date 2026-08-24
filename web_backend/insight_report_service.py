@@ -62,7 +62,7 @@ class InsightReportContent(BaseModel):
     findings: list[ReportFinding] = Field(min_length=2, max_length=6)
     actions: list[ReportAction] = Field(min_length=2, max_length=6)
     further_questions: list[str] = Field(default_factory=list, max_length=5)
-    caveats: list[str] = Field(min_length=1, max_length=5)
+    caveats: list[str] = Field(min_length=1)
 
 
 class InsightReportService:

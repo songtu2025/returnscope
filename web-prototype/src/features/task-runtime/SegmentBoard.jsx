@@ -261,13 +261,18 @@ export function SegmentBoard({
                     </div>
                   </div>
                   <div className="listing-agent" role="cell">
-                    <b>{segment.agent_family}</b>
+                    <b>{segment.standard_name || segment.agent_family}</b>
                     <p>
                       {segment.variants
                         ?.map((variant) => variant.category_b || "缺失品类B")
                         .join("、")}
                     </p>
-                    <small>{segment.logic_version || "未配置逻辑"}</small>
+                    <small>
+                      {segment.standard_version
+                        ? `标准 V${segment.standard_version} · `
+                        : ""}
+                      {segment.logic_version || "未配置逻辑"}
+                    </small>
                   </div>
                   <div className="listing-state" role="cell">
                     <span

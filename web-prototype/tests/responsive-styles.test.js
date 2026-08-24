@@ -2,7 +2,24 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, test } from "vitest";
 
-const styles = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
+const styleFiles = [
+  "src/styles.css",
+  "src/styles/classification-standards.css",
+  "src/styles/insight-generation.css",
+  "src/styles/task-flow.css",
+  "src/styles/desktop-layout.css",
+  "src/styles/analysis-dashboards.css",
+  "src/styles/classification-results.css",
+  "src/styles/operations.css",
+  "src/styles/system-settings.css",
+  "src/styles/visual-foundation.css",
+  "src/styles/return-insights.css",
+  "src/styles/ai-insight-reports.css",
+  "src/styles/product-info.css",
+];
+const styles = styleFiles
+  .map((file) => readFileSync(resolve(process.cwd(), file), "utf8"))
+  .join("\n");
 
 test("business pages use tiered desktop work widths", () => {
   expect(styles).toMatch(/--layout-wide-max:\s*1680px/);

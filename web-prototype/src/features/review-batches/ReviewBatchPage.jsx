@@ -449,15 +449,17 @@ function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
   }, [loadRecords]);
 
   useEffect(() => {
+    const resultVersionId = batchState.data?.base_result_version_id;
+    if (!resultVersionId) return undefined;
     const controller = new AbortController();
     reviewBatchApi
-      .reviewTaxonomy({ signal: controller.signal })
+      .reviewTaxonomy(resultVersionId, { signal: controller.signal })
       .then((value) => setLabels(value.labels ?? []))
       .catch((error) => {
         if (error.name !== "AbortError") notify(error.message, "error");
       });
     return () => controller.abort();
-  }, [notify]);
+  }, [batchState.data?.base_result_version_id, notify]);
 
   useEffect(() => {
     setSelected(null);

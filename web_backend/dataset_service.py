@@ -65,7 +65,7 @@ def _inspect_returns(path: Path) -> tuple[pd.DataFrame, dict[str, Any]]:
     skus = frame["sku"].fillna("").astype(str).str.strip()
     comments = frame["customer-comments"].fillna("").astype(str)
     encoding_anomaly = comments.str.contains(
-        r"(?:[A-Za-z][\u4e00-\u9fff]|[\u4e00-\u9fff][A-Za-z])",
+        r"(?:[A-Za-z][一-鿿]|[一-鿿][A-Za-z])",
         regex=True,
     )
     encoding_anomaly_rows = int(encoding_anomaly.sum())

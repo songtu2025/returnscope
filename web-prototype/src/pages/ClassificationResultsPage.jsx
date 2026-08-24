@@ -390,7 +390,10 @@ function ClassificationResultDetail({ route, updateRoute, notify, userId }) {
           <h1>{result.listing || "未提供 Listing"} 分类结果</h1>
           <p>
             {result.store_site || "未提供店铺/站点"} · 结果 v{result.version} · 产品信息
-            v{result.product_version} · {formatTime(result.published_at)}
+            v{result.product_version} ·{" "}
+            {result.standard_name || result.agent_family || "历史分类逻辑"}
+            {result.standard_version ? ` V${result.standard_version}` : ""} ·{" "}
+            {formatTime(result.published_at)}
           </p>
         </div>
         <div className="result-detail-actions">

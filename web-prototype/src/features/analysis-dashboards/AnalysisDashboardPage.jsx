@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   CaretRight,
   ChartBar,
@@ -11,9 +19,12 @@ import { EmptyState, InlineLoading, PageHeading } from "../../components/SharedU
 import { formatTime } from "../../lib/presentation";
 import { dashboardApi } from "../../shared/api/dashboardApi";
 import { DashboardCreateFlow } from "./DashboardCreateFlow";
-import { DashboardDetail } from "./DashboardDetail";
 import { DashboardPagination } from "./DashboardPagination";
 import { createDashboardSelection } from "./dashboardSelectionStorage";
+
+const DashboardDetail = lazy(() =>
+  import("./DashboardDetail").then((module) => ({ default: module.DashboardDetail })),
+);
 
 const PAGE_SIZES = [20, 50, 100];
 const TABS = new Set(["overview", "report", "source", "history"]);
@@ -80,12 +91,14 @@ export function AnalysisDashboardPage({ route: appRoute, notify, userId }) {
 
   if (route.dashboardId) {
     return (
-      <DashboardDetail
-        route={route}
-        updateRoute={updateRoute}
-        notify={notify}
-        userId={userId}
-      />
+      <Suspense fallback={<InlineLoading label="正在加载分析看板…" />}>
+        <DashboardDetail
+          route={route}
+          updateRoute={updateRoute}
+          notify={notify}
+          userId={userId}
+        />
+      </Suspense>
     );
   }
   if (route.selectionToken) {

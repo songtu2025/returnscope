@@ -2,7 +2,6 @@ from typing import Annotated, Any, Callable
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from return_semantics.capabilities import load_capability_registry
 from web_backend.api_schemas import (
     ReviewBatchCreateRequest,
     ReviewBatchPublishRequest,
@@ -17,7 +16,6 @@ from web_backend.review_service import (
     ReviewService,
     RevisionConflict,
 )
-from web_backend.settings import PROJECT_ROOT
 
 
 def create_review_router(
@@ -197,10 +195,7 @@ def create_review_router(
 
     @router.get("/api/taxonomy")
     def taxonomy(_user: User) -> dict[str, Any]:
-        registry = load_capability_registry(
-            PROJECT_ROOT / "config" / "category_capabilities.json"
-        )
-        config = registry.combined_taxonomy()
+        config = review_service.standard_service.combined_taxonomy()
         return config.model_dump(mode="json")
 
     @router.get("/api/audit/{entity_type}/{entity_id}")

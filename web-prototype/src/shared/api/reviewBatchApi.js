@@ -27,5 +27,11 @@ export const reviewBatchApi = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  reviewTaxonomy: (options = {}) => request("/api/taxonomy", options),
+  reviewTaxonomy: (resultVersionId, options = {}) =>
+    request(
+      resultVersionId
+        ? `/api/classification-results/${resultVersionId}/taxonomy`
+        : "/api/taxonomy",
+      options,
+    ),
 };

@@ -48,6 +48,11 @@ const DataAssetsPage = lazy(() =>
     default: module.DataAssetsPage,
   })),
 );
+const ClassificationStandardsPage = lazy(() =>
+  import("./features/classification-standards/ClassificationStandardsPage").then(
+    (module) => ({ default: module.ClassificationStandardsPage }),
+  ),
+);
 const ResultsPage = lazy(() =>
   import("./pages/ResultsPage").then((module) => ({ default: module.ResultsPage })),
 );
@@ -244,6 +249,9 @@ function App() {
             onNavigate={navigate}
             userId={user.id}
           />
+        )}
+        {page === "classification-standards" && (
+          <ClassificationStandardsPage route={route} notify={notify} />
         )}
         {page === "legacy-results" && (
           <Suspense fallback={<div className="empty-state">正在加载旧版任务分析…</div>}>
