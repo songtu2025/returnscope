@@ -21,6 +21,7 @@ import {
   PageHeading,
 } from "../components/SharedUi";
 import { STATUS_LABELS } from "../constants";
+import { DataAssetTabs } from "../features/data-management/DataAssetTabs";
 import { formatTime } from "../lib/presentation";
 
 export function DataManagement({
@@ -34,6 +35,7 @@ export function DataManagement({
   routeReferenceVersion = "",
   routeReferencePage = 1,
   onReferenceRouteChange,
+  onAssetViewChange = () => {},
 }) {
   const [selectedId, setSelectedId] = useState(null);
   const [selected, setSelected] = useState(null);
@@ -67,10 +69,12 @@ export function DataManagement({
       return;
     }
     api
-      .dataset(selectedId)
+      .dataset(selectedId, {
+        include: detailTab === "impact" ? "versions,audit" : "versions",
+      })
       .then(setSelected)
       .catch((error) => notify(error.message, "error"));
-  }, [selectedId, notify]);
+  }, [detailTab, selectedId, notify]);
 
   const dimensionAudit =
     selected?.audit?.filter((entry) =>
@@ -85,8 +89,7 @@ export function DataManagement({
   return (
     <div className="standard-page data-page product-master-page">
       <PageHeading
-        eyebrow="系统产品资料"
-        title="产品信息"
+        title="商品信息汇总"
         description="维护跨分析任务复用的产品名称、店铺映射和品类信息；退货明细在分析任务中导入。"
         action={
           <button
@@ -104,6 +107,7 @@ export function DataManagement({
           </button>
         }
       />
+      <DataAssetTabs current="products" onChange={onAssetViewChange} />
       {focus?.returnToTask && taskDraft && (
         <section className="task-return-banner" role="status">
           <div>
@@ -155,10 +159,9 @@ export function DataManagement({
               <div className="dataset-heading-copy">
                 <small className="asset-name-label">当前版本</small>
                 <div className="dataset-title-line">
-                  <h2>{selected.name}</h2>
+                  <h2>商品信息汇总</h2>
                   <span>v{selected.current_version} · 当前生效</span>
                 </div>
-                <p>{selected.description || "系统范围内统一复用的标准产品信息"}</p>
               </div>
               <div className="dataset-summary">
                 <span>
@@ -228,10 +231,7 @@ export function DataManagement({
                 <ProductDimensionRows
                   dataset={selected}
                   notify={notify}
-                  onChanged={async () => {
-                    await load();
-                    setSelected(await api.dataset(selected.id));
-                  }}
+                  onChanged={setSelected}
                 />
               )}
               {detailTab === "versions" && (
@@ -633,7 +633,7 @@ function TaskCategoryCompletion({ dataset, focus, notify, onReturnToTask }) {
       <header>
         <div>
           <span>当前任务待补充</span>
-          <h3>{focus.taskTitle || `${focus.store} 退货分析`}</h3>
+          <h3>{focus.taskTitle || "待创建分析任务"}</h3>
           <p>这里只显示阻断当前任务的商品，不需要在完整产品信息中搜索。</p>
         </div>
         <div className="completion-stats">
@@ -837,7 +837,7 @@ function ProductDimensionRows({ dataset, notify, onChanged }) {
     event.preventDefault();
     setSaving(true);
     try {
-      await api.updateDatasetRow(dataset.id, {
+      const updated = await api.updateDatasetRow(dataset.id, {
         row_index: editing._row_index,
         expected_version: dataset.current_version,
         changes: {
@@ -853,13 +853,12 @@ function ProductDimensionRows({ dataset, notify, onChanged }) {
         change_note: changeNote,
       });
       setEditing(null);
-      await onChanged();
-      await load();
+      onChanged(updated);
       notify("产品信息已更新，并创建了新版本");
     } catch (error) {
       if (error.status === 409) {
         setEditing(null);
-        await onChanged();
+        onChanged(await api.dataset(dataset.id, { include: "versions" }));
         notify("数据已被其他用户更新，已刷新到最新版本，请重新修改", "error");
       } else notify(error.message, "error");
     } finally {

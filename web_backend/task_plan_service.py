@@ -12,8 +12,6 @@ from return_semantics.claims import ClaimsResolver
 from return_semantics.data import (
     ReturnDataset,
     load_product_dimensions,
-    load_return_dataset,
-    load_return_dataset_auto,
 )
 from return_semantics.task_plan import (
     CategoryExecutionPlan,
@@ -21,6 +19,7 @@ from return_semantics.task_plan import (
 )
 from web_backend.classification_standard_service import ClassificationStandardService
 from web_backend.database import Database
+from web_backend.dataset_cache import load_cached_dataset
 from web_backend.settings import PROJECT_ROOT
 
 
@@ -87,20 +86,18 @@ class TaskPlanService:
         if model_policy is not None:
             config = self._apply_model_policy(config, model_policy)
         automatic_scope = not clean_store
+        dataset = load_cached_dataset(
+            str(returns["file_path"]),
+            str(products["file_path"]),
+            clean_store,
+            clean_listing,
+            "auto" if automatic_scope else "manual",
+            str(returns["sha256"]),
+            str(products["sha256"]),
+        )
         if automatic_scope:
-            dataset = load_return_dataset_auto(
-                Path(str(returns["file_path"])),
-                Path(str(products["file_path"])),
-            )
             clean_store = dataset.primary_store or "AUTO"
             clean_listing = None
-        else:
-            dataset = load_return_dataset(
-                Path(str(returns["file_path"])),
-                Path(str(products["file_path"])),
-                store=clean_store,
-                listing=clean_listing,
-            )
         model_config = {
             "primary_model": config["primary_model"],
             "primary_effort": config["primary_effort"],

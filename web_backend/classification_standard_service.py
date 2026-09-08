@@ -13,15 +13,16 @@ from return_semantics.capabilities import (
     CategoryVariant,
     ModelPolicy,
 )
+from return_semantics.prompt import validation_contract_matches
 from return_semantics.schemas import TaxonomyConfig
+from return_semantics.taxonomy import load_taxonomy_alignment
 from web_backend.common import add_audit, json_text, json_value, new_id
 from web_backend.database import Database
 from web_backend.security import utc_now
 from web_backend.settings import PROJECT_ROOT
 
-CLASSIFICATION_STANDARD_SEED_MIGRATION = (
-    "20260824_01_seed_classification_standards"
-)
+CLASSIFICATION_STANDARD_SEED_MIGRATION = "20260824_01_seed_classification_standards"
+CLASSIFICATION_STANDARD_RULES_MIGRATION = "20260825_01_embed_taxonomy_validation_rules"
 
 
 class ClassificationStandardNotFound(ValueError):
@@ -83,6 +84,7 @@ class ClassificationStandardService:
                         utc_now(),
                     ),
                 )
+            self._migrate_taxonomy_validation_rules(connection)
             self._backfill_bindings(connection)
 
     @staticmethod
@@ -292,9 +294,7 @@ class ClassificationStandardService:
                 (standard_id,),
             ).fetchone()
         if row is None:
-            raise ClassificationStandardNotFound(
-                "分类标准不存在、未启用或尚未发布"
-            )
+            raise ClassificationStandardNotFound("分类标准不存在、未启用或尚未发布")
         return self.get_version(str(row["id"]))
 
     def export_version_document(self, version_id: str) -> dict[str, Any]:
@@ -426,6 +426,11 @@ class ClassificationStandardService:
                 "product_context": product_context.strip(),
                 "instructions": [],
                 "allowed_parts": ["UNSPECIFIED"],
+                "validation_rules": {
+                    "allowed_groups": load_taxonomy_alignment()["groups"],
+                    "neutral_reason_labels": [],
+                    "conflict_scope": "evidence",
+                },
                 "labels": [],
             },
         }
@@ -610,8 +615,7 @@ class ClassificationStandardService:
             if (
                 current is None
                 or current["status"] != "active"
-                or current["current_version_id"]
-                != standard["standard_version_id"]
+                or current["current_version_id"] != standard["standard_version_id"]
             ):
                 raise ClassificationStandardConflict(
                     "当前启用版本已发生变化，请刷新后重试"
@@ -768,17 +772,30 @@ class ClassificationStandardService:
         with self.database.connect() as connection:
             sample_validation = connection.execute(
                 """
-                SELECT id FROM classification_standard_validation_runs
+                SELECT id, source_json FROM classification_standard_validation_runs
                 WHERE draft_id = ? AND draft_revision = ?
                   AND status = 'completed' AND error_count = 0
+                  AND approved_at IS NOT NULL
                 ORDER BY completed_at DESC, id DESC
                 LIMIT 1
                 """,
                 (draft_id, expected_revision),
             ).fetchone()
         sample_validation_id = (
-            str(sample_validation["id"]) if sample_validation is not None else None
+            str(sample_validation["id"])
+            if sample_validation is not None
+            and validation_contract_matches(
+                draft["snapshot"], json.loads(sample_validation["source_json"])
+            )
+            else None
         )
+        if sample_validation_id is None:
+            raise ClassificationStandardValidationError(
+                {
+                    "blocking": ["请先完成并人工确认当前草稿修订的样本验证"],
+                    "warnings": validation["warnings"],
+                }
+            )
         now = utc_now()
         standard_id = str(draft["standard_id"])
         with self.database.transaction(immediate=True) as connection:
@@ -1081,6 +1098,9 @@ class ClassificationStandardService:
             for item in content["variants"]
         ]
         taxonomy = snapshot["taxonomy"]
+        taxonomy["recognition_profile"] = content.get(
+            "recognition_profile", taxonomy.get("recognition_profile", "legacy_v3")
+        )
         taxonomy["product_context"] = str(content["product_context"]).strip()
         taxonomy["instructions"] = [
             str(value).strip()
@@ -1092,6 +1112,12 @@ class ClassificationStandardService:
             for value in content["allowed_parts"]
             if str(value).strip()
         ]
+        taxonomy["validation_rules"] = deepcopy(
+            content.get(
+                "validation_rules",
+                taxonomy.get("validation_rules", {}),
+            )
+        )
         taxonomy["labels"] = []
         for item in content["labels"]:
             code = str(item["code"]).strip().upper()
@@ -1102,18 +1128,26 @@ class ClassificationStandardService:
                     "name": str(item["name"]).strip(),
                     "group": str(item["group"]).strip(),
                     "description": str(item["description"]).strip(),
+                    "exclusions": list(
+                        item.get("exclusions", previous.get("exclusions", []))
+                    ),
+                    "examples": deepcopy(
+                        item.get("examples", previous.get("examples", []))
+                    ),
                     "keywords": [
                         str(value).strip()
-                        for value in item.get(
-                            "keywords", previous.get("keywords", [])
-                        )
+                        for value in item.get("keywords", previous.get("keywords", []))
                         if str(value).strip()
                     ],
                     "allowed_sentiments": [
                         str(value).strip().upper()
                         for value in item["allowed_sentiments"]
                     ],
-                    "allowed_claim_ids": list(previous.get("allowed_claim_ids", [])),
+                    "allowed_claim_ids": list(
+                        item["allowed_claim_ids"]
+                        if item.get("allowed_claim_ids") is not None
+                        else previous.get("allowed_claim_ids", [])
+                    ),
                 }
             )
         return snapshot
@@ -1127,6 +1161,9 @@ class ClassificationStandardService:
         blocking: list[str] = []
         warnings: list[str] = []
         taxonomy = candidate.get("taxonomy", {})
+        groups = taxonomy.get("validation_rules", {}).get("allowed_groups", [])
+        if groups and groups != load_taxonomy_alignment()["groups"]:
+            blocking.append("统一标准必须使用规定的七个业务分组")
         if not str(candidate.get("name", "")).strip():
             blocking.append("标准名称不能为空")
         if not str(taxonomy.get("product_context", "")).strip():
@@ -1192,6 +1229,11 @@ class ClassificationStandardService:
         diff = self._diff_snapshots(base, candidate)
         if not diff["has_changes"]:
             blocking.append("草稿与当前已发布版本没有差异")
+        if diff["semantic_label_changes"]:
+            codes = "、".join(diff["semantic_label_changes"])
+            blocking.append(
+                f"已发布标签不能同码改义：{codes}；请停用旧标签并创建新编码"
+            )
         if diff["removed_categories"]:
             warnings.append(
                 f"将移除 {len(diff['removed_categories'])} 个适用品类，新任务不再匹配这些品类"
@@ -1200,9 +1242,12 @@ class ClassificationStandardService:
             warnings.append(
                 f"将停用 {len(diff['removed_labels'])} 个标签，历史结果仍保留原标签"
             )
-        if diff["modified_labels"]:
+        nonsemantic_changes = sorted(
+            set(diff["modified_labels"]) - set(diff["semantic_label_changes"])
+        )
+        if nonsemantic_changes:
             warnings.append(
-                f"修改了 {len(diff['modified_labels'])} 个标签定义，请确认语义边界未发生误移"
+                f"补充了 {len(nonsemantic_changes)} 个已发布标签的搜索别名或判定说明"
             )
         return {
             "blocking": list(dict.fromkeys(blocking)),
@@ -1222,9 +1267,11 @@ class ClassificationStandardService:
         taxonomy = snapshot["taxonomy"]
         return {
             "name": snapshot["name"],
+            "recognition_profile": taxonomy.get("recognition_profile", "legacy_v3"),
             "product_context": taxonomy["product_context"],
             "instructions": list(taxonomy["instructions"]),
             "allowed_parts": list(taxonomy["allowed_parts"]),
+            "validation_rules": deepcopy(taxonomy.get("validation_rules", {})),
             "variants": deepcopy(snapshot["variants"]),
             "labels": [
                 {
@@ -1233,7 +1280,10 @@ class ClassificationStandardService:
                     "group": label["group"],
                     "description": label["description"],
                     "keywords": list(label.get("keywords", [])),
+                    "exclusions": list(label.get("exclusions", [])),
+                    "examples": deepcopy(label.get("examples", [])),
                     "allowed_sentiments": list(label["allowed_sentiments"]),
+                    "allowed_claim_ids": list(label.get("allowed_claim_ids", [])),
                 }
                 for label in taxonomy["labels"]
             ],
@@ -1269,9 +1319,26 @@ class ClassificationStandardService:
                 for code in shared_codes
                 if base_labels[code] != candidate_labels[code]
             ),
+            "semantic_label_changes": sorted(
+                code
+                for code in shared_codes
+                if any(
+                    base_labels[code][field] != candidate_labels[code][field]
+                    for field in (
+                        "name",
+                        "group",
+                        "description",
+                        "allowed_sentiments",
+                    )
+                )
+            ),
             "rules_changed": (
-                base_content["instructions"] != candidate_content["instructions"]
+                base_content["recognition_profile"]
+                != candidate_content["recognition_profile"]
+                or base_content["instructions"] != candidate_content["instructions"]
                 or base_content["allowed_parts"] != candidate_content["allowed_parts"]
+                or base_content["validation_rules"]
+                != candidate_content["validation_rules"]
             ),
             "description_changed": (
                 base_content["name"] != candidate_content["name"]
@@ -1380,6 +1447,95 @@ class ClassificationStandardService:
                 """,
                 (version_id, standard_id),
             )
+
+    def _migrate_taxonomy_validation_rules(self, connection: Any) -> None:
+        migration = connection.execute(
+            "SELECT 1 FROM app_migrations WHERE migration_id = ?",
+            (CLASSIFICATION_STANDARD_RULES_MIGRATION,),
+        ).fetchone()
+        if migration is not None:
+            return
+
+        registry_path = PROJECT_ROOT / "config" / "category_capabilities.json"
+        registry_data = json.loads(registry_path.read_text(encoding="utf-8"))
+        rules_by_standard = {}
+        for family in registry_data["families"]:
+            taxonomy_path = registry_path.parent / str(family["taxonomy"])
+            taxonomy = json.loads(taxonomy_path.read_text(encoding="utf-8"))
+            rules = taxonomy.get("validation_rules", {})
+            if rules:
+                rules_by_standard[str(family["key"])] = rules
+
+        updated_count = 0
+        version_rows = connection.execute(
+            """
+            SELECT version.id, version.snapshot_json, standard.standard_key
+            FROM classification_standard_versions version
+            JOIN classification_standards standard
+              ON standard.id = version.standard_id
+            """
+        ).fetchall()
+        for row in version_rows:
+            rules = rules_by_standard.get(str(row["standard_key"]))
+            snapshot = json.loads(row["snapshot_json"])
+            if not rules or "validation_rules" in snapshot["taxonomy"]:
+                continue
+            snapshot["taxonomy"]["validation_rules"] = deepcopy(rules)
+            encoded = json.dumps(
+                snapshot,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            content_hash = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+            connection.execute(
+                """
+                UPDATE classification_standard_versions
+                SET snapshot_json = ?, content_hash = ? WHERE id = ?
+                """,
+                (encoded, content_hash, row["id"]),
+            )
+            updated_count += 1
+
+        draft_rows = connection.execute(
+            """
+            SELECT draft.id, draft.snapshot_json, standard.standard_key
+            FROM classification_standard_drafts draft
+            JOIN classification_standards standard
+              ON standard.id = draft.standard_id
+            """
+        ).fetchall()
+        for row in draft_rows:
+            rules = rules_by_standard.get(str(row["standard_key"]))
+            snapshot = json.loads(row["snapshot_json"])
+            if not rules or "validation_rules" in snapshot["taxonomy"]:
+                continue
+            snapshot["taxonomy"]["validation_rules"] = deepcopy(rules)
+            connection.execute(
+                """
+                UPDATE classification_standard_drafts
+                SET snapshot_json = ? WHERE id = ?
+                """,
+                (json_text(snapshot), row["id"]),
+            )
+            updated_count += 1
+
+        rules_checksum = hashlib.sha256(
+            json_text(rules_by_standard).encode("utf-8")
+        ).hexdigest()
+        connection.execute(
+            """
+            INSERT INTO app_migrations(
+                migration_id, checksum, status, applied_at
+            ) VALUES (?, ?, ?, ?)
+            """,
+            (
+                CLASSIFICATION_STANDARD_RULES_MIGRATION,
+                rules_checksum,
+                "applied" if updated_count else "baselined",
+                utc_now(),
+            ),
+        )
 
     def _backfill_bindings(self, connection: Any) -> None:
         versions = connection.execute(

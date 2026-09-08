@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+
+from return_semantics.model_client import load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -29,9 +31,17 @@ class Settings:
     encryption_key: str
     secure_cookies: bool
     production: bool = False
+    mysql_host: str = "127.0.0.1"
+    mysql_port: int = 3306
+    mysql_user: str = ""
+    mysql_password: str = field(default="", repr=False)
+    mysql_database: str = "jijia_sync_isolated_20260827"
+    mysql_table: str = "sale_return_order"
+    mysql_max_rows: int = 100000
 
     @classmethod
     def from_env(cls) -> "Settings":
+        load_dotenv(PROJECT_ROOT / ".env.mysql")
         data_dir = Path(
             os.getenv("WEBAPP_DATA_DIR", PROJECT_ROOT / "runtime")
         ).resolve()
@@ -39,6 +49,15 @@ class Settings:
             os.getenv("WEBAPP_DATABASE_PATH", data_dir / "app.db")
         ).resolve()
         settings = cls(
+            mysql_host=os.getenv("WEBAPP_MYSQL_HOST", "127.0.0.1").strip(),
+            mysql_port=_read_int("WEBAPP_MYSQL_PORT", 3306),
+            mysql_user=os.getenv("WEBAPP_MYSQL_USER", "").strip(),
+            mysql_password=os.getenv("WEBAPP_MYSQL_PASSWORD", ""),
+            mysql_database=os.getenv(
+                "WEBAPP_MYSQL_DATABASE", "jijia_sync_isolated_20260827"
+            ).strip(),
+            mysql_table=os.getenv("WEBAPP_MYSQL_TABLE", "sale_return_order").strip(),
+            mysql_max_rows=_read_int("WEBAPP_MYSQL_MAX_ROWS", 100000),
             data_dir=data_dir,
             database_path=database_path,
             session_days=_read_int("WEBAPP_SESSION_DAYS", 14),

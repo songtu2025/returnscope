@@ -291,7 +291,7 @@ def normalize_model_payload(payload: dict[str, Any]) -> dict[str, Any]:
                     "reason": "模型未提供未映射原因",
                 }
             )
-        elif isinstance(item, dict) and "label_code" in item:
+        elif isinstance(item, dict) and item.get("label_code"):
             semantic_units.append(item)
         elif isinstance(item, dict) and "opinion" in item and "evidence" in item:
             unknown_semantics.append(

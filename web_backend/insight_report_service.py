@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
+from copy import deepcopy
 from dataclasses import replace
 from typing import Any, Callable, Literal
 
@@ -10,12 +12,17 @@ from pydantic import BaseModel, Field
 from return_semantics.model_client import Sub2APIClient
 from web_backend.common import json_text, json_value, new_id
 from web_backend.config_service import ConfigService
-from web_backend.dashboard_service import DashboardService
+from web_backend.dashboard_service import TEXT_ENCODING_ANOMALY, DashboardService
 from web_backend.database import Database
+from web_backend.insight_report_profiles import (
+    get_insight_report_profile,
+    resolve_insight_report_profile,
+)
 from web_backend.model_catalog import validate_effort
 from web_backend.security import utc_now
 
-PROMPT_VERSION = "ai-return-insight-v3"
+V5_PROMPT_VERSION = "ai-return-insight-v5"
+PROMPT_VERSION = "ai-return-insight-v6"
 GENERATION_ERROR_MESSAGE = (
     "报告生成未完成，请稍后重试。失败尝试已保留，且不会占用报告版本号。"
 )
@@ -63,6 +70,94 @@ class InsightReportContent(BaseModel):
     actions: list[ReportAction] = Field(min_length=2, max_length=6)
     further_questions: list[str] = Field(default_factory=list, max_length=5)
     caveats: list[str] = Field(min_length=1)
+
+
+class ReportIssueScope(BaseModel):
+    category: str | None = Field(default=None, max_length=120)
+    listing: str | None = Field(default=None, max_length=200)
+    product: str | None = Field(default=None, max_length=300)
+    sku: str | None = Field(default=None, max_length=200)
+
+
+class ReportIssueMetrics(BaseModel):
+    matched_return_samples: int = Field(ge=0)
+    scoped_return_samples: int = Field(ge=0)
+    return_sample_share: float = Field(ge=0, le=100)
+    baseline_return_sample_share: float | None = Field(default=None, ge=0, le=100)
+    gap_percentage_points: float | None = None
+    lift: float | None = Field(default=None, ge=0)
+    recent_change_percentage_points: float | None = None
+    trend_direction: Literal["rising", "stable", "falling", "insufficient"]
+
+
+class ReportIssueReadiness(BaseModel):
+    status: Literal["unusable", "diagnostic_only", "verification_ready"]
+    label: str = Field(min_length=1, max_length=40)
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class ReportIssueRecommendation(BaseModel):
+    label: Literal["建议验证"] = "建议验证"
+    validation_question: str = Field(min_length=1, max_length=300)
+    rationale: str = Field(min_length=1, max_length=500)
+    suggested_evidence: list[str] = Field(min_length=1, max_length=5)
+
+
+class ReportIssue(BaseModel):
+    id: str = Field(min_length=1, max_length=160)
+    rank: int = Field(ge=1)
+    title: str = Field(min_length=1, max_length=200)
+    scope: ReportIssueScope
+    metrics: ReportIssueMetrics
+    known: list[str] = Field(min_length=1, max_length=6)
+    evidence_explanation: str = Field(min_length=1, max_length=800)
+    unknown: list[str] = Field(min_length=1, max_length=5)
+    recommendation: ReportIssueRecommendation
+    readiness: ReportIssueReadiness
+    evidence_ids: list[str] = Field(min_length=1)
+
+
+class InsightDecisionReportContent(BaseModel):
+    report_type: Literal["problem_decision"] = "problem_decision"
+    title: str = Field(min_length=1, max_length=120)
+    issues: list[ReportIssue] = Field(min_length=1, max_length=8)
+    caveats: list[str] = Field(min_length=1, max_length=8)
+
+
+class ReportQualityIssue(BaseModel):
+    code: Literal[
+        "report_consistency",
+        "text_quality",
+        "product_mapping",
+        "pending_review",
+    ]
+    label: str = Field(min_length=1, max_length=80)
+    detail: str = Field(min_length=1, max_length=500)
+    evidence_ids: list[str] = Field(default_factory=list)
+
+
+class ReportDecisionReadiness(BaseModel):
+    status: Literal["actionable", "diagnostic_only", "unusable"]
+    label: str = Field(min_length=1, max_length=40)
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class ReportQualityGate(BaseModel):
+    status: Literal["passed", "warning", "blocked"]
+    issues: list[ReportQualityIssue]
+    text_quality: dict[str, Any]
+    product_mapping: dict[str, Any]
+    consistency: dict[str, Any]
+    decision_readiness: ReportDecisionReadiness
+
+
+class DecisionReportQualityGate(BaseModel):
+    status: Literal["passed", "warning", "blocked"]
+    issues: list[ReportQualityIssue]
+    text_quality: dict[str, Any]
+    product_mapping: dict[str, Any]
+    consistency: dict[str, Any]
+    decision_readiness: ReportIssueReadiness
 
 
 class InsightReportService:
@@ -155,13 +250,24 @@ class InsightReportService:
                 """,
                 (dashboard_id, dashboard_version_id),
             ).fetchall()
+            decisions = self._decision_map(
+                connection,
+                [str(row["id"]) for row in rows],
+            )
         text_quality = None
         if any(row["status"] == "completed" for row in rows):
             text_quality = self.dashboard_service.text_quality(
                 dashboard_id,
                 dashboard_version_id,
             )
-        return [self._serialize(dict(row), text_quality=text_quality) for row in rows]
+        return [
+            self._serialize(
+                dict(row),
+                text_quality=text_quality,
+                decisions=decisions.get(str(row["id"]), []),
+            )
+            for row in rows
+        ]
 
     def get(self, report_id: str) -> dict[str, Any]:
         with self.database.connect() as connection:
@@ -172,6 +278,10 @@ class InsightReportService:
                 """,
                 (report_id,),
             ).fetchone()
+            decisions = self._decision_map(connection, [report_id]).get(
+                report_id,
+                [],
+            )
         if row is None:
             raise InsightReportNotFound("AI 洞察报告不存在")
         report = dict(row)
@@ -181,7 +291,96 @@ class InsightReportService:
                 str(report["dashboard_id"]),
                 str(report["dashboard_version_id"]),
             )
-        return self._serialize(report, text_quality=text_quality)
+        return self._serialize(
+            report,
+            text_quality=text_quality,
+            decisions=decisions,
+        )
+
+    def set_issue_decision(
+        self,
+        report_id: str,
+        issue_id: str,
+        status: str,
+        actor_id: str,
+    ) -> dict[str, Any]:
+        if status not in {"pending", "ignored", "watching", "verify"}:
+            raise ValueError("问题决策状态不合法")
+        clean_issue_id = issue_id.strip()
+        if not clean_issue_id:
+            raise InsightReportNotFound("报告问题不存在")
+        with self.database.transaction(immediate=True) as connection:
+            report = connection.execute(
+                """
+                SELECT prompt_version, status, content_json
+                FROM ai_insight_reports WHERE id = ?
+                """,
+                (report_id,),
+            ).fetchone()
+            if report is None:
+                raise InsightReportNotFound("AI 洞察报告不存在")
+            if (
+                report["status"] != "completed"
+                or report["prompt_version"] != PROMPT_VERSION
+            ):
+                raise InsightReportConflict("只有已完成的 V6 报告支持问题决策")
+            content = json_value(report["content_json"], {})
+            issue_ids = {
+                str(issue.get("id") or "")
+                for issue in content.get("issues", [])
+                if isinstance(issue, dict)
+            }
+            if clean_issue_id not in issue_ids:
+                raise InsightReportNotFound("报告问题不存在")
+            existing = connection.execute(
+                """
+                SELECT report_id, issue_id, status, updated_by, updated_at
+                FROM ai_insight_issue_decisions
+                WHERE report_id = ? AND issue_id = ?
+                """,
+                (report_id, clean_issue_id),
+            ).fetchone()
+            if existing is not None and existing["status"] == status:
+                return dict(existing)
+            now = utc_now()
+            before = dict(existing) if existing is not None else None
+            connection.execute(
+                """
+                INSERT INTO ai_insight_issue_decisions(
+                    report_id, issue_id, status, updated_by, updated_at
+                ) VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(report_id, issue_id) DO UPDATE SET
+                    status = excluded.status,
+                    updated_by = excluded.updated_by,
+                    updated_at = excluded.updated_at
+                """,
+                (report_id, clean_issue_id, status, actor_id, now),
+            )
+            decision = {
+                "report_id": report_id,
+                "issue_id": clean_issue_id,
+                "status": status,
+                "updated_by": actor_id,
+                "updated_at": now,
+            }
+            connection.execute(
+                """
+                INSERT INTO audit_logs(
+                    id, entity_type, entity_id, action,
+                    before_json, after_json, actor_id, created_at
+                ) VALUES (?, 'ai_insight_issue_decision', ?,
+                          'set_decision', ?, ?, ?, ?)
+                """,
+                (
+                    new_id("audit"),
+                    f"{report_id}:{clean_issue_id}",
+                    json_text(before) if before else None,
+                    json_text(decision),
+                    actor_id,
+                    now,
+                ),
+            )
+        return decision
 
     def retry(self, report_id: str, actor_id: str) -> dict[str, Any]:
         with self.database.connect() as connection:
@@ -282,6 +481,11 @@ class InsightReportService:
                 str(report["dashboard_id"]),
                 str(report["dashboard_version_id"]),
             )
+            analysis["sources"] = self.dashboard_service.sources(
+                str(report["dashboard_id"]),
+                str(report["dashboard_version_id"]),
+            )
+            reason_codes = self._diagnostic_reason_codes(analysis)
             analysis["diagnostics"] = [
                 self._compact_diagnostic(
                     self.dashboard_service.insights(
@@ -290,9 +494,18 @@ class InsightReportService:
                         problem=reason_code,
                     )
                 )
-                for reason_code in self._diagnostic_reason_codes(analysis)
+                for reason_code in reason_codes
             ]
-            evidence = self._build_evidence(analysis)
+            analysis["issue_cases"] = self.dashboard_service.issue_cases(
+                str(report["dashboard_id"]),
+                str(report["dashboard_version_id"]),
+                reason_codes,
+            )
+            prompt_version = str(report["prompt_version"])
+            evidence = self._build_evidence(
+                analysis,
+                prompt_version=prompt_version,
+            )
             evidence_hash = hashlib.sha256(
                 json_text(evidence).encode("utf-8")
             ).hexdigest()
@@ -317,8 +530,13 @@ class InsightReportService:
                 secondary_model=None,
             )
             client = self.client_factory(settings)
+            messages = (
+                self._messages_v6(evidence)
+                if prompt_version == PROMPT_VERSION
+                else self._messages(evidence)
+            )
             result = client.generate_json(
-                self._messages(evidence),
+                messages,
                 model=str(report["model_key"]),
                 reasoning_effort=str(report["reasoning_effort"]),
             )
@@ -330,13 +548,24 @@ class InsightReportService:
                     """,
                     (report_id,),
                 )
-            content = self._assemble_content(evidence, result.payload)
-            self._validate_evidence_refs(content, set(evidence["catalog"]))
-            consistency = self._report_consistency(
-                content.model_dump(),
-                evidence,
-                require_information_diagnostics=True,
-            )
+            if prompt_version == PROMPT_VERSION:
+                content = self._assemble_content_v6(evidence, result.payload)
+                self._validate_issue_evidence_refs(
+                    content,
+                    set(evidence["catalog"]),
+                )
+                consistency = self._decision_report_consistency(
+                    content.model_dump(),
+                    evidence,
+                )
+            else:
+                content = self._assemble_content(evidence, result.payload)
+                self._validate_evidence_refs(content, set(evidence["catalog"]))
+                consistency = self._report_consistency(
+                    content.model_dump(),
+                    evidence,
+                    require_information_diagnostics=True,
+                )
             if consistency["status"] == "blocked":
                 detail = "；".join(consistency["issues"][:3])
                 raise ValueError(f"报告数据一致性校验未通过：{detail}")
@@ -519,6 +748,10 @@ class InsightReportService:
     @staticmethod
     def _diagnostic_reason_codes(analysis: dict[str, Any]) -> list[str]:
         reasons = list(analysis.get("reasons", []))[:15]
+        profile = resolve_insight_report_profile(analysis.get("sources"))
+        reason_by_code = {
+            str(reason.get("value") or ""): reason for reason in reasons
+        }
         selected: list[str] = []
         actionable = [
             reason
@@ -535,7 +768,12 @@ class InsightReportService:
             ),
             None,
         )
-        candidates = [*actionable[:2]]
+        candidates = [
+            reason_by_code[code]
+            for code in profile.preferred_reason_codes
+            if code in reason_by_code
+        ]
+        candidates.extend(actionable[:2])
         if broad_reason:
             candidates.append(broad_reason)
         if not candidates and reasons:
@@ -545,7 +783,7 @@ class InsightReportService:
             code = str(reason.get("value") or "")
             if code and code not in selected:
                 selected.append(code)
-        return [code for code in selected if code][:3]
+        return [code for code in selected if code][:4]
 
     @staticmethod
     def _trend_summary(
@@ -643,6 +881,9 @@ class InsightReportService:
             "hotspots": InsightReportService._rank_hotspots(
                 list(data.get("products", []))
             ),
+            "variants": InsightReportService._rank_hotspots(
+                list(data.get("variants", []))
+            ),
             "co_reasons": list(data.get("co_reasons", []))[:6],
             "semantic_profile": {
                 "record_count": semantic_profile.get("record_count", 0),
@@ -654,94 +895,332 @@ class InsightReportService:
         }
 
     @staticmethod
-    def _product_mapping_check(
-        listings: list[str],
-        products: list[dict[str, Any]],
+    def _has_text_anomaly(*values: Any) -> bool:
+        text = " ".join(str(value or "") for value in values)
+        return bool(TEXT_ENCODING_ANOMALY.search(text))
+
+    @staticmethod
+    def _filter_diagnostic_text(
+        diagnostic: dict[str, Any],
     ) -> dict[str, Any]:
-        if len(listings) != 1:
-            return {"status": "not_applicable", "examples": []}
+        semantic_profile = diagnostic.get("semantic_profile", {})
+        opinions = [
+            opinion
+            for opinion in semantic_profile.get("opinions", [])
+            if not InsightReportService._has_text_anomaly(
+                opinion.get("opinion"),
+                opinion.get("evidence"),
+            )
+        ]
+        samples = [
+            sample
+            for sample in diagnostic.get("samples", [])
+            if not InsightReportService._has_text_anomaly(
+                sample.get("comment"),
+                sample.get("reason"),
+            )
+        ]
+        return {
+            **diagnostic,
+            "semantic_profile": {
+                **semantic_profile,
+                "opinions": opinions,
+            },
+            "samples": samples,
+            "text_evidence": {
+                "status": "available" if opinions or samples else "limited",
+                "opinion_count": len(opinions),
+                "sample_count": len(samples),
+            },
+        }
 
-        listing = str(listings[0]).strip()
-        mismatched = []
-        for product in products:
-            name = str(product.get("value") or "").strip()
-            if "-" not in name:
+    @staticmethod
+    def _filter_issue_case_text(case: dict[str, Any]) -> dict[str, Any]:
+        semantic_profile = case.get("semantic_profile", {})
+        opinions = [
+            opinion
+            for opinion in semantic_profile.get("opinions", [])
+            if not InsightReportService._has_text_anomaly(
+                opinion.get("opinion"),
+                opinion.get("evidence"),
+            )
+        ]
+        samples = [
+            sample
+            for sample in case.get("samples", [])
+            if not InsightReportService._has_text_anomaly(
+                sample.get("comment"),
+                sample.get("reason"),
+            )
+        ]
+        return {
+            **case,
+            "semantic_profile": {
+                **semantic_profile,
+                "opinions": opinions,
+            },
+            "samples": samples,
+        }
+
+    @staticmethod
+    def _filter_business_issue_text(
+        issue: dict[str, Any],
+    ) -> dict[str, Any]:
+        contexts = issue.get("contexts", {})
+        opinions = [
+            opinion
+            for opinion in contexts.get("opinions", [])
+            if not InsightReportService._has_text_anomaly(
+                opinion.get("opinion"),
+                opinion.get("evidence"),
+            )
+        ]
+        samples = [
+            sample
+            for sample in contexts.get("samples", [])
+            if not InsightReportService._has_text_anomaly(
+                sample.get("comment"),
+                sample.get("reason"),
+            )
+        ]
+        return {
+            **issue,
+            "contexts": {
+                **contexts,
+                "opinions": opinions,
+                "samples": samples,
+            },
+        }
+
+    @staticmethod
+    def _build_business_issues(
+        diagnostics: list[dict[str, Any]],
+        issue_cases: list[dict[str, Any]],
+        *,
+        profile: Any,
+    ) -> list[dict[str, Any]]:
+        preferred_codes = set(profile.preferred_reason_codes)
+        cases_by_code: dict[str, list[dict[str, Any]]] = {}
+        for case in issue_cases:
+            code = str(case.get("reason_code") or "")
+            if code:
+                cases_by_code.setdefault(code, []).append(case)
+        issues = []
+        for diagnostic in diagnostics:
+            reason = diagnostic.get("selected_reason") or {}
+            code = str(diagnostic.get("reason_code") or "")
+            if not code:
                 continue
-            name_prefix = name.split("-", 1)[0]
-            if name_prefix.casefold() != listing.casefold():
-                mismatched.append(product)
-        if not mismatched:
-            return {"status": "consistent", "listing": listing, "examples": []}
+            cases = []
+            for case in cases_by_code.get(code, [])[:3]:
+                trend = list(case.get("trend", []))
+                cases.append(
+                    {
+                        **case,
+                        "value": str(case.get("product_sku") or ""),
+                        "product_reason_rate": float(case.get("issue_rate") or 0),
+                        "overall_reason_rate": float(case.get("overall_rate") or 0),
+                        "trend_summary": InsightReportService._trend_summary(
+                            trend,
+                            str(
+                                diagnostic.get("date_range", {}).get("date_to")
+                                or ""
+                            )
+                            or None,
+                        ),
+                    }
+                )
 
-        examples = [str(item.get("value") or "") for item in mismatched[:3]]
-        record_count = sum(
-            int(item.get("total_record_count") or 0) for item in mismatched
-        )
+            if cases:
+                dimension = "variant"
+                hotspots = cases
+                primary_case = cases[0]
+                trend_summary = primary_case["trend_summary"]
+                trend = list(primary_case.get("trend", []))
+                semantic_profile = primary_case.get("semantic_profile", {})
+                opinions = list(semantic_profile.get("opinions", []))[:3]
+                samples = list(primary_case.get("samples", []))[:3]
+                parts = list(semantic_profile.get("parts", []))[:4]
+                top_opinion = next(iter(opinions), None)
+                validation_focus = (
+                    f"先复核 {primary_case.get('product_sku')} 中"
+                    f"“{top_opinion.get('opinion')}”对应的评论，"
+                    "再核对实物规格、页面说明与使用情境"
+                    if top_opinion
+                    else (
+                        f"先复核 {primary_case.get('product_sku')} 的"
+                        f"{reason.get('label') or code}评论，再核对实物和页面说明"
+                    )
+                )
+            else:
+                dimension = (
+                    "variant" if diagnostic.get("variants") else "product"
+                )
+                hotspots = list(
+                    diagnostic.get(
+                        "variants" if dimension == "variant" else "hotspots",
+                        [],
+                    )
+                )[:3]
+                trend_summary = diagnostic.get("trend_summary", {})
+                trend = list(diagnostic.get("trend", []))
+                semantic_profile = diagnostic.get("semantic_profile", {})
+                opinions = list(semantic_profile.get("opinions", []))[:3]
+                samples = list(diagnostic.get("samples", []))[:3]
+                parts = list(semantic_profile.get("parts", []))[:4]
+                validation_focus = profile.diagnostic_action
+
+            evidence_ids = [f"reason.{code}"]
+            if cases:
+                evidence_ids.extend(str(case.get("id")) for case in cases)
+                primary_id = str(cases[0].get("id"))
+                if cases[0].get("trend"):
+                    evidence_ids.append(f"{primary_id}.trend")
+                evidence_ids.extend(
+                    f"{primary_id}.opinion.{index}"
+                    for index in range(1, len(opinions) + 1)
+                )
+                evidence_ids.extend(
+                    f"{primary_id}.sample.{index}"
+                    for index in range(1, len(samples) + 1)
+                )
+            elif trend_summary.get("status") == "available":
+                evidence_ids.append(f"diagnostic.{code}.trend")
+                evidence_ids.extend(
+                    f"diagnostic.{code}.{dimension}.{index}"
+                    for index in range(1, len(hotspots) + 1)
+                )
+                evidence_ids.extend(
+                    f"diagnostic.{code}.opinion.{index}"
+                    for index in range(1, len(opinions) + 1)
+                )
+                evidence_ids.extend(
+                    f"diagnostic.{code}.sample.{index}"
+                    for index in range(1, len(samples) + 1)
+                )
+            issues.append(
+                {
+                    "id": f"business_issue.{code}",
+                    "reason_code": code,
+                    "label": str(reason.get("label") or code),
+                    "label_group": str(reason.get("label_group") or ""),
+                    "role": (
+                        "supporting"
+                        if (
+                            str(reason.get("label_group") or "") == "其他原因"
+                            or len(reason.get("subjects", [])) > 1
+                        )
+                        else "primary"
+                        if not preferred_codes or code in preferred_codes
+                        else "supporting"
+                    ),
+                    "record_count": int(reason.get("record_count") or 0),
+                    "percentage": float(reason.get("percentage") or 0),
+                    "trend_summary": trend_summary,
+                    "trend": trend,
+                    "hotspot_dimension": dimension,
+                    "hotspot_label": (
+                        profile.variant_label if dimension == "variant" else "商品"
+                    ),
+                    "hotspots": hotspots,
+                    "cases": cases,
+                    "contexts": {
+                        "parts": parts,
+                        "opinions": opinions,
+                        "samples": samples,
+                    },
+                    "validation_focus": validation_focus,
+                    "evidence_ids": list(dict.fromkeys(evidence_ids)),
+                }
+            )
+        return issues
+
+    @staticmethod
+    def _product_mapping_check(
+        summary: dict[str, Any],
+        listings: list[str],
+    ) -> dict[str, Any]:
+        unmatched = int(summary.get("product_unmatched_count") or 0)
+        missing = int(summary.get("product_name_missing_count") or 0)
+        listing = str(listings[0]).strip() if len(listings) == 1 else None
+        if not unmatched and not missing:
+            return {
+                "status": "consistent",
+                "listing": listing,
+                "unmatched_record_count": 0,
+                "missing_name_record_count": 0,
+                "examples": [],
+                "note": "商品关系以已发布商品主数据为准，未发现未匹配记录。",
+            }
+
         return {
             "status": "needs_review",
             "listing": listing,
-            "mismatched_product_count": len(mismatched),
-            "mismatched_record_count": record_count,
-            "examples": examples,
+            "unmatched_record_count": unmatched,
+            "missing_name_record_count": missing,
+            "examples": [],
             "note": (
-                f"重点商品中有 {len(mismatched)} 个商品主数据名称前缀与 "
-                f"Listing {listing} 不一致，商品级行动前需核对主数据映射。"
+                f"当前有 {unmatched} 条未匹配商品记录、{missing} 条缺少商品名称，"
+                "商品级行动前需补全已发布商品主数据关系。"
             ),
         }
 
     @staticmethod
-    def _build_evidence(analysis: dict[str, Any]) -> dict[str, Any]:
+    def _build_evidence(
+        analysis: dict[str, Any],
+        *,
+        prompt_version: str = V5_PROMPT_VERSION,
+    ) -> dict[str, Any]:
         summary = analysis.get("summary", {})
         groups = list(analysis.get("label_group_breakdown", []))[:12]
         reasons = list(analysis.get("reasons", []))[:15]
         subjects = list(analysis.get("subject_breakdown", []))[:10]
         products = list(analysis.get("product_reason_matrix", []))[:8]
-        diagnostics = list(analysis.get("diagnostics", []))[:3]
+        diagnostics = list(analysis.get("diagnostics", []))[:4]
+        issue_cases = list(analysis.get("issue_cases", []))[:12]
         review_bias = analysis.get("review_bias", {})
         text_quality = analysis.get("text_quality", {})
         listings = list(analysis.get("filter_options", {}).get("listings", []))
         product_names = list(
             analysis.get("filter_options", {}).get("product_names", [])
         )
+        sources = list(analysis.get("sources", []))
+        profile = resolve_insight_report_profile(sources)
         product_mapping = InsightReportService._product_mapping_check(
+            summary,
             listings,
-            products,
         )
         mapping_trusted = product_mapping.get("status") != "needs_review"
         text_trusted = text_quality.get("status") != "needs_review"
-        product_level_trusted = mapping_trusted and text_trusted
+        product_level_trusted = mapping_trusted
         safe_products = products if product_level_trusted else []
-        safe_diagnostics = diagnostics
+        safe_diagnostics = deepcopy(diagnostics)
+        safe_issue_cases = deepcopy(issue_cases) if product_level_trusted else []
         if not product_level_trusted:
             safe_diagnostics = [
                 {
                     **diagnostic,
                     "hotspots": [],
-                    "semantic_profile": {
-                        **diagnostic.get("semantic_profile", {}),
-                        "opinions": (
-                            diagnostic.get("semantic_profile", {}).get(
-                                "opinions",
-                                [],
-                            )
-                            if text_trusted
-                            else []
-                        ),
-                    },
-                    "samples": (
-                        []
-                        if not text_trusted
-                        else [
-                            {
-                                **sample,
-                                "product_name": None,
-                                "product_sku": None,
-                            }
-                            for sample in diagnostic.get("samples", [])
-                        ]
-                    ),
+                    "variants": [],
+                    "samples": [
+                        {
+                            **sample,
+                            "product_name": None,
+                            "product_sku": None,
+                        }
+                        for sample in diagnostic.get("samples", [])
+                    ],
                 }
                 for diagnostic in diagnostics
+            ]
+        if not text_trusted:
+            safe_diagnostics = [
+                InsightReportService._filter_diagnostic_text(diagnostic)
+                for diagnostic in safe_diagnostics
+            ]
+            safe_issue_cases = [
+                InsightReportService._filter_issue_case_text(case)
+                for case in safe_issue_cases
             ]
         catalog: dict[str, dict[str, Any]] = {
             "scope": {
@@ -766,6 +1245,11 @@ class InsightReportService:
                 "label": "评论文本质量",
                 "value": str(text_quality.get("note") or "尚未评估"),
                 "data": text_quality,
+            },
+            "report_profile": {
+                "label": "报告品类配置",
+                "value": f"{profile.category_name} · {profile.version}",
+                "data": profile.snapshot(),
             },
         }
         for index, group in enumerate(groups, 1):
@@ -803,6 +1287,46 @@ class InsightReportService:
                 "value": f"{int(product.get('total_record_count') or 0)} 条已分析退货",
                 "data": product,
             }
+        for case in safe_issue_cases:
+            case_id = str(case.get("id") or "")
+            if not case_id:
+                continue
+            catalog[case_id] = {
+                "label": (
+                    f"{case.get('label') or case.get('reason_code')} · "
+                    f"{case.get('product_sku') or '未提供 SKU'}"
+                ),
+                "value": (
+                    f"{int(case.get('record_count') or 0)} / "
+                    f"{int(case.get('total_record_count') or 0)} 条，"
+                    f"变体内 {float(case.get('issue_rate') or 0):.1f}%，"
+                    f"整体 {float(case.get('overall_rate') or 0):.1f}%，"
+                    f"{float(case.get('lift') or 0):.2f}×"
+                ),
+                "data": case,
+            }
+            if case.get("trend"):
+                catalog[f"{case_id}.trend"] = {
+                    "label": f"{case.get('product_sku') or '商品变体'}问题趋势",
+                    "value": f"{len(case.get('trend', []))} 个周度数据点",
+                    "data": case.get("trend", []),
+                }
+            for index, opinion in enumerate(
+                case.get("semantic_profile", {}).get("opinions", []),
+                1,
+            ):
+                catalog[f"{case_id}.opinion.{index}"] = {
+                    "label": str(opinion.get("opinion") or f"高频表述 {index}"),
+                    "value": f"{int(opinion.get('record_count') or 0)} 条",
+                    "data": opinion,
+                }
+            for index, sample in enumerate(case.get("samples", []), 1):
+                text = str(sample.get("comment") or sample.get("reason") or "").strip()
+                catalog[f"{case_id}.sample.{index}"] = {
+                    "label": str(case.get("product_sku") or "原始评论"),
+                    "value": text[:160] or "未提供评论",
+                    "data": sample,
+                }
         samples = []
         seen_samples: set[str] = set()
         for diagnostic in safe_diagnostics:
@@ -832,6 +1356,18 @@ class InsightReportService:
                     ),
                     "data": hotspot,
                 }
+            for index, variant in enumerate(diagnostic.get("variants", []), 1):
+                catalog[f"diagnostic.{code}.variant.{index}"] = {
+                    "label": str(variant.get("value") or f"商品变体 {index}"),
+                    "value": (
+                        f"{int(variant.get('record_count') or 0)} / "
+                        f"{int(variant.get('total_record_count') or 0)} 条，"
+                        f"变体内 {float(variant.get('product_reason_rate') or 0):.1f}%，"
+                        f"整体 {float(variant.get('overall_reason_rate') or 0):.1f}%，"
+                        f"{float(variant.get('lift') or 0):.2f}×"
+                    ),
+                    "data": variant,
+                }
             opinions = diagnostic.get("semantic_profile", {}).get("opinions", [])
             for index, opinion in enumerate(opinions, 1):
                 catalog[f"diagnostic.{code}.opinion.{index}"] = {
@@ -852,6 +1388,20 @@ class InsightReportService:
                         {**sample, "reason_code": code, "evidence_id": sample_id}
                     )
                     seen_samples.add(text)
+        business_issues = InsightReportService._build_business_issues(
+            safe_diagnostics,
+            safe_issue_cases,
+            profile=profile,
+        )
+        for issue in business_issues:
+            catalog[issue["id"]] = {
+                "label": str(issue.get("label") or "业务问题"),
+                "value": (
+                    f"{int(issue.get('record_count') or 0)} 条 · "
+                    f"{float(issue.get('percentage') or 0):.1f}%"
+                ),
+                "data": issue,
+            }
         total_record_count = int(
             summary.get("total_record_count") or summary.get("record_count") or 0
         )
@@ -859,8 +1409,29 @@ class InsightReportService:
         coverage_rate = float(
             summary.get("coverage_rate")
             if summary.get("coverage_rate") is not None
-            else (100 if total_record_count else 0)
+                else (100 if total_record_count else 0)
         )
+        checked_comment_count = int(
+            text_quality.get("checked_record_count") or 0
+        )
+        anomaly_comment_count = int(
+            text_quality.get("anomaly_record_count") or 0
+        )
+        clean_comment_count = max(
+            checked_comment_count - anomaly_comment_count,
+            0,
+        )
+        clean_comment_rate = round(
+            clean_comment_count / checked_comment_count * 100,
+            1,
+        ) if checked_comment_count else 0.0
+        quality_issue_codes = []
+        if pending_review_count:
+            quality_issue_codes.append("pending_review")
+        if not text_trusted:
+            quality_issue_codes.append("text_quality")
+        if not mapping_trusted:
+            quality_issue_codes.append("product_mapping")
         evidence = {
             "source": {
                 "dashboard_id": analysis.get("dashboard_id"),
@@ -875,11 +1446,29 @@ class InsightReportService:
                 "coverage_rate": coverage_rate,
                 "product_mapping": product_mapping,
                 "text_quality": text_quality,
-                "report_status": (
-                    "provisional"
-                    if pending_review_count > 0 or not text_trusted
-                    else "final"
+                "clean_comment_record_count": clean_comment_count,
+                "clean_comment_rate": clean_comment_rate,
+                "quality_issue_codes": quality_issue_codes,
+                "report_status": "provisional" if quality_issue_codes else "final",
+                "agent_keys": sorted(
+                    {
+                        str(source.get("agent_key"))
+                        for source in sources
+                        if source.get("agent_key")
+                    }
                 ),
+                "taxonomy_versions": sorted(
+                    {
+                        str(
+                            source.get("taxonomy_version")
+                            or source.get("taxonomy_version_id")
+                        )
+                        for source in sources
+                        if source.get("taxonomy_version")
+                        or source.get("taxonomy_version_id")
+                    }
+                ),
+                "report_profile": profile.snapshot(),
             },
             "catalog": catalog,
             "analysis": {
@@ -889,24 +1478,343 @@ class InsightReportService:
                 "subject_breakdown": subjects,
                 "product_reason_matrix": safe_products,
                 "diagnostics": safe_diagnostics,
+                "issue_cases": safe_issue_cases,
+                "business_issues": business_issues,
                 "review_bias": review_bias,
                 "text_quality": text_quality,
+                "report_profile": profile.snapshot(),
                 "samples": samples,
             },
         }
-        evidence["blueprint"] = InsightReportService._build_blueprint(evidence)
+        evidence["blueprint"] = (
+            InsightReportService._build_decision_blueprint(evidence)
+            if prompt_version == PROMPT_VERSION
+            else InsightReportService._build_blueprint(evidence)
+        )
         return evidence
+
+    @staticmethod
+    def _build_decision_blueprint(evidence: dict[str, Any]) -> dict[str, Any]:
+        source = evidence["source"]
+        analysis = evidence["analysis"]
+        catalog = evidence["catalog"]
+        profile = get_insight_report_profile(
+            source.get("report_profile", {}).get("key")
+        )
+        listings = list(source.get("listings", []))
+        listing = str(listings[0]) if len(listings) == 1 else None
+        category = profile.category_name if profile.key != "generic" else None
+        source_limited = bool(source.get("quality_issue_codes"))
+        candidates = []
+
+        for business_issue in analysis.get("business_issues", []):
+            code = str(business_issue.get("reason_code") or "")
+            if not code:
+                continue
+            rows = list(business_issue.get("cases", []))
+            dimension = str(business_issue.get("hotspot_dimension") or "product")
+            if not rows:
+                rows = list(business_issue.get("hotspots", []))
+            if not rows:
+                rows = [None]
+
+            for index, row in enumerate(rows[:2], 1):
+                row = row or {}
+                case_id = str(row.get("id") or "")
+                value = str(row.get("value") or "").strip()
+                product = str(row.get("product_name") or "").strip() or None
+                sku = str(row.get("product_sku") or "").strip() or None
+                if not case_id and value:
+                    if dimension == "variant":
+                        sku = value
+                    else:
+                        product = value
+
+                issue_id = case_id
+                if not issue_id:
+                    if not product and not sku:
+                        issue_id = f"issue.reason.{code}"
+                    else:
+                        identity = "\x1f".join(
+                            [code, dimension, product or "", sku or ""]
+                        )
+                        suffix = hashlib.sha256(
+                            identity.encode("utf-8")
+                        ).hexdigest()[:12]
+                        issue_id = f"issue.{code}.{suffix}"
+
+                matched = int(
+                    row.get("record_count")
+                    or business_issue.get("record_count")
+                    or 0
+                )
+                scoped = int(
+                    row.get("total_record_count")
+                    or source.get("included_record_count")
+                    or 0
+                )
+                share = float(
+                    row.get("product_reason_rate")
+                    if row.get("product_reason_rate") is not None
+                    else row.get("issue_rate")
+                    if row.get("issue_rate") is not None
+                    else business_issue.get("percentage")
+                    or 0
+                )
+                baseline_value = (
+                    row.get("overall_reason_rate")
+                    if row.get("overall_reason_rate") is not None
+                    else row.get("overall_rate")
+                )
+                baseline = (
+                    float(baseline_value) if baseline_value is not None else None
+                )
+                gap = round(share - baseline, 1) if baseline is not None else None
+                lift_value = row.get("lift")
+                lift = float(lift_value) if lift_value is not None else None
+                trend = row.get("trend_summary") or business_issue.get(
+                    "trend_summary", {}
+                )
+                trend_available = trend.get("status") == "available"
+                recent_change = (
+                    float(trend.get("delta_percentage_points") or 0)
+                    if trend_available
+                    else None
+                )
+                direction = (
+                    str(trend.get("direction") or "stable")
+                    if trend_available
+                    else "insufficient"
+                )
+                if direction not in {"rising", "stable", "falling"}:
+                    direction = "insufficient"
+
+                evidence_ids = [f"reason.{code}", "scope"]
+                if case_id:
+                    evidence_ids.insert(1, case_id)
+                    evidence_ids.extend(
+                        evidence_id
+                        for evidence_id in (
+                            f"{case_id}.trend",
+                            f"{case_id}.opinion.1",
+                            f"{case_id}.sample.1",
+                        )
+                        if evidence_id in catalog
+                    )
+                else:
+                    evidence_dimension = (
+                        "variant" if dimension == "variant" else "hotspot"
+                    )
+                    hotspot_id = f"diagnostic.{code}.{evidence_dimension}.{index}"
+                    for evidence_id in (
+                        hotspot_id,
+                        f"diagnostic.{code}.trend",
+                        f"diagnostic.{code}.opinion.1",
+                        f"diagnostic.{code}.sample.1",
+                    ):
+                        if evidence_id in catalog:
+                            evidence_ids.append(evidence_id)
+                evidence_ids = list(dict.fromkeys(evidence_ids))
+
+                label = str(business_issue.get("label") or code)
+                target = sku or product
+                title = f"{target} · {label}" if target else label
+                known = [
+                    f"{matched} / {scoped} 条退货样本命中“{label}”，"
+                    f"退货样本内占比 {share:.1f}%。"
+                ]
+                if baseline is not None:
+                    known.append(
+                        f"相同范围整体基线为 {baseline:.1f}%，"
+                        f"当前高出 {gap:+.1f} 个百分点。"
+                    )
+                if trend_available:
+                    known.append(
+                        f"最近窗口较早期同长度窗口变化 {recent_change:+.1f} 个百分点。"
+                    )
+                top_opinion = next(
+                    iter(business_issue.get("contexts", {}).get("opinions", [])),
+                    None,
+                )
+                if top_opinion:
+                    known.append(
+                        f"高频反馈为“{top_opinion.get('opinion')}”，"
+                        f"覆盖 {int(top_opinion.get('record_count') or 0)} 条记录。"
+                    )
+
+                concrete_scope = bool(product or sku)
+                reliable = bool(row.get("reliable", concrete_scope))
+                if source_limited:
+                    readiness = {
+                        "status": "diagnostic_only",
+                        "label": "仅供诊断",
+                        "reason": "当前仍有数据质量或待审核问题，需先补齐证据。",
+                    }
+                elif not concrete_scope or not reliable or matched < 10 or scoped < 10:
+                    readiness = {
+                        "status": "diagnostic_only",
+                        "label": "仅供诊断",
+                        "reason": "当前信号尚未形成稳定的商品范围或样本基础。",
+                    }
+                else:
+                    readiness = {
+                        "status": "verification_ready",
+                        "label": "可进入验证",
+                        "reason": "样本量、对照基线和可追溯证据已具备。",
+                    }
+
+                questions = list(profile.further_questions)[:3]
+                if target:
+                    questions.insert(0, f"{target} 的该问题是否在相同条件下重复出现？")
+                candidates.append(
+                    {
+                        "id": issue_id,
+                        "rank_key": (
+                            0 if business_issue.get("role") == "primary" else 1,
+                            -int(row.get("excess_record_count") or 0),
+                            -float(lift or 0),
+                            -matched,
+                            title,
+                        ),
+                        "title": title,
+                        "scope": {
+                            "category": category,
+                            "listing": listing,
+                            "product": product,
+                            "sku": sku,
+                        },
+                        "metrics": {
+                            "matched_return_samples": matched,
+                            "scoped_return_samples": scoped,
+                            "return_sample_share": round(share, 1),
+                            "baseline_return_sample_share": (
+                                round(baseline, 1) if baseline is not None else None
+                            ),
+                            "gap_percentage_points": gap,
+                            "lift": round(lift, 2) if lift is not None else None,
+                            "recent_change_percentage_points": recent_change,
+                            "trend_direction": direction,
+                        },
+                        "known": known[:6],
+                        "fallback_evidence_explanation": (
+                            "该信号在当前退货样本中形成集中分化，"
+                            "但仅凭评论与样本结构不能判断真实发生率或因果。"
+                        ),
+                        "fallback_unknown": list(dict.fromkeys(questions))[:5],
+                        "fallback_recommendation": {
+                            "label": "建议验证",
+                            "validation_question": (
+                                f"是否需要进一步验证 {target or label} 的{label}风险？"
+                            ),
+                            "rationale": (
+                                "当前证据足以定位问题范围，但仍需结合实物、"
+                                "页面信息或业务分母验证原因与影响。"
+                            ),
+                            "suggested_evidence": [
+                                "复核命中的原始评论",
+                                "核对相同范围的商品信息与实物表现",
+                                "补充订单量或销量分母",
+                            ],
+                        },
+                        "readiness": readiness,
+                        "evidence_ids": evidence_ids,
+                    }
+                )
+
+        if not candidates:
+            candidates.append(
+                {
+                    "id": "issue.scope.coverage",
+                    "rank_key": (1, 0, 0, 0, "数据覆盖"),
+                    "title": "当前范围尚未形成可定位的问题信号",
+                    "scope": {
+                        "category": category,
+                        "listing": listing,
+                        "product": None,
+                        "sku": None,
+                    },
+                    "metrics": {
+                        "matched_return_samples": 0,
+                        "scoped_return_samples": int(
+                            source.get("included_record_count") or 0
+                        ),
+                        "return_sample_share": 0.0,
+                        "baseline_return_sample_share": None,
+                        "gap_percentage_points": None,
+                        "lift": None,
+                        "recent_change_percentage_points": None,
+                        "trend_direction": "insufficient",
+                    },
+                    "known": ["当前已分析范围内没有形成可定位到具体问题的稳定信号。"],
+                    "fallback_evidence_explanation": "现有数据只能说明覆盖范围，不能支持具体问题判断。",
+                    "fallback_unknown": list(profile.further_questions)[:5]
+                    or ["是否需要补充更完整的分类与商品信息？"],
+                    "fallback_recommendation": {
+                        "label": "建议验证",
+                        "validation_question": "是否需要先补充分类与商品证据？",
+                        "rationale": "当前缺少可定位的问题信号。",
+                        "suggested_evidence": ["补充已审核分类结果"],
+                    },
+                    "readiness": {
+                        "status": "diagnostic_only",
+                        "label": "仅供诊断",
+                        "reason": "当前证据不足以定位具体问题。",
+                    },
+                    "evidence_ids": ["scope"],
+                }
+            )
+
+        issues = []
+        for rank, candidate in enumerate(
+            sorted(candidates, key=lambda item: item["rank_key"])[:8],
+            1,
+        ):
+            issue = {key: value for key, value in candidate.items() if key != "rank_key"}
+            issue["rank"] = rank
+            issues.append(issue)
+
+        scope_name = (
+            listing
+            if listing
+            else f"{len(listings)} 个 Listing"
+            if listings
+            else "当前范围"
+        )
+        caveats = [
+            "所有占比均为退货样本内占比，不代表真实退货率。",
+            "当前缺少订单量、销量、成本和批次等分母，不能据此推断因果。",
+        ]
+        if source.get("pending_review_record_count"):
+            caveats.append("待审核记录未进入本次统计，结论可能随复核推进而变化。")
+        return {
+            "report_type": "problem_decision",
+            "title": f"{scope_name} 退货问题判断报告",
+            "issues": issues,
+            "caveats": caveats,
+        }
 
     @staticmethod
     def _build_blueprint(evidence: dict[str, Any]) -> dict[str, Any]:
         source = evidence["source"]
         analysis = evidence["analysis"]
+        profile = get_insight_report_profile(
+            source.get("report_profile", {}).get("key")
+        )
         reasons = list(analysis.get("reasons", []))
         groups = list(analysis.get("label_group_breakdown", []))
         diagnostics = {
             str(item.get("reason_code")): item
             for item in analysis.get("diagnostics", [])
             if item.get("reason_code")
+        }
+        business_issues = list(analysis.get("business_issues", []))
+        primary_issues = [
+            issue for issue in business_issues if issue.get("role") == "primary"
+        ]
+        issues_by_code = {
+            str(issue.get("reason_code") or ""): issue
+            for issue in business_issues
+            if issue.get("reason_code")
         }
         listings = list(source.get("listings", []))
         scope_name = (
@@ -927,19 +1835,34 @@ class InsightReportService:
         mapping_trusted = product_mapping.get("status") != "needs_review"
         text_quality = source.get("text_quality", {})
         text_trusted = text_quality.get("status") != "needs_review"
-        product_level_trusted = mapping_trusted and text_trusted
+        product_level_trusted = mapping_trusted
         scope_statement = (
             f"报告纳入 {included} / {total} 条记录，覆盖率 {coverage:.1f}%；"
             f"另有 {pending} 条待审核记录未进入本次统计。{bias_note}"
             if pending
             else f"报告纳入 {included} 条记录，当前范围内无待审核记录。"
         )
-        actionable_reasons = [
+        generic_actionable_reasons = [
             reason
             for reason in reasons
             if "PRODUCT" in reason.get("subjects", [])
             and str(reason.get("label_group") or "") != "其他原因"
-        ][:2]
+        ]
+        reason_by_code = {
+            str(reason.get("value") or ""): reason
+            for reason in generic_actionable_reasons
+        }
+        actionable_reasons = [
+            reason_by_code[code]
+            for code in profile.preferred_reason_codes
+            if code in reason_by_code
+        ]
+        for reason in generic_actionable_reasons:
+            if reason not in actionable_reasons:
+                actionable_reasons.append(reason)
+            if len(actionable_reasons) >= 3:
+                break
+        actionable_reasons = actionable_reasons[:3]
         broad_reason = next(
             (
                 reason
@@ -983,18 +1906,43 @@ class InsightReportService:
             structure_statement = (
                 f"{structure_statement.rstrip('。')}；其中{reason_text}。"
             )
+        business_headlines = []
+        business_evidence_ids = []
+        for issue in primary_issues[:3]:
+            hotspot = next(iter(issue.get("hotspots", [])), None)
+            if not hotspot:
+                continue
+            rate = float(hotspot.get("product_reason_rate") or 0)
+            baseline = float(hotspot.get("overall_reason_rate") or 0)
+            business_headlines.append(
+                f"{issue.get('label')}在{hotspot.get('value')}为{rate:.1f}%，"
+                f"比整体基线高{rate - baseline:+.1f}pp"
+            )
+            business_evidence_ids.append(str(issue.get("id")))
+        business_statement = (
+            "；".join(business_headlines) + "。"
+            if business_headlines
+            else structure_statement
+        )
 
         findings = [
             {
                 "id": "finding.structure",
                 "kind": "structure",
                 "title": (
-                    f"{primary_group.get('value')}是当前最值得优先处理的商品问题"
+                    f"{profile.category_name}问题已经分化到具体{profile.variant_label}"
+                    if business_headlines
+                    else f"{primary_group.get('value')}是当前最值得优先处理的商品问题"
                     if primary_group
                     else "当前问题结构需要先完成业务归类"
                 ),
-                "conclusion": structure_statement,
-                "evidence_ids": [group_evidence_id, *reason_evidence_ids, "scope"],
+                "conclusion": business_statement,
+                "evidence_ids": [
+                    *business_evidence_ids,
+                    group_evidence_id,
+                    *reason_evidence_ids,
+                    "scope",
+                ],
             }
         ]
 
@@ -1004,6 +1952,40 @@ class InsightReportService:
         hotspot_targets = []
         for reason in actionable_reasons:
             code = str(reason.get("value") or "")
+            issue = issues_by_code.get(code, {})
+            issue_case = next(iter(issue.get("cases", [])), None)
+            if issue_case:
+                case_id = str(issue_case.get("id") or "")
+                trend_summary = issue_case.get("trend_summary", {})
+                if (
+                    trend_summary.get("status") == "available"
+                    and f"{case_id}.trend" in evidence["catalog"]
+                ):
+                    diagnostic_ids.append(f"{case_id}.trend")
+                    trend_sentences.append(
+                        f"{reason.get('label')}在"
+                        f"{issue_case.get('product_sku')}最近"
+                        f"{trend_summary.get('window_weeks')}个完整周均值为"
+                        f"{float(trend_summary.get('recent_rate') or 0):.1f}%，"
+                        f"较最早同长度窗口"
+                        f"{float(trend_summary.get('delta_percentage_points') or 0):+.1f}pp"
+                    )
+                diagnostic_ids.append(case_id)
+                hotspot_targets.append(str(issue_case.get("product_sku") or ""))
+                hotspot_sentences.append(
+                    f"{reason.get('label')}集中在"
+                    f"{issue_case.get('product_sku')}："
+                    f"{int(issue_case.get('record_count') or 0)} / "
+                    f"{int(issue_case.get('total_record_count') or 0)}条，"
+                    f"变体内占比"
+                    f"{float(issue_case.get('product_reason_rate') or 0):.1f}%，"
+                    f"整体基线"
+                    f"{float(issue_case.get('overall_reason_rate') or 0):.1f}%，"
+                    f"为基线的{float(issue_case.get('lift') or 0):.2f}倍，"
+                    f"超出按整体基线预期约"
+                    f"{int(issue_case.get('excess_record_count') or 0)}条"
+                )
+                continue
             diagnostic = diagnostics.get(code, {})
             trend_summary = diagnostic.get("trend_summary", {})
             trend_id = f"diagnostic.{code}.trend"
@@ -1016,8 +1998,14 @@ class InsightReportService:
                     f"较最早同长度窗口"
                     f"{float(trend_summary.get('delta_percentage_points') or 0):+.1f}pp"
                 )
-            hotspot = next(iter(diagnostic.get("hotspots", [])), None)
-            hotspot_id = f"diagnostic.{code}.hotspot.1"
+            diagnostic_dimension = (
+                "variants" if diagnostic.get("variants") else "hotspots"
+            )
+            hotspot = next(iter(diagnostic.get(diagnostic_dimension, [])), None)
+            evidence_dimension = (
+                "variant" if diagnostic_dimension == "variants" else "hotspot"
+            )
+            hotspot_id = f"diagnostic.{code}.{evidence_dimension}.1"
             if hotspot and hotspot_id in evidence["catalog"]:
                 diagnostic_ids.append(hotspot_id)
                 hotspot_targets.append(str(hotspot.get("value") or ""))
@@ -1026,18 +2014,21 @@ class InsightReportService:
                     f"{float(hotspot.get('product_reason_rate') or 0):.1f}%，"
                     f"为整体基线的{float(hotspot.get('lift') or 0):.2f}倍"
                 )
+        hotspot_targets = list(
+            dict.fromkeys(target for target in hotspot_targets if target)
+        )
         if actionable_reasons:
             diagnostic_conclusion = "；".join(trend_sentences + hotspot_sentences)
             if not diagnostic_conclusion:
-                diagnostic_conclusion = "高频商品问题需要按商品和时间维度继续拆解。"
+                diagnostic_conclusion = profile.diagnostic_empty
             findings.append(
                 {
                     "id": "finding.diagnostic",
                     "kind": "diagnostic",
                     "title": (
-                        "偏小与偏大信号正在分化，不能统一调整尺码"
-                        if len(actionable_reasons) > 1
-                        else f"{actionable_reasons[0].get('label')}集中在部分商品"
+                        f"{'、'.join(hotspot_targets[:2])}是当前最需要验证的具体 SKU"
+                        if hotspot_targets
+                        else profile.diagnostic_title
                     ),
                     "conclusion": f"{diagnostic_conclusion}。",
                     "evidence_ids": [
@@ -1126,22 +2117,81 @@ class InsightReportService:
                     "finding_id": "finding.structure",
                     "evidence_ids": ["product_mapping", "scope"],
                     "fallback_action": "核对源 SKU、商品 SKU 与商品名称的对应关系后再下发商品级整改。",
-                    "fallback_rationale": "商品名称前缀与 Listing 不一致，当前不能确认商品级热点对应的真实对象。",
+                    "fallback_rationale": "存在未匹配或缺少名称的商品记录，当前不能确认商品级热点对应的真实对象。",
                     "fallback_success_signal": "源 SKU、商品 SKU 与商品名称形成唯一且可追溯的映射。",
                 }
             )
         if actionable_reasons and product_level_trusted:
-            target = "、".join(hotspot_targets[:2]) or "高频商品与对应尺码"
+            validation_issues = [
+                issue
+                for issue in primary_issues
+                if issue.get("cases")
+            ][:3]
+            validation_cases = [
+                issue["cases"][0] for issue in validation_issues
+            ]
+            target = (
+                "、".join(
+                    dict.fromkeys(
+                        str(case.get("product_sku") or "")
+                        for case in validation_cases
+                        if case.get("product_sku")
+                    )
+                )
+                or "、".join(hotspot_targets[:2])
+                or f"高频{profile.variant_label}"
+            )
+            case_actions = [
+                str(issue.get("validation_focus") or "")
+                for issue in validation_issues
+                if issue.get("validation_focus")
+            ]
+            case_rationales = [
+                (
+                    f"{case.get('product_sku')}的{case.get('label')}为"
+                    f"{float(case.get('product_reason_rate') or 0):.1f}%"
+                    f"（整体{float(case.get('overall_reason_rate') or 0):.1f}%，"
+                    f"{float(case.get('lift') or 0):.2f}倍）"
+                )
+                for case in validation_cases
+            ]
+            action_evidence_ids = list(
+                dict.fromkeys(
+                    [
+                        *reason_evidence_ids,
+                        *diagnostic_ids,
+                        *(
+                            str(case.get("id"))
+                            for case in validation_cases
+                            if case.get("id")
+                        ),
+                    ]
+                )
+            )
             actions.append(
                 {
                     "id": "action.diagnostic",
                     "priority": "P0",
                     "target": target,
                     "finding_id": "finding.diagnostic",
-                    "evidence_ids": [*reason_evidence_ids, *diagnostic_ids],
-                    "fallback_action": "分别核对偏小与偏大热点商品的尺码表、实物测量和页面说明。",
-                    "fallback_rationale": "两个尺码方向同时存在且商品热点不同，统一调整会掩盖商品差异。",
-                    "fallback_success_signal": "目标商品的对应尺码问题占比连续两个完整周期下降，且反向问题不升高。",
+                    "evidence_ids": action_evidence_ids,
+                    "fallback_action": (
+                        "；".join(case_actions)
+                        if case_actions
+                        else profile.diagnostic_action
+                    ),
+                    "fallback_rationale": (
+                        "；".join(case_rationales)
+                        + "。这些集中信号值得优先验证，但不能单凭评论结构推断原因。"
+                        if case_rationales
+                        else profile.diagnostic_rationale
+                    ),
+                    "fallback_success_signal": (
+                        "每个目标 SKU 都形成可复核的原因结论；后续同口径评论中，"
+                        "对应问题连续两个完整周期下降，且反向问题不升高。"
+                        if validation_cases
+                        else profile.diagnostic_success_signal
+                    ),
                 }
             )
         if broad_reason:
@@ -1152,9 +2202,9 @@ class InsightReportService:
                     "target": f"{broad_reason.get('label')}相关记录",
                     "finding_id": "finding.information",
                     "evidence_ids": information_ids,
-                    "fallback_action": "按改变主意、找到替代品、下单错误等具体意图拆分宽泛原因。",
-                    "fallback_rationale": "宽泛标签混合多种非商品情境，不能直接转化为商品整改。",
-                    "fallback_success_signal": "宽泛原因被稳定拆分为可解释子类，且未知或未明确对象占比下降。",
+                    "fallback_action": "按评论表达的具体意图、对象和使用场景拆分宽泛原因。",
+                    "fallback_rationale": "宽泛标签混合多种退货情境，不能直接转化为单一商品整改。",
+                    "fallback_success_signal": "宽泛原因被稳定拆分为可解释子类，且未明确对象占比下降。",
                 }
             )
         actions.append(
@@ -1169,6 +2219,14 @@ class InsightReportService:
                 "fallback_success_signal": "待审核占比下降并形成商品级真实退货率基线。",
             }
         )
+        action_order = {
+            "action.mapping": 0,
+            "action.diagnostic": 1,
+            "action.text_quality": 2,
+            "action.information": 3,
+            "action.scope": 4,
+        }
+        actions.sort(key=lambda item: action_order.get(str(item.get("id")), 99))
         caveats = [
             "本报告只描述所选分类结果版本中的退货问题结构，不代表真实退货率。",
             "当前缺少销量、订单量、成本和批次等分母数据，不能据此推断因果。",
@@ -1188,20 +2246,43 @@ class InsightReportService:
         diagnostic_summary = (
             findings[1]["conclusion"] if len(findings) > 1 else structure_statement
         )
+        diagnostic_action = next(
+            (
+                action
+                for action in actions
+                if action.get("id") == "action.diagnostic"
+            ),
+            None,
+        )
+        validation_target = (
+            str(diagnostic_action.get("target") or "")
+            if diagnostic_action
+            else "、".join(hotspot_targets[:2])
+        )
+        validation_statement = (
+            f"优先验证{validation_target}："
+            f"{diagnostic_action.get('fallback_action')}"
+            if validation_target and diagnostic_action
+            else diagnostic_summary
+        )
         return {
             "title": f"{scope_name} 退货问题{'临时' if provisional else ''}诊断报告",
             "executive_summary": [
                 {
                     "id": "summary.1",
-                    "title": "首要可行动问题",
-                    "statement": structure_statement,
+                    "title": "最明确的问题分化",
+                    "statement": business_statement,
                     "tone": "primary",
-                    "evidence_ids": [group_evidence_id, *reason_evidence_ids],
+                    "evidence_ids": [
+                        *business_evidence_ids,
+                        group_evidence_id,
+                        *reason_evidence_ids,
+                    ],
                 },
                 {
                     "id": "summary.2",
-                    "title": "关键诊断",
-                    "statement": diagnostic_summary,
+                    "title": "优先验证对象",
+                    "statement": validation_statement,
                     "tone": "neutral",
                     "evidence_ids": findings[1]["evidence_ids"],
                 },
@@ -1215,13 +2296,122 @@ class InsightReportService:
             ],
             "findings": findings,
             "actions": actions,
-            "further_questions": [
-                "偏小与偏大热点商品是否来自不同尺码段、颜色或生产批次？",
-                "商品主数据映射核对后，当前商品热点是否仍然成立？",
-                "补充销量分母后，问题优先级是否仍然成立？",
-            ],
+            "further_questions": list(profile.further_questions),
             "caveats": caveats,
         }
+
+    @staticmethod
+    def _messages_v6(evidence: dict[str, Any]) -> list[dict[str, str]]:
+        schema = {
+            "issues": [
+                {
+                    "id": "使用 fixed_blueprint 中的 issue id",
+                    "evidence_explanation": "解释已知证据说明了什么",
+                    "unknown": ["尚未回答的问题"],
+                    "validation_question": "下一步要验证的问题",
+                    "recommendation_rationale": "为什么需要验证",
+                    "suggested_evidence": ["验证需要补充的证据"],
+                }
+            ]
+        }
+        return [
+            {
+                "role": "system",
+                "content": (
+                    "你是资深电商退货分析负责人。系统已经确定问题列表、排序、"
+                    "范围、指标、已知事实、证据引用和可信状态。你只负责用中文解释"
+                    "这些证据、列出尚未回答的问题，并给出验证建议。不得增加或修改"
+                    "任何数字，不得改写问题 id、排序、范围、指标、已知事实、证据引用"
+                    "和可信状态。不得把退货样本内占比称为退货率，不得推断因果，"
+                    "不得提出直接整改、任务、负责人、截止时间或商品开发方案。"
+                    "只返回 JSON，不要返回 Markdown。"
+                ),
+            },
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "output_schema": schema,
+                        "fixed_blueprint": evidence["blueprint"],
+                        "evidence": {
+                            "source": evidence["source"],
+                            "catalog": evidence["catalog"],
+                            "analysis": evidence["analysis"],
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+            },
+        ]
+
+    @staticmethod
+    def _assemble_content_v6(
+        evidence: dict[str, Any],
+        payload: Any,
+    ) -> InsightDecisionReportContent:
+        if not isinstance(payload, dict):
+            raise ValueError("模型返回的报告解释不是 JSON 对象")
+        blueprint = evidence["blueprint"]
+        generated_by_id = InsightReportService._items_by_id(payload.get("issues"))
+        issues = []
+        for item in blueprint["issues"]:
+            generated = generated_by_id.get(item["id"], {})
+            fallback_recommendation = item["fallback_recommendation"]
+            unknown = [
+                text
+                for value in generated.get("unknown", [])
+                if isinstance(value, str) and value.strip()
+                if (text := InsightReportService._narrative_text(value, "", 300))
+            ][:5]
+            suggested_evidence = [
+                text
+                for value in generated.get("suggested_evidence", [])
+                if isinstance(value, str) and value.strip()
+                if (text := InsightReportService._narrative_text(value, "", 200))
+            ][:5]
+            issues.append(
+                {
+                    "id": item["id"],
+                    "rank": item["rank"],
+                    "title": item["title"],
+                    "scope": item["scope"],
+                    "metrics": item["metrics"],
+                    "known": item["known"],
+                    "evidence_explanation": InsightReportService._narrative_text(
+                        generated.get("evidence_explanation"),
+                        item["fallback_evidence_explanation"],
+                        800,
+                    ),
+                    "unknown": unknown or item["fallback_unknown"],
+                    "recommendation": {
+                        "label": "建议验证",
+                        "validation_question": InsightReportService._narrative_text(
+                            generated.get("validation_question"),
+                            fallback_recommendation["validation_question"],
+                            300,
+                        ),
+                        "rationale": InsightReportService._narrative_text(
+                            generated.get("recommendation_rationale"),
+                            fallback_recommendation["rationale"],
+                            500,
+                        ),
+                        "suggested_evidence": (
+                            suggested_evidence
+                            or fallback_recommendation["suggested_evidence"]
+                        ),
+                    },
+                    "readiness": item["readiness"],
+                    "evidence_ids": item["evidence_ids"],
+                }
+            )
+        return InsightDecisionReportContent.model_validate(
+            {
+                "report_type": blueprint["report_type"],
+                "title": blueprint["title"],
+                "issues": issues,
+                "caveats": blueprint["caveats"],
+            }
+        )
 
     @staticmethod
     def _messages(evidence: dict[str, Any]) -> list[dict[str, str]]:
@@ -1251,6 +2441,10 @@ class InsightReportService:
                     "退货原因洞察报告。系统已经固定事实、结论、报告结构和证据引用；你只负责"
                     "解释这些事实的业务含义，并提出可验证的行动假设。解释必须结合商品热点、"
                     "趋势、伴随原因、语义观点或原始评论中的至少一类诊断证据，不能只改写结论。"
+                    "优先使用 business_issues.cases 中的具体 SKU、分子分母、整体基线、"
+                    "提升倍数、趋势和已过滤评论上下文，"
+                    "每项解释先说明信号集中在哪里，再说明仍需验证什么。"
+                    "明确区分已验证事实、待验证解释和行动假设。"
                     "行动必须说明验证对象和判断是否有效的条件。只能使用 evidence 中已有事实，"
                     "不要引入新数字，不要把样本占比称为真实退货率，不要推断因果，也不要把"
                     "总量最大直接等同于最高行动优先级。"
@@ -1364,6 +2558,13 @@ class InsightReportService:
         return text[:limit]
 
     @staticmethod
+    def _narrative_text(value: Any, fallback: str, limit: int) -> str:
+        text = str(value or "").strip()
+        if not text or re.search(r"\d", text):
+            return fallback
+        return text[:limit]
+
+    @staticmethod
     def _validate_evidence_refs(
         content: InsightReportContent,
         known_ids: set[str],
@@ -1380,6 +2581,55 @@ class InsightReportService:
         unknown = sorted(set(references) - known_ids)
         if unknown:
             raise ValueError(f"报告引用了不存在的证据: {', '.join(unknown)}")
+
+    @staticmethod
+    def _validate_issue_evidence_refs(
+        content: InsightDecisionReportContent,
+        known_ids: set[str],
+    ) -> None:
+        references = [
+            evidence_id
+            for issue in content.issues
+            for evidence_id in issue.evidence_ids
+        ]
+        unknown = sorted(set(references) - known_ids)
+        if unknown:
+            raise ValueError(f"报告引用了不存在的证据: {', '.join(unknown)}")
+
+    @staticmethod
+    def _decision_report_consistency(
+        content: dict[str, Any],
+        evidence: dict[str, Any],
+    ) -> dict[str, Any]:
+        consistency = InsightReportService._report_consistency(
+            content,
+            evidence,
+            require_information_diagnostics=False,
+        )
+        issues = list(consistency["issues"])
+        blueprint_issues = evidence.get("blueprint", {}).get("issues", [])
+        expected = {
+            str(item.get("id")): item for item in blueprint_issues if item.get("id")
+        }
+        actual = {
+            str(item.get("id")): item
+            for item in content.get("issues", [])
+            if item.get("id")
+        }
+        if list(actual) != list(expected):
+            issues.append("问题列表或排序与确定性证据不一致")
+        for issue_id, blueprint in expected.items():
+            issue = actual.get(issue_id)
+            if issue is None:
+                continue
+            if issue.get("metrics") != blueprint.get("metrics"):
+                issues.append(f"问题 {issue_id} 的指标与确定性证据不一致")
+            if issue.get("evidence_ids") != blueprint.get("evidence_ids"):
+                issues.append(f"问题 {issue_id} 的证据引用不一致")
+        return {
+            "status": "blocked" if issues else "passed",
+            "issues": list(dict.fromkeys(issues)),
+        }
 
     @staticmethod
     def _report_consistency(
@@ -1452,23 +2702,212 @@ class InsightReportService:
         }
 
     @staticmethod
-    def _apply_live_quality_gate(
+    def _evaluate_live_quality_v6(
         content: dict[str, Any],
         evidence: dict[str, Any],
         text_quality: dict[str, Any],
     ) -> dict[str, Any]:
-        source = evidence.setdefault("source", {})
-        analysis = evidence.setdefault("analysis", {})
-        catalog = evidence.setdefault("catalog", {})
+        safe_content = deepcopy(content)
+        safe_evidence = deepcopy(evidence)
+        source = safe_evidence.setdefault("source", {})
+        analysis = safe_evidence.setdefault("analysis", {})
+        catalog = safe_evidence.setdefault("catalog", {})
+        product_mapping = source.get("product_mapping", {})
+        review_bias = analysis.get("review_bias", {})
+        pending_count = int(source.get("pending_review_record_count") or 0)
+        quality_issues = []
+
+        source["text_quality"] = text_quality
+        analysis["text_quality"] = text_quality
+        catalog["text_quality"] = {
+            "label": "评论文本质量",
+            "value": str(text_quality.get("note") or "未发现明显编码异常"),
+            "data": text_quality,
+        }
+        if text_quality.get("status") == "needs_review":
+            quality_issues.append(
+                {
+                    "code": "text_quality",
+                    "label": "评论文本质量未通过",
+                    "detail": str(text_quality.get("note") or "评论文本需要核对。"),
+                    "evidence_ids": ["text_quality", "scope"],
+                }
+            )
+            analysis["diagnostics"] = [
+                InsightReportService._filter_diagnostic_text(item)
+                for item in analysis.get("diagnostics", [])
+            ]
+            analysis["issue_cases"] = [
+                InsightReportService._filter_issue_case_text(item)
+                for item in analysis.get("issue_cases", [])
+            ]
+            analysis["business_issues"] = [
+                InsightReportService._filter_business_issue_text(item)
+                for item in analysis.get("business_issues", [])
+            ]
+            analysis["samples"] = []
+            for evidence_id, item in catalog.items():
+                if not any(
+                    marker in evidence_id for marker in (".sample.", ".opinion.")
+                ):
+                    continue
+                data = item.get("data", {})
+                if InsightReportService._has_text_anomaly(
+                    data.get("opinion"),
+                    data.get("evidence"),
+                    data.get("comment"),
+                    data.get("reason"),
+                ):
+                    item["value"] = "文本质量未通过，原始文本证据暂不可用"
+                    item["data"] = {}
+            for issue in safe_content.get("issues", []):
+                issue["known"] = [
+                    value
+                    for value in issue.get("known", [])
+                    if not str(value).startswith("高频反馈为")
+                ]
+                issue["evidence_explanation"] = (
+                    "评论文本质量未通过，当前仅保留结构化指标用于定位，"
+                    "不能据此判断原因。"
+                )
+
+        if product_mapping.get("status") == "needs_review":
+            quality_issues.append(
+                {
+                    "code": "product_mapping",
+                    "label": "商品主数据需核对",
+                    "detail": str(
+                        product_mapping.get("note") or "商品主数据映射需要核对。"
+                    ),
+                    "evidence_ids": ["product_mapping", "scope"],
+                }
+            )
+        if pending_count:
+            quality_issues.append(
+                {
+                    "code": "pending_review",
+                    "label": "存在待审核记录",
+                    "detail": str(
+                        review_bias.get("note")
+                        or f"{pending_count} 条待审核记录未进入本次统计。"
+                    ),
+                    "evidence_ids": ["scope", "review_bias"],
+                }
+            )
+
+        consistency = InsightReportService._decision_report_consistency(
+            safe_content,
+            safe_evidence,
+        )
+        if consistency["status"] == "blocked":
+            quality_issues.insert(
+                0,
+                {
+                    "code": "report_consistency",
+                    "label": "报告内部数据不一致",
+                    "detail": "；".join(consistency["issues"][:3]),
+                    "evidence_ids": [],
+                },
+            )
+            readiness = {
+                "status": "unusable",
+                "label": "不可使用",
+                "reason": "报告内部数据不一致，请重新生成报告。",
+            }
+            gate_status = "blocked"
+        elif quality_issues:
+            readiness = {
+                "status": "diagnostic_only",
+                "label": "仅供诊断",
+                "reason": "数据质量或审核范围仍有限，只能用于定位问题。",
+            }
+            gate_status = "warning"
+        else:
+            readiness = {
+                "status": "verification_ready",
+                "label": "可进入验证",
+                "reason": "数据质量和报告一致性校验均已通过。",
+            }
+            gate_status = "passed"
+
+        if readiness["status"] != "verification_ready":
+            for issue in safe_content.get("issues", []):
+                issue["readiness"] = readiness
+        source["quality_issue_codes"] = [item["code"] for item in quality_issues]
+        source["report_status"] = "provisional" if quality_issues else "final"
+        quality_gate = DecisionReportQualityGate.model_validate(
+            {
+                "status": gate_status,
+                "issues": quality_issues,
+                "text_quality": text_quality,
+                "product_mapping": product_mapping,
+                "consistency": consistency,
+                "decision_readiness": readiness,
+            }
+        ).model_dump()
+        return {
+            "content": safe_content,
+            "evidence": safe_evidence,
+            "quality_gate": quality_gate,
+        }
+
+    @staticmethod
+    def _evaluate_live_quality(
+        content: dict[str, Any],
+        evidence: dict[str, Any],
+        text_quality: dict[str, Any],
+    ) -> dict[str, Any]:
+        safe_content = deepcopy(content)
+        safe_evidence = deepcopy(evidence)
+        source = safe_evidence.setdefault("source", {})
+        analysis = safe_evidence.setdefault("analysis", {})
+        catalog = safe_evidence.setdefault("catalog", {})
         consistency = InsightReportService._report_consistency(
-            content,
-            evidence,
+            safe_content,
+            safe_evidence,
             require_information_diagnostics=True,
         )
         product_mapping = source.get("product_mapping", {})
         text_trusted = text_quality.get("status") != "needs_review"
         mapping_trusted = product_mapping.get("status") != "needs_review"
-        product_level_trusted = text_trusted and mapping_trusted
+        product_level_trusted = mapping_trusted
+        pending_count = int(source.get("pending_review_record_count") or 0)
+        review_bias = analysis.get("review_bias", {})
+        source_issues = []
+        if not text_trusted:
+            source_issues.append(
+                {
+                    "code": "text_quality",
+                    "label": "评论文本质量未通过",
+                    "detail": str(
+                        text_quality.get("note") or "评论文本质量需要核对。"
+                    ),
+                    "evidence_ids": ["text_quality", "scope"],
+                }
+            )
+        if not mapping_trusted:
+            source_issues.append(
+                {
+                    "code": "product_mapping",
+                    "label": "商品主数据需核对",
+                    "detail": str(
+                        product_mapping.get("note") or "商品主数据映射需要核对。"
+                    ),
+                    "evidence_ids": ["product_mapping", "scope"],
+                }
+            )
+        if pending_count:
+            source_issues.append(
+                {
+                    "code": "pending_review",
+                    "label": "存在待审核记录",
+                    "detail": str(
+                        review_bias.get("note")
+                        or f"{pending_count} 条待审核记录未进入本次统计。"
+                    ),
+                    "evidence_ids": ["scope", "review_bias"],
+                }
+            )
         product_names = [
             str(item.get("value") or "")
             for item in analysis.get("product_reason_matrix", [])
@@ -1476,8 +2915,8 @@ class InsightReportService:
         ]
 
         source["text_quality"] = text_quality
-        if not text_trusted:
-            source["report_status"] = "provisional"
+        source["quality_issue_codes"] = [item["code"] for item in source_issues]
+        source["report_status"] = "provisional" if source_issues else "final"
         analysis["text_quality"] = text_quality
         catalog["text_quality"] = {
             "label": "评论文本质量",
@@ -1487,68 +2926,109 @@ class InsightReportService:
 
         if not product_level_trusted:
             analysis["product_reason_matrix"] = []
+            analysis["business_issues"] = []
+            analysis["issue_cases"] = []
             analysis["diagnostics"] = [
                 {
                     **diagnostic,
                     "hotspots": [],
-                    "semantic_profile": {
-                        **diagnostic.get("semantic_profile", {}),
-                        "opinions": (
-                            diagnostic.get("semantic_profile", {}).get(
-                                "opinions",
-                                [],
-                            )
-                            if text_trusted
-                            else []
-                        ),
-                    },
-                    "samples": (
-                        []
-                        if not text_trusted
-                        else [
-                            {
-                                **sample,
-                                "product_name": None,
-                                "product_sku": None,
-                            }
-                            for sample in diagnostic.get("samples", [])
-                        ]
-                    ),
+                    "variants": [],
+                    "samples": [
+                        {
+                            **sample,
+                            "product_name": None,
+                            "product_sku": None,
+                        }
+                        for sample in diagnostic.get("samples", [])
+                    ],
                 }
                 for diagnostic in analysis.get("diagnostics", [])
             ]
-            analysis["samples"] = (
-                []
-                if not text_trusted
-                else analysis.get(
-                    "samples",
-                    [],
+            analysis["samples"] = [
+                {
+                    **sample,
+                    "product_name": None,
+                    "product_sku": None,
+                }
+                for sample in analysis.get("samples", [])
+            ]
+        if not text_trusted:
+            analysis["diagnostics"] = [
+                InsightReportService._filter_diagnostic_text(diagnostic)
+                for diagnostic in analysis.get("diagnostics", [])
+            ]
+            analysis["issue_cases"] = [
+                InsightReportService._filter_issue_case_text(case)
+                for case in analysis.get("issue_cases", [])
+            ]
+            analysis["business_issues"] = [
+                InsightReportService._filter_business_issue_text(issue)
+                for issue in analysis.get("business_issues", [])
+            ]
+            analysis["samples"] = [
+                sample
+                for sample in analysis.get("samples", [])
+                if not InsightReportService._has_text_anomaly(
+                    sample.get("comment"),
+                    sample.get("reason"),
                 )
-            )
+            ]
 
         blocked_catalog_markers = []
         if not product_level_trusted:
-            blocked_catalog_markers.append(".hotspot.")
-        if not text_trusted:
-            blocked_catalog_markers.extend([".sample.", ".opinion."])
+            blocked_catalog_markers.extend(
+                [
+                    ".hotspot.",
+                    ".variant.",
+                    "business_issue.",
+                    "issue_case.",
+                ]
+            )
         for evidence_id in list(catalog):
             if any(marker in evidence_id for marker in blocked_catalog_markers):
                 catalog.pop(evidence_id, None)
+                continue
+            if not text_trusted and any(
+                marker in evidence_id for marker in (".sample.", ".opinion.")
+            ):
+                data = catalog[evidence_id].get("data", {})
+                if InsightReportService._has_text_anomaly(
+                    data.get("opinion"),
+                    data.get("evidence"),
+                    data.get("comment"),
+                    data.get("reason"),
+                ):
+                    catalog.pop(evidence_id, None)
+            elif not text_trusted and evidence_id.startswith("business_issue."):
+                catalog[evidence_id]["data"] = (
+                    InsightReportService._filter_business_issue_text(
+                        catalog[evidence_id].get("data", {})
+                    )
+                )
 
-        if not mapping_trusted:
-            content["findings"] = [
+        if not product_level_trusted:
+            safe_content["findings"] = [
                 finding
-                for finding in content.get("findings", [])
+                for finding in safe_content.get("findings", [])
                 if finding.get("kind") != "diagnostic"
             ]
 
         summaries = []
-        for summary in content.get("executive_summary", []):
+        for summary in safe_content.get("executive_summary", []):
             summary_text = f"{summary.get('title', '')} {summary.get('statement', '')}"
             references = summary.get("evidence_ids", [])
             if not product_level_trusted and (
                 any(name in summary_text for name in product_names)
-                or any(".hotspot." in item for item in references)
+                or any(
+                    marker in item
+                    for item in references
+                    for marker in (
+                        ".hotspot.",
+                        ".variant.",
+                        "business_issue.",
+                        "issue_case.",
+                    )
+                )
             ):
                 continue
             if not text_trusted and any(
@@ -1559,34 +3039,60 @@ class InsightReportService:
                 continue
             summaries.append(summary)
 
-        gate_summaries = []
-        if not text_trusted:
-            gate_summaries.append(
+        quality_issues = list(source_issues)
+        if consistency["status"] == "blocked":
+            quality_issues.insert(
+                0,
                 {
-                    "title": "评论文本质量未通过",
-                    "statement": (
-                        "当前源数据存在疑似编码异常；修复前，本报告只用于定位数据问题。"
-                    ),
-                    "tone": "warning",
-                    "evidence_ids": ["text_quality", "scope"],
-                }
+                    "code": "report_consistency",
+                    "label": "报告内部数据不一致",
+                    "detail": "；".join(consistency["issues"][:3]),
+                    "evidence_ids": [],
+                },
             )
-        if not mapping_trusted:
-            gate_summaries.append(
-                {
-                    "title": "商品归因暂不可用",
-                    "statement": str(
-                        product_mapping.get("note") or "商品主数据映射需要核对。"
-                    ),
-                    "tone": "warning",
-                    "evidence_ids": ["product_mapping", "scope"],
-                }
+            summaries = []
+        gate_summary = None
+        if quality_issues:
+            issue_labels = "、".join(item["label"] for item in quality_issues)
+            evidence_ids = list(
+                dict.fromkeys(
+                    evidence_id
+                    for item in quality_issues
+                    for evidence_id in item["evidence_ids"]
+                )
             )
-        content["executive_summary"] = [*gate_summaries, *summaries]
+            gate_summary = {
+                "id": "summary.quality_gate",
+                "title": (
+                    "当前报告不可使用"
+                    if consistency["status"] == "blocked"
+                    else "当前结论仅供诊断"
+                ),
+                "statement": (
+                    f"{issue_labels}。"
+                    + (
+                        "请重新生成报告后再使用。"
+                        if consistency["status"] == "blocked"
+                        else "问题修复前，不应直接下发商品整改。"
+                    )
+                ),
+                "tone": "warning",
+                "evidence_ids": evidence_ids or ["scope"],
+            }
+        summary_candidates = [gate_summary, *summaries] if gate_summary else summaries
+        unique_summaries = []
+        seen_summaries = set()
+        for summary in summary_candidates:
+            key = (summary.get("title"), summary.get("statement"))
+            if key in seen_summaries:
+                continue
+            seen_summaries.add(key)
+            unique_summaries.append(summary)
+        safe_content["executive_summary"] = unique_summaries[:4]
 
         actions = [
             action
-            for action in content.get("actions", [])
+            for action in safe_content.get("actions", [])
             if action.get("id") != "action.diagnostic" or product_level_trusted
         ]
         gate_actions = []
@@ -1623,7 +3129,7 @@ class InsightReportService:
                         "再下发商品级整改。"
                     ),
                     "rationale": (
-                        "商品名称与 Listing 不一致，"
+                        "存在未匹配或缺少名称的商品记录，"
                         "当前不能确认商品级热点对应的真实对象。"
                     ),
                     "success_signal": (
@@ -1637,7 +3143,29 @@ class InsightReportService:
             for action in actions
             if action.get("id") not in {item["id"] for item in gate_actions}
         ]
-        content["actions"] = [*gate_actions, *actions]
+        action_candidates = [] if consistency["status"] == "blocked" else [
+            *gate_actions,
+            *actions,
+        ]
+        unique_actions = []
+        seen_action_ids = set()
+        for action in action_candidates:
+            action_id = action.get("id")
+            if action_id in seen_action_ids:
+                continue
+            seen_action_ids.add(action_id)
+            unique_actions.append(action)
+        action_order = {
+            "action.mapping": 0,
+            "action.diagnostic": 1,
+            "action.text_quality": 2,
+            "action.information": 3,
+            "action.scope": 4,
+        }
+        unique_actions.sort(
+            key=lambda action: action_order.get(action.get("id"), 99)
+        )
+        safe_content["actions"] = unique_actions[:6]
 
         warnings = []
         if not text_trusted:
@@ -1647,22 +3175,24 @@ class InsightReportService:
             )
         if not mapping_trusted:
             warnings.append(str(product_mapping.get("note") or "商品主数据需核对。"))
-        caveats = list(content.get("caveats", []))
-        content["caveats"] = [
-            *warnings,
-            *[item for item in caveats if item not in warnings],
-        ]
+        if pending_count:
+            warnings.append(str(review_bias.get("note") or source_issues[-1]["detail"]))
+        caveats = [*warnings, *safe_content.get("caveats", [])]
+        safe_content["caveats"] = list(dict.fromkeys(caveats))
         if consistency["status"] == "blocked":
             decision_readiness = {
                 "status": "unusable",
                 "label": "不可使用",
                 "reason": "报告内部数据不一致，请重新生成报告。",
             }
-        elif not product_level_trusted or source.get("report_status") == "provisional":
+        elif source_issues:
             decision_readiness = {
                 "status": "diagnostic_only",
                 "label": "仅供诊断",
-                "reason": "数据仍有待审核或质量问题，不应直接下发整改。",
+                "reason": (
+                    f"当前存在{'、'.join(item['label'] for item in source_issues)}，"
+                    "不应直接下发商品整改。"
+                ),
             }
         else:
             decision_readiness = {
@@ -1671,18 +3201,26 @@ class InsightReportService:
                 "reason": "数据质量与报告一致性校验均已通过。",
             }
 
-        if consistency["status"] == "blocked" or not product_level_trusted:
+        if consistency["status"] == "blocked":
             gate_status = "blocked"
-        elif source.get("report_status") == "provisional":
+        elif source_issues:
             gate_status = "warning"
         else:
             gate_status = "passed"
+        quality_gate = ReportQualityGate.model_validate(
+            {
+                "status": gate_status,
+                "issues": quality_issues,
+                "text_quality": text_quality,
+                "product_mapping": product_mapping,
+                "consistency": consistency,
+                "decision_readiness": decision_readiness,
+            }
+        ).model_dump()
         return {
-            "status": gate_status,
-            "text_quality": text_quality,
-            "product_mapping": product_mapping,
-            "consistency": consistency,
-            "decision_readiness": decision_readiness,
+            "content": safe_content,
+            "evidence": safe_evidence,
+            "quality_gate": quality_gate,
         }
 
     @staticmethod
@@ -1704,10 +3242,37 @@ class InsightReportService:
         """
 
     @staticmethod
+    def _decision_map(
+        connection: Any,
+        report_ids: list[str],
+    ) -> dict[str, list[dict[str, Any]]]:
+        if not report_ids:
+            return {}
+        placeholders = ",".join("?" for _ in report_ids)
+        rows = connection.execute(
+            f"""
+            SELECT decision.report_id, decision.issue_id, decision.status,
+                   decision.updated_by, decision.updated_at,
+                   user.display_name AS updated_by_name
+            FROM ai_insight_issue_decisions decision
+            LEFT JOIN users user ON user.id = decision.updated_by
+            WHERE decision.report_id IN ({placeholders})
+            ORDER BY decision.updated_at DESC, decision.issue_id
+            """,
+            tuple(report_ids),
+        ).fetchall()
+        decisions: dict[str, list[dict[str, Any]]] = {}
+        for row in rows:
+            value = dict(row)
+            decisions.setdefault(str(value["report_id"]), []).append(value)
+        return decisions
+
+    @staticmethod
     def _serialize(
         value: dict[str, Any],
         *,
         text_quality: dict[str, Any] | None = None,
+        decisions: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         value["attempt_no"] = int(value.pop("version_no"))
         published_version = value.pop("published_version_no", None)
@@ -1719,11 +3284,14 @@ class InsightReportService:
         value["evidence"] = json_value(value.pop("evidence_json"), None)
         value["usage"] = json_value(value.pop("usage_json"), {})
         value["metrics"] = json_value(value.pop("metrics_json"), {})
+        value["decisions"] = decisions or []
         if value["content"] and value["evidence"] and text_quality is not None:
-            value["quality_gate"] = InsightReportService._apply_live_quality_gate(
-                value["content"],
-                value["evidence"],
-                text_quality,
+            evaluator = (
+                InsightReportService._evaluate_live_quality_v6
+                if value.get("prompt_version") == PROMPT_VERSION
+                else InsightReportService._evaluate_live_quality
             )
+            evaluated = evaluator(value["content"], value["evidence"], text_quality)
+            value.update(evaluated)
         value.pop("technical_error", None)
         return value

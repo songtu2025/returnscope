@@ -1,3 +1,4 @@
+import { groups as BUSINESS_GROUPS } from "../../../../config/taxonomy_alignment.json";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
@@ -6,26 +7,30 @@ import {
   ClockCounterClockwise,
   DownloadSimple,
   MagnifyingGlass,
-  PencilSimple,
   Plus,
   Tag,
-  Trash,
   UploadSimple,
-  WarningCircle,
 } from "@phosphor-icons/react";
 import { navigateHash } from "../../app/hashRouter";
 import { EmptyState, Modal, PageHeading } from "../../components/SharedUi";
 import { classificationStandardApi } from "../../shared/api/classificationStandardApi";
 import { ClassificationStandardEditor } from "./ClassificationStandardDraftEditor";
 import { ClassificationStandardValidation } from "./ClassificationStandardValidation";
+import { labelChanges } from "./labelDraftPolicy";
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
 const EMPTY_CONTENT = {
+  recognition_profile: "semantic_v1",
   name: "",
   product_context: "",
   instructions: ["依据标签业务定义判断退货原因"],
   allowed_parts: ["UNSPECIFIED"],
+  validation_rules: {
+    allowed_groups: BUSINESS_GROUPS,
+    neutral_reason_labels: [],
+    conflict_scope: "evidence",
+  },
   variants: [{ category_a: "", category_b: "", attributes: {} }],
   labels: [],
 };
@@ -33,9 +38,11 @@ const EMPTY_CONTENT = {
 function contentFromSnapshot(snapshot) {
   return {
     name: snapshot.name,
+    recognition_profile: snapshot.taxonomy.recognition_profile ?? "legacy_v3",
     product_context: snapshot.taxonomy.product_context,
     instructions: snapshot.taxonomy.instructions ?? [],
     allowed_parts: snapshot.taxonomy.allowed_parts ?? ["UNSPECIFIED"],
+    validation_rules: snapshot.taxonomy.validation_rules ?? {},
     variants: snapshot.variants ?? [],
     labels: (snapshot.taxonomy.labels ?? []).map((label) => ({
       ...label,
@@ -100,14 +107,7 @@ export function ClassificationStandardsPage({ route, notify }) {
   const [validationSampleSize, setValidationSampleSize] = useState(20);
 
   const selectedId = route.query.standard || "";
-  const mode =
-    route.query.view === "new"
-      ? "new"
-      : selectedId
-        ? route.query.view === "edit"
-          ? "edit"
-          : "detail"
-        : "list";
+  const mode = route.query.view === "new" ? "new" : selectedId ? "edit" : "list";
 
   const loadStandards = useCallback(async () => {
     const values = await classificationStandardApi.classificationStandards();
@@ -224,9 +224,20 @@ export function ClassificationStandardsPage({ route, notify }) {
     [standards],
   );
 
-  const dirty = Boolean(
-    draft && JSON.stringify(content) !== JSON.stringify(draft.content),
-  );
+  const savedContent =
+    draft?.content ??
+    (detail?.snapshot ? contentFromSnapshot(detail.snapshot) : EMPTY_CONTENT);
+  const dirty = JSON.stringify(content) !== JSON.stringify(savedContent);
+
+  useEffect(() => {
+    if (!dirty || !["edit", "new"].includes(mode)) return;
+    const warnBeforeClose = (event) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeClose);
+    return () => window.removeEventListener("beforeunload", warnBeforeClose);
+  }, [dirty, mode]);
 
   const persistDraft = async () => {
     const error = validateContent(content);
@@ -259,6 +270,7 @@ export function ClassificationStandardsPage({ route, notify }) {
       );
     }
     setDraft(workingDraft);
+    setContent(clone(workingDraft.content));
     return workingDraft;
   };
 
@@ -296,6 +308,7 @@ export function ClassificationStandardsPage({ route, notify }) {
           reason: changeReason.trim() || "更新分类标准",
         });
       await loadStandards();
+      await loadSelected(standard.id);
       navigateHash("classification-standards", { standard: standard.id });
       notify(saved.is_new ? "分类标准已创建并启用" : "分类标准已更新并启用");
     } catch (error) {
@@ -305,22 +318,54 @@ export function ClassificationStandardsPage({ route, notify }) {
     }
   };
 
-  const startSampleValidation = async () => {
+  const startSampleValidation = async (
+    reviewFile,
+    comparisonType = "standard_version",
+  ) => {
     setBusy("validation");
     try {
       const saved = await persistDraft();
-      if (!validationSourceId) throw new Error("当前没有可用的样本来源");
-      const value =
-        await classificationStandardApi.createClassificationStandardValidationRun(
-          saved.id,
-          {
-            expected_revision: saved.revision,
-            source_result_version_id: validationSourceId,
-            sample_size: validationSampleSize,
-          },
-        );
+      if (!reviewFile && !validationSourceId) throw new Error("当前没有可用的样本来源");
+      const value = reviewFile
+        ? await classificationStandardApi.createReviewStandardValidationRun(
+            saved.id,
+            reviewFile,
+            saved.revision,
+            validationSampleSize,
+            comparisonType,
+          )
+        : await classificationStandardApi.createClassificationStandardValidationRun(
+            saved.id,
+            {
+              expected_revision: saved.revision,
+              source_result_version_id: validationSourceId,
+              sample_size: validationSampleSize,
+              comparison_type: comparisonType,
+            },
+          );
       await loadValidation(saved.id, value.id);
       notify("样本验证已进入队列");
+    } catch (error) {
+      notify(error.message, "error");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const approveSampleValidation = async (runId, note) => {
+    if (!draft) return;
+    setBusy("approval");
+    try {
+      const value =
+        await classificationStandardApi.approveClassificationStandardValidationRun(
+          runId,
+          {
+            expected_revision: draft.revision,
+            note,
+          },
+        );
+      await loadValidation(draft.id, value.id);
+      notify("当前草稿修订已人工确认，可进入发布确认");
     } catch (error) {
       notify(error.message, "error");
     } finally {
@@ -390,6 +435,7 @@ export function ClassificationStandardsPage({ route, notify }) {
       );
       setRestoreTarget(null);
       await loadStandards();
+      await loadSelected(detail.id);
       navigateHash("classification-standards", {
         standard: detail.id,
         view: "edit",
@@ -418,40 +464,23 @@ export function ClassificationStandardsPage({ route, notify }) {
           onView={(standard) =>
             navigateHash("classification-standards", { standard: standard.id })
           }
-          onEdit={(standard) =>
-            navigateHash("classification-standards", {
-              standard: standard.id,
-              view: "edit",
-            })
-          }
           onDelete={setDeleteTarget}
         />
       )}
-
-      {mode === "detail" &&
-        (pageLoading || !detail ? (
-          <div className="inline-loading">正在读取分类标准…</div>
-        ) : (
-          <StandardDetail
-            standard={detail}
-            versions={versions}
-            onBack={() => navigateHash("classification-standards")}
-            onEdit={() =>
-              navigateHash("classification-standards", {
-                standard: detail.id,
-                view: "edit",
-              })
-            }
-            onDelete={() => setDeleteTarget(detail)}
-            onRestore={setRestoreTarget}
-          />
-        ))}
 
       {(mode === "new" || mode === "edit") &&
         (pageLoading ? (
           <div className="inline-loading">正在读取分类标准…</div>
         ) : (
-          <StandardEditPage
+          <StandardWorkspace
+            key={`${selectedId || "new"}-${detail?.standard_version_id || ""}`}
+            initiallyEditing={route.query.view === "edit" || mode === "new"}
+            versions={versions}
+            notify={notify}
+            onDelete={() => setDeleteTarget(detail)}
+            onRestore={setRestoreTarget}
+            savedContent={savedContent}
+            focusLabelCode={route.query.label}
             isNew={mode === "new"}
             detail={detail}
             draft={draft}
@@ -468,15 +497,11 @@ export function ClassificationStandardsPage({ route, notify }) {
             onReasonChange={setChangeReason}
             onSave={saveDraft}
             onPublish={publish}
-            onBack={() =>
-              navigateHash(
-                "classification-standards",
-                detail ? { standard: detail.id } : {},
-              )
-            }
+            onBack={() => navigateHash("classification-standards")}
             onValidationSourceChange={setValidationSourceId}
             onValidationSampleSizeChange={setValidationSampleSize}
             onValidationRun={startSampleValidation}
+            onValidationApprove={approveSampleValidation}
             onImport={importJson}
             onValidationSelect={async (runId) => {
               try {
@@ -494,7 +519,10 @@ export function ClassificationStandardsPage({ route, notify }) {
 
       {deleteTarget && (
         <Modal
-          eyebrow="删除分类标准"
+          className="standard-lifecycle-modal"
+          eyebrow={
+            deleteTarget.delete_mode === "delete" ? "删除分类标准" : "停用分类标准"
+          }
           title={
             deleteTarget.delete_mode === "delete"
               ? `永久删除“${deleteTarget.name}”`
@@ -505,12 +533,18 @@ export function ClassificationStandardsPage({ route, notify }) {
               ? "该标准从未发布且未被任务使用，删除后无法恢复。"
               : "该标准已发布或已被任务使用。停用后新任务不再使用它，历史任务与结果保持不变。"
           }
-          onClose={() => setDeleteTarget(null)}
+          onClose={() => busy !== "delete" && setDeleteTarget(null)}
         >
+          {deleteTarget.delete_mode !== "delete" && deleteTarget.draft_id && (
+            <p className="standard-deactivate-warning">
+              此标准还有未发布草稿。停用时，草稿及其样本验证记录将一并删除，无法恢复。
+            </p>
+          )}
           <div className="standard-delete-actions">
             <button
               type="button"
               className="secondary-button"
+              disabled={busy === "delete"}
               onClick={() => setDeleteTarget(null)}
             >
               取消
@@ -570,7 +604,6 @@ function StandardList({
   onStatusChange,
   onCreate,
   onView,
-  onEdit,
   onDelete,
 }) {
   return (
@@ -678,6 +711,9 @@ function StandardList({
                         {Number(standard.version_no) > 0
                           ? `V${standard.version_no}`
                           : "草稿"}
+                        {standard.draft_id && Number(standard.version_no) > 0
+                          ? " · 有草稿"
+                          : ""}
                       </small>
                     </td>
                     <td>{formatDate(standard.updated_at)}</td>
@@ -686,18 +722,17 @@ function StandardList({
                         <button type="button" onClick={() => onView(standard)}>
                           查看
                         </button>
-                        {(standard.status === "active" || standard.draft_id) && (
-                          <button type="button" onClick={() => onEdit(standard)}>
-                            编辑
+                        {(standard.status === "active" ||
+                          standard.delete_mode === "delete") && (
+                          <button
+                            type="button"
+                            className="standard-deactivate-action"
+                            aria-label={`${standard.delete_mode === "delete" ? "删除标准" : "停用标准"}：${standard.name}`}
+                            onClick={() => onDelete(standard)}
+                          >
+                            {standard.delete_mode === "delete" ? "删除" : "停用"}
                           </button>
                         )}
-                        <button
-                          type="button"
-                          className="danger-text"
-                          onClick={() => onDelete(standard)}
-                        >
-                          删除
-                        </button>
                       </div>
                     </td>
                   </tr>
@@ -711,147 +746,55 @@ function StandardList({
   );
 }
 
-function StandardDetail({ standard, versions, onBack, onEdit, onDelete, onRestore }) {
-  const snapshot = standard.snapshot;
-  const groups = Object.groupBy
-    ? Object.groupBy(snapshot.taxonomy.labels, (label) => label.group)
-    : snapshot.taxonomy.labels.reduce((result, label) => {
-        result[label.group] = [...(result[label.group] ?? []), label];
-        return result;
-      }, {});
-  const editable = standard.status === "active" || standard.draft_id;
-
+function StandardVersionHistory({ standard, versions, onRestore }) {
   return (
-    <>
-      <div className="standard-subpage-heading">
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="返回列表"
-          onClick={onBack}
-        >
-          <ArrowLeft size={18} />
-        </button>
-        <div>
-          <p className="eyebrow">分类标准</p>
-          <h1>{standard.name}</h1>
-          <span>{standard.product_context}</span>
-        </div>
-        <div className="standard-heading-actions">
-          {editable && (
-            <button type="button" className="primary-button" onClick={onEdit}>
-              <PencilSimple size={16} /> 编辑
-            </button>
-          )}
-          <button type="button" className="danger-button" onClick={onDelete}>
-            <Trash size={16} /> 删除
-          </button>
-        </div>
-      </div>
-
-      <section className="standard-runtime-note">
-        {standard.status === "active" ? (
-          <CheckCircle size={20} />
-        ) : (
-          <WarningCircle size={20} />
-        )}
-        <div>
-          <b>
-            {standard.status === "active"
-              ? `当前启用版本 V${standard.version_no}`
-              : "该标准已停止用于新任务"}
-          </b>
-          <span>
-            新建分析任务会读取当前启用版本并固定到任务中；历史任务始终保留原版本。
-          </span>
-        </div>
-      </section>
-
-      <section className="standard-detail-section">
-        <header>
-          <h2>适用品类</h2>
-          <span>{snapshot.variants.length} 个</span>
-        </header>
-        <div className="standard-category-grid">
-          {snapshot.variants.map((variant, index) => (
-            <div key={`${variant.category_a}-${variant.category_b}-${index}`}>
-              <span>{variant.category_a}</span>
-              <b>{variant.category_b}</b>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="standard-detail-section">
-        <header>
-          <h2>分类标签体系</h2>
-          <span>{snapshot.taxonomy.labels.length} 个标签</span>
-        </header>
-        <div className="standard-label-groups">
-          {Object.entries(groups).map(([group, labels]) => (
-            <article key={group}>
-              <header>
-                <h3>{group}</h3>
-                <span>{labels.length}</span>
-              </header>
-              {labels.map((label) => (
-                <div key={label.code}>
-                  <span>
-                    <b>{label.name}</b>
-                    <code>{label.code}</code>
-                  </span>
-                  <p>{label.description}</p>
-                  {label.keywords?.length > 0 && (
-                    <p>关键词：{label.keywords.join("、")}</p>
-                  )}
-                </div>
-              ))}
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <details className="standard-version-history">
-        <summary>
-          <ClockCounterClockwise size={17} /> 版本记录（{versions.length}）
-        </summary>
-        <div>
-          {versions.map((version) => (
-            <div key={version.id}>
-              <b>V{version.version_no}</b>
-              <span>{version.version_reason}</span>
-              <small>{formatDate(version.published_at)}</small>
-              <a
-                href={classificationStandardApi.classificationStandardVersionExportUrl(
-                  version.id,
-                )}
-                aria-label={`导出 V${version.version_no} JSON`}
-              >
-                <DownloadSimple size={14} /> 导出JSON
-              </a>
-              {version.id === standard.standard_version_id ? (
-                <span className="standard-version-current">当前版本</span>
-              ) : (
-                <button
-                  type="button"
-                  className="standard-version-restore"
-                  disabled={Boolean(standard.draft_id)}
-                  title={standard.draft_id ? "请先处理现有草稿" : undefined}
-                  aria-label={`恢复 V${version.version_no} 为草稿`}
-                  onClick={() => onRestore(version)}
-                >
-                  <ClockCounterClockwise size={14} /> 恢复为草稿
-                </button>
+    <details className="standard-version-history">
+      <summary>
+        <ClockCounterClockwise size={17} /> 版本记录（{versions.length}）
+      </summary>
+      <div>
+        {versions.map((version) => (
+          <div key={version.id}>
+            <b>V{version.version_no}</b>
+            <span>{version.version_reason}</span>
+            <small>{formatDate(version.published_at)}</small>
+            <a
+              href={classificationStandardApi.classificationStandardVersionExportUrl(
+                version.id,
               )}
-            </div>
-          ))}
-        </div>
-      </details>
-    </>
+              aria-label={`导出 V${version.version_no} JSON`}
+            >
+              <DownloadSimple size={14} /> 导出JSON
+            </a>
+            {version.id === standard.standard_version_id ? (
+              <span className="standard-version-current">当前版本</span>
+            ) : (
+              <button
+                type="button"
+                className="standard-version-restore"
+                disabled={Boolean(standard.draft_id)}
+                title={standard.draft_id ? "请先处理现有草稿" : undefined}
+                aria-label={`恢复 V${version.version_no} 为草稿`}
+                onClick={() => onRestore(version)}
+              >
+                <ClockCounterClockwise size={14} /> 恢复为草稿
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </details>
   );
 }
 
-function StandardEditPage({
+function StandardWorkspace({
+  initiallyEditing,
+  versions,
+  notify,
+  onDelete,
+  onRestore,
+  savedContent,
+  focusLabelCode,
   isNew,
   detail,
   draft,
@@ -872,9 +815,47 @@ function StandardEditPage({
   onValidationSourceChange,
   onValidationSampleSizeChange,
   onValidationRun,
+  onValidationApprove,
   onImport,
   onValidationSelect,
 }) {
+  const [section, setSection] = useState(isNew ? "settings" : "labels");
+  const [confirmBack, setConfirmBack] = useState(false);
+  const editable = isNew || detail?.status === "active" || Boolean(draft);
+  const baseContent = draft?.base_snapshot
+    ? contentFromSnapshot(draft.base_snapshot)
+    : detail?.snapshot
+      ? contentFromSnapshot(detail.snapshot)
+      : null;
+  const changes = labelChanges(content.labels, baseContent?.labels).filter(
+    (entry) => entry.status !== "未修改",
+  );
+  const settingsChanges = Object.keys(content).filter(
+    (key) =>
+      key !== "labels" &&
+      JSON.stringify(content[key]) !== JSON.stringify(baseContent?.[key]),
+  ).length;
+  const changeCount = changes.length + settingsChanges;
+  const publicationReady = validationRuns.some((run) => run.publication_ready);
+  const awaitingApproval = validationRuns.some(
+    (run) =>
+      run.is_current &&
+      run.status === "completed" &&
+      (run.source?.comparison_type ?? "standard_version") === "standard_version" &&
+      Number(run.error_count) === 0 &&
+      !run.approved_at,
+  );
+  const publishDisabled = Boolean(busy) || !draft || dirty || !publicationReady;
+  const publishLabel = !draft
+    ? "请先保存草稿"
+    : dirty
+      ? "请先保存修改"
+      : publicationReady
+        ? "发布并启用"
+        : awaitingApproval
+          ? "等待人工确认"
+          : "等待样本验证";
+
   return (
     <>
       <div className="standard-subpage-heading editor-heading">
@@ -882,103 +863,291 @@ function StandardEditPage({
           type="button"
           className="icon-button"
           aria-label="返回"
-          onClick={onBack}
+          onClick={() => (dirty ? setConfirmBack(true) : onBack())}
         >
           <ArrowLeft size={18} />
         </button>
         <div>
-          <p className="eyebrow">{isNew ? "新建分类标准" : "编辑分类标准"}</p>
           <h1>{isNew ? "建立品类与标签体系" : detail?.name}</h1>
-          <span>保存启用后，新建分析任务将自动读取新版本。</span>
+          <span>
+            {draft
+              ? `未发布草稿 r${draft.revision} · 当前启用版本 V${draft.base_version_no}`
+              : detail
+                ? `${detail.status === "active" ? "当前启用版本" : "已停用版本"} V${detail.version_no}`
+                : "新建标准"}
+          </span>
         </div>
-        <div className="standard-heading-actions">
-          <button
-            type="button"
-            className="secondary-button"
-            disabled={Boolean(busy)}
-            onClick={onSave}
-          >
-            {busy === "save" ? "保存中" : "保存草稿"}
-          </button>
-          <button
-            type="button"
-            className="primary-button"
-            disabled={Boolean(busy)}
-            onClick={onPublish}
-          >
-            {busy === "publish" ? "启用中" : "保存并启用"}
-          </button>
-        </div>
+        {detail && (detail.status === "active" || detail.delete_mode === "delete") && (
+          <details className="standard-more-menu">
+            <summary>更多</summary>
+            <button type="button" disabled={Boolean(busy)} onClick={onDelete}>
+              {detail.delete_mode === "delete" ? "删除标准" : "停用标准"}
+            </button>
+          </details>
+        )}
       </div>
 
+      <nav className="standard-editor-tabs" aria-label="标准管理分区">
+        {[
+          ["labels", "标签管理"],
+          ["settings", "标准设置"],
+        ].map(([value, title]) => (
+          <button
+            key={value}
+            type="button"
+            aria-current={section === value ? "page" : undefined}
+            onClick={() => setSection(value)}
+          >
+            {title}
+          </button>
+        ))}
+      </nav>
+
       <ClassificationStandardEditor
+        section={section}
+        initiallyEditing={initiallyEditing}
+        editable={editable}
+        notify={notify}
+        busy={Boolean(busy)}
+        savedContent={savedContent}
+        focusLabelCode={focusLabelCode}
         content={content}
-        baseContent={
-          draft?.base_snapshot
-            ? contentFromSnapshot(draft.base_snapshot)
-            : detail?.snapshot
-              ? contentFromSnapshot(detail.snapshot)
-              : null
-        }
+        baseContent={baseContent}
         onChange={onContentChange}
       />
 
-      <section className="standard-change-reason">
-        <label>
-          变更说明
-          <input
-            value={changeReason}
-            onChange={(event) => onReasonChange(event.target.value)}
-          />
-        </label>
-        <span>用于版本记录，不影响智能体判断。</span>
-      </section>
+      <div className="standard-settings-extra" hidden={section !== "settings"}>
+        <section className="standard-detail-section">
+          <h2>识别策略</h2>
+          <label>
+            当前草稿使用
+            <select
+              aria-label="识别策略"
+              disabled={!editable}
+              value={content.recognition_profile ?? "legacy_v3"}
+              onChange={(event) =>
+                onContentChange({ ...content, recognition_profile: event.target.value })
+              }
+            >
+              <option value="legacy_v3">现有策略 · 定义与关键词</option>
+              <option value="semantic_v1">语义策略 · 定义、边界与证据</option>
+            </select>
+          </label>
+          <p>保存只修改草稿；通过发布验证并启用后，新任务才使用该策略。</p>
+        </section>
+        {!isNew && editable && (
+          <section className="standard-json-transfer">
+            <div>
+              <b>JSON 数据交换</b>
+              <span>导入只替换当前草稿的业务内容，不会直接发布。</span>
+            </div>
+            <label
+              className={`secondary-button standard-json-import-button ${
+                busy ? "disabled" : ""
+              }`}
+            >
+              <UploadSimple size={15} />
+              {busy === "import" ? "导入中" : "导入JSON"}
+              <input
+                type="file"
+                accept="application/json,.json"
+                aria-label="选择分类标准 JSON 文件"
+                disabled={Boolean(busy)}
+                onChange={onImport}
+              />
+            </label>
+          </section>
+        )}
 
-      {!isNew && (
-        <section className="standard-json-transfer">
-          <div>
-            <b>JSON 数据交换</b>
-            <span>导入只替换当前草稿的业务内容，不会直接发布。</span>
-          </div>
-          <label
-            className={`secondary-button standard-json-import-button ${
-              busy ? "disabled" : ""
-            }`}
-          >
-            <UploadSimple size={15} />
-            {busy === "import" ? "导入中" : "导入JSON"}
+        {detail && (
+          <StandardVersionHistory
+            standard={{ ...detail, draft_id: draft?.id }}
+            versions={versions}
+            onRestore={onRestore}
+          />
+        )}
+      </div>
+
+      <div className="standard-review-panel" hidden={section !== "review"}>
+        <section className="standard-editor-section standard-change-preview">
+          <header>
+            <h2>发布前检查</h2>
+            <span>对比当前启用版本</span>
+          </header>
+          <p>保存草稿不会影响运行中的标准。检查变更后，完成样本验证再发布。</p>
+          {content.recognition_profile !== baseContent?.recognition_profile && (
+            <p>
+              识别策略：
+              {baseContent?.recognition_profile === "semantic_v1"
+                ? "语义策略"
+                : "现有策略"}
+              {" → "}
+              {content.recognition_profile === "semantic_v1"
+                ? "语义策略（定义、边界与证据）"
+                : "现有策略（定义与关键词）"}
+            </p>
+          )}
+          {changes.length ? (
+            changes.map(({ label, before, status }) => (
+              <article key={label.code}>
+                <header>
+                  <strong>{label.name || "未命名标签"}</strong>
+                  <span className="label-change-badge changed">{status}</span>
+                </header>
+                <code>{label.code}</code>
+                <p>{label.description}</p>
+                {status === "已修改" && (
+                  <div>
+                    <span>原搜索别名：{before.keywords?.join("、") || "无"}</span>
+                    <span>新搜索别名：{label.keywords?.join("、") || "无"}</span>
+                  </div>
+                )}
+                {[
+                  ["原", before],
+                  ["新", status === "拟停用" ? null : label],
+                ].map(
+                  ([title, value]) =>
+                    value &&
+                    Boolean(
+                      before?.exclusions?.length ||
+                      before?.examples?.length ||
+                      label.exclusions?.length ||
+                      label.examples?.length,
+                    ) && (
+                      <div key={title}>
+                        <span>
+                          {title}排除说明：{value.exclusions?.join("；") || "无"}
+                        </span>
+                        <span>
+                          {title}判定示例：{value.examples?.length ? "" : "无"}
+                        </span>
+                        {value.examples?.map((example, index) => (
+                          <p key={index}>
+                            {example.applies ? "适用" : "不适用"}
+                            {example.sentiment ? ` · ${example.sentiment}` : ""}：
+                            {example.text} — {example.explanation}
+                          </p>
+                        ))}
+                      </div>
+                    ),
+                )}
+              </article>
+            ))
+          ) : (
+            <p>标签没有变化。基本信息与分类设置的修改会随草稿一起保存。</p>
+          )}
+          {JSON.stringify(content.validation_rules) !==
+            JSON.stringify(baseContent?.validation_rules ?? {}) && (
+            <p className="label-unsaved-hint">
+              标签校验规则有变化，请检查相关语义边界、分类指令与 Listing 承诺配置。
+            </p>
+          )}
+          {!dirty && draft?.validation.blocking?.length > 0 && (
+            <div className="label-unsaved-hint" role="status">
+              {draft.validation.blocking.join("；")}
+            </div>
+          )}
+        </section>
+        <section className="standard-change-reason">
+          <label>
+            变更说明
             <input
-              type="file"
-              accept="application/json,.json"
-              aria-label="选择分类标准 JSON 文件"
-              disabled={Boolean(busy)}
-              onChange={onImport}
+              value={changeReason}
+              onChange={(event) => onReasonChange(event.target.value)}
             />
           </label>
+          <span>用于版本记录，不影响智能体判断。</span>
         </section>
-      )}
 
-      <details className="standard-optional-validation">
-        <summary>小样本验证（可选）</summary>
-        {draft ? (
-          <ClassificationStandardValidation
-            draft={draft}
-            sources={validationSources}
-            runs={validationRuns}
-            selectedRun={selectedValidation}
-            sourceId={validationSourceId}
-            sampleSize={validationSampleSize}
-            busy={busy === "validation"}
-            dirty={dirty}
-            onSourceChange={onValidationSourceChange}
-            onSampleSizeChange={onValidationSampleSizeChange}
-            onRun={onValidationRun}
-            onSelectRun={onValidationSelect}
-          />
-        ) : (
-          <p>如需验证标签效果，请先保存草稿。该步骤不影响正常保存启用。</p>
-        )}
-      </details>
+        <details className="standard-optional-validation" open>
+          <summary>发布前样本验证（必需）</summary>
+          {draft ? (
+            <ClassificationStandardValidation
+              draft={draft}
+              sources={validationSources}
+              runs={validationRuns}
+              selectedRun={selectedValidation}
+              sourceId={validationSourceId}
+              sampleSize={validationSampleSize}
+              busy={busy === "validation"}
+              approvalBusy={busy === "approval"}
+              dirty={dirty}
+              onSourceChange={onValidationSourceChange}
+              onSampleSizeChange={onValidationSampleSizeChange}
+              onRun={onValidationRun}
+              onApprove={onValidationApprove}
+              onSelectRun={onValidationSelect}
+            />
+          ) : (
+            <p>请先保存草稿，再运行样本验证；验证通过后才能启用新版本。</p>
+          )}
+        </details>
+      </div>
+      {editable && (
+        <footer className="standard-editor-footer">
+          <div role="status">
+            <strong>
+              {changeCount
+                ? `有 ${changeCount} 项变更${dirty ? " · 未保存" : " · 已保存"}`
+                : "暂无变更"}
+            </strong>
+            {draft && !dirty && <span>草稿 r{draft.revision}，尚未发布</span>}
+          </div>
+          <div>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={Boolean(busy)}
+              onClick={onSave}
+            >
+              {busy === "save" ? "保存中" : "保存草稿"}
+            </button>
+            {section === "review" ? (
+              <button
+                type="button"
+                className="primary-button"
+                disabled={publishDisabled}
+                title={publishDisabled ? publishLabel : undefined}
+                onClick={onPublish}
+              >
+                {busy === "publish" ? "启用中" : publishLabel}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="primary-button"
+                disabled={Boolean(busy) || (!dirty && !draft)}
+                onClick={() => setSection("review")}
+              >
+                发布
+              </button>
+            )}
+          </div>
+        </footer>
+      )}
+      {confirmBack && (
+        <Modal
+          eyebrow="未保存修改"
+          title="离开编辑页？"
+          onClose={() => setConfirmBack(false)}
+        >
+          <div className="label-action-confirm">
+            <p>尚未保存的修改会丢失。可以继续编辑并保存草稿，或放弃本次未保存内容。</p>
+            <div>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setConfirmBack(false)}
+              >
+                继续编辑
+              </button>
+              <button type="button" className="danger-button" onClick={onBack}>
+                放弃修改并返回
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </>
   );
 }

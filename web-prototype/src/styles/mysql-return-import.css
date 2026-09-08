@@ -1,0 +1,344 @@
+.mysql-import-fields {
+  min-width: 0;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.mysql-import-fields legend {
+  padding: 0 6px;
+  font-weight: 650;
+}
+
+.mysql-import-fields p {
+  margin: 4px 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.mysql-import-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+  margin-bottom: 10px;
+}
+
+.mysql-date-range {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+  gap: 12px;
+}
+
+.mysql-date-range > span {
+  align-self: end;
+  padding-bottom: 10px;
+  color: var(--muted);
+}
+
+.mysql-date-filter p[role="alert"] {
+  color: var(--red);
+}
+
+.mysql-import-preview {
+  min-width: 0;
+}
+
+.mysql-preview-records {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.mysql-preview-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.mysql-preview-table th,
+.mysql-preview-table td {
+  padding: 12px 10px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line-soft);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.mysql-preview-table th {
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mysql-preview-date-col {
+  width: 110px;
+}
+.mysql-preview-product-col {
+  width: 23%;
+}
+.mysql-preview-quantity-col {
+  width: 52px;
+}
+.mysql-preview-reason-col {
+  width: 18%;
+}
+.mysql-preview-action-col {
+  width: 56px;
+}
+
+.mysql-preview-table .mysql-preview-date {
+  white-space: nowrap;
+}
+.mysql-preview-table .mysql-preview-quantity {
+  text-align: center;
+}
+.mysql-preview-table small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+.mysql-preview-table strong {
+  font-weight: 600;
+}
+.mysql-preview-excerpt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+.mysql-preview-table small.mysql-preview-excerpt {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  margin-top: 4px;
+}
+.mysql-preview-detail-button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--green);
+  font: inherit;
+  white-space: nowrap;
+}
+.mysql-preview-detail-row {
+  background: var(--surface-soft);
+}
+.mysql-preview-detail-row dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px 24px;
+  margin: 4px;
+}
+.mysql-preview-detail-row dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.mysql-preview-detail-row dd {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+}
+.mysql-preview-detail-wide {
+  grid-column: 1 / -1;
+}
+.mysql-preview-pagination,
+.mysql-preview-pagination > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.mysql-preview-pagination {
+  padding: 12px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 12px;
+}
+.mysql-preview-pagination button {
+  min-height: 30px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.mysql-return-import {
+  min-width: 0;
+}
+
+.mysql-return-import .task-advanced-settings {
+  margin-top: 0;
+}
+
+.mysql-return-import .return-import-intro {
+  overflow-wrap: anywhere;
+}
+
+.mysql-return-import .return-import-review {
+  padding: 0;
+  gap: 16px;
+}
+.mysql-filter-toolbar {
+  display: grid;
+  grid-template-columns: minmax(170px, 1fr) minmax(280px, 1.4fr) minmax(110px, 0.6fr);
+  align-items: end;
+  gap: 18px;
+  min-width: 0;
+  margin: 0;
+  padding: 0 0 18px;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.mysql-store-filter,
+.mysql-more-filter label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.mysql-filter-toolbar select,
+.mysql-filter-toolbar input {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--ink);
+  background: #fff;
+}
+.mysql-date-filter,
+.mysql-more-filter {
+  position: relative;
+  min-width: 0;
+}
+.mysql-date-filter > summary,
+.mysql-more-filter > summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted);
+  list-style: none;
+}
+.mysql-date-filter > summary b {
+  display: block;
+  margin-top: 6px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+}
+.mysql-more-filter > summary {
+  padding: 10px 0;
+  color: var(--green);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mysql-date-popover,
+.mysql-more-filter > label {
+  position: absolute;
+  top: calc(100% + 8px);
+  z-index: 10;
+  width: min(420px, 65vw);
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 10px 35px #142f2026;
+}
+.mysql-date-popover {
+  right: 0;
+}
+.mysql-more-filter > label {
+  right: 0;
+  width: 280px;
+}
+.mysql-date-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.mysql-date-presets button {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 12px;
+}
+.mysql-date-presets button[aria-pressed="true"] {
+  color: var(--green-dark);
+  background: var(--green-pale);
+}
+.mysql-date-popover > small {
+  display: inline-block;
+  margin-top: 12px;
+  color: var(--muted);
+}
+.mysql-date-popover > button {
+  float: right;
+  margin-top: 10px;
+}
+.mysql-return-import .task-advanced-settings {
+  border: 0;
+  border-radius: 0;
+}
+.mysql-return-import .task-advanced-settings > summary {
+  padding: 4px 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+.mysql-return-import .task-advanced-body {
+  padding: 14px 0;
+}
+.mysql-import-preview > summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  cursor: pointer;
+  font-size: 14px;
+}
+.mysql-preview-caption {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.mysql-preview-empty {
+  display: grid;
+  place-content: center;
+  gap: 16px;
+  min-height: 240px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.mysql-snapshot-note {
+  padding-top: 6px;
+}
+@media (max-width: 1100px) {
+  .mysql-filter-toolbar {
+    gap: 10px;
+    grid-template-columns: minmax(145px, 1fr) minmax(250px, 1.5fr) 90px;
+  }
+  .mysql-preview-date-col {
+    width: 90px;
+  }
+  .mysql-preview-table th,
+  .mysql-preview-table td {
+    padding: 10px 6px;
+  }
+}
+
+.mysql-return-import .return-import-review > .task-advanced-settings {
+  order: 4;
+}
+.mysql-return-import .return-import-review > .needs-mapping {
+  order: -1;
+}

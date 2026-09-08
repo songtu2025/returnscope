@@ -3,83 +3,51 @@ from __future__ import annotations
 from return_semantics.schemas import (
     ClaimRelation,
     SemanticUnit,
+    TaxonomyConfig,
     UnknownSemantic,
-)
-
-MATERIAL_QUALITY_CUES = (
-    "cheap",
-    "poor quality",
-    "low quality",
-    "flimsy",
-    "thin material",
-    "bad quality",
-    "bad material",
-    "not good quality",
-    "inferior",
-)
-PROTECTION_CUES = (
-    "rock",
-    "stone",
-    "pebble",
-    "gravel",
-    "shell",
-    "sharp",
-    "hot sand",
-    "protect",
-    "feel things",
-    "felt things",
-    "hurt",
-    "pain",
-)
-SMALLER_SIZE_CUES = (
-    "need smaller",
-    "needed smaller",
-    "need a smaller",
-    "wanted smaller",
-    "size down",
-)
-BIGGER_SIZE_CUES = (
-    "need bigger",
-    "needed bigger",
-    "need a bigger",
-    "wanted bigger",
-    "size up",
 )
 
 
 def normalize_semantic_unit(
     unit: SemanticUnit,
+    taxonomy: TaxonomyConfig,
 ) -> tuple[SemanticUnit | None, UnknownSemantic | None]:
     evidence = unit.evidence.lower()
+    rules = taxonomy.validation_rules
 
-    if unit.label_code == "QUALITY_CHEAP_MATERIAL" and not any(
-        cue in evidence for cue in MATERIAL_QUALITY_CUES
-    ):
-        return None, UnknownSemantic(
-            opinion="不喜欢材料，但没有说明具体问题",
-            evidence=unit.evidence,
-            reason="证据不足以判断材料廉价或质量差",
-        )
+    for rule in rules.evidence_requirements:
+        if taxonomy.recognition_profile == "semantic_v1" and rule.semantic_requirement:
+            continue
+        if unit.label_code == rule.label_code and not any(
+            cue.lower() in evidence for cue in rule.cues
+        ):
+            return None, UnknownSemantic(
+                opinion=rule.unknown_opinion,
+                evidence=unit.evidence,
+                reason=rule.unknown_reason,
+            )
 
-    if unit.label_code == "FIT_TOO_LARGE" and any(
-        cue in evidence for cue in SMALLER_SIZE_CUES
-    ):
-        unit = unit.model_copy(update={"implicit": True})
-    if unit.label_code == "FIT_TOO_SMALL" and any(
-        cue in evidence for cue in BIGGER_SIZE_CUES
-    ):
-        unit = unit.model_copy(update={"implicit": True})
+    for rule in rules.implicit_evidence_rules:
+        if taxonomy.recognition_profile == "semantic_v1" and rule.semantic_requirement:
+            continue
+        if unit.label_code == rule.label_code and any(
+            cue.lower() in evidence for cue in rule.cues
+        ):
+            unit = unit.model_copy(update={"implicit": True})
 
-    if (
-        unit.label_code == "EXPERIENCE_THIN"
-        and unit.claim_id == "CLM_PROTECT_01"
-        and not any(cue in evidence for cue in PROTECTION_CUES)
-    ):
-        unit = unit.model_copy(
-            update={
-                "claim_relation": ClaimRelation.NONE,
-                "claim_id": None,
-            }
-        )
+    for rule in rules.claim_evidence_requirements:
+        if taxonomy.recognition_profile == "semantic_v1" and rule.semantic_requirement:
+            continue
+        if (
+            unit.label_code == rule.label_code
+            and unit.claim_id == rule.claim_id
+            and not any(cue.lower() in evidence for cue in rule.cues)
+        ):
+            unit = unit.model_copy(
+                update={
+                    "claim_relation": ClaimRelation.NONE,
+                    "claim_id": None,
+                }
+            )
 
     return unit, None

@@ -630,6 +630,102 @@ def test_stale_plan_is_rejected_and_segments_are_persisted(tmp_path: Path) -> No
     assert service.get("old-task")["segments"] == []
 
 
+def test_blank_title_uses_returns_dataset_name(tmp_path: Path) -> None:
+    database, _returns_path, _products_path = _database_with_inputs(tmp_path)
+    service = TaskService(database)
+    preflight = service.preflight(
+        "version-returns",
+        "version-products",
+        "SEEKWAY:US",
+        "L1",
+        "config-1",
+    )
+
+    task = service.create(
+        actor_id="user-1",
+        title="  ",
+        dataset_version_id="version-returns",
+        product_version_id="version-products",
+        store="SEEKWAY:US",
+        listing="L1",
+        config_version_id="config-1",
+        plan_hash=str(preflight["plan_hash"]),
+        unresolved_policy="run_ready",
+    )
+
+    assert task["title"] == "returns · 分析任务"
+
+
+def test_finished_tasks_can_be_archived_and_restored(tmp_path: Path) -> None:
+    database, _returns_path, _products_path = _database_with_inputs(tmp_path)
+    service = TaskService(database)
+    task = _create_task(database, "run_ready")
+    task_id = str(task["id"])
+    with database.transaction(immediate=True) as connection:
+        connection.execute(
+            "UPDATE tasks SET status = 'completed', stage = '分析完成' WHERE id = ?",
+            (task_id,),
+        )
+
+    archived = service.set_archived([task_id], True, "user-1")[0]
+
+    assert archived["archived_at"]
+    assert archived["archived_by"] == "user-1"
+    assert all(item["id"] != task_id for item in service.list())
+    assert any(
+        item["id"] == task_id for item in service.list(include_archived=True)
+    )
+    assert service.events(task_id)[-1]["event_type"] == "task_archived"
+    assert list_audit(database, "task", task_id)[0]["action"] == "archive"
+
+    restored = service.set_archived([task_id], False, "user-1")[0]
+
+    assert restored["archived_at"] is None
+    assert restored["archived_by"] is None
+    assert any(item["id"] == task_id for item in service.list())
+    assert service.events(task_id)[-1]["event_type"] == "task_restored"
+    assert list_audit(database, "task", task_id)[0]["action"] == "restore"
+
+
+def test_task_list_includes_result_and_execution_states(tmp_path: Path) -> None:
+    database, _returns_path, _products_path = _database_with_inputs(tmp_path)
+    service = TaskService(database)
+    task = _create_task(database, "run_ready")
+    segment = next(
+        value for value in task["segments"] if value["agent_key"] != "unknown"
+    )
+    with database.transaction(immediate=True) as connection:
+        connection.execute(
+            """
+            UPDATE task_segments
+            SET status = 'completed', result_publish_status = 'published',
+                result_quality_status = 'needs_review'
+            WHERE id = ?
+            """,
+            (segment["id"],),
+        )
+    listed = service.list(owner_id="user-1", status=task["status"])[0]
+    detail = service.get(task["id"])
+    assert len(listed["segments"]) == len(detail["segments"])
+    listed_segment = next(
+        value for value in listed["segments"]
+        if value["agent_key"] == segment["agent_key"]
+    )
+    assert listed_segment["status"] == "completed"
+    assert listed_segment["result_publish_status"] == "published"
+    assert listed_segment["result_quality_status"] == "needs_review"
+    assert service.list(owner_id="missing") == []
+
+
+def test_active_tasks_cannot_be_archived(tmp_path: Path) -> None:
+    database, _returns_path, _products_path = _database_with_inputs(tmp_path)
+    service = TaskService(database)
+    task = _create_task(database, "run_ready")
+
+    with pytest.raises(ValueError, match="仅已结束任务可以归档"):
+        service.set_archived([str(task["id"])], True, "user-1")
+
+
 def test_task_creation_persists_requested_segment_order(tmp_path: Path) -> None:
     database, _returns_path, products_path = _database_with_inputs(tmp_path)
     product_version_id = _add_resolved_product_version(database, products_path)
@@ -1324,7 +1420,7 @@ def test_replan_runs_only_failed_segment_and_keeps_completed_result(
     _install_fake_runner(
         monkeypatch,
         first_calls,
-        failing_taxonomy="eyewear-2026-08-10-v1",
+        failing_taxonomy="eyewear-unified-2026-09-06-v1-semantic1",
     )
     settings = _settings(tmp_path)
     settings.ensure_directories()
@@ -1333,8 +1429,8 @@ def test_replan_runs_only_failed_segment_and_keeps_completed_result(
     partial = service.get(str(task["id"]))
     assert partial["status"] == "partial"
     assert first_calls == [
-        "water-shoes-2026-08-21-v2",
-        "eyewear-2026-08-10-v1",
+        "footwear-unified-2026-09-06-v1-semantic1",
+        "eyewear-unified-2026-09-06-v1-semantic1",
     ]
     partial_segments = {
         segment["agent_key"]: segment for segment in partial["segments"]
@@ -1358,7 +1454,7 @@ def test_replan_runs_only_failed_segment_and_keeps_completed_result(
 
     completed = service.get(str(task["id"]))
     assert completed["status"] == "completed"
-    assert second_calls == ["eyewear-2026-08-10-v1"]
+    assert second_calls == ["eyewear-unified-2026-09-06-v1-semantic1"]
     segments = {segment["agent_key"]: segment for segment in completed["segments"]}
     assert segments["footwear"]["model_calls"] == 1
     assert segments["eyewear"]["model_calls"] == 1
@@ -1393,7 +1489,7 @@ def test_failed_segment_can_retry_without_repeating_completed_segment(
     _install_fake_runner(
         monkeypatch,
         first_calls,
-        failing_taxonomy="water-shoes-2026-08-21-v2",
+        failing_taxonomy="footwear-unified-2026-09-06-v1-semantic1",
     )
     settings = _settings(tmp_path)
     settings.ensure_directories()
@@ -1418,7 +1514,7 @@ def test_failed_segment_can_retry_without_repeating_completed_segment(
 
     completed = service.get(str(task["id"]))
     assert completed["status"] == "completed"
-    assert retry_calls == ["water-shoes-2026-08-21-v2"]
+    assert retry_calls == ["footwear-unified-2026-09-06-v1-semantic1"]
     event = next(
         value
         for value in service.events(str(task["id"]))
@@ -1465,7 +1561,7 @@ def test_replan_rebuilds_failed_segment_when_its_scope_changes(
     _install_fake_runner(
         monkeypatch,
         failed_calls,
-        failing_taxonomy="water-shoes-2026-08-21-v2",
+        failing_taxonomy="footwear-unified-2026-09-06-v1-semantic1",
     )
     settings = _settings(tmp_path)
     settings.ensure_directories()
@@ -1545,8 +1641,8 @@ def test_replan_rebuilds_failed_segment_when_its_scope_changes(
     completed = service.get(str(task["id"]))
     assert completed["status"] == "completed"
     assert set(retry_calls) == {
-        "eyewear-2026-08-10-v1",
-        "water-shoes-2026-08-21-v2",
+        "eyewear-unified-2026-09-06-v1-semantic1",
+        "footwear-unified-2026-09-06-v1-semantic1",
     }
     checkpoint = json.loads(
         Path(str(completed["results_json_path"])).read_text(encoding="utf-8")
@@ -1684,7 +1780,7 @@ def test_cancelled_task_delivers_completed_listing_and_resumes_remaining(
     _install_fake_runner(monkeypatch, first_calls)
     claimed = _run_task_segments(database, runner, str(task["id"]), limit=1)
     assert len(claimed) == 1
-    assert first_calls == ["water-shoes-2026-08-21-v2"]
+    assert first_calls == ["footwear-unified-2026-09-06-v1-semantic1"]
 
     after_first = service.get(str(task["id"]))
     service.cancel(
@@ -1734,7 +1830,7 @@ def test_cancelled_task_delivers_completed_listing_and_resumes_remaining(
 
     completed = service.get(str(task["id"]))
     assert completed["status"] == "completed"
-    assert resume_calls == ["eyewear-2026-08-10-v1"]
+    assert resume_calls == ["eyewear-unified-2026-09-06-v1-semantic1"]
     assert any(
         event["event_type"] == "resumed" and event["data"]["note"] == "继续剩余 Listing"
         for event in service.events(str(task["id"]))

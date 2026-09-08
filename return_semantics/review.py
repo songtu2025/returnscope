@@ -8,6 +8,9 @@ from return_semantics.schemas import (
 MANUAL_ONLY_REASONS = (
     "Amazon 原因与评论方向冲突",
     "评论包含相反标签",
+    "评论包含需核对的标签组合",
+    "标签规则要求人工复核",
+    "语义边界需人工确认",
 )
 
 
@@ -26,7 +29,7 @@ def _signature(result: ValidatedClassification) -> tuple[object, ...]:
         (
             unit.label_code,
             unit.sentiment.value,
-            unit.part.value,
+            unit.part,
             unit.evidence,
             unit.claim_relation.value,
             unit.claim_id or "",

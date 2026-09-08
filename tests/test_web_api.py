@@ -51,7 +51,7 @@ class FakeResponsesHandler(BaseHTTPRequestHandler):
                     "semantic_units": [
                         {
                             "subject": "PRODUCT",
-                            "label_code": "FIT_TOO_LARGE",
+                            "label_code": "FIT_TOO_LARGE_U1",
                             "opinion": "鞋子太大",
                             "sentiment": "NEGATIVE",
                             "assertion": "AFFIRMED",
@@ -63,7 +63,7 @@ class FakeResponsesHandler(BaseHTTPRequestHandler):
                         }
                     ],
                     "unknown_semantics": [],
-                    "primary_label_codes": ["FIT_TOO_LARGE"],
+                    "primary_label_codes": ["FIT_TOO_LARGE_U1"],
                     "needs_review": True,
                     "review_reasons": ["测试人工复核"],
                 }
@@ -283,6 +283,13 @@ def test_return_version_fills_only_missing_store_values(tmp_path: Path) -> None:
             "SEEKWAY:CA",
             "SEEKWAY:US",
         ]
+        first_snapshot = client.get(
+            f"/api/datasets/{returns['id']}/rows",
+            params={"limit": 10, "version": 1},
+        )
+        assert first_snapshot.status_code == 200
+        assert first_snapshot.json()["version"] == 1
+        assert first_snapshot.json()["source_total"] == 1
 
 
 def test_real_web_task_flow(tmp_path: Path) -> None:
@@ -698,11 +705,11 @@ def test_real_web_task_flow(tmp_path: Path) -> None:
             category_segment = current["metrics"]["category_segments"][0]
             assert category_segment["agent_family"] == "鞋履智能体"
             assert category_segment["logic_version"] == (
-                "footwear-semantic-2026-08-10-v1"
+                "footwear-unified-semantic-2026-09-06-v1"
             )
             assert category_segment["record_count"] == 1
             assert category_segment["model_calls"] == 2
-            assert category_segment["claims_version"] == ("sk001-listing-2026-08-05-v1")
+            assert category_segment["claims_version"] == ("sk001-listing-2026-09-06-v2")
             assert category_segment["model_policy_version"] == (
                 "footwear-model-policy-2026-08-10-v1"
             )
@@ -776,7 +783,7 @@ def test_real_web_task_flow(tmp_path: Path) -> None:
                 f"/api/review-batches/{batch['id']}/records/{review['id']}",
                 json={
                     "expected_revision": review["revision"],
-                    "label_code": "FIT_TOO_SMALL",
+                    "label_code": "FIT_TOO_SMALL_U1",
                     "reason": "人工确认标签",
                 },
             )
@@ -786,7 +793,7 @@ def test_real_web_task_flow(tmp_path: Path) -> None:
                 f"/api/review-batches/{batch['id']}/records/{review['id']}",
                 json={
                     "expected_revision": review["revision"],
-                    "label_code": "FIT_TOO_LARGE",
+                    "label_code": "FIT_TOO_LARGE_U1",
                     "reason": "重复提交",
                 },
             )

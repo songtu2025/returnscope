@@ -1,3 +1,4 @@
+import { groups as BUSINESS_GROUPS } from "../../../../config/taxonomy_alignment.json";
 import { useState } from "react";
 import {
   ArrowCounterClockwise,
@@ -19,7 +20,20 @@ import {
   YAxis,
 } from "recharts";
 
-const GROUP_ORDER = ["尺码与合脚", "外观", "体感", "功能", "其他原因"];
+const GROUP_ORDER = [
+  ...new Set([
+    ...BUSINESS_GROUPS,
+    "尺码与适配",
+    "尺码与合脚",
+    "功能表现",
+    "功能",
+    "质量与耐用性",
+    "穿戴体验",
+    "体感",
+    "外观",
+    "其他原因",
+  ]),
+];
 const PART_LABELS = {
   WHOLE_SHOE: "整鞋",
   TOE: "鞋头",
@@ -28,6 +42,45 @@ const PART_LABELS = {
   INSOLE: "鞋垫",
   UPPER: "鞋面",
   HEEL: "后跟",
+  HEEL_TAB: "后跟提拉片",
+  SOLE_UPPER_SEAM: "鞋底与鞋面结合处",
+  ARCH: "足弓",
+  INSTEP: "脚背部位",
+  SEAM: "接缝",
+  DRAINAGE_HOLE: "排水孔",
+  FASTENER: "扣件",
+  CUFF: "袖口",
+  PALM: "掌心",
+  BACK_OF_HAND: "手背",
+  FINGER: "手指",
+  FINGER_GUSSET: "指缝",
+  THUMB: "拇指",
+  THUMB_WEB: "虎口",
+  LINING: "内衬",
+  CLOSURE: "闭合结构",
+  FRAME: "镜框",
+  LENS: "镜片",
+  NOSE_PAD: "鼻托",
+  NOSE_BRIDGE: "鼻梁",
+  TEMPLE: "镜腿",
+  EAR_SIDE: "耳侧",
+  HINGE: "铰链",
+  SCREW: "螺丝",
+  FACE_COVERAGE: "脸部覆盖",
+  LENS_FRAME_JOINT: "镜片与镜框连接处",
+  STRAP: "绑带",
+  COATING: "镀膜",
+  RUBBER_SLEEVE: "橡胶套",
+  CASE: "眼镜盒",
+  CLEANING_CLOTH: "清洁布",
+  PACKAGING: "包装",
+  EDGE: "边缘",
+  CONNECTION: "连接处",
+  ACCESSORY: "配件",
+  CROWN: "帽身",
+  BRIM: "帽檐",
+  CHIN_STRAP: "下巴带",
+  SIZE_ADJUSTER: "调节扣",
   UNSPECIFIED: "未明确部位",
 };
 
@@ -77,9 +130,11 @@ export function ReturnReasonInsights({
   const options = data.filter_options ?? {};
   const dateRange = data.date_range ?? {};
   const subjects = data.subject_breakdown ?? [];
-  const groups = GROUP_ORDER.filter((item) =>
-    (data.category_groups ?? []).includes(item),
-  );
+  const categoryGroups = data.category_groups ?? [];
+  const groups = [
+    ...GROUP_ORDER.filter((item) => categoryGroups.includes(item)),
+    ...categoryGroups.filter((item) => !GROUP_ORDER.includes(item)),
+  ];
   const visibleReasons = selectedSubject
     ? reasons.filter((reason) => reason.subjects?.includes(selectedSubject))
     : reasons;
@@ -197,7 +252,10 @@ export function ReturnReasonInsights({
           <b>{pendingCount.toLocaleString()} 条</b>
         </div>
         <p>
-          当前洞察使用已确认与自动通过的数据；多标签原因占比之和可能超过 100%。
+          当前洞察使用已确认与自动通过的数据；同一记录在每个分组内只计一次，多标签原因占比之和可能超过
+          100%。
+          {data.group_alignment === "unified-v1" &&
+            " 跨版本已统一一级分组，具体标签保留原版本口径。"}
           <span>
             已分析 {includedCount.toLocaleString()}/{totalCount.toLocaleString()} 条
           </span>

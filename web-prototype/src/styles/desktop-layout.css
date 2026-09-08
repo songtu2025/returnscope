@@ -53,13 +53,6 @@
   min-height: 72px;
   padding: 12px;
 }
-
-/* 创建任务 */
-.task-create-summary {
-  width: 100%;
-  max-width: none;
-  padding: var(--desktop-detail-padding);
-}
 .new-task-page .task-config-choice,
 .new-task-page .task-data-picker,
 .new-task-page .task-data-quality {
@@ -71,12 +64,8 @@
 .new-task-page .task-config-choice select {
   min-width: 0;
 }
-.task-config-header,
 .task-config-section {
   padding: var(--desktop-detail-padding);
-}
-.task-config-section .section-title {
-  margin-bottom: var(--desktop-section-gap);
 }
 .task-data-picker,
 .task-config-choice {

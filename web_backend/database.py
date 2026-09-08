@@ -54,6 +54,8 @@ CREATE TABLE IF NOT EXISTS datasets (
     name TEXT NOT NULL,
     kind TEXT NOT NULL CHECK(kind IN ('returns', 'products')),
     description TEXT NOT NULL DEFAULT '',
+    source_key TEXT,
+    usage_scope TEXT NOT NULL DEFAULT 'managed',
     current_version INTEGER NOT NULL DEFAULT 0,
     created_by TEXT NOT NULL REFERENCES users(id),
     created_at TEXT NOT NULL,
@@ -81,6 +83,51 @@ CREATE TABLE IF NOT EXISTS dataset_versions (
 );
 CREATE INDEX IF NOT EXISTS idx_dataset_versions_dataset
 ON dataset_versions(dataset_id, version DESC);
+CREATE INDEX IF NOT EXISTS idx_dataset_versions_sha
+ON dataset_versions(sha256);
+
+CREATE TABLE IF NOT EXISTS dataset_imports (
+    id TEXT PRIMARY KEY,
+    dataset_id TEXT NOT NULL REFERENCES datasets(id) ON DELETE CASCADE,
+    resulting_version_id TEXT NOT NULL REFERENCES dataset_versions(id),
+    mode TEXT NOT NULL CHECK(mode IN ('analyze_only', 'create', 'append', 'replace')),
+    raw_file_path TEXT NOT NULL,
+    original_name TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    raw_sha256 TEXT NOT NULL,
+    row_count INTEGER NOT NULL,
+    column_count INTEGER NOT NULL,
+    schema_json TEXT NOT NULL,
+    quality_json TEXT NOT NULL,
+    source_key TEXT,
+    imported_row_count INTEGER NOT NULL DEFAULT 0,
+    skipped_row_count INTEGER NOT NULL DEFAULT 0,
+    created_by TEXT NOT NULL REFERENCES users(id),
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_dataset_imports_dataset
+ON dataset_imports(dataset_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_dataset_imports_sha
+ON dataset_imports(raw_sha256, dataset_id);
+CREATE INDEX IF NOT EXISTS idx_dataset_imports_result_version
+ON dataset_imports(resulting_version_id);
+
+CREATE TABLE IF NOT EXISTS dataset_import_staging (
+    id TEXT PRIMARY KEY,
+    owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    temp_path TEXT NOT NULL,
+    original_name TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    sha256 TEXT NOT NULL,
+    inspection_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    consumed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_dataset_import_staging_expiry
+ON dataset_import_staging(expires_at);
 
 CREATE TABLE IF NOT EXISTS classification_standards (
     id TEXT PRIMARY KEY,
@@ -254,12 +301,18 @@ CREATE TABLE IF NOT EXISTS tasks (
     started_at TEXT,
     completed_at TEXT,
     heartbeat_at TEXT,
-    last_scheduled_at TEXT
+    last_scheduled_at TEXT,
+    archived_at TEXT,
+    archived_by TEXT REFERENCES users(id)
 );
 CREATE INDEX IF NOT EXISTS idx_tasks_owner_status
 ON tasks(owner_id, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tasks_status_created
 ON tasks(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_tasks_dataset_version
+ON tasks(dataset_version_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_product_version
+ON tasks(product_version_id);
 
 CREATE TABLE IF NOT EXISTS task_segments (
     id TEXT PRIMARY KEY,
@@ -462,6 +515,9 @@ CREATE TABLE IF NOT EXISTS classification_standard_validation_runs (
     metrics_json TEXT NOT NULL DEFAULT '{}',
     model_names_json TEXT NOT NULL DEFAULT '[]',
     error TEXT,
+    approved_by TEXT REFERENCES users(id),
+    approved_at TEXT,
+    approval_note TEXT NOT NULL DEFAULT '',
     published_version_id TEXT REFERENCES classification_standard_versions(id),
     created_by TEXT NOT NULL REFERENCES users(id),
     created_at TEXT NOT NULL,
@@ -582,6 +638,19 @@ CREATE TABLE IF NOT EXISTS ai_insight_report_versions (
 );
 CREATE INDEX IF NOT EXISTS idx_ai_insight_report_versions_dashboard
 ON ai_insight_report_versions(dashboard_id, version_no DESC);
+
+CREATE TABLE IF NOT EXISTS ai_insight_issue_decisions (
+    report_id TEXT NOT NULL
+        REFERENCES ai_insight_reports(id) ON DELETE CASCADE,
+    issue_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending'
+        CHECK(status IN ('pending', 'ignored', 'watching', 'verify')),
+    updated_by TEXT NOT NULL REFERENCES users(id),
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY(report_id, issue_id)
+);
+CREATE INDEX IF NOT EXISTS idx_ai_insight_issue_decisions_status
+ON ai_insight_issue_decisions(report_id, status, updated_at DESC);
 
 CREATE TRIGGER IF NOT EXISTS trg_dashboard_current_version_insert
 BEFORE INSERT ON analysis_dashboards
@@ -718,6 +787,21 @@ class Database:
                 connection.execute(
                     "ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0"
                 )
+            dataset_columns = {
+                row["name"]
+                for row in connection.execute(
+                    "PRAGMA table_info(datasets)"
+                ).fetchall()
+            }
+            dataset_column_definitions = {
+                "source_key": "TEXT",
+                "usage_scope": "TEXT NOT NULL DEFAULT 'managed'",
+            }
+            for column_name, definition in dataset_column_definitions.items():
+                if column_name not in dataset_columns:
+                    connection.execute(
+                        f"ALTER TABLE datasets ADD COLUMN {column_name} {definition}"
+                    )
             config_columns = {
                 row["name"]
                 for row in connection.execute(
@@ -828,6 +912,23 @@ class Database:
                     "ALTER TABLE classification_results "
                     "ADD COLUMN standard_version_id TEXT"
                 )
+            validation_columns = {
+                row["name"]
+                for row in connection.execute(
+                    "PRAGMA table_info(classification_standard_validation_runs)"
+                ).fetchall()
+            }
+            validation_column_definitions = {
+                "approved_by": "TEXT REFERENCES users(id)",
+                "approved_at": "TEXT",
+                "approval_note": "TEXT NOT NULL DEFAULT ''",
+            }
+            for column_name, definition in validation_column_definitions.items():
+                if column_name not in validation_columns:
+                    connection.execute(
+                        "ALTER TABLE classification_standard_validation_runs "
+                        f"ADD COLUMN {column_name} {definition}"
+                    )
             self._migrate_review_records(connection)
             self._repair_draft_review_batches(connection)
             self._migrate_excluded_quality_status(connection)
@@ -845,12 +946,20 @@ class Database:
                 "pause_requested": "INTEGER NOT NULL DEFAULT 0",
                 "max_parallel_segments": "INTEGER NOT NULL DEFAULT 3",
                 "last_scheduled_at": "TEXT",
+                "archived_at": "TEXT",
+                "archived_by": "TEXT REFERENCES users(id)",
             }
             for column_name, definition in task_column_definitions.items():
                 if column_name not in task_columns:
                     connection.execute(
                         f"ALTER TABLE tasks ADD COLUMN {column_name} {definition}"
                     )
+            connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_tasks_archive_created
+                ON tasks(archived_at, created_at DESC)
+                """
+            )
             self._migrate_ai_insight_reports(connection)
             connection.execute(
                 """

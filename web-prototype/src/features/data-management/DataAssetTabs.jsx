@@ -1,9 +1,8 @@
-import { FileCsv, ListBullets, ShieldCheck, Stack } from "@phosphor-icons/react";
+import { FileCsv, ListBullets, Stack } from "@phosphor-icons/react";
 
 const TABS = [
   { id: "returns", label: "退货数据", icon: FileCsv },
-  { id: "products", label: "产品信息", icon: Stack },
-  { id: "quality", label: "匹配与质量", icon: ShieldCheck },
+  { id: "products", label: "商品信息汇总", icon: Stack },
   { id: "rules", label: "导入规则", icon: ListBullets },
 ];
 

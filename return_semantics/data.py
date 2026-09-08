@@ -64,6 +64,7 @@ def _looks_like_gb18030(frame: pd.DataFrame) -> bool:
 def read_return_csv(
     path: Path,
     usecols: list[str] | None = None,
+    nrows: int | None = None,
 ) -> pd.DataFrame:
     try:
         return pd.read_csv(
@@ -71,6 +72,7 @@ def read_return_csv(
             encoding="utf-8-sig",
             dtype=str,
             usecols=usecols,
+            nrows=nrows,
         )
     except UnicodeDecodeError:
         pass
@@ -84,6 +86,7 @@ def read_return_csv(
                 encoding=encoding,
                 dtype=str,
                 usecols=usecols,
+                nrows=nrows,
             )
         except UnicodeDecodeError as exc:
             last_error = exc

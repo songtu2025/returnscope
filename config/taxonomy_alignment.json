@@ -1,0 +1,1758 @@
+{
+  "version": "unified-taxonomy-2026-09-06-v1",
+  "groups": [
+    "尺码与适配",
+    "功能表现",
+    "质量与耐用",
+    "使用感受",
+    "外观与款式",
+    "履约与售后",
+    "其他反馈"
+  ],
+  "sources": [
+    {
+      "standard_key": "headwear",
+      "taxonomy_version": "headwear-2026-08-10-v1",
+      "labels": {
+        "HEADWEAR_FIT_TIGHT": {
+          "group": "尺码与适配",
+          "target_code": "HEADWEAR_FIT_TIGHT_U1"
+        },
+        "HEADWEAR_FIT_LOOSE": {
+          "group": "尺码与适配",
+          "target_code": "HEADWEAR_FIT_LOOSE_U1"
+        },
+        "HEADWEAR_SUN_PROTECTION": {
+          "group": "功能表现",
+          "target_code": "HEADWEAR_SUN_PROTECTION_U1"
+        },
+        "HEADWEAR_COMFORT": {
+          "group": "使用感受",
+          "target_code": "HEADWEAR_COMFORT_U1"
+        },
+        "HEADWEAR_QUALITY": {
+          "group": "质量与耐用",
+          "target_code": "HEADWEAR_QUALITY_U1"
+        },
+        "HEADWEAR_APPEARANCE": {
+          "group": "外观与款式",
+          "target_code": "HEADWEAR_APPEARANCE_U1"
+        },
+        "HEADWEAR_BUYER_REASON": {
+          "group": "其他反馈",
+          "target_code": "HEADWEAR_BUYER_REASON_U1"
+        }
+      }
+    },
+    {
+      "standard_key": "eyewear",
+      "taxonomy_version": "eyewear-2026-09-06-v3",
+      "labels": {
+        "EYEWEAR_FIT_TIGHT_V2": {
+          "group": "尺码与适配",
+          "target_code": "EYEWEAR_FIT_TIGHT_V2_U1"
+        },
+        "EYEWEAR_FIT_LOOSE_V2": {
+          "group": "尺码与适配",
+          "target_code": "EYEWEAR_FIT_LOOSE_V2_U1"
+        },
+        "EYEWEAR_FIT_LOCAL": {
+          "group": "尺码与适配",
+          "target_code": "EYEWEAR_FIT_LOCAL_U1"
+        },
+        "EYEWEAR_FIT_UNSPECIFIED": {
+          "group": "尺码与适配",
+          "target_code": "EYEWEAR_FIT_UNSPECIFIED_U1"
+        },
+        "EYEWEAR_POLARIZATION_INSUFFICIENT": {
+          "group": "功能表现",
+          "target_code": "EYEWEAR_POLARIZATION_INSUFFICIENT_U1"
+        },
+        "EYEWEAR_SUN_PROTECTION_INSUFFICIENT": {
+          "group": "功能表现",
+          "target_code": "EYEWEAR_SUN_PROTECTION_INSUFFICIENT_U1"
+        },
+        "EYEWEAR_LENS_TOO_DARK": {
+          "group": "功能表现",
+          "target_code": "EYEWEAR_LENS_TOO_DARK_U1"
+        },
+        "EYEWEAR_LENS_VISIBILITY_V2": {
+          "group": "功能表现",
+          "target_code": "EYEWEAR_VISIBILITY_U1"
+        },
+        "EYEWEAR_COLOR_DISPLAY_ISSUE": {
+          "group": "功能表现",
+          "target_code": "EYEWEAR_COLOR_DISPLAY_ISSUE_U1"
+        },
+        "EYEWEAR_RETENTION_INSUFFICIENT": {
+          "group": "功能表现",
+          "target_code": "EYEWEAR_RETENTION_U1"
+        },
+        "EYEWEAR_FOGGING_V2": {
+          "group": "功能表现",
+          "target_code": "EYEWEAR_FOGGING_PERFORMANCE_U1"
+        },
+        "EYEWEAR_LENS_SCRATCHING": {
+          "group": "质量与耐用",
+          "target_code": "EYEWEAR_LENS_SCRATCHING_U1"
+        },
+        "EYEWEAR_LENS_COATING_FAILURE": {
+          "group": "质量与耐用",
+          "target_code": "EYEWEAR_LENS_COATING_FAILURE_U1"
+        },
+        "EYEWEAR_LENS_DETACHMENT": {
+          "group": "质量与耐用",
+          "target_code": "EYEWEAR_LENS_DETACHMENT_U1"
+        },
+        "EYEWEAR_LENS_BREAKAGE": {
+          "group": "质量与耐用",
+          "target_code": "EYEWEAR_LENS_BREAKAGE_U1"
+        },
+        "EYEWEAR_SCREW_HINGE_FAILURE": {
+          "group": "质量与耐用",
+          "target_code": "EYEWEAR_SCREW_HINGE_FAILURE_U1"
+        },
+        "EYEWEAR_FRAME_TEMPLE_BREAKAGE": {
+          "group": "质量与耐用",
+          "target_code": "EYEWEAR_FRAME_TEMPLE_BREAKAGE_U1"
+        },
+        "EYEWEAR_ACCESSORY_FAILURE": {
+          "group": "质量与耐用",
+          "target_code": "EYEWEAR_ACCESSORY_FAILURE_U1"
+        },
+        "EYEWEAR_DURABILITY_SHORT": {
+          "group": "质量与耐用",
+          "target_code": "EYEWEAR_DURABILITY_SHORT_U1"
+        },
+        "EYEWEAR_QUALITY_V2": {
+          "group": "质量与耐用",
+          "target_code": "EYEWEAR_QUALITY_GENERAL_U1"
+        },
+        "EYEWEAR_PRESSURE_FRICTION_DISCOMFORT": {
+          "group": "使用感受",
+          "target_code": "EYEWEAR_PRESSURE_FRICTION_DISCOMFORT_U1"
+        },
+        "EYEWEAR_TOO_HEAVY": {
+          "group": "使用感受",
+          "target_code": "EYEWEAR_TOO_HEAVY_U1"
+        },
+        "EYEWEAR_COMFORT_UNSPECIFIED": {
+          "group": "使用感受",
+          "target_code": "EYEWEAR_COMFORT_U1"
+        },
+        "EYEWEAR_APPEARANCE_V2": {
+          "group": "外观与款式",
+          "target_code": "EYEWEAR_APPEARANCE_GENERAL_U1"
+        },
+        "EYEWEAR_ARRIVAL_CONDITION": {
+          "group": "履约与售后",
+          "target_code": "EYEWEAR_ARRIVAL_CONDITION_U1"
+        },
+        "EYEWEAR_WRONG_ITEM": {
+          "group": "履约与售后",
+          "target_code": "EYEWEAR_WRONG_ITEM_U1"
+        },
+        "EYEWEAR_MISSING_PARTS": {
+          "group": "履约与售后",
+          "target_code": "EYEWEAR_MISSING_PARTS_U1"
+        },
+        "EYEWEAR_DESCRIPTION_MISMATCH": {
+          "group": "履约与售后",
+          "target_code": "EYEWEAR_DESCRIPTION_MISMATCH_U1"
+        },
+        "EYEWEAR_DELIVERY_ISSUE": {
+          "group": "履约与售后",
+          "target_code": "EYEWEAR_DELIVERY_ISSUE_U1"
+        },
+        "EYEWEAR_AFTERSALES_ISSUE": {
+          "group": "履约与售后",
+          "target_code": "EYEWEAR_SERVICE_U1"
+        },
+        "EYEWEAR_VALUE_NEGATIVE": {
+          "group": "其他反馈",
+          "target_code": "EYEWEAR_VALUE_U1"
+        },
+        "EYEWEAR_BUYER_REASON_V2": {
+          "group": "其他反馈",
+          "target_code": "EYEWEAR_BUYER_REASON_V2_U1"
+        },
+        "EYEWEAR_REASON_UNSPECIFIED": {
+          "group": "其他反馈",
+          "target_code": "EYEWEAR_REASON_UNSPECIFIED_U1"
+        },
+        "EYEWEAR_FIT_POSITIVE": {
+          "group": "尺码与适配",
+          "target_code": "EYEWEAR_FIT_POSITIVE_U1"
+        },
+        "EYEWEAR_PROTECTION_POSITIVE": {
+          "group": "功能表现",
+          "target_code": "EYEWEAR_PROTECTION_POSITIVE_U1"
+        },
+        "EYEWEAR_VISUAL_POSITIVE": {
+          "group": "功能表现",
+          "target_code": "EYEWEAR_VISIBILITY_U1"
+        },
+        "EYEWEAR_RETENTION_POSITIVE": {
+          "group": "功能表现",
+          "target_code": "EYEWEAR_RETENTION_U1"
+        },
+        "EYEWEAR_FOGGING_POSITIVE": {
+          "group": "功能表现",
+          "target_code": "EYEWEAR_FOGGING_PERFORMANCE_U1"
+        },
+        "EYEWEAR_COMFORT_POSITIVE": {
+          "group": "使用感受",
+          "target_code": "EYEWEAR_COMFORT_POSITIVE_U1"
+        },
+        "EYEWEAR_QUALITY_POSITIVE": {
+          "group": "质量与耐用",
+          "target_code": "EYEWEAR_QUALITY_GENERAL_U1"
+        },
+        "EYEWEAR_APPEARANCE_POSITIVE": {
+          "group": "外观与款式",
+          "target_code": "EYEWEAR_APPEARANCE_GENERAL_U1"
+        },
+        "EYEWEAR_ACCESSORY_POSITIVE": {
+          "group": "履约与售后",
+          "target_code": "EYEWEAR_ACCESSORY_POSITIVE_U1"
+        },
+        "EYEWEAR_VALUE_POSITIVE": {
+          "group": "其他反馈",
+          "target_code": "EYEWEAR_VALUE_U1"
+        },
+        "EYEWEAR_OVERALL_POSITIVE": {
+          "group": "其他反馈",
+          "target_code": "EYEWEAR_OVERALL_POSITIVE_U1"
+        }
+      }
+    },
+    {
+      "standard_key": "eyewear",
+      "taxonomy_version": "eyewear-2026-08-10-v1",
+      "labels": {
+        "EYEWEAR_FIT_TIGHT_V2": {
+          "group": "尺码与适配",
+          "target_code": "EYEWEAR_FIT_TIGHT_V2_U1"
+        },
+        "EYEWEAR_FIT_LOOSE_V2": {
+          "group": "尺码与适配",
+          "target_code": "EYEWEAR_FIT_LOOSE_V2_U1"
+        },
+        "EYEWEAR_FIT_LOCAL": {
+          "group": "尺码与适配",
+          "target_code": "EYEWEAR_FIT_LOCAL_U1"
+        },
+        "EYEWEAR_FIT_UNSPECIFIED": {
+          "group": "尺码与适配",
+          "target_code": "EYEWEAR_FIT_UNSPECIFIED_U1"
+        },
+        "EYEWEAR_POLARIZATION_INSUFFICIENT": {
+          "group": "功能表现",
+          "target_code": "EYEWEAR_POLARIZATION_INSUFFICIENT_U1"
+        },
+        "EYEWEAR_SUN_PROTECTION_INSUFFICIENT": {
+          "group": "功能表现",
+          "target_code": "EYEWEAR_SUN_PROTECTION_INSUFFICIENT_U1"
+        },
+        "EYEWEAR_LENS_TOO_DARK": {
+          "group": "功能表现",
+          "target_code": "EYEWEAR_LENS_TOO_DARK_U1"
+        },
+        "EYEWEAR_LENS_VISIBILITY_V2": {
+          "group": "功能表现",
+          "target_code": "EYEWEAR_VISIBILITY_U1"
+        },
+        "EYEWEAR_COLOR_DISPLAY_ISSUE": {
+          "group": "功能表现",
+          "target_code": "EYEWEAR_COLOR_DISPLAY_ISSUE_U1"
+        },
+        "EYEWEAR_RETENTION_INSUFFICIENT": {
+          "group": "功能表现",
+          "target_code": "EYEWEAR_RETENTION_U1"
+        },
+        "EYEWEAR_FOGGING_V2": {
+          "group": "功能表现",
+          "target_code": "EYEWEAR_FOGGING_PERFORMANCE_U1"
+        },
+        "EYEWEAR_LENS_SCRATCHING": {
+          "group": "质量与耐用",
+          "target_code": "EYEWEAR_LENS_SCRATCHING_U1"
+        },
+        "EYEWEAR_LENS_COATING_FAILURE": {
+          "group": "质量与耐用",
+          "target_code": "EYEWEAR_LENS_COATING_FAILURE_U1"
+        },
+        "EYEWEAR_LENS_DETACHMENT": {
+          "group": "质量与耐用",
+          "target_code": "EYEWEAR_LENS_DETACHMENT_U1"
+        },
+        "EYEWEAR_LENS_BREAKAGE": {
+          "group": "质量与耐用",
+          "target_code": "EYEWEAR_LENS_BREAKAGE_U1"
+        },
+        "EYEWEAR_SCREW_HINGE_FAILURE": {
+          "group": "质量与耐用",
+          "target_code": "EYEWEAR_SCREW_HINGE_FAILURE_U1"
+        },
+        "EYEWEAR_FRAME_TEMPLE_BREAKAGE": {
+          "group": "质量与耐用",
+          "target_code": "EYEWEAR_FRAME_TEMPLE_BREAKAGE_U1"
+        },
+        "EYEWEAR_ACCESSORY_FAILURE": {
+          "group": "质量与耐用",
+          "target_code": "EYEWEAR_ACCESSORY_FAILURE_U1"
+        },
+        "EYEWEAR_DURABILITY_SHORT": {
+          "group": "质量与耐用",
+          "target_code": "EYEWEAR_DURABILITY_SHORT_U1"
+        },
+        "EYEWEAR_QUALITY_V2": {
+          "group": "质量与耐用",
+          "target_code": "EYEWEAR_QUALITY_GENERAL_U1"
+        },
+        "EYEWEAR_PRESSURE_FRICTION_DISCOMFORT": {
+          "group": "使用感受",
+          "target_code": "EYEWEAR_PRESSURE_FRICTION_DISCOMFORT_U1"
+        },
+        "EYEWEAR_TOO_HEAVY": {
+          "group": "使用感受",
+          "target_code": "EYEWEAR_TOO_HEAVY_U1"
+        },
+        "EYEWEAR_COMFORT_UNSPECIFIED": {
+          "group": "使用感受",
+          "target_code": "EYEWEAR_COMFORT_U1"
+        },
+        "EYEWEAR_APPEARANCE_V2": {
+          "group": "外观与款式",
+          "target_code": "EYEWEAR_APPEARANCE_GENERAL_U1"
+        },
+        "EYEWEAR_ARRIVAL_CONDITION": {
+          "group": "履约与售后",
+          "target_code": "EYEWEAR_ARRIVAL_CONDITION_U1"
+        },
+        "EYEWEAR_WRONG_ITEM": {
+          "group": "履约与售后",
+          "target_code": "EYEWEAR_WRONG_ITEM_U1"
+        },
+        "EYEWEAR_MISSING_PARTS": {
+          "group": "履约与售后",
+          "target_code": "EYEWEAR_MISSING_PARTS_U1"
+        },
+        "EYEWEAR_DESCRIPTION_MISMATCH": {
+          "group": "履约与售后",
+          "target_code": "EYEWEAR_DESCRIPTION_MISMATCH_U1"
+        },
+        "EYEWEAR_DELIVERY_ISSUE": {
+          "group": "履约与售后",
+          "target_code": "EYEWEAR_DELIVERY_ISSUE_U1"
+        },
+        "EYEWEAR_AFTERSALES_ISSUE": {
+          "group": "履约与售后",
+          "target_code": "EYEWEAR_SERVICE_U1"
+        },
+        "EYEWEAR_VALUE_NEGATIVE": {
+          "group": "其他反馈",
+          "target_code": "EYEWEAR_VALUE_U1"
+        },
+        "EYEWEAR_BUYER_REASON_V2": {
+          "group": "其他反馈",
+          "target_code": "EYEWEAR_BUYER_REASON_V2_U1"
+        },
+        "EYEWEAR_REASON_UNSPECIFIED": {
+          "group": "其他反馈",
+          "target_code": "EYEWEAR_REASON_UNSPECIFIED_U1"
+        },
+        "EYEWEAR_FIT_POSITIVE": {
+          "group": "尺码与适配",
+          "target_code": "EYEWEAR_FIT_POSITIVE_U1"
+        },
+        "EYEWEAR_PROTECTION_POSITIVE": {
+          "group": "功能表现",
+          "target_code": "EYEWEAR_PROTECTION_POSITIVE_U1"
+        },
+        "EYEWEAR_VISUAL_POSITIVE": {
+          "group": "功能表现",
+          "target_code": "EYEWEAR_VISIBILITY_U1"
+        },
+        "EYEWEAR_RETENTION_POSITIVE": {
+          "group": "功能表现",
+          "target_code": "EYEWEAR_RETENTION_U1"
+        },
+        "EYEWEAR_FOGGING_POSITIVE": {
+          "group": "功能表现",
+          "target_code": "EYEWEAR_FOGGING_PERFORMANCE_U1"
+        },
+        "EYEWEAR_COMFORT_POSITIVE": {
+          "group": "使用感受",
+          "target_code": "EYEWEAR_COMFORT_POSITIVE_U1"
+        },
+        "EYEWEAR_QUALITY_POSITIVE": {
+          "group": "质量与耐用",
+          "target_code": "EYEWEAR_QUALITY_GENERAL_U1"
+        },
+        "EYEWEAR_APPEARANCE_POSITIVE": {
+          "group": "外观与款式",
+          "target_code": "EYEWEAR_APPEARANCE_GENERAL_U1"
+        },
+        "EYEWEAR_ACCESSORY_POSITIVE": {
+          "group": "履约与售后",
+          "target_code": "EYEWEAR_ACCESSORY_POSITIVE_U1"
+        },
+        "EYEWEAR_VALUE_POSITIVE": {
+          "group": "其他反馈",
+          "target_code": "EYEWEAR_VALUE_U1"
+        },
+        "EYEWEAR_OVERALL_POSITIVE": {
+          "group": "其他反馈",
+          "target_code": "EYEWEAR_OVERALL_POSITIVE_U1"
+        }
+      }
+    },
+    {
+      "standard_key": "footwear",
+      "taxonomy_version": "water-shoes-2026-09-06-v3",
+      "labels": {
+        "FIT_TOO_LARGE": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_LARGE_U1"
+        },
+        "FIT_TOO_SMALL": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_SMALL_U1"
+        },
+        "FIT_TOO_LONG": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_LONG_U1"
+        },
+        "FIT_TOO_SHORT": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_SHORT_U1"
+        },
+        "FIT_TOO_TIGHT_NARROW": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_TIGHT_NARROW_U1"
+        },
+        "FIT_TOO_LOOSE_WIDE": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_LOOSE_WIDE_U1"
+        },
+        "FIT_UNSPECIFIED": {
+          "group": "尺码与适配",
+          "target_code": "FIT_UNSPECIFIED_U1"
+        },
+        "FIT_SLIPS_OFF": {
+          "group": "尺码与适配",
+          "target_code": "FIT_SLIPS_OFF_U1"
+        },
+        "FIT_GOOD": {
+          "group": "尺码与适配",
+          "target_code": "FIT_GOOD_U1"
+        },
+        "SIZE_CHART_GUIDANCE": {
+          "group": "尺码与适配",
+          "target_code": "SIZE_CHART_GUIDANCE_U1"
+        },
+        "SIZE_AVAILABILITY": {
+          "group": "尺码与适配",
+          "target_code": "SIZE_AVAILABILITY_U1"
+        },
+        "SIZE_REQUEST": {
+          "group": "其他反馈",
+          "target_code": "SIZE_REQUEST_U1"
+        },
+        "FUNCTION_PROTECTION": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_PROTECTION_U1"
+        },
+        "FUNCTION_SUPPORT": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_SUPPORT_U1"
+        },
+        "FUNCTION_CUSHION": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_CUSHION_U1"
+        },
+        "FUNCTION_QUICK_DRY": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_QUICK_DRY_U1"
+        },
+        "FUNCTION_DRAINAGE": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_DRAINAGE_U1"
+        },
+        "FUNCTION_BREATHABILITY": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_BREATHABILITY_U1"
+        },
+        "FUNCTION_HEAT_INSULATION": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_HEAT_INSULATION_U1"
+        },
+        "FUNCTION_GRIP": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_GRIP_U1"
+        },
+        "FUNCTION_ON_OFF": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_ON_OFF_U1"
+        },
+        "FUNCTION_CLEANING": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_CLEANING_U1"
+        },
+        "FUNCTION_ELASTICITY": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_ELASTICITY_U1"
+        },
+        "FUNCTION_MOVEMENT": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_MOVEMENT_U1"
+        },
+        "QUALITY_HOLE": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_HOLE_U1"
+        },
+        "QUALITY_WEAR": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_WEAR_U1"
+        },
+        "QUALITY_SEAM_FAILURE": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_SEAM_FAILURE_U1"
+        },
+        "QUALITY_TEAR": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_TEAR_U1"
+        },
+        "QUALITY_FALLING_APART": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_FALLING_APART_U1"
+        },
+        "QUALITY_SHEDDING_PILLING": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_SHEDDING_PILLING_U1"
+        },
+        "QUALITY_SEPARATION": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_SEPARATION_U1"
+        },
+        "QUALITY_DURABILITY": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_DURABILITY_U1"
+        },
+        "QUALITY_CHEAP_MATERIAL": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_CHEAP_MATERIAL_U1"
+        },
+        "QUALITY_COLOR_BLEED": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_COLOR_BLEED_U1"
+        },
+        "QUALITY_UNSPECIFIED": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_UNSPECIFIED_U1"
+        },
+        "QUALITY_WORKMANSHIP": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_WORKMANSHIP_U1"
+        },
+        "EXPERIENCE_CHAFING_BLISTER": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_CHAFING_BLISTER_U1"
+        },
+        "EXPERIENCE_SAND_ENTRY": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_SAND_ENTRY_U1"
+        },
+        "EXPERIENCE_ITCHING": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_ITCHING_U1"
+        },
+        "EXPERIENCE_INSOLE_MOVEMENT": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_INSOLE_MOVEMENT_U1"
+        },
+        "EXPERIENCE_THIN": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_THIN_U1"
+        },
+        "EXPERIENCE_ODOR": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_ODOR_U1"
+        },
+        "EXPERIENCE_COMFORT": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_COMFORT_U1"
+        },
+        "EXPERIENCE_WEIGHT": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_WEIGHT_U1"
+        },
+        "APPEARANCE_COLOR_PREFERENCE": {
+          "group": "外观与款式",
+          "target_code": "APPEARANCE_COLOR_PREFERENCE_U1"
+        },
+        "APPEARANCE_COLOR_MISMATCH": {
+          "group": "外观与款式",
+          "target_code": "APPEARANCE_COLOR_MISMATCH_U1"
+        },
+        "APPEARANCE_STYLE": {
+          "group": "外观与款式",
+          "target_code": "APPEARANCE_STYLE_U1"
+        },
+        "OTHER_WRONG_ITEM": {
+          "group": "履约与售后",
+          "target_code": "OTHER_WRONG_ITEM_U1"
+        },
+        "OTHER_QUANTITY_MISMATCH": {
+          "group": "履约与售后",
+          "target_code": "OTHER_QUANTITY_MISMATCH_U1"
+        },
+        "OTHER_USE_SCENARIO": {
+          "group": "其他反馈",
+          "target_code": "OTHER_USE_SCENARIO_U1"
+        },
+        "OTHER_EXPECTATION_UNSPECIFIED": {
+          "group": "其他反馈",
+          "target_code": "OTHER_EXPECTATION_UNSPECIFIED_U1"
+        },
+        "OTHER_DESCRIPTION_MATCH": {
+          "group": "履约与售后",
+          "target_code": "OTHER_DESCRIPTION_MATCH_U1"
+        },
+        "OTHER_DELIVERY_SPEED": {
+          "group": "履约与售后",
+          "target_code": "OTHER_DELIVERY_SPEED_U1"
+        },
+        "OTHER_DELIVERY_LOST": {
+          "group": "履约与售后",
+          "target_code": "OTHER_DELIVERY_LOST_U1"
+        },
+        "OTHER_PACKAGING": {
+          "group": "履约与售后",
+          "target_code": "OTHER_PACKAGING_U1"
+        },
+        "OTHER_CUSTOMER_SERVICE": {
+          "group": "履约与售后",
+          "target_code": "OTHER_CUSTOMER_SERVICE_U1"
+        },
+        "OTHER_BUYER_CHANGED_MIND": {
+          "group": "其他反馈",
+          "target_code": "OTHER_BUYER_CHANGED_MIND_U1"
+        },
+        "OVERALL_POSITIVE": {
+          "group": "其他反馈",
+          "target_code": "OVERALL_POSITIVE_U1"
+        },
+        "FUNCTION_WATERPROOF_REPORT": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_WATERPROOF_REPORT_U1"
+        },
+        "FUNCTION_PORTABILITY": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_PORTABILITY_U1"
+        },
+        "FUNCTION_SAND_RESISTANCE": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_SAND_RESISTANCE_U1"
+        },
+        "QUALITY_DURABLE_POSITIVE": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_DURABLE_POSITIVE_U1"
+        },
+        "QUALITY_COLORFAST_POSITIVE": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_COLORFAST_POSITIVE_U1"
+        },
+        "EXPERIENCE_SOFTNESS": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_SOFTNESS_U1"
+        },
+        "EXPERIENCE_THICK": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_THICK_U1"
+        },
+        "EXPERIENCE_THICKNESS_BALANCED": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_THICKNESS_BALANCED_U1"
+        },
+        "APPEARANCE_EASILY_DIRTY": {
+          "group": "外观与款式",
+          "target_code": "APPEARANCE_EASILY_DIRTY_U1"
+        },
+        "OTHER_ARRIVAL_USED": {
+          "group": "履约与售后",
+          "target_code": "OTHER_ARRIVAL_USED_U1"
+        },
+        "VALUE_PRICE": {
+          "group": "其他反馈",
+          "target_code": "VALUE_PRICE_U1"
+        },
+        "VALUE_FOR_MONEY": {
+          "group": "其他反馈",
+          "target_code": "VALUE_FOR_MONEY_U1"
+        },
+        "OTHER_CHEAPER_ALTERNATIVE": {
+          "group": "其他反馈",
+          "target_code": "OTHER_CHEAPER_ALTERNATIVE_U1"
+        },
+        "OTHER_REPURCHASE_INTENT": {
+          "group": "其他反馈",
+          "target_code": "OTHER_REPURCHASE_INTENT_U1"
+        }
+      }
+    },
+    {
+      "standard_key": "gloves",
+      "taxonomy_version": "gloves-2026-08-10-v1",
+      "labels": {
+        "GLOVE_FIT_SMALL": {
+          "group": "尺码与适配",
+          "target_code": null
+        },
+        "GLOVE_FIT_LARGE": {
+          "group": "尺码与适配",
+          "target_code": null
+        },
+        "GLOVE_FINGER_LENGTH": {
+          "group": "尺码与适配",
+          "target_code": "GLOVE_FINGER_LENGTH_U1"
+        },
+        "GLOVE_WARMTH": {
+          "group": "功能表现",
+          "target_code": "GLOVE_WARMTH_U1"
+        },
+        "GLOVE_WATER_RESISTANCE": {
+          "group": "功能表现",
+          "target_code": "GLOVE_WATER_RESISTANCE_U1"
+        },
+        "GLOVE_GRIP": {
+          "group": "功能表现",
+          "target_code": "GLOVE_GRIP_U1"
+        },
+        "GLOVE_DEXTERITY": {
+          "group": "功能表现",
+          "target_code": null
+        },
+        "GLOVE_COMFORT": {
+          "group": "使用感受",
+          "target_code": null
+        },
+        "GLOVE_QUALITY": {
+          "group": "质量与耐用",
+          "target_code": null
+        },
+        "GLOVE_BUYER_REASON": {
+          "group": "其他反馈",
+          "target_code": null
+        }
+      }
+    },
+    {
+      "standard_key": "gloves",
+      "taxonomy_version": "gloves-taxonomy-v2",
+      "labels": {
+        "GLOVE_SIZE_SMALL": {
+          "group": "尺码与适配",
+          "target_code": "GLOVE_SIZE_SMALL_U1"
+        },
+        "GLOVE_SIZE_LARGE": {
+          "group": "尺码与适配",
+          "target_code": "GLOVE_SIZE_LARGE_U1"
+        },
+        "GLOVE_FIT_TIGHT": {
+          "group": "尺码与适配",
+          "target_code": "GLOVE_FIT_TIGHT_U1"
+        },
+        "GLOVE_FIT_LOOSE": {
+          "group": "尺码与适配",
+          "target_code": "GLOVE_FIT_LOOSE_U1"
+        },
+        "GLOVE_OVERALL_LENGTH": {
+          "group": "尺码与适配",
+          "target_code": "GLOVE_OVERALL_LENGTH_U1"
+        },
+        "GLOVE_FINGER_LENGTH": {
+          "group": "尺码与适配",
+          "target_code": "GLOVE_FINGER_LENGTH_U1"
+        },
+        "GLOVE_FIT_GENERAL": {
+          "group": "尺码与适配",
+          "target_code": "GLOVE_FIT_GENERAL_U1"
+        },
+        "GLOVE_WARMTH": {
+          "group": "功能表现",
+          "target_code": "GLOVE_WARMTH_U1"
+        },
+        "GLOVE_WATER_RESISTANCE": {
+          "group": "功能表现",
+          "target_code": "GLOVE_WATER_RESISTANCE_U1"
+        },
+        "GLOVE_GRIP": {
+          "group": "功能表现",
+          "target_code": "GLOVE_GRIP_U1"
+        },
+        "GLOVE_WIND_RESISTANCE": {
+          "group": "功能表现",
+          "target_code": "GLOVE_WIND_RESISTANCE_U1"
+        },
+        "GLOVE_BREATHABILITY": {
+          "group": "功能表现",
+          "target_code": "GLOVE_BREATHABILITY_U1"
+        },
+        "GLOVE_TOUCHSCREEN": {
+          "group": "功能表现",
+          "target_code": "GLOVE_TOUCHSCREEN_U1"
+        },
+        "GLOVE_HAND_DEXTERITY": {
+          "group": "功能表现",
+          "target_code": "GLOVE_HAND_DEXTERITY_U1"
+        },
+        "GLOVE_ON_OFF_EASE": {
+          "group": "功能表现",
+          "target_code": "GLOVE_ON_OFF_EASE_U1"
+        },
+        "GLOVE_MATERIAL_DAMAGE": {
+          "group": "质量与耐用",
+          "target_code": "GLOVE_MATERIAL_DAMAGE_U1"
+        },
+        "GLOVE_SEAM_FAILURE": {
+          "group": "质量与耐用",
+          "target_code": "GLOVE_SEAM_FAILURE_U1"
+        },
+        "GLOVE_ADHESION_FAILURE": {
+          "group": "质量与耐用",
+          "target_code": "GLOVE_ADHESION_FAILURE_U1"
+        },
+        "GLOVE_SHEDDING_PILLING": {
+          "group": "质量与耐用",
+          "target_code": "GLOVE_SHEDDING_PILLING_U1"
+        },
+        "GLOVE_DURABILITY": {
+          "group": "质量与耐用",
+          "target_code": "GLOVE_DURABILITY_U1"
+        },
+        "GLOVE_MATERIAL_QUALITY": {
+          "group": "质量与耐用",
+          "target_code": "GLOVE_MATERIAL_QUALITY_U1"
+        },
+        "GLOVE_QUALITY_GENERAL": {
+          "group": "质量与耐用",
+          "target_code": "GLOVE_QUALITY_GENERAL_U1"
+        },
+        "GLOVE_COMFORT_GENERAL": {
+          "group": "使用感受",
+          "target_code": "GLOVE_COMFORT_GENERAL_U1"
+        },
+        "GLOVE_SKIN_IRRITATION": {
+          "group": "使用感受",
+          "target_code": "GLOVE_SKIN_IRRITATION_U1"
+        },
+        "GLOVE_LINING_MOVEMENT": {
+          "group": "使用感受",
+          "target_code": "GLOVE_LINING_MOVEMENT_U1"
+        },
+        "GLOVE_BULK_WEIGHT": {
+          "group": "使用感受",
+          "target_code": "GLOVE_BULK_WEIGHT_U1"
+        },
+        "GLOVE_MATERIAL_FEEL": {
+          "group": "使用感受",
+          "target_code": "GLOVE_MATERIAL_FEEL_U1"
+        },
+        "GLOVE_THICKNESS": {
+          "group": "使用感受",
+          "target_code": "GLOVE_THICKNESS_U1"
+        },
+        "GLOVE_ODOR": {
+          "group": "使用感受",
+          "target_code": "GLOVE_ODOR_U1"
+        },
+        "GLOVE_DRYING": {
+          "group": "功能表现",
+          "target_code": "GLOVE_DRYING_U1"
+        },
+        "GLOVE_COLOR": {
+          "group": "外观与款式",
+          "target_code": "GLOVE_COLOR_U1"
+        },
+        "GLOVE_APPEARANCE": {
+          "group": "外观与款式",
+          "target_code": "GLOVE_APPEARANCE_U1"
+        },
+        "ORDER_WRONG_ITEM": {
+          "group": "履约与售后",
+          "target_code": "GLOVE_ORDER_WRONG_ITEM_U1"
+        },
+        "ORDER_QUANTITY_MISMATCH": {
+          "group": "履约与售后",
+          "target_code": "GLOVE_ORDER_QUANTITY_MISMATCH_U1"
+        },
+        "GLOVE_USE_SCENARIO": {
+          "group": "其他反馈",
+          "target_code": "GLOVE_USE_SCENARIO_U1"
+        },
+        "GLOVE_EXPECTATION_MISMATCH": {
+          "group": "其他反馈",
+          "target_code": "GLOVE_EXPECTATION_MISMATCH_U1"
+        },
+        "DELIVERY_ISSUE": {
+          "group": "履约与售后",
+          "target_code": "GLOVE_DELIVERY_ISSUE_U1"
+        },
+        "SERVICE_ISSUE": {
+          "group": "履约与售后",
+          "target_code": "GLOVE_SERVICE_ISSUE_U1"
+        },
+        "BUYER_REASON": {
+          "group": "其他反馈",
+          "target_code": "GLOVE_BUYER_REASON_U1"
+        },
+        "GLOVE_VALUE": {
+          "group": "其他反馈",
+          "target_code": "GLOVE_VALUE_U1"
+        }
+      }
+    },
+    {
+      "standard_key": "footwear",
+      "taxonomy_version": "water-shoes-2026-08-05-v1",
+      "labels": {
+        "FIT_TOO_LARGE": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_LARGE_U1"
+        },
+        "FIT_TOO_SMALL": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_SMALL_U1"
+        },
+        "FIT_TOO_LONG": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_LONG_U1"
+        },
+        "FIT_TOO_SHORT": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_SHORT_U1"
+        },
+        "FIT_TOO_TIGHT_NARROW": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_TIGHT_NARROW_U1"
+        },
+        "FIT_TOO_LOOSE_WIDE": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_LOOSE_WIDE_U1"
+        },
+        "FIT_UNSPECIFIED": {
+          "group": "尺码与适配",
+          "target_code": "FIT_UNSPECIFIED_U1"
+        },
+        "FIT_SLIPS_OFF": {
+          "group": "尺码与适配",
+          "target_code": "FIT_SLIPS_OFF_U1"
+        },
+        "FIT_GOOD": {
+          "group": "尺码与适配",
+          "target_code": "FIT_GOOD_U1"
+        },
+        "SIZE_GUIDANCE_CONFUSING": {
+          "group": "尺码与适配",
+          "target_code": null
+        },
+        "FUNCTION_PROTECTION": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_PROTECTION_U1"
+        },
+        "FUNCTION_SUPPORT_CUSHION": {
+          "group": "功能表现",
+          "target_code": null
+        },
+        "FUNCTION_DRY_DRAINAGE": {
+          "group": "功能表现",
+          "target_code": null
+        },
+        "FUNCTION_BREATHABILITY": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_BREATHABILITY_U1"
+        },
+        "FUNCTION_HEAT_INSULATION": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_HEAT_INSULATION_U1"
+        },
+        "FUNCTION_GRIP": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_GRIP_U1"
+        },
+        "FUNCTION_ON_OFF": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_ON_OFF_U1"
+        },
+        "FUNCTION_CLEANING": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_CLEANING_U1"
+        },
+        "FUNCTION_FLEXIBILITY": {
+          "group": "功能表现",
+          "target_code": null
+        },
+        "QUALITY_HOLE_WEAR": {
+          "group": "质量与耐用",
+          "target_code": null
+        },
+        "QUALITY_STITCH_TEAR": {
+          "group": "质量与耐用",
+          "target_code": null
+        },
+        "QUALITY_SHEDDING_PILLING": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_SHEDDING_PILLING_U1"
+        },
+        "QUALITY_SEPARATION": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_SEPARATION_U1"
+        },
+        "QUALITY_DURABILITY": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_DURABILITY_U1"
+        },
+        "QUALITY_CHEAP_MATERIAL": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_CHEAP_MATERIAL_U1"
+        },
+        "QUALITY_COLOR_BLEED": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_COLOR_BLEED_U1"
+        },
+        "QUALITY_GENERAL": {
+          "group": "质量与耐用",
+          "target_code": null
+        },
+        "EXPERIENCE_CHAFING_BLISTER": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_CHAFING_BLISTER_U1"
+        },
+        "EXPERIENCE_SAND_ENTRY": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_SAND_ENTRY_U1"
+        },
+        "EXPERIENCE_ITCHING": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_ITCHING_U1"
+        },
+        "EXPERIENCE_INSOLE_MOVEMENT": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_INSOLE_MOVEMENT_U1"
+        },
+        "EXPERIENCE_THIN": {
+          "group": "使用感受",
+          "target_code": null
+        },
+        "EXPERIENCE_ODOR": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_ODOR_U1"
+        },
+        "EXPERIENCE_DISCOMFORT": {
+          "group": "使用感受",
+          "target_code": null
+        },
+        "EXPERIENCE_COMFORT_LIGHTWEIGHT": {
+          "group": "使用感受",
+          "target_code": null
+        },
+        "APPEARANCE_COLOR_DISLIKE": {
+          "group": "外观与款式",
+          "target_code": null
+        },
+        "APPEARANCE_OTHER_DISLIKE": {
+          "group": "外观与款式",
+          "target_code": null
+        },
+        "APPEARANCE_LIKE": {
+          "group": "外观与款式",
+          "target_code": null
+        },
+        "OTHER_WRONG_ITEM_QUANTITY": {
+          "group": "其他反馈",
+          "target_code": null
+        },
+        "OTHER_USE_SCENARIO": {
+          "group": "其他反馈",
+          "target_code": null
+        },
+        "OTHER_NOT_AS_EXPECTED": {
+          "group": "其他反馈",
+          "target_code": null
+        },
+        "OTHER_LOGISTICS_SERVICE": {
+          "group": "其他反馈",
+          "target_code": null
+        },
+        "OTHER_BUYER_CHANGED_MIND": {
+          "group": "其他反馈",
+          "target_code": "OTHER_BUYER_CHANGED_MIND_U1"
+        },
+        "OVERALL_POSITIVE": {
+          "group": "其他反馈",
+          "target_code": "OVERALL_POSITIVE_U1"
+        }
+      }
+    },
+    {
+      "standard_key": "footwear",
+      "taxonomy_version": "footwear-taxonomy-v2",
+      "labels": {
+        "FIT_TOO_LARGE": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_LARGE_U1"
+        },
+        "FIT_TOO_SMALL": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_SMALL_U1"
+        },
+        "FIT_TOO_LONG": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_LONG_U1"
+        },
+        "FIT_TOO_SHORT": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_SHORT_U1"
+        },
+        "FIT_TOO_TIGHT_NARROW": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_TIGHT_NARROW_U1"
+        },
+        "FIT_TOO_LOOSE_WIDE": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_LOOSE_WIDE_U1"
+        },
+        "FIT_UNSPECIFIED": {
+          "group": "尺码与适配",
+          "target_code": "FIT_UNSPECIFIED_U1"
+        },
+        "FIT_SLIPS_OFF": {
+          "group": "尺码与适配",
+          "target_code": "FIT_SLIPS_OFF_U1"
+        },
+        "FIT_GOOD": {
+          "group": "尺码与适配",
+          "target_code": "FIT_GOOD_U1"
+        },
+        "SIZE_GUIDANCE_CONFUSING": {
+          "group": "尺码与适配",
+          "target_code": null
+        },
+        "FUNCTION_PROTECTION": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_PROTECTION_U1"
+        },
+        "FUNCTION_SUPPORT_CUSHION": {
+          "group": "功能表现",
+          "target_code": null
+        },
+        "FUNCTION_DRY_DRAINAGE": {
+          "group": "功能表现",
+          "target_code": null
+        },
+        "FUNCTION_BREATHABILITY": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_BREATHABILITY_U1"
+        },
+        "FUNCTION_HEAT_INSULATION": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_HEAT_INSULATION_U1"
+        },
+        "FUNCTION_GRIP": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_GRIP_U1"
+        },
+        "FUNCTION_ON_OFF": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_ON_OFF_U1"
+        },
+        "FUNCTION_CLEANING": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_CLEANING_U1"
+        },
+        "FUNCTION_FLEXIBILITY": {
+          "group": "功能表现",
+          "target_code": null
+        },
+        "QUALITY_HOLE_WEAR": {
+          "group": "质量与耐用",
+          "target_code": null
+        },
+        "QUALITY_STITCH_TEAR": {
+          "group": "质量与耐用",
+          "target_code": null
+        },
+        "QUALITY_SHEDDING_PILLING": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_SHEDDING_PILLING_U1"
+        },
+        "QUALITY_SEPARATION": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_SEPARATION_U1"
+        },
+        "QUALITY_DURABILITY": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_DURABILITY_U1"
+        },
+        "QUALITY_CHEAP_MATERIAL": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_CHEAP_MATERIAL_U1"
+        },
+        "QUALITY_COLOR_BLEED": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_COLOR_BLEED_U1"
+        },
+        "QUALITY_GENERAL": {
+          "group": "质量与耐用",
+          "target_code": null
+        },
+        "EXPERIENCE_CHAFING_BLISTER": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_CHAFING_BLISTER_U1"
+        },
+        "EXPERIENCE_SAND_ENTRY": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_SAND_ENTRY_U1"
+        },
+        "EXPERIENCE_ITCHING": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_ITCHING_U1"
+        },
+        "EXPERIENCE_INSOLE_MOVEMENT": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_INSOLE_MOVEMENT_U1"
+        },
+        "EXPERIENCE_THIN": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_THIN_U1"
+        },
+        "EXPERIENCE_ODOR": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_ODOR_U1"
+        },
+        "EXPERIENCE_DISCOMFORT": {
+          "group": "使用感受",
+          "target_code": null
+        },
+        "EXPERIENCE_COMFORT_LIGHTWEIGHT": {
+          "group": "使用感受",
+          "target_code": null
+        },
+        "APPEARANCE_COLOR_DISLIKE": {
+          "group": "外观与款式",
+          "target_code": null
+        },
+        "APPEARANCE_OTHER_DISLIKE": {
+          "group": "外观与款式",
+          "target_code": null
+        },
+        "APPEARANCE_LIKE": {
+          "group": "外观与款式",
+          "target_code": null
+        },
+        "OTHER_WRONG_ITEM_QUANTITY": {
+          "group": "其他反馈",
+          "target_code": null
+        },
+        "OTHER_USE_SCENARIO": {
+          "group": "其他反馈",
+          "target_code": "OTHER_USE_SCENARIO_U1"
+        },
+        "OTHER_NOT_AS_EXPECTED": {
+          "group": "其他反馈",
+          "target_code": null
+        },
+        "OTHER_LOGISTICS_SERVICE": {
+          "group": "其他反馈",
+          "target_code": null
+        },
+        "OTHER_BUYER_CHANGED_MIND": {
+          "group": "其他反馈",
+          "target_code": "OTHER_BUYER_CHANGED_MIND_U1"
+        },
+        "OVERALL_POSITIVE": {
+          "group": "其他反馈",
+          "target_code": "OVERALL_POSITIVE_U1"
+        }
+      }
+    },
+    {
+      "standard_key": "footwear",
+      "taxonomy_version": "footwear-taxonomy-v3",
+      "labels": {
+        "FIT_TOO_LARGE": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_LARGE_U1"
+        },
+        "FIT_TOO_SMALL": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_SMALL_U1"
+        },
+        "FIT_TOO_LONG": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_LONG_U1"
+        },
+        "FIT_TOO_SHORT": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_SHORT_U1"
+        },
+        "FIT_TOO_TIGHT_NARROW": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_TIGHT_NARROW_U1"
+        },
+        "FIT_TOO_LOOSE_WIDE": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_LOOSE_WIDE_U1"
+        },
+        "FIT_UNSPECIFIED": {
+          "group": "尺码与适配",
+          "target_code": "FIT_UNSPECIFIED_U1"
+        },
+        "FIT_SLIPS_OFF": {
+          "group": "尺码与适配",
+          "target_code": "FIT_SLIPS_OFF_U1"
+        },
+        "FIT_GOOD": {
+          "group": "尺码与适配",
+          "target_code": "FIT_GOOD_U1"
+        },
+        "SIZE_GUIDANCE_CONFUSING": {
+          "group": "尺码与适配",
+          "target_code": null
+        },
+        "FUNCTION_PROTECTION": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_PROTECTION_U1"
+        },
+        "FUNCTION_SUPPORT_CUSHION": {
+          "group": "功能表现",
+          "target_code": null
+        },
+        "FUNCTION_DRY_DRAINAGE": {
+          "group": "功能表现",
+          "target_code": null
+        },
+        "FUNCTION_BREATHABILITY": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_BREATHABILITY_U1"
+        },
+        "FUNCTION_HEAT_INSULATION": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_HEAT_INSULATION_U1"
+        },
+        "FUNCTION_GRIP": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_GRIP_U1"
+        },
+        "FUNCTION_ON_OFF": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_ON_OFF_U1"
+        },
+        "FUNCTION_CLEANING": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_CLEANING_U1"
+        },
+        "FUNCTION_FLEXIBILITY": {
+          "group": "功能表现",
+          "target_code": null
+        },
+        "QUALITY_HOLE_WEAR": {
+          "group": "质量与耐用",
+          "target_code": null
+        },
+        "QUALITY_STITCH_TEAR": {
+          "group": "质量与耐用",
+          "target_code": null
+        },
+        "QUALITY_SHEDDING_PILLING": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_SHEDDING_PILLING_U1"
+        },
+        "QUALITY_SEPARATION": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_SEPARATION_U1"
+        },
+        "QUALITY_DURABILITY": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_DURABILITY_U1"
+        },
+        "QUALITY_CHEAP_MATERIAL": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_CHEAP_MATERIAL_U1"
+        },
+        "QUALITY_COLOR_BLEED": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_COLOR_BLEED_U1"
+        },
+        "QUALITY_GENERAL": {
+          "group": "质量与耐用",
+          "target_code": null
+        },
+        "EXPERIENCE_CHAFING_BLISTER": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_CHAFING_BLISTER_U1"
+        },
+        "EXPERIENCE_SAND_ENTRY": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_SAND_ENTRY_U1"
+        },
+        "EXPERIENCE_ITCHING": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_ITCHING_U1"
+        },
+        "EXPERIENCE_INSOLE_MOVEMENT": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_INSOLE_MOVEMENT_U1"
+        },
+        "EXPERIENCE_THIN": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_THIN_U1"
+        },
+        "EXPERIENCE_ODOR": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_ODOR_U1"
+        },
+        "EXPERIENCE_DISCOMFORT": {
+          "group": "使用感受",
+          "target_code": null
+        },
+        "EXPERIENCE_COMFORT_LIGHTWEIGHT": {
+          "group": "使用感受",
+          "target_code": null
+        },
+        "APPEARANCE_COLOR_DISLIKE": {
+          "group": "外观与款式",
+          "target_code": null
+        },
+        "APPEARANCE_OTHER_DISLIKE": {
+          "group": "外观与款式",
+          "target_code": null
+        },
+        "APPEARANCE_LIKE": {
+          "group": "外观与款式",
+          "target_code": null
+        },
+        "OTHER_WRONG_ITEM_QUANTITY": {
+          "group": "其他反馈",
+          "target_code": null
+        },
+        "OTHER_USE_SCENARIO": {
+          "group": "其他反馈",
+          "target_code": "OTHER_USE_SCENARIO_U1"
+        },
+        "OTHER_NOT_AS_EXPECTED": {
+          "group": "其他反馈",
+          "target_code": null
+        },
+        "OTHER_LOGISTICS_SERVICE": {
+          "group": "其他反馈",
+          "target_code": null
+        },
+        "OTHER_BUYER_CHANGED_MIND": {
+          "group": "其他反馈",
+          "target_code": "OTHER_BUYER_CHANGED_MIND_U1"
+        },
+        "OVERALL_POSITIVE": {
+          "group": "其他反馈",
+          "target_code": "OVERALL_POSITIVE_U1"
+        }
+      }
+    },
+    {
+      "standard_key": "footwear",
+      "taxonomy_version": "footwear-taxonomy-v4",
+      "labels": {
+        "FIT_TOO_LARGE": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_LARGE_U1"
+        },
+        "FIT_TOO_SMALL": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_SMALL_U1"
+        },
+        "FIT_TOO_LONG": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_LONG_U1"
+        },
+        "FIT_TOO_SHORT": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_SHORT_U1"
+        },
+        "FIT_TOO_TIGHT_NARROW": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_TIGHT_NARROW_U1"
+        },
+        "FIT_TOO_LOOSE_WIDE": {
+          "group": "尺码与适配",
+          "target_code": "FIT_TOO_LOOSE_WIDE_U1"
+        },
+        "FIT_UNSPECIFIED": {
+          "group": "尺码与适配",
+          "target_code": "FIT_UNSPECIFIED_U1"
+        },
+        "FIT_SLIPS_OFF": {
+          "group": "尺码与适配",
+          "target_code": "FIT_SLIPS_OFF_U1"
+        },
+        "FIT_GOOD": {
+          "group": "尺码与适配",
+          "target_code": "FIT_GOOD_U1"
+        },
+        "SIZE_CHART_GUIDANCE": {
+          "group": "尺码与适配",
+          "target_code": "SIZE_CHART_GUIDANCE_U1"
+        },
+        "SIZE_AVAILABILITY": {
+          "group": "尺码与适配",
+          "target_code": "SIZE_AVAILABILITY_U1"
+        },
+        "SIZE_REQUEST": {
+          "group": "其他反馈",
+          "target_code": "SIZE_REQUEST_U1"
+        },
+        "FUNCTION_PROTECTION": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_PROTECTION_U1"
+        },
+        "FUNCTION_SUPPORT": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_SUPPORT_U1"
+        },
+        "FUNCTION_CUSHION": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_CUSHION_U1"
+        },
+        "FUNCTION_QUICK_DRY": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_QUICK_DRY_U1"
+        },
+        "FUNCTION_DRAINAGE": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_DRAINAGE_U1"
+        },
+        "FUNCTION_BREATHABILITY": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_BREATHABILITY_U1"
+        },
+        "FUNCTION_HEAT_INSULATION": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_HEAT_INSULATION_U1"
+        },
+        "FUNCTION_GRIP": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_GRIP_U1"
+        },
+        "FUNCTION_ON_OFF": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_ON_OFF_U1"
+        },
+        "FUNCTION_CLEANING": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_CLEANING_U1"
+        },
+        "FUNCTION_ELASTICITY": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_ELASTICITY_U1"
+        },
+        "FUNCTION_MOVEMENT": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_MOVEMENT_U1"
+        },
+        "QUALITY_HOLE": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_HOLE_U1"
+        },
+        "QUALITY_WEAR": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_WEAR_U1"
+        },
+        "QUALITY_SEAM_FAILURE": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_SEAM_FAILURE_U1"
+        },
+        "QUALITY_TEAR": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_TEAR_U1"
+        },
+        "QUALITY_FALLING_APART": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_FALLING_APART_U1"
+        },
+        "QUALITY_SHEDDING_PILLING": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_SHEDDING_PILLING_U1"
+        },
+        "QUALITY_SEPARATION": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_SEPARATION_U1"
+        },
+        "QUALITY_DURABILITY": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_DURABILITY_U1"
+        },
+        "QUALITY_CHEAP_MATERIAL": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_CHEAP_MATERIAL_U1"
+        },
+        "QUALITY_COLOR_BLEED": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_COLOR_BLEED_U1"
+        },
+        "QUALITY_UNSPECIFIED": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_UNSPECIFIED_U1"
+        },
+        "QUALITY_WORKMANSHIP": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_WORKMANSHIP_U1"
+        },
+        "EXPERIENCE_CHAFING_BLISTER": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_CHAFING_BLISTER_U1"
+        },
+        "EXPERIENCE_SAND_ENTRY": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_SAND_ENTRY_U1"
+        },
+        "EXPERIENCE_ITCHING": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_ITCHING_U1"
+        },
+        "EXPERIENCE_INSOLE_MOVEMENT": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_INSOLE_MOVEMENT_U1"
+        },
+        "EXPERIENCE_THIN": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_THIN_U1"
+        },
+        "EXPERIENCE_ODOR": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_ODOR_U1"
+        },
+        "EXPERIENCE_COMFORT": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_COMFORT_U1"
+        },
+        "EXPERIENCE_WEIGHT": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_WEIGHT_U1"
+        },
+        "APPEARANCE_COLOR_PREFERENCE": {
+          "group": "外观与款式",
+          "target_code": "APPEARANCE_COLOR_PREFERENCE_U1"
+        },
+        "APPEARANCE_COLOR_MISMATCH": {
+          "group": "外观与款式",
+          "target_code": "APPEARANCE_COLOR_MISMATCH_U1"
+        },
+        "APPEARANCE_STYLE": {
+          "group": "外观与款式",
+          "target_code": "APPEARANCE_STYLE_U1"
+        },
+        "OTHER_WRONG_ITEM": {
+          "group": "履约与售后",
+          "target_code": "OTHER_WRONG_ITEM_U1"
+        },
+        "OTHER_QUANTITY_MISMATCH": {
+          "group": "履约与售后",
+          "target_code": "OTHER_QUANTITY_MISMATCH_U1"
+        },
+        "OTHER_USE_SCENARIO": {
+          "group": "其他反馈",
+          "target_code": "OTHER_USE_SCENARIO_U1"
+        },
+        "OTHER_EXPECTATION_UNSPECIFIED": {
+          "group": "其他反馈",
+          "target_code": "OTHER_EXPECTATION_UNSPECIFIED_U1"
+        },
+        "OTHER_DESCRIPTION_MATCH": {
+          "group": "履约与售后",
+          "target_code": "OTHER_DESCRIPTION_MATCH_U1"
+        },
+        "OTHER_DELIVERY_SPEED": {
+          "group": "履约与售后",
+          "target_code": "OTHER_DELIVERY_SPEED_U1"
+        },
+        "OTHER_DELIVERY_LOST": {
+          "group": "履约与售后",
+          "target_code": "OTHER_DELIVERY_LOST_U1"
+        },
+        "OTHER_PACKAGING": {
+          "group": "履约与售后",
+          "target_code": "OTHER_PACKAGING_U1"
+        },
+        "OTHER_CUSTOMER_SERVICE": {
+          "group": "履约与售后",
+          "target_code": "OTHER_CUSTOMER_SERVICE_U1"
+        },
+        "OTHER_BUYER_CHANGED_MIND": {
+          "group": "其他反馈",
+          "target_code": "OTHER_BUYER_CHANGED_MIND_U1"
+        },
+        "OVERALL_POSITIVE": {
+          "group": "其他反馈",
+          "target_code": "OVERALL_POSITIVE_U1"
+        },
+        "FUNCTION_WATERPROOF_REPORT": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_WATERPROOF_REPORT_U1"
+        },
+        "FUNCTION_PORTABILITY": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_PORTABILITY_U1"
+        },
+        "FUNCTION_SAND_RESISTANCE": {
+          "group": "功能表现",
+          "target_code": "FUNCTION_SAND_RESISTANCE_U1"
+        },
+        "QUALITY_DURABLE_POSITIVE": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_DURABLE_POSITIVE_U1"
+        },
+        "QUALITY_COLORFAST_POSITIVE": {
+          "group": "质量与耐用",
+          "target_code": "QUALITY_COLORFAST_POSITIVE_U1"
+        },
+        "EXPERIENCE_SOFTNESS": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_SOFTNESS_U1"
+        },
+        "EXPERIENCE_THICK": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_THICK_U1"
+        },
+        "EXPERIENCE_THICKNESS_BALANCED": {
+          "group": "使用感受",
+          "target_code": "EXPERIENCE_THICKNESS_BALANCED_U1"
+        },
+        "APPEARANCE_EASILY_DIRTY": {
+          "group": "外观与款式",
+          "target_code": "APPEARANCE_EASILY_DIRTY_U1"
+        },
+        "OTHER_ARRIVAL_USED": {
+          "group": "履约与售后",
+          "target_code": "OTHER_ARRIVAL_USED_U1"
+        },
+        "VALUE_PRICE": {
+          "group": "其他反馈",
+          "target_code": "VALUE_PRICE_U1"
+        },
+        "VALUE_FOR_MONEY": {
+          "group": "其他反馈",
+          "target_code": "VALUE_FOR_MONEY_U1"
+        },
+        "OTHER_CHEAPER_ALTERNATIVE": {
+          "group": "其他反馈",
+          "target_code": "OTHER_CHEAPER_ALTERNATIVE_U1"
+        },
+        "OTHER_REPURCHASE_INTENT": {
+          "group": "其他反馈",
+          "target_code": "OTHER_REPURCHASE_INTENT_U1"
+        }
+      }
+    }
+  ]
+}

@@ -1,6 +1,26 @@
+from datetime import date
 from typing import Literal
 
 from pydantic import BaseModel, Field
+
+from return_semantics.schemas import LabelExample
+
+
+class MySQLReturnImportRequest(BaseModel):
+    mapping: dict[str, str] = Field(max_length=10)
+    default_store: str = Field(default="", max_length=100)
+    date_from: date | None = None
+    date_to: date | None = None
+    store: str = Field(default="", max_length=100)
+    sku: str = Field(default="", max_length=200)
+
+
+class ReturnImportRequest(BaseModel):
+    inspection_id: str = Field(min_length=1, max_length=100)
+    mode: str
+    dataset_id: str = Field(default="", max_length=100)
+    name: str = Field(default="", max_length=100)
+    change_note: str = Field(default="", max_length=500)
 
 
 class LoginRequest(BaseModel):
@@ -150,6 +170,11 @@ class TaskActionRequest(BaseModel):
     note: str = Field(min_length=1, max_length=500)
 
 
+class TaskArchiveRequest(BaseModel):
+    task_ids: list[str] = Field(min_length=1, max_length=100)
+    archived: bool
+
+
 class ReviewResolveRequest(BaseModel):
     expected_revision: int = Field(ge=1)
     label_code: str | None = Field(default=None, max_length=100)
@@ -196,14 +221,19 @@ class ClassificationStandardLabelRequest(BaseModel):
     group: str = Field(min_length=1, max_length=100)
     description: str = Field(min_length=1, max_length=500)
     keywords: list[str] = Field(default_factory=list, max_length=100)
+    exclusions: list[str] = Field(default_factory=list, max_length=10)
+    examples: list[LabelExample] = Field(default_factory=list, max_length=10)
     allowed_sentiments: list[str] = Field(min_length=1, max_length=3)
+    allowed_claim_ids: list[str] | None = None
 
 
 class ClassificationStandardDraftContentRequest(BaseModel):
+    recognition_profile: Literal["legacy_v3", "semantic_v1"] = "legacy_v3"
     name: str = Field(min_length=1, max_length=120)
     product_context: str = Field(min_length=1, max_length=500)
     instructions: list[str] = Field(max_length=100)
     allowed_parts: list[str] = Field(min_length=1, max_length=50)
+    validation_rules: dict[str, object] = Field(default_factory=dict)
     variants: list[ClassificationStandardVariantRequest] = Field(
         min_length=1,
         max_length=200,
@@ -249,9 +279,17 @@ class ClassificationStandardDraftActionRequest(BaseModel):
 
 
 class ClassificationStandardSampleValidationRequest(BaseModel):
+    comparison_type: Literal["standard_version", "keyword_ab", "semantic_ab"] = (
+        "standard_version"
+    )
     expected_revision: int = Field(ge=1)
     source_result_version_id: str = Field(min_length=1, max_length=120)
     sample_size: Literal[20, 50, 100] = 20
+
+
+class ClassificationStandardValidationApprovalRequest(BaseModel):
+    expected_revision: int = Field(ge=1)
+    note: str = Field(min_length=1, max_length=500)
 
 
 DashboardFilterValue = str | list[str] | None
@@ -278,6 +316,10 @@ class DashboardVersionCreateRequest(DashboardPlanRequest):
 class InsightReportGenerateRequest(BaseModel):
     model_id: str = Field(min_length=1, max_length=120)
     reasoning_effort: str = Field(min_length=1, max_length=20)
+
+
+class InsightReportIssueDecisionRequest(BaseModel):
+    status: Literal["pending", "ignored", "watching", "verify"]
 
 
 class InsightReportFromResultsRequest(DashboardPlanRequest):
@@ -307,3 +349,9 @@ class CategoryCompletionRequest(BaseModel):
     store: str = Field(default="", max_length=100)
     items: list[CategoryCompletionItem] = Field(min_length=1, max_length=500)
     change_note: str = Field(min_length=1, max_length=500)
+
+
+class DatasetStorageCleanupRequest(BaseModel):
+    dataset_ids: list[str] = Field(min_length=1, max_length=100)
+    retention_days: int = Field(default=30, ge=7, le=3650)
+    retain_latest: int = Field(default=2, ge=1, le=50)

@@ -82,7 +82,7 @@ def _build_detail_rows(
                     result.primary_label_codes if result else [],
                     label_names,
                 ),
-                "部位": " | ".join(unit.part.value for unit in units),
+                "部位": " | ".join(unit.part for unit in units),
                 "证据原文": " | ".join(unit.evidence for unit in units),
                 "Listing承诺关系": " | ".join(
                     unit.claim_relation.value for unit in units
@@ -124,7 +124,7 @@ def _build_semantic_rows(
                     "观点": unit.opinion,
                     "正负面": unit.sentiment.value,
                     "断言状态": unit.assertion.value,
-                    "部位": unit.part.value,
+                    "部位": unit.part,
                     "证据原文": unit.evidence,
                     "是否隐含": unit.implicit,
                     "Listing承诺关系": unit.claim_relation.value,

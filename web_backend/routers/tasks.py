@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from web_backend.analysis_service import AnalysisFilters, AnalysisService
 from web_backend.api_schemas import (
     TaskActionRequest,
+    TaskArchiveRequest,
     TaskCreateRequest,
     TaskParallelismRequest,
     TaskPreflightRequest,
@@ -80,8 +81,13 @@ def create_task_router(
         _user: User,
         status: str | None = Query(default=None),
         owner_id: str | None = Query(default=None),
+        include_archived: bool = Query(default=False),
     ) -> list[dict[str, Any]]:
-        return task_service.list(status=status, owner_id=owner_id)
+        return task_service.list(
+            status=status,
+            owner_id=owner_id,
+            include_archived=include_archived,
+        )
 
     @router.post("/api/tasks/preflight")
     def preflight_task(
@@ -99,6 +105,20 @@ def create_task_router(
             return task_service.create(actor_id=str(user["id"]), **payload.model_dump())
         except TaskPlanConflict as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.post("/api/tasks/archive")
+    def archive_tasks(
+        payload: TaskArchiveRequest,
+        user: User,
+    ) -> list[dict[str, Any]]:
+        try:
+            return task_service.set_archived(
+                task_ids=payload.task_ids,
+                archived=payload.archived,
+                actor_id=str(user["id"]),
+            )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 

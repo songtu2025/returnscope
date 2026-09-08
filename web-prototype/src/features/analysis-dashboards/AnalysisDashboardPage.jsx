@@ -35,6 +35,7 @@ function routeState(query) {
     dashboardId: query.dashboard || "",
     versionId: query.version || "",
     reportId: query.report || "",
+    issueId: query.issue || "",
     tab: TABS.has(query.tab) ? query.tab : "overview",
     selectionToken: query.selection_token || "",
     step: ["check", "conflicts", "confirm"].includes(query.step) ? query.step : "check",
@@ -61,6 +62,7 @@ function writeRoute(route, options) {
       dashboard: route.dashboardId,
       version: route.versionId,
       report: route.reportId,
+      issue: route.issueId,
       tab: route.tab === "overview" ? "" : route.tab,
       selection_token: route.selectionToken,
       step: route.selectionToken && route.step !== "check" ? route.step : "",
@@ -84,9 +86,13 @@ function writeRoute(route, options) {
 
 export function AnalysisDashboardPage({ route: appRoute, notify, userId }) {
   const route = routeState(appRoute?.query ?? {});
+  const routeRef = useRef(route);
+  useEffect(() => {
+    routeRef.current = route;
+  }, [route]);
   const updateRoute = useCallback(
-    (changes, options) => writeRoute({ ...route, ...changes }, options),
-    [route],
+    (changes, options) => writeRoute({ ...routeRef.current, ...changes }, options),
+    [],
   );
 
   if (route.dashboardId) {

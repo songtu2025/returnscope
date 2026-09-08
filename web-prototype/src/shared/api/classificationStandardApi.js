@@ -61,8 +61,33 @@ export const classificationStandardApi = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  createReviewStandardValidationRun: (
+    draftId,
+    file,
+    revision,
+    sampleSize,
+    comparisonType = "standard_version",
+  ) => {
+    const body = new FormData();
+    body.append("file", file);
+    body.append("expected_revision", revision);
+    body.append("sample_size", sampleSize);
+    body.append("comparison_type", comparisonType);
+    return request(
+      `/api/classification-standard-drafts/${draftId}/review-validation-runs`,
+      {
+        method: "POST",
+        body,
+      },
+    );
+  },
   classificationStandardValidationRun: (runId) =>
     request(`/api/classification-standard-validation-runs/${runId}`),
+  approveClassificationStandardValidationRun: (runId, payload) =>
+    request(`/api/classification-standard-validation-runs/${runId}/approve`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   resultTaxonomy: (resultVersionId, options = {}) =>
     request(`/api/classification-results/${resultVersionId}/taxonomy`, options),
 };

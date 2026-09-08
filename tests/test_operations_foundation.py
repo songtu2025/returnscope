@@ -380,7 +380,7 @@ def test_data_quality_cache_is_bounded_invalidates_and_isolation_safe(
         context,
         tmp_path,
     )
-    real_loader = data_quality_module.load_return_dataset_auto
+    real_loader = data_quality_module.load_cached_dataset
     calls = 0
 
     def counting_loader(*args, **kwargs):
@@ -389,7 +389,7 @@ def test_data_quality_cache_is_bounded_invalidates_and_isolation_safe(
         return real_loader(*args, **kwargs)
 
     monkeypatch.setattr(
-        data_quality_module, "load_return_dataset_auto", counting_loader
+        data_quality_module, "load_cached_dataset", counting_loader
     )
     service = DataQualityService(context.database)
     first = service.preflight(returns_id, products_id)
@@ -729,6 +729,10 @@ def test_new_read_apis_require_login_and_keep_pagination_contract(
     )
     assert references.status_code == 200
     assert references.json()["page_size"] == 1
+    managed_returns = client.get(
+        "/api/datasets?kind=returns&usage_scope=managed"
+    ).json()
+    assert managed_returns[0]["task_reference_count"] == references.json()["total"]
     assert client.get("/api/audit-logs?page=1&page_size=1").status_code == 200
     invalid_date = client.get("/api/audit-logs?date_to=2026-02-30")
     assert invalid_date.status_code == 400

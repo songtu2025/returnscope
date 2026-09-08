@@ -943,8 +943,7 @@ class TaskService:
                 """,
                 (
                     task_id,
-                    title.strip()
-                    or f"{'自动识别' if clean_store == 'AUTO' else clean_store} 退货语义分析",
+                    title.strip() or f"{returns['dataset_name']} · 分析任务",
                     actor_id,
                     dataset_version_id,
                     product_version_id,
@@ -1079,6 +1078,7 @@ class TaskService:
         self,
         status: str | None = None,
         owner_id: str | None = None,
+        include_archived: bool = False,
     ) -> list[dict[str, Any]]:
         query = """
             SELECT t.*, u.display_name AS owner_name,
@@ -1086,6 +1086,13 @@ class TaskService:
                    pd.name AS product_name, pv.version AS product_version,
                    c.name AS connection_name, cv.version AS config_version,
                    cv.primary_model,
+                   COALESCE(t.completed_at, t.heartbeat_at, t.started_at,
+                            t.created_at) AS updated_at,
+                   (SELECT COUNT(*) FROM task_segments segment
+                    WHERE segment.task_id = t.id) AS listing_count,
+                   (SELECT GROUP_CONCAT(segment.scope_json, ' ')
+                    FROM task_segments segment
+                    WHERE segment.task_id = t.id) AS listing_search_text,
                    CASE WHEN t.status = 'queued' THEN (
                        SELECT COUNT(*) + 1 FROM tasks q
                        WHERE q.status = 'queued' AND q.created_at < t.created_at
@@ -1107,10 +1114,29 @@ class TaskService:
         if owner_id:
             query += " AND t.owner_id = ?"
             params.append(owner_id)
+        if not include_archived:
+            query += " AND t.archived_at IS NULL"
         query += " ORDER BY t.created_at DESC"
         with self.database.connect() as connection:
             rows = connection.execute(query, tuple(params)).fetchall()
-        return [self._serialize(dict(row)) for row in rows]
+            items = {row["id"]: self._serialize(dict(row)) for row in rows}
+            for item in items.values():
+                item["segments"] = []
+            # 一次读取列表所需的执行与结果状态，避免逐任务加载完整详情。
+            segments = connection.execute(
+                """
+                SELECT task_id, agent_key, status, result_publish_status,
+                       result_version_id, result_quality_status,
+                       result_file_path, error, model_failures
+                FROM task_segments
+                WHERE task_id IN (SELECT value FROM json_each(?))
+                """,
+                (json_text(list(items)),),
+            ).fetchall()
+            for segment in segments:
+                value = dict(segment)
+                items[value.pop("task_id")]["segments"].append(value)
+        return list(items.values())
 
     def get(self, task_id: str) -> dict[str, Any] | None:
         with self.database.connect() as connection:
@@ -1226,6 +1252,87 @@ class TaskService:
         item["owner_running_segments"] = owner_running
         item["owner_segment_limit"] = SEGMENT_USER_LIMIT
         return item
+
+    def set_archived(
+        self,
+        task_ids: list[str],
+        archived: bool,
+        actor_id: str,
+    ) -> list[dict[str, Any]]:
+        unique_ids = list(dict.fromkeys(task_ids))
+        if not unique_ids:
+            raise ValueError("请选择任务")
+        placeholders = ",".join("?" for _ in unique_ids)
+        now = utc_now()
+        with self.database.transaction(immediate=True) as connection:
+            rows = connection.execute(
+                f"""
+                SELECT id, status, stage, archived_at
+                FROM tasks
+                WHERE id IN ({placeholders})
+                """,
+                tuple(unique_ids),
+            ).fetchall()
+            rows_by_id = {str(row["id"]): row for row in rows}
+            missing = [task_id for task_id in unique_ids if task_id not in rows_by_id]
+            if missing:
+                raise ValueError("部分任务不存在")
+            if archived:
+                invalid = [
+                    task_id
+                    for task_id in unique_ids
+                    if rows_by_id[task_id]["status"] not in FINAL_STATUSES
+                ]
+                if invalid:
+                    raise ValueError("仅已结束任务可以归档")
+
+            action = "archive" if archived else "restore"
+            event_type = "task_archived" if archived else "task_restored"
+            message = "任务已归档" if archived else "任务已恢复"
+            for task_id in unique_ids:
+                row = rows_by_id[task_id]
+                was_archived = bool(row["archived_at"])
+                if was_archived == archived:
+                    continue
+                connection.execute(
+                    """
+                    UPDATE tasks
+                    SET archived_at = ?, archived_by = ?, revision = revision + 1
+                    WHERE id = ?
+                    """,
+                    (now if archived else None, actor_id if archived else None, task_id),
+                )
+                event_data = {
+                    "before": {"archived": was_archived},
+                    "after": {"archived": archived},
+                }
+                connection.execute(
+                    """
+                    INSERT INTO task_events(
+                        task_id, event_type, stage, message, actor_id,
+                        data_json, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        task_id,
+                        event_type,
+                        row["stage"],
+                        message,
+                        actor_id,
+                        json_text(event_data),
+                        now,
+                    ),
+                )
+                self._insert_audit(
+                    connection,
+                    task_id,
+                    action,
+                    actor_id,
+                    event_data["before"],
+                    event_data["after"],
+                    now,
+                )
+        return [self.get(task_id) or {} for task_id in unique_ids]
 
     def events(self, task_id: str, after_id: int = 0) -> list[dict[str, Any]]:
         with self.database.connect() as connection:

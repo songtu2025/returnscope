@@ -20,7 +20,7 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
 
 @pytest.fixture(scope="session")
 def taxonomy():
-    return load_taxonomy(PROJECT_ROOT / "config" / "taxonomy_water_shoes.json")
+    return load_taxonomy(PROJECT_ROOT / "tests/fixtures/taxonomy_water_shoes_legacy.json")
 
 
 @pytest.fixture(scope="session")

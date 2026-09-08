@@ -10,11 +10,15 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from web_backend.classification_standard_service import (
+    CLASSIFICATION_STANDARD_RULES_MIGRATION,
     ClassificationStandardConflict,
     ClassificationStandardNotFound,
     ClassificationStandardService,
+    ClassificationStandardValidationError,
 )
 from web_backend.database import Database
+from return_semantics.schemas import TaxonomyConfig
+from return_semantics.prompt import recognition_fingerprint
 from web_backend.routers.classification_standards import (
     create_classification_standard_router,
 )
@@ -38,7 +42,7 @@ def _mark_sample_validation_ready(
     service: ClassificationStandardService,
     draft: dict[str, object],
 ) -> str:
-    run_id = "standard-validation-ready"
+    run_id = f"standard-validation-ready-{draft['id']}-{draft['revision']}"
     with service.database.transaction() as connection:
         connection.execute(
             """
@@ -47,10 +51,11 @@ def _mark_sample_validation_ready(
                 base_version_id, source_result_version_id,
                 config_version_id, status, stage, sample_size,
                 processed_count, snapshot_json, source_json, sample_json,
-                created_by, created_at, completed_at
+                created_by, created_at, completed_at,
+                approved_by, approved_at, approval_note
             ) VALUES (?, ?, ?, ?, ?, 'source-version', 'config-version',
-                      'completed', 'completed', 1, 1, '{}', '{}', '[]',
-                      'user-1', 'now', 'now')
+                      'completed', 'completed', 1, 1, '{}', ?, '[]',
+                      'user-1', 'now', 'now', 'user-1', 'now', '测试确认')
             """,
             (
                 run_id,
@@ -58,6 +63,9 @@ def _mark_sample_validation_ready(
                 draft["id"],
                 draft["revision"],
                 draft["base_version_id"],
+                json.dumps({"comparison_type": "standard_version", "recognition_contract": {
+                    "candidate": {"fingerprint": recognition_fingerprint(TaxonomyConfig.model_validate(draft["snapshot"]["taxonomy"]))}
+                }}),
             ),
         )
     return run_id
@@ -71,6 +79,44 @@ def test_active_registry_requires_initialized_database(tmp_path: Path) -> None:
         service.active_registry()
 
 
+def test_draft_roundtrip_preserves_new_label_claim_bindings(tmp_path: Path) -> None:
+    from web_backend.api_schemas import ClassificationStandardDraftUpdateRequest
+
+    service = _service(tmp_path)
+    standard = next(
+        item for item in service.list() if item["standard_key"] == "footwear"
+    )
+    draft = service.create_draft(standard["id"], "user-1")
+    content = service._editable_content(draft["snapshot"])
+    label = deepcopy(
+        next(item for item in content["labels"] if item["code"] == "FUNCTION_QUICK_DRY_U1")
+    )
+    label["code"] = "TEST_DRYING_VARIANT"
+    content["labels"].append(label)
+    request = ClassificationStandardDraftUpdateRequest(
+        expected_revision=draft["revision"],
+        content=content,
+        change_reason="验证声明引用",
+    )
+    updated = service.update_draft(
+        draft["id"],
+        request.expected_revision,
+        request.content.model_dump(),
+        request.change_reason,
+        "user-1",
+    )
+    actual = next(
+        item
+        for item in updated["snapshot"]["taxonomy"]["labels"]
+        if item["code"] == label["code"]
+    )
+    assert actual["allowed_claim_ids"] == ["CLM_DRY_01"]
+    exported = service._editable_content(updated["snapshot"])
+    assert next(item for item in exported["labels"] if item["code"] == label["code"])[
+        "allowed_claim_ids"
+    ] == ["CLM_DRY_01"]
+
+
 def test_existing_category_config_is_imported_as_published_standards(
     tmp_path: Path,
 ) -> None:
@@ -78,13 +124,11 @@ def test_existing_category_config_is_imported_as_published_standards(
 
     standards = service.list()
     with service.database.connect() as connection:
-        migration = connection.execute(
-            "SELECT * FROM app_migrations"
-        ).fetchone()
+        migration = connection.execute("SELECT * FROM app_migrations").fetchone()
 
     assert len(standards) == 4
     assert sum(item["category_count"] for item in standards) == 24
-    assert sum(item["label_count"] for item in standards) == 70
+    assert sum(item["label_count"] for item in standards) == 158
     assert {item["standard_key"] for item in standards} == {
         "eyewear",
         "footwear",
@@ -93,9 +137,7 @@ def test_existing_category_config_is_imported_as_published_standards(
     }
     assert all(item["status"] == "active" for item in standards)
     assert migration is not None
-    assert migration["migration_id"] == (
-        "20260824_01_seed_classification_standards"
-    )
+    assert migration["migration_id"] == ("20260824_01_seed_classification_standards")
     assert migration["status"] == "applied"
     assert len(migration["checksum"]) == 64
 
@@ -124,9 +166,7 @@ def test_existing_standards_are_baselined_without_reimport(tmp_path: Path) -> No
         item for item in restored.list() if item["standard_key"] == "footwear"
     )
     with service.database.connect() as connection:
-        migration = connection.execute(
-            "SELECT * FROM app_migrations"
-        ).fetchone()
+        migration = connection.execute("SELECT * FROM app_migrations").fetchone()
     assert after == before
     assert footwear["name"] == "用户维护的标准"
     assert migration is not None
@@ -150,7 +190,60 @@ def test_standard_bootstrap_is_idempotent_and_registry_uses_snapshots(
     eyewear = registry.resolve("眼镜", "儿童眼镜")
     assert eyewear is not None
     assert eyewear.taxonomy is not None
-    assert len(eyewear.taxonomy.labels) == 9
+    assert len(eyewear.taxonomy.labels) == 39
+
+
+def test_existing_snapshot_receives_configured_validation_rules(
+    tmp_path: Path,
+) -> None:
+    service = _service(tmp_path)
+    footwear = next(
+        item for item in service.list() if item["standard_key"] == "footwear"
+    )
+    version_id = footwear["standard_version_id"]
+    with service.database.transaction() as connection:
+        row = connection.execute(
+            """
+            SELECT snapshot_json FROM classification_standard_versions
+            WHERE id = ?
+            """,
+            (version_id,),
+        ).fetchone()
+        snapshot = json.loads(row["snapshot_json"])
+        snapshot["taxonomy"].pop("validation_rules", None)
+        encoded = json.dumps(
+            snapshot,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        connection.execute(
+            """
+            UPDATE classification_standard_versions
+            SET snapshot_json = ?, content_hash = ? WHERE id = ?
+            """,
+            (
+                encoded,
+                hashlib.sha256(encoded.encode("utf-8")).hexdigest(),
+                version_id,
+            ),
+        )
+        connection.execute(
+            "DELETE FROM app_migrations WHERE migration_id = ?",
+            (CLASSIFICATION_STANDARD_RULES_MIGRATION,),
+        )
+
+    restored = ClassificationStandardService(service.database)
+    taxonomy = restored.taxonomy_for_version(version_id)
+
+    assert taxonomy.validation_rules.opposite_reason_labels["APPAREL_TOO_SMALL"] == [
+        "FIT_TOO_LARGE_U1",
+        "FIT_TOO_LONG_U1",
+        "FIT_TOO_LOOSE_WIDE_U1",
+    ]
+    assert taxonomy.validation_rules.evidence_requirements[0].label_code == (
+        "QUALITY_CHEAP_MATERIAL_U1"
+    )
 
 
 def test_current_version_for_standard_requires_active_published_version(
@@ -187,7 +280,6 @@ def test_draft_does_not_affect_runtime_until_published(tmp_path: Path) -> None:
     content = deepcopy(draft["content"])
     assert draft["validation"]["blocking"] == ["草稿与当前已发布版本没有差异"]
     content["product_context"] = "儿童及骑行眼镜"
-    content["labels"][0]["description"] = "更新后的业务定义"
     content["labels"][0]["keywords"] = ["pressure", "tight"]
 
     updated = service.update_draft(
@@ -202,11 +294,13 @@ def test_draft_does_not_affect_runtime_until_published(tmp_path: Path) -> None:
     assert updated["validation"]["blocking"] == []
     assert updated["diff"]["has_changes"] is True
     assert len(updated["diff"]["modified_labels"]) == 1
+    assert updated["diff"]["semantic_label_changes"] == []
     active_before_publish = service.active_registry().resolve("眼镜", "儿童眼镜")
     assert active_before_publish is not None
     assert active_before_publish.taxonomy is not None
     assert active_before_publish.taxonomy.product_context != "儿童及骑行眼镜"
 
+    _mark_sample_validation_ready(service, updated)
     published = service.publish_draft(
         draft["id"],
         updated["revision"],
@@ -222,6 +316,87 @@ def test_draft_does_not_affect_runtime_until_published(tmp_path: Path) -> None:
     assert active_after_publish.taxonomy is not None
     assert active_after_publish.taxonomy.product_context == "儿童及骑行眼镜"
     assert active_after_publish.taxonomy.labels[0].keywords == ["pressure", "tight"]
+
+
+def test_published_label_semantics_require_a_new_code(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    standard = next(
+        item for item in service.list() if item["standard_key"] == "eyewear"
+    )
+    draft = service.create_draft(standard["id"], "user-1")
+    content = deepcopy(draft["content"])
+    content["labels"][0]["description"] = "改变已发布标签的语义"
+
+    updated = service.update_draft(
+        draft["id"],
+        draft["revision"],
+        content,
+        "尝试同码改义",
+        "user-1",
+    )
+
+    assert updated["diff"]["semantic_label_changes"] == ["EYEWEAR_FIT_TIGHT_V2_U1"]
+    assert any(
+        "已发布标签不能同码改义" in item for item in updated["validation"]["blocking"]
+    )
+
+
+def test_publish_requires_current_sample_validation(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    standard = next(
+        item for item in service.list() if item["standard_key"] == "eyewear"
+    )
+    draft = service.create_draft(standard["id"], "user-1")
+    content = deepcopy(draft["content"])
+    content["product_context"] = "儿童及骑行眼镜"
+    updated = service.update_draft(
+        draft["id"],
+        draft["revision"],
+        content,
+        "调整适用范围",
+        "user-1",
+    )
+
+    with pytest.raises(ClassificationStandardValidationError) as exc_info:
+        service.publish_draft(
+            draft["id"],
+            updated["revision"],
+            "发布新版本",
+            "user-1",
+        )
+    assert exc_info.value.validation["blocking"] == [
+        "请先完成并人工确认当前草稿修订的样本验证"
+    ]
+
+
+def test_glove_draft_accepts_detailed_hand_parts(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    standard = next(item for item in service.list() if item["standard_key"] == "gloves")
+    draft = service.create_draft(standard["id"], "user-1")
+    content = deepcopy(draft["content"])
+    content["allowed_parts"].extend(
+        ["BACK_OF_HAND", "FINGER_GUSSET", "THUMB_WEB", "KNUCKLE_GUARD"]
+    )
+
+    updated = service.update_draft(
+        draft["id"],
+        draft["revision"],
+        content,
+        "补充手套细分部位",
+        "user-1",
+    )
+
+    assert updated["validation"]["blocking"] == []
+    assert {
+        "BACK_OF_HAND",
+        "FINGER_GUSSET",
+        "THUMB_WEB",
+        "KNUCKLE_GUARD",
+    }.issubset(updated["content"]["allowed_parts"])
+    assert (
+        service.get(standard["id"])["standard_version_id"]
+        == (standard["standard_version_id"])
+    )
 
 
 def test_historical_version_restores_as_new_draft_and_publishes_v3(
@@ -242,6 +417,7 @@ def test_historical_version_restores_as_new_draft_and_publishes_v3(
         "发布 V2",
         "user-1",
     )
+    _mark_sample_validation_ready(service, updated)
     published_v2 = service.publish_draft(
         draft["id"],
         updated["revision"],
@@ -266,27 +442,27 @@ def test_historical_version_restores_as_new_draft_and_publishes_v3(
         assert current_response.json()["detail"] == "当前版本无需恢复"
 
         restore_response = client.post(
-            "/api/classification-standard-versions/"
-            f"{version_v1['id']}/restore-draft"
+            f"/api/classification-standard-versions/{version_v1['id']}/restore-draft"
         )
         assert restore_response.status_code == 201, restore_response.text
         restored = restore_response.json()
 
         duplicate_response = client.post(
-            "/api/classification-standard-versions/"
-            f"{version_v1['id']}/restore-draft"
+            f"/api/classification-standard-versions/{version_v1['id']}/restore-draft"
         )
         assert duplicate_response.status_code == 409
 
     assert restored["base_version_id"] == version_v2_id
     assert restored["base_version_no"] == 2
     assert restored["change_reason"] == "恢复 V1 的内容"
-    assert restored["content"]["product_context"] == (
-        version_v1["snapshot"]["taxonomy"]["product_context"]
+    assert (
+        restored["content"]["product_context"]
+        == (version_v1["snapshot"]["taxonomy"]["product_context"])
     )
     assert restored["validation"]["blocking"] == []
     assert service.get(standard["id"])["standard_version_id"] == version_v2_id
 
+    _mark_sample_validation_ready(service, restored)
     published_v3 = service.publish_draft(
         restored["id"],
         restored["revision"],
@@ -297,8 +473,9 @@ def test_historical_version_restores_as_new_draft_and_publishes_v3(
     assert published_v3["version_no"] == 3
     assert service.get_version(version_v1["id"])["version_no"] == 1
     assert service.get_version(version_v2_id)["version_no"] == 2
-    assert published_v3["snapshot"]["taxonomy"]["product_context"] == (
-        version_v1["snapshot"]["taxonomy"]["product_context"]
+    assert (
+        published_v3["snapshot"]["taxonomy"]["product_context"]
+        == (version_v1["snapshot"]["taxonomy"]["product_context"])
     )
 
 
@@ -389,7 +566,7 @@ def test_new_standard_stays_inactive_until_first_publish(tmp_path: Path) -> None
         {
             "code": "BACKPACK_STRUCTURE_DAMAGE",
             "name": "结构损坏",
-            "group": "商品质量",
+            "group": "质量与耐用",
             "description": "背包主体、拉链或缝线发生损坏",
             "allowed_sentiments": ["NEGATIVE"],
         }
@@ -620,9 +797,7 @@ def test_published_version_export_can_only_import_into_draft(
             sort_keys=True,
             separators=(",", ":"),
         )
-        document["content_hash"] = hashlib.sha256(
-            encoded.encode("utf-8")
-        ).hexdigest()
+        document["content_hash"] = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
         imported_response = client.post(
             f"/api/classification-standard-drafts/{draft['id']}/import",
@@ -638,8 +813,9 @@ def test_published_version_export_can_only_import_into_draft(
         assert imported["snapshot"]["agent_family"] != "外部智能体"
         assert imported["snapshot"]["logic_version"] != "external-logic-v9"
         assert imported["content"]["product_context"] == "导入后的适用范围"
-        assert service.get(standard["id"])["standard_version_id"] == (
-            standard["standard_version_id"]
+        assert (
+            service.get(standard["id"])["standard_version_id"]
+            == (standard["standard_version_id"])
         )
         published = service.get_version(standard["standard_version_id"])
         assert published["snapshot"]["taxonomy"]["product_context"] != (

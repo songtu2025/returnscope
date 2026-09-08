@@ -1,91 +1,776 @@
 {
-  "version": "gloves-2026-08-10-v1",
   "agent_family": "手套智能体",
-  "product_context": "冬季、滑雪、骑行或健身手套",
   "allowed_parts": [
     "CUFF",
     "PALM",
+    "BACK_OF_HAND",
     "FINGER",
+    "FINGER_GUSSET",
     "THUMB",
+    "THUMB_WEB",
     "LINING",
     "CLOSURE",
     "UNSPECIFIED"
   ],
   "instructions": [
-    "手套整体尺码和单独的指长问题必须分开表达。",
-    "保暖、防水、抓握和灵活性是不同功能，不得互相推断。",
-    "只有评论明确指出掌心、手指、拇指、袖口、内衬或闭合结构时才使用对应部位。"
+    "先阅读完整标题和正文，按独立事实拆分观点；关键词不替代语义判断。主题用标签，评价方向用sentiment，位置用part，时间、年龄和场景保留在opinion与逐字evidence中。",
+    "相同事件只选最具体标签，不把故障、故障后果和笼统质量评价重复统计；不同部位或独立事件可以并存。同一主题在不同对象或场景下的正负反馈分别保留，不自动判矛盾。",
+    "只有真实体验或明确评价才打标签；否定问题不自动等于好评。没有评价信息不判负向，明确负向但原因不明时保留原因不明标签并设置needs_review。",
+    "年龄、使用者与使用时长不是新的问题标签。品类默认属性不是具体Listing承诺；无对应Listing承诺时claim_relation必须为NONE，不推断描述有误或买家责任。",
+    "到货问题与使用后故障分别保留发生阶段；包装打开不推断二手。主体验证按实际语义选择PRODUCT、CUSTOMER、ORDER、DELIVERY、SERVICE，不由标签分组推断责任。",
+    "标签只表示可独立统计的业务问题；正负方向用 sentiment，位置用 part，具体说法用 opinion 和 evidence。",
+    "一个原子语义只选最具体标签，不同时输出具体标签和笼统标签。",
+    "整体大小、宽紧、整体长度和指长必须分开；need bigger 表示当前偏小，need smaller 表示当前偏大。",
+    "保暖、防水、防风、透气、抓握、触屏、手部灵活性和穿脱是不同功能，不得互相推断。",
+    "破损、开线、附着件脱落、掉毛起球和耐用性按损坏机制分类；手指、指缝、虎口等位置只写入 part。",
+    "只有无法判断具体原因时才使用适配性、整体质量或整体舒适性的笼统标签。",
+    "发错商品和数量不符使用 ORDER，配送问题使用 DELIVERY，客服或售后问题使用 SERVICE，买家主动改变使用 CUSTOMER。",
+    "误以为具有加热功能而 Listing 无此承诺时，使用预期不符且 subject 为 CUSTOMER；不得推断为产品功能故障。",
+    "只有评论明确指出手掌、手背、手指、指缝、拇指、虎口、袖口、内衬或闭合结构时，才使用对应部位。"
   ],
   "labels": [
     {
-      "code": "GLOVE_FIT_SMALL",
-      "name": "偏小或偏紧",
+      "code": "GLOVE_SIZE_SMALL_U1",
+      "name": "整体偏小",
       "group": "尺码与适配",
-      "description": "手套整体偏小、偏紧或限制手部活动",
-      "allowed_sentiments": ["NEGATIVE"]
+      "description": "手套整体尺码偏小，不包括只表达偏紧或手指过短",
+      "keywords": [
+        "small",
+        "too small",
+        "size up",
+        "need bigger"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": [],
+      "exclusions": [
+        "“适合小手”不等于尺寸偏小；小孔、小配件中的小不描述手套尺码。"
+      ],
+      "examples": [
+        {
+          "text": "These are too small for my hands.",
+          "applies": true,
+          "sentiment": "NEGATIVE",
+          "explanation": "明确使用者感觉整体尺寸偏小。"
+        },
+        {
+          "text": "Perfect for small hands.",
+          "applies": false,
+          "sentiment": null,
+          "explanation": "表达对小手的良好适配，不能判为偏小。"
+        }
+      ]
     },
     {
-      "code": "GLOVE_FIT_LARGE",
-      "name": "偏大或偏松",
+      "code": "GLOVE_SIZE_LARGE_U1",
+      "name": "整体偏大",
       "group": "尺码与适配",
-      "description": "手套整体偏大、偏松或容易脱落",
-      "allowed_sentiments": ["NEGATIVE"]
+      "description": "手套整体尺码偏大，不包括只表达偏松或手指过长",
+      "keywords": [
+        "large",
+        "big",
+        "too large",
+        "size down",
+        "need smaller"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
     },
     {
-      "code": "GLOVE_FINGER_LENGTH",
+      "code": "GLOVE_FIT_TIGHT_U1",
+      "name": "偏紧或偏窄",
+      "group": "尺码与适配",
+      "description": "手套整体或明确部位偏紧、偏窄、有压迫感",
+      "keywords": [
+        "tight",
+        "narrow",
+        "constricting",
+        "pressure"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "GLOVE_FIT_LOOSE_U1",
+      "name": "偏松或偏宽",
+      "group": "尺码与适配",
+      "description": "手套整体或明确部位偏松、偏宽或容易脱落",
+      "keywords": [
+        "loose",
+        "wide",
+        "slips off"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "GLOVE_OVERALL_LENGTH_U1",
+      "name": "整体或袖口长度不合适",
+      "group": "尺码与适配",
+      "description": "手套整体或袖口过长、过短；手指长度问题不使用此标签",
+      "keywords": [
+        "long",
+        "short",
+        "cuff length",
+        "wrist length"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "GLOVE_FINGER_LENGTH_U1",
       "name": "指长不合适",
       "group": "尺码与适配",
       "description": "手指或拇指部位过长、过短或位置不合适",
-      "allowed_sentiments": ["NEGATIVE"]
+      "keywords": [
+        "finger",
+        "thumb",
+        "fingertip",
+        "finger length",
+        "too long"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
     },
     {
-      "code": "GLOVE_WARMTH",
+      "code": "GLOVE_FIT_GENERAL_U1",
+      "name": "适配性笼统评价",
+      "group": "尺码与适配",
+      "description": "只明确表示合适或不合适，没有说明尺码、宽紧或长度方向",
+      "keywords": [
+        "fit",
+        "fits well",
+        "does not fit",
+        "not fit"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "GLOVE_WARMTH_U1",
       "name": "保暖表现",
       "group": "功能表现",
       "description": "手套保暖或防寒能力",
-      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+      "keywords": [
+        "warm",
+        "thermal",
+        "cold",
+        "freeze",
+        "froze",
+        "insulated"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
     },
     {
-      "code": "GLOVE_WATER_RESISTANCE",
+      "code": "GLOVE_WATER_RESISTANCE_U1",
       "name": "防水表现",
       "group": "功能表现",
       "description": "手套防水、渗水或湿冷表现",
-      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+      "keywords": [
+        "waterproof",
+        "water resistant",
+        "wet",
+        "soaked",
+        "leak"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
     },
     {
-      "code": "GLOVE_GRIP",
+      "code": "GLOVE_GRIP_U1",
       "name": "抓握表现",
       "group": "功能表现",
       "description": "掌心防滑、握持或器械抓握表现",
-      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+      "keywords": [
+        "grip",
+        "slip",
+        "gripping",
+        "non-slip"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
     },
     {
-      "code": "GLOVE_DEXTERITY",
-      "name": "灵活性",
+      "code": "GLOVE_WIND_RESISTANCE_U1",
+      "name": "防风表现",
       "group": "功能表现",
-      "description": "手指活动、精细操作或触屏使用灵活性",
-      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+      "description": "手套阻挡寒风、穿风或漏风的表现",
+      "keywords": [
+        "windproof",
+        "wind proof",
+        "wind",
+        "draft"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
     },
     {
-      "code": "GLOVE_COMFORT",
-      "name": "佩戴舒适性",
-      "group": "舒适性",
-      "description": "内衬、缝线、压迫或整体佩戴感受",
-      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+      "code": "GLOVE_BREATHABILITY_U1",
+      "name": "透气表现",
+      "group": "功能表现",
+      "description": "手套透气、排汗或导致手部闷热出汗的表现",
+      "keywords": [
+        "breathable",
+        "breathability",
+        "sweaty",
+        "sweat"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
     },
     {
-      "code": "GLOVE_QUALITY",
-      "name": "材料与做工",
-      "group": "材料与做工",
-      "description": "开线、破损、掉毛、脱胶或材料质量问题",
-      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+      "code": "GLOVE_TOUCHSCREEN_U1",
+      "name": "触屏表现",
+      "group": "功能表现",
+      "description": "在手机、触摸屏或智能设备上的触控灵敏度和可用性",
+      "keywords": [
+        "touchscreen",
+        "touch screen",
+        "phone",
+        "smart touch"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
     },
     {
-      "code": "GLOVE_BUYER_REASON",
+      "code": "GLOVE_HAND_DEXTERITY_U1",
+      "name": "手部灵活性",
+      "group": "功能表现",
+      "description": "手指活动、精细操作或使用工具时的灵活性，不包括触屏功能",
+      "keywords": [
+        "dexterity",
+        "flexible",
+        "movement",
+        "mobility"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "GLOVE_ON_OFF_EASE_U1",
+      "name": "穿脱便利性",
+      "group": "功能表现",
+      "description": "手套是否容易戴上、取下或从手上滑脱",
+      "keywords": [
+        "put on",
+        "take off",
+        "take it off",
+        "hard to put on"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "GLOVE_MATERIAL_DAMAGE_U1",
+      "name": "破洞、破损或撕裂",
+      "group": "质量与耐用",
+      "description": "手套材料破洞、破损、断裂、撕裂或异常磨损；用部位字段记录位置",
+      "keywords": [
+        "hole",
+        "broke",
+        "broken",
+        "ripped",
+        "torn",
+        "worn"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": [],
+      "exclusions": [
+        "仅明确缝线脱开且未描述面料本体破损时，优先使用开线或接缝失效。"
+      ],
+      "examples": [
+        {
+          "text": "A hole appeared in the thumb after two weeks.",
+          "applies": true,
+          "sentiment": "NEGATIVE",
+          "explanation": "明确拇指部位破洞并说明使用时间，不猜测生产原因。"
+        },
+        {
+          "text": "I worry these might tear someday.",
+          "applies": false,
+          "sentiment": null,
+          "explanation": "未来担忧不能作为实际破损事实。"
+        }
+      ]
+    },
+    {
+      "code": "GLOVE_SEAM_FAILURE_U1",
+      "name": "开线或接缝失效",
+      "group": "质量与耐用",
+      "description": "缝线松脱、开线、脱线、接缝开裂或出现缝隙",
+      "keywords": [
+        "coming apart",
+        "stitching",
+        "seam",
+        "gap",
+        "splitting"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": [],
+      "exclusions": [
+        "仅面料本体破洞、未说明缝线或接缝问题时，不推断开线；使用破洞、破损或撕裂标签。",
+        "仅担心未来接缝可能开裂，不确认已经发生。"
+      ],
+      "examples": [
+        {
+          "text": "The stitching came apart at the thumb.",
+          "applies": true,
+          "sentiment": "NEGATIVE",
+          "explanation": "明确描述拇指接缝分离，保留拇指部位。"
+        },
+        {
+          "text": "There is a small hole in the palm fabric.",
+          "applies": false,
+          "sentiment": null,
+          "explanation": "明确面料破洞，未指出接缝失效。"
+        }
+      ]
+    },
+    {
+      "code": "GLOVE_ADHESION_FAILURE_U1",
+      "name": "胶层或附着件脱落",
+      "group": "质量与耐用",
+      "description": "掌心防滑层、橡胶、粘合层或其他附着结构起胶、剥落或掉落",
+      "keywords": [
+        "peeling away",
+        "grip came off",
+        "falling off",
+        "detached"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "GLOVE_SHEDDING_PILLING_U1",
+      "name": "掉毛或起球",
+      "group": "质量与耐用",
+      "description": "面料、内衬或表层出现掉毛、起球或异常脱落",
+      "keywords": [
+        "shedding",
+        "pilling",
+        "fuzz",
+        "lint"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "GLOVE_DURABILITY_U1",
+      "name": "耐用性",
+      "group": "质量与耐用",
+      "description": "使用寿命、很快损坏或整体耐用程度，没有说明更具体的损坏机制",
+      "keywords": [
+        "durable",
+        "durability",
+        "not durable",
+        "wore out"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "GLOVE_MATERIAL_QUALITY_U1",
+      "name": "材料品质",
+      "group": "质量与耐用",
+      "description": "明确评价材料廉价、单薄、粗糙、用料好或材料品质",
+      "keywords": [
+        "cheap",
+        "flimsy",
+        "poor material",
+        "good material"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "GLOVE_QUALITY_GENERAL_U1",
+      "name": "整体质量评价",
+      "group": "质量与耐用",
+      "description": "只笼统评价做工或整体质量，没有说明具体材料或结构问题",
+      "keywords": [
+        "quality",
+        "well made",
+        "poorly made",
+        "workmanship"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "GLOVE_COMFORT_GENERAL_U1",
+      "name": "整体舒适性",
+      "group": "使用感受",
+      "description": "只明确表示舒适或不舒适，没有说明更具体的体感原因",
+      "keywords": [
+        "comfortable",
+        "comfy",
+        "uncomfortable"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "GLOVE_SKIN_IRRITATION_U1",
+      "name": "磨手或皮肤刺激",
+      "group": "使用感受",
+      "description": "穿戴导致摩擦、磨手、发痒、刺痛或皮肤刺激",
+      "keywords": [
+        "chafe",
+        "rubbing",
+        "itchy",
+        "itching",
+        "hurt",
+        "painful"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "GLOVE_LINING_MOVEMENT_U1",
+      "name": "内衬移位",
+      "group": "使用感受",
+      "description": "内衬被带出、在手套内移位、堆积或无法复位",
+      "keywords": [
+        "liner",
+        "lining",
+        "pulled out",
+        "shifted",
+        "bunching"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "GLOVE_BULK_WEIGHT_U1",
+      "name": "臃肿或重量体感",
+      "group": "使用感受",
+      "description": "手套臃肿、笨重、轻便或整体体积与重量感受",
+      "keywords": [
+        "bulky",
+        "heavy",
+        "lightweight",
+        "not bulky"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "GLOVE_MATERIAL_FEEL_U1",
+      "name": "材料触感",
+      "group": "使用感受",
+      "description": "手套材料柔软、偏硬、僵硬或其他直接触感",
+      "keywords": [
+        "soft",
+        "stiff",
+        "hard",
+        "rigid"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "GLOVE_THICKNESS_U1",
+      "name": "厚薄体感",
+      "group": "使用感受",
+      "description": "手套整体或明确部位的偏薄、偏厚或厚度评价，不直接推断保暖性",
+      "keywords": [
+        "thin",
+        "thick",
+        "thickness"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "GLOVE_ODOR_U1",
+      "name": "异味",
+      "group": "使用感受",
+      "description": "手套、内衬或清洗后的异味、气味问题",
+      "keywords": [
+        "smell",
+        "odor",
+        "odour"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "GLOVE_DRYING_U1",
+      "name": "干燥表现",
+      "group": "功能表现",
+      "description": "手套清洗、浸湿或使用后的干燥速度与难易程度",
+      "keywords": [
+        "dry",
+        "drying",
+        "hard to dry",
+        "dries quickly"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "GLOVE_COLOR_U1",
+      "name": "颜色表现",
+      "group": "外观与款式",
+      "description": "颜色与图片或描述不符，或买家明确喜欢、不喜欢颜色",
+      "keywords": [
+        "color",
+        "colour",
+        "color difference",
+        "color mismatch"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "GLOVE_APPEARANCE_U1",
+      "name": "款式与外观",
+      "group": "外观与款式",
+      "description": "手套造型、设计、时尚度或整体外观评价，不包括只表达颜色",
+      "keywords": [
+        "appearance",
+        "look",
+        "style",
+        "design",
+        "fashionable"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "GLOVE_ORDER_WRONG_ITEM_U1",
+      "name": "发错商品",
+      "group": "履约与售后",
+      "description": "收到错误商品、错误尺码、错误颜色或同手手套，主体使用 ORDER",
+      "keywords": [
+        "wrong item",
+        "wrong size",
+        "wrong color",
+        "same hand"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "GLOVE_ORDER_QUANTITY_MISMATCH_U1",
+      "name": "数量不符",
+      "group": "履约与售后",
+      "description": "到货数量、只数或对数与订单不符，包括缺只或缺对，主体使用 ORDER",
+      "keywords": [
+        "missing item",
+        "quantity",
+        "missing glove",
+        "one glove"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "GLOVE_USE_SCENARIO_U1",
+      "name": "使用场景适配",
+      "group": "其他反馈",
+      "description": "明确评价手套是否适用于某种运动、工作、寒冷环境或其他使用场景",
+      "keywords": [
+        "suitable",
+        "not suitable",
+        "used for",
+        "use"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "GLOVE_EXPECTATION_MISMATCH_U1",
+      "name": "描述或预期不符",
+      "group": "其他反馈",
+      "description": "只明确表示实物与描述或预期不符，没有足够证据判断更具体问题",
+      "keywords": [
+        "described",
+        "description",
+        "expected",
+        "expectation",
+        "heated"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "GLOVE_DELIVERY_ISSUE_U1",
+      "name": "配送问题",
+      "group": "履约与售后",
+      "description": "配送时效、延误、运输或到货过程问题，主体使用 DELIVERY",
+      "keywords": [
+        "delivery",
+        "arrived",
+        "shipping",
+        "late",
+        "delayed"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "GLOVE_SERVICE_ISSUE_U1",
+      "name": "客服或售后服务",
+      "group": "履约与售后",
+      "description": "客服沟通、售后处理或服务质量问题，主体使用 SERVICE",
+      "keywords": [
+        "customer service",
+        "support",
+        "service",
+        "refund service"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "GLOVE_BUYER_REASON_U1",
       "name": "买家原因",
-      "group": "其他原因",
-      "description": "误购、多买、不再需要或计划改变",
-      "allowed_sentiments": ["NEGATIVE", "NEUTRAL"]
+      "group": "其他反馈",
+      "description": "误购、多买、不再需要或计划改变；仅买家主动误购、需求变化等原因，不能从产品故障推断买家责任。",
+      "keywords": [
+        "ordered by mistake",
+        "bought too many",
+        "changed my mind",
+        "no longer need"
+      ],
+      "allowed_sentiments": [
+        "NEUTRAL"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "GLOVE_VALUE_U1",
+      "name": "性价比",
+      "group": "其他反馈",
+      "description": "明确评价价格与材料、质量、功能或整体价值是否匹配",
+      "keywords": [
+        "value",
+        "price",
+        "worth the money",
+        "cost"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
     }
-  ]
+  ],
+  "product_context": "冬季、滑雪、骑行、抓绒或健身手套",
+  "version": "gloves-unified-2026-09-06-v1-semantic1",
+  "validation_rules": {
+    "allowed_groups": [
+      "尺码与适配",
+      "功能表现",
+      "质量与耐用",
+      "使用感受",
+      "外观与款式",
+      "履约与售后",
+      "其他反馈"
+    ],
+    "neutral_reason_labels": [
+      "GLOVE_BUYER_REASON_U1"
+    ],
+    "required_review_labels": [],
+    "conflict_scope": "evidence"
+  },
+  "recognition_profile": "semantic_v1"
 }

@@ -369,3 +369,12 @@ def test_cache_key_isolated_by_claims_policy_and_actual_effort() -> None:
     )
 
     assert len({base, changed_claims, changed_policy, changed_effort}) == 4
+
+
+def test_unknown_semantics_with_null_code_stays_unknown():
+    payload = _payload([{"label_code": None, "opinion": "轻便", "evidence": "lightweight",
+                         "reason": "缺少适用标签", "sentiment": "POSITIVE"}])
+    result = ModelClassification.model_validate(normalize_model_payload(payload))
+    assert result.semantic_units == []
+    assert result.unknown_semantics[0].evidence == "lightweight"
+    assert result.unknown_semantics[0].reason == "缺少适用标签"

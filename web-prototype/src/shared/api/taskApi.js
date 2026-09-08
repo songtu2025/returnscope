@@ -1,7 +1,8 @@
 import { API_BASE, queryString, request } from "./request";
 
 export const taskApi = {
-  tasks: (options = {}) => request("/api/tasks", options),
+  tasks: (filters = {}, options = {}) =>
+    request(`/api/tasks${queryString(filters)}`, options),
   task: (id, options = {}) => request(`/api/tasks/${id}`, options),
   preflightTask: (payload) =>
     request("/api/tasks/preflight", { method: "POST", body: JSON.stringify(payload) }),
@@ -64,6 +65,11 @@ export const taskApi = {
       body: JSON.stringify(payload),
     }),
   retryTask: (id) => request(`/api/tasks/${id}/retry`, { method: "POST" }),
+  archiveTasks: (taskIds, archived) =>
+    request("/api/tasks/archive", {
+      method: "POST",
+      body: JSON.stringify({ task_ids: taskIds, archived }),
+    }),
   eventUrl: (taskId, after = 0) =>
     `${API_BASE}/api/tasks/${taskId}/events?after=${after}`,
   downloadUrl: (taskId) => `${API_BASE}/api/tasks/${taskId}/download`,

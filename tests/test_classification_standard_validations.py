@@ -25,11 +25,22 @@ class FakeRunner:
         source: dict[str, Any],
         progress: Any,
     ) -> PipelineRun:
-        del taxonomy, source
+        del source
+        taxonomy_codes = {label.code for label in taxonomy.labels}
+        is_draft = str(taxonomy.version).startswith("draft-")
         classifications = {}
         for position, sample in enumerate(samples, start=1):
             baseline = sample["baseline"].get("primary_label_codes", [])
-            label_codes = ["EYEWEAR_LENS_QUALITY"] if position == 1 else list(baseline)
+            if not is_draft:
+                label_codes = (
+                    ["EYEWEAR_FIT_PRESSURE"]
+                    if "EYEWEAR_FIT_PRESSURE" in taxonomy_codes
+                    else [taxonomy.labels[0].code]
+                )
+            elif position == 1:
+                label_codes = ["EYEWEAR_LENS_QUALITY"]
+            else:
+                label_codes = list(baseline) or [taxonomy.labels[0].code]
             classifications[sample["classification_key"]] = ValidatedClassification(
                 classification_key=sample["classification_key"],
                 semantic_units=[],
@@ -258,18 +269,21 @@ def test_sample_validation_completes_and_becomes_stale_after_edit(
     source_version_id = _seed_result(standards, standard)
     draft = standards.create_draft(standard["id"], "user-1")
     content = deepcopy(draft["content"])
-    content["labels"][0]["description"] = "更新后的标签定义"
+    content["labels"][0]["keywords"] = ["pressure", "tight"]
     draft = standards.update_draft(
         draft["id"],
         draft["revision"],
         content,
-        "验证标签定义",
+        "验证标签关键词",
         "user-1",
     )
 
     sources = validations.sources(draft["id"])
-    assert sources[0]["result_version_id"] == source_version_id
-    assert sources[0]["available_sample_count"] == 2
+    assert any(source["source_kind"] == "raw_dataset" for source in sources)
+    result_source = next(
+        source for source in sources if source["result_version_id"] == source_version_id
+    )
+    assert result_source["available_sample_count"] == 2
 
     run = validations.create_run(
         draft["id"],
@@ -287,8 +301,18 @@ def test_sample_validation_completes_and_becomes_stale_after_edit(
     assert completed["status"] == "completed"
     assert completed["summary"]["changed_count"] == 1
     assert completed["summary"]["error_count"] == 0
-    assert completed["publication_ready"] is True
+    assert completed["publication_ready"] is False
     assert len(completed["items"]) == 2
+
+    approved = validations.approve(
+        run["id"],
+        draft["revision"],
+        "差异符合预期，可以发布",
+        "user-1",
+    )
+    assert approved["publication_ready"] is True
+    assert approved["approved_by_name"] == "测试用户"
+    assert approved["approval_note"] == "差异符合预期，可以发布"
 
     changed_content = deepcopy(draft["content"])
     changed_content["product_context"] = "再次修改后的适用范围"
@@ -363,7 +387,7 @@ def test_new_standard_uses_matching_categories_from_raw_data(
         {
             "code": "BACKPACK_STRUCTURE_DAMAGE",
             "name": "结构损坏",
-            "group": "商品质量",
+            "group": "质量与耐用",
             "description": "背包主体、拉链或缝线发生损坏",
             "allowed_sentiments": ["NEGATIVE"],
         }
@@ -394,7 +418,248 @@ def test_new_standard_uses_matching_categories_from_raw_data(
 
     completed = validations.get(run["id"])
     assert completed["status"] == "completed"
-    assert completed["publication_ready"] is True
+    assert completed["publication_ready"] is False
     assert completed["source"]["available_sample_count"] == 2
     assert completed["source"]["listing"] == "BP001"
     assert {item["category_b"] for item in completed["items"]} == {"户外背包"}
+
+    approved = validations.approve(
+        run["id"],
+        draft["revision"],
+        "新标准样本结果符合预期",
+        "user-1",
+    )
+    assert approved["publication_ready"] is True
+
+
+def test_existing_standard_can_compare_raw_samples_with_base_and_draft(
+    tmp_path: Path,
+) -> None:
+    standards, validations = _services(tmp_path)
+    standard = next(
+        item for item in standards.list() if item["standard_key"] == "eyewear"
+    )
+    return_path = tmp_path / "returns.csv"
+    product_path = tmp_path / "products.xlsx"
+    pd.DataFrame(
+        [
+            {
+                "return-date": "2026-08-01",
+                "order-id": f"order-{index}",
+                "sku": "GL-001",
+                "asin": "ASIN-1",
+                "fnsku": "FNSKU-1",
+                "product-name": "儿童眼镜",
+                "quantity": 1,
+                "reason": "UNWANTED_ITEM",
+                "customer-comments": f"eyewear comment {index}",
+                "店铺/站点": "SEEKWAY:US",
+            }
+            for index in (1, 2)
+        ]
+    ).to_csv(return_path, index=False, encoding="utf-8-sig")
+    pd.DataFrame(
+        [
+            {
+                "MSKU": "GL-001",
+                "店铺/站点": "SEEKWAY:US",
+                "Listing": "GL001",
+                "产品名称": "儿童眼镜",
+                "SKU": "GL-001",
+                "品类A": "眼镜",
+                "品类B": "儿童眼镜",
+            }
+        ]
+    ).to_excel(product_path, sheet_name="产品信息汇总表", index=False)
+    _seed_result(
+        standards,
+        standard,
+        return_path=return_path,
+        product_path=product_path,
+    )
+    draft = standards.create_draft(standard["id"], "user-1")
+    content = deepcopy(draft["content"])
+    content["labels"][0]["keywords"] = ["pressure", "tight"]
+    draft = standards.update_draft(
+        draft["id"],
+        draft["revision"],
+        content,
+        "验证原始样本对照",
+        "user-1",
+    )
+
+    raw_source = next(
+        source
+        for source in validations.sources(draft["id"])
+        if source["source_kind"] == "raw_dataset"
+    )
+    run = validations.create_run(
+        draft["id"],
+        draft["revision"],
+        raw_source["result_version_id"],
+        20,
+        "user-1",
+    )
+    assert validations.claim_next() == run["id"]
+    validations.run(run["id"])
+
+    completed = validations.get(run["id"])
+    assert completed["source"]["comparison_mode"] == "baseline_and_draft"
+    assert completed["source"]["available_sample_count"] == 2
+    assert completed["summary"]["changed_count"] == 1
+    assert completed["items"][0]["baseline"]["primary_label_codes"] == [
+        "EYEWEAR_FIT_TIGHT_V2_U1"
+    ]
+    assert completed["items"][0]["draft"]["primary_label_codes"] == [
+        "EYEWEAR_LENS_QUALITY"
+    ]
+    assert completed["publication_ready"] is False
+
+
+def test_review_upload_keeps_source_context_and_isolated_validation(tmp_path):
+    from io import BytesIO
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from openpyxl import Workbook
+
+    from web_backend.routers.classification_standards import (
+        create_classification_standard_router,
+    )
+
+    standards, validations = _services(tmp_path)
+    standard = next(
+        item for item in standards.list() if item["standard_key"] == "eyewear"
+    )
+    _seed_result(standards, standard)
+    draft = standards.create_draft(standard["id"], "user-1")
+    content = deepcopy(draft["content"])
+    content["instructions"].append("保留评论年龄原文")
+    draft = standards.update_draft(
+        draft["id"], draft["revision"], content, "验证样本入口", "user-1"
+    )
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["评论编号", "评论标题", "评论内容", "一级品类", "ASIN"])
+    sheet.append(["r1", "Great", "Never fogs", "儿童眼镜", "A1"])
+    sheet.append(["r2", "Small", "Too small for my ten-year-old", "儿童眼镜", "A2"])
+    sheet.append(["r3", "Shoes", "Drain quickly", "薄底水鞋", "A3"])
+    output = BytesIO()
+    workbook.save(output)
+    app = FastAPI()
+    app.include_router(
+        create_classification_standard_router(
+            standards,
+            validations,
+            lambda: {"id": "user-1"},
+        )
+    )
+    with TestClient(app) as client:
+        response = client.post(
+            f"/api/classification-standard-drafts/{draft['id']}/review-validation-runs",
+            data={"expected_revision": draft["revision"], "sample_size": 20},
+            files={
+                "file": (
+                    "review.xlsx",
+                    output.getvalue(),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+        )
+    assert response.status_code == 201, response.text
+    run = response.json()
+    assert run["source"]["analysis_context"] == "review"
+    assert run["source"]["skipped_category_count"] == 1
+    assert run["sample_size"] == 2
+    with standards.database.connect() as connection:
+        row = connection.execute(
+            "SELECT source_json, sample_json FROM classification_standard_validation_runs WHERE id = ?",
+            (run["id"],),
+        ).fetchone()
+        source = json.loads(row["source_json"])
+        samples = json.loads(row["sample_json"])
+        assert source["analysis_context"] == "review"
+        assert {sample["review_id"] for sample in samples} == {"r1", "r2"}
+        assert connection.execute("SELECT COUNT(*) FROM datasets").fetchone()[0] == 2
+    assert validations.claim_next() == run["id"]
+    validations.run(run["id"])
+    completed = validations.get(run["id"])
+    assert completed["status"] == "completed"
+    assert completed["publication_ready"] is False
+
+
+def test_review_coverage_and_changes_include_positive_semantics():
+    from return_semantics.schemas import SemanticUnit
+
+    unit = SemanticUnit.model_validate(
+        {
+            "subject": "PRODUCT",
+            "label_code": "TOPIC",
+            "sentiment": "POSITIVE",
+            "part": "LENS",
+            "opinion": "Clear",
+            "evidence": "Clear",
+            "assertion": "AFFIRMED",
+            "implicit": False,
+        }
+    )
+    result = ValidatedClassification(
+        classification_key="one",
+        semantic_units=[unit],
+        unknown_semantics=[],
+        problem_label_codes=[],
+        positive_label_codes=["TOPIC"],
+        primary_label_codes=[],
+        status=ProcessingStatus.AUTO_APPROVED,
+        review_reasons=[],
+        model_name="fake",
+        prompt_version="test",
+        taxonomy_version="test",
+    )
+    items = ClassificationStandardValidationService._comparison_items(
+        [
+            {
+                "classification_key": "one",
+                "comment": "Clear",
+                "category_a": "眼镜",
+                "category_b": "儿童眼镜",
+                "baseline": {},
+            },
+        ],
+        {"one": result},
+    )
+    summary = ClassificationStandardValidationService._summary(items)
+    assert summary["coverage_rate"] == 100
+    assert summary["changed_count"] == 1
+    assert items[0]["draft"]["semantic_units"][0]["sentiment"] == "POSITIVE"
+
+
+
+def test_keyword_comparison_uses_same_taxonomy_and_cannot_approve(tmp_path):
+    import pytest
+
+    standards, validations = _services(tmp_path)
+    standard = next(item for item in standards.list() if item["standard_key"] == "eyewear")
+    source_id = _seed_result(standards, standard)
+    draft = standards.create_draft(standard["id"], "user-1")
+    content = deepcopy(draft["content"])
+    content["labels"][0]["keywords"].append("comparison")
+    draft = standards.update_draft(draft["id"], draft["revision"], content, "对照测试", "user-1")
+    captured = []
+    runner = validations.runner.classify_taxonomy_sample
+
+    def capture(**kwargs):
+        captured.append(kwargs["taxonomy"])
+        return runner(**kwargs)
+
+    validations.runner.classify_taxonomy_sample = capture
+    run = validations.create_run(draft["id"], draft["revision"], source_id, 20, "user-1", comparison_type="keyword_ab")
+    assert validations.claim_next() == run["id"]
+    validations.run(run["id"])
+    completed = validations.get(run["id"])
+    assert completed["status"] == "completed", completed["error"]
+    assert [taxonomy.recognition_profile for taxonomy in captured] == ["legacy_v3", "keyword_free_v1"]
+    assert captured[0].labels == captured[1].labels
+    assert completed["publication_ready"] is False
+    with pytest.raises(ValueError, match="仅用于诊断"):
+        validations.approve(run["id"], draft["revision"], "不得代替发布", "user-1")

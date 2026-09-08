@@ -78,7 +78,7 @@ test("桌面端共享尺寸以分类结果页为统一基准", () => {
   );
 });
 
-test("工作台和创建任务使用冻结的桌面双栏比例", () => {
+test("工作台和创建任务使用冻结的桌面布局", () => {
   expect(styles).toMatch(
     /\.workbench-focus-grid\s*{[^}]*grid-template-columns:\s*minmax\(0, 3fr\) minmax\(0, 2fr\);/s,
   );
@@ -86,18 +86,11 @@ test("工作台和创建任务使用冻结的桌面双栏比例", () => {
     /\.workbench-grid\s*{[^}]*gap:\s*var\(--desktop-section-gap\);/s,
   );
   expect(styles).toMatch(
-    /\.task-create-layout\s*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) clamp\(320px, 24vw, 380px\);[^}]*gap:\s*var\(--desktop-section-gap\);/s,
-  );
-  expect(styles).toMatch(
-    /\.task-plan-layout\s*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) clamp\(320px, 24vw, 380px\);/s,
-  );
-  expect(styles).toMatch(
-    /\.task-create-summary\s*{[^}]*width:\s*100%;[^}]*max-width:\s*none;/s,
+    /\.task-plan-layout\s*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[^}]*gap:\s*14px;/s,
   );
   expect(styles).toMatch(
     /\.new-task-page \.task-config-choice,[\s\S]*?\.new-task-page \.task-data-quality\s*{[^}]*width:\s*100%;[^}]*max-width:\s*none;/,
   );
-  expect(styles).not.toMatch(/\.task-create-summary\s*{[^}]*max-width:\s*295px;/s);
 });
 
 test("关键筛选条、表格行和空状态复用共享尺寸", () => {

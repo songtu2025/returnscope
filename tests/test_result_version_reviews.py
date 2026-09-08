@@ -197,7 +197,7 @@ def test_review_batch_publishes_immutable_complete_v2_without_model(
         review["id"],
         1,
         "user-1",
-        "FIT_TOO_SMALL",
+        "FIT_TOO_SMALL_U1",
         "确认尺码偏小",
     )
     assert updated["classification"]["status"] == "MANUAL_RESOLVED"
@@ -209,7 +209,7 @@ def test_review_batch_publishes_immutable_complete_v2_without_model(
             review["id"],
             1,
             "user-2",
-            "FIT_TOO_SMALL",
+            "FIT_TOO_SMALL_U1",
             "并发覆盖",
         )
 
@@ -344,7 +344,7 @@ def test_review_batch_api_and_version_history_contract(tmp_path: Path) -> None:
         f"/api/review-batches/{batch['id']}/records/{record['id']}",
         json={
             "expected_revision": 1,
-            "label_code": "FIT_TOO_SMALL",
+            "label_code": "FIT_TOO_SMALL_U1",
             "reason": "API 修改",
         },
     )
@@ -527,7 +527,7 @@ def test_version_lineage_counts_changed_label_and_missing_batch_history(
         review["id"],
         review["revision"],
         "user-1",
-        "FIT_TOO_LARGE",
+        "FIT_TOO_LARGE_U1",
         "确认应为尺码偏大",
     )
     derived = review_service.publish_batch(

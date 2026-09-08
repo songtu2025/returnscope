@@ -16,7 +16,12 @@ from return_semantics.model_client import (
     ModelClient,
     ModelHTTPError,
 )
-from return_semantics.prompt import PROMPT_VERSION, build_messages
+from return_semantics.prompt import (
+    PROMPT_VERSION,
+    build_messages,
+    prompt_version,
+    recognition_fingerprint,
+)
 from return_semantics.review import (
     classifications_match,
     reconcile_secondary,
@@ -29,6 +34,7 @@ from return_semantics.schemas import (
     TaxonomyConfig,
     ValidatedClassification,
 )
+from return_semantics.taxonomy import adapt_claims_to_taxonomy
 from return_semantics.validator import validate_classification
 
 _SEMANTIC_RISK_PATTERNS = (
@@ -139,17 +145,21 @@ def build_cache_key(
     classification_scope: str = "",
     reasoning_effort: str = "",
     model_policy_version: str = "legacy-model-policy-v1",
+    recognition_key: str = "",
+    effective_prompt_version: str = PROMPT_VERSION,
 ) -> str:
     payload = {
         "comment": comment.lower(),
         "model": f"{model_name}:thinking" if thinking else model_name,
-        "prompt": PROMPT_VERSION,
+        "prompt": effective_prompt_version,
         "taxonomy": taxonomy_version,
         "claims": claims_version,
         "scope": classification_scope,
         "effort": reasoning_effort,
         "model_policy": model_policy_version,
     }
+    if recognition_key:
+        payload["recognition"] = recognition_key
     payload["provider"] = provider_name
     encoded = json.dumps(
         payload,
@@ -190,6 +200,12 @@ def _call_with_cache(
         provider_name=client.settings.cache_namespace,
         taxonomy_version=taxonomy.version,
         claims_version=claims.version,
+        effective_prompt_version=prompt_version(taxonomy),
+        recognition_key=(
+            recognition_fingerprint(taxonomy)
+            if taxonomy.recognition_profile != "legacy_v3"
+            else ""
+        ),
         thinking=thinking,
         classification_scope=classification_scope,
         reasoning_effort=str(reasoning_effort),
@@ -230,7 +246,11 @@ def classify_comments(
     on_model_degraded: Callable[[PipelineRun, int, str], None] | None = None,
     model_policy_version: str = "legacy-model-policy-v1",
     secondary_is_fallback: bool = False,
+    analysis_context: str = "returns",
 ) -> PipelineRun:
+    if analysis_context not in {"returns", "review"}:
+        raise ValueError("不支持的分析场景")
+    claims = adapt_claims_to_taxonomy(claims, taxonomy)
     selected = unique_comments.iloc[offset:]
     if limit is not None:
         selected = selected.head(limit)
@@ -311,10 +331,13 @@ def classify_comments(
         category_a = str(getattr(row, "category_a", ""))
         category_b = str(getattr(row, "category_b", ""))
         classification_scope = f"{category_a}\x1f{category_b}"
+        if analysis_context == "review":
+            classification_scope += "\x1freview"
         messages = build_messages(
             comment,
             taxonomy,
             claims,
+            analysis_context=analysis_context,
             category_context={
                 "品类A": category_a,
                 "品类B": category_b,
@@ -391,7 +414,8 @@ def classify_comments(
                 taxonomy=taxonomy,
                 claims=claims,
                 model_name=call_result.model_name,
-                prompt_version=PROMPT_VERSION,
+                prompt_version=prompt_version(taxonomy),
+                analysis_context=analysis_context,
             )
 
             if use_cheap_model:
@@ -417,7 +441,8 @@ def classify_comments(
                         taxonomy=taxonomy,
                         claims=claims,
                         model_name=primary_result.model_name,
-                        prompt_version=PROMPT_VERSION,
+                        prompt_version=prompt_version(taxonomy),
+                        analysis_context=analysis_context,
                     )
                     if not audit_cheap_result:
                         validated = primary_validated
@@ -469,7 +494,8 @@ def classify_comments(
                         taxonomy=taxonomy,
                         claims=claims,
                         model_name=review_result.model_name,
-                        prompt_version=PROMPT_VERSION,
+                        prompt_version=prompt_version(taxonomy),
+                        analysis_context=analysis_context,
                     )
                     validated = reconcile_secondary(
                         validated,
@@ -506,7 +532,7 @@ def classify_comments(
                 status=ProcessingStatus.MODEL_ERROR,
                 review_reasons=[str(exc)],
                 model_name=client.settings.model,
-                prompt_version=PROMPT_VERSION,
+                prompt_version=prompt_version(taxonomy),
                 taxonomy_version=taxonomy.version,
             )
 

@@ -1,20 +1,16 @@
-import { useEffect } from "react";
-import {
-  ArrowClockwise,
-  CheckCircle,
-  ShieldCheck,
-  WarningCircle,
-  X,
-} from "@phosphor-icons/react";
+import { useEffect, useRef } from "react";
+import { ArrowClockwise, CheckCircle, WarningCircle, X } from "@phosphor-icons/react";
 import { STATUS_LABELS } from "../constants";
 import { classNames } from "../lib/presentation";
 
-export function PageHeading({ eyebrow, title, description, action }) {
+export function PageHeading({ eyebrow, title, description, action, titleRef }) {
   return (
     <header className="page-heading">
       <div>
-        <p className="eyebrow">{eyebrow}</p>
-        <h1>{title}</h1>
+        {eyebrow && <p className="eyebrow">{eyebrow}</p>}
+        <h1 ref={titleRef} tabIndex={titleRef ? -1 : undefined}>
+          {title}
+        </h1>
         <span>{description}</span>
       </div>
       {action && <div className="heading-action">{action}</div>}
@@ -51,6 +47,13 @@ export function Modal({
   onClose,
   children,
 }) {
+  const dialogRef = useRef(null);
+  useEffect(() => {
+    const previousFocus = document.activeElement;
+    dialogRef.current?.querySelector("button")?.focus();
+    return () => previousFocus?.focus();
+  }, []);
+
   useEffect(() => {
     const closeOnEscape = (event) => event.key === "Escape" && onClose();
     document.addEventListener("keydown", closeOnEscape);
@@ -63,10 +66,28 @@ export function Modal({
       onMouseDown={(event) => event.target === event.currentTarget && onClose()}
     >
       <section
+        ref={dialogRef}
         className={classNames("modal", className)}
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        onKeyDown={(event) => {
+          if (event.key !== "Tab") return;
+          const controls = [
+            ...dialogRef.current.querySelectorAll(
+              'button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), summary, [tabindex="0"]',
+            ),
+          ].filter((element) => element.getClientRects().length > 0);
+          const first = controls[0];
+          const last = controls.at(-1);
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last?.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first?.focus();
+          }
+        }}
       >
         <header>
           <div>
@@ -153,38 +174,6 @@ export function Toast({ message, tone }) {
         <CheckCircle size={20} weight="fill" />
       )}
       {message}
-    </div>
-  );
-}
-
-export function SectionTitle({ number, title, description }) {
-  return (
-    <div className="section-title">
-      <span>{number}</span>
-      <div>
-        <h2>{title}</h2>
-        <p>{description}</p>
-      </div>
-    </div>
-  );
-}
-
-export function SnapshotNotice({ text }) {
-  return (
-    <div className="snapshot-notice">
-      <ShieldCheck size={20} />
-      <span>{text}</span>
-    </div>
-  );
-}
-
-export function Confirmation({ icon: Icon, label, value, note }) {
-  return (
-    <div className="confirmation">
-      <Icon size={22} />
-      <span>{label}</span>
-      <b>{value}</b>
-      <small>{note}</small>
     </div>
   );
 }

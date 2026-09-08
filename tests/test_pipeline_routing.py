@@ -45,7 +45,7 @@ def _classification(
 def _multi_issue_classification() -> ModelClassification:
     classification = _classification(evidence="Uncomfortable")
     discomfort = classification.semantic_units[0].model_copy(
-        update={"label_code": "EXPERIENCE_DISCOMFORT"}
+        update={"label_code": "EXPERIENCE_COMFORT"}
     )
     return classification.model_copy(
         update={
@@ -210,7 +210,7 @@ def test_multiple_cheap_semantic_units_fall_back_to_primary(
         {
             "gpt-5.4-mini": _multi_issue_classification(),
             "gpt-5.5": _classification(
-                "EXPERIENCE_DISCOMFORT",
+                "EXPERIENCE_COMFORT",
                 evidence="Uncomfortable",
             ),
         }
@@ -226,7 +226,7 @@ def test_multiple_cheap_semantic_units_fall_back_to_primary(
 
     result = next(iter(run.classifications.values()))
     assert client.calls == ["gpt-5.4-mini", "gpt-5.5"]
-    assert result.problem_label_codes == ["EXPERIENCE_DISCOMFORT"]
+    assert result.problem_label_codes == ["EXPERIENCE_COMFORT"]
     assert run.routing["cheap_result_fallback"] == 1
 
 

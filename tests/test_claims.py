@@ -30,10 +30,31 @@ def test_sk001_claims_load_and_unconfigured_listing_has_no_claims() -> None:
     configured = resolver.resolve("SEEKWAY:US", "SK001", "footwear")
     unconfigured = resolver.resolve("SEEKWAY:US", "OTHER", "footwear")
 
-    assert configured.version == "sk001-listing-2026-08-05-v1"
+    assert configured.version == "sk001-listing-2026-09-06-v2"
     assert configured.claims
     assert unconfigured.version == NO_CLAIMS_VERSION
     assert unconfigured.claims == []
+
+
+def test_split_labels_keep_historical_claims_resolvable() -> None:
+    resolver = ClaimsResolver(PROJECT_ROOT / "config" / "listing_claims_registry.json")
+    current = resolver.resolve("SEEKWAY:US", "SK001", "footwear")
+    historical = resolver.resolve(
+        "SEEKWAY:US",
+        "SK001",
+        "footwear",
+        expected_version="sk001-listing-2026-08-05-v1",
+    )
+    current_dry = next(item for item in current.claims if item.claim_id == "CLM_DRY_01")
+    historical_dry = next(
+        item for item in historical.claims if item.claim_id == "CLM_DRY_01"
+    )
+    assert set(current_dry.allowed_label_codes) == {
+        "FUNCTION_QUICK_DRY",
+        "FUNCTION_DRAINAGE",
+    }
+    assert historical_dry.allowed_label_codes == ["FUNCTION_DRY_DRAINAGE"]
+    assert current_dry.text == historical_dry.text
 
 
 def test_runner_uses_persisted_claims_and_legacy_snapshot_is_safe(

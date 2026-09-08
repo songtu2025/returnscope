@@ -91,4 +91,11 @@ export const dashboardApi = {
     request(`/api/ai-insight-reports/${reportId}`, options),
   retryInsightReport: (reportId, options = {}) =>
     jsonRequest(`/api/ai-insight-reports/${reportId}/retry`, "POST", {}, options),
+  setInsightReportIssueDecision: (reportId, issueId, status, options = {}) =>
+    jsonRequest(
+      `/api/ai-insight-reports/${reportId}/issues/${encodeURIComponent(issueId)}/decision`,
+      "PUT",
+      { status },
+      options,
+    ),
 };

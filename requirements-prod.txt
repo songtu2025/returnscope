@@ -5,3 +5,4 @@ fastapi==0.139.2
 uvicorn[standard]==0.37.0
 python-multipart==0.0.32
 cryptography==49.0.0
+PyMySQL==1.1.1

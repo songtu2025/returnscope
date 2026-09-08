@@ -5,7 +5,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
-from return_semantics.schemas import PartCode, TaxonomyConfig
+from return_semantics.schemas import (
+    LabelDefinition,
+    TaxonomyConfig,
+    TaxonomyValidationRules,
+)
 from return_semantics.taxonomy import load_taxonomy
 
 
@@ -127,26 +131,121 @@ class CapabilityRegistry:
         return load_taxonomy(capability.taxonomy_path)
 
     def combined_taxonomy(self) -> TaxonomyConfig:
-        labels = []
-        parts: list[PartCode] = []
-        label_codes: set[str] = set()
+        neutral_reason_labels = []
+        required_review_labels = []
+        group_sets = []
+        conflict_scopes = []
+        labels: dict[str, LabelDefinition] = {}
+        parts: list[str] = []
+        opposite_reason_labels: dict[str, list[str]] = {}
+        conflicting_label_sets: list[list[str]] = []
+        evidence_requirements = []
+        implicit_evidence_rules = []
+        claim_evidence_requirements = []
         for capability in self.capabilities:
             taxonomy = self.load_taxonomy(capability)
             for label in taxonomy.labels:
-                if label.code in label_codes:
-                    raise ValueError(f"跨品类标签编码重复: {label.code}")
-                label_codes.add(label.code)
-                labels.append(label)
+                existing = labels.get(label.code)
+                if existing is None:
+                    labels[label.code] = label
+                else:
+                    labels[label.code] = self._merge_shared_label(existing, label)
             for part in taxonomy.allowed_parts:
                 if part not in parts:
                     parts.append(part)
+            rules = taxonomy.validation_rules
+            group_sets.append(rules.allowed_groups)
+            conflict_scopes.append(rules.conflict_scope)
+            neutral_reason_labels.extend(
+                rules.neutral_reason_labels
+                if rules.neutral_reason_labels is not None
+                else [
+                    label.code
+                    for label in taxonomy.labels
+                    if label.group in {"其他", "其他原因"}
+                ]
+            )
+            required_review_labels.extend(rules.required_review_labels)
+            for reason, codes in rules.opposite_reason_labels.items():
+                merged_codes = opposite_reason_labels.setdefault(reason, [])
+                for code in codes:
+                    if code not in merged_codes:
+                        merged_codes.append(code)
+            for codes in rules.conflicting_label_sets:
+                if codes not in conflicting_label_sets:
+                    conflicting_label_sets.append(codes)
+            for rule in rules.evidence_requirements:
+                if rule not in evidence_requirements:
+                    evidence_requirements.append(rule)
+            for rule in rules.implicit_evidence_rules:
+                if rule not in implicit_evidence_rules:
+                    implicit_evidence_rules.append(rule)
+            for rule in rules.claim_evidence_requirements:
+                if rule not in claim_evidence_requirements:
+                    claim_evidence_requirements.append(rule)
         return TaxonomyConfig(
             version=self.version,
             agent_family="multi-category",
             product_context="多品类商品",
             allowed_parts=parts,
             instructions=[],
-            labels=labels,
+            validation_rules=TaxonomyValidationRules(
+                neutral_reason_labels=list(dict.fromkeys(neutral_reason_labels)),
+                required_review_labels=list(dict.fromkeys(required_review_labels)),
+                allowed_groups=group_sets[0] if all(group_sets) else [],
+                conflict_scope="evidence"
+                if all(scope == "evidence" for scope in conflict_scopes)
+                else "comment",
+                opposite_reason_labels=opposite_reason_labels,
+                conflicting_label_sets=conflicting_label_sets,
+                evidence_requirements=evidence_requirements,
+                implicit_evidence_rules=implicit_evidence_rules,
+                claim_evidence_requirements=claim_evidence_requirements,
+            ),
+            labels=list(labels.values()),
+        )
+
+    @staticmethod
+    def _merge_shared_label(
+        existing: LabelDefinition,
+        incoming: LabelDefinition,
+    ) -> LabelDefinition:
+        existing_semantics = (
+            existing.name,
+            existing.group,
+            existing.description,
+            frozenset(existing.allowed_sentiments),
+        )
+        incoming_semantics = (
+            incoming.name,
+            incoming.group,
+            incoming.description,
+            frozenset(incoming.allowed_sentiments),
+        )
+        if existing_semantics != incoming_semantics:
+            raise ValueError(f"跨品类标签编码语义冲突: {existing.code}")
+        return existing.model_copy(
+            update={
+                "keywords": list(
+                    dict.fromkeys([*existing.keywords, *incoming.keywords])
+                ),
+                "exclusions": list(
+                    dict.fromkeys([*existing.exclusions, *incoming.exclusions])
+                ),
+                "examples": [
+                    *existing.examples,
+                    *[
+                        example
+                        for example in incoming.examples
+                        if example not in existing.examples
+                    ],
+                ],
+                "allowed_claim_ids": list(
+                    dict.fromkeys(
+                        [*existing.allowed_claim_ids, *incoming.allowed_claim_ids]
+                    )
+                ),
+            }
         )
 
 

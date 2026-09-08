@@ -50,6 +50,11 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
   });
   const [content, setContent] = useState({ loading: true, error: "", data: null });
   const [reports, setReports] = useState({ loading: false, error: "", items: [] });
+  const [decisionState, setDecisionState] = useState({
+    issueId: "",
+    loading: false,
+    error: "",
+  });
   const [generationOpen, setGenerationOpen] = useState(false);
   const [generationState, setGenerationState] = useState({
     loading: false,
@@ -207,19 +212,12 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
       if (reportGenerationRef.current !== generation) return;
       const reportItems = asItems(items);
       setReports({ loading: false, error: "", items: reportItems });
-      const selected = reportItems.find((item) => item.id === route.reportId);
-      const latestPublished = reportItems.find(isPublishedReport);
-      const nextReportId =
-        selected?.id || latestPublished?.id || reportItems[0]?.id || "";
-      if (nextReportId !== route.reportId) {
-        updateRoute({ reportId: nextReportId }, { replace: true });
-      }
     } catch (error) {
       if (reportGenerationRef.current === generation && error.name !== "AbortError") {
         setReports((current) => ({ ...current, loading: false, error: error.message }));
       }
     }
-  }, [route.dashboardId, route.reportId, route.tab, route.versionId, updateRoute]);
+  }, [route.dashboardId, route.tab, route.versionId]);
 
   useEffect(() => {
     loadReports();
@@ -239,6 +237,35 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
     latestPublishedReport ||
     generationAttempts[0] ||
     null;
+
+  useEffect(() => {
+    if (
+      route.tab !== "report" ||
+      reports.loading ||
+      reports.error ||
+      !selectedReport
+    ) {
+      return;
+    }
+    const issues =
+      selectedReport.prompt_version === "ai-return-insight-v6" &&
+      selectedReport.status === "completed"
+        ? selectedReport.content?.issues ?? []
+        : [];
+    const issueId =
+      issues.find((issue) => issue.id === route.issueId)?.id || issues[0]?.id || "";
+    if (selectedReport.id === route.reportId && issueId === route.issueId) return;
+    // 一次补全报告与问题，避免两个更新互相覆盖并反复加载正文。
+    updateRoute({ reportId: selectedReport.id, issueId }, { replace: true });
+  }, [
+    reports.error,
+    reports.loading,
+    route.issueId,
+    route.reportId,
+    route.tab,
+    selectedReport,
+    updateRoute,
+  ]);
   const activeReportId = generationAttempts.find((report) =>
     ["queued", "running"].includes(report.status),
   )?.id;
@@ -348,7 +375,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
         items: [report, ...current.items],
       }));
       setGenerationOpen(false);
-      updateRoute({ reportId: report.id }, { replace: true });
+      updateRoute({ reportId: report.id, issueId: "" }, { replace: true });
       notify?.("AI 洞察报告已加入生成队列");
     } catch (error) {
       setGenerationState((current) => ({
@@ -366,10 +393,35 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
         ...current,
         items: [report, ...current.items],
       }));
-      updateRoute({ reportId: report.id }, { replace: true });
+      updateRoute({ reportId: report.id, issueId: "" }, { replace: true });
       notify?.("新的生成尝试已加入队列，原失败记录已保留");
     } catch (error) {
       setReports((current) => ({ ...current, error: error.message }));
+    }
+  };
+  const setIssueDecision = async (issueId, status) => {
+    if (!selectedReport) return;
+    setDecisionState({ issueId, loading: true, error: "" });
+    try {
+      const decision = await dashboardApi.setInsightReportIssueDecision(
+        selectedReport.id,
+        issueId,
+        status,
+      );
+      setReports((current) => ({
+        ...current,
+        items: current.items.map((item) => {
+          if (item.id !== selectedReport.id) return item;
+          const decisions = (item.decisions ?? []).filter(
+            (value) => value.issue_id !== issueId,
+          );
+          return { ...item, decisions: [decision, ...decisions] };
+        }),
+      }));
+      setDecisionState({ issueId: "", loading: false, error: "" });
+      notify?.("问题状态已更新");
+    } catch (error) {
+      setDecisionState({ issueId, loading: false, error: error.message });
     }
   };
   const reportSummary =
@@ -449,6 +501,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
                 updateRoute({
                   versionId: event.target.value,
                   reportId: "",
+                  issueId: "",
                   tab: "overview",
                   recordPage: 1,
                   problem: "",
@@ -573,7 +626,13 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
           version={selectedVersion}
           onGenerate={openReportGeneration}
           onRetry={retryReport}
-          onSelect={(reportId) => updateRoute({ reportId }, { replace: true })}
+          selectedIssueId={route.issueId}
+          decisionState={decisionState}
+          onDecision={setIssueDecision}
+          onSelectIssue={(issueId) => updateRoute({ issueId }, { replace: true })}
+          onSelect={(reportId) =>
+            updateRoute({ reportId, issueId: "" }, { replace: true })
+          }
         />
       )}
       {!content.error && route.tab === "source" && content.data && (

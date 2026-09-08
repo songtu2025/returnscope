@@ -1,11 +1,21 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 
 import { navigateHash } from "../../app/hashRouter";
 import { DataManagement } from "../../pages/DataManagement";
 import { readTaskDraft, updateTaskDraft } from "../task-create/taskDraftStorage";
+import { ImportRulesPage } from "./ImportRulesPage";
+import { ReturnDataAssetsPage } from "./ReturnDataAssetsPage";
 
 export function DataAssetsPage({ route, notify, onNavigate, userId }) {
+  const requestedView = route.query.view || "products";
+  const view = requestedView === "quality" ? "products" : requestedView;
   const taskDraft = readTaskDraft(userId);
+
+  useEffect(() => {
+    if (requestedView === "quality") {
+      navigateHash("data-assets", { view: "products" });
+    }
+  }, [requestedView]);
   const focus = useMemo(() => {
     const repair = taskDraft?.repairContext ?? {};
     const routeTargetsProduct = route.query.view === "products";
@@ -19,6 +29,21 @@ export function DataAssetsPage({ route, notify, onNavigate, userId }) {
     };
   }, [route.query.dataset, route.query.view, route.query.return_to, taskDraft]);
 
+  const updateRoute = (changes) =>
+    navigateHash("data-assets", { ...route.query, ...changes });
+
+  if (view === "returns") {
+    return (
+      <ReturnDataAssetsPage
+        route={route}
+        notify={notify}
+        onNavigate={onNavigate}
+        onRouteChange={updateRoute}
+      />
+    );
+  }
+  if (view === "rules") return <ImportRulesPage />;
+
   return (
     <DataManagement
       notify={notify}
@@ -28,6 +53,9 @@ export function DataAssetsPage({ route, notify, onNavigate, userId }) {
       routeDetailTab={route.query.tab || ""}
       routeReferenceVersion={route.query.reference_version || ""}
       routeReferencePage={route.query.reference_page || 1}
+      onAssetViewChange={(nextView) =>
+        updateRoute({ view: nextView, dataset: "", tab: "" })
+      }
       onDetailTabChange={(tab) => navigateHash("data-assets", { ...route.query, tab })}
       onReferenceRouteChange={(changes) =>
         navigateHash("data-assets", { ...route.query, ...changes })

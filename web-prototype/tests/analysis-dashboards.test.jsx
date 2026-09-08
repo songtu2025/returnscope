@@ -20,6 +20,7 @@ const { dashboardApiMock, resultApiMock } = vi.hoisted(() => ({
     analysisDashboardInsightReports: vi.fn(),
     insightReport: vi.fn(),
     retryInsightReport: vi.fn(),
+    setInsightReportIssueDecision: vi.fn(),
   },
   resultApiMock: {
     classificationResults: vi.fn(),
@@ -33,6 +34,7 @@ vi.mock("../src/shared/api/dashboardApi", () => ({ dashboardApi: dashboardApiMoc
 vi.mock("../src/api", () => ({ api: resultApiMock }));
 
 import { useHashRoute } from "../src/app/hashRouter";
+import { AiInsightReport } from "../src/features/analysis-dashboards/AiInsightReport";
 import { AnalysisDashboardPage } from "../src/features/analysis-dashboards/AnalysisDashboardPage";
 import {
   createDashboardSelection,
@@ -519,7 +521,7 @@ test("看板详情聚焦退货原因洞察并保留证据与版本入口", async
       product_names: ["产品A"],
       product_skus: ["PRODUCT-SKU-1"],
     },
-    category_groups: ["尺码与合脚", "外观"],
+    category_groups: ["尺码与合脚", "外观", "质量与耐用性", "自定义分组"],
     total_record_count: 2000,
     reasons: [
       {
@@ -567,6 +569,8 @@ test("看板详情聚焦退货原因洞察并保留证据与版本入口", async
   expect(screen.getByText("退货原因洞察")).toBeVisible();
   expect(screen.getByText(/已分析 2,000\/2,300 条/)).toBeVisible();
   expect(screen.getByText("具体退货原因")).toBeVisible();
+  expect(screen.getByRole("button", { name: "质量与耐用性" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "自定义分组" })).toBeVisible();
   expect(screen.getByText("偏小原因占比趋势")).toBeVisible();
   const replaceState = vi.spyOn(window.history, "replaceState");
   await user.click(screen.getByRole("button", { name: /偏小.*55/ }));
@@ -1061,4 +1065,301 @@ test("旧列表响应不能覆盖新筛选结果", async () => {
   });
   expect(screen.queryByText("旧响应看板")).not.toBeInTheDocument();
   expect(screen.getByText("新筛选看板")).toBeVisible();
+});
+
+test.each([
+  ["报告与问题链接", "&report=report-v6&issue=issue-2", "issue-2"],
+  ["仅报告链接", "&report=report-v6", "issue-1"],
+  ["仅问题链接", "&issue=issue-2", "issue-2"],
+  ["默认报告入口", "", "issue-1"],
+])("V6 %s稳定显示问题判断工作台", async (_label, suffix, initialIssueId) => {
+  const user = userEvent.setup();
+  const issue = (id, rank, title, share, gap) => ({
+    id,
+    rank,
+    title,
+    scope: {
+      category: "手套",
+      listing: "RGA803",
+      product: "RGA803 Black",
+      sku: title.split(" · ")[0],
+    },
+    metrics: {
+      matched_return_samples: rank === 1 ? 21 : 17,
+      scoped_return_samples: rank === 1 ? 54 : 91,
+      return_sample_share: share,
+      baseline_return_sample_share: 20.9,
+      gap_percentage_points: gap,
+      lift: 1.6,
+      recent_change_percentage_points: rank === 1 ? 5.6 : -3.2,
+      trend_direction: rank === 1 ? "rising" : "falling",
+    },
+    known: ["当前退货样本形成了稳定的集中信号。"],
+    evidence_explanation: "当前证据可用于定位问题，但不能证明真实发生率或因果。",
+    unknown: ["该问题是否在相同使用条件下重复出现？"],
+    recommendation: {
+      label: "建议验证",
+      validation_question: `是否需要进一步验证 ${title}？`,
+      rationale: "需要结合实物与页面信息核对现有解释。",
+      suggested_evidence: ["复核原始评论", "核对实物表现"],
+    },
+    readiness: {
+      status: "verification_ready",
+      label: "可进入验证",
+      reason: "样本量、对照基线和可追溯证据已具备。",
+    },
+    evidence_ids: [`evidence.${rank}`, "scope"],
+  });
+  const report = {
+    id: "report-v6",
+    version_no: 6,
+    status: "completed",
+    prompt_version: "ai-return-insight-v6",
+    decisions: [{ issue_id: "issue-2", status: "watching" }],
+    quality_gate: {
+      status: "passed",
+      decision_readiness: {
+        status: "verification_ready",
+        label: "可进入验证",
+        reason: "数据质量和报告一致性校验均已通过。",
+      },
+    },
+    content: {
+      report_type: "problem_decision",
+      title: "RGA803 退货问题判断报告",
+      issues: [
+        issue("issue-1", 1, "RGA803 Black XL · 尺码偏小", 38.9, 18.0),
+        issue("issue-2", 2, "RGA803 Black S · 保暖不足", 20.9, 5.1),
+      ],
+      caveats: ["所有占比均为退货样本内占比。"],
+    },
+    evidence: {
+      source: {
+        date_range: { date_from: "2025-11-02", date_to: "2026-03-01" },
+        report_profile: { category_name: "手套" },
+        included_record_count: 425,
+        total_record_count: 517,
+        pending_review_record_count: 92,
+        label_coverage: 96.5,
+      },
+      catalog: {
+        "evidence.1": { label: "尺码偏小", value: "21 条" },
+        "evidence.2": { label: "保暖不足", value: "17 条" },
+        scope: { label: "分析范围", value: "425 / 517 条" },
+      },
+    },
+  };
+  dashboardApiMock.analysisDashboardInsightReports.mockResolvedValue([report]);
+  dashboardApiMock.setInsightReportIssueDecision.mockResolvedValue({
+    report_id: report.id,
+    issue_id: "issue-2",
+    status: "verify",
+    updated_by: "user-1",
+    updated_at: "2026-09-03T08:00:00Z",
+  });
+  window.location.hash =
+    `#analysis-dashboards?dashboard=dashboard-default&version=dashboard-version-default&tab=report${suffix}`;
+
+  render(<DashboardHarness />);
+
+  expect(await screen.findByText("RGA803 退货问题判断报告")).toBeVisible();
+  await waitFor(() => {
+    expect(window.location.hash).toContain("report=report-v6");
+    expect(window.location.hash).toContain(`issue=${initialIssueId}`);
+  });
+  if (initialIssueId === "issue-1") {
+    await user.click(screen.getByText("RGA803 Black S · 保暖不足"));
+  }
+  expect(
+    screen.getByRole("heading", { name: "RGA803 Black S · 保暖不足" }),
+  ).toBeVisible();
+  expect(screen.getByText("退货样本内占比")).toBeVisible();
+  expect(screen.getByRole("button", { name: "暂不处理" })).toBeVisible();
+  expect(screen.getByRole("button", { name: /继续观察/, pressed: true })).toBeVisible();
+  expect(
+    screen.getByRole("button", { name: /建议验证/, pressed: false }),
+  ).toBeVisible();
+  expect(screen.queryByText("行动计划")).not.toBeInTheDocument();
+  expect(screen.queryByText(/负责人|截止时间|创建任务/)).not.toBeInTheDocument();
+  expect(dashboardApiMock.analysisDashboardInsightReports).toHaveBeenCalledTimes(1);
+
+  const evidenceToggle = screen.getByText(/查看 2 项证据/);
+  await user.click(evidenceToggle);
+  expect(screen.getByText(/收起 2 项证据/)).toBeVisible();
+  const evidenceList = screen.getByRole("list", { name: "证据明细" });
+  expect(evidenceList).toBeVisible();
+  expect(within(evidenceList).getAllByRole("listitem")).toHaveLength(2);
+  expect(within(evidenceList).getByText("分析范围")).toBeVisible();
+  expect(within(evidenceList).getByText("425 / 517 条")).toBeVisible();
+  await user.click(screen.getByText(/收起 2 项证据/));
+  expect(screen.queryByRole("list", { name: "证据明细" })).not.toBeVisible();
+
+  await user.click(screen.getByRole("button", { name: /建议验证/, pressed: false }));
+  await waitFor(() =>
+    expect(dashboardApiMock.setInsightReportIssueDecision).toHaveBeenCalledWith(
+      "report-v6",
+      "issue-2",
+      "verify",
+    ),
+  );
+  expect(screen.getByRole("button", { name: /建议验证/, pressed: true })).toBeVisible();
+
+  await user.click(screen.getByText("RGA803 Black XL · 尺码偏小"));
+  await waitFor(() => expect(window.location.hash).toContain("issue=issue-1"));
+  expect(dashboardApiMock.analysisDashboardInsightReports).toHaveBeenCalledTimes(1);
+  expect(
+    screen.getByRole("heading", { name: "RGA803 Black XL · 尺码偏小" }),
+  ).toBeVisible();
+});
+
+test("业务问题视图展示品类变体与评论证据", () => {
+  const report = {
+    id: "report-business-issues",
+    version_no: 3,
+    status: "completed",
+    resolved_model: "gpt-5.6-sol",
+    reasoning_effort: "high",
+    prompt_version: "ai-return-insight-v4",
+    completed_at: "2026-08-26T08:30:00Z",
+    quality_gate: {
+      status: "warning",
+      decision_readiness: {
+        status: "diagnostic_only",
+        label: "仅供诊断",
+        reason: "评论文本质量需要修复。",
+      },
+    },
+    content: {
+      title: "RGA803 退货问题诊断报告",
+      executive_summary: [
+        {
+          title: "最明确的问题分化",
+          statement: "整体偏小在 XL 为 38.9%，比整体基线高 18.0pp。",
+          tone: "primary",
+          evidence_ids: ["business_issue.GLOVE_SIZE_SMALL"],
+        },
+      ],
+      findings: [
+        {
+          id: "finding.structure",
+          kind: "structure",
+          title: "手套问题已经分化到具体手套尺码",
+          conclusion: "偏小问题集中在 XL。",
+          interpretation: "需要结合评论验证具体适配部位。",
+          implication: "先核对掌围与指长，不做全尺码统一调整。",
+          evidence_ids: ["business_issue.GLOVE_SIZE_SMALL"],
+        },
+        {
+          id: "finding.diagnostic",
+          kind: "diagnostic",
+          title: "尺码适配需要按手套尺码验证",
+          conclusion: "XL 的偏小问题显著高于整体基线。",
+          interpretation: "评论进一步指向手部整体偏小。",
+          implication: "优先验证 XL 的标注与实物测量。",
+          evidence_ids: ["business_issue.GLOVE_SIZE_SMALL"],
+        },
+      ],
+      actions: [
+        {
+          id: "action.diagnostic",
+          priority: "P0",
+          target: "XL · 整体偏小",
+          action: "按尺码核对掌围、指长和内衬占用空间。",
+          rationale: "XL 的问题占比高于整体。",
+          success_signal: "XL 偏小反馈连续两个完整周期下降。",
+          evidence_ids: ["business_issue.GLOVE_SIZE_SMALL"],
+        },
+      ],
+      further_questions: ["偏小来自掌围还是指长？"],
+      caveats: ["占比描述退货样本结构，不代表真实退货率。"],
+    },
+    evidence: {
+      source: {
+        date_range: { date_from: "2025-11-02", date_to: "2026-03-01" },
+        label_coverage: 96.5,
+        report_status: "provisional",
+        product_mapping: { status: "passed" },
+        text_quality: {
+          status: "needs_review",
+          note: "28 条异常评论已隔离。",
+        },
+      },
+      catalog: {
+        "business_issue.GLOVE_SIZE_SMALL": {
+          label: "整体偏小",
+          value: "89 条 · 20.9%",
+        },
+      },
+      analysis: {
+        summary: { record_count: 425, pending_review_record_count: 92 },
+        label_group_breakdown: [
+          { value: "尺码与适配", record_count: 212, percentage: 49.9 },
+        ],
+        diagnostics: [],
+        business_issues: [
+          {
+            id: "business_issue.GLOVE_SIZE_SMALL",
+            reason_code: "GLOVE_SIZE_SMALL",
+            label: "整体偏小",
+            label_group: "尺码与适配",
+            role: "primary",
+            record_count: 89,
+            percentage: 20.9,
+            trend_summary: {
+              status: "available",
+              early_rate: 26.1,
+              recent_rate: 20.5,
+              delta_percentage_points: -5.6,
+            },
+            hotspot_label: "手套尺码",
+            hotspots: [
+              {
+                value: "XL",
+                record_count: 21,
+                total_record_count: 54,
+                product_reason_rate: 38.9,
+                overall_reason_rate: 20.9,
+                lift: 1.86,
+              },
+            ],
+            contexts: {
+              parts: [{ value: "HAND", record_count: 18 }],
+              opinions: [{ opinion: "hand overall too small", record_count: 16 }],
+              samples: [
+                {
+                  comment: "Too small for my hand.",
+                  product_name: "RGA803 Winter Gloves",
+                },
+              ],
+            },
+            validation_focus: "按尺码核对掌围、指长和内衬占用空间。",
+          },
+        ],
+      },
+    },
+  };
+
+  render(
+    <AiInsightReport
+      report={report}
+      reports={[report]}
+      attempts={[]}
+      latestReport={report}
+      dashboard={{ name: "AI 洞察 · RGA803" }}
+      version={{ version: 1 }}
+      onGenerate={vi.fn()}
+      onRetry={vi.fn()}
+      onSelect={vi.fn()}
+    />,
+  );
+
+  expect(screen.getByRole("button", { name: "问题诊断" })).toBeVisible();
+  expect(screen.getByText("手套问题已经分化到具体手套尺码")).toBeVisible();
+  expect(screen.getAllByText("XL")[0]).toBeVisible();
+  expect(screen.getByText(/比整体\+18\.0pp/)).toBeVisible();
+  expect(screen.getByText("hand overall too small")).toBeVisible();
+  expect(screen.getByText("“Too small for my hand.”")).toBeVisible();
+  expect(screen.getAllByText("按尺码核对掌围、指长和内衬占用空间。")[0]).toBeVisible();
+  expect(screen.queryByText("偏小与偏大问题占比趋势")).not.toBeInTheDocument();
+  expect(screen.queryByText("商品热点与整体基线")).not.toBeInTheDocument();
 });

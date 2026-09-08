@@ -4,7 +4,6 @@ import json
 import threading
 from collections import Counter
 from dataclasses import is_dataclass, replace
-from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable
 
@@ -15,8 +14,6 @@ from return_semantics.category_pipeline import CategorySegmentRuntime
 from return_semantics.claims import NO_CLAIMS_VERSION, ClaimsResolver
 from return_semantics.data import (
     ReturnDataset,
-    load_return_dataset,
-    load_return_dataset_auto,
 )
 from return_semantics.exporter import REVIEW_STATUSES, export_results
 from return_semantics.model_client import (
@@ -43,6 +40,7 @@ from web_backend.classification_standard_service import ClassificationStandardSe
 from web_backend.common import json_text, json_value
 from web_backend.config_service import ConfigService
 from web_backend.database import Database
+from web_backend.dataset_cache import load_cached_dataset
 from web_backend.security import utc_now
 from web_backend.settings import PROJECT_ROOT, Settings
 from web_backend.task_state import summarize_task_status
@@ -84,27 +82,6 @@ class AgentRunner:
         self._caches_lock = threading.Lock()
         self._task_locks: dict[str, threading.Lock] = {}
         self._task_locks_lock = threading.Lock()
-
-    @staticmethod
-    @lru_cache(maxsize=8)
-    def _cached_dataset(
-        return_file_path: str,
-        product_file_path: str,
-        store: str,
-        listing: str | None,
-        scope_mode: str,
-    ) -> ReturnDataset:
-        if scope_mode == "auto":
-            return load_return_dataset_auto(
-                Path(return_file_path),
-                Path(product_file_path),
-            )
-        return load_return_dataset(
-            Path(return_file_path),
-            Path(product_file_path),
-            store=store,
-            listing=listing,
-        )
 
     def _get_cache(self, config_version_id: str) -> JsonlCache:
         with self._caches_lock:
@@ -150,12 +127,14 @@ class AgentRunner:
         try:
             snapshot = json_value(task.get("snapshot_json"), {})
             scope_mode = str(snapshot.get("scope", {}).get("mode", "manual"))
-            dataset = self._cached_dataset(
+            dataset = load_cached_dataset(
                 str(task["return_file_path"]),
                 str(task["product_file_path"]),
                 str(task["store"]),
                 task["listing"],
                 scope_mode,
+                str(task["return_sha256"]),
+                str(task["product_sha256"]),
             )
             all_keys = {
                 str(key) for key in json_value(segment["classification_keys_json"], [])
@@ -375,7 +354,7 @@ class AgentRunner:
                 for item in samples
             ]
         )
-        if source.get("kind") == "raw_dataset":
+        if source.get("kind") in {"raw_dataset", "review_file"}:
             config_version_id = str(source["config_version_id"])
             settings = self.config_service.build_model_settings(config_version_id)
             claims = self.claims_resolver.resolve(
@@ -401,6 +380,7 @@ class AgentRunner:
                 progress=progress,
                 model_policy_version=str(source["model_policy_version"]),
                 secondary_is_fallback=False,
+                analysis_context=source.get("analysis_context", "returns"),
             )
         task = source["task"]
         segment = source["segment"]
@@ -509,12 +489,14 @@ class AgentRunner:
         capability = self._capability_for_segment(segment)
         taxonomy = self._taxonomy_for_segment(segment, capability)
         snapshot = json_value(task.get("snapshot_json"), {})
-        dataset = self._cached_dataset(
+        dataset = load_cached_dataset(
             str(task["return_file_path"]),
             str(task["product_file_path"]),
             str(task["store"]),
             task["listing"],
             str(snapshot.get("scope", {}).get("mode", "manual")),
+            str(task["return_sha256"]),
+            str(task["product_sha256"]),
         )
         segment_dataset = self._subset_dataset(dataset, all_keys)
         dataset_keys = {
@@ -561,12 +543,14 @@ class AgentRunner:
             }:
                 return
             snapshot = json_value(task.get("snapshot_json"), {})
-            dataset = self._cached_dataset(
+            dataset = load_cached_dataset(
                 str(task["return_file_path"]),
                 str(task["product_file_path"]),
                 str(task["store"]),
                 task["listing"],
                 str(snapshot.get("scope", {}).get("mode", "manual")),
+                str(task["return_sha256"]),
+                str(task["product_sha256"]),
             )
             try:
                 self._build_parent_result(task_id, dataset, str(task["status"]))
@@ -1162,12 +1146,14 @@ class AgentRunner:
             if terminal and has_deliverable:
                 if dataset is None:
                     snapshot = json_value(task.get("snapshot_json"), {})
-                    dataset = self._cached_dataset(
+                    dataset = load_cached_dataset(
                         str(task["return_file_path"]),
                         str(task["product_file_path"]),
                         str(task["store"]),
                         task["listing"],
                         str(snapshot.get("scope", {}).get("mode", "manual")),
+                        str(task["return_sha256"]),
+                        str(task["product_sha256"]),
                     )
                 try:
                     self._build_parent_result(task_id, dataset, parent_status)
@@ -1383,7 +1369,8 @@ class AgentRunner:
             row = connection.execute(
                 """
                 SELECT t.*, rv.file_path AS return_file_path,
-                       pv.file_path AS product_file_path
+                       pv.file_path AS product_file_path,
+                       rv.sha256 AS return_sha256, pv.sha256 AS product_sha256
                 FROM tasks t
                 JOIN dataset_versions rv ON rv.id = t.dataset_version_id
                 JOIN dataset_versions pv ON pv.id = t.product_version_id

@@ -125,7 +125,7 @@ def test_review_batch_list_discovery_conflict_and_derived_summary(
         review["id"],
         review["revision"],
         "user-1",
-        "FIT_TOO_SMALL",
+        "FIT_TOO_SMALL_U1",
         "确认尺码偏小",
     )
     current = service.get_batch(batch["id"])

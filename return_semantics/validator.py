@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from itertools import product
+from typing import Literal
 
 from return_semantics.schemas import (
     AssertionCode,
@@ -13,24 +15,6 @@ from return_semantics.schemas import (
     ValidatedClassification,
 )
 from return_semantics.semantic_guardrails import normalize_semantic_unit
-
-OPPOSITE_REASON_LABELS = {
-    "APPAREL_TOO_SMALL": {
-        "FIT_TOO_LARGE",
-        "FIT_TOO_LONG",
-        "FIT_TOO_LOOSE_WIDE",
-    },
-    "APPAREL_TOO_LARGE": {
-        "FIT_TOO_SMALL",
-        "FIT_TOO_SHORT",
-        "FIT_TOO_TIGHT_NARROW",
-    },
-}
-CONFLICTING_LABELS = [
-    {"FIT_TOO_SMALL", "FIT_TOO_LARGE"},
-    {"FIT_TOO_SHORT", "FIT_TOO_LONG"},
-    {"FIT_TOO_TIGHT_NARROW", "FIT_TOO_LOOSE_WIDE"},
-]
 
 
 def _unique(values: Iterable[str]) -> list[str]:
@@ -46,6 +30,7 @@ def validate_classification(
     claims: ListingClaimsConfig,
     model_name: str,
     prompt_version: str,
+    analysis_context: Literal["returns", "review"] = "returns",
 ) -> ValidatedClassification:
     labels = {label.code: label for label in taxonomy.labels}
     allowed_parts = set(taxonomy.allowed_parts)
@@ -68,14 +53,28 @@ def validate_classification(
             hard_reasons.append(f"标签情感方向无效: {unit.label_code}")
             continue
         if unit.part not in allowed_parts:
-            hard_reasons.append(f"部位不适用于当前品类: {unit.part.value}")
+            hard_reasons.append(f"部位不适用于当前品类: {unit.part}")
             continue
         if unit.assertion != AssertionCode.AFFIRMED:
             soft_reasons.append(f"语义并非已确认事实: {unit.label_code}")
             continue
 
+        if taxonomy.recognition_profile == "semantic_v1":
+            # 迁移后的高风险边界不按单词删除标签，保留证据交由人工确认。
+            boundaries = [
+                *taxonomy.validation_rules.evidence_requirements,
+                *taxonomy.validation_rules.claim_evidence_requirements,
+            ]
+            if any(
+                rule.label_code == unit.label_code
+                and rule.semantic_requirement
+                and (not hasattr(rule, "claim_id") or rule.claim_id == unit.claim_id)
+                for rule in boundaries
+            ):
+                soft_reasons.append(f"语义边界需人工确认: {unit.label_code}")
+
         original_label_code = unit.label_code
-        unit, unknown = normalize_semantic_unit(unit)
+        unit, unknown = normalize_semantic_unit(unit, taxonomy)
         if unknown is not None:
             unknown_semantics.append(unknown)
             guardrail_removed_codes.add(original_label_code)
@@ -129,7 +128,11 @@ def validate_classification(
         if unit.sentiment == SentimentCode.NEGATIVE
         or (
             unit.sentiment == SentimentCode.NEUTRAL
-            and labels[unit.label_code].group == "其他原因"
+            and (
+                unit.label_code in taxonomy.validation_rules.neutral_reason_labels
+                if taxonomy.validation_rules.neutral_reason_labels is not None
+                else labels[unit.label_code].group in {"其他", "其他原因"}
+            )
         )
     )
     positive_codes = _unique(
@@ -151,22 +154,54 @@ def validate_classification(
         soft_reasons.append("多个问题但主因不明确")
 
     problem_set = set(problem_codes)
-    if problem_set.intersection(OPPOSITE_REASON_LABELS.get(reason, set())):
+    opposite_codes = set(
+        taxonomy.validation_rules.opposite_reason_labels.get(reason, [])
+    )
+    if problem_set.intersection(opposite_codes):
         soft_reasons.append("Amazon 原因与评论方向冲突")
-    for pair in CONFLICTING_LABELS:
-        if pair.issubset(problem_set):
-            soft_reasons.append(f"评论包含相反标签: {sorted(pair)}")
+    all_label_codes = {unit.label_code for unit in valid_units}
+    for codes in taxonomy.validation_rules.conflicting_label_sets:
+        conflict_set = set(codes)
+        if conflict_set.issubset(all_label_codes):
+            if taxonomy.validation_rules.conflict_scope == "evidence":
+                candidates = [
+                    [unit for unit in valid_units if unit.label_code == code]
+                    for code in codes
+                ]
+                # 仅检查指向相同部位且证据重叠的观点，独立事件可以并存。
+                overlaps = any(
+                    len({unit.part for unit in units} - {"UNSPECIFIED"}) <= 1
+                    and max(comment.index(unit.evidence) for unit in units)
+                    < min(
+                        comment.index(unit.evidence) + len(unit.evidence)
+                        for unit in units
+                    )
+                    for units in product(*candidates)
+                )
+                if not overlaps:
+                    continue
+            message = (
+                "评论包含需核对的标签组合"
+                if taxonomy.validation_rules.conflict_scope == "evidence"
+                else "评论包含相反标签"
+            )
+            soft_reasons.append(f"{message}: {sorted(conflict_set)}")
+
+    if all_label_codes.intersection(taxonomy.validation_rules.required_review_labels):
+        soft_reasons.append("标签规则要求人工复核")
 
     if model_result.needs_review:
         soft_reasons.append("模型要求复核")
     if not valid_units and not unknown_semantics:
         soft_reasons.append("没有可确认的语义标签")
-    if positive_codes and not problem_codes:
+    if positive_codes and not problem_codes and analysis_context == "returns":
         soft_reasons.append("只有正面信息，无法确认退货原因")
 
     hard_reasons = _unique(hard_reasons)
     soft_reasons = _unique(soft_reasons)
-    if hard_reasons:
+    if hard_reasons or any(
+        reason.startswith("语义边界需人工确认:") for reason in soft_reasons
+    ):
         status = ProcessingStatus.MANUAL_REVIEW
     elif unknown_semantics:
         status = ProcessingStatus.UNKNOWN_SEMANTIC
