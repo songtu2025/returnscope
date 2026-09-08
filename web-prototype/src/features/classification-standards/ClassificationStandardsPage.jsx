@@ -1,5 +1,5 @@
 import { groups as BUSINESS_GROUPS } from "../../../../config/taxonomy_alignment.json";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   BookOpenText,
@@ -13,6 +13,7 @@ import {
 } from "@phosphor-icons/react";
 import { navigateHash } from "../../app/hashRouter";
 import { EmptyState, Modal, PageHeading } from "../../components/SharedUi";
+import { formatDate } from "../../lib/presentation";
 import { classificationStandardApi } from "../../shared/api/classificationStandardApi";
 import { ClassificationStandardEditor } from "./ClassificationStandardDraftEditor";
 import { ClassificationStandardValidation } from "./ClassificationStandardValidation";
@@ -56,11 +57,6 @@ function statusLabel(standard) {
   return Number(standard.version_no) > 0 ? "已停用" : "未发布";
 }
 
-function formatDate(value) {
-  if (!value) return "—";
-  return new Date(value).toLocaleDateString("zh-CN");
-}
-
 function validateContent(content) {
   if (!content.name.trim() || !content.product_context.trim()) {
     return "请填写标准名称和适用商品说明";
@@ -86,6 +82,38 @@ function validateContent(content) {
   return "";
 }
 
+function contentFieldErrors(content) {
+  return {
+    name: content.name.trim() ? "" : "请填写标准名称",
+    product_context: content.product_context.trim() ? "" : "请填写适用商品说明",
+    variants: content.variants.map((item) => ({
+      category_a: item.category_a.trim() ? "" : "请填写品类 A",
+      category_b: item.category_b.trim() ? "" : "请填写品类 B",
+    })),
+    variants_empty: content.variants.length ? "" : "请至少增加一个适用品类",
+    labels: content.labels.map((item) => ({
+      name: item.name.trim() ? "" : "请填写标签名称",
+      group: item.group.trim() ? "" : "请选择标签分组",
+      code: item.code.trim() ? "" : "请填写标签编码",
+      description: item.description.trim() ? "" : "请填写业务定义",
+    })),
+    labels_empty: content.labels.length ? "" : "请至少增加一个分类标签",
+  };
+}
+
+function clearContentFieldError(errors, field) {
+  if (!field) return errors;
+  if (!field.includes(".")) return { ...errors, [field]: "" };
+  const [collection, indexText, key] = field.split(".");
+  const index = Number(indexText);
+  return {
+    ...errors,
+    [collection]: (errors[collection] ?? []).map((item, itemIndex) =>
+      itemIndex === index ? { ...item, [key]: "" } : item,
+    ),
+  };
+}
+
 export function ClassificationStandardsPage({ route, notify }) {
   const [standards, setStandards] = useState([]);
   const [detail, setDetail] = useState(null);
@@ -105,6 +133,8 @@ export function ClassificationStandardsPage({ route, notify }) {
   const [selectedValidation, setSelectedValidation] = useState(null);
   const [validationSourceId, setValidationSourceId] = useState("");
   const [validationSampleSize, setValidationSampleSize] = useState(20);
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [validationAttempt, setValidationAttempt] = useState(0);
 
   const selectedId = route.query.standard || "";
   const mode = route.query.view === "new" ? "new" : selectedId ? "edit" : "list";
@@ -156,6 +186,7 @@ export function ClassificationStandardsPage({ route, notify }) {
         setContent(
           clone(draftValue?.content ?? contentFromSnapshot(standard.snapshot)),
         );
+        setFieldErrors({});
         setChangeReason(draftValue?.change_reason || `更新${standard.name}`);
         if (draftValue) await loadValidation(draftValue.id);
         else {
@@ -183,6 +214,7 @@ export function ClassificationStandardsPage({ route, notify }) {
       setVersions([]);
       setDraft(null);
       setContent(clone(EMPTY_CONTENT));
+      setFieldErrors({});
       setChangeReason("新增分类标准");
       return;
     }
@@ -241,7 +273,12 @@ export function ClassificationStandardsPage({ route, notify }) {
 
   const persistDraft = async () => {
     const error = validateContent(content);
-    if (error) throw new Error(error);
+    if (error) {
+      setFieldErrors(contentFieldErrors(content));
+      setValidationAttempt((value) => value + 1);
+      throw new Error(error);
+    }
+    setFieldErrors({});
 
     let workingDraft = draft;
     if (!workingDraft) {
@@ -493,7 +530,12 @@ export function ClassificationStandardsPage({ route, notify }) {
             selectedValidation={selectedValidation}
             validationSourceId={validationSourceId}
             validationSampleSize={validationSampleSize}
-            onContentChange={setContent}
+            fieldErrors={fieldErrors}
+            validationAttempt={validationAttempt}
+            onContentChange={(value, field) => {
+              setContent(value);
+              setFieldErrors((current) => clearContentFieldError(current, field));
+            }}
             onReasonChange={setChangeReason}
             onSave={saveDraft}
             onPublish={publish}
@@ -807,6 +849,8 @@ function StandardWorkspace({
   selectedValidation,
   validationSourceId,
   validationSampleSize,
+  fieldErrors,
+  validationAttempt,
   onContentChange,
   onReasonChange,
   onSave,
@@ -821,6 +865,7 @@ function StandardWorkspace({
 }) {
   const [section, setSection] = useState(isNew ? "settings" : "labels");
   const [confirmBack, setConfirmBack] = useState(false);
+  const handledValidationAttempt = useRef(validationAttempt);
   const editable = isNew || detail?.status === "active" || Boolean(draft);
   const baseContent = draft?.base_snapshot
     ? contentFromSnapshot(draft.base_snapshot)
@@ -855,6 +900,19 @@ function StandardWorkspace({
         : awaitingApproval
           ? "等待人工确认"
           : "等待样本验证";
+
+  useEffect(() => {
+    if (!validationAttempt || handledValidationAttempt.current === validationAttempt) {
+      return;
+    }
+    handledValidationAttempt.current = validationAttempt;
+    const hasSettingsError =
+      fieldErrors.name ||
+      fieldErrors.product_context ||
+      fieldErrors.variants_empty ||
+      fieldErrors.variants?.some((item) => item.category_a || item.category_b);
+    setSection(hasSettingsError ? "settings" : "labels");
+  }, [fieldErrors, validationAttempt]);
 
   return (
     <>
@@ -914,6 +972,8 @@ function StandardWorkspace({
         content={content}
         baseContent={baseContent}
         onChange={onContentChange}
+        fieldErrors={fieldErrors}
+        validationAttempt={validationAttempt}
       />
 
       <div className="standard-settings-extra" hidden={section !== "settings"}>
@@ -1087,9 +1147,13 @@ function StandardWorkspace({
         <footer className="standard-editor-footer">
           <div role="status">
             <strong>
-              {changeCount
-                ? `有 ${changeCount} 项变更${dirty ? " · 未保存" : " · 已保存"}`
-                : "暂无变更"}
+              {isNew && !draft
+                ? dirty
+                  ? `有 ${changeCount} 项变更 · 未保存`
+                  : "尚未保存"
+                : changeCount
+                  ? `有 ${changeCount} 项变更${dirty ? " · 未保存" : " · 已保存"}`
+                  : "暂无变更"}
             </strong>
             {draft && !dirty && <span>草稿 r{draft.revision}，尚未发布</span>}
           </div>

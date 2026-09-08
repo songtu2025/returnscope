@@ -39,6 +39,7 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
   const [status, setStatus] = useState("all");
   const [page, setPage] = useState(1);
   const [detailsBySource, setDetailsBySource] = useState({});
+  const [expandedOverride, setExpandedOverride] = useState(null);
 
   const loadSources = useCallback(async () => {
     setLoading(true);
@@ -83,10 +84,16 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
   const requestedSource = sources.find((source) =>
     source.member_ids.includes(route.query.dataset),
   );
-  const expandedId =
+  const defaultExpandedId =
     visibleSources.find((source) => source.id === requestedSource?.id)?.id ||
     visibleSources[0]?.id ||
     "";
+  const expandedId = expandedOverride ?? defaultExpandedId;
+
+  useEffect(() => {
+    setExpandedOverride(null);
+  }, [route.query.dataset]);
+
   useEffect(() => {
     const source = sources.find((item) => item.id === expandedId);
     if (!source || detailsBySource[expandedId]) return undefined;
@@ -124,6 +131,11 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
   );
 
   const selectSource = (source) => {
+    if (source.id === expandedId) {
+      setExpandedOverride("");
+      return;
+    }
+    setExpandedOverride(source.id);
     onRouteChange({ view: "returns", dataset: source.id, tab: "" });
   };
 
@@ -257,7 +269,7 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
                         aria-expanded={expanded}
                         onClick={() => selectSource(source)}
                       >
-                        查看详情
+                        {expanded ? "收起详情" : "查看详情"}
                         <CaretDown size={17} />
                       </button>
                     </div>
@@ -867,6 +879,12 @@ function canonicalSources(items) {
 
 function mergeSourceDetails(source, items) {
   const current = items.find((item) => item.id === source.id) || items[0];
+  const versions = items
+    .flatMap((item) => item.versions ?? [])
+    .sort((left, right) => String(right.created_at).localeCompare(left.created_at));
+  const notesByVersion = new Map(
+    versions.map((item) => [item.id, item.change_note || ""]),
+  );
   return {
     ...current,
     member_ids: source.member_ids,
@@ -875,16 +893,21 @@ function mergeSourceDetails(source, items) {
       (total, item) => total + Number(item.task_reference_count || 0),
       0,
     ),
-    versions: items
-      .flatMap((item) => item.versions ?? [])
-      .sort((left, right) => String(right.created_at).localeCompare(left.created_at)),
+    versions,
     imports: items
       .flatMap((item) => item.imports ?? [])
+      .map((item) => ({
+        ...item,
+        change_note:
+          item.change_note || notesByVersion.get(item.resulting_version_id) || "",
+      }))
       .sort((left, right) => String(right.created_at).localeCompare(left.created_at)),
   };
 }
 
 function sourceDisplayName(item) {
+  if (item.name) return item.name;
+  if (item.source_name) return item.source_name;
   const stores = item.quality?.stores ?? [];
   const brands = [
     ...new Set(
@@ -892,21 +915,13 @@ function sourceDisplayName(item) {
     ),
   ];
   if (brands.length === 1) return `${brands[0]} 退货数据`;
-  if (item.source_name) return item.source_name;
-  return item.name || "未命名退货数据";
+  return "未命名退货数据";
 }
 
 function sourceScopeLabel(item) {
   const stores = item.quality?.stores ?? [];
   if (!stores.length) return "未识别";
-  return [
-    ...new Set(
-      stores.map((value) => {
-        const parts = String(value).split(":");
-        return parts.length > 1 ? parts.at(-1) : value;
-      }),
-    ),
-  ].join(" · ");
+  return [...new Set(stores.map((value) => String(value)))].join(" · ");
 }
 
 function dataStatus(item) {

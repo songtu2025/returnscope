@@ -29,6 +29,20 @@
   background: var(--panel);
   box-shadow: var(--shadow-sm);
 }
+.result-filter-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+.result-filter-field > span {
+  line-height: 1;
+}
+.result-pool-filters > .primary-button {
+  align-self: end;
+}
 .result-pool-filters input,
 .result-pool-filters select,
 .record-order-search input {
@@ -536,6 +550,10 @@
 @media (max-width: 1120px) {
   .result-pool-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .result-pool-filters > .primary-button {
+    grid-column: 1 / -1;
+    width: 100%;
   }
   .result-pool-head,
   .result-pool-row {

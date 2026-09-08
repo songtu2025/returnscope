@@ -126,6 +126,10 @@ test("批次列表从 URL 恢复服务端筛选并进入批次", async () => {
   );
 
   expect(await screen.findByText("复核员甲")).toBeVisible();
+  const filters = screen.getByRole("region", { name: "复核批次筛选" });
+  for (const label of ["关键词", "批次状态"]) {
+    expect(within(filters).getByText(label, { selector: "span" })).toBeVisible();
+  }
   expect(screen.getByRole("button", { name: "复核记录" })).toHaveAttribute(
     "aria-current",
     "page",
@@ -181,6 +185,17 @@ test("待处理批次展示真实业务字段并阻止提前发布", async () =>
   expect(screen.getByText("ORDER-001、ORDER-002")).toBeVisible();
   expect(screen.getByText("产品SKU：PRODUCT-SKU-1")).toBeVisible();
   expect(screen.getByText("匹配MSKU：SOURCE-MSKU-1")).toBeVisible();
+  const filters = screen.getByRole("region", { name: "复核记录筛选" });
+  for (const label of [
+    "关键词",
+    "处理状态",
+    "Listing",
+    "产品名称",
+    "产品 SKU",
+    "order-id",
+  ]) {
+    expect(within(filters).getByText(label, { selector: "span" })).toBeVisible();
+  }
   expect(screen.queryByText("鞋履")).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "还剩 2 条需处理" })).toBeDisabled();
 

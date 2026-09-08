@@ -516,3 +516,14 @@
 .model-service-editor .validation-context-grid {
   grid-template-columns: minmax(0, 1.4fr) 0.55fr 0.7fr minmax(0, 1.25fr);
 }
+.model-service-editor .config-field-error,
+.model-service-editor .config-save-disabled-reason {
+  display: block;
+  margin-top: 4px;
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 600;
+}
+.model-service-editor .config-save-disabled-reason {
+  line-height: 1.4;
+}

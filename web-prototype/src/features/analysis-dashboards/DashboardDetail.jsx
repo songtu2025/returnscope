@@ -239,18 +239,13 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
     null;
 
   useEffect(() => {
-    if (
-      route.tab !== "report" ||
-      reports.loading ||
-      reports.error ||
-      !selectedReport
-    ) {
+    if (route.tab !== "report" || reports.loading || reports.error || !selectedReport) {
       return;
     }
     const issues =
       selectedReport.prompt_version === "ai-return-insight-v6" &&
       selectedReport.status === "completed"
-        ? selectedReport.content?.issues ?? []
+        ? (selectedReport.content?.issues ?? [])
         : [];
     const issueId =
       issues.find((issue) => issue.id === route.issueId)?.id || issues[0]?.id || "";

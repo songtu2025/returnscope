@@ -865,6 +865,14 @@ function ProductDimensionRows({ dataset, notify, onChanged }) {
       setSaving(false);
     }
   };
+  const clearFilters = () => {
+    setDraftQuery("");
+    setQuery("");
+    setStore("");
+    setCategory("");
+    setPage(1);
+  };
+  const hasFilters = Boolean(query || store || category);
   return (
     <section className="dimension-table-panel">
       <div className="dimension-table-toolbar">
@@ -883,6 +891,7 @@ function ProductDimensionRows({ dataset, notify, onChanged }) {
             onChange={(event) => setDraftQuery(event.target.value)}
             placeholder="搜索 MSKU、商品名称或 Listing"
           />
+          <button type="submit">搜索</button>
         </form>
         <div className="product-master-filters">
           <label>
@@ -970,7 +979,14 @@ function ProductDimensionRows({ dataset, notify, onChanged }) {
               </div>
             ))}
             {data.records.length === 0 && (
-              <p className="dimension-empty">没有匹配的产品信息。</p>
+              <div className="dimension-empty">
+                <span>没有匹配的产品信息。</span>
+                {hasFilters && (
+                  <button type="button" onClick={clearFilters}>
+                    清除筛选
+                  </button>
+                )}
+              </div>
             )}
           </div>
           <footer className="dimension-pagination">

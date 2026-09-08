@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -285,6 +293,52 @@ describe("关键用户流程", () => {
     expect(
       screen.queryByRole("navigation", { name: "主导航" }),
     ).not.toBeInTheDocument();
+  });
+
+  test("全局搜索约束焦点并在 Esc 与背景关闭后恢复触发点", async () => {
+    const user = userEvent.setup();
+    apiMock.me.mockResolvedValue({
+      id: "user-1",
+      email: "admin@example.com",
+      display_name: "管理员",
+    });
+    apiMock.tasks.mockResolvedValue([
+      {
+        id: "task-search-focus",
+        title: "焦点任务",
+        owner_name: "管理员",
+        status: "running",
+      },
+    ]);
+
+    render(<App />);
+    expect(await screen.findByRole("heading", { name: "首页" })).toBeVisible();
+    const trigger = screen.getByRole("button", {
+      name: "查找任务、数据或复核记录",
+    });
+
+    await user.click(trigger);
+    let dialog = screen.getByRole("dialog", { name: "全局搜索" });
+    const searchInput = within(dialog).getByRole("textbox", { name: "全局搜索" });
+    const resultButton = await within(dialog).findByRole("button", {
+      name: /焦点任务/,
+    });
+    expect(document.activeElement).toBe(searchInput);
+
+    expect(fireEvent.keyDown(searchInput, { key: "Tab", shiftKey: true })).toBe(false);
+    expect(document.activeElement).toBe(resultButton);
+    fireEvent.keyDown(resultButton, { key: "Tab" });
+    expect(document.activeElement).toBe(searchInput);
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "全局搜索" })).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(trigger);
+
+    await user.click(trigger);
+    dialog = screen.getByRole("dialog", { name: "全局搜索" });
+    fireEvent.mouseDown(dialog.parentElement);
+    expect(screen.queryByRole("dialog", { name: "全局搜索" })).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(trigger);
   });
 
   test("浏览器前进后退可以恢复对应页面", async () => {
@@ -1224,6 +1278,64 @@ describe("关键用户流程", () => {
     ).toBeVisible();
     await user.click(await screen.findByRole("button", { name: /返回任务并重新预检/ }));
     expect(onReturnToTask).toHaveBeenCalledWith("products-v2");
+  });
+
+  test("商品信息搜索支持回车提交并可从无结果清除筛选", async () => {
+    const user = userEvent.setup();
+    const productDataset = {
+      id: "products-dataset",
+      kind: "products",
+      name: "商品维度",
+      description: "",
+      current_version: 2,
+      row_count: 6,
+      column_count: 6,
+      updated_at: "2026-08-11T08:00:00Z",
+      quality: { complete_rate: 100 },
+      schema: [],
+      audit: [],
+      versions: [{ id: "products-v2", version: 2 }],
+    };
+    apiMock.datasets.mockResolvedValue([productDataset]);
+    apiMock.dataset.mockResolvedValue(productDataset);
+    apiMock.datasetRows.mockResolvedValue({
+      records: [],
+      total: 0,
+      facets: { stores: [], categories: [] },
+    });
+
+    render(<DataManagement notify={vi.fn()} onNavigate={vi.fn()} focus={null} />);
+
+    const input = await screen.findByRole("textbox", { name: "搜索产品信息" });
+    expect(screen.getByRole("button", { name: "搜索" })).toHaveAttribute(
+      "type",
+      "submit",
+    );
+    await user.type(input, "不存在的商品{Enter}");
+    await waitFor(() =>
+      expect(apiMock.datasetRows).toHaveBeenLastCalledWith(
+        productDataset.id,
+        "不存在的商品",
+        0,
+        15,
+        { store: "", category: "" },
+      ),
+    );
+    expect(screen.getByText("没有匹配的产品信息。")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "清除筛选" }));
+
+    expect(input).toHaveValue("");
+    await waitFor(() =>
+      expect(apiMock.datasetRows).toHaveBeenLastCalledWith(
+        productDataset.id,
+        "",
+        0,
+        15,
+        { store: "", category: "" },
+      ),
+    );
+    expect(screen.queryByRole("button", { name: "清除筛选" })).not.toBeInTheDocument();
   });
 
   test("任务跳转后只展示缺失商品并可批量补充后重新预检", async () => {
@@ -2874,6 +2986,36 @@ describe("关键用户流程", () => {
     expect(screen.getByRole("button", { name: "模型服务" })).toHaveClass("active");
   });
 
+  test("模型服务编辑态说明保存禁用原因并就近校验地址", async () => {
+    const user = userEvent.setup();
+    render(<ApiManagement notify={vi.fn()} />);
+
+    await user.click(await screen.findByRole("button", { name: "新增模型服务" }));
+
+    const saveButton = screen.getByRole("button", { name: "保存草稿" });
+    const baseUrlInput = screen.getByLabelText("Base URL");
+    expect(saveButton).toBeDisabled();
+    expect(screen.getAllByText("请选择验证模型。").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("请填写配置变更原因。").length).toBeGreaterThan(0);
+    expect(baseUrlInput).toHaveAttribute("aria-invalid", "true");
+    expect(baseUrlInput).toHaveAttribute(
+      "aria-describedby",
+      "model-service-base-url-error",
+    );
+
+    await user.type(baseUrlInput, "http://api.example.com");
+    expect(screen.getByText("非本地 API 必须使用 HTTPS。")).toBeVisible();
+
+    await user.clear(baseUrlInput);
+    await user.type(baseUrlInput, "https://api.example.com/v1");
+    expect(screen.queryByText("非本地 API 必须使用 HTTPS。")).not.toBeInTheDocument();
+    expect(baseUrlInput).toHaveAttribute("aria-invalid", "false");
+
+    await user.type(screen.getByLabelText("配置变更原因"), "新增生产接入");
+    expect(screen.getByRole("status")).toHaveTextContent("请选择验证模型。");
+    expect(screen.getByRole("status")).not.toHaveTextContent("配置变更原因");
+  });
+
   test("模型服务摘要展示未发布草稿并保留按需编辑入口", async () => {
     const user = userEvent.setup();
     const activeVersion = {
@@ -3181,6 +3323,27 @@ describe("关键用户流程", () => {
     await userEvent.click(screen.getByRole("checkbox", { name: "只看需处理" }));
     expect(screen.getByText("正常暂停")).toBeVisible();
     expect(apiMock.task).not.toHaveBeenCalled();
+  });
+
+  test("清空任务搜索后焦点回到搜索框", async () => {
+    const user = userEvent.setup();
+    apiMock.tasks.mockResolvedValue([
+      {
+        id: "paused-task",
+        title: "暂停任务",
+        status: "paused",
+        segments: [],
+      },
+    ]);
+    render(<TaskMonitor notify={vi.fn()} onNavigate={vi.fn()} onChanged={vi.fn()} />);
+    await screen.findByRole("table", { name: "任务管理表" });
+    const searchInput = screen.getByLabelText("搜索任务、店铺或 Listing");
+    await user.type(searchInput, "无匹配任务");
+
+    await user.click(screen.getByRole("button", { name: "清空搜索" }));
+
+    expect(searchInput).toHaveValue("");
+    expect(document.activeElement).toBe(searchInput);
   });
 
   test("返回列表保留搜索、状态筛选和滚动位置", async () => {

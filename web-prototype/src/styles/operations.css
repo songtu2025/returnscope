@@ -381,6 +381,11 @@
   min-width: 74px;
   min-height: var(--desktop-control-height);
 }
+.audit-filter-error {
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 600;
+}
 .audit-list article {
   padding: var(--desktop-card-padding);
   border: 1px solid var(--line-soft);

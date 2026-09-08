@@ -245,6 +245,22 @@
   }
 }
 
+@media (max-width: 720px) {
+  .team-page .member-table {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .team-page .team-security-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .team-page .team-security-actions {
+    flex-wrap: wrap;
+  }
+}
+
 .listing-row.is-targeted,
 .model-catalog-row.is-targeted,
 .member-table > div.is-targeted {

@@ -43,6 +43,7 @@ vi.mock("../src/api", () => ({
 
 import { ImportRulesPage } from "../src/features/data-management/ImportRulesPage";
 import { ReturnDataAssetsPage } from "../src/features/data-management/ReturnDataAssetsPage";
+import { ReturnImportDialog } from "../src/features/task-create/ReturnImportDialog";
 import { DatasetReferences } from "../src/pages/DataManagement";
 
 beforeEach(() => {
@@ -130,13 +131,13 @@ test("退货数据源页集中展示当前状态并从详情按需查看历史",
     imports: [
       {
         id: "import-1",
+        resulting_version_id: "returns-v6",
         mode: "append",
         original_name: "returns-0825.csv",
         row_count: 2184,
         imported_row_count: 1067,
         skipped_row_count: 1117,
         creator_name: "数据管理员",
-        change_note: "日常增量导入",
         created_at: "2026-08-25T04:32:00Z",
       },
     ],
@@ -248,16 +249,30 @@ test("退货数据源页集中展示当前状态并从详情按需查看历史",
   );
 
   expect(await screen.findByRole("heading", { name: "退货数据源管理" })).toBeVisible();
-  expect(screen.getByText("SENWAYZON 退货数据")).toBeVisible();
-  expect(screen.getByText("CA · US")).toBeVisible();
+  expect(screen.getByText("SENWAYZON CA、SENWAYZON US 退货数据")).toBeVisible();
+  expect(screen.getByText("SENWAYZON:CA · SENWAYZON:US")).toBeVisible();
   expect(screen.getByText("3 个任务")).toBeVisible();
   expect(await screen.findByText("最近导入摘要")).toBeVisible();
+  expect(screen.getByText("日常增量导入")).toBeVisible();
   expect(dataset).toHaveBeenCalledTimes(1);
   expect(dataset).toHaveBeenCalledWith(
     "returns-1",
     expect.objectContaining({ include: "versions,imports" }),
   );
   expect(screen.queryByText("历史快照")).not.toBeInTheDocument();
+
+  const detailButton = screen.getByRole("button", { name: "收起详情" });
+  expect(detailButton).toHaveAttribute("aria-expanded", "true");
+  await user.click(detailButton);
+  expect(screen.queryByText("最近导入摘要")).not.toBeInTheDocument();
+  const reopenButton = screen.getByRole("button", { name: "查看详情" });
+  expect(reopenButton).toHaveAttribute("aria-expanded", "false");
+  await user.click(reopenButton);
+  expect(await screen.findByText("最近导入摘要")).toBeVisible();
+  expect(screen.getByRole("button", { name: "收起详情" })).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
 
   await user.click(screen.getByRole("button", { name: "查看追溯记录" }));
   expect(screen.getByText(/完整快照/)).toBeVisible();
@@ -309,6 +324,51 @@ test("退货数据源页集中展示当前状态并从详情按需查看历史",
   await user.click(screen.getByRole("button", { name: "检查文件" }));
   expect(await screen.findByText("追加到已有数据源")).toBeVisible();
   expect(screen.queryByText("仅分析本批")).not.toBeInTheDocument();
+});
+
+test("退货文件检查失败后可重新选择同名修正文件", async () => {
+  const user = userEvent.setup();
+  const correctedFile = new File(["store,sku\nUS,SKU-1"], "returns.csv", {
+    type: "text/csv",
+  });
+  inspectReturnImport
+    .mockRejectedValueOnce(new Error("Failed to fetch"))
+    .mockResolvedValueOnce({
+      inspection_id: "inspection-2",
+      original_name: "returns.csv",
+      suggested_name: "修正后的退货数据",
+      row_count: 1,
+      stores: ["BRAND:US"],
+      quality: { valid_comment_rows: 1, missing_store_rows: 0 },
+      matches: [],
+    });
+
+  render(<ReturnImportDialog purpose="asset" onClose={vi.fn()} onDone={vi.fn()} />);
+
+  const fileInput = document.querySelector('input[type="file"]');
+  await user.upload(fileInput, new File(["broken"], "returns.csv"));
+  expect(fileInput).toHaveValue("");
+  await user.click(screen.getByRole("button", { name: "检查文件" }));
+  expect(
+    await screen.findByText(
+      "无法连接服务，请确认 CSV 格式正确，修正后重新选择文件并检查。",
+    ),
+  ).toBeVisible();
+  expect(screen.queryByText(/Failed to fetch/)).not.toBeInTheDocument();
+
+  await user.upload(fileInput, correctedFile);
+  expect(
+    screen.queryByText(/请确认 CSV 格式正确，修正后重新选择文件并检查。/),
+  ).not.toBeInTheDocument();
+  expect(inspectReturnImport).toHaveBeenCalledTimes(1);
+  await user.click(screen.getByRole("button", { name: "检查文件" }));
+  expect(await screen.findByText("文件检查完成")).toBeVisible();
+  expect(inspectReturnImport).toHaveBeenCalledTimes(2);
+  expect(inspectReturnImport.mock.calls[1][0].get("file")).toBe(correctedFile);
+
+  await user.click(screen.getByRole("button", { name: "更换文件" }));
+  expect(screen.getByText("选择 CSV 文件")).toBeVisible();
+  expect(screen.getByRole("button", { name: "检查文件" })).toBeDisabled();
 });
 
 test("数据版本引用显示历史任务固化快照并精确跳转", async () => {

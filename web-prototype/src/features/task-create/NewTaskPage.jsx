@@ -458,7 +458,8 @@ export function NewTaskPage({
   } else if (categoryCompletionRequired) launchStatus = "请先补齐上方提示的商品品类。";
   else if (countMismatch) launchStatus = "评论数量校验未通过，请重新检查数据。";
   else if (noExecutable) launchStatus = "当前范围没有可执行评论，请修改分析数据。";
-  else if (blocked && !unresolvedPolicy) launchStatus = "请在上方选择未解决问题的处理方式。";
+  else if (blocked && !unresolvedPolicy)
+    launchStatus = "请在上方选择未解决问题的处理方式。";
   else if (blocked && unresolvedPolicy === "block_all") {
     launchStatus = "仅保存任务，处理完数据问题后再开始分析。";
   } else if (requiresScopeConfirmation && !scopeConfirmed) {
@@ -549,7 +550,10 @@ export function NewTaskPage({
             <b>暂时无法读取创建任务所需的信息</b>
             <p>{setupError}</p>
           </div>
-          <button className="secondary-button" onClick={() => setSetupAttempt((value) => value + 1)}>
+          <button
+            className="secondary-button"
+            onClick={() => setSetupAttempt((value) => value + 1)}
+          >
             重新加载
           </button>
         </section>

@@ -137,6 +137,12 @@ test("用户与安全和审计记录使用紧凑桌面布局", () => {
     /\.team-security-bar\s*{[^}]*justify-content:\s*space-between;[^}]*padding:\s*14px 16px;/s,
   );
   expect(styles).toMatch(
+    /@media \(max-width:\s*720px\)[\s\S]*?\.team-page \.member-table\s*{[^}]*max-width:\s*100%;[^}]*overflow-x:\s*auto;/,
+  );
+  expect(styles).toMatch(
+    /@media \(max-width:\s*720px\)[\s\S]*?\.team-page \.team-security-bar\s*{[^}]*flex-direction:\s*column;/,
+  );
+  expect(styles).toMatch(
     /\.audit-filter-form\s*{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);/s,
   );
   expect(styles).toMatch(

@@ -180,6 +180,10 @@ test("空态只保留一个选择分类结果入口", async () => {
   );
 
   expect(await screen.findByText("还没有分析看板")).toBeVisible();
+  const filters = screen.getByRole("region", { name: "分析看板筛选" });
+  for (const label of ["关键词", "看板状态"]) {
+    expect(within(filters).getByText(label, { selector: "span" })).toBeVisible();
+  }
   expect(screen.getAllByRole("button", { name: "选择分类结果" })).toHaveLength(1);
 });
 
@@ -1157,8 +1161,7 @@ test.each([
     updated_by: "user-1",
     updated_at: "2026-09-03T08:00:00Z",
   });
-  window.location.hash =
-    `#analysis-dashboards?dashboard=dashboard-default&version=dashboard-version-default&tab=report${suffix}`;
+  window.location.hash = `#analysis-dashboards?dashboard=dashboard-default&version=dashboard-version-default&tab=report${suffix}`;
 
   render(<DashboardHarness />);
 

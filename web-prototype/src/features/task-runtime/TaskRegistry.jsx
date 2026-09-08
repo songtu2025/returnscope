@@ -81,6 +81,7 @@ export function TaskRegistry({
   const [attentionOnly, setAttentionOnly] = useState(false);
   const [saving, setSaving] = useState(false);
   const selectAllRef = useRef(null);
+  const searchInputRef = useRef(null);
 
   const owners = useMemo(
     () =>
@@ -172,13 +173,21 @@ export function TaskRegistry({
         <label className="task-registry-search">
           <MagnifyingGlass size={18} />
           <input
+            ref={searchInputRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="搜索任务、店铺或 Listing"
             aria-label="搜索任务、店铺或 Listing"
           />
           {query && (
-            <button type="button" onClick={() => setQuery("")} aria-label="清空搜索">
+            <button
+              type="button"
+              onClick={() => {
+                setQuery("");
+                searchInputRef.current?.focus();
+              }}
+              aria-label="清空搜索"
+            >
               <X size={15} />
             </button>
           )}

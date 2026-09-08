@@ -60,7 +60,12 @@ export function ReturnImportDialog({ onClose, onDone, purpose = "task" }) {
         purpose === "asset" ? (firstMatch ? "append" : "create") : "analyze_only",
       );
     } catch (requestError) {
-      setError(requestError.message);
+      setError(
+        importErrorMessage(
+          requestError,
+          "请确认 CSV 格式正确，修正后重新选择文件并检查。",
+        ),
+      );
     } finally {
       setChecking(false);
     }
@@ -85,7 +90,7 @@ export function ReturnImportDialog({ onClose, onDone, purpose = "task" }) {
         }),
       );
     } catch (requestError) {
-      setError(requestError.message);
+      setError(importErrorMessage(requestError, "请检查导入方式和目标数据源后重试。"));
     } finally {
       setSubmitting(false);
     }
@@ -132,7 +137,9 @@ export function ReturnImportDialog({ onClose, onDone, purpose = "task" }) {
               type="file"
               accept=".csv"
               onChange={(event) => {
-                setFile(event.target.files?.[0] ?? null);
+                const selectedFile = event.target.files?.[0] ?? null;
+                event.target.value = "";
+                setFile(selectedFile);
                 setInspection(null);
                 setError("");
               }}
@@ -163,7 +170,11 @@ export function ReturnImportDialog({ onClose, onDone, purpose = "task" }) {
               <button
                 type="button"
                 className="link-button"
-                onClick={() => setInspection(null)}
+                onClick={() => {
+                  setFile(null);
+                  setInspection(null);
+                  setError("");
+                }}
               >
                 更换文件
               </button>
@@ -312,4 +323,12 @@ function ImportError({ message }) {
       {message}
     </div>
   );
+}
+
+function importErrorMessage(error, nextStep) {
+  const detail = String(error?.message || "").trim();
+  if (/failed to fetch|network\s*error|networkerror|load failed/i.test(detail)) {
+    return `无法连接服务，${nextStep}`;
+  }
+  return detail ? `${detail} ${nextStep}` : nextStep;
 }

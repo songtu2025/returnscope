@@ -190,24 +190,30 @@ function DashboardList({ route, updateRoute, userId }) {
       />
 
       <section className="dashboard-list-filters" aria-label="分析看板筛选">
-        <div>
-          <MagnifyingGlass size={18} />
-          <input
-            aria-label="搜索分析看板"
-            placeholder="搜索看板名称"
-            value={filters.q}
-            onChange={(event) => setFilters({ ...filters, q: event.target.value })}
-          />
-        </div>
-        <select
-          aria-label="看板状态"
-          value={filters.status}
-          onChange={(event) => setFilters({ ...filters, status: event.target.value })}
-        >
-          <option value="">全部状态</option>
-          <option value="active">可用</option>
-          <option value="archived">已归档</option>
-        </select>
+        <label className="dashboard-filter-field">
+          <span>关键词</span>
+          <div className="dashboard-list-search">
+            <MagnifyingGlass size={18} />
+            <input
+              aria-label="搜索分析看板"
+              placeholder="搜索看板名称"
+              value={filters.q}
+              onChange={(event) => setFilters({ ...filters, q: event.target.value })}
+            />
+          </div>
+        </label>
+        <label className="dashboard-filter-field">
+          <span>看板状态</span>
+          <select
+            aria-label="看板状态"
+            value={filters.status}
+            onChange={(event) => setFilters({ ...filters, status: event.target.value })}
+          >
+            <option value="">全部状态</option>
+            <option value="active">可用</option>
+            <option value="archived">已归档</option>
+          </select>
+        </label>
         <button
           className="primary-button"
           onClick={() => updateRoute({ ...filters, page: 1 })}

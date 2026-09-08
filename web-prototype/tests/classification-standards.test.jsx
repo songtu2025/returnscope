@@ -31,6 +31,7 @@ import {
   reconcileLabelRules,
   sameLabel,
 } from "../src/features/classification-standards/labelDraftPolicy";
+import { formatDate } from "../src/lib/presentation";
 
 const content = {
   name: "眼镜分类标准",
@@ -434,9 +435,8 @@ test("分类标准首页使用全宽列表并支持搜索", async () => {
   expect(await screen.findByRole("heading", { name: "分类标准" })).toBeVisible();
   expect(screen.getByRole("button", { name: "新建分类标准" })).toBeVisible();
   expect(screen.getByRole("columnheader", { name: "适用品类" })).toBeVisible();
-  expect(
-    screen.getByRole("button", { name: /^眼镜分类标准/ }),
-  ).toBeVisible();
+  expect(screen.getByRole("button", { name: /^眼镜分类标准/ })).toBeVisible();
+  expect(screen.getByText(formatDate(standard.updated_at))).toBeVisible();
   expect(container.querySelector(".classification-standard-layout")).toBeNull();
   expect(screen.getByRole("group", { name: "标准状态" })).toBeVisible();
   expect(screen.getByRole("button", { name: "全部状态" })).toHaveAttribute(
@@ -610,10 +610,161 @@ test("高级设置的部位由当前标准驱动并可新增", async () => {
   expect(screen.getAllByText("FRAME").length).toBeGreaterThan(0);
   expect(screen.queryByText("手背")).not.toBeInTheDocument();
 
-  await userEvent.type(screen.getByLabelText("新增证据部位编码"), "knuckle_guard");
+  const partInput = screen.getByLabelText("新增证据部位编码");
   await userEvent.click(screen.getByRole("button", { name: "新增部位" }));
+  expect(screen.getByText("请输入证据部位编码")).toBeVisible();
+  expect(partInput).toHaveFocus();
+  expect(partInput).toHaveAttribute("aria-invalid", "true");
+
+  await userEvent.type(partInput, " ");
+  expect(screen.queryByText("请输入证据部位编码")).not.toBeInTheDocument();
+  await userEvent.type(partInput, "{Enter}");
+  expect(screen.getByText("请输入证据部位编码")).toBeVisible();
+  expect(partInput).toHaveFocus();
+
+  await userEvent.clear(partInput);
+  await userEvent.type(partInput, "knuckle_guard{Enter}");
 
   expect(screen.getAllByText("KNUCKLE_GUARD").length).toBeGreaterThan(0);
+  expect(screen.queryByText("请输入证据部位编码")).not.toBeInTheDocument();
+});
+
+test("草稿校验显示字段错误并聚焦首个未填写字段", async () => {
+  render(
+    <ClassificationStandardsPage route={{ query: { view: "new" } }} notify={vi.fn()} />,
+  );
+
+  const nameInput = await screen.findByRole("textbox", { name: "标准名称" });
+  const productContextInput = screen.getByRole("textbox", {
+    name: "适用商品说明",
+  });
+  const categoryAInput = screen.getByRole("textbox", { name: "品类 A 1" });
+  const categoryBInput = screen.getByRole("textbox", { name: "品类 B 1" });
+
+  await userEvent.click(screen.getByRole("button", { name: "保存草稿" }));
+  expect(await screen.findByText("请填写标准名称")).toBeVisible();
+  expect(screen.getByText("请填写适用商品说明")).toBeVisible();
+  expect(screen.getByText("请填写品类 A")).toBeVisible();
+  expect(screen.getByText("请填写品类 B")).toBeVisible();
+  expect(nameInput).toHaveFocus();
+  expect(nameInput).toHaveAttribute("aria-invalid", "true");
+  expect(nameInput).toHaveAccessibleDescription("请填写标准名称");
+
+  await userEvent.type(nameInput, "背包分类标准");
+  expect(screen.queryByText("请填写标准名称")).not.toBeInTheDocument();
+  expect(screen.getByText("请填写适用商品说明")).toBeVisible();
+  expect(nameInput).toHaveAttribute("aria-invalid", "false");
+
+  await userEvent.type(productContextInput, "户外背包");
+  expect(screen.queryByText("请填写适用商品说明")).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "保存草稿" }));
+  expect(categoryAInput).toHaveFocus();
+  expect(categoryAInput).toHaveAccessibleDescription("请填写品类 A");
+
+  await userEvent.type(categoryAInput, "箱包");
+  expect(screen.queryByText("请填写品类 A")).not.toBeInTheDocument();
+  expect(screen.getByText("请填写品类 B")).toBeVisible();
+  expect(categoryBInput).toHaveAttribute("aria-invalid", "true");
+  expect(standardApiMock.createClassificationStandard).not.toHaveBeenCalled();
+});
+
+test("草稿没有标签时就近提示并聚焦创建入口", async () => {
+  render(
+    <ClassificationStandardsPage route={{ query: { view: "new" } }} notify={vi.fn()} />,
+  );
+
+  await userEvent.type(
+    await screen.findByRole("textbox", { name: "标准名称" }),
+    "背包分类标准",
+  );
+  await userEvent.type(
+    screen.getByRole("textbox", { name: "适用商品说明" }),
+    "户外背包",
+  );
+  await userEvent.type(screen.getByRole("textbox", { name: "品类 A 1" }), "箱包");
+  await userEvent.type(screen.getByRole("textbox", { name: "品类 B 1" }), "户外背包");
+  await userEvent.click(screen.getByRole("button", { name: "保存草稿" }));
+
+  expect(await screen.findByText("请至少增加一个分类标签")).toBeVisible();
+  const createButton = screen.getByRole("button", { name: "创建第一个标签" });
+  await waitFor(() => expect(createButton).toHaveFocus());
+  expect(createButton).toHaveAccessibleDescription("请至少增加一个分类标签");
+
+  await userEvent.click(createButton);
+  expect(screen.queryByText("请至少增加一个分类标签")).not.toBeInTheDocument();
+  expect(screen.getByRole("textbox", { name: "标签名称 1" })).toBeVisible();
+});
+
+test("同次校验清除标签错误时保持用户选择的标签分区", async () => {
+  render(
+    <ClassificationStandardsPage route={{ query: { view: "new" } }} notify={vi.fn()} />,
+  );
+
+  await screen.findByRole("textbox", { name: "标准名称" });
+  await userEvent.click(screen.getByRole("button", { name: "保存草稿" }));
+  expect(screen.getByRole("textbox", { name: "标准名称" })).toHaveFocus();
+
+  const labelsTab = screen.getByRole("button", {
+    name: "标签管理",
+    exact: true,
+  });
+  await userEvent.click(labelsTab);
+  await userEvent.click(screen.getByRole("button", { name: "创建第一个标签" }));
+
+  expect(labelsTab).toHaveAttribute("aria-current", "page");
+  expect(screen.getByRole("textbox", { name: "标签名称 1" })).toBeVisible();
+  expect(screen.queryByText("请至少增加一个分类标签")).not.toBeInTheDocument();
+});
+
+test("标签校验显示字段错误并只清除已修改字段", async () => {
+  const invalidDraft = {
+    ...draft,
+    content: {
+      ...content,
+      labels: [
+        {
+          code: "",
+          name: "",
+          group: "",
+          description: "",
+          keywords: [],
+          allowed_sentiments: ["NEGATIVE"],
+          allowed_claim_ids: [],
+        },
+      ],
+    },
+  };
+  standardApiMock.classificationStandard.mockResolvedValue({
+    ...detail,
+    draft_id: invalidDraft.id,
+    draft_revision: invalidDraft.revision,
+  });
+  standardApiMock.classificationStandardDraft.mockResolvedValue(invalidDraft);
+
+  render(
+    <ClassificationStandardsPage
+      route={{ query: { standard: standard.id, view: "edit" } }}
+      notify={vi.fn()}
+    />,
+  );
+
+  const nameInput = await screen.findByRole("textbox", { name: "标签名称 1" });
+  await userEvent.click(screen.getByRole("button", { name: "保存草稿" }));
+  expect(await screen.findByText("请填写标签名称")).toBeVisible();
+  expect(screen.getByText("请选择标签分组")).toBeVisible();
+  expect(screen.getByText("请填写标签编码")).toBeVisible();
+  expect(screen.getByText("请填写业务定义")).toBeVisible();
+  await waitFor(() => expect(nameInput).toHaveFocus());
+  expect(nameInput).toHaveAccessibleDescription("请填写标签名称");
+
+  await userEvent.type(nameInput, "结构损坏");
+  expect(screen.queryByText("请填写标签名称")).not.toBeInTheDocument();
+  expect(screen.getByText("请选择标签分组")).toBeVisible();
+  expect(screen.getByRole("combobox", { name: "标签分组 1" })).toHaveAttribute(
+    "aria-invalid",
+    "true",
+  );
+  expect(standardApiMock.updateClassificationStandardDraft).not.toHaveBeenCalled();
 });
 
 test("已发布标签的编码和语义不可直接修改", async () => {
@@ -845,7 +996,9 @@ test("删除已发布标准时明确执行停用", async () => {
 
   render(<ClassificationStandardsPage route={{ query: {} }} notify={vi.fn()} />);
 
-  const deactivate = await screen.findByRole("button", { name: `停用标准：${standard.name}` });
+  const deactivate = await screen.findByRole("button", {
+    name: `停用标准：${standard.name}`,
+  });
   expect(screen.queryByText("更多")).not.toBeInTheDocument();
   await userEvent.click(deactivate);
   expect(screen.getByText(`停用“${standard.name}”`)).toBeVisible();
@@ -868,7 +1021,14 @@ test("删除已发布标准时明确执行停用", async () => {
 test("已停用标准不再显示停用入口，未发布标准使用删除文案", async () => {
   standardApiMock.classificationStandards.mockResolvedValue([
     { ...standard, status: "inactive" },
-    { ...standard, id: "unpublished", name: "未发布标准", status: "inactive", version_no: 0, delete_mode: "delete" },
+    {
+      ...standard,
+      id: "unpublished",
+      name: "未发布标准",
+      status: "inactive",
+      version_no: 0,
+      delete_mode: "delete",
+    },
   ]);
   render(<ClassificationStandardsPage route={{ query: {} }} notify={vi.fn()} />);
   await screen.findByText("已停用");

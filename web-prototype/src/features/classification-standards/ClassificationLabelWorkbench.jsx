@@ -1,5 +1,5 @@
 import { groups as BUSINESS_GROUPS } from "../../../../config/taxonomy_alignment.json";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   ArrowCounterClockwise,
   Copy,
@@ -22,6 +22,9 @@ export function ClassificationLabelWorkbench({
   editable,
   initiallyEditing,
   notify,
+  fieldErrors = {},
+  validationAttempt = 0,
+  section,
 }) {
   const [selected, setSelected] = useState(() =>
     Math.max(
@@ -36,6 +39,12 @@ export function ClassificationLabelWorkbench({
   const [keywordText, setKeywordText] = useState("");
   const [origins, setOrigins] = useState({});
   const selectedRef = useRef(null);
+  const addLabelRef = useRef(null);
+  const emptyLabelRef = useRef(null);
+  const labelFieldRefs = useRef(new Map());
+  const pendingFocusRef = useRef(null);
+  const focusedAttemptRef = useRef(0);
+  const errorId = useId();
   useEffect(() => {
     const target = selectedRef.current;
     if (target)
@@ -79,6 +88,7 @@ export function ClassificationLabelWorkbench({
   );
 
   const updateLabel = (updates) => {
+    const field = Object.keys(updates)[0];
     if (updates.code !== undefined && updates.code !== label.code) {
       setOrigins((current) => {
         const next = { ...current, [updates.code]: current[label.code] ?? label.code };
@@ -86,24 +96,30 @@ export function ClassificationLabelWorkbench({
         return next;
       });
     }
-    onChange({
-      ...content,
-      labels: content.labels.map((item, index) =>
-        index === entry.index ? { ...item, ...updates } : item,
-      ),
-    });
+    onChange(
+      {
+        ...content,
+        labels: content.labels.map((item, index) =>
+          index === entry.index ? { ...item, ...updates } : item,
+        ),
+      },
+      `labels.${entry.index}.${field}`,
+    );
   };
-  const changeLabels = (labels, restoredCode) =>
-    onChange({
-      ...content,
-      labels,
-      validation_rules: reconcileLabelRules(
-        content.validation_rules,
+  const changeLabels = (labels, restoredCode, field) =>
+    onChange(
+      {
+        ...content,
         labels,
-        baseContent?.validation_rules,
-        restoredCode,
-      ),
-    });
+        validation_rules: reconcileLabelRules(
+          content.validation_rules,
+          labels,
+          baseContent?.validation_rules,
+          restoredCode,
+        ),
+      },
+      field,
+    );
   const selectLabel = (value) => {
     setSelected(value);
     setKeywordText("");
@@ -129,7 +145,7 @@ export function ClassificationLabelWorkbench({
       ? content.labels.map((item, index) => (index === entry.index ? newLabel : item))
       : [...content.labels, newLabel];
     setOrigins((current) => ({ ...current, [newLabel.code]: source?.code ?? null }));
-    changeLabels(labels);
+    changeLabels(labels, undefined, "labels_empty");
     selectLabel(source ? entry.index : labels.length - 1);
     setQuery("");
     setGroup("");
@@ -172,6 +188,54 @@ export function ClassificationLabelWorkbench({
     setKeywordText("");
   };
 
+  useEffect(() => {
+    if (
+      !validationAttempt ||
+      busy ||
+      section !== "labels" ||
+      focusedAttemptRef.current === validationAttempt
+    ) {
+      return;
+    }
+    if (fieldErrors.labels_empty) {
+      const target = emptyLabelRef.current || addLabelRef.current;
+      if (target) {
+        focusedAttemptRef.current = validationAttempt;
+        target.focus();
+      }
+      return;
+    }
+    const index = fieldErrors.labels?.findIndex(
+      (item) => item.name || item.group || item.code || item.description,
+    );
+    if (index < 0) return;
+    const errors = fieldErrors.labels[index];
+    const field = ["name", "group", "code", "description"].find((key) => errors[key]);
+    pendingFocusRef.current = { attempt: validationAttempt, index, field };
+    setSelected(index);
+    setEditing(true);
+  }, [busy, fieldErrors, section, validationAttempt]);
+
+  useEffect(() => {
+    const pendingFocus = pendingFocusRef.current;
+    if (
+      !pendingFocus ||
+      busy ||
+      !editing ||
+      section !== "labels" ||
+      selected !== pendingFocus.index
+    ) {
+      return;
+    }
+    const target = labelFieldRefs.current.get(
+      `${pendingFocus.index}.${pendingFocus.field}`,
+    );
+    if (!target) return;
+    target.focus();
+    focusedAttemptRef.current = pendingFocus.attempt;
+    pendingFocusRef.current = null;
+  }, [busy, editing, section, selected]);
+
   return (
     <div className="label-workbench">
       <aside className="label-directory" aria-label="标签目录">
@@ -181,6 +245,7 @@ export function ClassificationLabelWorkbench({
           </strong>
           {editable && (
             <button
+              ref={addLabelRef}
               type="button"
               className="icon-button"
               aria-label="增加标签"
@@ -254,6 +319,11 @@ export function ClassificationLabelWorkbench({
         </div>
       </aside>
       <div className="label-workspace" aria-label="当前标签编辑区">
+        {fieldErrors.labels_empty && (
+          <p className="standard-field-error" id={`${errorId}-labels-empty`}>
+            {fieldErrors.labels_empty}
+          </p>
+        )}
         {label ? (
           <>
             <header>
@@ -374,17 +444,47 @@ export function ClassificationLabelWorkbench({
                       <label>
                         标签名称
                         <input
+                          ref={(node) => {
+                            labelFieldRefs.current.set(`${entry.index}.name`, node);
+                          }}
                           aria-label={`标签名称 ${entry.index + 1}`}
+                          aria-invalid={Boolean(
+                            fieldErrors.labels?.[entry.index]?.name,
+                          )}
+                          aria-describedby={
+                            fieldErrors.labels?.[entry.index]?.name
+                              ? `${errorId}-label-${entry.index}-name`
+                              : undefined
+                          }
                           value={label.name}
                           onChange={(event) =>
                             updateLabel({ name: event.target.value })
                           }
                         />
+                        {fieldErrors.labels?.[entry.index]?.name && (
+                          <span
+                            className="standard-field-error"
+                            id={`${errorId}-label-${entry.index}-name`}
+                          >
+                            {fieldErrors.labels[entry.index].name}
+                          </span>
+                        )}
                       </label>
                       <label>
                         标签分组
                         <select
+                          ref={(node) => {
+                            labelFieldRefs.current.set(`${entry.index}.group`, node);
+                          }}
                           aria-label={`标签分组 ${entry.index + 1}`}
+                          aria-invalid={Boolean(
+                            fieldErrors.labels?.[entry.index]?.group,
+                          )}
+                          aria-describedby={
+                            fieldErrors.labels?.[entry.index]?.group
+                              ? `${errorId}-label-${entry.index}-group`
+                              : undefined
+                          }
                           value={label.group}
                           onChange={(event) =>
                             updateLabel({ group: event.target.value })
@@ -401,27 +501,76 @@ export function ClassificationLabelWorkbench({
                             </option>
                           ))}
                         </select>
+                        {fieldErrors.labels?.[entry.index]?.group && (
+                          <span
+                            className="standard-field-error"
+                            id={`${errorId}-label-${entry.index}-group`}
+                          >
+                            {fieldErrors.labels[entry.index].group}
+                          </span>
+                        )}
                       </label>
                       <label className="wide-field">
                         标签编码
                         <input
+                          ref={(node) => {
+                            labelFieldRefs.current.set(`${entry.index}.code`, node);
+                          }}
                           aria-label={`标签编码 ${entry.index + 1}`}
+                          aria-invalid={Boolean(
+                            fieldErrors.labels?.[entry.index]?.code,
+                          )}
+                          aria-describedby={
+                            fieldErrors.labels?.[entry.index]?.code
+                              ? `${errorId}-label-${entry.index}-code`
+                              : undefined
+                          }
                           value={label.code}
                           onChange={(event) =>
                             updateLabel({ code: event.target.value.toUpperCase() })
                           }
                         />
+                        {fieldErrors.labels?.[entry.index]?.code && (
+                          <span
+                            className="standard-field-error"
+                            id={`${errorId}-label-${entry.index}-code`}
+                          >
+                            {fieldErrors.labels[entry.index].code}
+                          </span>
+                        )}
                       </label>
                       <label className="wide-field">
                         业务定义
                         <textarea
+                          ref={(node) => {
+                            labelFieldRefs.current.set(
+                              `${entry.index}.description`,
+                              node,
+                            );
+                          }}
                           rows={5}
                           aria-label={`业务定义 ${entry.index + 1}`}
+                          aria-invalid={Boolean(
+                            fieldErrors.labels?.[entry.index]?.description,
+                          )}
+                          aria-describedby={
+                            fieldErrors.labels?.[entry.index]?.description
+                              ? `${errorId}-label-${entry.index}-description`
+                              : undefined
+                          }
                           value={label.description}
                           onChange={(event) =>
                             updateLabel({ description: event.target.value })
                           }
                         />
+                        {fieldErrors.labels?.[entry.index]?.description && (
+                          <span
+                            className="standard-field-error"
+                            id={`${errorId}-label-${entry.index}-description`}
+                          >
+                            {fieldErrors.labels[entry.index].description}
+                          </span>
+                        )}
                       </label>
                       <fieldset className="wide-field label-sentiment-options">
                         <legend>支持的评价方向</legend>
@@ -573,8 +722,12 @@ export function ClassificationLabelWorkbench({
             action={
               editable && (
                 <button
+                  ref={emptyLabelRef}
                   type="button"
                   className="primary-button"
+                  aria-describedby={
+                    fieldErrors.labels_empty ? `${errorId}-labels-empty` : undefined
+                  }
                   onClick={() => addLabel()}
                 >
                   创建第一个标签

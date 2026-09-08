@@ -1,14 +1,29 @@
+function padDatePart(value) {
+  return String(value).padStart(2, "0");
+}
+
+function parseDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatLocalDate(date) {
+  return `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())}`;
+}
+
+export function formatDate(value) {
+  if (!value) return "—";
+  const date = parseDate(value);
+  return date ? formatLocalDate(date) : value;
+}
+
 export function formatTime(value) {
   if (!value) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? value
-    : new Intl.DateTimeFormat("zh-CN", {
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      }).format(date);
+  const date = parseDate(value);
+  return date
+    ? `${formatLocalDate(date)} ${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}`
+    : value;
 }
 
 export function classNames(...values) {

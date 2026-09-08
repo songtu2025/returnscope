@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react";
 import { ArrowClockwise, CheckCircle, WarningCircle, X } from "@phosphor-icons/react";
 import { STATUS_LABELS } from "../constants";
+import { useDialogFocus } from "../hooks/useDialogFocus";
 import { classNames } from "../lib/presentation";
 
 export function PageHeading({ eyebrow, title, description, action, titleRef }) {
@@ -47,18 +47,7 @@ export function Modal({
   onClose,
   children,
 }) {
-  const dialogRef = useRef(null);
-  useEffect(() => {
-    const previousFocus = document.activeElement;
-    dialogRef.current?.querySelector("button")?.focus();
-    return () => previousFocus?.focus();
-  }, []);
-
-  useEffect(() => {
-    const closeOnEscape = (event) => event.key === "Escape" && onClose();
-    document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
+  const { dialogRef, constrainFocus } = useDialogFocus({ open: true, onClose });
 
   return (
     <div
@@ -71,23 +60,8 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        onKeyDown={(event) => {
-          if (event.key !== "Tab") return;
-          const controls = [
-            ...dialogRef.current.querySelectorAll(
-              'button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), summary, [tabindex="0"]',
-            ),
-          ].filter((element) => element.getClientRects().length > 0);
-          const first = controls[0];
-          const last = controls.at(-1);
-          if (event.shiftKey && document.activeElement === first) {
-            event.preventDefault();
-            last?.focus();
-          } else if (!event.shiftKey && document.activeElement === last) {
-            event.preventDefault();
-            first?.focus();
-          }
-        }}
+        tabIndex={-1}
+        onKeyDownCapture={constrainFocus}
       >
         <header>
           <div>
@@ -95,7 +69,12 @@ export function Modal({
             <h2>{title}</h2>
             {description && <span className="modal-description">{description}</span>}
           </div>
-          <button type="button" onClick={onClose} aria-label="关闭">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="关闭"
+            data-dialog-initial-focus
+          >
             <X size={20} />
           </button>
         </header>

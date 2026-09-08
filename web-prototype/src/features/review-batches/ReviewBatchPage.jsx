@@ -180,26 +180,32 @@ function ReviewBatchList({ route, updateRoute }) {
         description="按批次处理需复核分类单元，完成后发布为新的不可变分类结果版本。"
       />
       <section className="review-batch-filters" aria-label="复核批次筛选">
-        <div>
-          <MagnifyingGlass size={18} />
-          <input
-            aria-label="搜索复核批次"
-            placeholder="搜索 Listing、批次或创建人"
-            value={filters.q}
-            onChange={(event) => setFilters({ ...filters, q: event.target.value })}
-          />
-        </div>
-        <select
-          aria-label="批次状态"
-          value={filters.status}
-          onChange={(event) => setFilters({ ...filters, status: event.target.value })}
-        >
-          <option value="">全部批次</option>
-          <option value="draft">复核中</option>
-          <option value="in_review">处理中</option>
-          <option value="conflict">存在冲突</option>
-          <option value="published">已发布</option>
-        </select>
+        <label className="review-filter-field">
+          <span>关键词</span>
+          <div className="review-batch-search">
+            <MagnifyingGlass size={18} />
+            <input
+              aria-label="搜索复核批次"
+              placeholder="搜索 Listing、批次或创建人"
+              value={filters.q}
+              onChange={(event) => setFilters({ ...filters, q: event.target.value })}
+            />
+          </div>
+        </label>
+        <label className="review-filter-field">
+          <span>批次状态</span>
+          <select
+            aria-label="批次状态"
+            value={filters.status}
+            onChange={(event) => setFilters({ ...filters, status: event.target.value })}
+          >
+            <option value="">全部批次</option>
+            <option value="draft">复核中</option>
+            <option value="in_review">处理中</option>
+            <option value="conflict">存在冲突</option>
+            <option value="published">已发布</option>
+          </select>
+        </label>
         <button
           className="primary-button"
           onClick={() => updateRoute({ ...filters, page: 1 })}
@@ -782,53 +788,49 @@ function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
       )}
 
       <section className="review-record-filters" aria-label="复核记录筛选">
-        <div className="review-record-search">
-          <MagnifyingGlass size={17} />
-          <input
-            aria-label="搜索复核记录"
-            placeholder="搜索评论、分类或业务字段"
-            value={filters.q}
-            onChange={(event) => setFilters({ ...filters, q: event.target.value })}
-          />
-        </div>
-        <select
-          aria-label="处理状态"
-          value={filters.status}
-          onChange={(event) => setFilters({ ...filters, status: event.target.value })}
-        >
-          <option value="">全部记录</option>
-          <option value="pending">待处理</option>
-          <option value="resolved">已处理</option>
-          <option value="excluded">已排除</option>
-        </select>
-        <input
-          aria-label="筛选 Listing"
-          placeholder="Listing"
-          value={filters.listing}
-          onChange={(event) => setFilters({ ...filters, listing: event.target.value })}
-        />
-        <input
-          aria-label="筛选产品名称"
-          placeholder="产品名称"
-          value={filters.productName}
-          onChange={(event) =>
-            setFilters({ ...filters, productName: event.target.value })
-          }
-        />
-        <input
-          aria-label="筛选产品SKU"
-          placeholder="产品SKU"
-          value={filters.productSku}
-          onChange={(event) =>
-            setFilters({ ...filters, productSku: event.target.value })
-          }
-        />
-        <input
-          aria-label="筛选 order-id"
-          placeholder="order-id"
-          value={filters.orderId}
-          onChange={(event) => setFilters({ ...filters, orderId: event.target.value })}
-        />
+        <label className="review-filter-field">
+          <span>关键词</span>
+          <div className="review-record-search">
+            <MagnifyingGlass size={17} />
+            <input
+              aria-label="搜索复核记录"
+              placeholder="搜索评论、分类或业务字段"
+              value={filters.q}
+              onChange={(event) => setFilters({ ...filters, q: event.target.value })}
+            />
+          </div>
+        </label>
+        <label className="review-filter-field">
+          <span>处理状态</span>
+          <select
+            aria-label="处理状态"
+            value={filters.status}
+            onChange={(event) => setFilters({ ...filters, status: event.target.value })}
+          >
+            <option value="">全部记录</option>
+            <option value="pending">待处理</option>
+            <option value="resolved">已处理</option>
+            <option value="excluded">已排除</option>
+          </select>
+        </label>
+        {[
+          ["Listing", "筛选 Listing", "Listing", "listing"],
+          ["产品名称", "筛选产品名称", "产品名称", "productName"],
+          ["产品 SKU", "筛选产品SKU", "产品SKU", "productSku"],
+          ["order-id", "筛选 order-id", "order-id", "orderId"],
+        ].map(([title, ariaLabel, placeholder, field]) => (
+          <label className="review-filter-field" key={field}>
+            <span>{title}</span>
+            <input
+              aria-label={ariaLabel}
+              placeholder={placeholder}
+              value={filters[field]}
+              onChange={(event) =>
+                setFilters({ ...filters, [field]: event.target.value })
+              }
+            />
+          </label>
+        ))}
         <button
           className="primary-button"
           onClick={() => updateRoute({ ...filters, page: 1 })}
