@@ -8,7 +8,7 @@ from datetime import date
 from typing import Any
 
 from return_semantics.taxonomy import aligned_label_group
-from web_backend.common import json_text, json_value, new_id
+from web_backend.common import insert_audit, json_text, json_value, new_id
 from web_backend.database import Database
 from web_backend.security import utc_now
 
@@ -2429,23 +2429,15 @@ class DashboardService:
         now: str,
         before: dict[str, Any] | None = None,
     ) -> None:
-        connection.execute(
-            """
-            INSERT INTO audit_logs(
-                id, entity_type, entity_id, action, before_json,
-                after_json, actor_id, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                new_id("audit"),
-                entity_type,
-                entity_id,
-                action,
-                json_text(before) if before is not None else None,
-                json_text(after),
-                actor_id,
-                now,
-            ),
+        insert_audit(
+            connection,
+            entity_type,
+            entity_id,
+            action,
+            actor_id,
+            before,
+            after,
+            now,
         )
 
     @staticmethod

@@ -18,7 +18,14 @@ from return_semantics.data import (
     RETURN_STORE_COLUMN,
     read_return_csv,
 )
-from web_backend.common import add_audit, json_text, json_value, list_audit, new_id
+from web_backend.common import (
+    add_audit,
+    insert_audit,
+    json_text,
+    json_value,
+    list_audit,
+    new_id,
+)
 from web_backend.database import Database
 from web_backend.security import utc_now
 from web_backend.settings import Settings
@@ -624,8 +631,18 @@ class DatasetService:
     def _ensure_blob(self, source_path: Path, digest: str) -> Path:
         destination = self._blob_path(digest, source_path.suffix.lower())
         destination.parent.mkdir(parents=True, exist_ok=True)
-        if not destination.exists():
-            shutil.copy2(source_path, destination)
+        if destination.exists():
+            return destination
+        temporary = destination.with_name(f"{destination.name}.{new_id('blob')}")
+        try:
+            shutil.copy2(source_path, temporary)
+            try:
+                temporary.replace(destination)
+            except OSError:
+                if not destination.exists():
+                    raise
+        finally:
+            temporary.unlink(missing_ok=True)
         return destination
 
     def _preview_path(self, digest: str) -> Path:
@@ -893,35 +910,12 @@ class DatasetService:
                 ORDER BY d.updated_at DESC, d.id
                 """
             ).fetchall()
-            duplicate = connection.execute(
-                """
-                SELECT i.id AS import_id, i.dataset_id,
-                       i.resulting_version_id AS version_id,
-                       i.mode, i.created_at,
-                       d.name AS dataset_name, d.usage_scope
-                FROM dataset_imports i
-                JOIN datasets d ON d.id = i.dataset_id
-                WHERE i.raw_sha256 = ? AND d.archived_at IS NULL
-                ORDER BY i.created_at DESC, i.id DESC
-                LIMIT 1
-                """,
-                (raw_sha256,),
-            ).fetchone()
-            if duplicate is None:
-                duplicate = connection.execute(
-                    """
-                    SELECT NULL AS import_id, v.dataset_id,
-                           v.id AS version_id, 'legacy' AS mode,
-                           v.created_at, d.name AS dataset_name,
-                           d.usage_scope
-                    FROM dataset_versions v
-                    JOIN datasets d ON d.id = v.dataset_id
-                    WHERE v.sha256 = ? AND d.archived_at IS NULL
-                    ORDER BY v.created_at DESC, v.id DESC
-                    LIMIT 1
-                    """,
-                    (raw_sha256,),
-                ).fetchone()
+            duplicate = self._find_duplicate_return_import(
+                connection,
+                raw_sha256=raw_sha256,
+                mode="analyze_only",
+                dataset_id="",
+            )
         matches = []
         for row in rows:
             item = dict(row)
@@ -1056,7 +1050,444 @@ class DatasetService:
             pass
         return result
 
-    def _append_return_version(
+    def _duplicate_return_import(
+        self,
+        *,
+        mode: str,
+        dataset_id: str,
+        inspection: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        duplicate = inspection.get("duplicate")
+        duplicate_in_target = duplicate and (
+            mode == "analyze_only"
+            or (mode == "create" and duplicate.get("usage_scope") == "managed")
+            or str(duplicate["dataset_id"]) == dataset_id
+        )
+        if not duplicate_in_target:
+            return None
+        existing = self.get(str(duplicate["dataset_id"]))
+        if existing is None:
+            return None
+        return {
+            "dataset": existing,
+            "version_id": str(duplicate["version_id"]),
+            "duplicate": True,
+            "mode": mode,
+            "inspection": inspection,
+            "summary": {
+                "imported_row_count": 0,
+                "skipped_row_count": int(inspection["row_count"]),
+            },
+        }
+
+    def _return_import_target(
+        self,
+        *,
+        mode: str,
+        dataset_id: str,
+        source_key: str,
+    ) -> dict[str, Any] | None:
+        if mode not in {"append", "replace"}:
+            return None
+        target = self.get(dataset_id)
+        if target is None or target["kind"] != "returns":
+            raise ValueError("请选择有效的退货数据源")
+        if target.get("usage_scope") != "managed":
+            raise ValueError("一次性任务数据不能作为长期数据源更新")
+        target_source_key = str(target.get("source_key") or "")
+        if target_source_key and source_key and target_source_key != source_key:
+            raise ValueError("上传文件与所选数据源的店铺/站点不一致")
+        return target
+
+    @staticmethod
+    def _find_duplicate_return_import(
+        connection: Any,
+        *,
+        raw_sha256: str,
+        mode: str,
+        dataset_id: str,
+    ) -> dict[str, Any] | None:
+        params = (raw_sha256, mode, mode, mode, dataset_id)
+        duplicate = connection.execute(
+            """
+            SELECT i.id AS import_id, i.dataset_id,
+                   i.resulting_version_id AS version_id,
+                   i.mode, i.created_at,
+                   d.name AS dataset_name, d.usage_scope
+            FROM dataset_imports i
+            JOIN datasets d ON d.id = i.dataset_id
+            WHERE i.raw_sha256 = ? AND d.archived_at IS NULL
+              AND (
+                  ? = 'analyze_only'
+                  OR (? = 'create' AND d.usage_scope = 'managed')
+                  OR (? IN ('append', 'replace') AND i.dataset_id = ?)
+              )
+            ORDER BY i.created_at DESC, i.id DESC
+            LIMIT 1
+            """,
+            params,
+        ).fetchone()
+        if duplicate is None:
+            duplicate = connection.execute(
+                """
+                SELECT NULL AS import_id, v.dataset_id,
+                       v.id AS version_id, 'legacy' AS mode,
+                       v.created_at, d.name AS dataset_name,
+                       d.usage_scope
+                FROM dataset_versions v
+                JOIN datasets d ON d.id = v.dataset_id
+                WHERE v.sha256 = ? AND d.archived_at IS NULL
+                  AND (
+                      ? = 'analyze_only'
+                      OR (? = 'create' AND d.usage_scope = 'managed')
+                      OR (? IN ('append', 'replace') AND v.dataset_id = ?)
+                  )
+                ORDER BY v.created_at DESC, v.id DESC
+                LIMIT 1
+                """,
+                params,
+            ).fetchone()
+        return dict(duplicate) if duplicate is not None else None
+
+    @staticmethod
+    def _validate_return_import_target(
+        connection: Any,
+        *,
+        mode: str,
+        dataset_id: str,
+        source_key: str,
+    ) -> None:
+        if mode not in {"append", "replace"}:
+            return
+        target = connection.execute(
+            """
+            SELECT kind, usage_scope, source_key FROM datasets
+            WHERE id = ? AND archived_at IS NULL
+            """,
+            (dataset_id,),
+        ).fetchone()
+        if target is None or target["kind"] != "returns":
+            raise ValueError("请选择有效的退货数据源")
+        if target["usage_scope"] != "managed":
+            raise ValueError("一次性任务数据不能作为长期数据源更新")
+        target_source_key = str(target["source_key"] or "")
+        if target_source_key and source_key and target_source_key != source_key:
+            raise ValueError("上传文件与所选数据源的店铺/站点不一致")
+
+    def _prepare_return_version(
+        self,
+        *,
+        source_path: Path,
+        original_name: str,
+        content_type: str,
+        change_note: str,
+        inspection: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        if inspection is None:
+            _, row_count, column_count, schema, quality = _inspect_file_with_frame(
+                source_path,
+                "returns",
+            )
+            digest = _sha256_file(source_path)
+        else:
+            row_count = int(inspection["row_count"])
+            column_count = int(inspection["column_count"])
+            schema = inspection["schema"]
+            quality = inspection["quality"]
+            digest = str(inspection["raw_sha256"])
+        destination = self._ensure_blob(source_path, digest)
+        return self._prepared_version(
+            destination=destination,
+            original_name=original_name,
+            content_type=content_type,
+            change_note=change_note,
+            digest=digest,
+            row_count=row_count,
+            column_count=column_count,
+            schema=schema,
+            quality=quality,
+        )
+
+    @staticmethod
+    def _prepared_version(
+        *,
+        destination: Path,
+        original_name: str,
+        content_type: str,
+        change_note: str,
+        digest: str,
+        row_count: int,
+        column_count: int,
+        schema: list[dict[str, str]],
+        quality: dict[str, Any],
+    ) -> dict[str, Any]:
+        return {
+            "id": new_id("dsv"),
+            "file_path": str(destination),
+            "original_name": original_name,
+            "content_type": content_type,
+            "size_bytes": destination.stat().st_size,
+            "sha256": digest,
+            "row_count": row_count,
+            "column_count": column_count,
+            "schema_json": json_text(schema),
+            "quality_json": json_text(quality),
+            "change_note": change_note,
+        }
+
+    def _prepare_appended_return_version(
+        self,
+        *,
+        target: dict[str, Any],
+        incoming_frame: pd.DataFrame,
+        original_name: str,
+        change_note: str,
+    ) -> tuple[dict[str, Any], int, int, int]:
+        expected_version = int(target["current_version"])
+        current_version = next(
+            value
+            for value in target["versions"]
+            if value["version"] == expected_version
+        )
+        with self.database.connect() as connection:
+            current_row = connection.execute(
+                "SELECT file_path FROM dataset_versions WHERE id = ?",
+                (current_version["id"],),
+            ).fetchone()
+        current_frame = read_return_csv(Path(str(current_row["file_path"])))
+        columns = list(dict.fromkeys([*current_frame.columns, *incoming_frame.columns]))
+        current_frame = current_frame.reindex(columns=columns)
+        current_incoming = incoming_frame.reindex(columns=columns)
+        clean_current = current_frame.drop_duplicates(ignore_index=True)
+        merged = pd.concat(
+            [clean_current, current_incoming],
+            ignore_index=True,
+        ).drop_duplicates(ignore_index=True)
+        imported_row_count = max(len(merged) - len(clean_current), 0)
+        skipped_row_count = max(len(current_incoming) - imported_row_count, 0)
+        merge_path = self.settings.data_dir / "tmp" / f"{new_id('merge')}.csv"
+        merge_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            merged.to_csv(merge_path, index=False, encoding="utf-8-sig")
+            prepared = self._prepare_return_version(
+                source_path=merge_path,
+                original_name=original_name,
+                content_type="text/csv",
+                change_note=change_note or "追加一批退货数据",
+            )
+        finally:
+            merge_path.unlink(missing_ok=True)
+        return (
+            prepared,
+            imported_row_count,
+            skipped_row_count,
+            expected_version,
+        )
+
+    @staticmethod
+    def _insert_prepared_version(
+        connection: Any,
+        *,
+        dataset_id: str,
+        prepared: dict[str, Any],
+        actor_id: str,
+        now: str,
+        expected_current_version: int | None,
+    ) -> int:
+        current = connection.execute(
+            "SELECT current_version FROM datasets WHERE id = ?",
+            (dataset_id,),
+        ).fetchone()
+        if current is None:
+            raise ValueError("数据集不存在")
+        if (
+            expected_current_version is not None
+            and int(current["current_version"]) != expected_current_version
+        ):
+            raise DatasetRevisionConflict("商品维度已被其他用户修改，请刷新后重试")
+        version = int(current["current_version"]) + 1
+        connection.execute(
+            """
+            INSERT INTO dataset_versions(
+                id, dataset_id, version, file_path, original_name,
+                content_type, size_bytes, sha256, row_count, column_count,
+                schema_json, quality_json, change_note, created_by, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                prepared["id"],
+                dataset_id,
+                version,
+                prepared["file_path"],
+                prepared["original_name"],
+                prepared["content_type"],
+                prepared["size_bytes"],
+                prepared["sha256"],
+                prepared["row_count"],
+                prepared["column_count"],
+                prepared["schema_json"],
+                prepared["quality_json"],
+                prepared["change_note"],
+                actor_id,
+                now,
+            ),
+        )
+        connection.execute(
+            """
+            UPDATE datasets
+            SET current_version = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (version, now, dataset_id),
+        )
+        return version
+
+    def _commit_return_import(
+        self,
+        *,
+        mode: str,
+        dataset_id: str,
+        dataset_name: str,
+        dataset_description: str,
+        usage_scope: str,
+        source_key: str,
+        prepared: dict[str, Any],
+        import_record: dict[str, Any],
+        actor_id: str,
+        expected_current_version: int | None,
+    ) -> dict[str, Any]:
+        now = utc_now()
+        with self.database.transaction(immediate=True) as connection:
+            duplicate = self._find_duplicate_return_import(
+                connection,
+                raw_sha256=str(import_record["raw_sha256"]),
+                mode=mode,
+                dataset_id=dataset_id,
+            )
+            if duplicate is not None:
+                return {
+                    "dataset_id": str(duplicate["dataset_id"]),
+                    "version_id": str(duplicate["version_id"]),
+                    "duplicate": True,
+                }
+            self._validate_return_import_target(
+                connection,
+                mode=mode,
+                dataset_id=dataset_id,
+                source_key=source_key,
+            )
+            if mode in {"analyze_only", "create"}:
+                connection.execute(
+                    """
+                    INSERT INTO datasets(
+                        id, name, kind, description, source_key, usage_scope,
+                        current_version, created_by, created_at, updated_at
+                    ) VALUES (?, ?, 'returns', ?, ?, ?, 0, ?, ?, ?)
+                    """,
+                    (
+                        dataset_id,
+                        dataset_name,
+                        dataset_description,
+                        source_key or None,
+                        usage_scope,
+                        actor_id,
+                        now,
+                        now,
+                    ),
+                )
+            version = self._insert_prepared_version(
+                connection,
+                dataset_id=dataset_id,
+                prepared=prepared,
+                actor_id=actor_id,
+                now=now,
+                expected_current_version=expected_current_version,
+            )
+            insert_audit(
+                connection,
+                "dataset",
+                dataset_id,
+                "add_version",
+                actor_id,
+                after={
+                    "version": version,
+                    "version_id": prepared["id"],
+                    "default_store": "",
+                },
+                created_at=now,
+            )
+            if mode in {"analyze_only", "create"}:
+                insert_audit(
+                    connection,
+                    "dataset",
+                    dataset_id,
+                    "create",
+                    actor_id,
+                    after={"name": dataset_name, "kind": "returns"},
+                    created_at=now,
+                )
+            connection.execute(
+                """
+                UPDATE datasets
+                SET source_key = COALESCE(source_key, ?), updated_at = ?
+                WHERE id = ?
+                """,
+                (source_key or None, now, dataset_id),
+            )
+            connection.execute(
+                """
+                INSERT INTO dataset_imports(
+                    id, dataset_id, resulting_version_id, mode,
+                    raw_file_path, original_name, content_type, size_bytes,
+                    raw_sha256, row_count, column_count, schema_json,
+                    quality_json, source_key, imported_row_count,
+                    skipped_row_count, created_by, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    import_record["id"],
+                    dataset_id,
+                    prepared["id"],
+                    mode,
+                    import_record["raw_file_path"],
+                    import_record["original_name"],
+                    import_record["content_type"],
+                    import_record["size_bytes"],
+                    import_record["raw_sha256"],
+                    import_record["row_count"],
+                    import_record["column_count"],
+                    import_record["schema_json"],
+                    import_record["quality_json"],
+                    source_key or None,
+                    import_record["imported_row_count"],
+                    import_record["skipped_row_count"],
+                    actor_id,
+                    now,
+                ),
+            )
+            insert_audit(
+                connection,
+                "dataset",
+                dataset_id,
+                "import_returns",
+                actor_id,
+                after={
+                    "import_id": import_record["id"],
+                    "mode": mode,
+                    "version_id": prepared["id"],
+                    "raw_sha256": import_record["raw_sha256"],
+                    "imported_row_count": import_record["imported_row_count"],
+                    "skipped_row_count": import_record["skipped_row_count"],
+                },
+                created_at=now,
+            )
+            return {
+                "dataset_id": dataset_id,
+                "version_id": str(prepared["id"]),
+                "duplicate": False,
+            }
+
+    def _commit_appended_return_import(
         self,
         *,
         dataset_id: str,
@@ -1064,56 +1495,44 @@ class DatasetService:
         source_path: Path,
         original_name: str,
         change_note: str,
+        source_key: str,
+        import_record: dict[str, Any],
         actor_id: str,
-    ) -> tuple[dict[str, Any], int, int, int]:
+    ) -> tuple[dict[str, Any], int, int, dict[str, Any]]:
         incoming_frame = read_return_csv(source_path)
         current_target = target
         for attempt in range(RETURN_APPEND_MAX_ATTEMPTS):
-            expected_version = int(current_target["current_version"])
-            current_version = next(
-                value
-                for value in current_target["versions"]
-                if value["version"] == expected_version
+            (
+                prepared,
+                imported_row_count,
+                skipped_row_count,
+                expected_version,
+            ) = self._prepare_appended_return_version(
+                target=current_target,
+                incoming_frame=incoming_frame,
+                original_name=original_name,
+                change_note=change_note,
             )
-            with self.database.connect() as connection:
-                current_row = connection.execute(
-                    "SELECT file_path FROM dataset_versions WHERE id = ?",
-                    (current_version["id"],),
-                ).fetchone()
-            current_frame = read_return_csv(Path(str(current_row["file_path"])))
-            columns = list(
-                dict.fromkeys([*current_frame.columns, *incoming_frame.columns])
-            )
-            current_frame = current_frame.reindex(columns=columns)
-            current_incoming = incoming_frame.reindex(columns=columns)
-            clean_current = current_frame.drop_duplicates(ignore_index=True)
-            merged = pd.concat(
-                [clean_current, current_incoming],
-                ignore_index=True,
-            ).drop_duplicates(ignore_index=True)
-            imported_row_count = max(len(merged) - len(clean_current), 0)
-            skipped_row_count = max(
-                len(current_incoming) - imported_row_count,
-                0,
-            )
-            merge_path = self.settings.data_dir / "tmp" / f"{new_id('merge')}.csv"
-            merge_path.parent.mkdir(parents=True, exist_ok=True)
+            import_record["imported_row_count"] = imported_row_count
+            import_record["skipped_row_count"] = skipped_row_count
             try:
-                merged.to_csv(merge_path, index=False, encoding="utf-8-sig")
-                updated = self.add_version(
+                outcome = self._commit_return_import(
+                    mode="append",
                     dataset_id=dataset_id,
-                    source_path=merge_path,
-                    original_name=original_name,
-                    content_type="text/csv",
-                    change_note=change_note or "追加一批退货数据",
+                    dataset_name=str(target["name"]),
+                    dataset_description=str(target["description"]),
+                    usage_scope=str(target["usage_scope"]),
+                    source_key=source_key,
+                    prepared=prepared,
+                    import_record=import_record,
                     actor_id=actor_id,
                     expected_current_version=expected_version,
                 )
                 return (
-                    updated,
+                    prepared,
                     imported_row_count,
                     skipped_row_count,
-                    expected_version + 1,
+                    outcome,
                 )
             except DatasetRevisionConflict as exc:
                 if attempt + 1 >= RETURN_APPEND_MAX_ATTEMPTS:
@@ -1124,10 +1543,16 @@ class DatasetService:
                 if refreshed is None:
                     raise ValueError("退货数据源不存在") from exc
                 current_target = refreshed
-            finally:
-                merge_path.unlink(missing_ok=True)
 
         raise DatasetRevisionConflict("退货数据已被其他用户连续修改，请刷新后重试")
+
+    @staticmethod
+    def _cleanup_import_source(raw_destination: Path) -> None:
+        raw_destination.unlink(missing_ok=True)
+        try:
+            raw_destination.parent.rmdir()
+        except OSError:
+            pass
 
     def import_returns(
         self,
@@ -1144,42 +1569,22 @@ class DatasetService:
     ) -> dict[str, Any]:
         if mode not in {"analyze_only", "create", "append", "replace"}:
             raise ValueError("未知的退货数据导入方式")
-        inspection = _inspection or self.inspect_return_import(source_path, original_name)
-        duplicate = inspection.get("duplicate")
-        duplicate_in_target = duplicate and (
-            mode == "analyze_only"
-            or (mode == "create" and duplicate.get("usage_scope") == "managed")
-            or str(duplicate["dataset_id"]) == dataset_id
+        inspection = _inspection or self.inspect_return_import(
+            source_path,
+            original_name,
         )
-        if duplicate_in_target:
-            existing = self.get(str(duplicate["dataset_id"]))
-            if existing is not None:
-                return {
-                    "dataset": existing,
-                    "version_id": str(duplicate["version_id"]),
-                    "duplicate": True,
-                    "mode": mode,
-                    "inspection": inspection,
-                    "summary": {
-                        "imported_row_count": 0,
-                        "skipped_row_count": int(inspection["row_count"]),
-                    },
-                }
-
-        target = None
-        if mode in {"append", "replace"}:
-            target = self.get(dataset_id)
-            if target is None or target["kind"] != "returns":
-                raise ValueError("请选择有效的退货数据源")
-            if target.get("usage_scope") != "managed":
-                raise ValueError("一次性任务数据不能作为长期数据源更新")
-            target_source_key = str(target.get("source_key") or "")
-            if (
-                target_source_key
-                and inspection["source_key"]
-                and target_source_key != inspection["source_key"]
-            ):
-                raise ValueError("上传文件与所选数据源的店铺/站点不一致")
+        duplicate_result = self._duplicate_return_import(
+            mode=mode,
+            dataset_id=dataset_id,
+            inspection=inspection,
+        )
+        if duplicate_result is not None:
+            return duplicate_result
+        target = self._return_import_target(
+            mode=mode,
+            dataset_id=dataset_id,
+            source_key=str(inspection["source_key"]),
+        )
 
         import_id = new_id("dataset_import")
         raw_destination = (
@@ -1188,137 +1593,110 @@ class DatasetService:
             / import_id
             / f"source{source_path.suffix.lower()}"
         )
-        raw_destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source_path, raw_destination)
         imported_row_count = int(inspection["row_count"])
         skipped_row_count = 0
-        resulting_version_number: int | None = None
         generated_note = change_note.strip()
+        effective_dataset_id = dataset_id
+        dataset_name = ""
+        dataset_description = ""
+        usage_scope = "managed"
         try:
+            raw_destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_path, raw_destination)
+            import_record = {
+                "id": import_id,
+                "raw_file_path": str(raw_destination),
+                "original_name": original_name,
+                "content_type": content_type,
+                "size_bytes": raw_destination.stat().st_size,
+                "raw_sha256": inspection["raw_sha256"],
+                "row_count": inspection["row_count"],
+                "column_count": inspection["column_count"],
+                "schema_json": json_text(inspection["schema"]),
+                "quality_json": json_text(inspection["quality"]),
+                "imported_row_count": imported_row_count,
+                "skipped_row_count": skipped_row_count,
+            }
             if mode in {"analyze_only", "create"}:
-                target = self.create(
-                    name=name.strip() or str(inspection["suggested_name"]),
-                    kind="returns",
-                    description=(
-                        "仅用于一次分析的退货明细"
-                        if mode == "analyze_only"
-                        else "持续维护的退货数据源"
-                    ),
+                effective_dataset_id = new_id("ds")
+                dataset_name = name.strip() or str(inspection["suggested_name"])
+                dataset_description = (
+                    "仅用于一次分析的退货明细"
+                    if mode == "analyze_only"
+                    else "持续维护的退货数据源"
+                )
+                usage_scope = "task_input" if mode == "analyze_only" else "managed"
+                prepared = self._prepare_return_version(
                     source_path=source_path,
                     original_name=original_name,
                     content_type=content_type,
                     change_note=generated_note or "首次导入退货数据",
-                    actor_id=actor_id,
-                    source_key=str(inspection["source_key"]),
-                    usage_scope=("task_input" if mode == "analyze_only" else "managed"),
-                    _inspection=inspection,
+                    inspection=inspection,
                 )
             elif mode == "replace":
                 assert target is not None
-                target = self.add_version(
-                    dataset_id=dataset_id,
+                dataset_name = str(target["name"])
+                dataset_description = str(target["description"])
+                usage_scope = str(target["usage_scope"])
+                prepared = self._prepare_return_version(
                     source_path=source_path,
                     original_name=original_name,
                     content_type=content_type,
                     change_note=generated_note or "替换当前退货数据",
-                    actor_id=actor_id,
                 )
             else:
                 assert target is not None
                 (
-                    target,
+                    prepared,
                     imported_row_count,
                     skipped_row_count,
-                    resulting_version_number,
-                ) = self._append_return_version(
-                    dataset_id=dataset_id,
+                    outcome,
+                ) = self._commit_appended_return_import(
+                    dataset_id=effective_dataset_id,
                     target=target,
                     source_path=source_path,
                     original_name=original_name,
                     change_note=generated_note,
+                    source_key=str(inspection["source_key"]),
+                    import_record=import_record,
                     actor_id=actor_id,
                 )
-
-            if target is None:
-                raise ValueError("导入后未生成可用数据")
-            version = next(
-                value
-                for value in target["versions"]
-                if value["version"]
-                == (resulting_version_number or target["current_version"])
-            )
-            now = utc_now()
-            with self.database.transaction(immediate=True) as connection:
-                connection.execute(
-                    """
-                    UPDATE datasets
-                    SET source_key = COALESCE(source_key, ?), updated_at = ?
-                    WHERE id = ?
-                    """,
-                    (inspection["source_key"] or None, now, target["id"]),
-                )
-                connection.execute(
-                    """
-                    INSERT INTO dataset_imports(
-                        id, dataset_id, resulting_version_id, mode,
-                        raw_file_path, original_name, content_type, size_bytes,
-                        raw_sha256, row_count, column_count, schema_json,
-                        quality_json, source_key, imported_row_count,
-                        skipped_row_count, created_by, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        import_id,
-                        target["id"],
-                        version["id"],
-                        mode,
-                        str(raw_destination),
-                        original_name,
-                        content_type,
-                        raw_destination.stat().st_size,
-                        inspection["raw_sha256"],
-                        inspection["row_count"],
-                        inspection["column_count"],
-                        json_text(inspection["schema"]),
-                        json_text(inspection["quality"]),
-                        inspection["source_key"] or None,
-                        imported_row_count,
-                        skipped_row_count,
-                        actor_id,
-                        now,
+            if mode != "append":
+                outcome = self._commit_return_import(
+                    mode=mode,
+                    dataset_id=effective_dataset_id,
+                    dataset_name=dataset_name,
+                    dataset_description=dataset_description,
+                    usage_scope=usage_scope,
+                    source_key=str(inspection["source_key"]),
+                    prepared=prepared,
+                    import_record=import_record,
+                    actor_id=actor_id,
+                    expected_current_version=(
+                        0 if mode in {"create", "analyze_only"} else None
                     ),
                 )
-            add_audit(
-                self.database,
-                "dataset",
-                str(target["id"]),
-                "import_returns",
-                actor_id,
-                after={
-                    "import_id": import_id,
-                    "mode": mode,
-                    "version_id": version["id"],
-                    "raw_sha256": inspection["raw_sha256"],
-                    "imported_row_count": imported_row_count,
-                    "skipped_row_count": skipped_row_count,
-                },
-            )
-            refreshed = self.get(str(target["id"])) or target
-            return {
-                "dataset": refreshed,
-                "version_id": version["id"],
-                "duplicate": False,
-                "mode": mode,
-                "inspection": inspection,
-                "summary": {
-                    "imported_row_count": imported_row_count,
-                    "skipped_row_count": skipped_row_count,
-                },
-            }
         except Exception:
-            raw_destination.unlink(missing_ok=True)
-            raw_destination.parent.rmdir()
+            self._cleanup_import_source(raw_destination)
             raise
+
+        if outcome["duplicate"]:
+            self._cleanup_import_source(raw_destination)
+            imported_row_count = 0
+            skipped_row_count = int(inspection["row_count"])
+        result_dataset_id = str(outcome["dataset_id"])
+        refreshed = self.get(result_dataset_id) or target or {}
+        return {
+            "dataset": refreshed,
+            "version_id": str(outcome["version_id"]),
+            "duplicate": bool(outcome["duplicate"]),
+            "mode": mode,
+            "inspection": inspection,
+            "summary": {
+                "imported_row_count": imported_row_count,
+                "skipped_row_count": skipped_row_count,
+            },
+        }
 
     def create(
         self,
@@ -1422,56 +1800,31 @@ class DatasetService:
                 quality,
             ) = _inspect_file_with_frame(source_path, kind)
             digest = _sha256_file(source_path)
-        version_id = new_id("dsv")
         destination = self._ensure_blob(source_path, digest)
         if kind == "products":
             self._ensure_product_preview(destination, digest, inspected_frame)
+        prepared = self._prepared_version(
+            destination=destination,
+            original_name=original_name,
+            content_type=content_type,
+            change_note=change_note.strip(),
+            digest=digest,
+            row_count=row_count,
+            column_count=column_count,
+            schema=schema,
+            quality=quality,
+        )
+        version_id = str(prepared["id"])
 
         with self.database.transaction(immediate=True) as connection:
-            current = connection.execute(
-                "SELECT current_version FROM datasets WHERE id = ?",
-                (dataset_id,),
-            ).fetchone()
-            if (
-                expected_current_version is not None
-                and int(current["current_version"]) != expected_current_version
-            ):
-                raise DatasetRevisionConflict("商品维度已被其他用户修改，请刷新后重试")
-            version = int(current["current_version"]) + 1
             now = utc_now()
-            connection.execute(
-                """
-                INSERT INTO dataset_versions(
-                    id, dataset_id, version, file_path, original_name,
-                    content_type, size_bytes, sha256, row_count, column_count,
-                    schema_json, quality_json, change_note, created_by, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    version_id,
-                    dataset_id,
-                    version,
-                    str(destination),
-                    original_name,
-                    content_type,
-                    destination.stat().st_size,
-                    digest,
-                    row_count,
-                    column_count,
-                    json_text(schema),
-                    json_text(quality),
-                    change_note.strip(),
-                    actor_id,
-                    now,
-                ),
-            )
-            connection.execute(
-                """
-                UPDATE datasets
-                SET current_version = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (version, now, dataset_id),
+            version = self._insert_prepared_version(
+                connection,
+                dataset_id=dataset_id,
+                prepared=prepared,
+                actor_id=actor_id,
+                now=now,
+                expected_current_version=expected_current_version,
             )
         add_audit(
             self.database,

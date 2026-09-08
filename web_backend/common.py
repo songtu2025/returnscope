@@ -22,6 +22,36 @@ def json_value(value: str | None, default: Any = None) -> Any:
     return json.loads(value)
 
 
+def insert_audit(
+    connection: Any,
+    entity_type: str,
+    entity_id: str,
+    action: str,
+    actor_id: str,
+    before: Any = None,
+    after: Any = None,
+    created_at: str | None = None,
+) -> None:
+    connection.execute(
+        """
+        INSERT INTO audit_logs(
+            id, entity_type, entity_id, action, before_json,
+            after_json, actor_id, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            new_id("audit"),
+            entity_type,
+            entity_id,
+            action,
+            json_text(before) if before is not None else None,
+            json_text(after) if after is not None else None,
+            actor_id,
+            created_at or utc_now(),
+        ),
+    )
+
+
 def add_audit(
     database: Database,
     entity_type: str,
@@ -32,23 +62,14 @@ def add_audit(
     after: Any = None,
 ) -> None:
     with database.transaction() as connection:
-        connection.execute(
-            """
-            INSERT INTO audit_logs(
-                id, entity_type, entity_id, action, before_json,
-                after_json, actor_id, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                new_id("audit"),
-                entity_type,
-                entity_id,
-                action,
-                json_text(before) if before is not None else None,
-                json_text(after) if after is not None else None,
-                actor_id,
-                utc_now(),
-            ),
+        insert_audit(
+            connection,
+            entity_type,
+            entity_id,
+            action,
+            actor_id,
+            before,
+            after,
         )
 
 
