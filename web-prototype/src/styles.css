@@ -820,18 +820,24 @@
 
 .standard-validation-controls {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) auto auto;
   gap: 14px;
-  align-items: end;
   padding: 14px 0;
 }
 
-.standard-validation-controls label,
-.standard-validation-controls > div {
+.standard-validation-configuration {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr)) auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.standard-validation-configuration label,
+.standard-validation-sample-size,
+.standard-review-upload > div {
   display: grid;
   gap: 7px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .standard-validation-controls select {
@@ -842,6 +848,63 @@
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 8px;
+}
+
+.standard-review-upload {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.9fr) minmax(320px, 1.1fr);
+  gap: 18px;
+  align-items: start;
+  padding: 14px;
+  background: var(--canvas);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.standard-review-upload input {
+  width: 100%;
+  min-width: 0;
+}
+
+.standard-review-upload small,
+.standard-review-reference-help p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.standard-review-reference-help {
+  padding-top: 1px;
+}
+
+.standard-review-reference-help summary {
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.standard-review-reference-help p {
+  margin-top: 8px;
+}
+
+.standard-validation-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+}
+
+.standard-validation-actions p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.standard-validation-actions .primary-button {
+  grid-column: 2;
+  min-width: 220px;
 }
 
 .standard-sample-size {
@@ -856,7 +919,7 @@
 
 .standard-sample-size button {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   background: transparent;
   border: 0;
@@ -896,7 +959,7 @@
 
 .standard-validation-history > header > span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .standard-validation-run-list {
@@ -912,12 +975,54 @@
   min-height: 46px;
   padding: 8px 10px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   text-align: left;
   background: transparent;
   border: 0;
   border-bottom: 1px solid var(--line);
   cursor: pointer;
+}
+
+@media (max-width: 1100px) {
+  .standard-validation-configuration {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .standard-validation-sample-size {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .standard-review-upload {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .standard-validation-configuration,
+  .standard-review-upload,
+  .standard-validation-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .standard-validation-sample-size {
+    grid-column: auto;
+    justify-self: stretch;
+  }
+
+  .standard-sample-size {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .standard-validation-actions .primary-button {
+    grid-column: auto;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .standard-validation-run-list > button {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .standard-validation-run-list > button:hover,

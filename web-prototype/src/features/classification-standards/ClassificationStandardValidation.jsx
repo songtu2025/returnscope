@@ -36,32 +36,42 @@ export function ClassificationStandardValidation({
   const [comparisonType, setComparisonType] = useState("standard_version");
   const reviewMode = sourceId === "__review_file__" || !sourceId;
   const active = runs.some((run) => ["queued", "running"].includes(run.status));
+  const runDisabledReason = busy
+    ? "正在创建验证任务，请稍候。"
+    : active
+      ? "已有样本验证正在运行，请等待完成。"
+      : draft.validation.blocking.length > 0
+        ? "请先解决结构检查中的阻断项。"
+        : reviewMode && !reviewFile
+          ? "请选择 Review 表格后开始验证。"
+          : !reviewMode && !sourceId
+            ? "请选择样本来源后开始验证。"
+            : "";
   return (
     <div className="standard-sample-validation">
       <section className="standard-validation-launcher">
         <header>
           <div>
-            <p className="eyebrow">发布前验证</p>
             <h3>用真实评论检验草稿分类效果</h3>
             <p>
               选择退货数据，或上传当前品类的 Review
               表格。旧版与草稿使用同一批样本对比；验证不会生成正式分类结果。
             </p>
           </div>
-          <Flask size={24} />
+          <Flask size={24} aria-hidden="true" />
         </header>
         {dirty && (
-          <div className="standard-validation-notice warning">
+          <div className="standard-validation-notice warning" role="status">
             当前有未保存修改，开始验证时会先保存并生成新的草稿修订。
           </div>
         )}
         {draft.validation.blocking.length > 0 && (
-          <div className="standard-validation-notice blocking">
+          <div className="standard-validation-notice blocking" role="alert">
             请先解决结构检查中的阻断项，再运行样本验证。
           </div>
         )}
-        {
-          <div className="standard-validation-controls">
+        <div className="standard-validation-controls">
+          <div className="standard-validation-configuration">
             <label>
               验证目的
               <select
@@ -94,27 +104,7 @@ export function ClassificationStandardValidation({
                 ))}
               </select>
             </label>
-            {reviewMode && (
-              <label>
-                Review 表格
-                <input
-                  type="file"
-                  accept=".xlsx"
-                  aria-label="Review 表格"
-                  onChange={(event) => setReviewFile(event.target.files?.[0] ?? null)}
-                />
-                <small>
-                  需包含评论内容列，可含评论标题、评论编号、一级品类、ASIN；无品类列时按当前标准验证。
-                </small>
-                <details>
-                  <summary>导入人工参考答案（可选）</summary>
-                  <small>
-                    同一文件可增加“人工参考答案”工作表，列为评论编号、标签编码、评价方向、部位、证据；多标签逐行填写，无标签填写“无标签”。可用“存在歧义”列标记“是”，排除不确定答案。参考答案只用于评分，不发送给模型。
-                  </small>
-                </details>
-              </label>
-            )}
-            <div>
+            <div className="standard-validation-sample-size">
               <span>样本规模</span>
               <div className="standard-sample-size" role="group" aria-label="样本规模">
                 {SAMPLE_SIZES.map((value) => (
@@ -130,6 +120,36 @@ export function ClassificationStandardValidation({
                 ))}
               </div>
             </div>
+          </div>
+          {reviewMode && (
+            <div className="standard-review-upload">
+              <div>
+                <label htmlFor="standard-validation-review-file">Review 表格</label>
+                <input
+                  id="standard-validation-review-file"
+                  type="file"
+                  accept=".xlsx"
+                  aria-describedby="standard-validation-review-file-help"
+                  onChange={(event) => setReviewFile(event.target.files?.[0] ?? null)}
+                />
+                <small id="standard-validation-review-file-help">
+                  需包含评论内容列，可含评论标题、评论编号、一级品类、ASIN；无品类列时按当前标准验证。
+                </small>
+              </div>
+              <details className="standard-review-reference-help">
+                <summary>导入人工参考答案（可选）</summary>
+                <p>
+                  同一文件可增加“人工参考答案”工作表，列为评论编号、标签编码、评价方向、部位、证据；多标签逐行填写，无标签填写“无标签”。可用“存在歧义”列标记“是”，排除不确定答案。参考答案只用于评分，不发送给模型。
+                </p>
+              </details>
+            </div>
+          )}
+          <div className="standard-validation-actions">
+            {runDisabledReason && (
+              <p id="standard-validation-disabled-reason" role="status">
+                {runDisabledReason}
+              </p>
+            )}
             <button
               type="button"
               className="primary-button"
@@ -139,13 +159,20 @@ export function ClassificationStandardValidation({
                 (reviewMode ? !reviewFile : !sourceId) ||
                 draft.validation.blocking.length > 0
               }
+              aria-describedby={
+                runDisabledReason ? "standard-validation-disabled-reason" : undefined
+              }
               onClick={() => onRun(reviewMode ? reviewFile : null, comparisonType)}
             >
-              {busy ? <SpinnerGap size={16} className="spin" /> : <Play size={16} />}
+              {busy ? (
+                <SpinnerGap size={16} className="spin" aria-hidden="true" />
+              ) : (
+                <Play size={16} aria-hidden="true" />
+              )}
               {busy ? "正在创建" : "开始样本验证"}
             </button>
           </div>
-        }
+        </div>
       </section>
 
       <section className="standard-validation-history">
@@ -169,11 +196,11 @@ export function ClassificationStandardValidation({
               >
                 <span className={`standard-run-status ${run.status}`}>
                   {run.status === "completed" ? (
-                    <CheckCircle size={16} weight="fill" />
+                    <CheckCircle size={16} weight="fill" aria-hidden="true" />
                   ) : run.status === "failed" ? (
-                    <WarningCircle size={16} weight="fill" />
+                    <WarningCircle size={16} weight="fill" aria-hidden="true" />
                   ) : (
-                    <SpinnerGap size={16} className="spin" />
+                    <SpinnerGap size={16} className="spin" aria-hidden="true" />
                   )}
                   {STATUS_LABELS[run.status]}
                 </span>
@@ -209,7 +236,7 @@ function ValidationResult({ run, isNew, approvalBusy, onApprove }) {
       : 0;
     return (
       <section className="standard-validation-runtime" role="status">
-        <SpinnerGap size={19} className="spin" />
+        <SpinnerGap size={19} className="spin" aria-hidden="true" />
         <div>
           <b>
             {run.stage === "comparing_baseline"
@@ -230,7 +257,7 @@ function ValidationResult({ run, isNew, approvalBusy, onApprove }) {
   if (run.status === "failed") {
     return (
       <section className="standard-validation-runtime failed" role="alert">
-        <WarningCircle size={19} weight="fill" />
+        <WarningCircle size={19} weight="fill" aria-hidden="true" />
         <div>
           <b>样本验证失败</b>
           <span>{run.error || "模型调用未完成，请重新运行。"}</span>
@@ -434,7 +461,7 @@ function ValidationApproval({ run, isNew, busy, onApprove }) {
   if (run.approved_at) {
     return (
       <div className="standard-validation-approval ready">
-        <CheckCircle size={20} weight="fill" />
+        <CheckCircle size={20} weight="fill" aria-hidden="true" />
         <div>
           <b>{isNew ? "验证结果已人工确认" : "验证差异已人工确认"}</b>
           <span>
@@ -482,7 +509,11 @@ function ValidationApproval({ run, isNew, busy, onApprove }) {
         disabled={busy || !confirmed || !note.trim()}
         onClick={() => onApprove(run.id, note.trim())}
       >
-        {busy ? <SpinnerGap size={16} className="spin" /> : <CheckCircle size={16} />}
+        {busy ? (
+          <SpinnerGap size={16} className="spin" aria-hidden="true" />
+        ) : (
+          <CheckCircle size={16} aria-hidden="true" />
+        )}
         {busy ? "确认中" : "确认验证通过"}
       </button>
     </div>

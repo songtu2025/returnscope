@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
@@ -837,6 +839,11 @@ test("草稿未完成样本验证时禁止发布", async () => {
   await userEvent.click(
     await screen.findByRole("button", { name: "发布", exact: true }),
   );
+  const validationRegion = await screen.findByRole("region", {
+    name: "发布前样本验证",
+  });
+  expect(validationRegion.closest("details")).toBeNull();
+  expect(within(validationRegion).getByText("必需")).toBeVisible();
   expect(await screen.findByRole("button", { name: "等待样本验证" })).toBeDisabled();
   expect(standardApiMock.publishClassificationStandardDraft).not.toHaveBeenCalled();
 });
@@ -1064,6 +1071,7 @@ test("Review 上传入口不依赖退货数据资产", async () => {
   const { ClassificationStandardValidation } =
     await import("../src/features/classification-standards/ClassificationStandardValidation");
   const onRun = vi.fn();
+  const onSampleSizeChange = vi.fn();
   render(
     <ClassificationStandardValidation
       draft={{ validation: { blocking: [] } }}
@@ -1075,18 +1083,97 @@ test("Review 上传入口不依赖退货数据资产", async () => {
       approvalBusy={false}
       onRun={onRun}
       onSourceChange={vi.fn()}
-      onSampleSizeChange={vi.fn()}
+      onSampleSizeChange={onSampleSizeChange}
     />,
   );
   const button = screen.getByRole("button", { name: "开始样本验证" });
   expect(button).toBeDisabled();
+  expect(screen.getByText("请选择 Review 表格后开始验证。")).toBeVisible();
+  expect(button).toHaveAttribute(
+    "aria-describedby",
+    "standard-validation-disabled-reason",
+  );
+  expect(screen.getByText("导入人工参考答案（可选）").closest("label")).toBeNull();
   const file = new File(["test"], "reviews.xlsx", {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
-  await userEvent.upload(screen.getByLabelText("Review 表格"), file);
+  const fileInput = screen.getByLabelText("Review 表格");
+  expect(fileInput).toHaveAttribute(
+    "aria-describedby",
+    "standard-validation-review-file-help",
+  );
+  await userEvent.upload(fileInput, file);
   expect(button).toBeEnabled();
+  expect(screen.queryByText("请选择 Review 表格后开始验证。")).toBeNull();
+  expect(button).not.toHaveAttribute("aria-describedby");
+  await userEvent.click(screen.getByRole("button", { name: "50 条" }));
+  expect(onSampleSizeChange).toHaveBeenCalledWith(50);
   await userEvent.click(button);
   expect(onRun).toHaveBeenCalledWith(file, "standard_version");
+});
+
+test("样本验证按钮解释当前优先禁用原因", async () => {
+  const { ClassificationStandardValidation } =
+    await import("../src/features/classification-standards/ClassificationStandardValidation");
+  const commonProps = {
+    sources: [],
+    selectedRun: null,
+    sourceId: "",
+    sampleSize: 20,
+    busy: false,
+    approvalBusy: false,
+    dirty: false,
+    onRun: vi.fn(),
+    onApprove: vi.fn(),
+    onSelectRun: vi.fn(),
+    onSourceChange: vi.fn(),
+    onSampleSizeChange: vi.fn(),
+  };
+  const { rerender } = render(
+    <ClassificationStandardValidation
+      {...commonProps}
+      draft={{ validation: { blocking: ["标签编码重复"] } }}
+      runs={[]}
+    />,
+  );
+  expect(screen.getByText("请先解决结构检查中的阻断项。")).toBeVisible();
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    "请先解决结构检查中的阻断项，再运行样本验证。",
+  );
+
+  rerender(
+    <ClassificationStandardValidation
+      {...commonProps}
+      draft={{ validation: { blocking: [] } }}
+      runs={[
+        {
+          id: "running-validation",
+          status: "running",
+          draft_revision: 2,
+          processed_count: 4,
+          sample_size: 20,
+          is_current: true,
+        },
+      ]}
+    />,
+  );
+  expect(screen.getByText("已有样本验证正在运行，请等待完成。")).toBeVisible();
+});
+
+test("发布前样本验证在目标宽度使用三段响应式布局", () => {
+  const styles = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
+  expect(styles).toMatch(
+    /\.standard-validation-configuration\s*{[^}]*grid-template-columns:\s*repeat\(2, minmax\(220px, 1fr\)\) auto;/s,
+  );
+  expect(styles).toMatch(
+    /@media \(max-width:\s*1100px\)[\s\S]*?\.standard-validation-configuration\s*{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/,
+  );
+  expect(styles).toMatch(
+    /@media \(max-width:\s*900px\)[\s\S]*?\.standard-validation-configuration,[\s\S]*?\.standard-review-upload,[\s\S]*?\.standard-validation-actions\s*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/,
+  );
+  expect(styles).toMatch(
+    /@media \(max-width:\s*900px\)[\s\S]*?\.standard-validation-actions \.primary-button\s*{[^}]*width:\s*100%;[^}]*min-width:\s*0;/,
+  );
 });
 
 test("停用与恢复标签同步维护中性原因和强制复核规则", () => {

@@ -1119,8 +1119,17 @@ function StandardWorkspace({
           <span>用于版本记录，不影响智能体判断。</span>
         </section>
 
-        <details className="standard-optional-validation" open>
-          <summary>发布前样本验证（必需）</summary>
+        <section
+          className="standard-required-validation"
+          aria-labelledby="standard-required-validation-title"
+        >
+          <header className="standard-required-validation-heading">
+            <div>
+              <h2 id="standard-required-validation-title">发布前样本验证</h2>
+              <p>发布前必须完成样本验证，并确认当前草稿的分类效果。</p>
+            </div>
+            <span>必需</span>
+          </header>
           {draft ? (
             <ClassificationStandardValidation
               draft={draft}
@@ -1141,7 +1150,7 @@ function StandardWorkspace({
           ) : (
             <p>请先保存草稿，再运行样本验证；验证通过后才能启用新版本。</p>
           )}
-        </details>
+        </section>
       </div>
       {editable && (
         <footer className="standard-editor-footer">

@@ -475,7 +475,7 @@
 .standard-change-reason,
 .standard-json-transfer,
 .standard-advanced-settings,
-.standard-optional-validation,
+.standard-required-validation,
 .standard-version-history {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -701,14 +701,13 @@
 }
 
 .standard-version-history,
-.standard-optional-validation,
+.standard-required-validation,
 .standard-advanced-settings {
   margin-bottom: 16px;
   padding: 16px 18px;
 }
 
 .standard-version-history summary,
-.standard-optional-validation summary,
 .standard-advanced-settings summary {
   display: flex;
   gap: 8px;
@@ -924,7 +923,7 @@
 }
 
 .standard-change-reason span,
-.standard-optional-validation > p,
+.standard-required-validation > p,
 .standard-advanced-settings > fieldset > p {
   color: var(--muted);
   font-size: 11px;
@@ -932,8 +931,37 @@
 
 .standard-advanced-settings > fieldset > label,
 .standard-advanced-settings fieldset,
-.standard-optional-validation > div {
+.standard-required-validation > div {
   margin-top: 16px;
+}
+
+.standard-required-validation-heading {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.standard-required-validation-heading h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.standard-required-validation-heading p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.standard-required-validation-heading > span {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--green-pale);
+  border-radius: 5px;
 }
 
 .standard-delete-actions {
