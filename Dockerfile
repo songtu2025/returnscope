@@ -17,6 +17,7 @@ RUN useradd --create-home --uid 10001 webapp \
     && mkdir -p /app/runtime /app/backups \
     && chown -R webapp:webapp /app/runtime /app/backups
 COPY return_semantics/ return_semantics/
+COPY return_analysis/ return_analysis/
 COPY web_backend/ web_backend/
 COPY config/ config/
 COPY --from=frontend /build/web-prototype/dist web-prototype/dist

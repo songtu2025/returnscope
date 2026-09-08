@@ -68,6 +68,15 @@ def test_project_validation_lists_only_missing_files(tmp_path: Path) -> None:
     assert validate_project(tmp_path) == [f"缺少部署文件：{REQUIRED_FILES[-1]}"]
 
 
+def test_docker_image_copies_legacy_analysis_package() -> None:
+    project_root = Path(__file__).resolve().parents[1]
+    dockerfile_lines = (
+        (project_root / "Dockerfile").read_text(encoding="utf-8").splitlines()
+    )
+
+    assert "COPY return_analysis/ return_analysis/" in dockerfile_lines
+
+
 def test_smoke_test_requires_https_by_default() -> None:
     assert validate_base_url("https://analysis.example.com/") == (
         "https://analysis.example.com"

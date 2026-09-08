@@ -85,12 +85,13 @@ class AgentRunner:
 
     def _get_cache(self, config_version_id: str) -> JsonlCache:
         with self._caches_lock:
-            return self._caches.setdefault(
-                config_version_id,
-                JsonlCache(
+            cache = self._caches.get(config_version_id)
+            if cache is None:
+                cache = JsonlCache(
                     self.settings.data_dir / "cache" / f"{config_version_id}.jsonl"
-                ),
-            )
+                )
+                self._caches[config_version_id] = cache
+            return cache
 
     def _get_task_lock(self, task_id: str) -> threading.Lock:
         with self._task_locks_lock:

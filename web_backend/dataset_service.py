@@ -28,6 +28,7 @@ ALLOWED_EXTENSIONS = {
     "products": {".xlsx"},
 }
 PRODUCT_WORKSHEET = "产品信息汇总表"
+RETURN_APPEND_MAX_ATTEMPTS = 3
 _preview_locks: dict[str, threading.Lock] = {}
 _preview_locks_guard = threading.Lock()
 
@@ -1055,6 +1056,79 @@ class DatasetService:
             pass
         return result
 
+    def _append_return_version(
+        self,
+        *,
+        dataset_id: str,
+        target: dict[str, Any],
+        source_path: Path,
+        original_name: str,
+        change_note: str,
+        actor_id: str,
+    ) -> tuple[dict[str, Any], int, int, int]:
+        incoming_frame = read_return_csv(source_path)
+        current_target = target
+        for attempt in range(RETURN_APPEND_MAX_ATTEMPTS):
+            expected_version = int(current_target["current_version"])
+            current_version = next(
+                value
+                for value in current_target["versions"]
+                if value["version"] == expected_version
+            )
+            with self.database.connect() as connection:
+                current_row = connection.execute(
+                    "SELECT file_path FROM dataset_versions WHERE id = ?",
+                    (current_version["id"],),
+                ).fetchone()
+            current_frame = read_return_csv(Path(str(current_row["file_path"])))
+            columns = list(
+                dict.fromkeys([*current_frame.columns, *incoming_frame.columns])
+            )
+            current_frame = current_frame.reindex(columns=columns)
+            current_incoming = incoming_frame.reindex(columns=columns)
+            clean_current = current_frame.drop_duplicates(ignore_index=True)
+            merged = pd.concat(
+                [clean_current, current_incoming],
+                ignore_index=True,
+            ).drop_duplicates(ignore_index=True)
+            imported_row_count = max(len(merged) - len(clean_current), 0)
+            skipped_row_count = max(
+                len(current_incoming) - imported_row_count,
+                0,
+            )
+            merge_path = self.settings.data_dir / "tmp" / f"{new_id('merge')}.csv"
+            merge_path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                merged.to_csv(merge_path, index=False, encoding="utf-8-sig")
+                updated = self.add_version(
+                    dataset_id=dataset_id,
+                    source_path=merge_path,
+                    original_name=original_name,
+                    content_type="text/csv",
+                    change_note=change_note or "追加一批退货数据",
+                    actor_id=actor_id,
+                    expected_current_version=expected_version,
+                )
+                return (
+                    updated,
+                    imported_row_count,
+                    skipped_row_count,
+                    expected_version + 1,
+                )
+            except DatasetRevisionConflict as exc:
+                if attempt + 1 >= RETURN_APPEND_MAX_ATTEMPTS:
+                    raise DatasetRevisionConflict(
+                        "退货数据已被其他用户连续修改，请刷新后重试"
+                    ) from exc
+                refreshed = self.get(dataset_id, include={"versions"})
+                if refreshed is None:
+                    raise ValueError("退货数据源不存在") from exc
+                current_target = refreshed
+            finally:
+                merge_path.unlink(missing_ok=True)
+
+        raise DatasetRevisionConflict("退货数据已被其他用户连续修改，请刷新后重试")
+
     def import_returns(
         self,
         *,
@@ -1118,6 +1192,7 @@ class DatasetService:
         shutil.copy2(source_path, raw_destination)
         imported_row_count = int(inspection["row_count"])
         skipped_row_count = 0
+        resulting_version_number: int | None = None
         generated_note = change_note.strip()
         try:
             if mode in {"analyze_only", "create"}:
@@ -1150,51 +1225,27 @@ class DatasetService:
                 )
             else:
                 assert target is not None
-                current_version = next(
-                    value
-                    for value in target["versions"]
-                    if value["version"] == target["current_version"]
+                (
+                    target,
+                    imported_row_count,
+                    skipped_row_count,
+                    resulting_version_number,
+                ) = self._append_return_version(
+                    dataset_id=dataset_id,
+                    target=target,
+                    source_path=source_path,
+                    original_name=original_name,
+                    change_note=generated_note,
+                    actor_id=actor_id,
                 )
-                with self.database.connect() as connection:
-                    current_row = connection.execute(
-                        "SELECT file_path FROM dataset_versions WHERE id = ?",
-                        (current_version["id"],),
-                    ).fetchone()
-                current_frame = read_return_csv(Path(str(current_row["file_path"])))
-                incoming_frame = read_return_csv(source_path)
-                columns = list(
-                    dict.fromkeys([*current_frame.columns, *incoming_frame.columns])
-                )
-                current_frame = current_frame.reindex(columns=columns)
-                incoming_frame = incoming_frame.reindex(columns=columns)
-                clean_current = current_frame.drop_duplicates(ignore_index=True)
-                merged = pd.concat(
-                    [clean_current, incoming_frame],
-                    ignore_index=True,
-                ).drop_duplicates(ignore_index=True)
-                imported_row_count = max(len(merged) - len(clean_current), 0)
-                skipped_row_count = max(len(incoming_frame) - imported_row_count, 0)
-                merge_path = self.settings.data_dir / "tmp" / f"{new_id('merge')}.csv"
-                merge_path.parent.mkdir(parents=True, exist_ok=True)
-                try:
-                    merged.to_csv(merge_path, index=False, encoding="utf-8-sig")
-                    target = self.add_version(
-                        dataset_id=dataset_id,
-                        source_path=merge_path,
-                        original_name=original_name,
-                        content_type="text/csv",
-                        change_note=generated_note or "追加一批退货数据",
-                        actor_id=actor_id,
-                    )
-                finally:
-                    merge_path.unlink(missing_ok=True)
 
             if target is None:
                 raise ValueError("导入后未生成可用数据")
             version = next(
                 value
                 for value in target["versions"]
-                if value["version"] == target["current_version"]
+                if value["version"]
+                == (resulting_version_number or target["current_version"])
             )
             now = utc_now()
             with self.database.transaction(immediate=True) as connection:

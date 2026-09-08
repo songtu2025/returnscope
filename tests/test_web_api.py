@@ -1011,7 +1011,22 @@ def test_login_is_rate_limited(tmp_path: Path) -> None:
         assert int(blocked.headers["Retry-After"]) > 0
 
 
-def test_health_fails_when_worker_stops(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("state_name", "worker_name"),
+    [
+        ("worker", "listing"),
+        ("insight_report_worker", "insight_report"),
+        (
+            "standard_validation_worker",
+            "classification_standard_validation",
+        ),
+    ],
+)
+def test_health_fails_when_worker_stops(
+    tmp_path: Path,
+    state_name: str,
+    worker_name: str,
+) -> None:
     settings = Settings(
         data_dir=tmp_path / "runtime",
         database_path=tmp_path / "runtime" / "app.db",
@@ -1026,10 +1041,47 @@ def test_health_fails_when_worker_stops(tmp_path: Path) -> None:
     app = create_app(start_worker=True, settings_override=settings)
 
     with TestClient(app) as client:
-        app.state.worker.stop()
+        getattr(app.state, state_name).stop()
         response = client.get("/api/health")
         assert response.status_code == 503
         assert response.json()["detail"]["worker"] == "unavailable"
+        assert response.json()["detail"]["workers"][worker_name]["status"] == (
+            "unavailable"
+        )
+
+
+def test_health_reports_recent_worker_error(tmp_path: Path) -> None:
+    settings = Settings(
+        data_dir=tmp_path / "runtime",
+        database_path=tmp_path / "runtime" / "app.db",
+        session_days=14,
+        task_workers=1,
+        bootstrap_email="admin@example.com",
+        bootstrap_name="管理员",
+        bootstrap_password="test-password-123",
+        encryption_key=Fernet.generate_key().decode("ascii"),
+        secure_cookies=False,
+    )
+    app = create_app(start_worker=True, settings_override=settings)
+
+    with TestClient(app) as client:
+        app.state.insight_report_worker._health.record_error(
+            RuntimeError("报告监督异常")
+        )
+        response = client.get("/api/health")
+
+    assert response.status_code == 200
+    payload = response.json()
+    worker_health = payload["workers"]["insight_report"]
+    assert payload["status"] == "degraded"
+    assert payload["worker"] == "degraded"
+    assert worker_health["status"] == "degraded"
+    assert worker_health["last_error"] == "RuntimeError"
+    assert worker_health["last_error_at"] is not None
+    assert "报告监督异常" not in response.text
+    assert "领取失败" not in response.text
+    assert app.state.standard_validation_service is not None
+    assert app.state.standard_validation_worker is not None
 
 
 def test_production_settings_reject_development_defaults(monkeypatch) -> None:

@@ -184,6 +184,8 @@ def create_app(
             dummy_password_hash=dummy_password_hash,
             task_service=task_service,
             worker=worker,
+            insight_report_worker=insight_report_worker,
+            standard_validation_worker=standard_validation_worker,
             start_worker=start_worker,
             current_user=current_user,
         )
@@ -277,6 +279,8 @@ def create_app(
     app.state.worker = worker
     app.state.insight_report_service = insight_report_service
     app.state.insight_report_worker = insight_report_worker
+    app.state.standard_validation_service = standard_validation_service
+    app.state.standard_validation_worker = standard_validation_worker
     return app
 
 

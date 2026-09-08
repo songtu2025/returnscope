@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import shutil
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -345,6 +347,73 @@ def test_return_import_appends_without_repeating_rows(tmp_path: Path) -> None:
     assert first_snapshot["source_total"] == 2
     assert current_snapshot["version"] == 2
     assert current_snapshot["source_total"] == 3
+
+
+def test_concurrent_return_appends_merge_from_latest_version(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    context = _seed_result_context(tmp_path)
+    service = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
+    initial = tmp_path / "initial.csv"
+    first_append = tmp_path / "first-append.csv"
+    second_append = tmp_path / "second-append.csv"
+    _write_returns(initial, [_return_row("O-1", "偏小")])
+    _write_returns(first_append, [_return_row("O-2", "不够保暖")])
+    _write_returns(second_append, [_return_row("O-3", "抓握不好")])
+    created = _create_managed_returns(service, initial)
+    dataset_id = str(created["id"])
+
+    original_add_version = service.add_version
+    first_attempt_barrier = threading.Barrier(2)
+    synchronized_threads: set[int] = set()
+    synchronized_threads_lock = threading.Lock()
+
+    def synchronized_add_version(**kwargs):
+        thread_id = threading.get_ident()
+        with synchronized_threads_lock:
+            should_wait = thread_id not in synchronized_threads
+            synchronized_threads.add(thread_id)
+        if should_wait:
+            first_attempt_barrier.wait(timeout=5)
+        return original_add_version(**kwargs)
+
+    monkeypatch.setattr(service, "add_version", synchronized_add_version)
+
+    def append(source_path: Path) -> dict[str, object]:
+        return service.import_returns(
+            source_path=source_path,
+            original_name=source_path.name,
+            content_type="text/csv",
+            mode="append",
+            dataset_id=dataset_id,
+            actor_id="user-1",
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(append, first_append),
+            executor.submit(append, second_append),
+        ]
+        results = [future.result(timeout=10) for future in futures]
+
+    current = service.preview_rows(dataset_id, limit=10)
+    assert current["version"] == 3
+    assert current["source_total"] == 3
+    assert {record["order-id"] for record in current["records"]} == {
+        "O-1",
+        "O-2",
+        "O-3",
+    }
+    assert [result["summary"] for result in results] == [
+        {"imported_row_count": 1, "skipped_row_count": 0},
+        {"imported_row_count": 1, "skipped_row_count": 0},
+    ]
+    imported = service.get(dataset_id)["imports"]
+    append_version_ids = {
+        item["resulting_version_id"] for item in imported if item["mode"] == "append"
+    }
+    assert len(append_version_ids) == 2
 
 
 def test_dataset_versions_reuse_identical_blob(tmp_path: Path) -> None:

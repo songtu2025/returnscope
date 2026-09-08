@@ -1,17 +1,21 @@
 from __future__ import annotations
 
+import logging
 import threading
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import CancelledError, Future, ThreadPoolExecutor
+from typing import Any
 
 from web_backend.agent_runner import AgentRunner
 from web_backend.database import Database
 from web_backend.security import utc_now
 from web_backend.task_state import summarize_task_status
+from web_backend.worker_health import WorkerHealthMixin, WorkerHealthState
 
 USER_SEGMENT_LIMIT = 3
+logger = logging.getLogger(__name__)
 
 
-class TaskWorker:
+class TaskWorker(WorkerHealthMixin):
     def __init__(
         self,
         database: Database,
@@ -26,6 +30,7 @@ class TaskWorker:
         self._executor = ThreadPoolExecutor(max_workers=concurrency)
         self._active: set[str] = set()
         self._lock = threading.Lock()
+        self._health = WorkerHealthState()
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -50,25 +55,50 @@ class TaskWorker:
 
     def _loop(self) -> None:
         while not self._stop.is_set():
-            with self._lock:
-                capacity = self.concurrency - len(self._active)
-            for _ in range(max(capacity, 0)):
-                claimed = self._claim_next_segment()
-                if claimed is None:
-                    break
-                task_id, segment_id = claimed
+            try:
                 with self._lock:
-                    self._active.add(segment_id)
-                future = self._executor.submit(
-                    self.runner.run_segment,
-                    task_id,
-                    segment_id,
-                )
-                future.add_done_callback(
-                    lambda _future, claimed_id=segment_id: self._release(claimed_id)
-                )
-            self._finalize_pending_results()
+                    capacity = self.concurrency - len(self._active)
+                for _ in range(max(capacity, 0)):
+                    claimed = self._claim_next_segment()
+                    if claimed is None:
+                        break
+                    task_id, segment_id = claimed
+                    with self._lock:
+                        self._active.add(segment_id)
+                    future = self._executor.submit(
+                        self.runner.run_segment,
+                        task_id,
+                        segment_id,
+                    )
+                    future.add_done_callback(
+                        lambda completed, claimed_id=segment_id: self._segment_finished(
+                            claimed_id, completed
+                        )
+                    )
+                self._finalize_pending_results()
+            except Exception as exc:
+                self._record_error("Listing 监督循环异常", exc)
             self._stop.wait(1.0)
+
+    def _record_error(self, message: str, error: BaseException) -> None:
+        self._health.record_error(error)
+        logger.error(
+            message,
+            exc_info=(type(error), error, error.__traceback__),
+        )
+
+    def _segment_finished(
+        self,
+        segment_id: str,
+        future: Future[Any],
+    ) -> None:
+        try:
+            error = future.exception()
+        except CancelledError:
+            error = None
+        if error is not None:
+            self._record_error("Listing 片段执行出现未处理异常", error)
+        self._release(segment_id)
 
     def _claim_next_segment(self) -> tuple[str, str] | None:
         with self.database.transaction(immediate=True) as connection:

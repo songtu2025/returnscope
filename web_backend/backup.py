@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
 from secrets import token_hex
 
-from web_backend.settings import Settings
+from web_backend.settings import RUNTIME_DIRECTORIES, Settings
 
 
 def create_backup(settings: Settings, backup_dir: Path | None = None) -> Path:
@@ -39,7 +39,7 @@ def create_backup(settings: Settings, backup_dir: Path | None = None) -> Path:
         compresslevel=6,
     ) as archive:
         archive.write(database_snapshot, "app.db")
-        for directory_name in ("uploads", "results", "cache"):
+        for directory_name in RUNTIME_DIRECTORIES:
             directory = settings.data_dir / directory_name
             if not directory.exists():
                 continue
@@ -60,7 +60,7 @@ def _validate_archive(archive: zipfile.ZipFile) -> None:
     for name in names:
         path = PurePosixPath(name)
         allowed = name == "app.db" or (
-            bool(path.parts) and path.parts[0] in {"uploads", "results", "cache"}
+            bool(path.parts) and path.parts[0] in RUNTIME_DIRECTORIES
         )
         if not allowed or path.is_absolute() or ".." in path.parts:
             raise ValueError(f"备份文件包含非法路径：{name}")
@@ -85,11 +85,7 @@ def restore_backup(settings: Settings, archive_path: Path) -> Path:
 
     safety_backup = create_backup(settings)
     restore_token = token_hex(6)
-    directory_targets = {
-        "uploads": data_root / "uploads",
-        "results": data_root / "results",
-        "cache": data_root / "cache",
-    }
+    directory_targets = {name: data_root / name for name in RUNTIME_DIRECTORIES}
     old_paths: dict[str, Path] = {}
     installed: list[Path] = []
     old_database: Path | None = None
@@ -103,7 +99,7 @@ def restore_backup(settings: Settings, archive_path: Path) -> Path:
         with zipfile.ZipFile(source_archive) as archive:
             _validate_archive(archive)
             archive.extractall(staging)
-        for directory_name in ("uploads", "results", "cache"):
+        for directory_name in RUNTIME_DIRECTORIES:
             (staging / directory_name).mkdir(exist_ok=True)
         connection = sqlite3.connect(staging / "app.db")
         try:

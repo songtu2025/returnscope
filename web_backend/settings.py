@@ -7,6 +7,7 @@ from pathlib import Path
 from return_semantics.model_client import load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+RUNTIME_DIRECTORIES = ("uploads", "imports", "results", "cache")
 
 
 def _read_int(name: str, default: int, minimum: int = 1) -> int:
@@ -120,6 +121,6 @@ class Settings:
             raise ValueError("生产环境数据库必须位于 WEBAPP_DATA_DIR 内")
 
     def ensure_directories(self) -> None:
-        for name in ("uploads", "results", "cache"):
+        for name in RUNTIME_DIRECTORIES:
             (self.data_dir / name).mkdir(parents=True, exist_ok=True)
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
