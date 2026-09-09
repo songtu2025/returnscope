@@ -10,12 +10,14 @@ from threading import Event, Lock
 
 import pandas as pd
 
+from return_semantics.fact_pipeline import FactPipelineCancelled, classify_facts
 from return_semantics.model_client import (
     JsonlCache,
     ModelCallResult,
     ModelClient,
     ModelHTTPError,
 )
+from return_semantics.output_correction import correct_invalid_output
 from return_semantics.prompt import (
     PROMPT_VERSION,
     build_messages,
@@ -182,6 +184,7 @@ def _call_with_cache(
     force: bool,
     classification_scope: str,
     model_policy_version: str,
+    should_cancel: Callable[[], bool] | None = None,
 ) -> tuple[ModelCallResult, bool]:
     if thinking:
         reasoning_effort = getattr(
@@ -216,11 +219,36 @@ def _call_with_cache(
         if cached is not None:
             return cached, True
 
-        result = client.classify(
-            messages=messages,
-            model=model_name,
-            thinking=thinking,
-        )
+        if taxonomy.recognition_profile == "fact_v2":
+            try:
+                result = classify_facts(
+                    comment=comment,
+                    taxonomy=taxonomy,
+                    client=client,
+                    model_name=model_name,
+                    reasoning_effort=str(reasoning_effort),
+                    should_cancel=should_cancel,
+                    claims=claims,
+                )
+            except FactPipelineCancelled as exc:
+                raise PipelineCancelled(str(exc)) from exc
+        else:
+            result = client.classify(
+                messages=messages,
+                model=model_name,
+                thinking=thinking,
+            )
+            result = correct_invalid_output(
+                result,
+                comment=comment,
+                messages=messages,
+                taxonomy=taxonomy,
+                claims=claims,
+                client=client,
+                model_name=model_name,
+                thinking=thinking,
+                should_cancel=should_cancel,
+            )
         cache.put(cache_key, result)
         return result, False
 
@@ -299,9 +327,12 @@ def classify_comments(
                 return
 
             consecutive_service_failures = 0
-            model_calls += 1
+            call_count = call_result.metrics.get(
+                "fact_model_calls", 1
+            ) + call_result.metrics.get("output_correction_calls", 0)
+            model_calls += call_count
             model_calls_by_model[requested_model] = (
-                model_calls_by_model.get(requested_model, 0) + 1
+                model_calls_by_model.get(requested_model, 0) + call_count
             )
             _add_usage(usage, call_result.usage)
             model_usage = usage_by_model.setdefault(requested_model, {})
@@ -378,6 +409,7 @@ def classify_comments(
                     force=force,
                     classification_scope=classification_scope,
                     model_policy_version=model_policy_version,
+                    should_cancel=should_cancel,
                 )
             except PipelineCancelled:
                 raise

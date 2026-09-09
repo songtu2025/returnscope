@@ -9,6 +9,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from return_semantics.prompt import recognition_fingerprint
+from return_semantics.schemas import TaxonomyConfig
 from web_backend.classification_standard_service import (
     CLASSIFICATION_STANDARD_RULES_MIGRATION,
     ClassificationStandardConflict,
@@ -17,8 +19,6 @@ from web_backend.classification_standard_service import (
     ClassificationStandardValidationError,
 )
 from web_backend.database import Database
-from return_semantics.schemas import TaxonomyConfig
-from return_semantics.prompt import recognition_fingerprint
 from web_backend.routers.classification_standards import (
     create_classification_standard_router,
 )
@@ -128,7 +128,7 @@ def test_existing_category_config_is_imported_as_published_standards(
 
     assert len(standards) == 4
     assert sum(item["category_count"] for item in standards) == 24
-    assert sum(item["label_count"] for item in standards) == 158
+    assert sum(item["label_count"] for item in standards) == 181
     assert {item["standard_key"] for item in standards} == {
         "eyewear",
         "footwear",
@@ -852,7 +852,11 @@ def test_draft_validation_reports_blank_business_fields(tmp_path: Path) -> None:
     )
 
     assert "标准名称不能为空" in updated["validation"]["blocking"]
+    assert not any(
+        issue.get("field") == "description"
+        for issue in updated["validation"]["issues"]
+    )
     assert any(
-        "编码、名称、分组和定义不能为空" in item
+        "已发布标签不能同码改义" in item
         for item in updated["validation"]["blocking"]
     )

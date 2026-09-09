@@ -67,12 +67,55 @@ class UnknownSemantic(StrictModel):
     reason: str = Field(min_length=1)
 
 
+class EvidenceSpan(StrictModel):
+    text: str = Field(min_length=1)
+
+
+class ExtractedFact(StrictModel):
+    fact_id: str = Field(min_length=1)
+    actor_ref: str = Field(min_length=1)
+    product_ref: str = Field(min_length=1)
+    event_ref: str = Field(min_length=1)
+    subject: SubjectCode = SubjectCode.PRODUCT
+    statement_type: Literal[
+        "EXPERIENCE",
+        "EVALUATION",
+        "RECOMMENDATION",
+        "INTENT",
+        "PREDICTION",
+        "HYPOTHESIS",
+        "REPORTED",
+        "NEGATED",
+        "NOT_TESTED",
+        "ADVICE",
+    ]
+    opinion: str = Field(min_length=1)
+    sentiment: SentimentCode
+    part: str = Field(min_length=1)
+    condition: str = ""
+    is_primary_reason: bool = False
+    candidate_branch_codes: list[str] = Field(default_factory=list)
+    evidence_spans: list[EvidenceSpan] = Field(min_length=1)
+
+
+class FactExtraction(StrictModel):
+    facts: list[ExtractedFact]
+
+
+class FactMapping(StrictModel):
+    fact_id: str = Field(min_length=1)
+    label_codes: list[str] = Field(default_factory=list, max_length=1)
+    reason: str = ""
+
+
 class ModelClassification(StrictModel):
     semantic_units: list[SemanticUnit] = Field(default_factory=list)
     unknown_semantics: list[UnknownSemantic] = Field(default_factory=list)
     primary_label_codes: list[str] = Field(default_factory=list)
     needs_review: bool = False
     review_reasons: list[str] = Field(default_factory=list)
+    extracted_facts: list[ExtractedFact] = Field(default_factory=list)
+    fact_mappings: list[FactMapping] = Field(default_factory=list)
 
 
 class LabelExample(StrictModel):
@@ -85,8 +128,9 @@ class LabelExample(StrictModel):
 class LabelDefinition(StrictModel):
     code: str
     name: str
-    group: str
-    description: str
+    group: str = ""
+    parent_code: str | None = None
+    description: str = ""
     keywords: list[str] = Field(default_factory=list)
     exclusions: list[str] = Field(default_factory=list, max_length=10)
     examples: list[LabelExample] = Field(default_factory=list, max_length=10)
@@ -128,6 +172,7 @@ class TaxonomyValidationRules(StrictModel):
     allowed_groups: list[str] = Field(default_factory=list)
     neutral_reason_labels: list[str] | None = None
     required_review_labels: list[str] = Field(default_factory=list)
+    boundary_required_labels: list[str] = Field(default_factory=list)
     conflict_scope: Literal["comment", "evidence"] = "comment"
     opposite_reason_labels: dict[str, list[str]] = Field(default_factory=dict)
     conflicting_label_sets: list[list[str]] = Field(default_factory=list)
@@ -138,11 +183,19 @@ class TaxonomyValidationRules(StrictModel):
     )
 
 
+class CategoryDefinition(StrictModel):
+    code: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    parent_code: str | None = None
+
+
 class TaxonomyConfig(StrictModel):
     version: str
-    recognition_profile: Literal["legacy_v3", "keyword_free_v1", "semantic_v1"] = (
-        "legacy_v3"
-    )
+    structure_version: Literal[1, 2] = 1
+    categories: list[CategoryDefinition] = Field(default_factory=list)
+    recognition_profile: Literal[
+        "legacy_v3", "keyword_free_v1", "semantic_v1", "fact_v2"
+    ] = "legacy_v3"
     agent_family: str
     product_context: str
     allowed_parts: list[str] = Field(default_factory=lambda: ["UNSPECIFIED"])
@@ -154,9 +207,19 @@ class TaxonomyConfig(StrictModel):
 
     @model_validator(mode="after")
     def validate_rule_labels(self) -> "TaxonomyConfig":
+        if self.structure_version == 2:
+            from return_semantics.taxonomy_hierarchy import validate_hierarchy
+
+            validate_hierarchy(self)
+        elif self.categories or any(label.parent_code for label in self.labels):
+            raise ValueError("层级标签必须使用 structure_version=2")
         label_codes = {label.code for label in self.labels}
         groups = self.validation_rules.allowed_groups
-        if groups and any(label.group not in groups for label in self.labels):
+        if (
+            self.structure_version == 1
+            and groups
+            and any(label.group not in groups for label in self.labels)
+        ):
             raise ValueError("标签分组必须来自标准规定的业务分组")
         rule_codes = {
             code
@@ -180,6 +243,7 @@ class TaxonomyConfig(StrictModel):
         )
         rule_codes.update(self.validation_rules.neutral_reason_labels or [])
         rule_codes.update(self.validation_rules.required_review_labels)
+        rule_codes.update(self.validation_rules.boundary_required_labels)
         unknown_codes = sorted(rule_codes.difference(label_codes))
         if unknown_codes:
             raise ValueError(f"校验规则引用了未知标签: {unknown_codes}")
@@ -204,6 +268,8 @@ class ListingClaimsConfig(StrictModel):
 
 
 class ValidatedClassification(StrictModel):
+    extracted_facts: list[ExtractedFact] = Field(default_factory=list)
+    fact_mappings: list[FactMapping] = Field(default_factory=list)
     classification_key: str
     semantic_units: list[SemanticUnit]
     unknown_semantics: list[UnknownSemantic]

@@ -1,3 +1,4 @@
+import json
 from copy import deepcopy
 from pathlib import Path
 
@@ -6,6 +7,7 @@ from openpyxl import Workbook
 from pydantic import ValidationError
 
 from return_semantics.prompt import (
+    _label_catalog,
     build_messages,
     recognition_fingerprint,
     validation_contract_matches,
@@ -53,6 +55,43 @@ def test_profiles_remove_aliases_without_changing_comment(eyewear):
     assert "UNIQUE_SEARCH_ALIAS" not in keyword_free[0]["content"]
     assert semantic[1] == legacy[1] == keyword_free[1]
     assert "label_code 必须是非空" in semantic[0]["content"]
+
+
+@pytest.mark.parametrize("profile", ["legacy_v3", "keyword_free_v1", "semantic_v1"])
+@pytest.mark.parametrize("hierarchical", [False, True])
+def test_name_and_path_remain_available_without_description(
+    eyewear, profile, hierarchical
+):
+    taxonomy = eyewear.model_copy(deep=True)
+    taxonomy.recognition_profile = profile
+    for label in taxonomy.labels:
+        label.description = ""
+    if hierarchical:
+        from return_semantics.schemas import CategoryDefinition
+
+        taxonomy.structure_version = 2
+        taxonomy.categories = [CategoryDefinition(code="ROOT", name="测试分类")]
+        for label in taxonomy.labels:
+            label.parent_code = "ROOT"
+    compact = not hierarchical and profile != "semantic_v1"
+    entries = [
+        line.split("|") if compact else json.loads(line)
+        for line in _label_catalog(taxonomy).splitlines()
+    ]
+    assert len(entries) == len(taxonomy.labels)
+    for entry, label in zip(entries, taxonomy.labels, strict=True):
+        path = ["测试分类" if hierarchical else label.group, label.name]
+        if compact:
+            assert entry[:3] == [label.code, " → ".join(path), ""]
+        else:
+            assert "判定说明" not in entry
+            assert entry["名称"] == label.name
+            assert entry["完整路径"] == path
+    assert "没有判定说明的标签仍可使用" in messages(taxonomy)[0]["content"]
+    signature = recognition_fingerprint(taxonomy)
+    taxonomy.labels[0].description = "补充排除边界"
+    assert "补充排除边界" in _label_catalog(taxonomy).splitlines()[0]
+    assert recognition_fingerprint(taxonomy) != signature
 
 
 def test_alias_change_leaves_semantic_prompt_and_fingerprint_unchanged(eyewear):

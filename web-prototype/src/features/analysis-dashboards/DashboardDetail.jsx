@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { resultLabelText } from "../../lib/taxonomyPresentation";
 import {
   ArrowLeft,
   ArrowsClockwise,
@@ -850,11 +851,11 @@ function DashboardEvidenceDrawer({ record, onClose, returnFocusRef }) {
           <b>分类结论</b>
           <DrawerField
             label="主要问题"
-            value={classification.primary_label_codes?.join("、")}
+            value={resultLabelText(record, classification.primary_label_codes)}
           />
           <DrawerField
             label="问题标签"
-            value={classification.problem_label_codes?.join("、")}
+            value={resultLabelText(record, classification.problem_label_codes)}
           />
         </section>
         <section className="drawer-section">
@@ -862,7 +863,7 @@ function DashboardEvidenceDrawer({ record, onClose, returnFocusRef }) {
           {units.length === 0 && <p className="drawer-empty">没有提取到有效证据。</p>}
           {units.map((unit, index) => (
             <div className="evidence-unit" key={`${unit.label_code}-${index}`}>
-              <span>{unit.label_code || "未标注"}</span>
+              <span>{unit.label_path?.join(" → ") || unit.label_code || "未标注"}</span>
               <blockquote>“{unit.evidence || "未提供证据"}”</blockquote>
               <small>
                 部位：{unit.part || "未提供"} · 观点：{unit.opinion || "未提供"}

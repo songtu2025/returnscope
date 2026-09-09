@@ -9,6 +9,8 @@ import {
 } from "@phosphor-icons/react";
 import { EmptyState, Modal } from "../../components/SharedUi";
 import { labelChanges, reconcileLabelRules, sameLabel } from "./labelDraftPolicy";
+import { taxonomyPath } from "../../lib/taxonomyPresentation";
+import { ClassificationHierarchyDirectory } from "./ClassificationHierarchyEditor";
 
 const SENTIMENTS = { NEGATIVE: "负向", POSITIVE: "正向", NEUTRAL: "中性" };
 
@@ -18,6 +20,7 @@ export function ClassificationLabelWorkbench({
   savedContent,
   onChange,
   focusLabelCode,
+  fixRequest,
   busy,
   editable,
   initiallyEditing,
@@ -43,6 +46,7 @@ export function ClassificationLabelWorkbench({
   const emptyLabelRef = useRef(null);
   const labelFieldRefs = useRef(new Map());
   const pendingFocusRef = useRef(null);
+  const handledFixRef = useRef(null);
   const focusedAttemptRef = useRef(0);
   const errorId = useId();
   useEffect(() => {
@@ -66,13 +70,24 @@ export function ClassificationLabelWorkbench({
     savedContent?.labels.find((item) => item.code === origins[label?.code]);
   const labelDirty = label && (removed ? Boolean(saved) : !sameLabel(label, saved));
   const groups = [...new Set(entries.map((item) => item.label.group).filter(Boolean))];
-  const allowedGroups = content.validation_rules?.allowed_groups?.length
-    ? content.validation_rules.allowed_groups
-    : BUSINESS_GROUPS;
+  const hierarchical = content.structure_version === 2;
+  const allowedGroups = hierarchical
+    ? (content.categories ?? [])
+        .filter((item) => !item.parent_code)
+        .map((item) => item.name)
+    : content.validation_rules?.allowed_groups?.length
+      ? content.validation_rules.allowed_groups
+      : BUSINESS_GROUPS;
   const matches = entries.filter(
     ({ label: item }) =>
       (!group || item.group === group) &&
-      [item.name, item.code, item.description, ...(item.keywords ?? [])]
+      [
+        item.name,
+        item.code,
+        item.description,
+        ...taxonomyPath(content, item),
+        ...(item.keywords ?? []),
+      ]
         .join(" ")
         .toLowerCase()
         .includes(query.trim().toLowerCase()),
@@ -111,12 +126,14 @@ export function ClassificationLabelWorkbench({
       {
         ...content,
         labels,
-        validation_rules: reconcileLabelRules(
-          content.validation_rules,
-          labels,
-          baseContent?.validation_rules,
-          restoredCode,
-        ),
+        validation_rules: hierarchical
+          ? content.validation_rules
+          : reconcileLabelRules(
+              content.validation_rules,
+              labels,
+              baseContent?.validation_rules,
+              restoredCode,
+            ),
       },
       field,
     );
@@ -127,7 +144,11 @@ export function ClassificationLabelWorkbench({
   const addLabel = (source) => {
     setEditing(true);
     const usedCodes = new Set(entries.map((item) => item.label.code));
-    const prefix = source ? `${source.code}_V` : "NEW_LABEL_";
+    const prefix = source
+      ? `${source.code}_V`
+      : hierarchical
+        ? `LABEL_${crypto.randomUUID().replaceAll("-", "").toUpperCase()}_`
+        : "NEW_LABEL_";
     let suffix = source ? 2 : 1;
     while (usedCodes.has(`${prefix}${suffix}`)) suffix += 1;
     const newLabel = source
@@ -136,6 +157,9 @@ export function ClassificationLabelWorkbench({
           code: `${prefix}${suffix}`,
           name: "",
           group: allowedGroups.includes(group) ? group : allowedGroups[0] || "",
+          ...(hierarchical
+            ? { parent_code: content.categories?.[0]?.code ?? null }
+            : {}),
           description: "",
           keywords: [],
           allowed_sentiments: ["NEGATIVE"],
@@ -206,15 +230,30 @@ export function ClassificationLabelWorkbench({
       return;
     }
     const index = fieldErrors.labels?.findIndex(
-      (item) => item.name || item.group || item.code || item.description,
+      (item) => item.name || item.group || item.code,
     );
     if (index < 0) return;
     const errors = fieldErrors.labels[index];
-    const field = ["name", "group", "code", "description"].find((key) => errors[key]);
+    const field = ["name", "group", "code"].find((key) => errors[key]);
     pendingFocusRef.current = { attempt: validationAttempt, index, field };
     setSelected(index);
     setEditing(true);
   }, [busy, fieldErrors, section, validationAttempt]);
+
+  useEffect(() => {
+    if (!fixRequest || section !== "labels" || handledFixRef.current === fixRequest)
+      return;
+    const index = fixRequest.label_code
+      ? content.labels.findIndex((item) => item.code === fixRequest.label_code)
+      : fixRequest.label_index;
+    if (index < 0 || !content.labels[index]) return;
+    handledFixRef.current = fixRequest;
+    pendingFocusRef.current = { index, field: fixRequest.field || "description" };
+    setQuery("");
+    setGroup("");
+    setSelected(index);
+    setEditing(true);
+  }, [content.labels, fixRequest, section]);
 
   useEffect(() => {
     const pendingFocus = pendingFocusRef.current;
@@ -234,7 +273,7 @@ export function ClassificationLabelWorkbench({
     target.focus();
     focusedAttemptRef.current = pendingFocus.attempt;
     pendingFocusRef.current = null;
-  }, [busy, editing, section, selected]);
+  }, [busy, editing, section, selected, fixRequest]);
 
   return (
     <div className="label-workbench">
@@ -277,31 +316,46 @@ export function ClassificationLabelWorkbench({
           ))}
         </select>
         <div className="label-directory-scroll">
-          {matches.map((item) => {
-            const value = item.index < 0 ? item.label.code : item.index;
-            return (
-              <button
-                ref={selected === value ? selectedRef : undefined}
-                key={item.index < 0 ? `removed-${item.label.code}` : item.index}
-                type="button"
-                aria-current={selected === value ? "true" : undefined}
-                disabled={busy}
-                onClick={() => selectLabel(value)}
-              >
-                <span>
-                  <b>{item.label.name || "未命名标签"}</b>
-                  <small>{item.label.group || "未分组"}</small>
-                </span>
-                {item.status !== "未修改" && (
-                  <span
-                    className={`label-change-badge ${item.status === "拟停用" ? "removed" : "changed"}`}
-                  >
-                    {item.status}
+          {(() => {
+            const renderLabel = (item) => {
+              const value = item.index < 0 ? item.label.code : item.index;
+              return (
+                <button
+                  ref={selected === value ? selectedRef : undefined}
+                  key={item.index < 0 ? `removed-${item.label.code}` : item.index}
+                  type="button"
+                  aria-current={selected === value ? "true" : undefined}
+                  disabled={busy}
+                  onClick={() => selectLabel(value)}
+                >
+                  <span>
+                    <b>{item.label.name || "未命名标签"}</b>
+                    <small>
+                      {taxonomyPath(item.index < 0 ? baseContent : content, item.label)
+                        .slice(0, -1)
+                        .join(" → ") || "未分组"}
+                    </small>
                   </span>
-                )}
-              </button>
+                  {item.status !== "未修改" && (
+                    <span
+                      className={`label-change-badge ${item.status === "拟停用" ? "removed" : "changed"}`}
+                    >
+                      {item.status}
+                    </span>
+                  )}
+                </button>
+              );
+            };
+            return hierarchical ? (
+              <ClassificationHierarchyDirectory
+                content={content}
+                entries={matches}
+                renderLabel={renderLabel}
+              />
+            ) : (
+              matches.map(renderLabel)
             );
-          })}
+          })()}
           {!matches.length && (
             <p className="label-directory-empty">
               没有匹配的标签。
@@ -406,27 +460,68 @@ export function ClassificationLabelWorkbench({
                 </div>
               ) : (
                 <>
+                  {hierarchical && editable && editing && (
+                    <label>
+                      上级分类
+                      <select
+                        ref={(node) =>
+                          labelFieldRefs.current.set(`${entry.index}.parent_code`, node)
+                        }
+                        aria-label="标签的上级分类"
+                        value={label.parent_code || ""}
+                        onChange={(event) => {
+                          const next = { ...label, parent_code: event.target.value };
+                          updateLabel({
+                            parent_code: next.parent_code,
+                            group: taxonomyPath(content, next)[0] || "",
+                          });
+                        }}
+                      >
+                        <option value="" disabled>
+                          请选择上级分类
+                        </option>
+                        {(content.categories ?? []).map((item) => (
+                          <option key={item.code} value={item.code}>
+                            {taxonomyPath(content, item).join(" → ")}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  {hierarchical && published && editable && editing && (
+                    <label>
+                      标签名称
+                      <input
+                        aria-label="已发布标签名称"
+                        value={label.name}
+                        onChange={(event) => updateLabel({ name: event.target.value })}
+                      />
+                    </label>
+                  )}
                   {published || !editing ? (
                     <>
                       {editable && editing && published && (
                         <div className="label-published-note">
-                          <span>已发布定义保持稳定，可直接补充关键词。</span>
+                          <span>已发布标签语义保持稳定，可直接补充关键词。</span>
                           <button
                             type="button"
                             disabled={busy}
                             onClick={() => setPending({ type: "replace" })}
                           >
-                            修改定义：创建替代标签 →
+                            修改说明：创建替代标签 →
                           </button>
                         </div>
                       )}
                       <section className="label-business-definition">
-                        <h3>业务定义</h3>
-                        <p>{label.description}</p>
                         <dl>
                           <div>
-                            <dt>标签分组</dt>
-                            <dd>{label.group}</dd>
+                            <dt>{hierarchical ? "标签路径" : "标签分组"}</dt>
+                            <dd>
+                              {taxonomyPath(
+                                removed ? baseContent : content,
+                                label,
+                              ).join(" → ")}
+                            </dd>
                           </div>
                           <div>
                             <dt>评价方向</dt>
@@ -437,6 +532,8 @@ export function ClassificationLabelWorkbench({
                             </dd>
                           </div>
                         </dl>
+                        <h3>判定说明（可选）</h3>
+                        <p>{label.description || "依据标签名称和完整路径理解"}</p>
                       </section>
                     </>
                   ) : (
@@ -470,46 +567,48 @@ export function ClassificationLabelWorkbench({
                           </span>
                         )}
                       </label>
-                      <label>
-                        标签分组
-                        <select
-                          ref={(node) => {
-                            labelFieldRefs.current.set(`${entry.index}.group`, node);
-                          }}
-                          aria-label={`标签分组 ${entry.index + 1}`}
-                          aria-invalid={Boolean(
-                            fieldErrors.labels?.[entry.index]?.group,
-                          )}
-                          aria-describedby={
-                            fieldErrors.labels?.[entry.index]?.group
-                              ? `${errorId}-label-${entry.index}-group`
-                              : undefined
-                          }
-                          value={label.group}
-                          onChange={(event) =>
-                            updateLabel({ group: event.target.value })
-                          }
-                        >
-                          {!allowedGroups.includes(label.group) && (
-                            <option value={label.group}>
-                              {label.group || "请选择分组"}
-                            </option>
-                          )}
-                          {allowedGroups.map((name) => (
-                            <option key={name} value={name}>
-                              {name}
-                            </option>
-                          ))}
-                        </select>
-                        {fieldErrors.labels?.[entry.index]?.group && (
-                          <span
-                            className="standard-field-error"
-                            id={`${errorId}-label-${entry.index}-group`}
+                      {!hierarchical && (
+                        <label>
+                          标签分组
+                          <select
+                            ref={(node) => {
+                              labelFieldRefs.current.set(`${entry.index}.group`, node);
+                            }}
+                            aria-label={`标签分组 ${entry.index + 1}`}
+                            aria-invalid={Boolean(
+                              fieldErrors.labels?.[entry.index]?.group,
+                            )}
+                            aria-describedby={
+                              fieldErrors.labels?.[entry.index]?.group
+                                ? `${errorId}-label-${entry.index}-group`
+                                : undefined
+                            }
+                            value={label.group}
+                            onChange={(event) =>
+                              updateLabel({ group: event.target.value })
+                            }
                           >
-                            {fieldErrors.labels[entry.index].group}
-                          </span>
-                        )}
-                      </label>
+                            {!allowedGroups.includes(label.group) && (
+                              <option value={label.group}>
+                                {label.group || "请选择分组"}
+                              </option>
+                            )}
+                            {allowedGroups.map((name) => (
+                              <option key={name} value={name}>
+                                {name}
+                              </option>
+                            ))}
+                          </select>
+                          {fieldErrors.labels?.[entry.index]?.group && (
+                            <span
+                              className="standard-field-error"
+                              id={`${errorId}-label-${entry.index}-group`}
+                            >
+                              {fieldErrors.labels[entry.index].group}
+                            </span>
+                          )}
+                        </label>
+                      )}
                       <label className="wide-field">
                         标签编码
                         <input
@@ -540,7 +639,7 @@ export function ClassificationLabelWorkbench({
                         )}
                       </label>
                       <label className="wide-field">
-                        业务定义
+                        判定说明（可选）
                         <textarea
                           ref={(node) => {
                             labelFieldRefs.current.set(
@@ -549,34 +648,26 @@ export function ClassificationLabelWorkbench({
                             );
                           }}
                           rows={5}
-                          aria-label={`业务定义 ${entry.index + 1}`}
-                          aria-invalid={Boolean(
-                            fieldErrors.labels?.[entry.index]?.description,
-                          )}
-                          aria-describedby={
-                            fieldErrors.labels?.[entry.index]?.description
-                              ? `${errorId}-label-${entry.index}-description`
-                              : undefined
-                          }
-                          value={label.description}
+                          aria-label={`判定说明（可选） ${entry.index + 1}`}
+                          value={label.description ?? ""}
+                          placeholder="有特殊边界时补充，无需重复标签名称"
                           onChange={(event) =>
                             updateLabel({ description: event.target.value })
                           }
                         />
-                        {fieldErrors.labels?.[entry.index]?.description && (
-                          <span
-                            className="standard-field-error"
-                            id={`${errorId}-label-${entry.index}-description`}
-                          >
-                            {fieldErrors.labels[entry.index].description}
-                          </span>
-                        )}
                       </label>
                       <fieldset className="wide-field label-sentiment-options">
                         <legend>支持的评价方向</legend>
                         {Object.entries(SENTIMENTS).map(([value, name]) => (
                           <label key={value}>
                             <input
+                              ref={(node) => {
+                                if (value === "NEGATIVE")
+                                  labelFieldRefs.current.set(
+                                    `${entry.index}.allowed_sentiments`,
+                                    node,
+                                  );
+                              }}
                               type="checkbox"
                               checked={label.allowed_sentiments.includes(value)}
                               onChange={(event) =>
@@ -630,11 +721,14 @@ export function ClassificationLabelWorkbench({
                     label={label}
                     editing={editable && editing}
                     onChange={updateLabel}
+                    onFieldRef={(field, node) =>
+                      labelFieldRefs.current.set(`${entry.index}.${field}`, node)
+                    }
                   />
                   <details className="label-keyword-editor">
                     <summary>搜索别名（可选） · {label.keywords?.length ?? 0}</summary>
                     <p>
-                      {content.recognition_profile === "semantic_v1"
+                      {["semantic_v1", "fact_v2"].includes(content.recognition_profile)
                         ? "仅用于管理页面搜索，不参与当前语义策略分类。"
                         : "当前仍使用旧策略：这些词同时用于搜索和模型提示。切换语义策略并发布后，仅用于搜索。"}
                     </p>
@@ -718,7 +812,7 @@ export function ClassificationLabelWorkbench({
           <EmptyState
             icon={Plus}
             title="开始建立标签体系"
-            description="新增标签后，在右侧填写定义和关键词。"
+            description="新增标签后，在右侧填写名称，并按需补充判定说明和关键词。"
             action={
               editable && (
                 <button
@@ -752,7 +846,7 @@ export function ClassificationLabelWorkbench({
           <div className="label-action-confirm">
             <p>
               {pending.type === "replace"
-                ? "将复制名称、定义和关键词，生成新编码，并将旧标签标记为拟停用。新标签不继承旧标签的承诺关联与专用校验规则；发布前请在标准设置中核对相关指令。"
+                ? "将复制名称、判定说明和关键词，生成新编码，并将旧标签标记为拟停用。新标签不继承旧标签的承诺关联与专用校验规则；发布前请在标准设置中核对相关指令。"
                 : "仅修改当前草稿。相关标签校验引用会同步清理，已发布标准和历史结果保持原样。"}
             </p>
             <div>
@@ -780,7 +874,7 @@ export function ClassificationLabelWorkbench({
   );
 }
 
-function LabelBoundaries({ label, editing, onChange }) {
+function LabelBoundaries({ label, editing, onChange, onFieldRef }) {
   const exclusions = label.exclusions ?? [];
   const examples = label.examples ?? [];
   const updateExample = (index, change) =>
@@ -798,8 +892,9 @@ function LabelBoundaries({ label, editing, onChange }) {
           {editing ? (
             <textarea
               aria-label="排除说明"
+              ref={(node) => onFieldRef("exclusions", node)}
               rows={3}
-              placeholder="每行说明一种不适用情况；避免重复业务定义"
+              placeholder="每行说明一种不适用情况；避免重复判定说明"
               value={exclusions.join("\n")}
               onChange={(event) =>
                 onChange({ exclusions: event.target.value.split("\n") })
@@ -815,7 +910,7 @@ function LabelBoundaries({ label, editing, onChange }) {
         </div>
       )}
       {(editing || examples.length > 0) && (
-        <div>
+        <div tabIndex={-1} ref={(node) => onFieldRef("examples", node)}>
           <h3>判定示例</h3>
           <p>完整短句用于解释边界，不是必须命中的词语。</p>
           {examples.map((example, index) => (

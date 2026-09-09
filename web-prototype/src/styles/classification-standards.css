@@ -1,4 +1,47 @@
 /* 分类标准：全宽列表、标签目录与草稿编辑 */
+.hierarchy-directory-branch {
+  padding-left: 12px;
+}
+.hierarchy-directory-branch summary {
+  padding: 8px 0;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.hierarchy-category-editor {
+  margin-bottom: 12px;
+}
+.hierarchy-category-editor fieldset,
+.taxonomy-import-content,
+.taxonomy-import-content fieldset {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.hierarchy-category-editor label,
+.taxonomy-import-content label {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.taxonomy-import-paths,
+.taxonomy-import-issues {
+  max-height: 240px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  padding: 12px;
+  border: 1px solid var(--line);
+}
+.taxonomy-import-content select,
+.hierarchy-category-editor select {
+  width: 100%;
+  min-width: 0;
+}
+.taxonomy-import-content {
+  max-height: calc(100dvh - 180px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 8px;
+}
 .standard-editor-stack {
   min-width: 0;
   padding: 0;
@@ -95,7 +138,7 @@
   padding: 0 5px;
   overscroll-behavior: contain;
 }
-.label-directory-scroll > button {
+.label-directory-scroll button {
   display: flex;
   width: 100%;
   align-items: center;
@@ -109,10 +152,10 @@
   text-align: left;
   color: var(--ink);
 }
-.label-directory-scroll > button:hover {
+.label-directory-scroll button:hover {
   background: #edf3ef;
 }
-.label-directory-scroll > button[aria-current="true"] {
+.label-directory-scroll button[aria-current="true"] {
   border-color: #b4d7c8;
   background: var(--green-pale);
   color: var(--green-dark);
@@ -922,6 +965,11 @@
   opacity: 0;
 }
 
+.standard-review-upload .standard-json-import-button:focus-within {
+  outline: 2px solid var(--green);
+  outline-offset: 3px;
+}
+
 .standard-change-reason span,
 .standard-required-validation > p,
 .standard-advanced-settings > fieldset > p {
@@ -979,6 +1027,33 @@
   background: #f8faf9;
   border: 1px solid var(--line);
   border-radius: 10px;
+}
+
+.standard-quality-summary {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.standard-quality-group {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+
+.standard-quality-group > summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.standard-quality-group details {
+  margin-block: 10px;
+}
+
+.standard-quality-group summary:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 3px;
 }
 
 .standard-validation-approval > div {
@@ -1149,4 +1224,41 @@
 .label-keyword-editor summary {
   cursor: pointer;
   font-weight: 600;
+}
+
+.standard-structure-issues details {
+  margin-block: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.standard-structure-issues summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.standard-structure-issues ul {
+  list-style: none;
+  padding: 0;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.standard-structure-issues li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-block: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.standard-structure-issues li > div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+.standard-structure-issues li > button {
+  flex-shrink: 0;
+}
+.standard-structure-issues li span,
+.standard-structure-issues li small {
+  color: var(--muted);
 }

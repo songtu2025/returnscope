@@ -7,9 +7,16 @@ import sqlite3
 from datetime import date
 from typing import Any
 
+from return_semantics.schemas import TaxonomyConfig
 from return_semantics.taxonomy import aligned_label_group
+from return_semantics.taxonomy_hierarchy import descendant_label_codes
 from web_backend.common import insert_audit, json_text, json_value, new_id
 from web_backend.database import Database
+from web_backend.result_hierarchy import (
+    enrich_record,
+    hierarchy_counts,
+    result_taxonomy,
+)
 from web_backend.security import utc_now
 
 PAGE_SIZE_DEFAULT = 50
@@ -462,6 +469,20 @@ class DashboardService:
 
         with self.database.connect() as connection:
             context = self._version_context(connection, dashboard_id, version_id)
+            if self._mixed_hierarchy(connection, context["sources"]):
+                return {
+                    "dashboard_id": dashboard_id,
+                    "version_id": version_id,
+                    "hierarchy_conflict": True,
+                    "message": "该看板包含不同层级标准版本，请按标准版本分别建立看板。",
+                    "reasons": [],
+                    "hierarchy_problems": [],
+                }
+            taxonomy = (
+                result_taxonomy(connection, context["source_ids"][0])
+                if context["source_ids"]
+                else None
+            )
             source_taxonomies = {
                 source["result_version_id"]: source for source in context["sources"]
             }
@@ -478,7 +499,7 @@ class DashboardService:
             def group_for_result(group, code, result_id):
                 source = source_taxonomies.get(result_id, {})
                 original = group or "其他原因"
-                if not mixed_versions:
+                if not mixed_versions or (taxonomy and taxonomy.structure_version == 2):
                     return original
                 return aligned_label_group(
                     source.get("agent_key", ""),
@@ -509,6 +530,11 @@ class DashboardService:
             if clean_date_to:
                 where_sql += " AND date(r.return_date) <= date(?)"
                 params.append(clean_date_to)
+            hierarchy_problems = (
+                hierarchy_counts(connection, taxonomy, where_sql, params)
+                if taxonomy and taxonomy.structure_version == 2
+                else []
+            )
             unit_rollup = (
                 report_mode
                 and not runtime_filters
@@ -1191,7 +1217,11 @@ class DashboardService:
             "dashboard_id": dashboard_id,
             "version_id": version_id,
             "summary": summary,
-            "group_alignment": "unified-v1" if mixed_versions else "original",
+            "group_alignment": "unified-v1"
+            if mixed_versions and not (taxonomy and taxonomy.structure_version == 2)
+            else "original",
+            "hierarchy_problems": hierarchy_problems,
+            "taxonomy": taxonomy.model_dump(mode="json") if taxonomy else None,
             "counting_note": "按原始记录在每个分组内去重；多标签占比之和可能超过100%。",
             "date_range": date_range,
             "filter_options": filter_options,
@@ -1709,11 +1739,14 @@ class DashboardService:
             rows = connection.execute(
                 f"""
                 SELECT r.*, u.processing_status, u.problem_labels_json,
-                       u.classification_json
+                       u.classification_json, standard.snapshot_json AS hierarchy_snapshot_json
                 FROM classification_result_records r
                 JOIN classification_units u
                   ON u.result_version_id = r.result_version_id
                  AND u.classification_key = r.classification_key
+                JOIN classification_result_versions result_version ON result_version.id = r.result_version_id
+                JOIN classification_results result ON result.id = result_version.result_id
+                LEFT JOIN classification_standard_versions standard ON standard.id = result.standard_version_id
                 WHERE {where_sql}
                 ORDER BY r.store_site ASC, r.listing ASC,
                          r.source_row ASC, r.id ASC
@@ -1721,8 +1754,18 @@ class DashboardService:
                 """,
                 (*params, page_size, (page - 1) * page_size),
             ).fetchall()
+        items = []
+        for row in rows:
+            item = dict(row)
+            snapshot = json_value(item.pop("hierarchy_snapshot_json", None), {})
+            taxonomy = (
+                TaxonomyConfig.model_validate(snapshot["taxonomy"])
+                if snapshot
+                else None
+            )
+            items.append(enrich_record(self._serialize_record(item), taxonomy))
         return {
-            "items": [self._serialize_record(dict(row)) for row in rows],
+            "items": items,
             "total": total,
             "page": page,
             "page_size": page_size,
@@ -1825,7 +1868,7 @@ class DashboardService:
                    product_dataset.name AS product_dataset_name,
                    product_version.version AS product_version,
                    r.store_site, r.listing, r.agent_key, r.agent_family,
-                   r.logic_version, r.taxonomy_version,
+                   r.logic_version, r.taxonomy_version, r.standard_version_id,
                    r.model_policy_version, r.claims_version,
                    COALESCE((
                        SELECT COUNT(DISTINCT revision.review_record_id)
@@ -1889,6 +1932,13 @@ class DashboardService:
             for version_id in clean_ids
             if version_id not in found_ids
         ]
+        if self._mixed_hierarchy(connection, sources):
+            blockers.append(
+                {
+                    "type": "incompatible_hierarchy_versions",
+                    "message": "层级框架必须按标准版本分别建立看板，不能合并不同标准版本的标签。",
+                }
+            )
         warnings: list[dict[str, Any]] = []
         for source in sources:
             if source["publish_status"] != "published":
@@ -2225,7 +2275,7 @@ class DashboardService:
                    product_dataset.name AS product_dataset_name,
                    product_version.version AS product_version,
                    r.store_site, r.listing, r.agent_key, r.agent_family,
-                   r.logic_version, r.taxonomy_version,
+                   r.logic_version, r.taxonomy_version, r.standard_version_id,
                    r.model_policy_version, r.claims_version,
                    COALESCE((
                        SELECT COUNT(DISTINCT revision.review_record_id)
@@ -2337,6 +2387,21 @@ class DashboardService:
         return value
 
     @staticmethod
+    def _mixed_hierarchy(
+        connection: sqlite3.Connection, sources: list[dict[str, Any]]
+    ) -> bool:
+        versions = {source.get("standard_version_id") for source in sources}
+        if len(versions) < 2:
+            return False
+        return any(
+            taxonomy is not None and taxonomy.structure_version == 2
+            for taxonomy in (
+                result_taxonomy(connection, source["result_version_id"])
+                for source in sources
+            )
+        )
+
+    @staticmethod
     def _normalize_filters(filters: dict[str, Any]) -> dict[str, list[str]]:
         unknown = sorted(set(filters) - ALLOWED_FILTERS)
         if unknown:
@@ -2359,8 +2424,8 @@ class DashboardService:
             raise ValueError("quality_status 不合法")
         return output
 
-    @staticmethod
     def _record_where(
+        self,
         source_ids: list[str],
         *filter_sets: dict[str, list[str]],
     ) -> tuple[str, list[Any]]:
@@ -2372,6 +2437,29 @@ class DashboardService:
             for key, values in filters.items():
                 placeholders = ",".join("?" for _ in values)
                 if key == "problem":
+                    scoped = []
+                    with self.database.connect() as connection:
+                        for source in source_ids:
+                            taxonomy = result_taxonomy(connection, source)
+                            codes = sorted(
+                                {
+                                    code
+                                    for value in values
+                                    for code in (
+                                        (
+                                            descendant_label_codes(taxonomy, value)
+                                            or [value]
+                                        )
+                                        if taxonomy
+                                        else [value]
+                                    )
+                                }
+                            )
+                            code_placeholders = ",".join("?" for _ in codes)
+                            scoped.append(
+                                f"(f.result_version_id = ? AND f.label_code IN ({code_placeholders}))"
+                            )
+                            params.extend([source, *codes])
                     where.append(
                         """
                         EXISTS (
@@ -2379,13 +2467,13 @@ class DashboardService:
                             WHERE f.result_version_id = r.result_version_id
                               AND f.classification_key = r.classification_key
                               AND f.label_kind = 'problem'
-                              AND f.label_code IN ("""
-                        + placeholders
+                              AND ("""
+                        + " OR ".join(scoped)
                         + ") )"
                     )
                 else:
                     where.append(f"r.{FILTER_COLUMNS[key]} IN ({placeholders})")
-                params.extend(values)
+                    params.extend(values)
         return " AND ".join(where), params
 
     @staticmethod

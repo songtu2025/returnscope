@@ -663,3 +663,48 @@ def test_keyword_comparison_uses_same_taxonomy_and_cannot_approve(tmp_path):
     assert completed["publication_ready"] is False
     with pytest.raises(ValueError, match="仅用于诊断"):
         validations.approve(run["id"], draft["revision"], "不得代替发布", "user-1")
+
+
+def test_quality_policy_blocks_approval_and_publishing_even_with_saved_approval(
+    tmp_path,
+):
+    import pytest
+
+    from web_backend.classification_standard_service import (
+        ClassificationStandardValidationError,
+    )
+    from web_backend.classification_validation_quality import FACT_QUALITY_POLICY
+
+    standards, validations = _services(tmp_path)
+    standard = next(
+        item for item in standards.list() if item["standard_key"] == "eyewear"
+    )
+    source_id = _seed_result(standards, standard)
+    draft = standards.create_draft(standard["id"], "user-1")
+    content = deepcopy(draft["content"])
+    content["product_context"] = "质量门槛测试适用范围"
+    draft = standards.update_draft(
+        draft["id"], draft["revision"], content, "验证质量门槛", "user-1"
+    )
+    run = validations.create_run(
+        draft["id"], draft["revision"], source_id, 20, "user-1"
+    )
+    assert validations.claim_next() == run["id"]
+    validations.run(run["id"])
+    with standards.database.transaction() as connection:
+        raw = connection.execute(
+            "SELECT source_json FROM classification_standard_validation_runs WHERE id = ?",
+            (run["id"],),
+        ).fetchone()
+        source = json.loads(raw["source_json"])
+        source["quality_policy"] = FACT_QUALITY_POLICY
+        connection.execute(
+            "UPDATE classification_standard_validation_runs "
+            "SET source_json = ?, approved_at = 'saved-before-policy' WHERE id = ?",
+            (json.dumps(source), run["id"]),
+        )
+    assert validations.get(run["id"])["publication_ready"] is False
+    with pytest.raises(ValueError, match="质量门槛未通过"):
+        validations.approve(run["id"], draft["revision"], "不能绕过", "user-1")
+    with pytest.raises(ClassificationStandardValidationError):
+        standards.publish_draft(draft["id"], draft["revision"], "不能绕过", "user-1")

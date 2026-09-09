@@ -218,17 +218,21 @@ class ClassificationStandardVariantRequest(BaseModel):
 class ClassificationStandardLabelRequest(BaseModel):
     code: str = Field(min_length=1, max_length=100)
     name: str = Field(min_length=1, max_length=100)
-    group: str = Field(min_length=1, max_length=100)
-    description: str = Field(min_length=1, max_length=500)
+    group: str = Field(default="", max_length=100)
+    parent_code: str | None = None
+    description: str = Field(default="", max_length=500)
     keywords: list[str] = Field(default_factory=list, max_length=100)
     exclusions: list[str] = Field(default_factory=list, max_length=10)
     examples: list[LabelExample] = Field(default_factory=list, max_length=10)
-    allowed_sentiments: list[str] = Field(min_length=1, max_length=3)
+    allowed_sentiments: list[str] = Field(max_length=3)
     allowed_claim_ids: list[str] | None = None
 
 
 class ClassificationStandardDraftContentRequest(BaseModel):
-    recognition_profile: Literal["legacy_v3", "semantic_v1"] = "legacy_v3"
+    structure_version: Literal[1, 2] = 1
+    categories: list[dict[str, object]] = Field(default_factory=list)
+    import_sources: list[dict[str, object]] = Field(default_factory=list)
+    recognition_profile: Literal["legacy_v3", "semantic_v1", "fact_v2"] = "legacy_v3"
     name: str = Field(min_length=1, max_length=120)
     product_context: str = Field(min_length=1, max_length=500)
     instructions: list[str] = Field(max_length=100)

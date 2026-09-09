@@ -6,7 +6,11 @@ import pytest
 from return_semantics.capabilities import load_capability_registry
 from return_semantics.model_client import JsonlCache, ModelCallResult, Sub2APISettings
 from return_semantics.pipeline import classify_comments
-from return_semantics.schemas import ListingClaimsConfig, ModelClassification
+from return_semantics.schemas import (
+    ListingClaimsConfig,
+    ModelClassification,
+    SentimentCode,
+)
 from return_semantics.taxonomy import (
     adapt_claims_to_taxonomy,
     aligned_label_group,
@@ -58,7 +62,51 @@ def test_four_categories_share_groups_and_keep_neutral_reasons_explicit():
         assert all(label.group in groups for label in taxonomy.labels)
     combined = registry.combined_taxonomy()
     assert combined.validation_rules.conflict_scope == "evidence"
-    assert len(combined.validation_rules.neutral_reason_labels) == 6
+    assert len(combined.validation_rules.neutral_reason_labels) == 11
+
+
+def test_glove_framework_topics_extend_taxonomy_compatibly():
+    taxonomy = load_taxonomy(ROOT / "config/taxonomy_gloves.json")
+    labels = {label.code: label for label in taxonomy.labels}
+
+    assert taxonomy.version == "gloves-unified-2026-09-08-v1-semantic1"
+    assert len(labels) == 63
+    assert {
+        "GLOVE_SIZE_SMALL_U1",
+        "GLOVE_FIT_GENERAL_U1",
+        "GLOVE_SIZE_REQUEST_U1",
+        "GLOVE_SNOW_RESISTANCE_U1",
+        "GLOVE_HEATING_EXPECTATION_U1",
+        "GLOVE_SWEATING_U1",
+        "GLOVE_WORKMANSHIP_U1",
+        "GLOVE_PRESSURE_DISCOMFORT_U1",
+        "GLOVE_NUMBNESS_U1",
+        "GLOVE_PACKAGING_U1",
+        "GLOVE_SAME_SIDE_PAIR_U1",
+        "GLOVE_DELIVERY_SPEED_U1",
+        "GLOVE_PRICE_U1",
+        "GLOVE_PURCHASE_INTENT_U1",
+    }.issubset(labels)
+    assert set(labels["GLOVE_ODOR_U1"].allowed_sentiments) == {
+        SentimentCode.NEGATIVE,
+        SentimentCode.POSITIVE,
+    }
+    assert labels["GLOVE_ORDER_WRONG_ITEM_U1"].allowed_sentiments == [
+        SentimentCode.NEGATIVE
+    ]
+    assert set(taxonomy.validation_rules.neutral_reason_labels) == {
+        "GLOVE_SIZE_REQUEST_U1",
+        "GLOVE_BUYER_REASON_U1",
+        "GLOVE_GIFT_REASON_U1",
+        "GLOVE_CHEAPER_ALTERNATIVE_U1",
+        "GLOVE_PACKAGING_U1",
+        "GLOVE_POWER_BUTTON_U1",
+    }
+    assert set(taxonomy.validation_rules.required_review_labels) == {
+        "GLOVE_SIZE_ISSUE_UNSPECIFIED_U1",
+        "GLOVE_POWER_BUTTON_U1",
+        "GLOVE_REASON_UNSPECIFIED_U1",
+    }
 
 
 def test_review_positive_does_not_require_a_return_reason():

@@ -11,6 +11,7 @@ from test_classification_result_pool import _publish, _seed_result_context
 
 from return_semantics.schemas import ProcessingStatus
 from web_backend.classification_result_service import ClassificationResultService
+from web_backend.classification_standard_service import ClassificationStandardService
 from web_backend.common import json_text
 from web_backend.dashboard_service import DashboardService
 from web_backend.review_service import (
@@ -38,7 +39,15 @@ def _publish_review_required(tmp_path: Path):
         )
     }
     version = _publish(context)
+    standards = ClassificationStandardService(context.database)
+    standard = next(
+        item for item in standards.list() if item["standard_key"] == "footwear"
+    )
     with context.database.transaction() as connection:
+        connection.execute(
+            "UPDATE classification_results SET standard_version_id = ? WHERE id = ?",
+            (standard["standard_version_id"], version["result_id"]),
+        )
         connection.execute(
             """
             INSERT INTO users(id, email, display_name, password_hash, created_at)

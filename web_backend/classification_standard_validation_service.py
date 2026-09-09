@@ -20,6 +20,12 @@ from web_backend.classification_standard_service import (
     ClassificationStandardConflict,
     ClassificationStandardService,
 )
+from web_backend.classification_validation_quality import (
+    FACT_QUALITY_POLICY,
+    append_reference_fact,
+    evaluate_references,
+    publication_quality_gate,
+)
 from web_backend.common import add_audit, json_text, json_value, new_id
 from web_backend.database import Database
 from web_backend.security import utc_now
@@ -192,6 +198,9 @@ class ClassificationStandardValidationService:
         )
         if comparison_type != "standard_version":
             source["result"]["comparison_mode"] = "baseline_and_draft"
+        if candidate.recognition_profile == "fact_v2":
+            source["quality_policy"] = deepcopy(FACT_QUALITY_POLICY)
+            source["result"]["quality_policy"] = source["quality_policy"]
         run_id = new_id("classification_standard_validation")
         now = utc_now()
         with self.database.transaction(immediate=True) as connection:
@@ -272,6 +281,10 @@ class ClassificationStandardValidationService:
             raise ValueError("样本验证尚未完成")
         if int(validation["error_count"]) > 0:
             raise ValueError("样本验证存在模型错误，不能确认通过")
+        if not validation["quality_gate"]["passed"]:
+            raise ValueError(
+                "质量门槛未通过：" + "；".join(validation["quality_gate"]["blocking"])
+            )
         approval_note = note.strip()
         if not approval_note:
             raise ValueError("请填写验证结论")
@@ -726,7 +739,10 @@ class ClassificationStandardValidationService:
             ]
             if len(matched_samples) != 1:
                 raise ValueError(f"参考答案评论编号 {identity} 未唯一匹配当前品类评论")
-            for unit in references[identity]["units"]:
+            for unit in (
+                *references[identity]["units"],
+                *references[identity].get("facts", []),
+            ):
                 if (
                     unit.get("evidence")
                     and unit["evidence"] not in matched_samples[0]["comment"]
@@ -791,6 +807,7 @@ class ClassificationStandardValidationService:
                 "True",
             }
             code = str(row.get("标签编码") or "").strip()
+            append_reference_fact(reference, row, identity, code)
             if code == "无标签":
                 continue
             sentiment = str(row.get("评价方向") or "").strip()
@@ -818,69 +835,7 @@ class ClassificationStandardValidationService:
             )
         return references
 
-    @staticmethod
-    def _evaluate_references(items: list[dict]) -> dict:
-        judged = [
-            item
-            for item in items
-            if item.get("reference") and not item["reference"]["ambiguous"]
-        ]
-        output = {
-            "sample_count": len(judged),
-            "ambiguous_count": sum(
-                bool(item.get("reference", {}).get("ambiguous"))
-                for item in items
-                if item.get("reference")
-            ),
-            "sides": {},
-        }
-        for side in ("baseline", "draft"):
-            totals = {
-                "extra_labels": 0,
-                "missing_labels": 0,
-                "direction_errors": 0,
-                "part_errors": 0,
-                "exact_label_samples": 0,
-                "model_errors": 0,
-            }
-            for item in judged:
-                expected = item["reference"]["units"]
-                actual = item[side].get("semantic_units", [])
-                expected_pairs = {
-                    (unit["label_code"], unit["sentiment"]) for unit in expected
-                }
-                actual_pairs = {
-                    (unit["label_code"], unit.get("sentiment")) for unit in actual
-                }
-                expected_codes = {code for code, _ in expected_pairs}
-                actual_codes = {code for code, _ in actual_pairs}
-                totals["extra_labels"] += len(actual_codes - expected_codes)
-                totals["missing_labels"] += len(expected_codes - actual_codes)
-                totals["direction_errors"] += sum(
-                    {sentiment for code, sentiment in expected_pairs if code == shared}
-                    != {sentiment for code, sentiment in actual_pairs if code == shared}
-                    for shared in expected_codes & actual_codes
-                )
-                for pair in expected_pairs & actual_pairs:
-                    expected_parts = {
-                        unit["part"]
-                        for unit in expected
-                        if (unit["label_code"], unit["sentiment"]) == pair
-                        and unit["part"] != "UNSPECIFIED"
-                    }
-                    actual_parts = {
-                        unit.get("part")
-                        for unit in actual
-                        if (unit["label_code"], unit.get("sentiment")) == pair
-                    }
-                    totals["part_errors"] += len(expected_parts - actual_parts)
-                failed = item[side].get("status") == "MODEL_ERROR"
-                totals["model_errors"] += failed
-                totals["exact_label_samples"] += (
-                    expected_pairs == actual_pairs and not failed
-                )
-            output["sides"][side] = totals
-        return output
+    _evaluate_references = staticmethod(evaluate_references)
 
     @staticmethod
     def _round_robin_samples(
@@ -1015,6 +970,10 @@ class ClassificationStandardValidationService:
                     "category_a": sample["category_a"],
                     "category_b": sample["category_b"],
                     "baseline": {
+                        "extracted_facts": sample["baseline"].get(
+                            "extracted_facts", []
+                        ),
+                        "fact_mappings": sample["baseline"].get("fact_mappings", []),
                         "primary_label_codes": baseline_labels,
                         "semantic_units": sample["baseline"].get("semantic_units", []),
                         "unknown_semantics": sample["baseline"].get(
@@ -1025,6 +984,8 @@ class ClassificationStandardValidationService:
                         "reason": sample.get("reason"),
                     },
                     "draft": {
+                        "extracted_facts": result.get("extracted_facts", []),
+                        "fact_mappings": result.get("fact_mappings", []),
                         "primary_label_codes": draft_labels,
                         "status": result["status"],
                         "unknown_semantics": result.get("unknown_semantics", []),
@@ -1124,8 +1085,16 @@ class ClassificationStandardValidationService:
                 or validation_contract_matches(snapshot, source)
             )
         )
+        if items:
+            value["summary"]["reference_evaluation"] = evaluate_references(items)
+            if source.get("comparison_type", "standard_version") == "standard_version":
+                value["summary"]["reference_evaluation"]["sides"].pop("baseline", None)
+        value["quality_gate"] = publication_quality_gate(
+            snapshot, source, [], value["summary"]
+        )
         value["publication_ready"] = bool(
-            value["is_current"]
+            value["quality_gate"]["passed"]
+            and value["is_current"]
             and value["status"] == "completed"
             and int(value["error_count"]) == 0
             and bool(value.get("approved_at"))

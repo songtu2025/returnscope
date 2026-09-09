@@ -4,6 +4,7 @@ export function sameLabel(left, right) {
     "code",
     "name",
     "group",
+    "parent_code",
     "description",
     "keywords",
     "exclusions",

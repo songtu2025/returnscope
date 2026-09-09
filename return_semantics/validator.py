@@ -32,6 +32,52 @@ def validate_classification(
     prompt_version: str,
     analysis_context: Literal["returns", "review"] = "returns",
 ) -> ValidatedClassification:
+    result, _ = _validate_classification(
+        classification_key,
+        comment,
+        reason,
+        model_result,
+        taxonomy,
+        claims,
+        model_name,
+        prompt_version,
+        analysis_context,
+    )
+    return result
+
+
+def collect_output_errors(
+    model_result: ModelClassification,
+    comment: str,
+    taxonomy: TaxonomyConfig,
+    claims: ListingClaimsConfig,
+) -> list[str]:
+    """复用正式校验提取硬错误，供纠正原始输出；软语义风险仍交复核。"""
+    _, errors = _validate_classification(
+        "",
+        comment,
+        "",
+        model_result,
+        taxonomy,
+        claims,
+        "",
+        "",
+        "review",
+    )
+    return errors
+
+
+def _validate_classification(
+    classification_key: str,
+    comment: str,
+    reason: str,
+    model_result: ModelClassification,
+    taxonomy: TaxonomyConfig,
+    claims: ListingClaimsConfig,
+    model_name: str,
+    prompt_version: str,
+    analysis_context: Literal["returns", "review"] = "returns",
+) -> tuple[ValidatedClassification, list[str]]:
     labels = {label.code: label for label in taxonomy.labels}
     allowed_parts = set(taxonomy.allowed_parts)
     claim_map = {claim.claim_id: claim for claim in claims.claims}
@@ -41,7 +87,13 @@ def validate_classification(
     guardrail_removed_codes: set[str] = set()
 
     valid_units = []
+    seen_units: set[str] = set()
     for unit in model_result.semantic_units:
+        # 原始完整原子语义完全相同才合并，不将归一化后的不同事实误合并。
+        signature = unit.model_dump_json()
+        if taxonomy.recognition_profile != "fact_v2" and signature in seen_units:
+            continue
+        seen_units.add(signature)
         label = labels.get(unit.label_code)
         if label is None:
             hard_reasons.append(f"未知标签: {unit.label_code}")
@@ -59,7 +111,7 @@ def validate_classification(
             soft_reasons.append(f"语义并非已确认事实: {unit.label_code}")
             continue
 
-        if taxonomy.recognition_profile == "semantic_v1":
+        if taxonomy.recognition_profile in {"semantic_v1", "fact_v2"}:
             # 迁移后的高风险边界不按单词删除标签，保留证据交由人工确认。
             boundaries = [
                 *taxonomy.validation_rules.evidence_requirements,
@@ -141,6 +193,19 @@ def validate_classification(
         if unit.sentiment == SentimentCode.POSITIVE
     )
     primary_codes = _unique(model_result.primary_label_codes)
+    if taxonomy.recognition_profile == "fact_v2":
+        primary_facts = {
+            fact.fact_id
+            for fact in model_result.extracted_facts
+            if fact.is_primary_reason
+        }
+        explicit_codes = {
+            code
+            for mapping in model_result.fact_mappings
+            if mapping.fact_id in primary_facts
+            for code in mapping.label_codes
+        }
+        primary_codes = [code for code in primary_codes if code in explicit_codes]
 
     invalid_primary = set(primary_codes).difference(problem_codes)
     hard_invalid_primary = invalid_primary.difference(guardrail_removed_codes)
@@ -148,7 +213,11 @@ def validate_classification(
         hard_reasons.append(f"主因不属于问题标签: {sorted(hard_invalid_primary)}")
     if invalid_primary:
         primary_codes = [code for code in primary_codes if code in problem_codes]
-    if len(problem_codes) == 1 and not primary_codes:
+    if (
+        taxonomy.recognition_profile != "fact_v2"
+        and len(problem_codes) == 1
+        and not primary_codes
+    ):
         primary_codes = problem_codes.copy()
     if len(problem_codes) > 1 and not primary_codes:
         soft_reasons.append("多个问题但主因不明确")
@@ -210,7 +279,9 @@ def validate_classification(
     else:
         status = ProcessingStatus.AUTO_APPROVED
 
-    return ValidatedClassification(
+    result = ValidatedClassification(
+        extracted_facts=model_result.extracted_facts,
+        fact_mappings=model_result.fact_mappings,
         classification_key=classification_key,
         semantic_units=valid_units,
         unknown_semantics=unknown_semantics,
@@ -225,3 +296,4 @@ def validate_classification(
         prompt_version=prompt_version,
         taxonomy_version=taxonomy.version,
     )
+    return result, hard_reasons

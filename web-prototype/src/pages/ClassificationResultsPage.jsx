@@ -33,6 +33,7 @@ import {
 } from "../features/classification-results/classificationResultConstants";
 import { ReviewBatchPage } from "../features/review-batches/ReviewBatchPage";
 import { formatTime } from "../lib/presentation";
+import { resultLabelText } from "../lib/taxonomyPresentation";
 
 function routeState(query) {
   const number = (key) => Number(query[key]);
@@ -548,8 +549,13 @@ function ClassificationResultDetail({ route, updateRoute, notify, userId }) {
             </header>
             <div className="drilldown-columns">
               <DrilldownColumn
-                title="问题"
-                items={drilldowns.problem}
+                title={summary?.hierarchy_problems?.length ? "问题层级" : "问题"}
+                items={
+                  summary?.hierarchy_problems?.length
+                    ? summary.hierarchy_problems
+                    : drilldowns.problem
+                }
+                limit={summary?.hierarchy_problems?.length ? Infinity : 12}
                 selected={route.problem}
                 emptyTitle={
                   allNeedReviewWithoutProblems ? "尚未形成问题标签" : "暂无数据"
@@ -693,6 +699,7 @@ function DrilldownColumn({
   emptyLabel = "未标注",
   emptyTitle = "暂无数据",
   emptyDescription = "",
+  limit = 12,
 }) {
   return (
     <div className="drilldown-column">
@@ -709,9 +716,10 @@ function DrilldownColumn({
             )}
           </span>
         )}
-        {items.slice(0, 12).map((item) => {
+        {items.slice(0, limit).map((item) => {
           const value = item.value ?? "";
-          const label = item.label_name || value || emptyLabel;
+          const label =
+            item.label_path?.join(" → ") || item.label_name || value || emptyLabel;
           return (
             <button
               key={`${title}-${value || "empty"}`}
@@ -752,7 +760,7 @@ function ResultRecordRow({ record, onOpen }) {
         <span className={`result-quality-badge ${resultState(record)}`}>
           {resultStateLabel(record)}
         </span>
-        <b>{problems.join("、") || "未形成问题标签"}</b>
+        <b>{resultLabelText(record, problems) || "未形成问题标签"}</b>
       </div>
       <div className="result-row-actions">
         <button
@@ -861,11 +869,11 @@ function EvidenceDrawer({ record, onClose, returnFocusRef }) {
           <b>分类结论</b>
           <DrawerField
             label="主要问题"
-            value={classification.primary_label_codes?.join("、")}
+            value={resultLabelText(record, classification.primary_label_codes)}
           />
           <DrawerField
             label="问题标签"
-            value={classification.problem_label_codes?.join("、")}
+            value={resultLabelText(record, classification.problem_label_codes)}
           />
           <DrawerField label="处理状态" value={record.processing_status} />
           <DrawerField
@@ -879,7 +887,7 @@ function EvidenceDrawer({ record, onClose, returnFocusRef }) {
           {units.length === 0 && <p className="drawer-empty">没有提取到有效证据。</p>}
           {units.map((unit, index) => (
             <div className="evidence-unit" key={`${unit.label_code}-${index}`}>
-              <span>{unit.label_code || "未标注"}</span>
+              <span>{unit.label_path?.join(" → ") || unit.label_code || "未标注"}</span>
               <blockquote>“{unit.evidence || "未提供证据"}”</blockquote>
               <small>
                 部位：{unit.part || "未提供"} · 观点：{unit.opinion || "未提供"}

@@ -23,6 +23,16 @@ export const classificationStandardApi = {
     }),
   classificationStandardDraft: (draftId) =>
     request(`/api/classification-standard-drafts/${draftId}`),
+  previewClassificationExcel: (draftId, file, sheetName = "", columns = {}) => {
+    const body = new FormData();
+    body.append("file", file);
+    body.append("sheet_name", sheetName);
+    body.append("columns_json", JSON.stringify(columns));
+    return request(`/api/classification-standard-drafts/${draftId}/preview-excel`, {
+      method: "POST",
+      body,
+    });
+  },
   createClassificationStandardDraft: (standardId) =>
     request(`/api/classification-standards/${standardId}/draft`, {
       method: "POST",

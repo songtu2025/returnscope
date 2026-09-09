@@ -18,6 +18,10 @@ import { classificationStandardApi } from "../../shared/api/classificationStanda
 import { ClassificationStandardEditor } from "./ClassificationStandardDraftEditor";
 import { ClassificationStandardValidation } from "./ClassificationStandardValidation";
 import { labelChanges } from "./labelDraftPolicy";
+import { ClassificationExcelImport } from "./ClassificationExcelImport";
+import { ClassificationStructureIssues } from "./ClassificationStructureIssues";
+import { ClassificationRuleIssues } from "./ClassificationRuleIssues";
+import { ClassificationHierarchyChanges } from "./ClassificationHierarchyEditor";
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -25,7 +29,7 @@ const EMPTY_CONTENT = {
   recognition_profile: "semantic_v1",
   name: "",
   product_context: "",
-  instructions: ["依据标签业务定义判断退货原因"],
+  instructions: ["依据标签名称、完整路径和补充判定说明判断退货原因"],
   allowed_parts: ["UNSPECIFIED"],
   validation_rules: {
     allowed_groups: BUSINESS_GROUPS,
@@ -45,6 +49,13 @@ function contentFromSnapshot(snapshot) {
     allowed_parts: snapshot.taxonomy.allowed_parts ?? ["UNSPECIFIED"],
     validation_rules: snapshot.taxonomy.validation_rules ?? {},
     variants: snapshot.variants ?? [],
+    ...(snapshot.taxonomy.structure_version === 2
+      ? {
+          structure_version: 2,
+          categories: snapshot.taxonomy.categories ?? [],
+          import_sources: snapshot.import_sources ?? [],
+        }
+      : {}),
     labels: (snapshot.taxonomy.labels ?? []).map((label) => ({
       ...label,
       keywords: label.keywords ?? [],
@@ -73,11 +84,10 @@ function validateContent(content) {
       (item) =>
         !item.code.trim() ||
         !item.name.trim() ||
-        !item.group.trim() ||
-        !item.description.trim(),
+        (content.structure_version === 2 ? !item.parent_code : !item.group.trim()),
     )
   ) {
-    return "请完整填写标签分组、名称、编码和业务定义";
+    return "请完整填写标签所属分类、名称和编码";
   }
   return "";
 }
@@ -95,7 +105,6 @@ function contentFieldErrors(content) {
       name: item.name.trim() ? "" : "请填写标签名称",
       group: item.group.trim() ? "" : "请选择标签分组",
       code: item.code.trim() ? "" : "请填写标签编码",
-      description: item.description.trim() ? "" : "请填写业务定义",
     })),
     labels_empty: content.labels.length ? "" : "请至少增加一个分类标签",
   };
@@ -315,6 +324,12 @@ export function ClassificationStandardsPage({ route, notify }) {
     setBusy("save");
     try {
       const saved = await persistDraft();
+      const checked =
+        await classificationStandardApi.validateClassificationStandardDraft(
+          saved.id,
+          saved.revision,
+        );
+      setDraft(checked);
       await loadStandards();
       await loadValidation(saved.id);
       if (mode === "new") {
@@ -330,6 +345,37 @@ export function ClassificationStandardsPage({ route, notify }) {
     } finally {
       setBusy("");
     }
+  };
+
+  const prepareExcelDraft = async () => {
+    if (dirty && (draft || content.labels.length))
+      throw new Error("请先保存当前修改，再导入标签框架");
+    if (draft) return draft;
+    let created;
+    if (mode === "new") {
+      const category = content.variants[0];
+      if (
+        !content.name.trim() ||
+        !content.product_context.trim() ||
+        !category?.category_a.trim() ||
+        !category?.category_b.trim()
+      )
+        throw new Error("请先填写标准名称、适用商品说明和适用品类");
+      created = await classificationStandardApi.createClassificationStandard({
+        name: content.name.trim(),
+        product_context: content.product_context.trim(),
+        category_a: category.category_a.trim(),
+        category_b: category.category_b.trim(),
+      });
+    } else {
+      created = await classificationStandardApi.createClassificationStandardDraft(
+        detail.id,
+      );
+    }
+    setDraft(created);
+    setContent(clone(created.content));
+    setChangeReason("导入层级标签框架");
+    return created;
   };
 
   const publish = async () => {
@@ -545,6 +591,13 @@ export function ClassificationStandardsPage({ route, notify }) {
             onValidationRun={startSampleValidation}
             onValidationApprove={approveSampleValidation}
             onImport={importJson}
+            onPrepareExcel={prepareExcelDraft}
+            onApplyExcel={(value, filename) => {
+              setContent(value);
+              setChangeReason(`导入 ${filename}`);
+              setFieldErrors({});
+              notify("已采用层级预览，请检查层级和评价方向，保存后可运行样本验证");
+            }}
             onValidationSelect={async (runId) => {
               try {
                 setSelectedValidation(
@@ -861,10 +914,24 @@ function StandardWorkspace({
   onValidationRun,
   onValidationApprove,
   onImport,
+  onPrepareExcel,
+  onApplyExcel,
   onValidationSelect,
 }) {
   const [section, setSection] = useState(isNew ? "settings" : "labels");
   const [confirmBack, setConfirmBack] = useState(false);
+  const [fixRequest, setFixRequest] = useState(null);
+  const fixIssue = (issue) => {
+    setSection(
+      issue.kind === "invalid_rule" ||
+        (!issue.label_code &&
+          issue.label_index == null &&
+          issue.kind === "missing_field")
+        ? "settings"
+        : "labels",
+    );
+    setFixRequest({ ...issue });
+  };
   const handledValidationAttempt = useRef(validationAttempt);
   const editable = isNew || detail?.status === "active" || Boolean(draft);
   const baseContent = draft?.base_snapshot
@@ -969,6 +1036,7 @@ function StandardWorkspace({
         busy={Boolean(busy)}
         savedContent={savedContent}
         focusLabelCode={focusLabelCode}
+        fixRequest={fixRequest}
         content={content}
         baseContent={baseContent}
         onChange={onContentChange}
@@ -976,7 +1044,27 @@ function StandardWorkspace({
         validationAttempt={validationAttempt}
       />
 
+      {editable && (
+        <section className="standard-json-transfer">
+          <div>
+            <b>Excel 标签框架</b>
+            <span>选择工作表与层级列，预览后采用。</span>
+          </div>
+          <ClassificationExcelImport
+            prepareDraft={onPrepareExcel}
+            onApply={onApplyExcel}
+            disabled={Boolean(busy)}
+          />
+        </section>
+      )}
+
       <div className="standard-settings-extra" hidden={section !== "settings"}>
+        <ClassificationRuleIssues
+          content={content}
+          onChange={onContentChange}
+          focusRequest={fixRequest}
+          disabled={!editable || Boolean(busy)}
+        />
         <section className="standard-detail-section">
           <h2>识别策略</h2>
           <label>
@@ -991,6 +1079,7 @@ function StandardWorkspace({
             >
               <option value="legacy_v3">现有策略 · 定义与关键词</option>
               <option value="semantic_v1">语义策略 · 定义、边界与证据</option>
+              <option value="fact_v2">事实策略 · 对象、条件与证据对齐</option>
             </select>
           </label>
           <p>保存只修改草稿；通过发布验证并启用后，新任务才使用该策略。</p>
@@ -1035,16 +1124,21 @@ function StandardWorkspace({
             <span>对比当前启用版本</span>
           </header>
           <p>保存草稿不会影响运行中的标准。检查变更后，完成样本验证再发布。</p>
+          <ClassificationHierarchyChanges content={content} baseContent={baseContent} />
           {content.recognition_profile !== baseContent?.recognition_profile && (
             <p>
               识别策略：
-              {baseContent?.recognition_profile === "semantic_v1"
-                ? "语义策略"
-                : "现有策略"}
+              {baseContent?.recognition_profile === "fact_v2"
+                ? "事实策略"
+                : baseContent?.recognition_profile === "semantic_v1"
+                  ? "语义策略"
+                  : "现有策略"}
               {" → "}
-              {content.recognition_profile === "semantic_v1"
-                ? "语义策略（定义、边界与证据）"
-                : "现有策略（定义与关键词）"}
+              {content.recognition_profile === "fact_v2"
+                ? "事实策略（对象、条件与证据对齐）"
+                : content.recognition_profile === "semantic_v1"
+                  ? "语义策略（定义、边界与证据）"
+                  : "现有策略（定义与关键词）"}
             </p>
           )}
           {changes.length ? (
@@ -1055,7 +1149,7 @@ function StandardWorkspace({
                   <span className="label-change-badge changed">{status}</span>
                 </header>
                 <code>{label.code}</code>
-                <p>{label.description}</p>
+                <p>{label.description || "依据标签名称和完整路径理解"}</p>
                 {status === "已修改" && (
                   <div>
                     <span>原搜索别名：{before.keywords?.join("、") || "无"}</span>
@@ -1103,9 +1197,12 @@ function StandardWorkspace({
             </p>
           )}
           {!dirty && draft?.validation.blocking?.length > 0 && (
-            <div className="label-unsaved-hint" role="status">
-              {draft.validation.blocking.join("；")}
-            </div>
+            <ClassificationStructureIssues
+              validation={draft.validation}
+              content={content}
+              onFix={fixIssue}
+              busy={Boolean(busy)}
+            />
           )}
         </section>
         <section className="standard-change-reason">

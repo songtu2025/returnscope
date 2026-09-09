@@ -93,6 +93,7 @@ import { ResultsPage } from "../src/pages/ResultsPage";
 import { TeamPage } from "../src/pages/TeamPage";
 import { NewTaskPage, TaskMonitor } from "../src/pages/Tasks";
 import { SESSION_EXPIRED_EVENT } from "../src/shared/api/request";
+import systemSettingsStyles from "../src/styles/system-settings.css?raw";
 
 const systemStatus = {
   worker_status: "ok",
@@ -3066,6 +3067,80 @@ describe("关键用户流程", () => {
     expect(screen.getByRole("heading", { name: "连接信息" })).toBeVisible();
     expect(screen.getByLabelText("API 密钥")).toHaveValue("");
     expect(screen.getByRole("button", { name: "取消" })).toBeVisible();
+  });
+
+  test("已有连接可替换停用的共享验证模型且不修改个人偏好", async () => {
+    const user = userEvent.setup();
+    const activeVersion = {
+      id: "cfg-1",
+      connection_id: "conn-1",
+      version: 1,
+      base_url: "https://api.example.com/v1",
+      primary_model: "retired-model",
+      primary_effort: "medium",
+      validation_status: "validated",
+      published_at: "2026-08-10T08:10:00Z",
+    };
+    apiMock.configs.mockResolvedValue([
+      {
+        id: "conn-1",
+        name: "生产模型服务",
+        active_version_id: "cfg-1",
+        active_version: activeVersion,
+        versions: [activeVersion],
+        models: [
+          {
+            id: "retired",
+            model_key: "retired-model",
+            display_name: "旧模型",
+            active: false,
+            supported_efforts: ["medium"],
+          },
+          {
+            id: "available",
+            model_key: "available-model",
+            display_name: "可用模型",
+            active: true,
+            validation_status: "validated",
+            supported_efforts: ["medium"],
+          },
+        ],
+      },
+    ]);
+    apiMock.createConfig.mockResolvedValue({
+      ...activeVersion,
+      id: "cfg-2",
+      version: 2,
+    });
+    render(
+      <>
+        <style>{systemSettingsStyles}</style>
+        <ApiManagement notify={vi.fn()} />
+      </>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "编辑连接" }));
+    const modelSelect = screen.getByRole("combobox", { name: "模型", exact: true });
+    expect(modelSelect).toBeVisible();
+    expect(modelSelect).toHaveValue("retired-model");
+    expect(screen.getByRole("option", { name: /旧模型.*已停用/ })).toBeVisible();
+    expect(screen.getByText(/分类标准的 Review 样本/)).toBeVisible();
+    await user.selectOptions(modelSelect, "available-model");
+    await user.type(screen.getByLabelText("配置变更原因"), "替换停用的样本验证模型");
+    await user.click(screen.getByRole("button", { name: "保存草稿" }));
+
+    await waitFor(() =>
+      expect(apiMock.createConfig).toHaveBeenCalledWith(
+        expect.objectContaining({
+          connection_id: "conn-1",
+          primary_model: "available-model",
+          primary_effort: "medium",
+          api_key: "",
+        }),
+      ),
+    );
+    expect(apiMock.saveModelPreference).not.toHaveBeenCalled();
+    expect(apiMock.publishConfig).not.toHaveBeenCalled();
   });
 
   test("模型服务低频操作收进更多菜单且已验证草稿发布入口可达", async () => {

@@ -14,8 +14,14 @@ from return_semantics.schemas import (
     TaxonomyConfig,
     ValidatedClassification,
 )
+from return_semantics.taxonomy_hierarchy import descendant_label_codes, label_path
 from web_backend.common import json_text, json_value, new_id
 from web_backend.database import Database
+from web_backend.result_hierarchy import (
+    enrich_record,
+    hierarchy_counts,
+    result_taxonomy,
+)
 from web_backend.result_state import result_delivery_state
 from web_backend.security import utc_now
 
@@ -440,6 +446,10 @@ class ClassificationResultService:
         with self.database.connect() as connection:
             return self._get_version_with_connection(connection, version_id)
 
+    def taxonomy(self, version_id: str) -> TaxonomyConfig | None:
+        with self.database.connect() as connection:
+            return result_taxonomy(connection, version_id)
+
     def history(self, version_id: str) -> list[dict[str, Any]]:
         current = self.get(version_id)
         with self.database.connect() as connection:
@@ -455,6 +465,7 @@ class ClassificationResultService:
 
     def summary(self, version_id: str) -> dict[str, Any]:
         self.get(version_id)
+        taxonomy = self.taxonomy(version_id)
         with self.database.connect() as connection:
             quality_rows = connection.execute(
                 """
@@ -496,7 +507,16 @@ class ClassificationResultService:
             "version_id": version_id,
             "quality": [dict(row) for row in quality_rows],
             "processing_statuses": [dict(row) for row in status_rows],
-            "top_problems": [dict(row) for row in problem_rows],
+            "top_problems": [
+                {
+                    **dict(row),
+                    "label_path": label_path(taxonomy, row["label_code"])
+                    if taxonomy
+                    else [],
+                }
+                for row in problem_rows
+            ],
+            "hierarchy_problems": self.drilldown(version_id, "category")["items"],
         }
 
     def records(
@@ -511,6 +531,7 @@ class ClassificationResultService:
         page, page_size = self._validate_page(page, page_size)
         where_sql, params = self._record_filters(version_id, filters)
         select_sql = self._records_select()
+        taxonomy = self.taxonomy(version_id)
         with self.database.connect() as connection:
             total = int(
                 connection.execute(
@@ -529,7 +550,11 @@ class ClassificationResultService:
                 (*params, page_size, (page - 1) * page_size),
             ).fetchall()
         return {
-            "items": [self._serialize_record(dict(row)) for row in rows],
+            "taxonomy": taxonomy.model_dump(mode="json") if taxonomy else None,
+            "items": [
+                enrich_record(self._serialize_record(dict(row)), taxonomy)
+                for row in rows
+            ],
             "total": total,
             "page": page,
             "page_size": page_size,
@@ -545,10 +570,28 @@ class ClassificationResultService:
         **filters: str | None,
     ) -> dict[str, Any]:
         self.get(version_id)
-        if group_by not in {"problem", "product_name", "product_sku"}:
-            raise ValueError("group_by 仅支持 problem、product_name、product_sku")
+        if group_by not in {"category", "problem", "product_name", "product_sku"}:
+            raise ValueError(
+                "group_by 仅支持 category、problem、product_name、product_sku"
+            )
         page, page_size = self._validate_page(page, page_size)
         where_sql, params = self._record_filters(version_id, filters)
+        if group_by == "category":
+            taxonomy = self.taxonomy(version_id)
+            with self.database.connect() as connection:
+                items = (
+                    hierarchy_counts(connection, taxonomy, where_sql, params)
+                    if taxonomy
+                    else []
+                )
+            return {
+                "group_by": group_by,
+                "items": items[(page - 1) * page_size : page * page_size],
+                "total": len(items),
+                "page": page,
+                "page_size": page_size,
+            }
+        taxonomy = self.taxonomy(version_id) if group_by == "problem" else None
         if group_by == "problem":
             join_sql = """
                 JOIN classification_unit_labels l
@@ -591,7 +634,12 @@ class ClassificationResultService:
             ).fetchall()
         return {
             "group_by": group_by,
-            "items": [dict(row) for row in rows],
+            "items": [
+                {**dict(row), "label_path": label_path(taxonomy, row["value"])}
+                if taxonomy
+                else dict(row)
+                for row in rows
+            ],
             "total": total,
             "page": page,
             "page_size": page_size,
@@ -609,8 +657,26 @@ class ClassificationResultService:
                 (version_id,),
             ).fetchall()
         output = []
+        semantics = []
+        taxonomy = self.taxonomy(version_id)
         for row in rows:
-            item = self._serialize_record(dict(row))
+            item = enrich_record(self._serialize_record(dict(row)), taxonomy)
+            for unit in item["classification"].get("semantic_units", []):
+                path = unit.get("label_path", [])
+                semantics.append(
+                    {
+                        "source_record_id": item["source_record_id"],
+                        "source_row": item["source_row"],
+                        "label_code": unit["label_code"],
+                        "完整路径": " → ".join(path),
+                        **{
+                            f"第{index}级标签": name
+                            for index, name in enumerate(path, 1)
+                        },
+                        "证据原文": unit.get("evidence", ""),
+                        "标准版本": version.get("standard_version_id", ""),
+                    }
+                )
             output.append(
                 {
                     "source_record_id": item["source_record_id"],
@@ -645,6 +711,7 @@ class ClassificationResultService:
                 sheet_name="分类结果",
                 index=False,
             )
+            pd.DataFrame(semantics).to_excel(writer, sheet_name="语义层级", index=False)
         filename = (
             f"classification-{version['listing'] or version['result_id']}"
             f"-v{version['version']}.xlsx"
@@ -1058,17 +1125,21 @@ class ClassificationResultService:
             params.append(quality_status)
         problem = filters.get("problem")
         if problem:
+            taxonomy = self.taxonomy(version_id)
+            codes = descendant_label_codes(taxonomy, problem) if taxonomy else [problem]
+            codes = codes or [problem]
+            placeholders = ",".join("?" for _ in codes)
             where.append(
-                """
+                f"""
                 EXISTS (
                     SELECT 1 FROM classification_unit_labels f
                     WHERE f.result_version_id = r.result_version_id
                       AND f.classification_key = r.classification_key
-                      AND f.label_kind = 'problem' AND f.label_code = ?
+                      AND f.label_kind = 'problem' AND f.label_code IN ({placeholders})
                 )
                 """
             )
-            params.append(problem)
+            params.extend(codes)
         return " AND ".join(where), params
 
     @staticmethod

@@ -474,7 +474,6 @@
   padding-bottom: var(--desktop-detail-padding);
 }
 .model-service-editor.panel-connection #available-models,
-.model-service-editor.panel-connection #model-pipeline,
 .model-service-editor.panel-connection .runtime-grid,
 .model-service-editor.panel-models #model-pipeline,
 .model-service-editor.panel-models .runtime-grid,

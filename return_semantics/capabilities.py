@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from return_semantics.schemas import (
+    CategoryDefinition,
     LabelDefinition,
     TaxonomyConfig,
     TaxonomyValidationRules,
@@ -131,6 +132,10 @@ class CapabilityRegistry:
         return load_taxonomy(capability.taxonomy_path)
 
     def combined_taxonomy(self) -> TaxonomyConfig:
+        taxonomies = [self.load_taxonomy(item) for item in self.capabilities]
+        hierarchical = any(item.structure_version == 2 for item in taxonomies)
+        categories: list[CategoryDefinition] = []
+        hierarchy_labels: set[str] = set()
         neutral_reason_labels = []
         required_review_labels = []
         group_sets = []
@@ -142,14 +147,28 @@ class CapabilityRegistry:
         evidence_requirements = []
         implicit_evidence_rules = []
         claim_evidence_requirements = []
-        for capability in self.capabilities:
-            taxonomy = self.load_taxonomy(capability)
-            for label in taxonomy.labels:
+        for capability, taxonomy in zip(self.capabilities, taxonomies, strict=True):
+            incoming_labels = taxonomy.labels
+            if hierarchical:
+                new_categories, incoming_labels = _combined_tree(
+                    capability.key, taxonomy
+                )
+                categories.extend(new_categories)
+            for label in incoming_labels:
                 existing = labels.get(label.code)
                 if existing is None:
                     labels[label.code] = label
                 else:
+                    if (
+                        taxonomy.structure_version == 2
+                        or label.code in hierarchy_labels
+                    ):
+                        raise ValueError(
+                            f"不同框架的末端编码重复，不能自动合并: {label.code}"
+                        )
                     labels[label.code] = self._merge_shared_label(existing, label)
+                if taxonomy.structure_version == 2:
+                    hierarchy_labels.add(label.code)
             for part in taxonomy.allowed_parts:
                 if part not in parts:
                     parts.append(part)
@@ -185,6 +204,8 @@ class CapabilityRegistry:
                     claim_evidence_requirements.append(rule)
         return TaxonomyConfig(
             version=self.version,
+            structure_version=2 if hierarchical else 1,
+            categories=categories,
             agent_family="multi-category",
             product_context="多品类商品",
             allowed_parts=parts,
@@ -247,6 +268,39 @@ class CapabilityRegistry:
                 ),
             }
         )
+
+
+def _combined_tree(
+    capability_key: str, taxonomy: TaxonomyConfig
+) -> tuple[list[CategoryDefinition], list[LabelDefinition]]:
+    """组合视图按能力隔离分类节点，不改变源版本中的编码和关系。"""
+    prefix = f"{capability_key}::"
+    if taxonomy.structure_version == 2:
+        categories = [
+            category.model_copy(
+                update={
+                    "code": prefix + category.code,
+                    "parent_code": prefix + category.parent_code
+                    if category.parent_code is not None
+                    else None,
+                }
+            )
+            for category in taxonomy.categories
+        ]
+        labels = [
+            label.model_copy(update={"parent_code": prefix + str(label.parent_code)})
+            for label in taxonomy.labels
+        ]
+    else:
+        groups = list(dict.fromkeys(label.group for label in taxonomy.labels))
+        categories = [
+            CategoryDefinition(code=prefix + group, name=group) for group in groups
+        ]
+        labels = [
+            label.model_copy(update={"parent_code": prefix + label.group})
+            for label in taxonomy.labels
+        ]
+    return categories, labels
 
 
 def load_capability_registry(path: Path) -> CapabilityRegistry:

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { labelText, taxonomyPath } from "../../lib/taxonomyPresentation";
 import {
   ArrowLeft,
   CaretRight,
@@ -460,7 +461,14 @@ function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
     const controller = new AbortController();
     reviewBatchApi
       .reviewTaxonomy(resultVersionId, { signal: controller.signal })
-      .then((value) => setLabels(value.labels ?? []))
+      .then((value) =>
+        setLabels(
+          (value.labels ?? []).map((label) => ({
+            ...label,
+            label_path: taxonomyPath(value, label),
+          })),
+        ),
+      )
       .catch((error) => {
         if (error.name !== "AbortError") notify(error.message, "error");
       });
@@ -1045,7 +1053,7 @@ function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
                   <option value="">请选择分类标签</option>
                   {labels.map((label) => (
                     <option key={label.code} value={label.code}>
-                      {label.name} · {label.code}
+                      {labelText(label)} · {label.code}
                     </option>
                   ))}
                 </select>

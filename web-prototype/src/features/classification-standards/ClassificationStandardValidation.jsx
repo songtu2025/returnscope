@@ -6,6 +6,10 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react";
 import { useState } from "react";
+import {
+  ClassificationValidationQuality,
+  ValidationFactTrace,
+} from "./ClassificationValidationQuality";
 
 const STATUS_LABELS = {
   queued: "等待运行",
@@ -124,14 +128,18 @@ export function ClassificationStandardValidation({
           {reviewMode && (
             <div className="standard-review-upload">
               <div>
-                <label htmlFor="standard-validation-review-file">Review 表格</label>
-                <input
-                  id="standard-validation-review-file"
-                  type="file"
-                  accept=".xlsx"
-                  aria-describedby="standard-validation-review-file-help"
-                  onChange={(event) => setReviewFile(event.target.files?.[0] ?? null)}
-                />
+                <label className="secondary-button standard-json-import-button">
+                  选择 Review Excel
+                  <input
+                    id="standard-validation-review-file"
+                    type="file"
+                    accept=".xlsx"
+                    aria-label="Review 表格"
+                    aria-describedby="standard-validation-review-file-help"
+                    onChange={(event) => setReviewFile(event.target.files?.[0] ?? null)}
+                  />
+                </label>
+                {reviewFile && <span role="status">已选择：{reviewFile.name}</span>}
                 <small id="standard-validation-review-file-help">
                   需包含评论内容列，可含评论标题、评论编号、一级品类、ASIN；无品类列时按当前标准验证。
                 </small>
@@ -139,7 +147,7 @@ export function ClassificationStandardValidation({
               <details className="standard-review-reference-help">
                 <summary>导入人工参考答案（可选）</summary>
                 <p>
-                  同一文件可增加“人工参考答案”工作表，列为评论编号、标签编码、评价方向、部位、证据；多标签逐行填写，无标签填写“无标签”。可用“存在歧义”列标记“是”，排除不确定答案。参考答案只用于评分，不发送给模型。
+                  同一文件可增加“人工参考答案”工作表，列为评论编号、标签编码、评价方向、部位、证据；多标签逐行填写，无标签填写“无标签”。可用“存在歧义”列标记“是”，排除不确定答案。事实策略还需填写“事实状态”（EXPERIENCE、EVALUATION、RECOMMENDATION、INTENT、PREDICTION、HYPOTHESIS、REPORTED、NEGATED、NOT_TESTED、ADVICE）；无标签行也需事实状态和证据。“使用者”“商品对象”可选，仅明确填写时比较。参考答案只用于评分，不发送给模型。
                 </p>
               </details>
             </div>
@@ -287,7 +295,9 @@ function ValidationResult({ run, isNew, approvalBusy, onApprove }) {
                 : run.source.comparison_type &&
                     run.source.comparison_type !== "standard_version"
                   ? "诊断完成"
-                  : "等待人工确认"}
+                  : run.quality_gate?.passed === false
+                    ? "质量门槛未通过"
+                    : "等待人工确认"}
         </span>
       </header>
       {run.source.recognition_contract && (
@@ -304,6 +314,7 @@ function ValidationResult({ run, isNew, approvalBusy, onApprove }) {
       {run.source.skipped_category_count > 0 && (
         <p>已排除 {run.source.skipped_category_count} 条不属于当前品类的评论。</p>
       )}
+      <ClassificationValidationQuality run={run} />
       {summary.reference_evaluation?.sample_count > 0 && (
         <section>
           <h3>人工参考答案对比 · {summary.reference_evaluation.sample_count} 条</h3>
@@ -315,11 +326,13 @@ function ValidationResult({ run, isNew, approvalBusy, onApprove }) {
             <thead>
               <tr>
                 <th>结果</th>
-                <th>多标</th>
+                <th>重复实例</th>
+                <th>多标实例</th>
                 <th>漏标</th>
                 <th>方向错误</th>
                 <th>明确部位漏错</th>
-                <th>标签完全一致</th>
+                <th>证据检查失败</th>
+                <th>实例一致样本</th>
               </tr>
             </thead>
             <tbody>
@@ -327,10 +340,12 @@ function ValidationResult({ run, isNew, approvalBusy, onApprove }) {
                 ([side, values]) => (
                   <tr key={side}>
                     <td>{side === "baseline" ? "对照" : "候选"}</td>
+                    <td>{values.duplicate_units ?? 0}</td>
                     <td>{values.extra_labels}</td>
                     <td>{values.missing_labels}</td>
                     <td>{values.direction_errors}</td>
                     <td>{values.part_errors}</td>
+                    <td>{values.evidence_errors ?? 0}</td>
                     <td>{values.exact_label_samples}</td>
                   </tr>
                 ),
@@ -431,7 +446,10 @@ function ValidationResult({ run, isNew, approvalBusy, onApprove }) {
                   )}
                 </span>
               )}
-              <span>{semanticLabels(item.draft)}</span>
+              <span>
+                {semanticLabels(item.draft)}
+                <ValidationFactTrace result={item.draft} />
+              </span>
               <span>
                 <b>{item.draft.status}</b>
                 <small>
@@ -458,7 +476,7 @@ function ValidationResult({ run, isNew, approvalBusy, onApprove }) {
 function ValidationApproval({ run, isNew, busy, onApprove }) {
   const [confirmed, setConfirmed] = useState(false);
   const [note, setNote] = useState("");
-  if (run.approved_at) {
+  if (run.approved_at && run.quality_gate?.passed !== false) {
     return (
       <div className="standard-validation-approval ready">
         <CheckCircle size={20} weight="fill" aria-hidden="true" />
@@ -472,6 +490,7 @@ function ValidationApproval({ run, isNew, busy, onApprove }) {
     );
   }
   if (
+    run.quality_gate?.passed === false ||
     !run.is_current ||
     Number(run.error_count) > 0 ||
     (run.source.comparison_type && run.source.comparison_type !== "standard_version")

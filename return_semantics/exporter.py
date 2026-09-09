@@ -12,6 +12,7 @@ from return_semantics.schemas import (
     TaxonomyConfig,
     ValidatedClassification,
 )
+from return_semantics.taxonomy_hierarchy import label_path, label_path_codes
 
 REVIEW_STATUSES = {
     ProcessingStatus.SECONDARY_REVIEW.value,
@@ -23,6 +24,15 @@ REVIEW_STATUSES = {
 
 def _format_labels(codes: list[str], label_names: dict[str, str]) -> str:
     return " | ".join(f"{code}:{label_names.get(code, '')}" for code in codes)
+
+
+def _path_columns(taxonomy: TaxonomyConfig, code: str) -> dict[str, str]:
+    path = label_path(taxonomy, code)
+    return {
+        "完整路径": " → ".join(path),
+        "标签编码路径": " → ".join(label_path_codes(taxonomy, code)),
+        **{f"第{index}级标签": name for index, name in enumerate(path, 1)},
+    }
 
 
 def _display_key(classification_key: str) -> str:
@@ -120,6 +130,7 @@ def _build_semantic_rows(
                     "标签编码": unit.label_code,
                     "标签名称": label.name,
                     "一级分类": label.group,
+                    **_path_columns(taxonomy, label.code),
                     "对象": unit.subject.value,
                     "观点": unit.opinion,
                     "正负面": unit.sentiment.value,
@@ -189,6 +200,7 @@ def _build_statistics(
                     "标签编码": code,
                     "标签名称": label.name,
                     "一级分类": label.group,
+                    **_path_columns(taxonomy, label.code),
                     "退货记录数": count,
                 }
             )

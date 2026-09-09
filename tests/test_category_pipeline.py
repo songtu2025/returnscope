@@ -258,7 +258,7 @@ def test_mixed_task_loads_each_family_taxonomy_and_excludes_unknown(
         "headwear-unified-2026-09-06-v1-semantic1",
         "eyewear-unified-2026-09-06-v1-semantic1",
         "footwear-unified-2026-09-06-v1-semantic1",
-        "gloves-unified-2026-09-06-v1-semantic1",
+        "gloves-unified-2026-09-08-v1-semantic1",
     ]
     assert result.pipeline.model_calls == 4
     assert result.pipeline.cache_hits == 4

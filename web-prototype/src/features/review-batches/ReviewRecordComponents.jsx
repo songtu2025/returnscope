@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { labelText, resultLabelText } from "../../lib/taxonomyPresentation";
 import {
   CaretRight,
   CheckCircle,
@@ -28,7 +29,7 @@ function groupedLabels(labels, query = "") {
     .filter((label) =>
       !keyword
         ? true
-        : `${label.name || ""} ${label.code || ""}`.toLowerCase().includes(keyword),
+        : `${labelText(label)} ${label.code || ""}`.toLowerCase().includes(keyword),
     )
     .reduce((groups, label) => {
       const group = label.group || "其他";
@@ -79,7 +80,7 @@ export function ReviewRecordRow({
         <span>匹配MSKU：{valueText(values(record, "matched_mskus"), "未匹配")}</span>
       </div>
       <div>
-        <b>{labelCodes.length ? labelCodes.join("、") : "未形成标签"}</b>
+        <b>{resultLabelText(record, labelCodes) || "未形成标签"}</b>
         <span>{record.comment || "没有评论证据"}</span>
       </div>
       <div>
@@ -219,12 +220,15 @@ export function ReviewRecordDrawer({
           <section className="review-current-result">
             <b>当前分类结果与证据</b>
             <p>
-              {(classification.primary_label_codes ?? []).join("、") || "未形成主标签"}
+              {resultLabelText(record, classification.primary_label_codes) ||
+                "未形成主标签"}
             </p>
             {semanticUnits.length ? (
               semanticUnits.map((unit, index) => (
                 <div key={`${unit.label_code || "evidence"}-${index}`}>
-                  <span>{unit.label_code || "未提供标签"}</span>
+                  <span>
+                    {unit.label_path?.join(" → ") || unit.label_code || "未提供标签"}
+                  </span>
                   <p>{unit.evidence || "未提供证据"}</p>
                 </div>
               ))
@@ -325,7 +329,7 @@ export function ReviewRecordDrawer({
                         <optgroup key={group} label={group}>
                           {options.map((label) => (
                             <option key={label.code} value={label.code}>
-                              {label.name} · {label.code}
+                              {labelText(label)} · {label.code}
                             </option>
                           ))}
                         </optgroup>

@@ -13,6 +13,7 @@ from web_backend.classification_result_service import ClassificationResultServic
 from web_backend.classification_standard_service import ClassificationStandardService
 from web_backend.common import add_audit, json_text, json_value, new_id
 from web_backend.database import Database
+from web_backend.result_hierarchy import enrich_record, result_taxonomy
 from web_backend.security import utc_now
 
 _TASK_LOCKS: dict[str, threading.Lock] = {}
@@ -451,8 +452,15 @@ class ReviewService:
                 """,
                 (*params, page_size, (page - 1) * page_size),
             ).fetchall()
+        batch = self.get_batch(batch_id)
+        with self.database.connect() as connection:
+            taxonomy = result_taxonomy(connection, batch["base_result_version_id"])
         return {
-            "items": [self._serialize_batch_record(dict(row)) for row in rows],
+            "taxonomy": taxonomy.model_dump(mode="json") if taxonomy else None,
+            "items": [
+                enrich_record(self._serialize_batch_record(dict(row)), taxonomy)
+                for row in rows
+            ],
             "total": total,
             "page": page,
             "page_size": page_size,

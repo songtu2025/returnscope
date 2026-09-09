@@ -19,6 +19,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { taxonomyPath } from "../../lib/taxonomyPresentation";
 
 const GROUP_ORDER = [
   ...new Set([
@@ -122,6 +123,10 @@ export function ReturnReasonInsights({
   const [showDefinition, setShowDefinition] = useState(false);
   const summary = data.summary ?? {};
   const reasons = data.reasons ?? [];
+  const hierarchy = data.hierarchy_problems ?? [];
+  const taxonomyLabels = new Map(
+    (data.taxonomy?.labels ?? []).map((label) => [label.code, label]),
+  );
   const selected = data.selected_reason;
   const products = data.products ?? [];
   const coReasons = data.co_reasons ?? [];
@@ -326,7 +331,7 @@ export function ReturnReasonInsights({
             </header>
             {visibleReasons.length ? (
               <ol>
-                {visibleReasons.slice(0, 8).map((reason, index) => (
+                {visibleReasons.map((reason, index) => (
                   <li key={reason.value}>
                     <button
                       className={selected?.value === reason.value ? "active" : ""}
@@ -336,7 +341,14 @@ export function ReturnReasonInsights({
                     >
                       <span className="return-reason-rank">{index + 1}</span>
                       <div>
-                        <b>{reason.label}</b>
+                        <b>
+                          {taxonomyLabels.has(reason.value)
+                            ? taxonomyPath(
+                                data.taxonomy,
+                                taxonomyLabels.get(reason.value),
+                              ).join(" → ")
+                            : reason.label}
+                        </b>
                         <i aria-hidden="true">
                           <span
                             style={{
@@ -360,6 +372,35 @@ export function ReturnReasonInsights({
               <div className="return-insight-empty">当前对象下没有匹配原因</div>
             )}
           </section>
+          {hierarchy.length > 0 && (
+            <section className="return-reason-ranking" aria-label="标签层级统计">
+              <header>
+                <div>
+                  <h3>标签层级</h3>
+                  <p>父级按评论去重；选择末端标签查看诊断</p>
+                </div>
+                <span>{hierarchy.length} 项</span>
+              </header>
+              <ol>
+                {hierarchy.map((node) => (
+                  <li key={node.value}>
+                    <button
+                      disabled={!taxonomyLabels.has(node.value)}
+                      className={selected?.value === node.value ? "active" : ""}
+                      onClick={() =>
+                        updateRoute({ problem: node.value, recordPage: 1 })
+                      }
+                    >
+                      <div>
+                        <b>{node.label_path?.join(" → ") || node.label_name}</b>
+                      </div>
+                      <strong>{Number(node.record_count).toLocaleString()} 条</strong>
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
         </aside>
 
         <main className="return-insight-diagnostic">

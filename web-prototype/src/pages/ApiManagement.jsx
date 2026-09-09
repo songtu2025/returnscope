@@ -1037,11 +1037,11 @@ export function ApiManagement({
                 validationEvents={validationEvents}
                 validationRun={validationRun}
               />
-              {!selectedConnection && (
+              {activePanel === "connection" && (
                 <div className="config-section" id="model-pipeline">
                   <CardHeading
-                    title="连接验证模型"
-                    note="新接入需要选择至少一个模型，用于保存与验证连接；任务策略由用户单独维护。"
+                    title="共享验证模型"
+                    note="用于验证连接及分类标准的 Review 样本；保存、验证并发布配置后生效。"
                   />
                   <div className="model-config-row primary">
                     <span className="model-number">1</span>
@@ -1049,7 +1049,7 @@ export function ApiManagement({
                       <b>
                         验证模型 <em>必选</em>
                       </b>
-                      <small>用于验证新接入是否可用，不会成为用户的任务策略。</small>
+                      <small>个人模型偏好与任务策略独立维护，不会随此选择更改。</small>
                     </div>
                     <label>
                       模型
@@ -1270,7 +1270,7 @@ export function ApiManagement({
                   }
                 />
                 <InfoRow
-                  label="连接验证模型"
+                  label="共享验证模型"
                   value={selectedConnection?.active_version?.primary_model ?? "—"}
                 />
                 <InfoRow

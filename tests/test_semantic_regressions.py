@@ -15,10 +15,20 @@ def test_prompt_contains_direction_and_overreach_rules(taxonomy, claims) -> None
     messages = build_messages("Need smaller size", taxonomy, claims)
     system_prompt = messages[0]["content"]
 
-    assert PROMPT_VERSION == "category-semantic-v3"
-    assert "Need smaller size 表示收到的商品偏大" in system_prompt
+    assert PROMPT_VERSION == "category-semantic-v5"
     assert "不能推断材料廉价" in system_prompt
     assert "只说鞋底薄时不能关联保护承诺" in system_prompt
+
+
+def test_size_preference_requires_context_before_inferring_fit(taxonomy, claims):
+    candidate = taxonomy.model_copy(update={"instructions": []})
+    system = build_messages("Need smaller size", candidate, claims)[0]["content"]
+
+    assert "尺码需求或换码偏好本身不等于收到的商品不合身" in system
+    assert "上下文明确描述实际偏大、偏小或其他不合身体验" in system
+    assert "单纯选码需求使用允许的中性标签" in system
+    assert "未覆盖时保留未知" in system
+    assert "Need smaller size 表示收到的商品偏大" not in system
 
 
 def test_prompt_compacts_catalog_without_claims(taxonomy) -> None:
@@ -26,7 +36,11 @@ def test_prompt_compacts_catalog_without_claims(taxonomy) -> None:
     messages = build_messages("Too small", taxonomy, claims)
     system_prompt = messages[0]["content"]
 
-    assert "FIT_TOO_LARGE|整体尺码明显偏大|large,big|NEGATIVE" in system_prompt
+    first = taxonomy.labels[0]
+    assert (
+        f"FIT_TOO_LARGE|{first.group} → {first.name}|整体尺码明显偏大|NEGATIVE|large,big"
+        in system_prompt
+    )
     assert "Listing 承诺（编号|文本|允许标签，仅用于关系判断）：\n无" in system_prompt
     assert '"code":' not in system_prompt
     assert '"claim_id": null' in system_prompt

@@ -186,6 +186,25 @@ def create_classification_standard_router(
         except ValueError as exc:
             raise handle_error(exc) from exc
 
+    @router.post("/api/classification-standard-drafts/{draft_id}/preview-excel")
+    async def preview_draft_excel(
+        draft_id: str,
+        _user: User,
+        file: Annotated[UploadFile, File()],
+        sheet_name: Annotated[str, Form()] = "",
+        columns_json: Annotated[str, Form()] = "{}",
+    ) -> dict[str, Any]:
+        try:
+            content = await file.read(20 * 1024 * 1024 + 1)
+            if len(content) > 20 * 1024 * 1024:
+                raise ValueError("标签框架文件不能超过20MB")
+            columns = json.loads(columns_json)
+            if not isinstance(columns, dict):
+                raise ValueError("列映射必须为 JSON 对象")
+            return service.preview_draft_excel(draft_id, content, sheet_name, columns)
+        except ValueError as exc:
+            raise handle_error(exc) from exc
+
     @router.post("/api/classification-standard-drafts/{draft_id}/validate")
     def validate_draft(
         draft_id: str,

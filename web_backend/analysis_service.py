@@ -101,7 +101,7 @@ class AnalysisService:
         task = self._task_source(task_id, filters.listing)
         data = self._load_task_data(task)
         details = self._apply_task_scope(data.details, task)
-        filtered = self._filter(details, filters)
+        filtered = self._filter(details, filters, data.semantics)
         view = filters.view if filters.view in ANALYSIS_VIEWS else "all"
         metrics = self._metric_summary(filtered)
         payload = {
@@ -157,11 +157,18 @@ class AnalysisService:
         task = self._task_source(task_id, filters.listing)
         data = self._load_task_data(task)
         details = self._apply_task_scope(data.details, task)
-        filtered = self._filter(details, filters)
+        filtered = self._filter(details, filters, data.semantics)
         export = filtered.drop(columns=["return_date", "has_text"], errors="ignore")
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
             export.to_excel(writer, sheet_name="筛选明细", index=False)
+            semantics = data.semantics.loc[
+                data.semantics["分类键"].isin(filtered["分类键"])
+            ].copy()
+            semantics["重复记录数"] = semantics["分类键"].map(
+                filtered["分类键"].value_counts()
+            )
+            semantics.to_excel(writer, sheet_name="语义层级", index=False)
         filename = f"{task_id}-filtered-analysis-v{task['result_version']}.xlsx"
         return output.getvalue(), filename
 
@@ -338,7 +345,19 @@ class AnalysisService:
         return scoped
 
     @staticmethod
-    def _filter(frame: pd.DataFrame, filters: AnalysisFilters) -> pd.DataFrame:
+    def _filter(
+        frame: pd.DataFrame,
+        filters: AnalysisFilters,
+        semantics: pd.DataFrame | None = None,
+    ) -> pd.DataFrame:
+        codes = [filters.problem_code] if filters.problem_code else []
+        if codes and semantics is not None and "标签编码路径" in semantics:
+            matching = (
+                semantics["标签编码路径"]
+                .fillna("")
+                .map(lambda value: filters.problem_code in str(value).split(" → "))
+            )
+            codes = sorted(set(semantics.loc[matching, "标签编码"])) or codes
         return filter_details(
             frame,
             start_date=filters.start_date,
@@ -350,7 +369,7 @@ class AnalysisService:
             listings=[filters.listing] if filters.listing else (),
             reasons=[filters.reason] if filters.reason else (),
             statuses=[filters.status] if filters.status else (),
-            problem_codes=[filters.problem_code] if filters.problem_code else (),
+            problem_codes=codes,
             claim_relations=(
                 [filters.claim_relation] if filters.claim_relation else ()
             ),
@@ -388,6 +407,17 @@ class AnalysisService:
                 "一级分类": "group",
             }
         )
+        if "完整路径" in data.semantics:
+            paths = data.semantics.drop_duplicates("标签编码").set_index("标签编码")[
+                "完整路径"
+            ]
+            labels = labels.copy()
+            labels["label_path"] = (
+                labels["code"]
+                .map(paths)
+                .fillna("")
+                .map(lambda value: str(value).split(" → ") if value else [])
+            )
         relations = sorted(
             {
                 value

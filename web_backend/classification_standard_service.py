@@ -16,6 +16,10 @@ from return_semantics.capabilities import (
 from return_semantics.prompt import validation_contract_matches
 from return_semantics.schemas import TaxonomyConfig
 from return_semantics.taxonomy import load_taxonomy_alignment
+from return_semantics.taxonomy_hierarchy import label_path
+from web_backend.classification_standard_excel import preview_excel
+from web_backend.classification_standard_issues import label_field_issues
+from web_backend.classification_validation_quality import publication_quality_gate
 from web_backend.common import add_audit, json_text, json_value, new_id
 from web_backend.database import Database
 from web_backend.security import utc_now
@@ -34,7 +38,7 @@ class ClassificationStandardConflict(ValueError):
 
 
 class ClassificationStandardValidationError(ValueError):
-    def __init__(self, validation: dict[str, list[str]]) -> None:
+    def __init__(self, validation: dict[str, Any]) -> None:
         self.validation = validation
         super().__init__("分类标准未通过发布检查")
 
@@ -669,6 +673,12 @@ class ClassificationStandardService:
         actor_id: str,
     ) -> dict[str, Any]:
         draft = self.get_draft(draft_id)
+        if (
+            content.get("import_sources")
+            and content["import_sources"] != draft["snapshot"].get("import_sources", [])
+            and not change_reason.strip()
+        ):
+            raise ValueError("导入标签框架必须填写修改原因")
         candidate = self._snapshot_from_content(draft["snapshot"], content)
         validation = self._validate_candidate(
             str(draft["standard_id"]),
@@ -710,6 +720,33 @@ class ClassificationStandardService:
             },
         )
         return self.get_draft(draft_id)
+
+    def preview_draft_excel(
+        self,
+        draft_id: str,
+        data: bytes,
+        sheet_name: str,
+        columns: dict[str, Any],
+    ) -> dict[str, Any]:
+        draft = self.get_draft(draft_id)
+        result = preview_excel(
+            data,
+            sheet_name,
+            columns,
+            self._editable_content(draft["snapshot"]),
+            str(draft["standard_id"]),
+        )
+        if result["content"] is not None:
+            candidate = self._snapshot_from_content(
+                draft["snapshot"], result["content"]
+            )
+            validation = self._validate_candidate(
+                str(draft["standard_id"]),
+                candidate,
+                draft["base_snapshot"],
+            )
+            result["validation"] = validation
+        return result
 
     def validate_draft(
         self,
@@ -772,7 +809,7 @@ class ClassificationStandardService:
         with self.database.connect() as connection:
             sample_validation = connection.execute(
                 """
-                SELECT id, source_json FROM classification_standard_validation_runs
+                SELECT id, source_json, result_json, summary_json FROM classification_standard_validation_runs
                 WHERE draft_id = ? AND draft_revision = ?
                   AND status = 'completed' AND error_count = 0
                   AND approved_at IS NOT NULL
@@ -787,6 +824,12 @@ class ClassificationStandardService:
             and validation_contract_matches(
                 draft["snapshot"], json.loads(sample_validation["source_json"])
             )
+            and publication_quality_gate(
+                draft["snapshot"],
+                json.loads(sample_validation["source_json"]),
+                json.loads(sample_validation["result_json"] or "[]"),
+                json.loads(sample_validation["summary_json"] or "{}"),
+            )["passed"]
             else None
         )
         if sample_validation_id is None:
@@ -1031,6 +1074,13 @@ class ClassificationStandardService:
         taxonomy, version = self._taxonomy_context_for_result(result_version_id)
         return {
             **taxonomy.model_dump(mode="json"),
+            "labels": [
+                {
+                    **label.model_dump(mode="json"),
+                    "label_path": label_path(taxonomy, label.code),
+                }
+                for label in taxonomy.labels
+            ],
             "standard_id": version["standard_id"],
             "standard_version_id": version["id"],
             "standard_name": version["standard_name"],
@@ -1062,12 +1112,9 @@ class ClassificationStandardService:
             raise ClassificationStandardNotFound("分类结果版本不存在")
         version_id = str(row["standard_version_id"] or "")
         if not version_id:
-            return self.combined_taxonomy(), {
-                "standard_id": None,
-                "id": None,
-                "standard_name": "历史合并标签体系",
-                "version_no": None,
-            }
+            raise ClassificationStandardNotFound(
+                "历史结果缺少标准版本绑定，请恢复正确的历史标准绑定后再复核"
+            )
         version = self.get_version(version_id)
         taxonomy = TaxonomyConfig.model_validate(version["snapshot"]["taxonomy"])
         return taxonomy, version
@@ -1098,6 +1145,14 @@ class ClassificationStandardService:
             for item in content["variants"]
         ]
         taxonomy = snapshot["taxonomy"]
+        if content.get("structure_version", 1) == 2:
+            taxonomy["structure_version"] = 2
+            taxonomy["categories"] = deepcopy(content.get("categories", []))
+        elif "structure_version" in taxonomy:
+            taxonomy["structure_version"] = 1
+            taxonomy.pop("categories", None)
+        if content.get("import_sources") or "import_sources" in snapshot:
+            snapshot["import_sources"] = deepcopy(content.get("import_sources", []))
         taxonomy["recognition_profile"] = content.get(
             "recognition_profile", taxonomy.get("recognition_profile", "legacy_v3")
         )
@@ -1120,14 +1175,21 @@ class ClassificationStandardService:
         )
         taxonomy["labels"] = []
         for item in content["labels"]:
-            code = str(item["code"]).strip().upper()
+            code = str(item["code"]).strip()
+            if taxonomy.get("structure_version", 1) == 1:
+                code = code.upper()
             previous = existing_labels.get(code, {})
             taxonomy["labels"].append(
                 {
                     "code": code,
                     "name": str(item["name"]).strip(),
-                    "group": str(item["group"]).strip(),
-                    "description": str(item["description"]).strip(),
+                    "group": str(item.get("group", "")).strip(),
+                    **(
+                        {"parent_code": item.get("parent_code")}
+                        if taxonomy.get("structure_version") == 2
+                        else {}
+                    ),
+                    "description": str(item.get("description", "")).strip(),
                     "exclusions": list(
                         item.get("exclusions", previous.get("exclusions", []))
                     ),
@@ -1150,6 +1212,17 @@ class ClassificationStandardService:
                     ),
                 }
             )
+        if taxonomy.get("structure_version") == 2:
+            # 草稿允许暂存未完成的树，合法结构才更新派生分组。
+            try:
+                parsed = TaxonomyConfig.model_validate(taxonomy)
+            except ValidationError:
+                pass
+            else:
+                for label, definition in zip(
+                    taxonomy["labels"], parsed.labels, strict=True
+                ):
+                    label["group"] = definition.group
         return snapshot
 
     def _validate_candidate(
@@ -1157,12 +1230,25 @@ class ClassificationStandardService:
         standard_id: str,
         candidate: dict[str, Any],
         base: dict[str, Any],
-    ) -> dict[str, list[str]]:
+    ) -> dict[str, Any]:
         blocking: list[str] = []
         warnings: list[str] = []
         taxonomy = candidate.get("taxonomy", {})
+        issues = label_field_issues(taxonomy)
+        blocking.extend(issue["message"] for issue in issues)
         groups = taxonomy.get("validation_rules", {}).get("allowed_groups", [])
-        if groups and groups != load_taxonomy_alignment()["groups"]:
+        if taxonomy.get("structure_version") == 2:
+            nodes = [*taxonomy.get("categories", []), *taxonomy.get("labels", [])]
+            sibling_names = [
+                (node.get("parent_code"), node.get("name")) for node in nodes
+            ]
+            if len(sibling_names) != len(set(sibling_names)):
+                blocking.append("同一父节点下的分类和标签不能重名")
+        if (
+            taxonomy.get("structure_version", 1) == 1
+            and groups
+            and groups != load_taxonomy_alignment()["groups"]
+        ):
             blocking.append("统一标准必须使用规定的七个业务分组")
         if not str(candidate.get("name", "")).strip():
             blocking.append("标准名称不能为空")
@@ -1182,14 +1268,6 @@ class ClassificationStandardService:
         for index, (category_a, category_b) in enumerate(categories, start=1):
             if not category_a.strip() or not category_b.strip():
                 blocking.append(f"第 {index} 个品类的品类 A 和品类 B 不能为空")
-        for index, label in enumerate(taxonomy.get("labels", []), start=1):
-            if not all(
-                str(label.get(field, "")).strip()
-                for field in ("code", "name", "group", "description")
-            ):
-                blocking.append(f"第 {index} 个标签的编码、名称、分组和定义不能为空")
-            if not label.get("allowed_sentiments"):
-                blocking.append(f"第 {index} 个标签至少需要一种适用情感")
         if len(categories) != len(set(categories)):
             blocking.append("同一标准内存在重复品类映射")
         if len(label_codes) != len(set(label_codes)):
@@ -1249,9 +1327,22 @@ class ClassificationStandardService:
             warnings.append(
                 f"补充了 {len(nonsemantic_changes)} 个已发布标签的搜索别名或判定说明"
             )
+        explained = {issue["message"] for issue in issues}
+        issues.extend(
+            {
+                "kind": "invalid_rule"
+                if "校验规则" in message
+                else "invalid_structure",
+                "message": message,
+                "field": "validation_rules" if "校验规则" in message else None,
+            }
+            for message in dict.fromkeys(blocking)
+            if message not in explained
+        )
         return {
             "blocking": list(dict.fromkeys(blocking)),
             "warnings": warnings,
+            "issues": issues,
         }
 
     @staticmethod
@@ -1265,8 +1356,19 @@ class ClassificationStandardService:
     @staticmethod
     def _editable_content(snapshot: dict[str, Any]) -> dict[str, Any]:
         taxonomy = snapshot["taxonomy"]
+        groups = {}
+        if taxonomy.get("structure_version") == 2:
+            try:
+                parsed = TaxonomyConfig.model_validate(taxonomy)
+            except ValidationError:
+                groups = {}
+            else:
+                groups = {label.code: label.group for label in parsed.labels}
         return {
             "name": snapshot["name"],
+            "structure_version": taxonomy.get("structure_version", 1),
+            "categories": deepcopy(taxonomy.get("categories", [])),
+            "import_sources": deepcopy(snapshot.get("import_sources", [])),
             "recognition_profile": taxonomy.get("recognition_profile", "legacy_v3"),
             "product_context": taxonomy["product_context"],
             "instructions": list(taxonomy["instructions"]),
@@ -1277,8 +1379,9 @@ class ClassificationStandardService:
                 {
                     "code": label["code"],
                     "name": label["name"],
-                    "group": label["group"],
-                    "description": label["description"],
+                    "group": groups.get(label["code"], label.get("group", "")),
+                    "parent_code": label.get("parent_code"),
+                    "description": label.get("description", ""),
                     "keywords": list(label.get("keywords", [])),
                     "exclusions": list(label.get("exclusions", [])),
                     "examples": deepcopy(label.get("examples", [])),
@@ -1310,6 +1413,16 @@ class ClassificationStandardService:
         shared_codes = base_labels.keys() & candidate_labels.keys()
         return {
             "has_changes": base_content != candidate_content,
+            "hierarchy_changed": (
+                base_content["structure_version"]
+                != candidate_content["structure_version"]
+                or base_content["categories"] != candidate_content["categories"]
+                or any(
+                    base_labels[code]["parent_code"]
+                    != candidate_labels[code]["parent_code"]
+                    for code in shared_codes
+                )
+            ),
             "added_categories": sorted(candidate_categories - base_categories),
             "removed_categories": sorted(base_categories - candidate_categories),
             "added_labels": sorted(candidate_labels.keys() - base_labels.keys()),
@@ -1325,10 +1438,9 @@ class ClassificationStandardService:
                 if any(
                     base_labels[code][field] != candidate_labels[code][field]
                     for field in (
-                        "name",
-                        "group",
-                        "description",
-                        "allowed_sentiments",
+                        ("description", "allowed_sentiments")
+                        if candidate_content["structure_version"] == 2
+                        else ("name", "group", "description", "allowed_sentiments")
                     )
                 )
             ),

@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { ClassificationLabelWorkbench } from "./ClassificationLabelWorkbench";
+import { ClassificationHierarchyEditor } from "./ClassificationHierarchyEditor";
 import { Plus, Trash } from "@phosphor-icons/react";
 
 const emptyVariant = () => ({ category_a: "", category_b: "", attributes: {} });
@@ -9,6 +10,7 @@ export function ClassificationStandardEditor({
   baseContent,
   onChange,
   focusLabelCode,
+  fixRequest,
   section,
   savedContent,
   busy,
@@ -21,12 +23,28 @@ export function ClassificationStandardEditor({
   const [partCode, setPartCode] = useState("");
   const [partError, setPartError] = useState("");
   const errorId = useId();
+  const editorRef = useRef(null);
   const nameRef = useRef(null);
   const productContextRef = useRef(null);
   const addVariantRef = useRef(null);
   const partCodeRef = useRef(null);
   const variantRefs = useRef(new Map());
   const focusedAttemptRef = useRef(0);
+
+  useEffect(() => {
+    if (!fixRequest || fixRequest.label_code || fixRequest.label_index != null) return;
+    if (fixRequest.kind === "invalid_structure") {
+      const hierarchy = editorRef.current?.querySelector(".hierarchy-category-editor");
+      if (hierarchy) {
+        hierarchy.open = true;
+        hierarchy.querySelector("summary")?.focus();
+      }
+    } else if (fixRequest.kind === "missing_field") {
+      const target =
+        fixRequest.field === "name" ? nameRef.current : productContextRef.current;
+      target?.focus();
+    }
+  }, [fixRequest, section]);
 
   const updateVariant = (index, updates) => {
     const field = Object.keys(updates)[0];
@@ -88,6 +106,7 @@ export function ClassificationStandardEditor({
 
   return (
     <fieldset
+      ref={editorRef}
       className="standard-editor-stack"
       disabled={busy}
       aria-label="标准草稿编辑"
@@ -252,12 +271,20 @@ export function ClassificationStandardEditor({
       </section>
 
       <div hidden={section !== "labels"}>
+        {content.structure_version === 2 && (
+          <ClassificationHierarchyEditor
+            content={content}
+            onChange={onChange}
+            disabled={busy || !editable}
+          />
+        )}
         <ClassificationLabelWorkbench
           content={content}
           baseContent={baseContent}
           savedContent={savedContent}
           onChange={onChange}
           focusLabelCode={focusLabelCode}
+          fixRequest={fixRequest}
           busy={busy}
           editable={editable}
           initiallyEditing={initiallyEditing}

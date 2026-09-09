@@ -73,7 +73,11 @@ def adapt_claims_to_taxonomy(
     claims: ListingClaimsConfig,
     taxonomy: TaxonomyConfig,
 ) -> ListingClaimsConfig:
-    if not taxonomy.validation_rules.allowed_groups or not claims.claims:
+    if (
+        taxonomy.structure_version == 2
+        or not taxonomy.validation_rules.allowed_groups
+        or not claims.claims
+    ):
         return claims
     # 只转换已登记的编码映射；承诺文本、来源和原版本保持不变。
     targets = {label.code: label for label in taxonomy.labels}

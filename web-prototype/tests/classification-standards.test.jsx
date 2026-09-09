@@ -13,6 +13,7 @@ const standardApiMock = vi.hoisted(() => ({
   classificationStandardDraft: vi.fn(),
   createClassificationStandardDraft: vi.fn(),
   updateClassificationStandardDraft: vi.fn(),
+  validateClassificationStandardDraft: vi.fn(),
   importClassificationStandardDraft: vi.fn(),
   publishClassificationStandardDraft: vi.fn(),
   classificationStandardVersionExportUrl: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock("../src/shared/api/classificationStandardApi", () => ({
   classificationStandardApi: standardApiMock,
 }));
 
+import { ClassificationStructureIssues } from "../src/features/classification-standards/ClassificationStructureIssues";
 import { ClassificationStandardsPage } from "../src/features/classification-standards/ClassificationStandardsPage";
 import {
   reconcileLabelRules,
@@ -180,6 +182,13 @@ beforeEach(() => {
   );
   standardApiMock.classificationStandardValidationSources.mockResolvedValue([]);
   standardApiMock.classificationStandardValidationRuns.mockResolvedValue([]);
+  standardApiMock.validateClassificationStandardDraft.mockImplementation(
+    async () =>
+      await (standardApiMock.updateClassificationStandardDraft.mock.results.at(-1)
+        ?.value ??
+        standardApiMock.classificationStandardDraft.mock.results.at(-1)?.value ??
+        validDraft),
+  );
   window.location.hash = "";
 });
 
@@ -319,7 +328,7 @@ test("替代标签生成新编码并清理旧引用，检查变更后才可保�
     />,
   );
   await userEvent.click(
-    await screen.findByRole("button", { name: /修改定义：创建替代标签/ }),
+    await screen.findByRole("button", { name: /修改说明：创建替代标签/ }),
   );
   await userEvent.click(
     screen.getByRole("button", { name: "创建替代标签", exact: true }),
@@ -327,9 +336,9 @@ test("替代标签生成新编码并清理旧引用，检查变更后才可保�
   expect(screen.getByRole("textbox", { name: "标签编码 1" })).toHaveValue(
     "EYEWEAR_FIT_PRESSURE_V2",
   );
-  await userEvent.clear(screen.getByRole("textbox", { name: "业务定义 1" }));
+  await userEvent.clear(screen.getByRole("textbox", { name: "判定说明（可选） 1" }));
   await userEvent.type(
-    screen.getByRole("textbox", { name: "业务定义 1" }),
+    screen.getByRole("textbox", { name: "判定说明（可选） 1" }),
     "明确描述鼻托压迫",
   );
   await userEvent.click(screen.getByRole("button", { name: "发布", exact: true }));
@@ -755,7 +764,7 @@ test("标签校验显示字段错误并只清除已修改字段", async () => {
   expect(await screen.findByText("请填写标签名称")).toBeVisible();
   expect(screen.getByText("请选择标签分组")).toBeVisible();
   expect(screen.getByText("请填写标签编码")).toBeVisible();
-  expect(screen.getByText("请填写业务定义")).toBeVisible();
+  expect(screen.queryByText("请填写业务定义")).not.toBeInTheDocument();
   await waitFor(() => expect(nameInput).toHaveFocus());
   expect(nameInput).toHaveAccessibleDescription("请填写标签名称");
 
@@ -778,11 +787,11 @@ test("已发布标签的编码和语义不可直接修改", async () => {
   );
 
   expect(await screen.findByRole("complementary", { name: "标签目录" })).toBeVisible();
-  for (const name of ["标签分组 1", "标签名称 1", "标签编码 1", "业务定义 1"])
+  for (const name of ["标签分组 1", "标签名称 1", "标签编码 1", "判定说明（可选） 1"])
     expect(screen.queryByRole("textbox", { name })).toBeNull();
   expect(screen.getByText("镜框或镜腿造成压迫")).toBeVisible();
   expect(screen.getByRole("textbox", { name: "搜索别名 1" })).toBeEnabled();
-  expect(screen.getByRole("button", { name: /修改定义：创建替代标签/ })).toBeVisible();
+  expect(screen.getByRole("button", { name: /修改说明：创建替代标签/ })).toBeVisible();
 });
 
 test("编辑页只允许发布当前修订已验证的草稿", async () => {
@@ -960,7 +969,7 @@ test("新建页一次维护品类和标签并保存草稿", async () => {
     "BACKPACK_DAMAGE",
   );
   await userEvent.type(
-    screen.getByRole("textbox", { name: "业务定义 1" }),
+    screen.getByRole("textbox", { name: "判定说明（可选） 1" }),
     "背包主体或拉链损坏",
   );
   await userEvent.type(
@@ -1244,4 +1253,238 @@ test("语义策略保存边界示例并将别名降为搜索用途", async () =>
     sentiment: null,
   });
   expect(standardApiMock.publishClassificationStandardDraft).not.toHaveBeenCalled();
+});
+
+test("结构检查定位缺名称和方向的标签，规则修正只写草稿", async () => {
+  const imported = {
+    ...content,
+    structure_version: 2,
+    categories: [
+      { code: "ROOT", name: "尺码" },
+      { code: "FIT", name: "不合身", parent_code: "ROOT" },
+    ],
+    validation_rules: { neutral_reason_labels: ["OLD_LABEL"] },
+    labels: [
+      {
+        ...content.labels[0],
+        code: "NEW_SMALL",
+        name: "偏小",
+        group: "尺码",
+        parent_code: "FIT",
+        description: "",
+        allowed_sentiments: [],
+      },
+    ],
+  };
+  const issues = [
+    {
+      kind: "missing_field",
+      message: "请填写标签名称",
+      label_code: "NEW_SMALL",
+      label_index: 0,
+      field: "name",
+    },
+    {
+      kind: "missing_sentiment",
+      message: "请确认评价方向",
+      label_code: "NEW_SMALL",
+      label_index: 0,
+      field: "allowed_sentiments",
+    },
+    {
+      kind: "invalid_rule",
+      message: "校验规则引用未知标签 OLD_LABEL",
+      field: "validation_rules",
+    },
+  ];
+  standardApiMock.classificationStandard.mockResolvedValue({
+    ...detail,
+    draft_id: validDraft.id,
+  });
+  standardApiMock.classificationStandardDraft.mockResolvedValue({
+    ...validDraft,
+    content: imported,
+    validation: { blocking: issues.map((item) => item.message), warnings: [], issues },
+  });
+  standardApiMock.updateClassificationStandardDraft.mockImplementation(
+    async (_, payload) => ({ ...validDraft, content: payload.content }),
+  );
+  render(
+    <ClassificationStandardsPage
+      route={{ query: { standard: standard.id } }}
+      notify={vi.fn()}
+    />,
+  );
+  await userEvent.click(
+    await screen.findByRole("button", { name: "发布", exact: true }),
+  );
+  const region = screen.getByRole("region", { name: "结构检查" });
+  expect(within(region).getByText("必填信息不完整 · 1 项")).toBeVisible();
+  expect(within(region).getByText("评价方向待确认 · 1 项")).toBeVisible();
+  await userEvent.click(
+    within(region).getAllByRole("button", { name: "去修正 尺码 → 不合身 → 偏小" })[0],
+  );
+  await waitFor(() =>
+    expect(screen.getByRole("textbox", { name: "标签名称 1" })).toHaveFocus(),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "发布", exact: true }));
+  await userEvent.click(
+    within(region).getAllByRole("button", { name: "去修正 尺码 → 不合身 → 偏小" })[1],
+  );
+  await waitFor(() =>
+    expect(screen.getByRole("checkbox", { name: "负向", exact: true })).toHaveFocus(),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "发布", exact: true }));
+  await userEvent.click(
+    screen.getByRole("button", { name: "去修正 校验规则引用未知标签 OLD_LABEL" }),
+  );
+  expect(screen.getByRole("heading", { name: "标签校验规则" })).toHaveFocus();
+  await userEvent.click(
+    screen.getByRole("button", { name: "删除中性退货原因规则 OLD_LABEL" }),
+  );
+  expect(standardApiMock.updateClassificationStandardDraft).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByRole("button", { name: "保存草稿", exact: true }));
+  await waitFor(() =>
+    expect(standardApiMock.updateClassificationStandardDraft).toHaveBeenCalled(),
+  );
+  expect(
+    standardApiMock.updateClassificationStandardDraft.mock.calls[0][1].content
+      .validation_rules.neutral_reason_labels,
+  ).toEqual([]);
+  expect(standardApiMock.publishClassificationStandardDraft).not.toHaveBeenCalled();
+});
+
+test("未改动的旧草稿保存时重新结构检查而不增加修订", async () => {
+  standardApiMock.classificationStandard.mockResolvedValue({
+    ...detail,
+    draft_id: validDraft.id,
+  });
+  standardApiMock.classificationStandardDraft.mockResolvedValue(validDraft);
+  const message = "请填写标签名称";
+  standardApiMock.validateClassificationStandardDraft.mockResolvedValue({
+    ...validDraft,
+    validation: {
+      blocking: [message],
+      warnings: [],
+      issues: [
+        {
+          kind: "missing_field",
+          message,
+          label_code: content.labels[0].code,
+          field: "name",
+        },
+      ],
+    },
+  });
+  render(
+    <ClassificationStandardsPage
+      route={{ query: { standard: standard.id } }}
+      notify={vi.fn()}
+    />,
+  );
+  await userEvent.click(
+    await screen.findByRole("button", { name: "保存草稿", exact: true }),
+  );
+  await waitFor(() =>
+    expect(standardApiMock.validateClassificationStandardDraft).toHaveBeenCalledWith(
+      validDraft.id,
+      validDraft.revision,
+    ),
+  );
+  expect(standardApiMock.updateClassificationStandardDraft).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByRole("button", { name: "发布", exact: true }));
+  expect(screen.getByText("必填信息不完整 · 1 项")).toBeVisible();
+});
+
+test("不能定位的结构问题仅展示说明，失效规则保留修正入口", () => {
+  const validation = {
+    blocking: ["标准无差异", "规则失效"],
+    issues: [
+      { kind: "invalid_structure", message: "标准无差异" },
+      { kind: "invalid_rule", message: "规则失效" },
+    ],
+  };
+  render(
+    <ClassificationStructureIssues
+      validation={validation}
+      content={content}
+      onFix={vi.fn()}
+    />,
+  );
+  expect(screen.getByText("标准无差异")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "去修正 标准无差异" })).toBeNull();
+  expect(screen.getByRole("button", { name: "去修正 规则失效" })).toBeVisible();
+});
+
+test.each([1, 2])("v%s 标签可以清空判定说明并保存草稿", async (structureVersion) => {
+  const editableContent = {
+    ...content,
+    structure_version: structureVersion,
+    ...(structureVersion === 2
+      ? { categories: [{ code: "FIT", name: "尺码与适配" }] }
+      : {}),
+    labels: [
+      {
+        ...content.labels[0],
+        code: "NEW_FIT",
+        parent_code: structureVersion === 2 ? "FIT" : undefined,
+      },
+    ],
+  };
+  standardApiMock.classificationStandard.mockResolvedValue({
+    ...detail,
+    draft_id: validDraft.id,
+  });
+  standardApiMock.classificationStandardDraft.mockResolvedValue({
+    ...validDraft,
+    content: editableContent,
+  });
+  standardApiMock.updateClassificationStandardDraft.mockImplementation(
+    async (_, payload) => ({ ...validDraft, content: payload.content }),
+  );
+  render(
+    <ClassificationStandardsPage
+      route={{ query: { standard: standard.id } }}
+      notify={vi.fn()}
+    />,
+  );
+  await userEvent.click(
+    await screen.findByRole("button", { name: "编辑", exact: true }),
+  );
+  const description = await screen.findByRole("textbox", {
+    name: "判定说明（可选） 1",
+  });
+  await userEvent.clear(description);
+  await userEvent.click(screen.getByRole("button", { name: "保存草稿", exact: true }));
+  await waitFor(() =>
+    expect(standardApiMock.updateClassificationStandardDraft).toHaveBeenCalled(),
+  );
+  expect(
+    standardApiMock.updateClassificationStandardDraft.mock.calls[0][1].content.labels[0]
+      .description,
+  ).toBe("");
+  expect(standardApiMock.validateClassificationStandardDraft).toHaveBeenCalled();
+  expect(screen.getByRole("textbox", { name: "判定说明（可选） 1" })).toHaveValue("");
+  expect(standardApiMock.publishClassificationStandardDraft).not.toHaveBeenCalled();
+});
+
+test("没有判定说明的已发布标签展示名称路径语义提示", async () => {
+  standardApiMock.classificationStandard.mockResolvedValue({
+    ...detail,
+    snapshot: {
+      ...snapshot,
+      taxonomy: {
+        ...snapshot.taxonomy,
+        labels: [{ ...content.labels[0], description: "" }],
+      },
+    },
+  });
+  render(
+    <ClassificationStandardsPage
+      route={{ query: { standard: standard.id } }}
+      notify={vi.fn()}
+    />,
+  );
+  expect(await screen.findByText("依据标签名称和完整路径理解")).toBeVisible();
+  expect(screen.getByText("尺码与适配 → 佩戴压迫")).toBeVisible();
 });
