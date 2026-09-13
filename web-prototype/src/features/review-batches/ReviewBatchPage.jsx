@@ -26,16 +26,19 @@ import {
   createDashboardSelection,
   selectionItem,
 } from "../analysis-dashboards/dashboardSelectionStorage";
+import { Pagination } from "../../components/Pagination";
+import { PAGE_SIZES } from "../../shared/pagination";
 import { ResultWorkspaceNav } from "../classification-results/ResultWorkspaceNav";
 import { ReviewRecordDrawer, ReviewRecordRow } from "./ReviewRecordComponents";
+import { defaultReviewAssessment, reviewAssessment } from "./reviewAssessment";
 
-const PAGE_SIZES = [20, 50, 100];
 const BATCH_STATUS_LABELS = {
   draft: "复核中",
   in_review: "复核中",
   conflict: "存在冲突",
   published: "已发布",
 };
+
 function routeState(query) {
   const number = (key) => Number(query[key]);
   return {
@@ -335,6 +338,9 @@ function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
   const [mode, setMode] = useState("confirm");
   const [labelCode, setLabelCode] = useState("");
   const [reason, setReason] = useState("");
+  const [assessment, setAssessment] = useState(() =>
+    defaultReviewAssessment("confirm"),
+  );
   const [saving, setSaving] = useState(false);
   const [checkedIds, setCheckedIds] = useState([]);
   const [bulkAction, setBulkAction] = useState("");
@@ -529,7 +535,14 @@ function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
     setMode("confirm");
     setLabelCode(currentCode);
     setReason("");
+    setAssessment(reviewAssessment(record));
     setConflict(null);
+  };
+
+  /** @param {"confirm" | "modify" | "exclude"} nextMode */
+  const changeMode = (nextMode) => {
+    setMode(nextMode);
+    setAssessment(defaultReviewAssessment(nextMode));
   };
 
   const refreshConflict = async (error) => {
@@ -565,6 +578,9 @@ function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
           action: mode,
           label_code: mode === "modify" ? labelCode || null : null,
           reason: reason.trim(),
+          label_correctness: assessment.labelCorrectness,
+          evidence_completeness: assessment.evidenceCompleteness,
+          review_routing: assessment.reviewRouting,
         },
       );
       setReason("");
@@ -957,7 +973,9 @@ function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
           reason={reason}
           conflict={conflict}
           saving={saving}
-          onMode={setMode}
+          assessment={assessment}
+          onMode={changeMode}
+          onAssessment={setAssessment}
           onLabelCode={setLabelCode}
           onReason={setReason}
           onSave={() => saveRecord(false)}
@@ -1097,45 +1115,6 @@ function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
           </div>
         </Modal>
       )}
-    </div>
-  );
-}
-
-function Pagination({ page, pageSize, total, totalPages, onPage, onPageSize }) {
-  return (
-    <div className="result-pagination">
-      <span>共 {Number(total || 0).toLocaleString()} 条</span>
-      <label>
-        每页
-        <select
-          aria-label="每页数量"
-          value={pageSize}
-          onChange={(event) => onPageSize(Number(event.target.value))}
-        >
-          {PAGE_SIZES.map((size) => (
-            <option key={size} value={size}>
-              {size}
-            </option>
-          ))}
-        </select>
-      </label>
-      <button
-        className="secondary-button compact-button"
-        disabled={page <= 1}
-        onClick={() => onPage(page - 1)}
-      >
-        上一页
-      </button>
-      <b>
-        {page} / {totalPages}
-      </b>
-      <button
-        className="secondary-button compact-button"
-        disabled={page >= totalPages}
-        onClick={() => onPage(page + 1)}
-      >
-        下一页
-      </button>
     </div>
   );
 }

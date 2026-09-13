@@ -779,156 +779,13 @@ class Database:
         with self.connect() as connection:
             connection.execute("PRAGMA journal_mode = WAL")
             connection.executescript(SCHEMA)
-            user_columns = {
-                row["name"]
-                for row in connection.execute("PRAGMA table_info(users)").fetchall()
-            }
-            if "is_admin" not in user_columns:
-                connection.execute(
-                    "ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0"
-                )
-            dataset_columns = {
-                row["name"]
-                for row in connection.execute(
-                    "PRAGMA table_info(datasets)"
-                ).fetchall()
-            }
-            dataset_column_definitions = {
-                "source_key": "TEXT",
-                "usage_scope": "TEXT NOT NULL DEFAULT 'managed'",
-            }
-            for column_name, definition in dataset_column_definitions.items():
-                if column_name not in dataset_columns:
-                    connection.execute(
-                        f"ALTER TABLE datasets ADD COLUMN {column_name} {definition}"
-                    )
-            config_columns = {
-                row["name"]
-                for row in connection.execute(
-                    "PRAGMA table_info(api_config_versions)"
-                ).fetchall()
-            }
-            if "change_note" not in config_columns:
-                connection.execute(
-                    """
-                    ALTER TABLE api_config_versions
-                    ADD COLUMN change_note TEXT NOT NULL DEFAULT ''
-                    """
-                )
-            segment_columns = {
-                row["name"]
-                for row in connection.execute(
-                    "PRAGMA table_info(task_segments)"
-                ).fetchall()
-            }
-            if "classification_keys_json" not in segment_columns:
-                connection.execute(
-                    """
-                    ALTER TABLE task_segments
-                    ADD COLUMN classification_keys_json TEXT NOT NULL DEFAULT '[]'
-                    """
-                )
-            if "execution_order" not in segment_columns:
-                connection.execute(
-                    """
-                    ALTER TABLE task_segments
-                    ADD COLUMN execution_order INTEGER NOT NULL DEFAULT 0
-                    """
-                )
-                rows = connection.execute(
-                    """
-                    SELECT id, task_id FROM task_segments
-                    ORDER BY task_id, created_at, segment_key
-                    """
-                ).fetchall()
-                task_positions: dict[str, int] = {}
-                for row in rows:
-                    task_id = str(row["task_id"])
-                    position = task_positions.get(task_id, 0) + 1
-                    task_positions[task_id] = position
-                    connection.execute(
-                        "UPDATE task_segments SET execution_order = ? WHERE id = ?",
-                        (position, row["id"]),
-                    )
-            for column_name in (
-                "model_policy_version",
-                "model_policy_json",
-                "claims_version",
-                "scope_json",
-            ):
-                if column_name not in segment_columns:
-                    connection.execute(
-                        f"ALTER TABLE task_segments ADD COLUMN {column_name} TEXT"
-                    )
-            if "standard_version_id" not in segment_columns:
-                connection.execute(
-                    "ALTER TABLE task_segments ADD COLUMN standard_version_id TEXT"
-                )
-            segment_column_definitions = {
-                "requested_action": "TEXT",
-                "revision": "INTEGER NOT NULL DEFAULT 1",
-                "retry_count": "INTEGER NOT NULL DEFAULT 0",
-                "model_failures": "INTEGER NOT NULL DEFAULT 0",
-                "heartbeat_at": "TEXT",
-                "result_file_path": "TEXT",
-                "result_json_path": "TEXT",
-                "result_version": "INTEGER NOT NULL DEFAULT 0",
-                "result_version_id": "TEXT",
-                "result_publish_status": "TEXT",
-                "result_quality_status": "TEXT",
-                "result_published_at": "TEXT",
-                "result_publish_error": "TEXT",
-            }
-            for column_name, definition in segment_column_definitions.items():
-                if column_name not in segment_columns:
-                    connection.execute(
-                        f"ALTER TABLE task_segments ADD COLUMN {column_name} {definition}"
-                    )
-            version_columns = {
-                row["name"]
-                for row in connection.execute(
-                    "PRAGMA table_info(classification_result_versions)"
-                ).fetchall()
-            }
-            version_column_definitions = {
-                "parent_version_id": "TEXT REFERENCES classification_result_versions(id)",
-                "version_reason": "TEXT NOT NULL DEFAULT ''",
-                "created_by": "TEXT REFERENCES users(id)",
-            }
-            for column_name, definition in version_column_definitions.items():
-                if column_name not in version_columns:
-                    connection.execute(
-                        "ALTER TABLE classification_result_versions "
-                        f"ADD COLUMN {column_name} {definition}"
-                    )
-            result_columns = {
-                row["name"]
-                for row in connection.execute(
-                    "PRAGMA table_info(classification_results)"
-                ).fetchall()
-            }
-            if "standard_version_id" not in result_columns:
-                connection.execute(
-                    "ALTER TABLE classification_results "
-                    "ADD COLUMN standard_version_id TEXT"
-                )
-            validation_columns = {
-                row["name"]
-                for row in connection.execute(
-                    "PRAGMA table_info(classification_standard_validation_runs)"
-                ).fetchall()
-            }
-            validation_column_definitions = {
-                "approved_by": "TEXT REFERENCES users(id)",
-                "approved_at": "TEXT",
-                "approval_note": "TEXT NOT NULL DEFAULT ''",
-            }
-            for column_name, definition in validation_column_definitions.items():
-                if column_name not in validation_columns:
-                    connection.execute(
-                        "ALTER TABLE classification_standard_validation_runs "
-                        f"ADD COLUMN {column_name} {definition}"
-                    )
+            self._migrate_user_columns(connection)
+            self._migrate_dataset_columns(connection)
+            self._migrate_api_config_version_columns(connection)
+            self._migrate_task_segment_columns(connection)
+            self._migrate_result_version_columns(connection)
+            self._migrate_classification_result_columns(connection)
+            self._migrate_validation_run_columns(connection)
             self._migrate_review_records(connection)
             self._repair_draft_review_batches(connection)
             self._migrate_excluded_quality_status(connection)
@@ -938,28 +795,7 @@ class Database:
                 ON review_records(batch_id, updated_at DESC, id)
                 """
             )
-            task_columns = {
-                row["name"]
-                for row in connection.execute("PRAGMA table_info(tasks)").fetchall()
-            }
-            task_column_definitions = {
-                "pause_requested": "INTEGER NOT NULL DEFAULT 0",
-                "max_parallel_segments": "INTEGER NOT NULL DEFAULT 3",
-                "last_scheduled_at": "TEXT",
-                "archived_at": "TEXT",
-                "archived_by": "TEXT REFERENCES users(id)",
-            }
-            for column_name, definition in task_column_definitions.items():
-                if column_name not in task_columns:
-                    connection.execute(
-                        f"ALTER TABLE tasks ADD COLUMN {column_name} {definition}"
-                    )
-            connection.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_tasks_archive_created
-                ON tasks(archived_at, created_at DESC)
-                """
-            )
+            self._migrate_task_columns(connection)
             self._migrate_ai_insight_reports(connection)
             connection.execute(
                 """
@@ -967,93 +803,300 @@ class Database:
                 ON task_segments(status, execution_order, created_at)
                 """
             )
+            self._recover_interrupted_result_publishing(connection)
+            self._migrate_api_models(connection)
+            connection.execute("PRAGMA optimize")
+
+    @staticmethod
+    def _migrate_user_columns(connection: sqlite3.Connection) -> None:
+        user_columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(users)").fetchall()
+        }
+        if "is_admin" not in user_columns:
+            connection.execute(
+                "ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0"
+            )
+
+    @staticmethod
+    def _migrate_dataset_columns(connection: sqlite3.Connection) -> None:
+        dataset_columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(datasets)").fetchall()
+        }
+        dataset_column_definitions = {
+            "source_key": "TEXT",
+            "usage_scope": "TEXT NOT NULL DEFAULT 'managed'",
+        }
+        for column_name, definition in dataset_column_definitions.items():
+            if column_name not in dataset_columns:
+                connection.execute(
+                    f"ALTER TABLE datasets ADD COLUMN {column_name} {definition}"
+                )
+
+    @staticmethod
+    def _migrate_api_config_version_columns(
+        connection: sqlite3.Connection,
+    ) -> None:
+        config_columns = {
+            row["name"]
+            for row in connection.execute(
+                "PRAGMA table_info(api_config_versions)"
+            ).fetchall()
+        }
+        if "change_note" not in config_columns:
             connection.execute(
                 """
-                UPDATE classification_result_versions
-                SET publish_status = 'failed'
-                WHERE publish_status = 'publishing'
+                ALTER TABLE api_config_versions
+                ADD COLUMN change_note TEXT NOT NULL DEFAULT ''
                 """
             )
+
+    @staticmethod
+    def _migrate_task_segment_columns(connection: sqlite3.Connection) -> None:
+        segment_columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(task_segments)").fetchall()
+        }
+        if "classification_keys_json" not in segment_columns:
             connection.execute(
                 """
-                UPDATE task_segments
-                SET result_publish_status = 'failed',
-                    result_publish_error = COALESCE(
-                        result_publish_error,
-                        '服务重启时发现结果发布未完成，请重试发布'
-                    )
-                WHERE result_publish_status = 'publishing'
-                  AND NOT EXISTS (
-                      SELECT 1 FROM classification_result_versions v
-                      WHERE v.source_segment_id = task_segments.id
-                        AND v.publish_status = 'published'
-                  )
+                ALTER TABLE task_segments
+                ADD COLUMN classification_keys_json TEXT NOT NULL DEFAULT '[]'
                 """
             )
-            model_rows = connection.execute(
+        if "execution_order" not in segment_columns:
+            connection.execute(
                 """
-                SELECT connection_id, primary_model AS model_key,
-                       validation_status, validation_message, validated_at,
-                       created_by, created_at
-                FROM api_config_versions
-                UNION ALL
-                SELECT connection_id, cheap_model AS model_key,
-                       validation_status, validation_message, validated_at,
-                       created_by, created_at
-                FROM api_config_versions
-                WHERE cheap_model IS NOT NULL
-                UNION ALL
-                SELECT connection_id, secondary_model AS model_key,
-                       validation_status, validation_message, validated_at,
-                       created_by, created_at
-                FROM api_config_versions
-                WHERE secondary_model IS NOT NULL
-                ORDER BY created_at
+                ALTER TABLE task_segments
+                ADD COLUMN execution_order INTEGER NOT NULL DEFAULT 0
+                """
+            )
+            rows = connection.execute(
+                """
+                SELECT id, task_id FROM task_segments
+                ORDER BY task_id, created_at, segment_key
                 """
             ).fetchall()
-            for row in model_rows:
-                model_id = f"model_{secrets.token_hex(8)}"
+            task_positions: dict[str, int] = {}
+            for row in rows:
+                task_id = str(row["task_id"])
+                position = task_positions.get(task_id, 0) + 1
+                task_positions[task_id] = position
                 connection.execute(
-                    """
-                    INSERT INTO api_models(
-                        id, connection_id, model_key, display_name,
-                        supported_efforts_json, active, validation_status,
-                        validation_message, validated_at, created_by,
-                        created_at, updated_by, updated_at
-                    ) VALUES (?, ?, ?, ?, '["low","medium","high"]', 1,
-                              ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(connection_id, model_key) DO UPDATE SET
-                        validation_status = CASE
-                            WHEN excluded.validation_status = 'validated'
-                            THEN 'validated'
-                            ELSE api_models.validation_status
-                        END,
-                        validation_message = CASE
-                            WHEN excluded.validation_status = 'validated'
-                            THEN excluded.validation_message
-                            ELSE api_models.validation_message
-                        END,
-                        validated_at = CASE
-                            WHEN excluded.validation_status = 'validated'
-                            THEN excluded.validated_at
-                            ELSE api_models.validated_at
-                        END
-                    """,
-                    (
-                        model_id,
-                        row["connection_id"],
-                        row["model_key"],
-                        row["model_key"],
-                        row["validation_status"],
-                        row["validation_message"],
-                        row["validated_at"],
-                        row["created_by"],
-                        row["created_at"],
-                        row["created_by"],
-                        row["created_at"],
-                    ),
+                    "UPDATE task_segments SET execution_order = ? WHERE id = ?",
+                    (position, row["id"]),
                 )
-            connection.execute("PRAGMA optimize")
+        for column_name in (
+            "model_policy_version",
+            "model_policy_json",
+            "claims_version",
+            "scope_json",
+        ):
+            if column_name not in segment_columns:
+                connection.execute(
+                    f"ALTER TABLE task_segments ADD COLUMN {column_name} TEXT"
+                )
+        if "standard_version_id" not in segment_columns:
+            connection.execute(
+                "ALTER TABLE task_segments ADD COLUMN standard_version_id TEXT"
+            )
+        segment_column_definitions = {
+            "requested_action": "TEXT",
+            "revision": "INTEGER NOT NULL DEFAULT 1",
+            "retry_count": "INTEGER NOT NULL DEFAULT 0",
+            "model_failures": "INTEGER NOT NULL DEFAULT 0",
+            "heartbeat_at": "TEXT",
+            "result_file_path": "TEXT",
+            "result_json_path": "TEXT",
+            "result_version": "INTEGER NOT NULL DEFAULT 0",
+            "result_version_id": "TEXT",
+            "result_publish_status": "TEXT",
+            "result_quality_status": "TEXT",
+            "result_published_at": "TEXT",
+            "result_publish_error": "TEXT",
+        }
+        for column_name, definition in segment_column_definitions.items():
+            if column_name not in segment_columns:
+                connection.execute(
+                    f"ALTER TABLE task_segments ADD COLUMN {column_name} {definition}"
+                )
+
+    @staticmethod
+    def _migrate_result_version_columns(connection: sqlite3.Connection) -> None:
+        version_columns = {
+            row["name"]
+            for row in connection.execute(
+                "PRAGMA table_info(classification_result_versions)"
+            ).fetchall()
+        }
+        version_column_definitions = {
+            "parent_version_id": "TEXT REFERENCES classification_result_versions(id)",
+            "version_reason": "TEXT NOT NULL DEFAULT ''",
+            "created_by": "TEXT REFERENCES users(id)",
+        }
+        for column_name, definition in version_column_definitions.items():
+            if column_name not in version_columns:
+                connection.execute(
+                    "ALTER TABLE classification_result_versions "
+                    f"ADD COLUMN {column_name} {definition}"
+                )
+
+    @staticmethod
+    def _migrate_classification_result_columns(
+        connection: sqlite3.Connection,
+    ) -> None:
+        result_columns = {
+            row["name"]
+            for row in connection.execute(
+                "PRAGMA table_info(classification_results)"
+            ).fetchall()
+        }
+        if "standard_version_id" not in result_columns:
+            connection.execute(
+                "ALTER TABLE classification_results ADD COLUMN standard_version_id TEXT"
+            )
+
+    @staticmethod
+    def _migrate_validation_run_columns(
+        connection: sqlite3.Connection,
+    ) -> None:
+        validation_columns = {
+            row["name"]
+            for row in connection.execute(
+                "PRAGMA table_info(classification_standard_validation_runs)"
+            ).fetchall()
+        }
+        validation_column_definitions = {
+            "approved_by": "TEXT REFERENCES users(id)",
+            "approved_at": "TEXT",
+            "approval_note": "TEXT NOT NULL DEFAULT ''",
+        }
+        for column_name, definition in validation_column_definitions.items():
+            if column_name not in validation_columns:
+                connection.execute(
+                    "ALTER TABLE classification_standard_validation_runs "
+                    f"ADD COLUMN {column_name} {definition}"
+                )
+
+    @staticmethod
+    def _migrate_task_columns(connection: sqlite3.Connection) -> None:
+        task_columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(tasks)").fetchall()
+        }
+        task_column_definitions = {
+            "pause_requested": "INTEGER NOT NULL DEFAULT 0",
+            "max_parallel_segments": "INTEGER NOT NULL DEFAULT 3",
+            "last_scheduled_at": "TEXT",
+            "archived_at": "TEXT",
+            "archived_by": "TEXT REFERENCES users(id)",
+        }
+        for column_name, definition in task_column_definitions.items():
+            if column_name not in task_columns:
+                connection.execute(
+                    f"ALTER TABLE tasks ADD COLUMN {column_name} {definition}"
+                )
+        connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_tasks_archive_created
+            ON tasks(archived_at, created_at DESC)
+            """
+        )
+
+    @staticmethod
+    def _recover_interrupted_result_publishing(
+        connection: sqlite3.Connection,
+    ) -> None:
+        connection.execute(
+            """
+            UPDATE classification_result_versions
+            SET publish_status = 'failed'
+            WHERE publish_status = 'publishing'
+            """
+        )
+        connection.execute(
+            """
+            UPDATE task_segments
+            SET result_publish_status = 'failed',
+                result_publish_error = COALESCE(
+                    result_publish_error,
+                    '服务重启时发现结果发布未完成，请重试发布'
+                )
+            WHERE result_publish_status = 'publishing'
+              AND NOT EXISTS (
+                  SELECT 1 FROM classification_result_versions v
+                  WHERE v.source_segment_id = task_segments.id
+                    AND v.publish_status = 'published'
+              )
+            """
+        )
+
+    @staticmethod
+    def _migrate_api_models(connection: sqlite3.Connection) -> None:
+        model_rows = connection.execute(
+            """
+            SELECT connection_id, primary_model AS model_key,
+                   validation_status, validation_message, validated_at,
+                   created_by, created_at
+            FROM api_config_versions
+            UNION ALL
+            SELECT connection_id, cheap_model AS model_key,
+                   validation_status, validation_message, validated_at,
+                   created_by, created_at
+            FROM api_config_versions
+            WHERE cheap_model IS NOT NULL
+            UNION ALL
+            SELECT connection_id, secondary_model AS model_key,
+                   validation_status, validation_message, validated_at,
+                   created_by, created_at
+            FROM api_config_versions
+            WHERE secondary_model IS NOT NULL
+            ORDER BY created_at
+            """
+        ).fetchall()
+        for row in model_rows:
+            model_id = f"model_{secrets.token_hex(8)}"
+            connection.execute(
+                """
+                INSERT INTO api_models(
+                    id, connection_id, model_key, display_name,
+                    supported_efforts_json, active, validation_status,
+                    validation_message, validated_at, created_by,
+                    created_at, updated_by, updated_at
+                ) VALUES (?, ?, ?, ?, '["low","medium","high"]', 1,
+                          ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(connection_id, model_key) DO UPDATE SET
+                    validation_status = CASE
+                        WHEN excluded.validation_status = 'validated'
+                        THEN 'validated'
+                        ELSE api_models.validation_status
+                    END,
+                    validation_message = CASE
+                        WHEN excluded.validation_status = 'validated'
+                        THEN excluded.validation_message
+                        ELSE api_models.validation_message
+                    END,
+                    validated_at = CASE
+                        WHEN excluded.validation_status = 'validated'
+                        THEN excluded.validated_at
+                        ELSE api_models.validated_at
+                    END
+                """,
+                (
+                    model_id,
+                    row["connection_id"],
+                    row["model_key"],
+                    row["model_key"],
+                    row["validation_status"],
+                    row["validation_message"],
+                    row["validated_at"],
+                    row["created_by"],
+                    row["created_at"],
+                    row["created_by"],
+                    row["created_at"],
+                ),
+            )
 
     @staticmethod
     def _migrate_ai_insight_reports(connection: sqlite3.Connection) -> None:

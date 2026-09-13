@@ -4,9 +4,10 @@ import hashlib
 import json
 import re
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, replace
 from threading import Event, Lock
+from typing import Any, Literal, cast
 
 import pandas as pd
 
@@ -258,6 +259,424 @@ def _add_usage(total: dict[str, int], usage: dict[str, int]) -> None:
         total[key] = total.get(key, 0) + value
 
 
+@dataclass(frozen=True)
+class _PipelineContext:
+    taxonomy: TaxonomyConfig
+    claims: ListingClaimsConfig
+    client: ModelClient
+    cache: JsonlCache
+    force: bool
+    secondary_model: str | None
+    should_cancel: Callable[[], bool] | None
+    model_policy_version: str
+    secondary_is_fallback: bool
+    analysis_context: Literal["returns", "review"]
+
+
+@dataclass(frozen=True)
+class _RowContext:
+    classification_key: str
+    comment: str
+    reason: str
+    classification_scope: str
+    messages: list[dict[str, str]]
+    use_cheap_model: bool
+    initial_model: str
+
+
+class _RunTracker:
+    def __init__(
+        self,
+        on_model_degraded: Callable[[PipelineRun, int, str], None] | None,
+    ) -> None:
+        self.results: dict[str, ValidatedClassification] = {}
+        self.usage: dict[str, int] = {}
+        self.usage_by_model: dict[str, dict[str, int]] = {}
+        self.cache_hits = 0
+        self.cache_hits_by_model: dict[str, int] = {}
+        self.model_calls = 0
+        self.model_calls_by_model: dict[str, int] = {}
+        self.model_failures = 0
+        self.consecutive_service_failures = 0
+        self.last_service_error = ""
+        self.request_metrics: dict[str, int] = {}
+        self.routing: dict[str, int] = {}
+        self._on_model_degraded = on_model_degraded
+        self._lock = Lock()
+        self._service_breaker = Event()
+
+    def increment_routing(self, route_name: str) -> None:
+        with self._lock:
+            self.routing[route_name] = self.routing.get(route_name, 0) + 1
+
+    def record_call(
+        self,
+        requested_model: str,
+        call_result: ModelCallResult,
+        cache_hit: bool,
+    ) -> None:
+        with self._lock:
+            if cache_hit:
+                self.cache_hits += 1
+                self.cache_hits_by_model[requested_model] = (
+                    self.cache_hits_by_model.get(requested_model, 0) + 1
+                )
+                return
+
+            self.consecutive_service_failures = 0
+            call_count = call_result.metrics.get(
+                "fact_model_calls", 1
+            ) + call_result.metrics.get("output_correction_calls", 0)
+            self.model_calls += call_count
+            self.model_calls_by_model[requested_model] = (
+                self.model_calls_by_model.get(requested_model, 0) + call_count
+            )
+            _add_usage(self.usage, call_result.usage)
+            model_usage = self.usage_by_model.setdefault(requested_model, {})
+            _add_usage(model_usage, call_result.usage)
+            _add_usage(self.request_metrics, call_result.metrics)
+
+    def record_failure(self, exc: Exception) -> int:
+        is_service_error = _is_model_service_error(exc)
+        with self._lock:
+            self.model_failures += 1
+            if is_service_error:
+                self.consecutive_service_failures += 1
+                self.last_service_error = str(exc)
+            else:
+                self.consecutive_service_failures = 0
+            failure_count = self.consecutive_service_failures
+        if failure_count >= 3 and self._on_model_degraded is not None:
+            self._on_model_degraded(self.snapshot(), failure_count, str(exc))
+        return failure_count
+
+    def raise_if_service_paused(self) -> None:
+        if not self._service_breaker.is_set():
+            return
+        with self._lock:
+            failure_count = self.consecutive_service_failures
+            error = self.last_service_error
+        raise ModelServiceUnavailable(
+            f"模型服务连续失败 {failure_count} 次，已自动暂停：{error}",
+            failure_count,
+        )
+
+    def pause_after_failure(self, failure_count: int, exc: Exception) -> None:
+        if failure_count < 5:
+            return
+        self._service_breaker.set()
+        raise ModelServiceUnavailable(
+            f"模型服务连续失败 {failure_count} 次，已自动暂停：{exc}",
+            failure_count,
+        ) from exc
+
+    def add_result(
+        self,
+        classification_key: str,
+        validated: ValidatedClassification,
+    ) -> None:
+        with self._lock:
+            self.results[classification_key] = validated
+
+    def snapshot(self) -> PipelineRun:
+        with self._lock:
+            return PipelineRun(
+                classifications=dict(self.results),
+                usage=dict(self.usage),
+                usage_by_model={
+                    key: dict(values) for key, values in self.usage_by_model.items()
+                },
+                cache_hits=self.cache_hits,
+                cache_hits_by_model=dict(self.cache_hits_by_model),
+                model_calls=self.model_calls,
+                model_calls_by_model=dict(self.model_calls_by_model),
+                request_metrics=dict(self.request_metrics),
+                routing=dict(self.routing),
+                model_failures=self.model_failures,
+            )
+
+
+class _CommentClassifier:
+    def __init__(self, context: _PipelineContext, tracker: _RunTracker) -> None:
+        self.context = context
+        self.tracker = tracker
+        self.cheap_model = getattr(context.client.settings, "cheap_model", None)
+        self.cheap_model_audit_percent = int(
+            getattr(context.client.settings, "cheap_model_audit_percent", 0)
+        )
+
+    def classify(self, row: Any) -> tuple[str, ValidatedClassification]:
+        self._raise_if_cancelled()
+        row_context = self._build_row_context(row)
+        try:
+            call_result, used_cheap_model = self._call_initial_model(row_context)
+            validated = self._validate(row_context, call_result)
+            if used_cheap_model:
+                validated = self._resolve_cheap_result(
+                    row_context,
+                    call_result,
+                    validated,
+                )
+            validated = self._resolve_secondary(row_context, validated)
+        except (PipelineCancelled, ModelServiceUnavailable):
+            raise
+        except Exception as exc:
+            validated = self._model_error(row_context.classification_key, exc)
+        return row_context.classification_key, validated
+
+    def _raise_if_cancelled(self) -> None:
+        if self.context.should_cancel is not None and self.context.should_cancel():
+            raise PipelineCancelled("分析任务已取消")
+
+    def _build_row_context(self, row: Any) -> _RowContext:
+        comment = row.comment_normalized
+        category_a = str(getattr(row, "category_a", ""))
+        category_b = str(getattr(row, "category_b", ""))
+        classification_scope = f"{category_a}\x1f{category_b}"
+        if self.context.analysis_context == "review":
+            classification_scope += "\x1freview"
+        input_has_semantic_risk = has_input_semantic_risk(comment)
+        use_cheap_model = bool(self.cheap_model and not input_has_semantic_risk)
+        self._record_initial_route(use_cheap_model, input_has_semantic_risk)
+        return _RowContext(
+            classification_key=row.classification_key,
+            comment=comment,
+            reason=row.reason,
+            classification_scope=classification_scope,
+            messages=build_messages(
+                comment,
+                self.context.taxonomy,
+                self.context.claims,
+                analysis_context=self.context.analysis_context,
+                category_context={"品类A": category_a, "品类B": category_b},
+            ),
+            use_cheap_model=use_cheap_model,
+            initial_model=(
+                str(self.cheap_model)
+                if use_cheap_model
+                else self.context.client.settings.model
+            ),
+        )
+
+    def _record_initial_route(
+        self,
+        use_cheap_model: bool,
+        input_has_semantic_risk: bool,
+    ) -> None:
+        if use_cheap_model:
+            self.tracker.increment_routing("cheap_first_pass")
+        elif self.cheap_model and input_has_semantic_risk:
+            self.tracker.increment_routing("input_risk_primary")
+
+    def _call_initial_model(
+        self,
+        row: _RowContext,
+    ) -> tuple[ModelCallResult, bool]:
+        try:
+            return self._call_model(row, row.initial_model), row.use_cheap_model
+        except (PipelineCancelled, ModelServiceUnavailable):
+            raise
+        except Exception:
+            if not row.use_cheap_model:
+                raise
+            self.tracker.increment_routing("cheap_error_fallback")
+            return self._call_model(row, self.context.client.settings.model), False
+
+    def _call_model(
+        self,
+        row: _RowContext,
+        model_name: str,
+        thinking: bool = False,
+    ) -> ModelCallResult:
+        self._raise_if_cancelled()
+        self.tracker.raise_if_service_paused()
+        try:
+            call_result, cache_hit = _call_with_cache(
+                comment=row.comment,
+                model_name=model_name,
+                thinking=thinking,
+                messages=row.messages,
+                taxonomy=self.context.taxonomy,
+                claims=self.context.claims,
+                client=self.context.client,
+                cache=self.context.cache,
+                force=self.context.force,
+                classification_scope=row.classification_scope,
+                model_policy_version=self.context.model_policy_version,
+                should_cancel=self.context.should_cancel,
+            )
+        except PipelineCancelled:
+            raise
+        except Exception as exc:
+            failure_count = self.tracker.record_failure(exc)
+            self.tracker.pause_after_failure(failure_count, exc)
+            raise
+        self.tracker.record_call(model_name, call_result, cache_hit)
+        return call_result
+
+    def _validate(
+        self,
+        row: _RowContext,
+        call_result: ModelCallResult,
+    ) -> ValidatedClassification:
+        return validate_classification(
+            classification_key=row.classification_key,
+            comment=row.comment,
+            reason=row.reason,
+            model_result=call_result.classification,
+            taxonomy=self.context.taxonomy,
+            claims=self.context.claims,
+            model_name=call_result.model_name,
+            prompt_version=prompt_version(self.context.taxonomy),
+            analysis_context=self.context.analysis_context,
+        )
+
+    def _resolve_cheap_result(
+        self,
+        row: _RowContext,
+        cheap_call: ModelCallResult,
+        validated: ValidatedClassification,
+    ) -> ValidatedClassification:
+        cheap_result_accepted = can_accept_cheap_result(validated)
+        audit_cheap_result = cheap_result_accepted and should_audit_cheap_model(
+            row.comment,
+            self.cheap_model_audit_percent,
+        )
+        if cheap_result_accepted and not audit_cheap_result:
+            self.tracker.increment_routing("cheap_result_accepted")
+            return validated
+
+        route_name = "cheap_audited" if audit_cheap_result else "cheap_result_fallback"
+        self.tracker.increment_routing(route_name)
+        primary_call = self._call_model(row, self.context.client.settings.model)
+        primary_validated = self._validate(row, primary_call)
+        if not audit_cheap_result:
+            return primary_validated
+        return self._resolve_cheap_audit(
+            cheap_call,
+            validated,
+            primary_call,
+            primary_validated,
+        )
+
+    def _resolve_cheap_audit(
+        self,
+        cheap_call: ModelCallResult,
+        cheap_validated: ValidatedClassification,
+        primary_call: ModelCallResult,
+        primary_validated: ValidatedClassification,
+    ) -> ValidatedClassification:
+        combined_model_name = f"{cheap_call.model_name} + {primary_call.model_name}"
+        if primary_validated.status != ProcessingStatus.AUTO_APPROVED:
+            self.tracker.increment_routing("cheap_audit_primary_rejected")
+            return primary_validated
+        if classifications_match(cheap_validated, primary_validated):
+            self.tracker.increment_routing("cheap_audit_agreement")
+            return primary_validated.model_copy(
+                update={"model_name": combined_model_name}
+            )
+        self.tracker.increment_routing("cheap_disagreement")
+        return primary_validated.model_copy(
+            update={
+                "status": ProcessingStatus.SECONDARY_REVIEW,
+                "review_reasons": primary_validated.review_reasons
+                + ["低成本模型与主模型结果不一致"],
+                "model_name": combined_model_name,
+            }
+        )
+
+    def _resolve_secondary(
+        self,
+        row: _RowContext,
+        validated: ValidatedClassification,
+    ) -> ValidatedClassification:
+        if not self.context.secondary_model or not should_run_secondary(validated):
+            return validated
+        try:
+            review_call = self._call_model(
+                row,
+                self.context.secondary_model,
+                thinking=True,
+            )
+            reviewed = reconcile_secondary(
+                validated,
+                self._validate(row, review_call),
+            )
+            return self._mark_secondary_fallback(reviewed)
+        except (PipelineCancelled, ModelServiceUnavailable):
+            raise
+        except Exception as exc:
+            return validated.model_copy(
+                update={
+                    "status": ProcessingStatus.MANUAL_REVIEW,
+                    "review_reasons": validated.review_reasons
+                    + [f"二次模型调用失败: {exc}"],
+                }
+            )
+
+    def _mark_secondary_fallback(
+        self,
+        validated: ValidatedClassification,
+    ) -> ValidatedClassification:
+        if not self.context.secondary_is_fallback:
+            return validated
+        return validated.model_copy(
+            update={
+                "status": ProcessingStatus.MANUAL_REVIEW,
+                "review_reasons": validated.review_reasons
+                + ["风险复核模型缺失，已使用主模型复核"],
+            }
+        )
+
+    def _model_error(
+        self,
+        classification_key: str,
+        exc: Exception,
+    ) -> ValidatedClassification:
+        return ValidatedClassification(
+            classification_key=classification_key,
+            semantic_units=[],
+            unknown_semantics=[],
+            problem_label_codes=[],
+            positive_label_codes=[],
+            primary_label_codes=[],
+            status=ProcessingStatus.MODEL_ERROR,
+            review_reasons=[str(exc)],
+            model_name=self.context.client.settings.model,
+            prompt_version=prompt_version(self.context.taxonomy),
+            taxonomy_version=self.context.taxonomy.version,
+        )
+
+
+def _classify_selected_comments(
+    selected: pd.DataFrame,
+    classifier: _CommentClassifier,
+    max_workers: int,
+    progress: Callable[[int, int], None] | None,
+    checkpoint: Callable[[PipelineRun], None] | None,
+) -> PipelineRun:
+    total = len(selected)
+    rows = list(selected.itertuples(index=False))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(classifier.classify, row) for row in rows]
+        for position, future in enumerate(as_completed(futures), start=1):
+            classification_key, validated = future.result()
+            classifier.tracker.add_result(classification_key, validated)
+            if progress is not None:
+                progress(position, total)
+            if checkpoint is not None and (
+                position == 1 or position == total or position % 5 == 0
+            ):
+                checkpoint(classifier.tracker.snapshot())
+    run = classifier.tracker.snapshot()
+    ordered_results = {
+        row.classification_key: run.classifications[row.classification_key]
+        for row in rows
+        if row.classification_key in run.classifications
+    }
+    return replace(run, classifications=ordered_results)
+
+
 def classify_comments(
     unique_comments: pd.DataFrame,
     taxonomy: TaxonomyConfig,
@@ -282,323 +701,33 @@ def classify_comments(
     selected = unique_comments.iloc[offset:]
     if limit is not None:
         selected = selected.head(limit)
-
-    results: dict[str, ValidatedClassification] = {}
-    usage: dict[str, int] = {}
-    usage_by_model: dict[str, dict[str, int]] = {}
-    cache_hits = 0
-    cache_hits_by_model: dict[str, int] = {}
-    model_calls = 0
-    model_calls_by_model: dict[str, int] = {}
-    model_failures = 0
-    consecutive_service_failures = 0
-    last_service_error = ""
-    request_metrics: dict[str, int] = {}
-    routing: dict[str, int] = {}
-    cheap_model = getattr(client.settings, "cheap_model", None)
-    cheap_model_audit_percent = int(
-        getattr(client.settings, "cheap_model_audit_percent", 0)
-    )
-    total = len(selected)
-
     max_workers = max(
         1,
         int(getattr(client.settings, "max_workers", 1)),
     )
-    tracking_lock = Lock()
-    service_breaker = Event()
-
-    def increment_routing(route_name: str) -> None:
-        with tracking_lock:
-            routing[route_name] = routing.get(route_name, 0) + 1
-
-    def record_call(
-        requested_model: str,
-        call_result: ModelCallResult,
-        cache_hit: bool,
-    ) -> None:
-        nonlocal cache_hits, model_calls, consecutive_service_failures
-        with tracking_lock:
-            if cache_hit:
-                cache_hits += 1
-                cache_hits_by_model[requested_model] = (
-                    cache_hits_by_model.get(requested_model, 0) + 1
-                )
-                return
-
-            consecutive_service_failures = 0
-            call_count = call_result.metrics.get(
-                "fact_model_calls", 1
-            ) + call_result.metrics.get("output_correction_calls", 0)
-            model_calls += call_count
-            model_calls_by_model[requested_model] = (
-                model_calls_by_model.get(requested_model, 0) + call_count
-            )
-            _add_usage(usage, call_result.usage)
-            model_usage = usage_by_model.setdefault(requested_model, {})
-            _add_usage(model_usage, call_result.usage)
-            _add_usage(request_metrics, call_result.metrics)
-
-    def record_failure(exc: Exception) -> int:
-        nonlocal model_failures, consecutive_service_failures, last_service_error
-        is_service_error = _is_model_service_error(exc)
-        with tracking_lock:
-            model_failures += 1
-            if is_service_error:
-                consecutive_service_failures += 1
-                last_service_error = str(exc)
-            else:
-                consecutive_service_failures = 0
-            failure_count = consecutive_service_failures
-        if failure_count >= 3 and on_model_degraded is not None:
-            on_model_degraded(snapshot_run(), failure_count, str(exc))
-        return failure_count
-
-    def classify_row(row) -> tuple[str, ValidatedClassification]:
-        if should_cancel is not None and should_cancel():
-            raise PipelineCancelled("分析任务已取消")
-        classification_key = row.classification_key
-        comment = row.comment_normalized
-        category_a = str(getattr(row, "category_a", ""))
-        category_b = str(getattr(row, "category_b", ""))
-        classification_scope = f"{category_a}\x1f{category_b}"
-        if analysis_context == "review":
-            classification_scope += "\x1freview"
-        messages = build_messages(
-            comment,
-            taxonomy,
-            claims,
-            analysis_context=analysis_context,
-            category_context={
-                "品类A": category_a,
-                "品类B": category_b,
-            },
-        )
-        input_has_semantic_risk = has_input_semantic_risk(comment)
-        use_cheap_model = bool(cheap_model and not input_has_semantic_risk)
-        initial_model = str(cheap_model) if use_cheap_model else client.settings.model
-        if use_cheap_model:
-            increment_routing("cheap_first_pass")
-        elif cheap_model and input_has_semantic_risk:
-            increment_routing("input_risk_primary")
-
-        def call_and_track(
-            model_name: str,
-            thinking: bool = False,
-        ) -> ModelCallResult:
-            if should_cancel is not None and should_cancel():
-                raise PipelineCancelled("分析任务已取消")
-            if service_breaker.is_set():
-                with tracking_lock:
-                    failure_count = consecutive_service_failures
-                    error = last_service_error
-                raise ModelServiceUnavailable(
-                    f"模型服务连续失败 {failure_count} 次，已自动暂停：{error}",
-                    failure_count,
-                )
-            try:
-                call_result, cache_hit = _call_with_cache(
-                    comment=comment,
-                    model_name=model_name,
-                    thinking=thinking,
-                    messages=messages,
-                    taxonomy=taxonomy,
-                    claims=claims,
-                    client=client,
-                    cache=cache,
-                    force=force,
-                    classification_scope=classification_scope,
-                    model_policy_version=model_policy_version,
-                    should_cancel=should_cancel,
-                )
-            except PipelineCancelled:
-                raise
-            except Exception as exc:
-                failure_count = record_failure(exc)
-                if failure_count >= 5:
-                    service_breaker.set()
-                    raise ModelServiceUnavailable(
-                        f"模型服务连续失败 {failure_count} 次，已自动暂停：{exc}",
-                        failure_count,
-                    ) from exc
-                raise
-            record_call(model_name, call_result, cache_hit)
-            return call_result
-
-        try:
-            try:
-                call_result = call_and_track(initial_model)
-            except (PipelineCancelled, ModelServiceUnavailable):
-                raise
-            except Exception:
-                if not use_cheap_model:
-                    raise
-                increment_routing("cheap_error_fallback")
-                use_cheap_model = False
-                initial_model = client.settings.model
-                call_result = call_and_track(initial_model)
-
-            validated = validate_classification(
-                classification_key=classification_key,
-                comment=comment,
-                reason=row.reason,
-                model_result=call_result.classification,
-                taxonomy=taxonomy,
-                claims=claims,
-                model_name=call_result.model_name,
-                prompt_version=prompt_version(taxonomy),
-                analysis_context=analysis_context,
-            )
-
-            if use_cheap_model:
-                cheap_result_accepted = can_accept_cheap_result(validated)
-                audit_cheap_result = cheap_result_accepted and should_audit_cheap_model(
-                    comment,
-                    cheap_model_audit_percent,
-                )
-                fallback_to_primary = not cheap_result_accepted
-                if audit_cheap_result or fallback_to_primary:
-                    route_name = (
-                        "cheap_audited"
-                        if audit_cheap_result
-                        else "cheap_result_fallback"
-                    )
-                    increment_routing(route_name)
-                    primary_result = call_and_track(client.settings.model)
-                    primary_validated = validate_classification(
-                        classification_key=classification_key,
-                        comment=comment,
-                        reason=row.reason,
-                        model_result=primary_result.classification,
-                        taxonomy=taxonomy,
-                        claims=claims,
-                        model_name=primary_result.model_name,
-                        prompt_version=prompt_version(taxonomy),
-                        analysis_context=analysis_context,
-                    )
-                    if not audit_cheap_result:
-                        validated = primary_validated
-                    elif primary_validated.status != ProcessingStatus.AUTO_APPROVED:
-                        increment_routing("cheap_audit_primary_rejected")
-                        validated = primary_validated
-                    elif classifications_match(
-                        validated,
-                        primary_validated,
-                    ):
-                        increment_routing("cheap_audit_agreement")
-                        validated = primary_validated.model_copy(
-                            update={
-                                "model_name": (
-                                    f"{call_result.model_name} + "
-                                    f"{primary_result.model_name}"
-                                ),
-                            }
-                        )
-                    else:
-                        increment_routing("cheap_disagreement")
-                        validated = primary_validated.model_copy(
-                            update={
-                                "status": ProcessingStatus.SECONDARY_REVIEW,
-                                "review_reasons": (
-                                    primary_validated.review_reasons
-                                    + ["低成本模型与主模型结果不一致"]
-                                ),
-                                "model_name": (
-                                    f"{call_result.model_name} + "
-                                    f"{primary_result.model_name}"
-                                ),
-                            }
-                        )
-                else:
-                    increment_routing("cheap_result_accepted")
-
-            if secondary_model and should_run_secondary(validated):
-                try:
-                    review_result = call_and_track(
-                        secondary_model,
-                        thinking=True,
-                    )
-                    review_validated = validate_classification(
-                        classification_key=classification_key,
-                        comment=comment,
-                        reason=row.reason,
-                        model_result=review_result.classification,
-                        taxonomy=taxonomy,
-                        claims=claims,
-                        model_name=review_result.model_name,
-                        prompt_version=prompt_version(taxonomy),
-                        analysis_context=analysis_context,
-                    )
-                    validated = reconcile_secondary(
-                        validated,
-                        review_validated,
-                    )
-                    if secondary_is_fallback:
-                        validated = validated.model_copy(
-                            update={
-                                "status": ProcessingStatus.MANUAL_REVIEW,
-                                "review_reasons": validated.review_reasons
-                                + ["风险复核模型缺失，已使用主模型复核"],
-                            }
-                        )
-                except (PipelineCancelled, ModelServiceUnavailable):
-                    raise
-                except Exception as exc:
-                    validated = validated.model_copy(
-                        update={
-                            "status": ProcessingStatus.MANUAL_REVIEW,
-                            "review_reasons": validated.review_reasons
-                            + [f"二次模型调用失败: {exc}"],
-                        }
-                    )
-        except (PipelineCancelled, ModelServiceUnavailable):
-            raise
-        except Exception as exc:
-            validated = ValidatedClassification(
-                classification_key=classification_key,
-                semantic_units=[],
-                unknown_semantics=[],
-                problem_label_codes=[],
-                positive_label_codes=[],
-                primary_label_codes=[],
-                status=ProcessingStatus.MODEL_ERROR,
-                review_reasons=[str(exc)],
-                model_name=client.settings.model,
-                prompt_version=prompt_version(taxonomy),
-                taxonomy_version=taxonomy.version,
-            )
-
-        return classification_key, validated
-
-    def snapshot_run() -> PipelineRun:
-        with tracking_lock:
-            return PipelineRun(
-                classifications=dict(results),
-                usage=dict(usage),
-                usage_by_model={
-                    key: dict(values) for key, values in usage_by_model.items()
-                },
-                cache_hits=cache_hits,
-                cache_hits_by_model=dict(cache_hits_by_model),
-                model_calls=model_calls,
-                model_calls_by_model=dict(model_calls_by_model),
-                request_metrics=dict(request_metrics),
-                routing=dict(routing),
-                model_failures=model_failures,
-            )
-
-    rows = list(selected.itertuples(index=False))
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        classified_rows = executor.map(classify_row, rows)
-        for position, item in enumerate(classified_rows, start=1):
-            classification_key, validated = item
-            with tracking_lock:
-                results[classification_key] = validated
-            if progress is not None:
-                progress(position, total)
-            if checkpoint is not None and (
-                position == 1 or position == total or position % 5 == 0
-            ):
-                checkpoint(snapshot_run())
-
-    return snapshot_run()
+    tracker = _RunTracker(on_model_degraded)
+    classifier = _CommentClassifier(
+        _PipelineContext(
+            taxonomy=taxonomy,
+            claims=claims,
+            client=client,
+            cache=cache,
+            force=force,
+            secondary_model=secondary_model,
+            should_cancel=should_cancel,
+            model_policy_version=model_policy_version,
+            secondary_is_fallback=secondary_is_fallback,
+            analysis_context=cast(
+                Literal["returns", "review"],
+                analysis_context,
+            ),
+        ),
+        tracker,
+    )
+    return _classify_selected_comments(
+        selected,
+        classifier,
+        max_workers,
+        progress,
+        checkpoint,
+    )

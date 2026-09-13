@@ -1,13 +1,6 @@
-const PAGE_SIZES = [20, 50, 100];
+import { PAGE_SIZES } from "../shared/pagination";
 
-export function DashboardPagination({
-  page,
-  pageSize,
-  total,
-  totalPages,
-  onPage,
-  onPageSize,
-}) {
+export function Pagination({ page, pageSize, total, totalPages, onPage, onPageSize }) {
   return (
     <div className="result-pagination">
       <span>共 {Number(total || 0).toLocaleString()} 条</span>
@@ -26,6 +19,7 @@ export function DashboardPagination({
         </select>
       </label>
       <button
+        type="button"
         className="secondary-button compact-button"
         disabled={page <= 1}
         onClick={() => onPage(page - 1)}
@@ -36,6 +30,7 @@ export function DashboardPagination({
         {page} / {totalPages}
       </b>
       <button
+        type="button"
         className="secondary-button compact-button"
         disabled={page >= totalPages}
         onClick={() => onPage(page + 1)}

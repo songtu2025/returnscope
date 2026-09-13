@@ -60,7 +60,7 @@ def _multi_issue_classification() -> ModelClassification:
 class FakeClient:
     def __init__(
         self,
-        responses: dict[str, ModelClassification],
+        responses: dict[str, ModelClassification | Exception],
         audit_percent: int = 0,
         max_workers: int = 1,
     ) -> None:
@@ -84,8 +84,11 @@ class FakeClient:
     ) -> ModelCallResult:
         model_name = model or self.settings.model
         self.calls.append(model_name)
+        response = self.responses[model_name]
+        if isinstance(response, Exception):
+            raise response
         return ModelCallResult(
-            classification=self.responses[model_name],
+            classification=response,
             model_name=model_name,
             usage={"input_tokens": 10, "output_tokens": 2},
             metrics={"attempts": 1, "retries": 0, "latency_ms": 5},
@@ -201,6 +204,35 @@ def test_cheap_review_falls_back_to_primary(
     assert run.routing["cheap_result_fallback"] == 1
 
 
+def test_cheap_error_falls_back_to_primary(
+    tmp_path,
+    taxonomy,
+    claims,
+) -> None:
+    client = FakeClient(
+        {
+            "gpt-5.4-mini": RuntimeError("低成本模型临时失败"),
+            "gpt-5.5": _classification(),
+        }
+    )
+
+    run = classify_comments(
+        unique_comments=_comments("Too small"),
+        taxonomy=taxonomy,
+        claims=claims,
+        client=client,
+        cache=JsonlCache(tmp_path / "cache.jsonl"),
+    )
+
+    assert client.calls == ["gpt-5.4-mini", "gpt-5.5"]
+    assert run.model_failures == 1
+    assert run.model_calls_by_model == {"gpt-5.5": 1}
+    assert run.routing == {
+        "cheap_first_pass": 1,
+        "cheap_error_fallback": 1,
+    }
+
+
 def test_multiple_cheap_semantic_units_fall_back_to_primary(
     tmp_path,
     taxonomy,
@@ -264,6 +296,66 @@ def test_audit_disagreement_uses_secondary_model(
     assert run.routing["cheap_disagreement"] == 1
 
 
+def test_secondary_error_becomes_manual_review(
+    tmp_path,
+    taxonomy,
+    claims,
+) -> None:
+    client = FakeClient(
+        {
+            "gpt-5.5": _classification(needs_review=True),
+            "gpt-5.6-sol": RuntimeError("复核模型临时失败"),
+        }
+    )
+
+    run = classify_comments(
+        unique_comments=_comments("Too small but uncomfortable"),
+        taxonomy=taxonomy,
+        claims=claims,
+        client=client,
+        cache=JsonlCache(tmp_path / "cache.jsonl"),
+        secondary_model="gpt-5.6-sol",
+    )
+
+    result = next(iter(run.classifications.values()))
+    assert client.calls == ["gpt-5.5", "gpt-5.6-sol"]
+    assert run.model_failures == 1
+    assert result.status.value == "MANUAL_REVIEW"
+    assert result.review_reasons[-1] == "二次模型调用失败: 复核模型临时失败"
+
+
+def test_secondary_accepts_same_terminal_result_with_evidence_span_variation(
+    tmp_path,
+    taxonomy,
+    claims,
+) -> None:
+    client = FakeClient(
+        {
+            "gpt-5.5": _classification(
+                evidence="Too small",
+                needs_review=True,
+            ),
+            "gpt-5.6-sol": _classification(
+                evidence="They are Too small",
+            ),
+        }
+    )
+
+    run = classify_comments(
+        unique_comments=_comments("They are Too small but still usable"),
+        taxonomy=taxonomy,
+        claims=claims,
+        client=client,
+        cache=JsonlCache(tmp_path / "cache.jsonl"),
+        secondary_model="gpt-5.6-sol",
+    )
+
+    result = next(iter(run.classifications.values()))
+    assert client.calls == ["gpt-5.5", "gpt-5.6-sol"]
+    assert result.status.value == "AUTO_APPROVED"
+    assert result.review_reasons == ["二次模型结果一致"]
+
+
 def test_input_semantic_risk_router_ignores_text_length() -> None:
     assert not has_input_semantic_risk("Too small")
     assert has_input_semantic_risk("Not too small")
@@ -278,6 +370,49 @@ def test_input_semantic_risk_router_ignores_text_length() -> None:
     assert not has_input_semantic_risk(
         "The shoes feel very tight across my feet every time I wear them"
     )
+
+
+def test_parallel_run_aggregates_metrics_and_callbacks_in_input_order(
+    tmp_path,
+    taxonomy,
+    claims,
+) -> None:
+    client = FakeClient(
+        {"gpt-5.4-mini": _classification()},
+        max_workers=3,
+    )
+    comments = pd.concat(
+        [_comments(f"Too small {index}") for index in range(6)],
+        ignore_index=True,
+    )
+    progress_events: list[tuple[int, int]] = []
+    checkpoint_sizes: list[int] = []
+
+    run = classify_comments(
+        unique_comments=comments,
+        taxonomy=taxonomy,
+        claims=claims,
+        client=client,
+        cache=JsonlCache(tmp_path / "cache.jsonl"),
+        progress=lambda current, total: progress_events.append((current, total)),
+        checkpoint=lambda snapshot: checkpoint_sizes.append(
+            len(snapshot.classifications)
+        ),
+    )
+
+    assert run.model_calls == 6
+    assert run.model_calls_by_model == {"gpt-5.4-mini": 6}
+    assert run.usage == {"input_tokens": 60, "output_tokens": 12}
+    assert run.usage_by_model == {
+        "gpt-5.4-mini": {"input_tokens": 60, "output_tokens": 12}
+    }
+    assert run.request_metrics == {"attempts": 6, "retries": 0, "latency_ms": 30}
+    assert run.routing == {
+        "cheap_first_pass": 6,
+        "cheap_result_accepted": 6,
+    }
+    assert progress_events == [(index, 6) for index in range(1, 7)]
+    assert checkpoint_sizes == [1, 5, 6]
 
 
 def test_cancellation_is_not_converted_to_secondary_review(
@@ -298,7 +433,7 @@ def test_cancellation_is_not_converted_to_secondary_review(
         checks += 1
         return checks >= 3
 
-    with pytest.raises(PipelineCancelled):
+    with pytest.raises(PipelineCancelled, match="^分析任务已取消$"):
         classify_comments(
             unique_comments=_comments("Too small but uncomfortable"),
             taxonomy=taxonomy,
@@ -368,5 +503,9 @@ def test_consecutive_service_failures_alert_then_pause(
         )
 
     assert error.value.consecutive_failures == 5
+    assert str(error.value) == (
+        "模型服务连续失败 5 次，已自动暂停："
+        "Sub2API 调用失败: Sub2API HTTP 503: Service unavailable"
+    )
     assert client.calls == 5
     assert degraded == [(3, 3), (4, 4), (5, 5)]

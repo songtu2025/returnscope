@@ -4,6 +4,7 @@ import hashlib
 import re
 import shutil
 import threading
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -42,6 +43,16 @@ _preview_locks_guard = threading.Lock()
 
 class DatasetRevisionConflict(ValueError):
     pass
+
+
+@dataclass
+class _ProductWorkbookEdit:
+    dataset_id: str
+    expected_version: int
+    original_name: str
+    content_type: str
+    workbook: dict[str, pd.DataFrame]
+    frame: pd.DataFrame
 
 
 def _identifier_prefix(value: object) -> str:
@@ -646,12 +657,7 @@ class DatasetService:
         return destination
 
     def _preview_path(self, digest: str) -> Path:
-        return (
-            self.settings.data_dir
-            / "cache"
-            / "dataset-previews"
-            / f"{digest}.csv"
-        )
+        return self.settings.data_dir / "cache" / "dataset-previews" / f"{digest}.csv"
 
     def _ensure_product_preview(
         self,
@@ -675,9 +681,7 @@ class DatasetService:
                     dtype=str,
                 )
             destination.parent.mkdir(parents=True, exist_ok=True)
-            temporary = destination.with_name(
-                f"{destination.name}.{new_id('tmp')}"
-            )
+            temporary = destination.with_name(f"{destination.name}.{new_id('tmp')}")
             try:
                 preview_frame.to_csv(temporary, index=False, encoding="utf-8-sig")
                 temporary.replace(destination)
@@ -1957,14 +1961,10 @@ class DatasetService:
             "facets": {"stores": stores, "categories": categories},
         }
 
-    def update_product_row(
+    def _current_product_version(
         self,
         dataset_id: str,
-        row_index: int,
         expected_version: int,
-        changes: dict[str, str],
-        change_note: str,
-        actor_id: str,
     ) -> dict[str, Any]:
         with self.database.connect() as connection:
             row = connection.execute(
@@ -1982,15 +1982,62 @@ class DatasetService:
             raise ValueError("商品维度不存在")
         if int(row["current_version"]) != expected_version:
             raise DatasetRevisionConflict("商品维度已被其他用户修改，请刷新后重试")
-        source_path = Path(str(row["file_path"]))
-        workbook = pd.read_excel(
-            source_path,
+        return dict(row)
+
+    @staticmethod
+    def _load_product_workbook(
+        dataset_id: str,
+        expected_version: int,
+        source: dict[str, Any],
+    ) -> _ProductWorkbookEdit:
+        workbook: dict[str, pd.DataFrame] = pd.read_excel(
+            Path(str(source["file_path"])),
             sheet_name=None,
             dtype=str,
         )
         frame = workbook.get(PRODUCT_WORKSHEET)
         if frame is None:
             raise ValueError("商品维度缺少“产品信息汇总表”工作表")
+        return _ProductWorkbookEdit(
+            dataset_id=dataset_id,
+            expected_version=expected_version,
+            original_name=str(source["original_name"]),
+            content_type=str(source["content_type"]),
+            workbook=workbook,
+            frame=frame,
+        )
+
+    def _persist_product_workbook(
+        self,
+        edit: _ProductWorkbookEdit,
+        change_note: str,
+        actor_id: str,
+    ) -> dict[str, Any]:
+        edit.workbook[PRODUCT_WORKSHEET] = edit.frame
+        temp_path = self.settings.data_dir / "tmp" / f"{new_id('dimension')}.xlsx"
+        temp_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with pd.ExcelWriter(temp_path, engine="openpyxl") as writer:
+                for sheet_name, sheet in edit.workbook.items():
+                    sheet.to_excel(writer, sheet_name=sheet_name, index=False)
+            return self.add_version(
+                dataset_id=edit.dataset_id,
+                source_path=temp_path,
+                original_name=edit.original_name,
+                content_type=edit.content_type,
+                change_note=change_note,
+                actor_id=actor_id,
+                expected_current_version=edit.expected_version,
+            )
+        finally:
+            temp_path.unlink(missing_ok=True)
+
+    @staticmethod
+    def _validated_product_row_change(
+        frame: pd.DataFrame,
+        row_index: int,
+        changes: dict[str, str],
+    ) -> tuple[dict[str, str], dict[str, str]]:
         if row_index < 0 or row_index >= len(frame):
             raise ValueError("要修改的数据行不存在")
         allowed = {column for column in changes if column in frame.columns}
@@ -2002,80 +2049,36 @@ class DatasetService:
             else str(frame.at[row_index, column])
             for column in allowed
         }
-        normalized_changes = {
-            column: str(changes[column]).strip() for column in allowed
-        }
+        normalized = {column: str(changes[column]).strip() for column in allowed}
         changed = {
-            column for column in allowed if before[column] != normalized_changes[column]
+            column: normalized[column]
+            for column in allowed
+            if before[column] != normalized[column]
         }
         if not changed:
             raise ValueError("内容没有变化，无需创建新版本")
-        for column in changed:
-            frame.at[row_index, column] = normalized_changes[column]
+        return before, changed
+
+    @staticmethod
+    def _apply_product_row_change(
+        frame: pd.DataFrame,
+        row_index: int,
+        changes: dict[str, str],
+    ) -> None:
         for column in PRODUCT_COLUMNS:
-            value = frame.at[row_index, column]
+            value = changes.get(column, frame.at[row_index, column])
             if pd.isna(value) or not str(value).strip():
                 raise ValueError(f"{column} 不能为空")
-        temp_path = self.settings.data_dir / "tmp" / f"{new_id('dimension')}.xlsx"
-        temp_path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            with pd.ExcelWriter(temp_path, engine="openpyxl") as writer:
-                for sheet_name, sheet in workbook.items():
-                    sheet.to_excel(writer, sheet_name=sheet_name, index=False)
-            result = self.add_version(
-                dataset_id=dataset_id,
-                source_path=temp_path,
-                original_name=str(row["original_name"]),
-                content_type=str(row["content_type"]),
-                change_note=change_note or f"修改商品维度第 {row_index + 2} 行",
-                actor_id=actor_id,
-                expected_current_version=expected_version,
-            )
-        finally:
-            temp_path.unlink(missing_ok=True)
-        add_audit(
-            self.database,
-            "dataset",
-            dataset_id,
-            "dimension_row_update",
-            actor_id,
-            before={"row_index": row_index, "values": before},
-            after={
-                "row_index": row_index,
-                "values": {column: normalized_changes[column] for column in changed},
-                "note": change_note.strip(),
-            },
-        )
-        return self.get(dataset_id) or result
+        for column, value in changes.items():
+            frame.at[row_index, column] = value
 
-    def complete_product_categories(
-        self,
-        dataset_id: str,
-        expected_version: int,
+    @staticmethod
+    def _normalize_category_completion_items(
         store: str | None,
         items: list[dict[str, str]],
-        change_note: str,
-        actor_id: str,
-    ) -> dict[str, Any]:
-        with self.database.connect() as connection:
-            row = connection.execute(
-                """
-                SELECT d.kind, d.current_version, v.file_path,
-                       v.original_name, v.content_type
-                FROM datasets d
-                JOIN dataset_versions v
-                  ON v.dataset_id = d.id AND v.version = d.current_version
-                WHERE d.id = ? AND d.archived_at IS NULL
-                """,
-                (dataset_id,),
-            ).fetchone()
-        if row is None or row["kind"] != "products":
-            raise ValueError("商品维度不存在")
-        if int(row["current_version"]) != expected_version:
-            raise DatasetRevisionConflict("商品维度已被其他用户修改，请刷新后重试")
+    ) -> tuple[str, list[dict[str, str]]]:
         fallback_store = (store or "").strip()
-
-        normalized_items = []
+        normalized_items: list[dict[str, str]] = []
         seen_products: set[tuple[str, str]] = set()
         for item in items:
             normalized = {
@@ -2102,22 +2105,35 @@ class DatasetService:
                 )
             seen_products.add(product_key)
             normalized_items.append(normalized)
+        return fallback_store, normalized_items
 
-        source_path = Path(str(row["file_path"]))
-        workbook = pd.read_excel(source_path, sheet_name=None, dtype=str)
-        frame = workbook.get(PRODUCT_WORKSHEET)
-        if frame is None:
-            raise ValueError("商品维度缺少“产品信息汇总表”工作表")
+    @staticmethod
+    def _product_rows_by_identity(
+        frame: pd.DataFrame,
+    ) -> dict[tuple[str, str], list[Any]]:
+        rows_by_product: dict[tuple[str, str], list[Any]] = {}
+        identities = frame[["店铺/站点", "MSKU"]].fillna("").astype(str)
+        for index, values in identities.iterrows():
+            product_key = (
+                str(values["店铺/站点"]).strip(),
+                str(values["MSKU"]).strip(),
+            )
+            rows_by_product.setdefault(product_key, []).append(index)
+        return rows_by_product
+
+    @classmethod
+    def _apply_category_completion_items(
+        cls,
+        frame: pd.DataFrame,
+        items: list[dict[str, str]],
+    ) -> list[dict[str, Any]]:
         for column in PRODUCT_CATEGORY_COLUMNS:
             if column not in frame.columns:
                 frame[column] = ""
-        before_items = []
-        for item in normalized_items:
-            msku_values = frame["MSKU"].fillna("").astype(str).str.strip()
-            store_values = frame["店铺/站点"].fillna("").astype(str).str.strip()
-            matching = frame.index[
-                msku_values.eq(item["msku"]) & store_values.eq(item["store"])
-            ].tolist()
+        rows_by_product = cls._product_rows_by_identity(frame)
+        before_items: list[dict[str, Any]] = []
+        for item in items:
+            matching = rows_by_product.get((item["store"], item["msku"]), [])
             if matching:
                 before_items.append(
                     {
@@ -2151,25 +2167,73 @@ class DatasetService:
             before_items.append(
                 {"store": item["store"], "msku": item["msku"], "rows": []}
             )
+        return before_items
 
-        workbook[PRODUCT_WORKSHEET] = frame
-        temp_path = self.settings.data_dir / "tmp" / f"{new_id('dimension')}.xlsx"
-        temp_path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            with pd.ExcelWriter(temp_path, engine="openpyxl") as writer:
-                for sheet_name, sheet in workbook.items():
-                    sheet.to_excel(writer, sheet_name=sheet_name, index=False)
-            result = self.add_version(
-                dataset_id=dataset_id,
-                source_path=temp_path,
-                original_name=str(row["original_name"]),
-                content_type=str(row["content_type"]),
-                change_note=change_note,
-                actor_id=actor_id,
-                expected_current_version=expected_version,
-            )
-        finally:
-            temp_path.unlink(missing_ok=True)
+    def update_product_row(
+        self,
+        dataset_id: str,
+        row_index: int,
+        expected_version: int,
+        changes: dict[str, str],
+        change_note: str,
+        actor_id: str,
+    ) -> dict[str, Any]:
+        source = self._current_product_version(dataset_id, expected_version)
+        edit = self._load_product_workbook(
+            dataset_id,
+            expected_version,
+            source,
+        )
+        before, changed = self._validated_product_row_change(
+            edit.frame,
+            row_index,
+            changes,
+        )
+        self._apply_product_row_change(edit.frame, row_index, changed)
+        result = self._persist_product_workbook(
+            edit,
+            change_note or f"修改商品维度第 {row_index + 2} 行",
+            actor_id,
+        )
+        add_audit(
+            self.database,
+            "dataset",
+            dataset_id,
+            "dimension_row_update",
+            actor_id,
+            before={"row_index": row_index, "values": before},
+            after={
+                "row_index": row_index,
+                "values": changed,
+                "note": change_note.strip(),
+            },
+        )
+        return self.get(dataset_id) or result
+
+    def complete_product_categories(
+        self,
+        dataset_id: str,
+        expected_version: int,
+        store: str | None,
+        items: list[dict[str, str]],
+        change_note: str,
+        actor_id: str,
+    ) -> dict[str, Any]:
+        source = self._current_product_version(dataset_id, expected_version)
+        fallback_store, normalized_items = self._normalize_category_completion_items(
+            store,
+            items,
+        )
+        edit = self._load_product_workbook(
+            dataset_id,
+            expected_version,
+            source,
+        )
+        before_items = self._apply_category_completion_items(
+            edit.frame,
+            normalized_items,
+        )
+        result = self._persist_product_workbook(edit, change_note, actor_id)
         add_audit(
             self.database,
             "dataset",

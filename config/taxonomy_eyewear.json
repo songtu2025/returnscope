@@ -935,6 +935,10 @@
     "required_review_labels": [
       "EYEWEAR_REASON_UNSPECIFIED_U1"
     ],
+    "fallback_label_codes": [
+      "EYEWEAR_FIT_UNSPECIFIED_U1",
+      "EYEWEAR_REASON_UNSPECIFIED_U1"
+    ],
     "conflict_scope": "evidence"
   },
   "recognition_profile": "semantic_v1"

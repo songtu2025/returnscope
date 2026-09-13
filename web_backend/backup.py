@@ -6,6 +6,7 @@ import shutil
 import sqlite3
 import tempfile
 import zipfile
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
 from secrets import token_hex
@@ -73,7 +74,23 @@ def _remove_path(path: Path) -> None:
         path.unlink()
 
 
-def restore_backup(settings: Settings, archive_path: Path) -> Path:
+@dataclass
+class _RestoreContext:
+    data_root: Path
+    database_path: Path
+    staging: Path
+    restore_token: str
+    directory_targets: dict[str, Path]
+    old_paths: dict[str, Path] = field(default_factory=dict)
+    installed: list[Path] = field(default_factory=list)
+    old_database: Path | None = None
+    old_sidecars: dict[Path, Path] = field(default_factory=dict)
+
+
+def _resolve_restore_paths(
+    settings: Settings,
+    archive_path: Path,
+) -> tuple[Path, Path, Path]:
     settings.ensure_directories()
     data_root = settings.data_dir.resolve()
     database_path = settings.database_path.resolve()
@@ -82,90 +99,130 @@ def restore_backup(settings: Settings, archive_path: Path) -> Path:
     source_archive = archive_path.resolve()
     if not source_archive.is_file():
         raise ValueError("备份文件不存在")
+    return data_root, database_path, source_archive
+
+
+def _validate_staged_database(database_path: Path) -> None:
+    connection = sqlite3.connect(database_path)
+    try:
+        integrity = connection.execute("PRAGMA integrity_check").fetchone()
+        required = {
+            row[0]
+            for row in connection.execute(
+                """
+                SELECT name FROM sqlite_master
+                WHERE type = 'table' AND name IN ('users', 'tasks')
+                """
+            ).fetchall()
+        }
+    finally:
+        connection.close()
+    if integrity != ("ok",) or required != {"users", "tasks"}:
+        raise ValueError("备份数据库校验失败")
+
+
+def _prepare_staging(source_archive: Path, staging: Path) -> None:
+    with zipfile.ZipFile(source_archive) as archive:
+        _validate_archive(archive)
+        archive.extractall(staging)
+    for directory_name in RUNTIME_DIRECTORIES:
+        (staging / directory_name).mkdir(exist_ok=True)
+    _validate_staged_database(staging / "app.db")
+
+
+def _move_current_state(context: _RestoreContext) -> None:
+    if context.database_path.exists():
+        context.old_database = (
+            context.data_root / f".restore-old-{context.restore_token}-app.db"
+        )
+        shutil.copy2(context.database_path, context.old_database)
+    for suffix in ("-wal", "-shm"):
+        sidecar = Path(f"{context.database_path}{suffix}")
+        if sidecar.exists():
+            old_sidecar = context.data_root / (
+                f".restore-old-{context.restore_token}-app.db{suffix}"
+            )
+            sidecar.replace(old_sidecar)
+            context.old_sidecars[sidecar] = old_sidecar
+    for name, target in context.directory_targets.items():
+        if target.exists():
+            old_path = context.data_root / (
+                f".restore-old-{context.restore_token}-{name}"
+            )
+            target.replace(old_path)
+            context.old_paths[name] = old_path
+
+
+def _install_staged_state(context: _RestoreContext) -> None:
+    shutil.copy2(context.staging / "app.db", context.database_path)
+    for name, target in context.directory_targets.items():
+        (context.staging / name).replace(target)
+        context.installed.append(target)
+    connection = sqlite3.connect(context.database_path)
+    try:
+        connection.execute("DELETE FROM sessions")
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def _rollback_restore(context: _RestoreContext) -> None:
+    for path in reversed(context.installed):
+        _remove_path(path)
+    for name, old_path in context.old_paths.items():
+        old_path.replace(context.directory_targets[name])
+    if context.old_database is not None:
+        shutil.copy2(context.old_database, context.database_path)
+    else:
+        context.database_path.unlink(missing_ok=True)
+    for suffix in ("-wal", "-shm"):
+        Path(f"{context.database_path}{suffix}").unlink(missing_ok=True)
+    for sidecar, old_sidecar in context.old_sidecars.items():
+        old_sidecar.replace(sidecar)
+
+
+def _cleanup_restored_state(context: _RestoreContext) -> None:
+    for old_path in context.old_paths.values():
+        _remove_path(old_path)
+    if context.old_database is not None:
+        context.old_database.unlink(missing_ok=True)
+    for old_sidecar in context.old_sidecars.values():
+        old_sidecar.unlink(missing_ok=True)
+
+
+def _replace_runtime_state(context: _RestoreContext) -> None:
+    try:
+        _move_current_state(context)
+        _install_staged_state(context)
+    except Exception:
+        _rollback_restore(context)
+        raise
+    else:
+        _cleanup_restored_state(context)
+
+
+def restore_backup(settings: Settings, archive_path: Path) -> Path:
+    data_root, database_path, source_archive = _resolve_restore_paths(
+        settings,
+        archive_path,
+    )
 
     safety_backup = create_backup(settings)
     restore_token = token_hex(6)
-    directory_targets = {name: data_root / name for name in RUNTIME_DIRECTORIES}
-    old_paths: dict[str, Path] = {}
-    installed: list[Path] = []
-    old_database: Path | None = None
-    old_sidecars: dict[Path, Path] = {}
-
     with tempfile.TemporaryDirectory(
         prefix="restore-",
         dir=data_root,
     ) as temporary:
         staging = Path(temporary)
-        with zipfile.ZipFile(source_archive) as archive:
-            _validate_archive(archive)
-            archive.extractall(staging)
-        for directory_name in RUNTIME_DIRECTORIES:
-            (staging / directory_name).mkdir(exist_ok=True)
-        connection = sqlite3.connect(staging / "app.db")
-        try:
-            integrity = connection.execute("PRAGMA integrity_check").fetchone()
-            required = {
-                row[0]
-                for row in connection.execute(
-                    """
-                    SELECT name FROM sqlite_master
-                    WHERE type = 'table' AND name IN ('users', 'tasks')
-                    """
-                ).fetchall()
-            }
-        finally:
-            connection.close()
-        if integrity != ("ok",) or required != {"users", "tasks"}:
-            raise ValueError("备份数据库校验失败")
-
-        try:
-            if database_path.exists():
-                old_database = data_root / f".restore-old-{restore_token}-app.db"
-                shutil.copy2(database_path, old_database)
-            for suffix in ("-wal", "-shm"):
-                sidecar = Path(f"{database_path}{suffix}")
-                if sidecar.exists():
-                    old_sidecar = data_root / (
-                        f".restore-old-{restore_token}-app.db{suffix}"
-                    )
-                    sidecar.replace(old_sidecar)
-                    old_sidecars[sidecar] = old_sidecar
-            for name, target in directory_targets.items():
-                if target.exists():
-                    old_path = data_root / f".restore-old-{restore_token}-{name}"
-                    target.replace(old_path)
-                    old_paths[name] = old_path
-            shutil.copy2(staging / "app.db", database_path)
-            for name, target in directory_targets.items():
-                (staging / name).replace(target)
-                installed.append(target)
-            connection = sqlite3.connect(database_path)
-            try:
-                connection.execute("DELETE FROM sessions")
-                connection.commit()
-            finally:
-                connection.close()
-        except Exception:
-            for path in reversed(installed):
-                _remove_path(path)
-            for name, old_path in old_paths.items():
-                old_path.replace(directory_targets[name])
-            if old_database is not None:
-                shutil.copy2(old_database, database_path)
-            else:
-                database_path.unlink(missing_ok=True)
-            for suffix in ("-wal", "-shm"):
-                Path(f"{database_path}{suffix}").unlink(missing_ok=True)
-            for sidecar, old_sidecar in old_sidecars.items():
-                old_sidecar.replace(sidecar)
-            raise
-        else:
-            for old_path in old_paths.values():
-                _remove_path(old_path)
-            if old_database is not None:
-                old_database.unlink(missing_ok=True)
-            for old_sidecar in old_sidecars.values():
-                old_sidecar.unlink(missing_ok=True)
+        _prepare_staging(source_archive, staging)
+        context = _RestoreContext(
+            data_root=data_root,
+            database_path=database_path,
+            staging=staging,
+            restore_token=restore_token,
+            directory_targets={name: data_root / name for name in RUNTIME_DIRECTORIES},
+        )
+        _replace_runtime_state(context)
     return safety_backup
 
 

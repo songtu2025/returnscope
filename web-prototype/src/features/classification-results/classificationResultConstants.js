@@ -1,4 +1,4 @@
-export const RESULT_PAGE_SIZES = [20, 50, 100];
+export { PAGE_SIZES as RESULT_PAGE_SIZES } from "../../shared/pagination";
 
 export const PUBLISH_LABELS = {
   publishing: "正在生成结果",

@@ -1,0 +1,261 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "退货语义分析智能体：代码结构",
+    "locale": "zh-CN",
+    "output": "code-structure.html",
+    "animation": "none",
+    "quality_profile": "showcase",
+    "viewBox": [1360, 660],
+    "views": [
+      {
+        "id": "request-path",
+        "label": "请求主链路",
+        "focus": ["react-entry", "domain-pages", "shared-ui-api", "fastapi-auth", "routers", "domain-services"],
+        "note": "从 Hash 路由页面经共享 API 客户端进入 FastAPI 领域服务。"
+      },
+      {
+        "id": "async-analysis",
+        "label": "异步分析链路",
+        "focus": ["domain-services", "background-workers", "return-semantics", "return-analysis", "sub2api"],
+        "note": "Workers 从 SQLite 任务状态领取工作，AgentRunner 驱动分类与洞察处理。"
+      },
+      {
+        "id": "data-boundaries",
+        "label": "数据边界",
+        "focus": ["excel-mysql", "local-state", "domain-services", "background-workers"],
+        "note": "外部数据源进入任务执行，业务状态与运行产物落入本地持久化边界。"
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "react-entry",
+      "type": "frontend",
+      "label": "React 入口与 Hash 路由",
+      "sublabel": "main.jsx · App.jsx",
+      "pos": [70, 70],
+      "size": [210, 78],
+      "tag": "React 19 + Vite"
+    },
+    {
+      "id": "domain-pages",
+      "type": "frontend",
+      "label": "领域页面",
+      "sublabel": "任务 · 分类结果 · 复核 · 看板 · 配置",
+      "pos": [355, 70],
+      "size": [240, 78]
+    },
+    {
+      "id": "shared-ui-api",
+      "type": "frontend",
+      "label": "共享组件与 API 客户端",
+      "sublabel": "components · shared · api",
+      "pos": [680, 70],
+      "size": [230, 78]
+    },
+    {
+      "id": "fastapi-auth",
+      "type": "security",
+      "label": "FastAPI 应用与认证",
+      "sublabel": "app 生命周期 · 会话 · 权限",
+      "pos": [1000, 70],
+      "size": [220, 78],
+      "tag": "API 边界"
+    },
+    {
+      "id": "routers",
+      "type": "backend",
+      "label": "API Routers",
+      "sublabel": "任务 · 复核 · 标准 · 看板 · 运维",
+      "pos": [1000, 210],
+      "size": [220, 78]
+    },
+    {
+      "id": "domain-services",
+      "type": "backend",
+      "label": "领域服务",
+      "sublabel": "数据集 · 复核 · 配置 · 版本 · 验证",
+      "pos": [1000, 350],
+      "size": [220, 78],
+      "tag": "事务与业务规则"
+    },
+    {
+      "id": "background-workers",
+      "type": "messagebus",
+      "label": "任务、洞察与标准验证 Workers",
+      "sublabel": "TaskWorker · AgentRunner",
+      "pos": [680, 350],
+      "size": [240, 88],
+      "tag": "后台执行器"
+    },
+    {
+      "id": "return-semantics",
+      "type": "backend",
+      "label": "return_semantics",
+      "sublabel": "语义分类流水线 · 规则 · 校验",
+      "pos": [355, 350],
+      "size": [230, 78]
+    },
+    {
+      "id": "return-analysis",
+      "type": "backend",
+      "label": "return_analysis",
+      "sublabel": "结果数据装载 · 指标计算",
+      "pos": [355, 500],
+      "size": [230, 78]
+    },
+    {
+      "id": "local-state",
+      "type": "database",
+      "label": "本地状态与运行产物",
+      "sublabel": "SQLite · runtime · cache",
+      "pos": [1000, 520],
+      "size": [220, 78]
+    },
+    {
+      "id": "excel-mysql",
+      "type": "external",
+      "label": "Excel / MySQL 数据源",
+      "sublabel": "退货明细与商品数据",
+      "pos": [70, 350],
+      "size": [210, 78]
+    },
+    {
+      "id": "sub2api",
+      "type": "cloud",
+      "label": "Sub2API 模型服务",
+      "sublabel": "兼容模型接口 · 推理调用",
+      "pos": [70, 500],
+      "size": [210, 78]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "浏览器前端",
+      "wraps": ["react-entry", "domain-pages", "shared-ui-api"],
+      "pad": 28
+    },
+    {
+      "kind": "region",
+      "label": "Web 后端",
+      "wraps": ["fastapi-auth", "routers", "domain-services", "background-workers"],
+      "pad": 30
+    },
+    {
+      "kind": "region",
+      "label": "分析内核",
+      "wraps": ["return-semantics", "return-analysis"],
+      "pad": 28
+    }
+  ],
+  "connections": [
+    {
+      "id": "bootstrap-ui",
+      "from": "react-entry",
+      "to": "domain-pages",
+      "label": "解析 hash 并渲染页面",
+      "variant": "emphasis",
+      "labelAt": [318, 165]
+    },
+    {
+      "id": "page-shared",
+      "from": "domain-pages",
+      "to": "shared-ui-api",
+      "label": "复用组件与请求封装",
+      "labelAt": [638, 165]
+    },
+    {
+      "id": "http-api",
+      "from": "shared-ui-api",
+      "to": "fastapi-auth",
+      "label": "HTTP /api"
+    },
+    {
+      "id": "auth-dispatch",
+      "from": "fastapi-auth",
+      "to": "routers",
+      "label": "认证后分发",
+      "labelAt": [1110, 180]
+    },
+    {
+      "id": "router-service",
+      "from": "routers",
+      "to": "domain-services",
+      "label": "调用用例服务",
+      "variant": "emphasis",
+      "labelAt": [1110, 315]
+    },
+    {
+      "id": "run-classification",
+      "from": "background-workers",
+      "to": "return-semantics",
+      "label": "执行分类与标准验证"
+    },
+    {
+      "id": "run-insights",
+      "from": "background-workers",
+      "to": "return-analysis",
+      "label": "执行洞察与报告分析",
+      "fromSide": "bottom",
+      "toSide": "right",
+      "via": [[800, 465], [620, 465], [620, 539]],
+      "labelAt": [710, 455]
+    },
+    {
+      "id": "load-source",
+      "from": "excel-mysql",
+      "to": "domain-services",
+      "label": "导入与同步数据",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "left",
+      "via": [[310, 389], [310, 300], [960, 300], [960, 389]],
+      "labelAt": [650, 290]
+    },
+    {
+      "id": "model-inference",
+      "from": "return-semantics",
+      "to": "sub2api",
+      "label": "模型推理请求",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "via": [[470, 450], [175, 450]],
+      "labelAt": [300, 440]
+    },
+    {
+      "id": "service-state",
+      "from": "domain-services",
+      "to": "local-state",
+      "label": "写入任务与业务状态",
+      "fromSide": "right",
+      "toSide": "right",
+      "via": [[1260, 389], [1260, 559]],
+      "labelAt": [1270, 470]
+    },
+    {
+      "id": "worker-artifacts",
+      "from": "background-workers",
+      "to": "local-state",
+      "label": "回写状态与产物",
+      "fromSide": "right",
+      "toSide": "top",
+      "via": [[980, 394], [980, 490], [1110, 490]],
+      "labelAt": [1045, 480]
+    },
+    {
+      "id": "worker-claim",
+      "from": "local-state",
+      "to": "background-workers",
+      "label": "轮询并领取 queued 任务",
+      "variant": "dashed",
+      "fromSide": "left",
+      "toSide": "bottom",
+      "via": [[940, 559], [940, 470], [800, 470]],
+      "labelAt": [870, 460]
+    }
+  ]
+}

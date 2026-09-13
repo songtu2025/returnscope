@@ -62,6 +62,16 @@ def test_preflight_hash_is_stable_and_blocks_invalid_sources(tmp_path: Path) -> 
         "listing_count": 1,
         "record_count": 3,
         "unit_count": 1,
+        "comment_count": 3,
+        "total_comment_count": 3,
+        "pending_review_comment_count": 0,
+        "comment_statuses": [
+            {"status": "POSITIVE", "comment_count": 0},
+            {"status": "NEGATIVE", "comment_count": 3},
+            {"status": "MIXED", "comment_count": 0},
+            {"status": "CONFLICT", "comment_count": 0},
+            {"status": "NO_CONFIRMED", "comment_count": 0},
+        ],
         "product_name_missing_count": 0,
         "product_unmatched_count": 0,
         "review_changed_unit_count": 0,
@@ -151,6 +161,9 @@ def test_preflight_blocks_duplicate_listing_and_review_required(
     assert partial["filters"] == {"quality_status": ["ready"]}
     assert partial["summary"]["record_count"] == 0
     assert partial["summary"]["pending_review_record_count"] == 3
+    assert partial["summary"]["comment_count"] == 0
+    assert partial["summary"]["total_comment_count"] == 3
+    assert partial["summary"]["pending_review_comment_count"] == 3
 
 
 def test_create_and_new_version_are_atomic_and_keep_old_version(
@@ -313,6 +326,16 @@ def test_dashboard_insights_are_derived_from_ready_records(tmp_path: Path) -> No
     )
 
     assert insights["summary"]["record_count"] == 3
+    assert insights["summary"]["comment_count"] == 3
+    assert insights["summary"]["total_comment_count"] == 3
+    assert insights["summary"]["pending_review_comment_count"] == 0
+    assert insights["summary"]["comment_statuses"] == [
+        {"status": "POSITIVE", "comment_count": 0},
+        {"status": "NEGATIVE", "comment_count": 3},
+        {"status": "MIXED", "comment_count": 0},
+        {"status": "CONFLICT", "comment_count": 0},
+        {"status": "NO_CONFIRMED", "comment_count": 0},
+    ]
     assert insights["selected_reason"] == {
         "value": "FIT_TOO_SMALL_U1",
         "label": "偏小",
@@ -358,6 +381,16 @@ def test_dashboard_insights_are_derived_from_ready_records(tmp_path: Path) -> No
     assert len(insights["evidence"]["items"]) == 3
     assert insights["evidence"]["items"][0]["problem_labels"] == ["偏小"]
     assert insights["filter_options"]["listings"] == ["L1"]
+
+    empty_insights = service.insights(
+        dashboard_id,
+        dashboard_version_id,
+        product_name="不存在的产品",
+    )
+    assert empty_insights["summary"]["record_count"] == 3
+    assert empty_insights["summary"]["comment_count"] == 0
+    assert empty_insights["summary"]["total_comment_count"] == 0
+    assert empty_insights["summary"]["pending_review_comment_count"] == 0
 
 
 def test_issue_cases_keep_variant_context_and_rank_representative_samples(

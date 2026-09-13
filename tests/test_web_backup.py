@@ -4,6 +4,8 @@ import sqlite3
 import zipfile
 from pathlib import Path
 
+import pytest
+
 from web_backend.backup import create_backup, restore_backup
 from web_backend.database import Database
 from web_backend.settings import Settings
@@ -124,3 +126,73 @@ def test_restore_accepts_legacy_backup_without_imports_directory(
 
     assert (settings.data_dir / "imports").is_dir()
     assert not list((settings.data_dir / "imports").iterdir())
+
+
+def test_restore_validation_failure_keeps_runtime_and_creates_safety_backup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = _settings(tmp_path)
+    settings.ensure_directories()
+    Database(settings.database_path).initialize()
+    current_upload = settings.data_dir / "uploads" / "current.csv"
+    current_upload.write_text("current\n", encoding="utf-8")
+    invalid_backup = tmp_path / "invalid.zip"
+    with zipfile.ZipFile(invalid_backup, mode="w") as archive:
+        archive.writestr("uploads/replacement.csv", "replacement\n")
+    safety_backup_dir = tmp_path / "safety-backups"
+    monkeypatch.setenv("WEBAPP_BACKUP_DIR", str(safety_backup_dir))
+
+    with pytest.raises(ValueError, match="备份文件缺少 app.db"):
+        restore_backup(settings, invalid_backup)
+
+    assert current_upload.read_text(encoding="utf-8") == "current\n"
+    assert len(list(safety_backup_dir.glob("seekway-backup-*.zip"))) == 1
+
+
+def test_restore_install_failure_rolls_back_runtime(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = _settings(tmp_path)
+    settings.ensure_directories()
+    database = Database(settings.database_path)
+    database.initialize()
+    with database.transaction(immediate=True) as connection:
+        connection.execute(
+            """
+            INSERT INTO users(
+                id, email, display_name, password_hash, created_at
+            ) VALUES ('user-1', 'user@example.com', '备份状态', 'hash', '2026-01-01')
+            """
+        )
+    current_upload = settings.data_dir / "uploads" / "current.csv"
+    current_upload.write_text("before-backup\n", encoding="utf-8")
+    source_backup = create_backup(settings, tmp_path / "source-backups")
+    current_upload.write_text("current\n", encoding="utf-8")
+    with database.transaction(immediate=True) as connection:
+        connection.execute(
+            "UPDATE users SET display_name = '当前状态' WHERE id = 'user-1'"
+        )
+    original_replace = Path.replace
+
+    def fail_staged_imports(source: Path, target: Path) -> Path:
+        if source.name == "imports" and source.parent.name.startswith("restore-"):
+            raise OSError("模拟恢复安装失败")
+        return original_replace(source, target)
+
+    monkeypatch.setattr(Path, "replace", fail_staged_imports)
+    monkeypatch.setenv("WEBAPP_BACKUP_DIR", str(tmp_path / "safety-backups"))
+
+    with pytest.raises(OSError, match="模拟恢复安装失败"):
+        restore_backup(settings, source_backup)
+
+    assert current_upload.read_text(encoding="utf-8") == "current\n"
+    with database.connect() as connection:
+        assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        assert (
+            connection.execute(
+                "SELECT display_name FROM users WHERE id = 'user-1'"
+            ).fetchone()[0]
+            == "当前状态"
+        )

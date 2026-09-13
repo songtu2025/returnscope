@@ -1,0 +1,437 @@
+{
+  "schema_version": 1,
+  "data_origin": "synthetic",
+  "cases": [
+    {
+      "id": "preserve_warmth_and_lightweight_facts",
+      "contracts": [
+        "fact_preservation",
+        "evidence_traceability"
+      ],
+      "comment": "The gloves kept my hands warm during a short walk and felt light enough for the train.",
+      "facts": [
+        {
+          "fact_id": "F1",
+          "opinion": "The gloves provided warmth during the walk.",
+          "sentiment": "POSITIVE",
+          "statement_type": "EXPERIENCE",
+          "condition": "short walk",
+          "evidence_spans": [
+            "kept my hands warm during a short walk"
+          ],
+          "allowed_label_codes": [
+            "WARM_POSITIVE",
+            "WARM_NEGATIVE"
+          ],
+          "mapping": {
+            "label_codes": [
+              "WARM_POSITIVE"
+            ],
+            "reason": "Directly reports warmth during use."
+          },
+          "expected": {
+            "outcome": "TERMINAL",
+            "label_code": "WARM_POSITIVE",
+            "evidence": "kept my hands warm during a short walk",
+            "scope": {
+              "product_ref": "CURRENT",
+              "condition": "short walk"
+            }
+          }
+        },
+        {
+          "fact_id": "F2",
+          "opinion": "The gloves felt lightweight during the commute.",
+          "sentiment": "POSITIVE",
+          "statement_type": "EVALUATION",
+          "condition": "train commute",
+          "evidence_spans": [
+            "felt light enough for the train"
+          ],
+          "allowed_label_codes": [
+            "LIGHTWEIGHT_POSITIVE"
+          ],
+          "mapping": {
+            "label_codes": [
+              "LIGHTWEIGHT_POSITIVE"
+            ],
+            "reason": "Directly evaluates product weight."
+          },
+          "expected": {
+            "outcome": "TERMINAL",
+            "label_code": "LIGHTWEIGHT_POSITIVE",
+            "evidence": "felt light enough for the train",
+            "scope": {
+              "product_ref": "CURRENT",
+              "condition": "train commute"
+            }
+          }
+        }
+      ],
+      "expected": {
+        "needs_review": false,
+        "status": "AUTO_APPROVED"
+      }
+    },
+    {
+      "id": "preserve_touchscreen_direction_and_precision",
+      "contracts": [
+        "fact_preservation",
+        "label_direction"
+      ],
+      "comment": "The touchscreen responds to taps, but typing is not precise.",
+      "facts": [
+        {
+          "fact_id": "F1",
+          "opinion": "Basic touch input works.",
+          "sentiment": "POSITIVE",
+          "statement_type": "EXPERIENCE",
+          "operation": "basic taps",
+          "evidence_spans": [
+            "touchscreen responds to taps"
+          ],
+          "allowed_label_codes": [
+            "TOUCH_USABLE_POSITIVE",
+            "TOUCH_IMPRECISE_NEGATIVE"
+          ],
+          "mapping": {
+            "label_codes": [
+              "TOUCH_USABLE_POSITIVE"
+            ],
+            "reason": "Basic taps are directly reported as working."
+          },
+          "expected": {
+            "outcome": "TERMINAL",
+            "label_code": "TOUCH_USABLE_POSITIVE",
+            "evidence": "touchscreen responds to taps",
+            "scope": {
+              "operation": "basic taps"
+            }
+          }
+        },
+        {
+          "fact_id": "F2",
+          "opinion": "Typing lacks precision.",
+          "sentiment": "NEGATIVE",
+          "statement_type": "EXPERIENCE",
+          "operation": "typing",
+          "evidence_spans": [
+            "typing is not precise"
+          ],
+          "allowed_label_codes": [
+            "TOUCH_USABLE_POSITIVE",
+            "TOUCH_IMPRECISE_NEGATIVE"
+          ],
+          "mapping": {
+            "label_codes": [
+              "TOUCH_IMPRECISE_NEGATIVE"
+            ],
+            "reason": "Typing precision is directly reported as poor."
+          },
+          "expected": {
+            "outcome": "TERMINAL",
+            "label_code": "TOUCH_IMPRECISE_NEGATIVE",
+            "evidence": "typing is not precise",
+            "scope": {
+              "operation": "typing"
+            }
+          }
+        }
+      ],
+      "direction_guard": {
+        "fact_id": "F2",
+        "rejected_label_code": "TOUCH_USABLE_POSITIVE",
+        "error": "事实方向不符合标签允许方向"
+      },
+      "expected": {
+        "needs_review": false,
+        "status": "AUTO_APPROVED"
+      }
+    },
+    {
+      "id": "keep_opposite_warmth_results_in_distinct_conditions",
+      "contracts": [
+        "applicability_scope",
+        "label_direction"
+      ],
+      "comment": "The gloves felt warm inside the station but cold on the windy platform.",
+      "facts": [
+        {
+          "fact_id": "F1",
+          "opinion": "The gloves felt warm indoors.",
+          "sentiment": "POSITIVE",
+          "statement_type": "EXPERIENCE",
+          "condition": "inside station",
+          "evidence_spans": [
+            "warm inside the station"
+          ],
+          "allowed_label_codes": [
+            "WARM_POSITIVE",
+            "WARM_NEGATIVE"
+          ],
+          "mapping": {
+            "label_codes": [
+              "WARM_POSITIVE"
+            ]
+          },
+          "expected": {
+            "outcome": "TERMINAL",
+            "label_code": "WARM_POSITIVE",
+            "evidence": "warm inside the station",
+            "scope": {
+              "condition": "inside station"
+            }
+          }
+        },
+        {
+          "fact_id": "F2",
+          "opinion": "The gloves felt cold in wind.",
+          "sentiment": "NEGATIVE",
+          "statement_type": "EXPERIENCE",
+          "condition": "windy platform",
+          "evidence_spans": [
+            "cold on the windy platform"
+          ],
+          "allowed_label_codes": [
+            "WARM_POSITIVE",
+            "WARM_NEGATIVE"
+          ],
+          "mapping": {
+            "label_codes": [
+              "WARM_NEGATIVE"
+            ]
+          },
+          "expected": {
+            "outcome": "TERMINAL",
+            "label_code": "WARM_NEGATIVE",
+            "evidence": "cold on the windy platform",
+            "scope": {
+              "condition": "windy platform"
+            }
+          }
+        }
+      ],
+      "expected": {
+        "needs_review": false,
+        "status": "AUTO_APPROVED"
+      }
+    },
+    {
+      "id": "exclude_other_product_comparison_from_current_labels",
+      "contracts": [
+        "fact_preservation",
+        "applicability_scope"
+      ],
+      "comment": "This pair feels flexible, while my older pair was warmer.",
+      "facts": [
+        {
+          "fact_id": "F1",
+          "opinion": "The current pair feels flexible.",
+          "sentiment": "POSITIVE",
+          "statement_type": "EVALUATION",
+          "evidence_spans": [
+            "This pair feels flexible"
+          ],
+          "allowed_label_codes": [
+            "FLEXIBLE_POSITIVE"
+          ],
+          "mapping": {
+            "label_codes": [
+              "FLEXIBLE_POSITIVE"
+            ]
+          },
+          "expected": {
+            "outcome": "TERMINAL",
+            "label_code": "FLEXIBLE_POSITIVE",
+            "evidence": "This pair feels flexible",
+            "scope": {
+              "product_ref": "CURRENT"
+            }
+          }
+        },
+        {
+          "fact_id": "F2",
+          "opinion": "The older pair was warmer.",
+          "sentiment": "POSITIVE",
+          "statement_type": "REPORTED",
+          "product_ref": "OTHER:1",
+          "reference_basis": "OTHER_PRODUCT",
+          "evidence_spans": [
+            "my older pair was warmer"
+          ],
+          "allowed_label_codes": [],
+          "mapping": {
+            "disposition": "OUT_OF_SCOPE",
+            "reason": "The statement describes another product."
+          },
+          "expected": {
+            "outcome": "UNKNOWN",
+            "disposition": "OUT_OF_SCOPE",
+            "evidence": "my older pair was warmer",
+            "scope": {
+              "product_ref": "OTHER:1",
+              "reference_basis": "OTHER_PRODUCT"
+            }
+          }
+        }
+      ],
+      "expected": {
+        "needs_review": false,
+        "status": "AUTO_APPROVED"
+      }
+    },
+    {
+      "id": "join_split_evidence_spans_without_inventing_text",
+      "contracts": [
+        "evidence_traceability"
+      ],
+      "comment": "The palm stayed dry in light rain, even after twenty minutes.",
+      "facts": [
+        {
+          "fact_id": "F1",
+          "opinion": "The palm remained dry during the rain test.",
+          "sentiment": "POSITIVE",
+          "statement_type": "EXPERIENCE",
+          "operation": "rain exposure",
+          "condition": "light rain for twenty minutes",
+          "evidence_spans": [
+            "stayed dry",
+            "after twenty minutes"
+          ],
+          "allowed_label_codes": [
+            "WATER_RESISTANT_POSITIVE"
+          ],
+          "mapping": {
+            "label_codes": [
+              "WATER_RESISTANT_POSITIVE"
+            ]
+          },
+          "expected": {
+            "outcome": "TERMINAL",
+            "label_code": "WATER_RESISTANT_POSITIVE",
+            "evidence": "stayed dry in light rain, even after twenty minutes",
+            "scope": {
+              "operation": "rain exposure",
+              "condition": "light rain for twenty minutes"
+            }
+          }
+        }
+      ],
+      "expected": {
+        "needs_review": false,
+        "status": "AUTO_APPROVED"
+      }
+    },
+    {
+      "id": "not_tested_is_expected_abstention_without_review",
+      "contracts": [
+        "unknown_review_routing"
+      ],
+      "comment": "I have not worn them in heavy rain yet.",
+      "facts": [
+        {
+          "fact_id": "F1",
+          "opinion": "Heavy-rain performance was not tested.",
+          "sentiment": "NEUTRAL",
+          "statement_type": "NOT_TESTED",
+          "condition": "heavy rain",
+          "evidence_spans": [
+            "not worn them in heavy rain yet"
+          ],
+          "allowed_label_codes": [],
+          "mapping": {
+            "disposition": "MAPPING_UNCERTAIN",
+            "reason": "No observed performance is available."
+          },
+          "expected": {
+            "outcome": "UNKNOWN",
+            "disposition": "EXPECTED_ABSTENTION",
+            "evidence": "not worn them in heavy rain yet",
+            "scope": {
+              "condition": "heavy rain"
+            }
+          }
+        }
+      ],
+      "expected": {
+        "needs_review": false,
+        "status": "AUTO_APPROVED"
+      }
+    },
+    {
+      "id": "taxonomy_gap_routes_to_human_review",
+      "contracts": [
+        "unknown_review_routing"
+      ],
+      "comment": "The lining leaves a powdery feel on my fingers.",
+      "facts": [
+        {
+          "fact_id": "F1",
+          "opinion": "The lining creates a powdery tactile residue.",
+          "sentiment": "NEGATIVE",
+          "statement_type": "EVALUATION",
+          "evidence_spans": [
+            "lining leaves a powdery feel"
+          ],
+          "allowed_label_codes": [],
+          "mapping": {
+            "disposition": "TAXONOMY_GAP",
+            "reason": "No configured label covers this tactile residue."
+          },
+          "expected": {
+            "outcome": "UNKNOWN",
+            "disposition": "TAXONOMY_GAP",
+            "evidence": "lining leaves a powdery feel",
+            "scope": {
+              "product_ref": "CURRENT"
+            }
+          }
+        }
+      ],
+      "expected": {
+        "needs_review": true,
+        "status": "UNKNOWN_SEMANTIC"
+      }
+    },
+    {
+      "id": "ambiguous_experiencer_routes_to_human_review",
+      "contracts": [
+        "unknown_review_routing"
+      ],
+      "comment": "After a quick try-on, the fit is difficult to judge.",
+      "facts": [
+        {
+          "fact_id": "F1",
+          "opinion": "The fit cannot be assigned to a clear experiencer.",
+          "sentiment": "NEUTRAL",
+          "statement_type": "EVALUATION",
+          "experiencer_resolution": "AMBIGUOUS",
+          "evidence_spans": [
+            "fit is difficult to judge"
+          ],
+          "allowed_label_codes": [
+            "FIT_AS_EXPECTED"
+          ],
+          "mapping": {
+            "label_codes": [
+              "FIT_AS_EXPECTED"
+            ],
+            "reason": "The wording leaves the experiencer unresolved."
+          },
+          "expected": {
+            "outcome": "UNKNOWN",
+            "disposition": "MAPPING_UNCERTAIN",
+            "evidence": "fit is difficult to judge",
+            "scope": {
+              "product_ref": "CURRENT"
+            }
+          }
+        }
+      ],
+      "expected": {
+        "needs_review": true,
+        "status": "UNKNOWN_SEMANTIC"
+      }
+    }
+  ]
+}

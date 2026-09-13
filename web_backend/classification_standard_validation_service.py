@@ -20,6 +20,10 @@ from web_backend.classification_standard_service import (
     ClassificationStandardConflict,
     ClassificationStandardService,
 )
+from web_backend.classification_standard_validation_leakage import (
+    find_taxonomy_sample_leaks,
+    format_taxonomy_sample_leaks,
+)
 from web_backend.classification_validation_quality import (
     FACT_QUALITY_POLICY,
     append_reference_fact,
@@ -133,74 +137,27 @@ class ClassificationStandardValidationService:
         if draft["validation"]["blocking"]:
             detail = "；".join(draft["validation"]["blocking"][:3])
             raise ValueError(f"草稿必须先通过结构检查：{detail}")
-        raw_source_ids = {item["id"] for item in self._raw_source_options()}
-        if review_file is not None:
-            source, samples = self._review_source_context(
-                review_file[0], review_file[1], draft, sample_size
-            )
-            source_result_version_id = source["result"]["result_version_id"]
-        elif source_result_version_id in raw_source_ids:
-            source, samples = self._raw_source_context(
-                source_result_version_id,
-                draft,
-                sample_size,
-            )
-        else:
-            source = self._source_context(
-                source_result_version_id,
-                str(draft["base_version_id"]),
-            )
-            samples = self._sample(source_result_version_id, sample_size)
+        source, samples, source_result_version_id = self._validation_source_context(
+            draft,
+            source_result_version_id,
+            sample_size,
+            review_file,
+        )
         if not samples:
             raise ValueError("所选数据中没有当前品类可用于验证的评论")
-        candidate = TaxonomyConfig.model_validate(draft["snapshot"]["taxonomy"])
-        baseline = self.standard_service.taxonomy_for_version(
-            str(draft["base_version_id"])
+        leakage_issues = find_taxonomy_sample_leaks(
+            draft["snapshot"]["taxonomy"],
+            samples,
         )
-        if comparison_type != "standard_version":
-            candidate = candidate.model_copy(
-                update={
-                    "version": f"draft-{draft_id}-r{expected_revision}",
-                }
-            )
-            baseline = candidate.model_copy(
-                update={
-                    "recognition_profile": "legacy_v3"
-                    if comparison_type == "keyword_ab"
-                    else "keyword_free_v1",
-                }
-            )
-            candidate = candidate.model_copy(
-                update={
-                    "recognition_profile": "keyword_free_v1"
-                    if comparison_type == "keyword_ab"
-                    else "semantic_v1",
-                }
-            )
-        source["comparison_type"] = comparison_type
-        source["recognition_contract"] = {
-            side: {
-                "profile": config.recognition_profile,
-                "prompt_version": prompt_version(config),
-                "fingerprint": recognition_fingerprint(config),
-            }
-            for side, config in (("baseline", baseline), ("candidate", candidate))
-        }
-        source["recognition_taxonomies"] = {
-            "baseline": baseline.model_dump(mode="json"),
-            "candidate": candidate.model_dump(mode="json"),
-        }
-        source["result"].update(
-            {
-                "comparison_type": comparison_type,
-                "recognition_contract": source["recognition_contract"],
-            }
+        if leakage_issues:
+            raise ValueError(format_taxonomy_sample_leaks(leakage_issues))
+        self._apply_recognition_context(
+            source,
+            draft,
+            draft_id,
+            expected_revision,
+            comparison_type,
         )
-        if comparison_type != "standard_version":
-            source["result"]["comparison_mode"] = "baseline_and_draft"
-        if candidate.recognition_profile == "fact_v2":
-            source["quality_policy"] = deepcopy(FACT_QUALITY_POLICY)
-            source["result"]["quality_policy"] = source["quality_policy"]
         run_id = new_id("classification_standard_validation")
         now = utc_now()
         with self.database.transaction(immediate=True) as connection:
@@ -257,6 +214,93 @@ class ClassificationStandardValidationService:
             },
         )
         return self.get(run_id)
+
+    def _validation_source_context(
+        self,
+        draft: dict[str, Any],
+        source_result_version_id: str,
+        sample_size: int,
+        review_file: tuple[str, bytes] | None,
+    ) -> tuple[dict[str, Any], list[dict[str, Any]], str]:
+        raw_source_ids = {item["id"] for item in self._raw_source_options()}
+        if review_file is not None:
+            source, samples = self._review_source_context(
+                review_file[0], review_file[1], draft, sample_size
+            )
+            return source, samples, source["result"]["result_version_id"]
+        if source_result_version_id in raw_source_ids:
+            source, samples = self._raw_source_context(
+                source_result_version_id,
+                draft,
+                sample_size,
+            )
+            return source, samples, source_result_version_id
+        source = self._source_context(
+            source_result_version_id,
+            str(draft["base_version_id"]),
+        )
+        return (
+            source,
+            self._sample(source_result_version_id, sample_size),
+            source_result_version_id,
+        )
+
+    def _apply_recognition_context(
+        self,
+        source: dict[str, Any],
+        draft: dict[str, Any],
+        draft_id: str,
+        expected_revision: int,
+        comparison_type: str,
+    ) -> None:
+        candidate = TaxonomyConfig.model_validate(draft["snapshot"]["taxonomy"])
+        baseline = self.standard_service.taxonomy_for_version(
+            str(draft["base_version_id"])
+        )
+        if comparison_type != "standard_version":
+            candidate = candidate.model_copy(
+                update={
+                    "version": f"draft-{draft_id}-r{expected_revision}",
+                }
+            )
+            baseline = candidate.model_copy(
+                update={
+                    "recognition_profile": "legacy_v3"
+                    if comparison_type == "keyword_ab"
+                    else "keyword_free_v1",
+                }
+            )
+            candidate = candidate.model_copy(
+                update={
+                    "recognition_profile": "keyword_free_v1"
+                    if comparison_type == "keyword_ab"
+                    else "semantic_v1",
+                }
+            )
+        source["comparison_type"] = comparison_type
+        source["recognition_contract"] = {
+            side: {
+                "profile": config.recognition_profile,
+                "prompt_version": prompt_version(config),
+                "fingerprint": recognition_fingerprint(config),
+            }
+            for side, config in (("baseline", baseline), ("candidate", candidate))
+        }
+        source["recognition_taxonomies"] = {
+            "baseline": baseline.model_dump(mode="json"),
+            "candidate": candidate.model_dump(mode="json"),
+        }
+        source["result"].update(
+            {
+                "comparison_type": comparison_type,
+                "recognition_contract": source["recognition_contract"],
+            }
+        )
+        if comparison_type != "standard_version":
+            source["result"]["comparison_mode"] = "baseline_and_draft"
+        if candidate.recognition_profile == "fact_v2":
+            source["quality_policy"] = deepcopy(FACT_QUALITY_POLICY)
+            source["result"]["quality_policy"] = source["quality_policy"]
 
     def approve(
         self,
@@ -660,94 +704,19 @@ class ClassificationStandardValidationService:
         except Exception as exc:
             raise ValueError("无法读取 Review 表格，请检查文件格式") from exc
         candidates = []
-        seen = set()
         skipped = 0
-        variants = draft["snapshot"]["variants"]
-        headers = None
         try:
             references = self._read_references(workbook, draft["snapshot"]["taxonomy"])
-            for sheet in workbook:
-                if sheet.title == "人工参考答案":
-                    continue
-                for number, values in enumerate(
-                    sheet.iter_rows(max_row=50, values_only=True), start=1
-                ):
-                    if number <= 50 and "评论内容" in values:
-                        headers = [str(value or "").strip() for value in values]
-                        break
-                if headers is None:
-                    continue
-                header_row = number
-                for number, values in enumerate(
-                    sheet.iter_rows(min_row=header_row + 1, values_only=True),
-                    start=header_row + 1,
-                ):
-                    row = dict(zip(headers, values, strict=False))
-                    comment = "\n".join(
-                        str(row.get(key) or "").strip()
-                        for key in ("评论标题", "评论内容")
-                    ).strip()
-                    if not comment:
-                        continue
-                    category = str(row.get("一级品类") or row.get("品类") or "").strip()
-                    matched = next(
-                        (
-                            variant
-                            for variant in sorted(
-                                variants, key=lambda item: -len(item["category_b"])
-                            )
-                            if variant["category_b"] in category
-                            or variant["category_a"] == category
-                        ),
-                        None,
-                    )
-                    if category and matched is None:
-                        skipped += 1
-                        continue
-                    identity = str(row.get("评论编号") or number)
-                    store = str(row.get("下单店铺") or row.get("上架店铺") or "")
-                    listing = str(row.get("ASIN") or row.get("Listing") or "")
-                    key = hashlib.sha256(
-                        f"{identity}\x1f{store}\x1f{listing}\x1f{comment}".encode()
-                    ).hexdigest()
-                    if key in seen:
-                        continue
-                    seen.add(key)
-                    candidates.append(
-                        {
-                            "classification_key": key,
-                            "comment": comment,
-                            "reason": "",
-                            "store": store,
-                            "listing": listing,
-                            "category_a": matched["category_a"] if matched else "",
-                            "category_b": matched["category_b"] if matched else "",
-                            "source_row": number,
-                            "source_category": category,
-                            "review_id": identity,
-                            "reference": references.get(identity),
-                            "record_count": 1,
-                            "baseline": {},
-                        }
-                    )
-                break
+            sheet_context = self._review_sheet_context(workbook)
+            if sheet_context is not None:
+                candidates, skipped = self._review_candidates(
+                    *sheet_context,
+                    draft["snapshot"]["variants"],
+                    references,
+                )
         finally:
             workbook.close()
-        for identity in references:
-            matched_samples = [
-                item for item in candidates if item["review_id"] == identity
-            ]
-            if len(matched_samples) != 1:
-                raise ValueError(f"参考答案评论编号 {identity} 未唯一匹配当前品类评论")
-            for unit in (
-                *references[identity]["units"],
-                *references[identity].get("facts", []),
-            ):
-                if (
-                    unit.get("evidence")
-                    and unit["evidence"] not in matched_samples[0]["comment"]
-                ):
-                    raise ValueError(f"参考答案 {identity} 的证据不在原评论中")
+        self._validate_review_references(candidates, references)
         if not candidates:
             raise ValueError(
                 "未找到当前品类的评论；表格需包含评论内容列，品类需与当前标准匹配"
@@ -779,6 +748,102 @@ class ClassificationStandardValidationService:
                 candidates, sample_size, bucket_fields=("store", "listing")
             ),
         )
+
+    @staticmethod
+    def _review_sheet_context(workbook: Any) -> tuple[Any, list[str], int] | None:
+        for sheet in workbook:
+            if sheet.title == "人工参考答案":
+                continue
+            for number, values in enumerate(
+                sheet.iter_rows(max_row=50, values_only=True), start=1
+            ):
+                if number <= 50 and "评论内容" in values:
+                    headers = [str(value or "").strip() for value in values]
+                    return sheet, headers, number
+        return None
+
+    @staticmethod
+    def _review_candidates(
+        sheet: Any,
+        headers: list[str],
+        header_row: int,
+        variants: list[dict[str, Any]],
+        references: dict[str, Any],
+    ) -> tuple[list[dict[str, Any]], int]:
+        candidates = []
+        seen = set()
+        skipped = 0
+        sorted_variants = sorted(variants, key=lambda item: -len(item["category_b"]))
+        for number, values in enumerate(
+            sheet.iter_rows(min_row=header_row + 1, values_only=True),
+            start=header_row + 1,
+        ):
+            row = dict(zip(headers, values, strict=False))
+            comment = "\n".join(
+                str(row.get(key) or "").strip() for key in ("评论标题", "评论内容")
+            ).strip()
+            if not comment:
+                continue
+            category = str(row.get("一级品类") or row.get("品类") or "").strip()
+            matched = next(
+                (
+                    variant
+                    for variant in sorted_variants
+                    if variant["category_b"] in category
+                    or variant["category_a"] == category
+                ),
+                None,
+            )
+            if category and matched is None:
+                skipped += 1
+                continue
+            identity = str(row.get("评论编号") or number)
+            store = str(row.get("下单店铺") or row.get("上架店铺") or "")
+            listing = str(row.get("ASIN") or row.get("Listing") or "")
+            key = hashlib.sha256(
+                f"{identity}\x1f{store}\x1f{listing}\x1f{comment}".encode()
+            ).hexdigest()
+            if key in seen:
+                continue
+            seen.add(key)
+            candidates.append(
+                {
+                    "classification_key": key,
+                    "comment": comment,
+                    "reason": "",
+                    "store": store,
+                    "listing": listing,
+                    "category_a": matched["category_a"] if matched else "",
+                    "category_b": matched["category_b"] if matched else "",
+                    "source_row": number,
+                    "source_category": category,
+                    "review_id": identity,
+                    "reference": references.get(identity),
+                    "record_count": 1,
+                    "baseline": {},
+                }
+            )
+        return candidates, skipped
+
+    @staticmethod
+    def _validate_review_references(
+        candidates: list[dict[str, Any]], references: dict[str, Any]
+    ) -> None:
+        for identity in references:
+            matched_samples = [
+                item for item in candidates if item["review_id"] == identity
+            ]
+            if len(matched_samples) != 1:
+                raise ValueError(f"参考答案评论编号 {identity} 未唯一匹配当前品类评论")
+            for unit in (
+                *references[identity]["units"],
+                *references[identity].get("facts", []),
+            ):
+                if (
+                    unit.get("evidence")
+                    and unit["evidence"] not in matched_samples[0]["comment"]
+                ):
+                    raise ValueError(f"参考答案 {identity} 的证据不在原评论中")
 
     @staticmethod
     def _read_references(workbook, taxonomy: dict) -> dict:

@@ -1729,6 +1729,80 @@
   color: #805517;
   background: #fff8e8;
 }
+.review-assessment-fields {
+  margin: 0 0 12px;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f7faf8;
+}
+.review-assessment-fields legend {
+  padding: 0 5px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+}
+.review-assessment-fields > p {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.review-assessment-fields > div {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.review-assessment-fields label {
+  gap: 5px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+.review-assessment-fields select {
+  min-width: 0;
+  height: 32px;
+  padding-inline: 7px;
+  font-size: 11px;
+}
+.review-assessment-summary > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+.review-assessment-summary > header b {
+  font-size: 13px;
+}
+.review-assessment-summary > header span {
+  color: var(--muted);
+  font-size: 10px;
+}
+.review-assessment-summary dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+.review-assessment-summary dl > div {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #f7faf8;
+}
+.review-assessment-summary dt {
+  color: var(--muted);
+  font-size: 10px;
+}
+.review-assessment-summary dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--green-dark);
+  font-size: 11px;
+  font-weight: 800;
+}
 .review-label-picker {
   display: grid;
   grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);

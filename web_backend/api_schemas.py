@@ -1,9 +1,88 @@
 from datetime import date
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from return_semantics.schemas import LabelExample
+
+
+class ClassificationSemanticFactResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    fact_id: str | None = None
+    label_code: str
+    label_code_path: list[str] = Field(default_factory=list)
+    label_path: list[str] = Field(default_factory=list)
+    actor_ref: str | None = None
+    product_ref: str | None = None
+    event_ref: str | None = None
+    statement_type: str | None = None
+    condition: str | dict[str, Any] = ""
+    evidence: str = ""
+    evidence_source: str = "UNKNOWN"
+
+
+class ClassificationUnknownSemanticResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    opinion: str = ""
+    evidence: str = ""
+    reason: str = ""
+    disposition: str
+
+
+class ClassificationTopicSummaryResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    topic_code: str
+    topic_name: str
+    topic_code_path: list[str] = Field(default_factory=list)
+    topic_path: list[str] = Field(default_factory=list)
+    status: Literal["POSITIVE", "NEGATIVE", "MIXED", "CONFLICT", "NO_CONFIRMED"]
+    supporting_fact_ids: list[str] = Field(default_factory=list)
+    label_codes: list[str] = Field(default_factory=list)
+    fact_count: int = 0
+    event_count: int = 0
+
+
+class ClassificationResultRecordResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    processing_status: str
+    semantic_disposition: str
+    comment_summary_status: str
+    quality_status: str
+    fact_count: int
+    event_count: int
+    atomic_facts: list[ClassificationSemanticFactResponse] = Field(default_factory=list)
+    comment_conclusions: list[ClassificationTopicSummaryResponse] = Field(
+        default_factory=list
+    )
+    unknown_semantics: list[ClassificationUnknownSemanticResponse] = Field(
+        default_factory=list
+    )
+    classification: dict[str, Any]
+
+
+class ClassificationResultRecordsResponse(BaseModel):
+    taxonomy: dict[str, Any] | None = None
+    items: list[ClassificationResultRecordResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class ClassificationResultSummaryResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    version_id: str
+    comment_count: int
+    total_comment_count: int
+    metrics: dict[str, int | str]
+    comment_statuses: list[dict[str, int | str]] = Field(default_factory=list)
+    semantic_dispositions: list[dict[str, int | str]] = Field(default_factory=list)
+    topic_summaries: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class MySQLReturnImportRequest(BaseModel):
@@ -190,6 +269,13 @@ class ReviewBatchRecordUpdateRequest(BaseModel):
     action: Literal["confirm", "modify", "exclude"] = "confirm"
     label_code: str | None = Field(default=None, max_length=100)
     reason: str = Field(min_length=1, max_length=500)
+    label_correctness: (
+        Literal["correct", "partial", "incorrect", "not_applicable"] | None
+    ) = None
+    evidence_completeness: Literal["complete", "partial", "missing"] | None = None
+    review_routing: (
+        Literal["correct", "should_auto_approve", "should_manual_review"] | None
+    ) = None
 
 
 class ReviewBatchRecordRevision(BaseModel):
@@ -202,6 +288,13 @@ class ReviewBatchRecordBulkUpdateRequest(BaseModel):
     action: Literal["confirm", "modify", "exclude"]
     label_code: str | None = Field(default=None, max_length=100)
     reason: str = Field(min_length=1, max_length=500)
+    label_correctness: (
+        Literal["correct", "partial", "incorrect", "not_applicable"] | None
+    ) = None
+    evidence_completeness: Literal["complete", "partial", "missing"] | None = None
+    review_routing: (
+        Literal["correct", "should_auto_approve", "should_manual_review"] | None
+    ) = None
 
 
 class ReviewBatchPublishRequest(BaseModel):

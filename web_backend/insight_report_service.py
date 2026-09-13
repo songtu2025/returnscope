@@ -749,9 +749,7 @@ class InsightReportService:
     def _diagnostic_reason_codes(analysis: dict[str, Any]) -> list[str]:
         reasons = list(analysis.get("reasons", []))[:15]
         profile = resolve_insight_report_profile(analysis.get("sources"))
-        reason_by_code = {
-            str(reason.get("value") or ""): reason for reason in reasons
-        }
+        reason_by_code = {str(reason.get("value") or ""): reason for reason in reasons}
         selected: list[str] = []
         actionable = [
             reason
@@ -1022,10 +1020,7 @@ class InsightReportService:
                         "overall_reason_rate": float(case.get("overall_rate") or 0),
                         "trend_summary": InsightReportService._trend_summary(
                             trend,
-                            str(
-                                diagnostic.get("date_range", {}).get("date_to")
-                                or ""
-                            )
+                            str(diagnostic.get("date_range", {}).get("date_to") or "")
                             or None,
                         ),
                     }
@@ -1053,9 +1048,7 @@ class InsightReportService:
                     )
                 )
             else:
-                dimension = (
-                    "variant" if diagnostic.get("variants") else "product"
-                )
+                dimension = "variant" if diagnostic.get("variants") else "product"
                 hotspots = list(
                     diagnostic.get(
                         "variants" if dimension == "variant" else "hotspots",
@@ -1409,22 +1402,22 @@ class InsightReportService:
         coverage_rate = float(
             summary.get("coverage_rate")
             if summary.get("coverage_rate") is not None
-                else (100 if total_record_count else 0)
+            else (100 if total_record_count else 0)
         )
-        checked_comment_count = int(
-            text_quality.get("checked_record_count") or 0
-        )
-        anomaly_comment_count = int(
-            text_quality.get("anomaly_record_count") or 0
-        )
+        checked_comment_count = int(text_quality.get("checked_record_count") or 0)
+        anomaly_comment_count = int(text_quality.get("anomaly_record_count") or 0)
         clean_comment_count = max(
             checked_comment_count - anomaly_comment_count,
             0,
         )
-        clean_comment_rate = round(
-            clean_comment_count / checked_comment_count * 100,
-            1,
-        ) if checked_comment_count else 0.0
+        clean_comment_rate = (
+            round(
+                clean_comment_count / checked_comment_count * 100,
+                1,
+            )
+            if checked_comment_count
+            else 0.0
+        )
         quality_issue_codes = []
         if pending_review_count:
             quality_issue_codes.append("pending_review")
@@ -1538,15 +1531,13 @@ class InsightReportService:
                         identity = "\x1f".join(
                             [code, dimension, product or "", sku or ""]
                         )
-                        suffix = hashlib.sha256(
-                            identity.encode("utf-8")
-                        ).hexdigest()[:12]
+                        suffix = hashlib.sha256(identity.encode("utf-8")).hexdigest()[
+                            :12
+                        ]
                         issue_id = f"issue.{code}.{suffix}"
 
                 matched = int(
-                    row.get("record_count")
-                    or business_issue.get("record_count")
-                    or 0
+                    row.get("record_count") or business_issue.get("record_count") or 0
                 )
                 scoped = int(
                     row.get("total_record_count")
@@ -1558,17 +1549,14 @@ class InsightReportService:
                     if row.get("product_reason_rate") is not None
                     else row.get("issue_rate")
                     if row.get("issue_rate") is not None
-                    else business_issue.get("percentage")
-                    or 0
+                    else business_issue.get("percentage") or 0
                 )
                 baseline_value = (
                     row.get("overall_reason_rate")
                     if row.get("overall_reason_rate") is not None
                     else row.get("overall_rate")
                 )
-                baseline = (
-                    float(baseline_value) if baseline_value is not None else None
-                )
+                baseline = float(baseline_value) if baseline_value is not None else None
                 gap = round(share - baseline, 1) if baseline is not None else None
                 lift_value = row.get("lift")
                 lift = float(lift_value) if lift_value is not None else None
@@ -1769,7 +1757,9 @@ class InsightReportService:
             sorted(candidates, key=lambda item: item["rank_key"])[:8],
             1,
         ):
-            issue = {key: value for key, value in candidate.items() if key != "rank_key"}
+            issue = {
+                key: value for key, value in candidate.items() if key != "rank_key"
+            }
             issue["rank"] = rank
             issues.append(issue)
 
@@ -2123,13 +2113,9 @@ class InsightReportService:
             )
         if actionable_reasons and product_level_trusted:
             validation_issues = [
-                issue
-                for issue in primary_issues
-                if issue.get("cases")
+                issue for issue in primary_issues if issue.get("cases")
             ][:3]
-            validation_cases = [
-                issue["cases"][0] for issue in validation_issues
-            ]
+            validation_cases = [issue["cases"][0] for issue in validation_issues]
             target = (
                 "、".join(
                     dict.fromkeys(
@@ -2247,11 +2233,7 @@ class InsightReportService:
             findings[1]["conclusion"] if len(findings) > 1 else structure_statement
         )
         diagnostic_action = next(
-            (
-                action
-                for action in actions
-                if action.get("id") == "action.diagnostic"
-            ),
+            (action for action in actions if action.get("id") == "action.diagnostic"),
             None,
         )
         validation_target = (
@@ -2260,8 +2242,7 @@ class InsightReportService:
             else "、".join(hotspot_targets[:2])
         )
         validation_statement = (
-            f"优先验证{validation_target}："
-            f"{diagnostic_action.get('fallback_action')}"
+            f"优先验证{validation_target}：{diagnostic_action.get('fallback_action')}"
             if validation_target and diagnostic_action
             else diagnostic_summary
         )
@@ -2879,9 +2860,7 @@ class InsightReportService:
                 {
                     "code": "text_quality",
                     "label": "评论文本质量未通过",
-                    "detail": str(
-                        text_quality.get("note") or "评论文本质量需要核对。"
-                    ),
+                    "detail": str(text_quality.get("note") or "评论文本质量需要核对。"),
                     "evidence_ids": ["text_quality", "scope"],
                 }
             )
@@ -3143,10 +3122,14 @@ class InsightReportService:
             for action in actions
             if action.get("id") not in {item["id"] for item in gate_actions}
         ]
-        action_candidates = [] if consistency["status"] == "blocked" else [
-            *gate_actions,
-            *actions,
-        ]
+        action_candidates = (
+            []
+            if consistency["status"] == "blocked"
+            else [
+                *gate_actions,
+                *actions,
+            ]
+        )
         unique_actions = []
         seen_action_ids = set()
         for action in action_candidates:
@@ -3162,9 +3145,7 @@ class InsightReportService:
             "action.information": 3,
             "action.scope": 4,
         }
-        unique_actions.sort(
-            key=lambda action: action_order.get(action.get("id"), 99)
-        )
+        unique_actions.sort(key=lambda action: action_order.get(action.get("id"), 99))
         safe_content["actions"] = unique_actions[:6]
 
         warnings = []

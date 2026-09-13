@@ -112,6 +112,36 @@ def test_system_status_excludes_legacy_review_records(tmp_path: Path) -> None:
     assert payload["pending_review_batches"] == 1
 
 
+def test_review_record_keeps_independent_quality_assessment(tmp_path: Path) -> None:
+    context, base = _publish_review_required(tmp_path)
+    service = ReviewService(context.database)
+    batch = service.create_batch(str(base["version_id"]), "user-1", "验证复核口径")
+    review = service.batch_records(batch["id"])["items"][0]
+
+    updated = service.update_batch_record(
+        batch_id=batch["id"],
+        review_id=review["id"],
+        expected_revision=review["revision"],
+        actor_id="user-1",
+        label_code=None,
+        note="标签正确，但证据展示不完整且本条无需人工复核",
+        action="confirm",
+        review_assessment={
+            "label_correctness": "correct",
+            "evidence_completeness": "partial",
+            "review_routing": "should_auto_approve",
+        },
+    )
+
+    assessment = updated["classification"]["human_review_assessment"]
+    assert assessment["label_correctness"] == "correct"
+    assert assessment["evidence_completeness"] == "partial"
+    assert assessment["review_routing"] == "should_auto_approve"
+    assert assessment["assessed_by"] == "user-1"
+    assert assessment["assessed_at"]
+    assert updated["revisions"][0]["after"]["human_review_assessment"] == assessment
+
+
 def _replace_with_legacy_review_schema(context: SimpleNamespace) -> None:
     with context.database.connect() as connection:
         connection.execute("PRAGMA foreign_keys = OFF")
@@ -241,6 +271,7 @@ def test_review_batch_publishes_immutable_complete_v2_without_model(
         "发布人工确认结果",
     )
     derived_id = str(derived["version_id"])
+    published_batch = review_service.get_batch(batch["id"])
 
     assert derived["version"] == 2
     assert derived["parent_version_id"] == base_id
@@ -251,6 +282,9 @@ def test_review_batch_publishes_immutable_complete_v2_without_model(
     assert derived["parent_version_no"] == 1
     assert derived["changed_unit_count"] == 0
     assert derived["inherited_unit_count"] == 1
+    assert published_batch["status"] == "published"
+    assert published_batch["published_version_id"] == derived_id
+    assert published_batch["revision"] == current_batch["revision"] + 1
     assert result_service.get(base_id) == base_detail
     derived_records = result_service.records(derived_id, page_size=200)
     assert derived_records["total"] == base_records["total"] == 3
@@ -332,6 +366,121 @@ def test_review_batch_publishes_immutable_complete_v2_without_model(
             ).fetchall()
         }
     assert {"create", "update_record", "publish", "conflict"}.issubset(actions)
+
+
+def test_publish_batch_rejects_stale_revision_and_pending_records(
+    tmp_path: Path,
+) -> None:
+    context, base = _publish_review_required(tmp_path)
+    review_service = ReviewService(context.database)
+    batch = review_service.create_batch(
+        str(base["version_id"]),
+        "user-1",
+        "验证发布阻断",
+    )
+
+    with pytest.raises(
+        RevisionConflict,
+        match="批次已被其他用户修改，请刷新后重试",
+    ):
+        review_service.publish_batch(
+            batch["id"],
+            batch["revision"] + 1,
+            "user-2",
+            "陈旧修订发布",
+        )
+    with pytest.raises(
+        ReviewBatchConflict,
+        match="复核批次仍有 1 条记录未完成",
+    ):
+        review_service.publish_batch(
+            batch["id"],
+            batch["revision"],
+            "user-1",
+            "未完成记录发布",
+        )
+
+    current_batch = review_service.get_batch(batch["id"])
+    assert current_batch["status"] == "draft"
+    assert current_batch["revision"] == batch["revision"]
+    assert current_batch["published_version_id"] is None
+    with context.database.connect() as connection:
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM classification_result_versions"
+            ).fetchone()[0]
+            == 1
+        )
+
+
+def test_publish_batch_rolls_back_failed_derived_version(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context, base = _publish_review_required(tmp_path)
+    base_id = str(base["version_id"])
+    result_service = ClassificationResultService(context.database)
+    review_service = ReviewService(context.database, result_service)
+    batch = review_service.create_batch(base_id, "user-1", "验证发布回滚")
+    review = review_service.batch_records(batch["id"])["items"][0]
+    review_service.update_batch_record(
+        batch["id"],
+        review["id"],
+        review["revision"],
+        "user-1",
+        "FIT_TOO_SMALL_U1",
+        "完成复核后模拟发布失败",
+    )
+    current_batch = review_service.get_batch(batch["id"])
+
+    def fail_insert_records(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("模拟派生记录写入失败")
+
+    monkeypatch.setattr(result_service, "_insert_records", fail_insert_records)
+    with pytest.raises(RuntimeError, match="模拟派生记录写入失败"):
+        review_service.publish_batch(
+            batch["id"],
+            current_batch["revision"],
+            "user-1",
+            "不应留下半成品",
+        )
+
+    rolled_back_batch = review_service.get_batch(batch["id"])
+    assert rolled_back_batch["status"] == "draft"
+    assert rolled_back_batch["revision"] == current_batch["revision"]
+    assert rolled_back_batch["published_version_id"] is None
+    assert rolled_back_batch["published_at"] is None
+    with context.database.connect() as connection:
+        assert (
+            connection.execute(
+                """
+                SELECT COUNT(*) FROM classification_result_versions
+                WHERE parent_version_id = ? OR publish_status = 'publishing'
+                """,
+                (base_id,),
+            ).fetchone()[0]
+            == 0
+        )
+        assert (
+            connection.execute(
+                """
+                SELECT COUNT(*) FROM classification_units
+                WHERE result_version_id != ?
+                """,
+                (base_id,),
+            ).fetchone()[0]
+            == 0
+        )
+        assert (
+            connection.execute(
+                """
+                SELECT COUNT(*) FROM audit_logs
+                WHERE entity_id = ? AND action = 'publish'
+                """,
+                (batch["id"],),
+            ).fetchone()[0]
+            == 0
+        )
 
 
 def test_review_batch_api_and_version_history_contract(tmp_path: Path) -> None:

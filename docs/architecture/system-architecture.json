@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "退货语义分析智能体｜系统架构",
+    "locale": "zh-CN",
+    "output": "docs/architecture/system-architecture.html",
+    "animation": "none",
+    "quality_profile": "showcase",
+    "viewBox": [1320, 780]
+  },
+  "components": [
+    { "id": "team_user", "type": "external", "label": "团队用户", "sublabel": "运营、产品、审核人员", "pos": [28, 318], "size": [142, 66] },
+    { "id": "react_workbench", "type": "frontend", "label": "React 工作台", "sublabel": "任务、复核、看板、设置", "pos": [220, 318], "size": [154, 66] },
+    { "id": "fastapi_api", "type": "backend", "label": "FastAPI 接口层", "sublabel": "会话认证与 REST API", "pos": [430, 318], "size": [158, 66] },
+    { "id": "domain_services", "type": "backend", "label": "业务服务层", "sublabel": "数据、任务、结果、复核、看板", "pos": [646, 318], "size": [174, 66], "tag": "受控编排" },
+    { "id": "task_workers", "type": "backend", "label": "后台任务工作器", "sublabel": "分段调度、恢复与进度", "pos": [876, 178], "size": [164, 66] },
+    { "id": "semantic_engine", "type": "backend", "label": "语义决策引擎", "sublabel": "抽取、校验、模型分流", "pos": [1094, 178], "size": [164, 66], "tag": "核心能力" },
+    { "id": "sqlite_store", "type": "database", "label": "SQLite 状态库", "sublabel": "配置、任务、版本、审计", "pos": [876, 426], "size": [164, 66] },
+    { "id": "runtime_store", "type": "database", "label": "运行时文件存储", "sublabel": "上传、缓存、结果文件", "pos": [1094, 426], "size": [164, 66] },
+    { "id": "mysql_source", "type": "external", "label": "MySQL 退货数据源", "sublabel": "sale_return_order", "pos": [646, 572], "size": [174, 66] },
+    { "id": "model_gateway", "type": "external", "label": "Sub2API 模型网关", "sublabel": "Responses API / 多模型", "pos": [1094, 42], "size": [164, 66] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "退货语义分析应用", "wraps": ["react_workbench", "fastapi_api", "domain_services", "task_workers", "semantic_engine", "sqlite_store", "runtime_store"], "pad": 18 },
+    { "kind": "security-group", "label": "受控数据与执行边界", "wraps": ["fastapi_api", "domain_services", "task_workers", "semantic_engine", "sqlite_store", "runtime_store"], "pad": 12 }
+  ],
+  "connections": [
+    { "from": "team_user", "to": "react_workbench", "label": "业务操作", "variant": "emphasis" },
+    { "from": "react_workbench", "to": "fastapi_api", "label": "REST / JSON", "variant": "emphasis", "labelDy": -27 },
+    { "from": "fastapi_api", "to": "domain_services", "label": "认证后的业务请求", "labelDy": -27 },
+    { "from": "domain_services", "to": "sqlite_store", "label": "任务、配置与版本" },
+    { "from": "sqlite_store", "to": "task_workers", "label": "轮询并抢占任务", "variant": "dashed" },
+    { "from": "task_workers", "to": "semantic_engine", "label": "执行 Listing 分段", "variant": "emphasis", "labelDy": -27 },
+    { "from": "semantic_engine", "to": "model_gateway", "label": "HTTPS /responses", "variant": "security" },
+    { "from": "semantic_engine", "to": "runtime_store", "label": "数据版本、缓存与结果文件", "variant": "dashed", "labelDy": 24 },
+    { "from": "mysql_source", "to": "domain_services", "label": "筛选导入退货记录", "variant": "security" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "设计主线", "items": ["模型理解语义，程序执行约束，人工处理不确定性", "业务服务统一管理数据、任务、结果与版本"] },
+    { "dot": "emerald", "title": "可追溯性", "items": ["任务状态、配置版本、复核修改和审计记录进入 SQLite", "输入、缓存和结果文件保留在运行时数据卷"] },
+    { "dot": "orange", "title": "外部边界", "items": ["MySQL 只作为可选退货数据来源", "模型调用通过可配置的 Sub2API 网关完成"] }
+  ]
+}

@@ -61,6 +61,19 @@ def test_exporter_creates_expected_sheets(tmp_path: Path, taxonomy) -> None:
                 }
             ],
             "unknown_semantics": [],
+            "dimension_decisions": [
+                {
+                    "parent_code": "FIT",
+                    "scope": {
+                        "product_ref": "CURRENT",
+                        "variant_ref": "M",
+                    },
+                    "verdict_label_code": "FIT_TOO_SMALL",
+                    "supporting_fact_ids": ["F1"],
+                    "context_fact_ids": ["F2"],
+                    "reason": "完整评价表明尺码偏小",
+                }
+            ],
             "problem_label_codes": ["FIT_TOO_SMALL"],
             "positive_label_codes": [],
             "primary_label_codes": ["FIT_TOO_SMALL"],
@@ -86,9 +99,11 @@ def test_exporter_creates_expected_sheets(tmp_path: Path, taxonomy) -> None:
         "语义单元",
         "人工复核",
         "未知语义",
+        "维度裁决",
         "标签统计",
     ]
     assert workbook["分类明细"].max_row == 2
+    assert workbook["维度裁决"].max_row == 2
 
 
 def test_exporter_marks_missing_category_as_excluded(tmp_path: Path, taxonomy) -> None:

@@ -1152,6 +1152,10 @@
       "GLOVE_POWER_BUTTON_U1",
       "GLOVE_REASON_UNSPECIFIED_U1"
     ],
+    "fallback_label_codes": [
+      "GLOVE_SIZE_ISSUE_UNSPECIFIED_U1",
+      "GLOVE_REASON_UNSPECIFIED_U1"
+    ],
     "conflict_scope": "evidence"
   },
   "recognition_profile": "semantic_v1"

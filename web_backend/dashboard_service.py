@@ -23,6 +23,13 @@ PAGE_SIZE_DEFAULT = 50
 PAGE_SIZE_MAX = 200
 PLAN_VERSION = "dashboard-dataset-plan-v1"
 QUALITY_STATUSES = {"ready", "review_required", "unusable", "excluded"}
+COMMENT_SUMMARY_STATUSES = (
+    "POSITIVE",
+    "NEGATIVE",
+    "MIXED",
+    "CONFLICT",
+    "NO_CONFIRMED",
+)
 FILTER_COLUMNS = {
     "listing": "listing",
     "product_name": "product_name",
@@ -47,6 +54,41 @@ SUBJECT_LABELS = {
 TEXT_ENCODING_ANOMALY = re.compile(
     r"(?:[A-Za-z][\u4e00-\u9fff]|[\u4e00-\u9fff][A-Za-z]|\ufffd)"
 )
+
+
+def _classification_comment_status(payload: dict[str, Any]) -> str:
+    summary = payload.get("comment_summary")
+    if isinstance(summary, dict):
+        status = str(summary.get("status") or "")
+        is_explicit = status != "NO_CONFIRMED" or any(
+            summary.get(field)
+            for field in ("fact_ids", "positive_label_codes", "negative_label_codes")
+        )
+        if is_explicit and status in COMMENT_SUMMARY_STATUSES:
+            return status
+
+    legacy_status = str(payload.get("comment_summary_status") or "")
+    if legacy_status in COMMENT_SUMMARY_STATUSES:
+        return legacy_status
+
+    sentiments = {
+        str(unit.get("sentiment") or "")
+        for unit in payload.get("semantic_units", [])
+        if isinstance(unit, dict)
+        and str(unit.get("assertion") or "AFFIRMED") == "AFFIRMED"
+    }
+    if {"POSITIVE", "NEGATIVE"}.issubset(sentiments):
+        relation_types = {
+            str(relation.get("relation_type") or "")
+            for relation in payload.get("semantic_relations", [])
+            if isinstance(relation, dict)
+        }
+        return "CONFLICT" if "CONFLICT" in relation_types else "MIXED"
+    if "NEGATIVE" in sentiments:
+        return "NEGATIVE"
+    if "POSITIVE" in sentiments:
+        return "POSITIVE"
+    return "NO_CONFIRMED"
 
 
 class DashboardConflict(ValueError):
@@ -308,6 +350,7 @@ class DashboardService:
                 context["source_ids"],
                 context["filters"],
                 context["sources"],
+                include_comment_metrics=False,
             )
         return {
             "dashboard_id": dashboard_id,
@@ -530,6 +573,31 @@ class DashboardService:
             if clean_date_to:
                 where_sql += " AND date(r.return_date) <= date(?)"
                 params.append(clean_date_to)
+            comment_scope_filters = {
+                key: value
+                for key, value in context["filters"].items()
+                if key != "quality_status"
+            }
+            comment_scope_where, comment_scope_params = self._record_where(
+                context["source_ids"],
+                comment_scope_filters,
+                runtime_filters,
+            )
+            if clean_date_from:
+                comment_scope_where += " AND date(r.return_date) >= date(?)"
+                comment_scope_params.append(clean_date_from)
+            if clean_date_to:
+                comment_scope_where += " AND date(r.return_date) <= date(?)"
+                comment_scope_params.append(clean_date_to)
+            summary.update(
+                self._comment_summary_metrics(
+                    connection,
+                    where_sql,
+                    params,
+                    comment_scope_where,
+                    comment_scope_params,
+                )
+            )
             hierarchy_problems = (
                 hierarchy_counts(connection, taxonomy, where_sql, params)
                 if taxonomy and taxonomy.structure_version == 2
@@ -2084,6 +2152,8 @@ class DashboardService:
         source_ids: list[str],
         filters: dict[str, list[str]],
         sources: list[dict[str, Any]],
+        *,
+        include_comment_metrics: bool = True,
     ) -> dict[str, Any]:
         if source_ids:
             where_sql, params = self._record_where(source_ids, filters)
@@ -2118,6 +2188,13 @@ class DashboardService:
             ),
             "record_count": record_count,
             "unit_count": unit_count,
+            "comment_count": 0,
+            "total_comment_count": 0,
+            "pending_review_comment_count": 0,
+            "comment_statuses": [
+                {"status": status, "comment_count": 0}
+                for status in COMMENT_SUMMARY_STATUSES
+            ],
             "product_name_missing_count": missing_count,
             "product_unmatched_count": unmatched_count,
             "review_changed_unit_count": sum(
@@ -2139,6 +2216,16 @@ class DashboardService:
                 source_ids,
                 scope_filters,
             )
+            if include_comment_metrics:
+                summary.update(
+                    self._comment_summary_metrics(
+                        connection,
+                        where_sql,
+                        params,
+                        scope_where,
+                        scope_params,
+                    )
+                )
             coverage = connection.execute(
                 f"""
                 SELECT COUNT(*) AS total_record_count,
@@ -2175,6 +2262,66 @@ class DashboardService:
                     }
                 )
         return summary
+
+    @staticmethod
+    def _comment_summary_metrics(
+        connection: sqlite3.Connection,
+        where_sql: str,
+        params: list[Any],
+        total_where_sql: str,
+        total_params: list[Any],
+    ) -> dict[str, Any]:
+        rows = connection.execute(
+            f"""
+            SELECT u.classification_json, COUNT(r.id) AS comment_count
+            FROM classification_result_records r
+            JOIN classification_units u
+              ON u.result_version_id = r.result_version_id
+             AND u.classification_key = r.classification_key
+            WHERE {where_sql}
+            GROUP BY r.result_version_id, r.classification_key
+            """,
+            tuple(params),
+        ).fetchall()
+        status_counts = {status: 0 for status in COMMENT_SUMMARY_STATUSES}
+        for row in rows:
+            payload = json_value(row["classification_json"], {})
+            status = _classification_comment_status(payload)
+            status_counts[status] += int(row["comment_count"] or 0)
+
+        coverage = connection.execute(
+            f"""
+            SELECT COALESCE(SUM(comment_count), 0) AS total_comment_count,
+                   COALESCE(SUM(
+                       CASE WHEN pending_review = 1 THEN comment_count ELSE 0 END
+                   ), 0) AS pending_review_comment_count
+            FROM (
+                SELECT COUNT(r.id) AS comment_count,
+                       MAX(
+                           CASE WHEN u.quality_status NOT IN ('ready', 'excluded')
+                                THEN 1 ELSE 0 END
+                       ) AS pending_review
+                FROM classification_result_records r
+                JOIN classification_units u
+                  ON u.result_version_id = r.result_version_id
+                 AND u.classification_key = r.classification_key
+                WHERE {total_where_sql}
+                GROUP BY r.result_version_id, r.classification_key
+            ) scoped_comments
+            """,
+            tuple(total_params),
+        ).fetchone()
+        return {
+            "comment_count": sum(int(row["comment_count"] or 0) for row in rows),
+            "total_comment_count": int(coverage["total_comment_count"] or 0),
+            "pending_review_comment_count": int(
+                coverage["pending_review_comment_count"] or 0
+            ),
+            "comment_statuses": [
+                {"status": status, "comment_count": status_counts[status]}
+                for status in COMMENT_SUMMARY_STATUSES
+            ],
+        }
 
     def _insert_version(
         self,

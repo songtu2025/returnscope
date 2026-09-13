@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import threading
 from collections import Counter
-from dataclasses import is_dataclass, replace
+from dataclasses import dataclass, is_dataclass, replace
 from pathlib import Path
 from typing import Any, Callable
 
@@ -48,6 +48,28 @@ from web_backend.task_state import summarize_task_status
 
 class IncompleteResultCheckpoint(ValueError):
     pass
+
+
+@dataclass
+class _SegmentRunContext:
+    task_id: str
+    segment_id: str
+    task: dict[str, Any]
+    segment: dict[str, Any]
+    checkpoint_path: Path
+    existing_results: dict[str, ValidatedClassification]
+    base_model_calls: int
+    base_cache_hits: int
+    base_model_failures: int
+    latest_run: PipelineRun | None = None
+
+    def runtime_totals(self) -> tuple[int, int, int]:
+        run = self.latest_run
+        return (
+            self.base_model_calls + (run.model_calls if run else 0),
+            self.base_cache_hits + (run.cache_hits if run else 0),
+            self.base_model_failures + (run.model_failures if run else 0),
+        )
 
 
 class AgentRunner:
@@ -102,6 +124,56 @@ class AgentRunner:
         segment = self._load_segment(segment_id)
         if task is None or segment is None or segment["status"] != "running":
             return
+        context = self._segment_run_context(task_id, segment_id, task, segment)
+        try:
+            self._execute_segment(context)
+        except PipelineCancelled:
+            self._finish_interrupted_segment(
+                task_id,
+                segment_id,
+                context.existing_results,
+                context.latest_run,
+                context.checkpoint_path,
+                *context.runtime_totals(),
+            )
+        except ModelServiceUnavailable as exc:
+            self._finish_model_service_paused(
+                task_id,
+                segment_id,
+                str(exc),
+                context.existing_results,
+                context.latest_run,
+                context.checkpoint_path,
+                *context.runtime_totals(),
+            )
+        except ResultPublicationError as exc:
+            self._finish_result_publish_failed_segment(
+                task_id,
+                segment_id,
+                str(exc),
+                context.latest_run,
+                context.checkpoint_path,
+                context.existing_results,
+                *context.runtime_totals(),
+            )
+        except Exception as exc:
+            self._finish_failed_segment(
+                task_id,
+                segment_id,
+                str(exc),
+                context.latest_run,
+                context.checkpoint_path,
+                context.existing_results,
+                *context.runtime_totals(),
+            )
+
+    def _segment_run_context(
+        self,
+        task_id: str,
+        segment_id: str,
+        task: dict[str, Any],
+        segment: dict[str, Any],
+    ) -> _SegmentRunContext:
         segment_dir = self.settings.data_dir / "results" / task_id / "segments"
         segment_dir.mkdir(parents=True, exist_ok=True)
         checkpoint_path = Path(
@@ -113,226 +185,226 @@ class AgentRunner:
             for key, value in self._load_checkpoint(checkpoint_path).items()
             if value.status != ProcessingStatus.MODEL_ERROR
         }
-        base_model_calls = int(segment.get("model_calls") or 0)
-        base_cache_hits = int(segment.get("cache_hits") or 0)
-        base_model_failures = int(segment.get("model_failures") or 0)
-        latest_run: PipelineRun | None = None
+        return _SegmentRunContext(
+            task_id=task_id,
+            segment_id=segment_id,
+            task=task,
+            segment=segment,
+            checkpoint_path=checkpoint_path,
+            existing_results=existing_results,
+            base_model_calls=int(segment.get("model_calls") or 0),
+            base_cache_hits=int(segment.get("cache_hits") or 0),
+            base_model_failures=int(segment.get("model_failures") or 0),
+        )
 
-        def runtime_totals(run: PipelineRun | None) -> tuple[int, int, int]:
-            return (
-                base_model_calls + (run.model_calls if run else 0),
-                base_cache_hits + (run.cache_hits if run else 0),
-                base_model_failures + (run.model_failures if run else 0),
+    def _execute_segment(self, context: _SegmentRunContext) -> None:
+        task = context.task
+        segment = context.segment
+        snapshot = json_value(task.get("snapshot_json"), {})
+        scope_mode = str(snapshot.get("scope", {}).get("mode", "manual"))
+        dataset = load_cached_dataset(
+            str(task["return_file_path"]),
+            str(task["product_file_path"]),
+            str(task["store"]),
+            task["listing"],
+            scope_mode,
+            str(task["return_sha256"]),
+            str(task["product_sha256"]),
+        )
+        all_keys = {
+            str(key) for key in json_value(segment["classification_keys_json"], [])
+        }
+        context.existing_results = {
+            key: value
+            for key, value in context.existing_results.items()
+            if key in all_keys
+        }
+        remaining_keys = all_keys - set(context.existing_results)
+        selected = dataset.unique_comments.loc[
+            dataset.unique_comments["classification_key"]
+            .astype(str)
+            .isin(remaining_keys)
+        ].reset_index(drop=True)
+
+        capability = self._capability_for_segment(segment)
+        taxonomy = self._taxonomy_for_segment(segment, capability)
+        base_settings = self._snapshot_model_settings(task, snapshot)
+        runtime = self._build_segment_runtime(
+            segment,
+            base_settings,
+            str(task["config_version_id"]),
+            str(task["store"]),
+            task["listing"],
+        )
+        run = self._classify_segment(
+            context,
+            selected,
+            taxonomy,
+            runtime,
+            len(all_keys),
+        )
+        context.latest_run = run
+        self._complete_segment_run(context, dataset, all_keys, taxonomy, run)
+
+    def _classify_segment(
+        self,
+        context: _SegmentRunContext,
+        selected: pd.DataFrame,
+        taxonomy: TaxonomyConfig,
+        runtime: CategorySegmentRuntime,
+        total: int,
+    ) -> PipelineRun:
+        completed_base = len(context.existing_results)
+
+        def progress(current: int, _total: int) -> None:
+            completed = completed_base + current
+            if completed == total or completed == 1 or completed % 5 == 0:
+                self._update_segment_progress(
+                    context.task_id,
+                    context.segment_id,
+                    completed,
+                    total,
+                )
+
+        def checkpoint(run: PipelineRun) -> None:
+            self._save_segment_checkpoint(context, run)
+
+        def model_degraded(
+            run: PipelineRun,
+            consecutive_failures: int,
+            error: str,
+        ) -> None:
+            self._save_segment_checkpoint(context, run)
+            if consecutive_failures == 3:
+                self._record_model_degraded(
+                    context.task_id,
+                    context.segment_id,
+                    error,
+                    consecutive_failures,
+                )
+
+        if selected.empty:
+            return PipelineRun(
+                classifications={},
+                usage={},
+                usage_by_model={},
+                cache_hits=0,
+                cache_hits_by_model={},
+                model_calls=0,
+                model_calls_by_model={},
+                request_metrics={},
+                routing={},
             )
+        task = context.task
+        return classify_comments(
+            unique_comments=selected,
+            taxonomy=taxonomy,
+            claims=runtime.claims,
+            client=runtime.client,
+            cache=self._get_cache(f"{task['id']}-{task['config_version_id']}"),
+            secondary_model=runtime.secondary_model,
+            model_policy_version=str(runtime.model_policy["version"]),
+            secondary_is_fallback=bool(
+                runtime.model_policy["actual"].get("review")
+                and runtime.model_policy["actual"]["review"].get("fallback_from")
+                == "secondary"
+            ),
+            progress=progress,
+            should_cancel=lambda: self._segment_should_stop(
+                context.task_id,
+                context.segment_id,
+            ),
+            checkpoint=checkpoint,
+            on_model_degraded=model_degraded,
+        )
 
+    def _save_segment_checkpoint(
+        self,
+        context: _SegmentRunContext,
+        run: PipelineRun,
+    ) -> None:
+        context.latest_run = run
+        combined = {**context.existing_results, **run.classifications}
+        self._write_checkpoint(context.checkpoint_path, combined)
+        self._update_segment_runtime_metrics(
+            context.segment_id,
+            *context.runtime_totals(),
+        )
+
+    def _complete_segment_run(
+        self,
+        context: _SegmentRunContext,
+        dataset: ReturnDataset,
+        all_keys: set[str],
+        taxonomy: TaxonomyConfig,
+        run: PipelineRun,
+    ) -> None:
+        results = {**context.existing_results, **run.classifications}
+        if set(results) != all_keys:
+            missing_count = len(all_keys - set(results))
+            raise ValueError(f"Listing 片段仍缺少 {missing_count} 组分类结果")
+        self._write_checkpoint(context.checkpoint_path, results)
+        segment_dataset = self._subset_dataset(dataset, all_keys)
+        result_version = int(context.segment["result_version"] or 0) + 1
+        output_path = (
+            self.settings.data_dir
+            / "results"
+            / context.task_id
+            / "segments"
+            / f"{context.segment_id}-analysis-v{result_version}.xlsx"
+        )
+        model_calls, cache_hits, model_failures = context.runtime_totals()
+        self._complete_segment(
+            task_id=context.task_id,
+            segment_id=context.segment_id,
+            status=(
+                "completed_with_errors"
+                if self._results_have_quality_errors(results)
+                else "completed"
+            ),
+            progress_total=len(all_keys),
+            model_calls=model_calls,
+            cache_hits=cache_hits,
+            model_failures=model_failures,
+            checkpoint_path=context.checkpoint_path,
+            result_version=result_version,
+            dataset=segment_dataset,
+            results=results,
+            taxonomy=taxonomy,
+        )
+        self._export_legacy_segment_result(
+            context,
+            output_path,
+            segment_dataset,
+            results,
+            taxonomy,
+        )
+        self._refresh_parent(context.task_id, dataset)
+
+    def _export_legacy_segment_result(
+        self,
+        context: _SegmentRunContext,
+        output_path: Path,
+        dataset: ReturnDataset,
+        results: dict[str, ValidatedClassification],
+        taxonomy: TaxonomyConfig,
+    ) -> None:
         try:
-            snapshot = json_value(task.get("snapshot_json"), {})
-            scope_mode = str(snapshot.get("scope", {}).get("mode", "manual"))
-            dataset = load_cached_dataset(
-                str(task["return_file_path"]),
-                str(task["product_file_path"]),
-                str(task["store"]),
-                task["listing"],
-                scope_mode,
-                str(task["return_sha256"]),
-                str(task["product_sha256"]),
-            )
-            all_keys = {
-                str(key) for key in json_value(segment["classification_keys_json"], [])
-            }
-            existing_results = {
-                key: value for key, value in existing_results.items() if key in all_keys
-            }
-            remaining_keys = all_keys - set(existing_results)
-            selected = dataset.unique_comments.loc[
-                dataset.unique_comments["classification_key"]
-                .astype(str)
-                .isin(remaining_keys)
-            ].reset_index(drop=True)
-
-            capability = self._capability_for_segment(segment)
-            taxonomy = self._taxonomy_for_segment(segment, capability)
-            base_settings = self._snapshot_model_settings(task, snapshot)
-            runtime = self._build_segment_runtime(
-                segment,
-                base_settings,
-                str(task["config_version_id"]),
-                str(task["store"]),
-                task["listing"],
-            )
-            completed_base = len(existing_results)
-            total = len(all_keys)
-
-            def progress(current: int, _total: int) -> None:
-                completed = completed_base + current
-                if completed == total or completed == 1 or completed % 5 == 0:
-                    self._update_segment_progress(
-                        task_id,
-                        segment_id,
-                        completed,
-                        total,
-                    )
-
-            def checkpoint(run: PipelineRun) -> None:
-                nonlocal latest_run
-                latest_run = run
-                combined = {**existing_results, **run.classifications}
-                self._write_checkpoint(checkpoint_path, combined)
-                self._update_segment_runtime_metrics(
-                    segment_id,
-                    *runtime_totals(run),
-                )
-
-            def model_degraded(
-                run: PipelineRun,
-                consecutive_failures: int,
-                error: str,
-            ) -> None:
-                nonlocal latest_run
-                latest_run = run
-                combined = {**existing_results, **run.classifications}
-                self._write_checkpoint(checkpoint_path, combined)
-                self._update_segment_runtime_metrics(
-                    segment_id,
-                    *runtime_totals(run),
-                )
-                if consecutive_failures == 3:
-                    self._record_model_degraded(
-                        task_id,
-                        segment_id,
-                        error,
-                        consecutive_failures,
-                    )
-
-            if selected.empty:
-                run = PipelineRun(
-                    classifications={},
-                    usage={},
-                    usage_by_model={},
-                    cache_hits=0,
-                    cache_hits_by_model={},
-                    model_calls=0,
-                    model_calls_by_model={},
-                    request_metrics={},
-                    routing={},
-                )
-            else:
-                run = classify_comments(
-                    unique_comments=selected,
-                    taxonomy=taxonomy,
-                    claims=runtime.claims,
-                    client=runtime.client,
-                    cache=self._get_cache(f"{task['id']}-{task['config_version_id']}"),
-                    secondary_model=runtime.secondary_model,
-                    model_policy_version=str(runtime.model_policy["version"]),
-                    secondary_is_fallback=bool(
-                        runtime.model_policy["actual"].get("review")
-                        and runtime.model_policy["actual"]["review"].get(
-                            "fallback_from"
-                        )
-                        == "secondary"
-                    ),
-                    progress=progress,
-                    should_cancel=lambda: self._segment_should_stop(
-                        task_id,
-                        segment_id,
-                    ),
-                    checkpoint=checkpoint,
-                    on_model_degraded=model_degraded,
-                )
-            latest_run = run
-            results = {**existing_results, **run.classifications}
-            if set(results) != all_keys:
-                missing_count = len(all_keys - set(results))
-                raise ValueError(f"Listing 片段仍缺少 {missing_count} 组分类结果")
-            self._write_checkpoint(checkpoint_path, results)
-            segment_dataset = self._subset_dataset(dataset, all_keys)
-            result_version = int(segment["result_version"] or 0) + 1
-            output_path = segment_dir / f"{segment_id}-analysis-v{result_version}.xlsx"
-            has_errors = self._results_have_quality_errors(results)
-            model_calls, cache_hits, model_failures = runtime_totals(run)
-            self._complete_segment(
-                task_id=task_id,
-                segment_id=segment_id,
-                status="completed_with_errors" if has_errors else "completed",
-                progress_total=total,
-                model_calls=model_calls,
-                cache_hits=cache_hits,
-                model_failures=model_failures,
-                checkpoint_path=checkpoint_path,
-                result_version=result_version,
-                dataset=segment_dataset,
+            export_results(
+                output_path=output_path,
+                dataset=dataset,
                 results=results,
                 taxonomy=taxonomy,
             )
-            try:
-                export_results(
-                    output_path=output_path,
-                    dataset=segment_dataset,
-                    results=results,
-                    taxonomy=taxonomy,
-                )
-                self.result_service.attach_legacy_file(
-                    segment_id,
-                    str(output_path),
-                )
-            except Exception as exc:
-                self.result_service.record_legacy_export_error(
-                    task_id,
-                    segment_id,
-                    str(exc),
-                )
-            self._refresh_parent(task_id, dataset)
-        except PipelineCancelled:
-            model_calls, cache_hits, model_failures = runtime_totals(latest_run)
-            self._finish_interrupted_segment(
-                task_id,
-                segment_id,
-                existing_results,
-                latest_run,
-                checkpoint_path,
-                model_calls,
-                cache_hits,
-                model_failures,
-            )
-        except ModelServiceUnavailable as exc:
-            model_calls, cache_hits, model_failures = runtime_totals(latest_run)
-            self._finish_model_service_paused(
-                task_id,
-                segment_id,
-                str(exc),
-                existing_results,
-                latest_run,
-                checkpoint_path,
-                model_calls,
-                cache_hits,
-                model_failures,
-            )
-        except ResultPublicationError as exc:
-            model_calls, cache_hits, model_failures = runtime_totals(latest_run)
-            self._finish_result_publish_failed_segment(
-                task_id,
-                segment_id,
-                str(exc),
-                latest_run,
-                checkpoint_path,
-                existing_results,
-                model_calls,
-                cache_hits,
-                model_failures,
+            self.result_service.attach_legacy_file(
+                context.segment_id,
+                str(output_path),
             )
         except Exception as exc:
-            model_calls, cache_hits, model_failures = runtime_totals(latest_run)
-            self._finish_failed_segment(
-                task_id,
-                segment_id,
+            self.result_service.record_legacy_export_error(
+                context.task_id,
+                context.segment_id,
                 str(exc),
-                latest_run,
-                checkpoint_path,
-                existing_results,
-                model_calls,
-                cache_hits,
-                model_failures,
             )
 
     def classify_taxonomy_sample(

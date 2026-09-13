@@ -15,18 +15,18 @@ import {
 } from "@phosphor-icons/react";
 
 import { navigateHash } from "../../app/hashRouter";
+import { Pagination } from "../../components/Pagination";
 import { EmptyState, InlineLoading, PageHeading } from "../../components/SharedUi";
 import { formatTime } from "../../lib/presentation";
+import { PAGE_SIZES } from "../../shared/pagination";
 import { dashboardApi } from "../../shared/api/dashboardApi";
 import { DashboardCreateFlow } from "./DashboardCreateFlow";
-import { DashboardPagination } from "./DashboardPagination";
 import { createDashboardSelection } from "./dashboardSelectionStorage";
 
 const DashboardDetail = lazy(() =>
   import("./DashboardDetail").then((module) => ({ default: module.DashboardDetail })),
 );
 
-const PAGE_SIZES = [20, 50, 100];
 const TABS = new Set(["overview", "report", "source", "history"]);
 
 function routeState(query) {
@@ -254,7 +254,7 @@ function DashboardList({ route, updateRoute, userId }) {
                 <span>看板名称</span>
                 <span>当前版本</span>
                 <span>数据范围</span>
-                <span>记录数</span>
+                <span>评论数</span>
                 <span>最近更新</span>
                 <span>创建人</span>
                 <span>操作</span>
@@ -274,7 +274,7 @@ function DashboardList({ route, updateRoute, userId }) {
                 />
               ))}
             </div>
-            <DashboardPagination
+            <Pagination
               page={route.page}
               pageSize={route.pageSize}
               total={state.data.total}
@@ -303,7 +303,9 @@ function DashboardRow({ dashboard, onOpen }) {
       </div>
       <b>v{dashboard.current_version || dashboard.version || 1}</b>
       <span>{Number(summary.listing_count || 0).toLocaleString()} 个 Listing</span>
-      <span>{Number(summary.record_count || 0).toLocaleString()} 条</span>
+      <span>
+        {Number(summary.comment_count ?? summary.record_count ?? 0).toLocaleString()} 条
+      </span>
       <span>{formatTime(dashboard.updated_at || dashboard.created_at)}</span>
       <span>{dashboard.created_by_name || "未提供"}</span>
       <button className="secondary-button compact-button" onClick={onOpen}>

@@ -149,6 +149,11 @@ def create_review_router(
                 label_code=payload.label_code,
                 note=payload.reason,
                 action=payload.action,
+                review_assessment={
+                    "label_correctness": payload.label_correctness,
+                    "evidence_completeness": payload.evidence_completeness,
+                    "review_routing": payload.review_routing,
+                },
             )
         except (ReviewBatchConflict, RevisionConflict) as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -169,6 +174,11 @@ def create_review_router(
                 action=payload.action,
                 label_code=payload.label_code,
                 note=payload.reason,
+                review_assessment={
+                    "label_correctness": payload.label_correctness,
+                    "evidence_completeness": payload.evidence_completeness,
+                    "review_routing": payload.review_routing,
+                },
             )
         except (ReviewBatchConflict, RevisionConflict) as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc

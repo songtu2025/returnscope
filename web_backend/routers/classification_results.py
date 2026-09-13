@@ -4,6 +4,10 @@ from typing import Any, Callable
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
+from web_backend.api_schemas import (
+    ClassificationResultRecordsResponse,
+    ClassificationResultSummaryResponse,
+)
 from web_backend.classification_result_service import (
     ClassificationResultNotFound,
     ClassificationResultService,
@@ -81,6 +85,7 @@ def create_classification_result_router(
     @router.get(
         "/api/classification-results/{version_id}/summary",
         dependencies=[Depends(current_user)],
+        response_model=ClassificationResultSummaryResponse,
     )
     def get_summary(version_id: str) -> dict[str, Any]:
         try:
@@ -91,6 +96,7 @@ def create_classification_result_router(
     @router.get(
         "/api/classification-results/{version_id}/records",
         dependencies=[Depends(current_user)],
+        response_model=ClassificationResultRecordsResponse,
     )
     def list_records(
         version_id: str,

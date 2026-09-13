@@ -32,7 +32,7 @@ export function readDashboardSelection(userId, token) {
   }
 }
 
-export function writeDashboardSelection(userId, token, value) {
+function writeDashboardSelection(userId, token, value) {
   if (!token) return;
   sessionStorage.setItem(
     storageKey(userId, token),
@@ -51,7 +51,7 @@ export function clearDashboardSelection(userId, token) {
   if (token) sessionStorage.removeItem(storageKey(userId, token));
 }
 
-export function resultVersionId(result) {
+function resultVersionId(result) {
   return result.version_id || result.result_version_id || result.id;
 }
 

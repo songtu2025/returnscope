@@ -7,7 +7,9 @@ from web_backend.classification_reference_scope import (
     compare_reference_scope,
 )
 from web_backend.classification_validation_quality import (
+    ERROR_METRICS,
     FACT_QUALITY_POLICY,
+    SCOPE_FIELDS,
     quality_gate,
 )
 
@@ -182,21 +184,35 @@ def test_invalid_scope_fails_during_upload(row, code):
         append_reference_scope({}, row, "one", code)
 
 
-def test_v2_requires_scope_coverage_while_frozen_v1_stays_compatible():
+def test_v4_warns_for_missing_scope_while_frozen_v3_still_blocks():
     evaluation = {
         "sample_count": 20,
         "total_sample_count": 20,
         "fact_state_sample_count": 20,
-        "sides": {"draft": dict.fromkeys(FACT_QUALITY_POLICY["thresholds"], 0)},
+        "sides": {"draft": dict.fromkeys(ERROR_METRICS, 0)},
     }
     summary = {"reference_evaluation": evaluation}
     gate = quality_gate(summary, FACT_QUALITY_POLICY)
-    assert not gate["passed"]
-    assert len(gate["blocking"]) == 4
+    assert gate["passed"]
+    assert gate["blocking"] == []
+    assert sum("参考未完整评估" in warning for warning in gate["warnings"]) == 4
     legacy = deepcopy(FACT_QUALITY_POLICY)
-    legacy.pop("require_scope_dimensions")
-    legacy["version"] = "fact-reference-v1"
-    assert quality_gate(summary, legacy)["passed"]
+    legacy.update(
+        version="fact-reference-v3",
+        thresholds=dict.fromkeys(ERROR_METRICS, 0),
+        min_reference_samples=20,
+        min_reference_coverage=100,
+        min_instance_match_rate=100,
+        max_duplicate_rate=0,
+        require_fact_states=True,
+        require_scope_dimensions=list(SCOPE_FIELDS),
+    )
+    legacy.pop("warning_metrics")
+    legacy.pop("warn_incomplete_fact_states")
+    legacy.pop("warn_incomplete_scope_dimensions")
+    frozen_gate = quality_gate(summary, legacy)
+    assert not frozen_gate["passed"]
+    assert len(frozen_gate["blocking"]) == 4
     evaluation["scope_sample_counts"] = dict.fromkeys(
         ("event", "condition", "subject", "primary"), 20
     )

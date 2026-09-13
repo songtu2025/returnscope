@@ -250,8 +250,7 @@ def test_v6_keeps_numbers_and_ranking_deterministic(tmp_path) -> None:
     assert "7" not in first_issue["recommendation"]["validation_question"]
     assert "80" not in first_issue["recommendation"]["rationale"]
     assert all(
-        "50" not in item
-        for item in first_issue["recommendation"]["suggested_evidence"]
+        "50" not in item for item in first_issue["recommendation"]["suggested_evidence"]
     )
     assert first["evidence_hash"] == second["evidence_hash"]
 
@@ -261,9 +260,7 @@ def test_issue_decision_put_is_idempotent_and_audited(tmp_path) -> None:
     report = _complete_report(dashboard, service)
     issue_id = report["content"]["issues"][0]["id"]
     app = FastAPI()
-    app.include_router(
-        create_insight_report_router(service, lambda: {"id": "user-1"})
-    )
+    app.include_router(create_insight_report_router(service, lambda: {"id": "user-1"}))
     client = TestClient(app)
 
     first = client.put(
@@ -337,16 +334,16 @@ def test_v5_report_is_serialized_without_v6_conversion(tmp_path) -> None:
     assert legacy["quality_gate"]["decision_readiness"]["status"] == "actionable"
 
 
-def test_report_profile_supports_same_category_multi_listing_and_generic_fallback() -> None:
+def test_report_profile_supports_same_category_multi_listing_and_generic_fallback() -> (
+    None
+):
     same_category = resolve_insight_report_profile(
         [{"agent_key": "gloves"}, {"agent_key": "gloves"}]
     )
     mixed_category = resolve_insight_report_profile(
         [{"agent_key": "gloves"}, {"agent_key": "footwear"}]
     )
-    unknown_category = resolve_insight_report_profile(
-        [{"agent_key": "unknown"}]
-    )
+    unknown_category = resolve_insight_report_profile([{"agent_key": "unknown"}])
 
     assert same_category.key == "gloves"
     assert same_category.snapshot()["category_name"] == "手套"
@@ -709,14 +706,11 @@ def test_glove_evidence_uses_variant_diagnostic_blueprint() -> None:
         evidence,
         analysis["text_quality"],
     )
-    evaluated_action_ids = [
-        item["id"] for item in evaluated["content"]["actions"]
-    ]
+    evaluated_action_ids = [item["id"] for item in evaluated["content"]["actions"]]
     assert "action.diagnostic" in evaluated_action_ids
     assert evaluated["evidence"]["analysis"]["diagnostics"][0]["variants"]
     assert (
-        evaluated["quality_gate"]["decision_readiness"]["status"]
-        == "diagnostic_only"
+        evaluated["quality_gate"]["decision_readiness"]["status"] == "diagnostic_only"
     )
 
 
@@ -892,9 +886,11 @@ def test_untrusted_quality_signals_preserve_all_report_caveats() -> None:
     assert evaluated["quality_gate"]["decision_readiness"]["status"] == (
         "diagnostic_only"
     )
-    assert [
-        item["code"] for item in evaluated["quality_gate"]["issues"]
-    ] == ["text_quality", "product_mapping", "pending_review"]
+    assert [item["code"] for item in evaluated["quality_gate"]["issues"]] == [
+        "text_quality",
+        "product_mapping",
+        "pending_review",
+    ]
     assert all(
         issue["scope"]["product"] is None and issue["scope"]["sku"] is None
         for issue in evaluated["content"]["issues"]
@@ -967,9 +963,7 @@ def test_live_quality_gate_sanitizes_existing_report() -> None:
                     "product_name": "SK001-701",
                     "product_sku": "SK001-701-40",
                     "samples": [{"comment": "Didn稚 fit"}],
-                    "semantic_profile": {
-                        "opinions": [{"opinion": "Didn稚 fit"}]
-                    },
+                    "semantic_profile": {"opinions": [{"opinion": "Didn稚 fit"}]},
                 }
             ],
             "samples": [{"comment": "Didn稚 fit"}],

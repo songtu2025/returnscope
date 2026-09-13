@@ -8,7 +8,7 @@ const STATE_ALIASES = {
   unusable: "unusable",
 };
 
-export const RESULT_STATE_LABELS = {
+const RESULT_STATE_LABELS = {
   ready: "可用",
   needs_review: "需复核",
   "review-derived": "复核已发布",
@@ -46,7 +46,7 @@ export function resultStateLabel(result) {
   return RESULT_STATE_LABELS[resultState(result)];
 }
 
-export function resultBlockingReason(result) {
+function resultBlockingReason(result) {
   if (Array.isArray(result?.blocking_reasons)) {
     const messages = result.blocking_reasons
       .map((reason) => (typeof reason === "string" ? reason : reason?.message))

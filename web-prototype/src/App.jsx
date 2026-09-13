@@ -688,4 +688,3 @@ function GlobalSearch({ onClose, onSelect, notify }) {
 }
 
 export { App };
-export default App;

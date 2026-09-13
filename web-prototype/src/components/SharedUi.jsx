@@ -110,16 +110,6 @@ export function StatusBadge({ value }) {
   );
 }
 
-export function Kpi({ label, value, note }) {
-  return (
-    <div className="kpi-card">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{note}</small>
-    </div>
-  );
-}
-
 export function EmptyState({ icon: Icon, title, description, action }) {
   return (
     <div className="empty-state">

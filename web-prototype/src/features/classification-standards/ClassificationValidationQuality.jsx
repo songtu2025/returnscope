@@ -104,6 +104,8 @@ export function ClassificationValidationQuality({ run }) {
     },
   ];
   const gate = run.quality_gate;
+  const blocking = /** @type {string[]} */ (gate?.blocking || []);
+  const warnings = /** @type {string[]} */ (gate?.warnings || []);
   const referenceEvaluation = run.summary?.reference_evaluation;
   return (
     <section className="standard-quality-summary" aria-label="质量门槛与问题分组">
@@ -123,12 +125,25 @@ export function ClassificationValidationQuality({ run }) {
           {gate?.note ||
             "自动检查只覆盖人工参考答案；观点与证据是否充分、覆盖缺口及业务歧义仍需人工判断。"}
         </p>
-        {gate?.blocking?.length > 0 && (
-          <ul>
-            {gate.blocking.map((reason) => (
-              <li key={reason}>{reason}</li>
-            ))}
-          </ul>
+        {blocking.length > 0 && (
+          <div>
+            <strong>发布阻断项</strong>
+            <ul>
+              {blocking.map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {warnings.length > 0 && (
+          <div>
+            <strong>人工复核警告</strong>
+            <ul>
+              {warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          </div>
         )}
         {gate?.policy && (
           <small>
@@ -139,7 +154,7 @@ export function ClassificationValidationQuality({ run }) {
             {gate.policy.max_duplicate_rate}%。
             {gate.policy.thresholds && (
               <>
-                零错误项：
+                发布阻断零容忍项：
                 {Object.entries(gate.policy.thresholds)
                   .filter(([, limit]) => limit === 0)
                   .map(([key]) => ISSUE_LABELS[key] || key)

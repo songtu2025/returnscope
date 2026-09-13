@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -307,3 +308,38 @@ def test_rejects_database_without_ciphertext(
             == 0
         )
     assert not list((settings.data_dir / "backups").glob("*.zip"))
+
+
+def test_transaction_failure_rolls_back_all_ciphertexts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = _settings(tmp_path)
+    old_key = _key()
+    database = _seed_configs(settings, old_key)
+    before = _ciphertexts(database)
+    backup_dir = settings.data_dir / "backups"
+    monkeypatch.setenv("WEBAPP_BACKUP_DIR", str(backup_dir))
+    with database.transaction(immediate=True) as connection:
+        connection.execute(
+            """
+            CREATE TRIGGER fail_second_key_rotation
+            BEFORE UPDATE OF api_key_ciphertext ON api_config_versions
+            WHEN OLD.id = 'config-2'
+            BEGIN
+                SELECT RAISE(ABORT, 'forced rotation failure');
+            END
+            """
+        )
+
+    with pytest.raises(sqlite3.IntegrityError, match="forced rotation failure"):
+        rotate_api_config_keys(
+            settings,
+            app_stopped=True,
+            new_key=_key(),
+            old_key=old_key,
+            from_development_key=False,
+        )
+
+    assert _ciphertexts(database) == before
+    assert len(list(backup_dir.glob("seekway-backup-*.zip"))) == 1

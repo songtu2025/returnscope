@@ -14,7 +14,7 @@ def prompt_version(taxonomy: TaxonomyConfig) -> str:
         "legacy_v3": PROMPT_VERSION,
         "keyword_free_v1": "category-keyword-free-v3",
         "semantic_v1": "category-semantic-evidence-v3",
-        "fact_v2": "category-fact-v2-v10",
+        "fact_v2": "category-fact-v2-v33",
     }[taxonomy.recognition_profile]
 
 
@@ -33,7 +33,7 @@ def recognition_fingerprint(taxonomy: TaxonomyConfig) -> str:
     content["prompt_version"] = prompt_version(taxonomy)
     content["validator_version"] = {
         "semantic_v1": "evidence-validator-v2",
-        "fact_v2": "evidence-fact-validator-v3",
+        "fact_v2": "evidence-fact-validator-v11",
     }.get(taxonomy.recognition_profile, "evidence-validator-v1")
     return hashlib.sha256(
         json.dumps(

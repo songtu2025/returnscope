@@ -29,15 +29,30 @@ ERROR_METRICS = (
     "plan_confirmation_errors",
     *SCOPE_METRICS,
 )
+HIGH_DAMAGE_METRICS = (
+    "model_errors",
+    "evidence_errors",
+    "plan_confirmation_errors",
+    "product_errors",
+    "direction_errors",
+    "subject_errors",
+    "primary_errors",
+)
+WARNING_METRICS = tuple(
+    metric for metric in ERROR_METRICS if metric not in HIGH_DAMAGE_METRICS
+)
 FACT_QUALITY_POLICY = {
-    "version": "fact-reference-v3",
-    "thresholds": dict.fromkeys(ERROR_METRICS, 0),
-    "min_reference_samples": 20,
-    "min_reference_coverage": 100,
-    "min_instance_match_rate": 100,
-    "max_duplicate_rate": 0,
-    "require_fact_states": True,
-    "require_scope_dimensions": list(SCOPE_FIELDS),
+    "version": "fact-reference-v4",
+    "thresholds": dict.fromkeys(HIGH_DAMAGE_METRICS, 0),
+    "warning_metrics": list(WARNING_METRICS),
+    "min_reference_samples": 15,
+    "min_reference_coverage": 80,
+    "min_instance_match_rate": 80,
+    "max_duplicate_rate": 10,
+    "require_fact_states": False,
+    "warn_incomplete_fact_states": True,
+    "require_scope_dimensions": [],
+    "warn_incomplete_scope_dimensions": list(SCOPE_FIELDS),
 }
 METRIC_LABELS = dict(
     zip(
@@ -423,6 +438,7 @@ def quality_gate(summary: dict, policy: dict | None = None) -> dict:
             "status": "not_configured",
             "passed": True,
             "blocking": [],
+            "warnings": [],
             "note": "未配置自动质量门槛，需人工审阅；不代表语义质量已通过",
         }
     values = evaluation.get("sides", {}).get("draft", {})
@@ -430,6 +446,11 @@ def quality_gate(summary: dict, policy: dict | None = None) -> dict:
         f"{METRIC_LABELS.get(metric, metric)}={values.get(metric, '未评估')}，要求不超过 {limit}"
         for metric, limit in policy["thresholds"].items()
         if metric not in values or values[metric] > limit
+    ]
+    warnings = [
+        f"{METRIC_LABELS.get(metric, metric)}={values.get(metric, '未评估')}，请人工复核"
+        for metric in policy.get("warning_metrics", [])
+        if metric not in values or values[metric] > 0
     ]
     sample_count = evaluation.get("sample_count", 0)
     if sample_count < policy["min_reference_samples"]:
@@ -442,6 +463,12 @@ def quality_gate(summary: dict, policy: dict | None = None) -> dict:
         if count != total or not total:
             blocking.append(
                 f"{SCOPE_FIELDS[dimension][0]}参考未完整评估：{count}/{total} 条；旧表缺列不代表零错误"
+            )
+    for dimension in policy.get("warn_incomplete_scope_dimensions", []):
+        count = evaluation.get("scope_sample_counts", {}).get(dimension, 0)
+        if count != total or not total:
+            warnings.append(
+                f"{SCOPE_FIELDS[dimension][0]}参考未完整评估：{count}/{total} 条；请在人工审批时核对"
             )
     coverage = sample_count / total * 100 if total else 0
     denominator = max(
@@ -462,6 +489,8 @@ def quality_gate(summary: dict, policy: dict | None = None) -> dict:
             blocking.append(
                 f"{message} {actual:.2f}%，要求{'至少' if minimum else '不超过'} {limit}%"
             )
+        elif (minimum and actual < 100) or (not minimum and actual > 0):
+            warnings.append(f"{message} {actual:.2f}%，请人工复核")
     if (
         policy.get("require_fact_states")
         and evaluation.get("fact_state_sample_count", 0) != total
@@ -469,10 +498,18 @@ def quality_gate(summary: dict, policy: dict | None = None) -> dict:
         blocking.append(
             "事实状态参考答案不完整：每条参考行须填写事实状态及对应证据；不能将未验证状态算作通过"
         )
+    if (
+        policy.get("warn_incomplete_fact_states")
+        and evaluation.get("fact_state_sample_count", 0) != total
+    ):
+        warnings.append(
+            "事实状态参考答案不完整：请在人工审批时核对未标注样本的事实状态"
+        )
     return {
         "status": "failed" if blocking else "passed",
         "passed": not blocking,
         "blocking": blocking,
+        "warnings": warnings,
         "policy": policy,
         "reference_coverage": coverage,
         "instance_match_rate": match_rate,

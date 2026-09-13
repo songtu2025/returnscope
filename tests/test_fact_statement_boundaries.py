@@ -60,5 +60,9 @@ def test_statement_and_subject_projection_preserves_semantic_boundary(
         allowed={"f1": [label.code]},
     )
     assert result.extracted_facts[0].statement_type == statement
-    assert result.semantic_units[0].subject == subject
-    assert result.semantic_units[0].assertion == assertion
+    if statement in {"NEGATED", "ADVICE"}:
+        assert result.semantic_units == []
+        assert result.unknown_semantics[0].disposition == "EXPECTED_ABSTENTION"
+    else:
+        assert result.semantic_units[0].subject == subject
+        assert result.semantic_units[0].assertion == assertion

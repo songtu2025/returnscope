@@ -137,6 +137,7 @@ def test_review_batch_list_discovery_conflict_and_derived_summary(
     )
     detail = client.get(f"/api/review-batches/{batch['id']}")
     assert detail.status_code == 200
+    assert detail.json()["status"] == "published"
     assert detail.json()["derived_result_version_id"] == derived["version_id"]
     assert detail.json()["derived_version_no"] == 2
     assert detail.json()["resolved_count"] == 1

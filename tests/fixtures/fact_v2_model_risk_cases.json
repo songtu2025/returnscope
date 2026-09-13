@@ -1,0 +1,757 @@
+{
+  "schema_version": 1,
+  "data_origin": "synthetic",
+  "target_profile": "fact_v2",
+  "taxonomy_version": "gloves-unified-2026-09-08-v1-semantic1",
+  "cases": [
+    {
+      "case_id": "multi_fact_warm_and_lightweight_01",
+      "risk_type": "MULTI_FACT_PRESERVATION",
+      "comment": "On my dawn walk, the gloves kept my hands warm and were easy to carry in my coat pocket.",
+      "expected_facts": [
+        {
+          "fact_id": "F1",
+          "opinion": "The gloves kept the reviewer warm during the walk.",
+          "sentiment": "POSITIVE",
+          "statement_type": "EXPERIENCE",
+          "fact_role": "CONCLUSION",
+          "evidence": "kept my hands warm",
+          "product_ref": "CURRENT",
+          "condition": "dawn walk",
+          "reference_basis": "NONE",
+          "required_label_code": "GLOVE_WARMTH_U1",
+          "expected_disposition": null
+        },
+        {
+          "fact_id": "F2",
+          "opinion": "The gloves were easy to carry in a coat pocket.",
+          "sentiment": "POSITIVE",
+          "statement_type": "EVALUATION",
+          "fact_role": "CONCLUSION",
+          "evidence": "were easy to carry in my coat pocket",
+          "product_ref": "CURRENT",
+          "condition": "carried in coat pocket",
+          "reference_basis": "NONE",
+          "required_label_code": "GLOVE_PORTABILITY_U1",
+          "expected_disposition": null
+        }
+      ],
+      "required_labels": [
+        "GLOVE_WARMTH_U1",
+        "GLOVE_PORTABILITY_U1"
+      ],
+      "forbidden_labels": [
+        "GLOVE_HAND_DEXTERITY_U1"
+      ],
+      "expected_needs_review": false,
+      "damage_level": "HIGH"
+    },
+    {
+      "case_id": "multi_fact_cold_and_lightweight_02",
+      "risk_type": "MULTI_FACT_PRESERVATION",
+      "comment": "During the bus stop wait, my hands stayed cold, although the gloves felt light on my hands.",
+      "expected_facts": [
+        {
+          "fact_id": "F1",
+          "opinion": "The gloves did not keep the reviewer's hands warm at the bus stop.",
+          "sentiment": "NEGATIVE",
+          "statement_type": "EXPERIENCE",
+          "fact_role": "CONCLUSION",
+          "evidence": "my hands stayed cold",
+          "product_ref": "CURRENT",
+          "condition": "bus stop wait",
+          "reference_basis": "NONE",
+          "required_label_code": "GLOVE_WARMTH_U1",
+          "expected_disposition": null
+        },
+        {
+          "fact_id": "F2",
+          "opinion": "The gloves felt lightweight while worn.",
+          "sentiment": "POSITIVE",
+          "statement_type": "EXPERIENCE",
+          "fact_role": "CONCLUSION",
+          "evidence": "gloves felt light on my hands",
+          "product_ref": "CURRENT",
+          "condition": "worn at bus stop",
+          "reference_basis": "NONE",
+          "required_label_code": "GLOVE_BULK_WEIGHT_U1",
+          "expected_disposition": null
+        }
+      ],
+      "required_labels": [
+        "GLOVE_WARMTH_U1",
+        "GLOVE_BULK_WEIGHT_U1"
+      ],
+      "forbidden_labels": [
+        "GLOVE_HAND_DEXTERITY_U1"
+      ],
+      "expected_needs_review": false,
+      "damage_level": "HIGH"
+    },
+    {
+      "case_id": "multi_fact_warm_and_bulky_03",
+      "risk_type": "MULTI_FACT_PRESERVATION",
+      "comment": "The gloves stayed warm during snow clearing, but they felt bulky around my hands.",
+      "expected_facts": [
+        {
+          "fact_id": "F1",
+          "opinion": "The gloves stayed warm while clearing snow.",
+          "sentiment": "POSITIVE",
+          "statement_type": "EXPERIENCE",
+          "fact_role": "CONCLUSION",
+          "evidence": "gloves stayed warm during snow clearing",
+          "product_ref": "CURRENT",
+          "condition": "snow clearing",
+          "reference_basis": "NONE",
+          "required_label_code": "GLOVE_WARMTH_U1",
+          "expected_disposition": null
+        },
+        {
+          "fact_id": "F2",
+          "opinion": "The gloves felt bulky around the reviewer's hands.",
+          "sentiment": "NEGATIVE",
+          "statement_type": "EXPERIENCE",
+          "fact_role": "CONCLUSION",
+          "evidence": "felt bulky around my hands",
+          "product_ref": "CURRENT",
+          "condition": "snow clearing",
+          "reference_basis": "NONE",
+          "required_label_code": "GLOVE_BULK_WEIGHT_U1",
+          "expected_disposition": null
+        }
+      ],
+      "required_labels": [
+        "GLOVE_WARMTH_U1",
+        "GLOVE_BULK_WEIGHT_U1"
+      ],
+      "forbidden_labels": [
+        "GLOVE_HAND_DEXTERITY_U1"
+      ],
+      "expected_needs_review": false,
+      "damage_level": "HIGH"
+    },
+    {
+      "case_id": "multi_fact_cold_and_heavy_04",
+      "risk_type": "MULTI_FACT_PRESERVATION",
+      "comment": "On a short bike ride, the gloves did not keep me warm and felt heavy after ten minutes.",
+      "expected_facts": [
+        {
+          "fact_id": "F1",
+          "opinion": "The gloves did not keep the reviewer warm on the ride.",
+          "sentiment": "NEGATIVE",
+          "statement_type": "EXPERIENCE",
+          "fact_role": "CONCLUSION",
+          "evidence": "did not keep me warm",
+          "product_ref": "CURRENT",
+          "condition": "short bike ride",
+          "reference_basis": "NONE",
+          "required_label_code": "GLOVE_WARMTH_U1",
+          "expected_disposition": null
+        },
+        {
+          "fact_id": "F2",
+          "opinion": "The gloves felt heavy after ten minutes of riding.",
+          "sentiment": "NEGATIVE",
+          "statement_type": "EXPERIENCE",
+          "fact_role": "CONCLUSION",
+          "evidence": "felt heavy after ten minutes",
+          "product_ref": "CURRENT",
+          "condition": "after ten minutes of biking",
+          "reference_basis": "NONE",
+          "required_label_code": "GLOVE_BULK_WEIGHT_U1",
+          "expected_disposition": null
+        }
+      ],
+      "required_labels": [
+        "GLOVE_WARMTH_U1",
+        "GLOVE_BULK_WEIGHT_U1"
+      ],
+      "forbidden_labels": [
+        "GLOVE_HAND_DEXTERITY_U1"
+      ],
+      "expected_needs_review": false,
+      "damage_level": "HIGH"
+    },
+    {
+      "case_id": "multi_fact_warm_and_not_bulky_05",
+      "risk_type": "MULTI_FACT_PRESERVATION",
+      "comment": "The gloves were warm at the rink and were not bulky under my jacket cuffs.",
+      "expected_facts": [
+        {
+          "fact_id": "F1",
+          "opinion": "The gloves felt warm at the rink.",
+          "sentiment": "POSITIVE",
+          "statement_type": "EXPERIENCE",
+          "fact_role": "CONCLUSION",
+          "evidence": "gloves were warm at the rink",
+          "product_ref": "CURRENT",
+          "condition": "at the rink",
+          "reference_basis": "NONE",
+          "required_label_code": "GLOVE_WARMTH_U1",
+          "expected_disposition": null
+        },
+        {
+          "fact_id": "F2",
+          "opinion": "The gloves were not bulky under jacket cuffs.",
+          "sentiment": "POSITIVE",
+          "statement_type": "EVALUATION",
+          "fact_role": "CONCLUSION",
+          "evidence": "not bulky under my jacket cuffs",
+          "product_ref": "CURRENT",
+          "condition": "under jacket cuffs",
+          "reference_basis": "NONE",
+          "required_label_code": "GLOVE_BULK_WEIGHT_U1",
+          "expected_disposition": null
+        }
+      ],
+      "required_labels": [
+        "GLOVE_WARMTH_U1",
+        "GLOVE_BULK_WEIGHT_U1"
+      ],
+      "forbidden_labels": [
+        "GLOVE_HAND_DEXTERITY_U1"
+      ],
+      "expected_needs_review": false,
+      "damage_level": "MEDIUM"
+    },
+    {
+      "case_id": "touchscreen_taps_but_imprecise_01",
+      "risk_type": "CAPABILITY_WITH_LIMITATION",
+      "comment": "The touchscreen responds to single taps, but typing is not precise.",
+      "expected_facts": [
+        {
+          "fact_id": "F1",
+          "opinion": "Single taps register through the gloves.",
+          "sentiment": "POSITIVE",
+          "statement_type": "EXPERIENCE",
+          "fact_role": "EVIDENCE",
+          "evidence": "touchscreen responds to single taps",
+          "product_ref": "CURRENT",
+          "condition": "single taps",
+          "reference_basis": "NONE",
+          "required_label_code": null,
+          "expected_disposition": "EVIDENCE_ONLY"
+        },
+        {
+          "fact_id": "F2",
+          "opinion": "Typing through the gloves lacks precision.",
+          "sentiment": "NEGATIVE",
+          "statement_type": "EXPERIENCE",
+          "fact_role": "CONCLUSION",
+          "evidence": "typing is not precise",
+          "product_ref": "CURRENT",
+          "condition": "typing",
+          "reference_basis": "NONE",
+          "required_label_code": "GLOVE_TOUCHSCREEN_U1",
+          "expected_disposition": null
+        }
+      ],
+      "required_labels": [
+        "GLOVE_TOUCHSCREEN_U1"
+      ],
+      "forbidden_labels": [
+        "GLOVE_HAND_DEXTERITY_U1"
+      ],
+      "expected_needs_review": false,
+      "damage_level": "HIGH"
+    },
+    {
+      "case_id": "touchscreen_unlock_but_slow_swipe_02",
+      "risk_type": "CAPABILITY_WITH_LIMITATION",
+      "comment": "I can unlock the phone with these gloves, but each swipe responds slowly.",
+      "expected_facts": [
+        {
+          "fact_id": "F1",
+          "opinion": "The reviewer can unlock a phone through the gloves.",
+          "sentiment": "POSITIVE",
+          "statement_type": "EXPERIENCE",
+          "fact_role": "EVIDENCE",
+          "evidence": "can unlock the phone with these gloves",
+          "product_ref": "CURRENT",
+          "condition": "phone unlock",
+          "reference_basis": "NONE",
+          "required_label_code": null,
+          "expected_disposition": "EVIDENCE_ONLY"
+        },
+        {
+          "fact_id": "F2",
+          "opinion": "Swipe input responds slowly through the gloves.",
+          "sentiment": "NEGATIVE",
+          "statement_type": "EXPERIENCE",
+          "fact_role": "CONCLUSION",
+          "evidence": "each swipe responds slowly",
+          "product_ref": "CURRENT",
+          "condition": "swiping",
+          "reference_basis": "NONE",
+          "required_label_code": "GLOVE_TOUCHSCREEN_U1",
+          "expected_disposition": null
+        }
+      ],
+      "required_labels": [
+        "GLOVE_TOUCHSCREEN_U1"
+      ],
+      "forbidden_labels": [
+        "GLOVE_HAND_DEXTERITY_U1"
+      ],
+      "expected_needs_review": false,
+      "damage_level": "HIGH"
+    },
+    {
+      "case_id": "touchscreen_call_button_but_unstable_03",
+      "risk_type": "CAPABILITY_WITH_LIMITATION",
+      "comment": "The call button works through the gloves, yet taps register inconsistently.",
+      "expected_facts": [
+        {
+          "fact_id": "F1",
+          "opinion": "The call button can be activated through the gloves.",
+          "sentiment": "POSITIVE",
+          "statement_type": "EXPERIENCE",
+          "fact_role": "EVIDENCE",
+          "evidence": "call button works through the gloves",
+          "product_ref": "CURRENT",
+          "condition": "call button",
+          "reference_basis": "NONE",
+          "required_label_code": null,
+          "expected_disposition": "EVIDENCE_ONLY"
+        },
+        {
+          "fact_id": "F2",
+          "opinion": "Touchscreen taps register inconsistently.",
+          "sentiment": "NEGATIVE",
+          "statement_type": "EXPERIENCE",
+          "fact_role": "CONCLUSION",
+          "evidence": "taps register inconsistently",
+          "product_ref": "CURRENT",
+          "condition": "repeated taps",
+          "reference_basis": "NONE",
+          "required_label_code": "GLOVE_TOUCHSCREEN_U1",
+          "expected_disposition": null
+        }
+      ],
+      "required_labels": [
+        "GLOVE_TOUCHSCREEN_U1"
+      ],
+      "forbidden_labels": [
+        "GLOVE_HAND_DEXTERITY_U1"
+      ],
+      "expected_needs_review": false,
+      "damage_level": "HIGH"
+    },
+    {
+      "case_id": "touchscreen_scroll_but_gesture_lag_04",
+      "risk_type": "CAPABILITY_WITH_LIMITATION",
+      "comment": "Scrolling is possible with the gloves, but quick gestures often lag.",
+      "expected_facts": [
+        {
+          "fact_id": "F1",
+          "opinion": "Basic scrolling is possible through the gloves.",
+          "sentiment": "POSITIVE",
+          "statement_type": "EXPERIENCE",
+          "fact_role": "EVIDENCE",
+          "evidence": "Scrolling is possible with the gloves",
+          "product_ref": "CURRENT",
+          "condition": "basic scrolling",
+          "reference_basis": "NONE",
+          "required_label_code": null,
+          "expected_disposition": "EVIDENCE_ONLY"
+        },
+        {
+          "fact_id": "F2",
+          "opinion": "Quick touchscreen gestures often lag.",
+          "sentiment": "NEGATIVE",
+          "statement_type": "EXPERIENCE",
+          "fact_role": "CONCLUSION",
+          "evidence": "quick gestures often lag",
+          "product_ref": "CURRENT",
+          "condition": "quick gestures",
+          "reference_basis": "NONE",
+          "required_label_code": "GLOVE_TOUCHSCREEN_U1",
+          "expected_disposition": null
+        }
+      ],
+      "required_labels": [
+        "GLOVE_TOUCHSCREEN_U1"
+      ],
+      "forbidden_labels": [
+        "GLOVE_HAND_DEXTERITY_U1"
+      ],
+      "expected_needs_review": false,
+      "damage_level": "MEDIUM"
+    },
+    {
+      "case_id": "touchscreen_keypad_but_repeated_taps_05",
+      "risk_type": "CAPABILITY_WITH_LIMITATION",
+      "comment": "The keypad accepts input, but I need repeated taps for each number.",
+      "expected_facts": [
+        {
+          "fact_id": "F1",
+          "opinion": "The touchscreen keypad accepts input through the gloves.",
+          "sentiment": "POSITIVE",
+          "statement_type": "EXPERIENCE",
+          "fact_role": "EVIDENCE",
+          "evidence": "keypad accepts input",
+          "product_ref": "CURRENT",
+          "condition": "keypad input",
+          "reference_basis": "NONE",
+          "required_label_code": null,
+          "expected_disposition": "EVIDENCE_ONLY"
+        },
+        {
+          "fact_id": "F2",
+          "opinion": "Each keypad number requires repeated taps.",
+          "sentiment": "NEGATIVE",
+          "statement_type": "EXPERIENCE",
+          "fact_role": "CONCLUSION",
+          "evidence": "need repeated taps for each number",
+          "product_ref": "CURRENT",
+          "condition": "entering keypad numbers",
+          "reference_basis": "NONE",
+          "required_label_code": "GLOVE_TOUCHSCREEN_U1",
+          "expected_disposition": null
+        }
+      ],
+      "required_labels": [
+        "GLOVE_TOUCHSCREEN_U1"
+      ],
+      "forbidden_labels": [
+        "GLOVE_HAND_DEXTERITY_U1"
+      ],
+      "expected_needs_review": false,
+      "damage_level": "MEDIUM"
+    },
+    {
+      "case_id": "context_purchase_and_future_trip_01",
+      "risk_type": "NON_EVALUATIVE_CONTEXT",
+      "comment": "I bought these gloves on Monday for a trip in December.",
+      "expected_facts": [
+        {
+          "fact_id": "F1",
+          "opinion": "The gloves were purchased on Monday.",
+          "sentiment": "NEUTRAL",
+          "statement_type": "EXPERIENCE",
+          "fact_role": "CONTEXT",
+          "evidence": "bought these gloves on Monday",
+          "product_ref": "CURRENT",
+          "condition": "on Monday",
+          "reference_basis": "NONE",
+          "required_label_code": null,
+          "expected_disposition": "EVIDENCE_ONLY"
+        },
+        {
+          "fact_id": "F2",
+          "opinion": "The gloves are intended for a future trip.",
+          "sentiment": "NEUTRAL",
+          "statement_type": "INTENT",
+          "fact_role": "CONTEXT",
+          "evidence": "for a trip in December",
+          "product_ref": "CURRENT",
+          "condition": "trip in December",
+          "reference_basis": "NONE",
+          "required_label_code": null,
+          "expected_disposition": "EXPECTED_ABSTENTION"
+        }
+      ],
+      "required_labels": [],
+      "forbidden_labels": [
+        "GLOVE_WARMTH_U1",
+        "GLOVE_BULK_WEIGHT_U1",
+        "GLOVE_TOUCHSCREEN_U1",
+        "GLOVE_EXPECTATION_MISMATCH_U1"
+      ],
+      "expected_needs_review": false,
+      "damage_level": "MEDIUM"
+    },
+    {
+      "case_id": "context_boxed_and_rain_not_tested_02",
+      "risk_type": "NON_EVALUATIVE_CONTEXT",
+      "comment": "They are still in the box, so I have not tested them in rain.",
+      "expected_facts": [
+        {
+          "fact_id": "F1",
+          "opinion": "The gloves remain in their box.",
+          "sentiment": "NEUTRAL",
+          "statement_type": "EXPERIENCE",
+          "fact_role": "CONTEXT",
+          "evidence": "still in the box",
+          "product_ref": "CURRENT",
+          "condition": "before use",
+          "reference_basis": "NONE",
+          "required_label_code": null,
+          "expected_disposition": "EVIDENCE_ONLY"
+        },
+        {
+          "fact_id": "F2",
+          "opinion": "Rain performance has not been tested.",
+          "sentiment": "NEUTRAL",
+          "statement_type": "NOT_TESTED",
+          "fact_role": "CONCLUSION",
+          "evidence": "have not tested them in rain",
+          "product_ref": "CURRENT",
+          "condition": "rain",
+          "reference_basis": "NONE",
+          "required_label_code": null,
+          "expected_disposition": "EXPECTED_ABSTENTION"
+        }
+      ],
+      "required_labels": [],
+      "forbidden_labels": [
+        "GLOVE_WARMTH_U1",
+        "GLOVE_BULK_WEIGHT_U1",
+        "GLOVE_TOUCHSCREEN_U1",
+        "GLOVE_EXPECTATION_MISMATCH_U1"
+      ],
+      "expected_needs_review": false,
+      "damage_level": "MEDIUM"
+    },
+    {
+      "case_id": "context_future_warmth_prediction_03",
+      "risk_type": "NON_EVALUATIVE_CONTEXT",
+      "comment": "I expect they might feel warm on next week's hike.",
+      "expected_facts": [
+        {
+          "fact_id": "F1",
+          "opinion": "The reviewer predicts that the gloves might feel warm on a future hike.",
+          "sentiment": "NEUTRAL",
+          "statement_type": "PREDICTION",
+          "fact_role": "CONCLUSION",
+          "evidence": "expect they might feel warm on next week's hike",
+          "product_ref": "CURRENT",
+          "condition": "next week's hike",
+          "reference_basis": "NONE",
+          "required_label_code": null,
+          "expected_disposition": "EXPECTED_ABSTENTION"
+        }
+      ],
+      "required_labels": [],
+      "forbidden_labels": [
+        "GLOVE_WARMTH_U1",
+        "GLOVE_BULK_WEIGHT_U1",
+        "GLOVE_TOUCHSCREEN_U1",
+        "GLOVE_EXPECTATION_MISMATCH_U1"
+      ],
+      "expected_needs_review": false,
+      "damage_level": "MEDIUM"
+    },
+    {
+      "case_id": "context_visual_wind_inference_04",
+      "risk_type": "NON_EVALUATIVE_CONTEXT",
+      "comment": "The lining looks as if it could block wind, but I have not worn the gloves outside.",
+      "expected_facts": [
+        {
+          "fact_id": "F1",
+          "opinion": "The reviewer infers wind protection from the lining's appearance.",
+          "sentiment": "NEUTRAL",
+          "statement_type": "APPEARANCE_INFERENCE",
+          "fact_role": "CONCLUSION",
+          "evidence": "lining looks as if it could block wind",
+          "product_ref": "CURRENT",
+          "condition": "visual inspection",
+          "reference_basis": "NONE",
+          "required_label_code": null,
+          "expected_disposition": "EXPECTED_ABSTENTION"
+        },
+        {
+          "fact_id": "F2",
+          "opinion": "Outdoor performance has not been tested.",
+          "sentiment": "NEUTRAL",
+          "statement_type": "NOT_TESTED",
+          "fact_role": "CONCLUSION",
+          "evidence": "have not worn the gloves outside",
+          "product_ref": "CURRENT",
+          "condition": "outdoors",
+          "reference_basis": "NONE",
+          "required_label_code": null,
+          "expected_disposition": "EXPECTED_ABSTENTION"
+        }
+      ],
+      "required_labels": [],
+      "forbidden_labels": [
+        "GLOVE_WARMTH_U1",
+        "GLOVE_BULK_WEIGHT_U1",
+        "GLOVE_TOUCHSCREEN_U1",
+        "GLOVE_EXPECTATION_MISMATCH_U1"
+      ],
+      "expected_needs_review": false,
+      "damage_level": "MEDIUM"
+    },
+    {
+      "case_id": "context_other_person_future_trial_05",
+      "risk_type": "NON_EVALUATIVE_CONTEXT",
+      "comment": "My coworker plans to try this pair during a ski lesson next month.",
+      "expected_facts": [
+        {
+          "fact_id": "F1",
+          "opinion": "A coworker intends to try the gloves during a future ski lesson.",
+          "sentiment": "NEUTRAL",
+          "statement_type": "INTENT",
+          "fact_role": "CONTEXT",
+          "evidence": "coworker plans to try this pair during a ski lesson next month",
+          "product_ref": "CURRENT",
+          "condition": "ski lesson next month",
+          "reference_basis": "OTHER_PERSON",
+          "required_label_code": null,
+          "expected_disposition": "EXPECTED_ABSTENTION"
+        }
+      ],
+      "required_labels": [],
+      "forbidden_labels": [
+        "GLOVE_WARMTH_U1",
+        "GLOVE_BULK_WEIGHT_U1",
+        "GLOVE_TOUCHSCREEN_U1",
+        "GLOVE_EXPECTATION_MISMATCH_U1"
+      ],
+      "expected_needs_review": false,
+      "damage_level": "MEDIUM"
+    },
+    {
+      "case_id": "listing_pattern_differs_01",
+      "risk_type": "LISTING_EXPECTATION_MISMATCH",
+      "comment": "The listing photo shows a plain knit back, but the received gloves have a raised chevron pattern.",
+      "expected_facts": [
+        {
+          "fact_id": "F1",
+          "opinion": "The received glove pattern differs from the listing photo.",
+          "sentiment": "NEGATIVE",
+          "statement_type": "EVALUATION",
+          "fact_role": "CONCLUSION",
+          "evidence": "listing photo shows a plain knit back, but the received gloves have a raised chevron pattern",
+          "product_ref": "CURRENT",
+          "condition": "listing photo comparison",
+          "reference_basis": "LISTING",
+          "required_label_code": "GLOVE_APPEARANCE_U1",
+          "expected_disposition": null
+        }
+      ],
+      "required_labels": [
+        "GLOVE_APPEARANCE_U1"
+      ],
+      "forbidden_labels": [
+        "GLOVE_COLOR_U1",
+        "GLOVE_ORDER_WRONG_ITEM_U1",
+        "GLOVE_EXPECTATION_MISMATCH_U1"
+      ],
+      "expected_needs_review": false,
+      "damage_level": "HIGH"
+    },
+    {
+      "case_id": "listing_material_differs_02",
+      "risk_type": "LISTING_EXPECTATION_MISMATCH",
+      "comment": "The description says the palm is leather, while the pair I received has a woven fabric palm.",
+      "expected_facts": [
+        {
+          "fact_id": "F1",
+          "opinion": "The received palm material differs from the listing description.",
+          "sentiment": "NEGATIVE",
+          "statement_type": "EVALUATION",
+          "fact_role": "CONCLUSION",
+          "evidence": "description says the palm is leather, while the pair I received has a woven fabric palm",
+          "product_ref": "CURRENT",
+          "condition": "listing description comparison",
+          "reference_basis": "LISTING",
+          "required_label_code": "GLOVE_EXPECTATION_MISMATCH_U1",
+          "expected_disposition": null
+        }
+      ],
+      "required_labels": [
+        "GLOVE_EXPECTATION_MISMATCH_U1"
+      ],
+      "forbidden_labels": [
+        "GLOVE_COLOR_U1",
+        "GLOVE_ORDER_WRONG_ITEM_U1",
+        "GLOVE_APPEARANCE_U1"
+      ],
+      "expected_needs_review": false,
+      "damage_level": "HIGH"
+    },
+    {
+      "case_id": "listing_cuff_structure_differs_03",
+      "risk_type": "LISTING_EXPECTATION_MISMATCH",
+      "comment": "The listing shows a sleek zippered cuff, but this pair arrived with a plain open cuff that looks completely different.",
+      "expected_facts": [
+        {
+          "fact_id": "F1",
+          "opinion": "The received cuff appearance looks completely different from the listing image.",
+          "sentiment": "NEGATIVE",
+          "statement_type": "EVALUATION",
+          "fact_role": "CONCLUSION",
+          "evidence": "listing shows a sleek zippered cuff, but this pair arrived with a plain open cuff that looks completely different",
+          "product_ref": "CURRENT",
+          "condition": "listing appearance comparison",
+          "reference_basis": "LISTING",
+          "required_label_code": "GLOVE_APPEARANCE_U1",
+          "expected_disposition": null
+        }
+      ],
+      "required_labels": [
+        "GLOVE_APPEARANCE_U1"
+      ],
+      "forbidden_labels": [
+        "GLOVE_COLOR_U1",
+        "GLOVE_ORDER_WRONG_ITEM_U1",
+        "GLOVE_EXPECTATION_MISMATCH_U1"
+      ],
+      "expected_needs_review": false,
+      "damage_level": "HIGH"
+    },
+    {
+      "case_id": "listing_reinforcement_detail_differs_04",
+      "risk_type": "LISTING_EXPECTATION_MISMATCH",
+      "comment": "The product photo includes reinforced knuckle stitching, but the delivered pair has no reinforcement there.",
+      "expected_facts": [
+        {
+          "fact_id": "F1",
+          "opinion": "The delivered knuckle detail differs from the listing photo.",
+          "sentiment": "NEGATIVE",
+          "statement_type": "EVALUATION",
+          "fact_role": "CONCLUSION",
+          "evidence": "product photo includes reinforced knuckle stitching, but the delivered pair has no reinforcement there",
+          "product_ref": "CURRENT",
+          "condition": "listing detail comparison",
+          "reference_basis": "LISTING",
+          "required_label_code": "GLOVE_EXPECTATION_MISMATCH_U1",
+          "expected_disposition": null
+        }
+      ],
+      "required_labels": [
+        "GLOVE_EXPECTATION_MISMATCH_U1"
+      ],
+      "forbidden_labels": [
+        "GLOVE_COLOR_U1",
+        "GLOVE_APPEARANCE_U1",
+        "GLOVE_ORDER_WRONG_ITEM_U1"
+      ],
+      "expected_needs_review": false,
+      "damage_level": "MEDIUM"
+    },
+    {
+      "case_id": "listing_layer_description_differs_05",
+      "risk_type": "LISTING_EXPECTATION_MISMATCH",
+      "comment": "The listing describes a double-layer glove, but the received pair has only a single layer.",
+      "expected_facts": [
+        {
+          "fact_id": "F1",
+          "opinion": "The received glove construction differs from the listing description.",
+          "sentiment": "NEGATIVE",
+          "statement_type": "EVALUATION",
+          "fact_role": "CONCLUSION",
+          "evidence": "listing describes a double-layer glove, but the received pair has only a single layer",
+          "product_ref": "CURRENT",
+          "condition": "listing construction comparison",
+          "reference_basis": "LISTING",
+          "required_label_code": "GLOVE_EXPECTATION_MISMATCH_U1",
+          "expected_disposition": null
+        }
+      ],
+      "required_labels": [
+        "GLOVE_EXPECTATION_MISMATCH_U1"
+      ],
+      "forbidden_labels": [
+        "GLOVE_COLOR_U1",
+        "GLOVE_APPEARANCE_U1",
+        "GLOVE_ORDER_WRONG_ITEM_U1"
+      ],
+      "expected_needs_review": false,
+      "damage_level": "MEDIUM"
+    }
+  ]
+}

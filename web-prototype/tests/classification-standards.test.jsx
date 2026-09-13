@@ -194,6 +194,29 @@ beforeEach(() => {
 
 afterEach(() => cleanup());
 
+test("质量门槛分开展示发布阻断项与人工复核警告", async () => {
+  const { ClassificationValidationQuality } =
+    await import("../src/features/classification-standards/ClassificationValidationQuality");
+  const run = {
+    items: [],
+    summary: {},
+    quality_gate: {
+      status: "failed",
+      passed: false,
+      blocking: ["证据检查失败=1，要求不超过 0"],
+      warnings: ["漏标实例=1，请人工复核"],
+    },
+  };
+
+  render(<ClassificationValidationQuality run={run} />);
+
+  const alert = screen.getByRole("alert");
+  expect(within(alert).getByText("发布阻断项")).toBeVisible();
+  expect(within(alert).getByText("证据检查失败=1，要求不超过 0")).toBeVisible();
+  expect(within(alert).getByText("人工复核警告")).toBeVisible();
+  expect(within(alert).getByText("漏标实例=1，请人工复核")).toBeVisible();
+});
+
 test("停用和恢复标签同步校验引用，且不修改原配置", () => {
   const rules = {
     opposite_reason_labels: { SMALL: ["A", "B"] },
