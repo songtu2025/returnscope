@@ -5,6 +5,7 @@ import json
 from typing import Any
 
 from return_semantics.taxonomy import load_taxonomy_alignment
+from web_backend import classification_standard_contracts as _defs
 from web_backend.classification_standard_bootstrap import (
     ClassificationStandardBootstrapMixin,
 )
@@ -14,30 +15,19 @@ from web_backend.classification_standard_catalog import (
 from web_backend.classification_standard_content import (
     ClassificationStandardContentMixin,
 )
-from web_backend.classification_standard_contracts import (
-    CLASSIFICATION_STANDARD_RULES_MIGRATION as CLASSIFICATION_STANDARD_RULES_MIGRATION,
-)
-from web_backend.classification_standard_contracts import (
-    CLASSIFICATION_STANDARD_SEED_MIGRATION as CLASSIFICATION_STANDARD_SEED_MIGRATION,
-)
-from web_backend.classification_standard_contracts import (
-    ClassificationStandardConflict as ClassificationStandardConflict,
-)
-from web_backend.classification_standard_contracts import (
-    ClassificationStandardNotFound as ClassificationStandardNotFound,
-)
-from web_backend.classification_standard_contracts import (
-    ClassificationStandardValidationError as ClassificationStandardValidationError,
-)
-from web_backend.classification_standard_drafts import (
-    ClassificationStandardDraftsMixin,
-)
+from web_backend.classification_standard_drafts import ClassificationStandardDraftsMixin
 from web_backend.classification_standard_publication import (
     ClassificationStandardPublicationMixin,
 )
 from web_backend.common import add_audit, json_text, new_id
 from web_backend.database import Database
 from web_backend.security import utc_now
+
+CLASSIFICATION_STANDARD_RULES_MIGRATION = _defs.CLASSIFICATION_STANDARD_RULES_MIGRATION
+CLASSIFICATION_STANDARD_SEED_MIGRATION = _defs.CLASSIFICATION_STANDARD_SEED_MIGRATION
+ClassificationStandardConflict = _defs.ClassificationStandardConflict
+ClassificationStandardNotFound = _defs.ClassificationStandardNotFound
+ClassificationStandardValidationError = _defs.ClassificationStandardValidationError
 
 ClassificationStandardConflict.__module__ = __name__
 ClassificationStandardNotFound.__module__ = __name__

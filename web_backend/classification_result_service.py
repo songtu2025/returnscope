@@ -4,84 +4,40 @@ from typing import Any
 
 from return_semantics.data import ReturnDataset
 from return_semantics.schemas import TaxonomyConfig, ValidatedClassification
+from web_backend import classification_result_payload as _payload
+from web_backend import classification_result_publication as _publication
 from web_backend.classification_result_download import _ClassificationResultDownload
-from web_backend.classification_result_payload import (
-    CONFIRMED_STATEMENT_TYPES as CONFIRMED_STATEMENT_TYPES,
-)
-from web_backend.classification_result_payload import (
-    PAGE_SIZE_DEFAULT as PAGE_SIZE_DEFAULT,
-)
-from web_backend.classification_result_payload import (
-    PAGE_SIZE_MAX as PAGE_SIZE_MAX,
-)
-from web_backend.classification_result_payload import (
-    QUALITY_STATUSES as QUALITY_STATUSES,
-)
-from web_backend.classification_result_payload import (
-    REVIEW_DISPOSITIONS as REVIEW_DISPOSITIONS,
-)
-from web_backend.classification_result_payload import (
-    SEMANTIC_DISPOSITIONS as SEMANTIC_DISPOSITIONS,
-)
-from web_backend.classification_result_payload import (
-    _classification_disposition as _classification_disposition,
-)
-from web_backend.classification_result_payload import (
-    _classification_quality as _classification_quality,
-)
-from web_backend.classification_result_payload import (
-    _comment_summary_status as _comment_summary_status,
-)
-from web_backend.classification_result_payload import (
-    _fact_id_by_label as _fact_id_by_label,
-)
-from web_backend.classification_result_payload import (
-    _is_confirmed_fact as _is_confirmed_fact,
-)
-from web_backend.classification_result_payload import (
-    _normalize_semantic_facts as _normalize_semantic_facts,
-)
-from web_backend.classification_result_payload import (
-    _nullable_text as _nullable_text,
-)
-from web_backend.classification_result_payload import (
-    _prepare_classification_payload as _prepare_classification_payload,
-)
-from web_backend.classification_result_payload import (
-    _scope_key as _scope_key,
-)
-from web_backend.classification_result_payload import (
-    _topic_identity as _topic_identity,
-)
-from web_backend.classification_result_payload import (
-    _topic_summaries as _topic_summaries,
-)
-from web_backend.classification_result_payload import (
-    _unit_fact_ids as _unit_fact_ids,
-)
-from web_backend.classification_result_payload import (
-    _unknown_disposition as _unknown_disposition,
-)
-from web_backend.classification_result_payload import (
-    _version_quality as _version_quality,
-)
-from web_backend.classification_result_publication import (
-    ClassificationResultNotFound as ClassificationResultNotFound,
-)
-from web_backend.classification_result_publication import (
-    ResultPublicationConflict as ResultPublicationConflict,
-)
-from web_backend.classification_result_publication import (
-    ResultPublicationError as ResultPublicationError,
-)
-from web_backend.classification_result_publication import (
-    _ClassificationResultPublication,
-)
 from web_backend.classification_result_queries import _ClassificationResultQueries
 from web_backend.classification_result_records import _ClassificationResultRecords
 from web_backend.common import json_text, new_id
 from web_backend.database import Database
 from web_backend.security import utc_now
+
+CONFIRMED_STATEMENT_TYPES = _payload.CONFIRMED_STATEMENT_TYPES
+PAGE_SIZE_DEFAULT = _payload.PAGE_SIZE_DEFAULT
+PAGE_SIZE_MAX = _payload.PAGE_SIZE_MAX
+QUALITY_STATUSES = _payload.QUALITY_STATUSES
+REVIEW_DISPOSITIONS = _payload.REVIEW_DISPOSITIONS
+SEMANTIC_DISPOSITIONS = _payload.SEMANTIC_DISPOSITIONS
+_classification_disposition = _payload._classification_disposition
+_classification_quality = _payload._classification_quality
+_comment_summary_status = _payload._comment_summary_status
+_fact_id_by_label = _payload._fact_id_by_label
+_is_confirmed_fact = _payload._is_confirmed_fact
+_normalize_semantic_facts = _payload._normalize_semantic_facts
+_nullable_text = _payload._nullable_text
+_prepare_classification_payload = _payload._prepare_classification_payload
+_scope_key = _payload._scope_key
+_topic_identity = _payload._topic_identity
+_topic_summaries = _payload._topic_summaries
+_unit_fact_ids = _payload._unit_fact_ids
+_unknown_disposition = _payload._unknown_disposition
+_version_quality = _payload._version_quality
+
+ClassificationResultNotFound = _publication.ClassificationResultNotFound
+ResultPublicationConflict = _publication.ResultPublicationConflict
+ResultPublicationError = _publication.ResultPublicationError
+_ClassificationResultPublication = _publication._ClassificationResultPublication
 
 ClassificationResultNotFound.__module__ = __name__
 ResultPublicationConflict.__module__ = __name__
