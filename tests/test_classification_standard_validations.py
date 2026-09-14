@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import json
 from copy import deepcopy
 from pathlib import Path
@@ -9,8 +10,13 @@ import pandas as pd
 
 from return_semantics.pipeline import PipelineRun
 from return_semantics.schemas import ProcessingStatus, ValidatedClassification
+from web_backend import (
+    classification_standard_validation_service as validation_service_module,
+)
 from web_backend.classification_standard_service import ClassificationStandardService
 from web_backend.classification_standard_validation_service import (
+    ClassificationStandardValidationConflict,
+    ClassificationStandardValidationNotFound,
     ClassificationStandardValidationService,
 )
 from web_backend.database import Database
@@ -88,6 +94,135 @@ def _services(
         FakeRunner(),
     )
     return standards, validations
+
+
+def test_validation_service_preserves_method_contract() -> None:
+    expected_methods = [
+        "__init__|(self, database: 'Database', standard_service: 'ClassificationStandardService', runner: 'AgentRunner') -> 'None'|function",
+        "sources|(self, draft_id: 'str') -> 'list[dict[str, Any]]'|function",
+        "list_runs|(self, draft_id: 'str') -> 'list[dict[str, Any]]'|function",
+        "get|(self, run_id: 'str', include_items: 'bool' = True) -> 'dict[str, Any]'|function",
+        "create_run|(self, draft_id: 'str', expected_revision: 'int', source_result_version_id: 'str', sample_size: 'int', actor_id: 'str', review_file: 'tuple[str, bytes] | None' = None, comparison_type: 'str' = 'standard_version') -> 'dict[str, Any]'|function",
+        "_validation_source_context|(self, draft: 'dict[str, Any]', source_result_version_id: 'str', sample_size: 'int', review_file: 'tuple[str, bytes] | None') -> 'tuple[dict[str, Any], list[dict[str, Any]], str]'|function",
+        "_apply_recognition_context|(self, source: 'dict[str, Any]', draft: 'dict[str, Any]', draft_id: 'str', expected_revision: 'int', comparison_type: 'str') -> 'None'|function",
+        "approve|(self, run_id: 'str', expected_revision: 'int', note: 'str', actor_id: 'str') -> 'dict[str, Any]'|function",
+        "recover|(self) -> 'None'|function",
+        "claim_next|(self) -> 'str | None'|function",
+        "run|(self, run_id: 'str') -> 'None'|function",
+        "_raw_source_options|(self) -> 'list[dict[str, Any]]'|function",
+        "_raw_source_context|(self, source_id: 'str', draft: 'dict[str, Any]', sample_size: 'int') -> 'tuple[dict[str, Any], list[dict[str, Any]]]'|function",
+        "_published_config_id|(self) -> 'str'|function",
+        "_review_source_context|(self, filename: 'str', content: 'bytes', draft: 'dict[str, Any]', sample_size: 'int') -> 'tuple[dict[str, Any], list[dict[str, Any]]]'|function",
+        "_review_sheet_context|(workbook: 'Any') -> 'tuple[Any, list[str], int] | None'|staticmethod",
+        "_review_candidates|(sheet: 'Any', headers: 'list[str]', header_row: 'int', variants: 'list[dict[str, Any]]', references: 'dict[str, Any]') -> 'tuple[list[dict[str, Any]], int]'|staticmethod",
+        "_validate_review_references|(candidates: 'list[dict[str, Any]]', references: 'dict[str, Any]') -> 'None'|staticmethod",
+        "_read_references|(workbook, taxonomy: 'dict') -> 'dict'|staticmethod",
+        "_round_robin_samples|(items: 'list[dict[str, Any]]', sample_size: 'int', *, bucket_fields: 'tuple[str, ...]') -> 'list[dict[str, Any]]'|staticmethod",
+        "_source_context|(self, result_version_id: 'str', base_version_id: 'str') -> 'dict[str, Any]'|function",
+        "_sample|(self, result_version_id: 'str', sample_size: 'int') -> 'list[dict[str, Any]]'|function",
+        "_comparison_items|(samples: 'list[dict[str, Any]]', classifications: 'dict[str, Any]') -> 'list[dict[str, Any]]'|staticmethod",
+        "_summary|(items: 'list[dict[str, Any]]') -> 'dict[str, Any]'|staticmethod",
+        "_serialize|(self, value: 'dict[str, Any]', include_items: 'bool' = False) -> 'dict[str, Any]'|function",
+    ]
+
+    actual_methods = []
+    for expected in expected_methods:
+        name = expected.partition("|")[0]
+        descriptor = inspect.getattr_static(
+            ClassificationStandardValidationService,
+            name,
+        )
+        actual_methods.append(
+            f"{name}|{inspect.signature(getattr(ClassificationStandardValidationService, name))}|{type(descriptor).__name__}"
+        )
+
+    assert actual_methods == expected_methods
+    assert isinstance(
+        inspect.getattr_static(
+            ClassificationStandardValidationService,
+            "_evaluate_references",
+        ),
+        staticmethod,
+    )
+    assert callable(ClassificationStandardValidationService._evaluate_references)
+
+
+def test_validation_service_preserves_exception_import_contract() -> None:
+    from web_backend.routers import classification_standards as router_module
+
+    assert (
+        ClassificationStandardValidationNotFound
+        is validation_service_module.ClassificationStandardValidationNotFound
+        is router_module.ClassificationStandardValidationNotFound
+    )
+    assert (
+        ClassificationStandardValidationConflict
+        is validation_service_module.ClassificationStandardValidationConflict
+        is router_module.ClassificationStandardValidationConflict
+    )
+    assert issubclass(ClassificationStandardValidationNotFound, ValueError)
+    assert issubclass(ClassificationStandardValidationConflict, ValueError)
+    assert (
+        ClassificationStandardValidationNotFound.__module__
+        == "web_backend.classification_standard_validation_service"
+    )
+    assert (
+        ClassificationStandardValidationConflict.__module__
+        == "web_backend.classification_standard_validation_service"
+    )
+
+
+def test_validation_routes_preserve_registration_contract(tmp_path: Path) -> None:
+    from fastapi import FastAPI
+    from fastapi.routing import APIRoute
+
+    from web_backend.routers.classification_standards import (
+        create_classification_standard_router,
+    )
+
+    standards, validations = _services(tmp_path)
+
+    def current_user() -> dict[str, str]:
+        return {"id": "user-1"}
+
+    app = FastAPI()
+    app.include_router(
+        create_classification_standard_router(
+            standards,
+            validations,
+            current_user,
+        )
+    )
+    routes = [
+        route
+        for route in app.routes
+        if isinstance(route, APIRoute) and "validation" in route.path
+    ]
+    expected_routes = [
+        "GET|/api/classification-standard-drafts/{draft_id}/validation-sources|validation_sources|200|sync|draft_id,_user",
+        "GET|/api/classification-standard-drafts/{draft_id}/validation-runs|validation_runs|200|sync|draft_id,_user",
+        "POST|/api/classification-standard-drafts/{draft_id}/validation-runs|create_validation_run|201|sync|draft_id,payload,user",
+        "POST|/api/classification-standard-drafts/{draft_id}/review-validation-runs|create_review_validation_run|201|async|draft_id,user,expected_revision,file,sample_size,comparison_type",
+        "GET|/api/classification-standard-validation-runs/{run_id}|validation_run|200|sync|run_id,_user",
+        "POST|/api/classification-standard-validation-runs/{run_id}/approve|approve_validation_run|200|sync|run_id,payload,user",
+    ]
+    actual_routes = [
+        "|".join(
+            (
+                next(iter(route.methods)),
+                route.path,
+                route.name,
+                str(route.status_code or 200),
+                "async" if inspect.iscoroutinefunction(route.endpoint) else "sync",
+                ",".join(inspect.signature(route.endpoint).parameters),
+            )
+        )
+        for route in routes
+    ]
+
+    assert actual_routes == expected_routes
+    assert all(len(route.dependant.dependencies) == 1 for route in routes)
+    assert all(route.dependant.dependencies[0].call is current_user for route in routes)
 
 
 def _seed_result(

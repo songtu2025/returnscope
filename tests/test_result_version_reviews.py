@@ -904,6 +904,119 @@ def test_legacy_reviews_stay_legacy_and_new_batches_do_not_rebuild_task(
     assert service.batch_records(batch["id"])["items"][0]["legacy"] is False
 
 
+def test_legacy_resolve_rebuild_failure_restores_committed_review(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context, _base = _publish_review_required(tmp_path)
+    service = ReviewService(context.database)
+    original_classification = json_text(
+        context.results[context.key].model_dump(mode="json")
+    )
+    original_state = {
+        "workflow_status": "pending",
+        "classification_json": original_classification,
+        "revision": 7,
+        "updated_by": "user-2",
+        "updated_at": "2026-08-12T00:04:00+00:00",
+    }
+    with context.database.transaction() as connection:
+        connection.execute(
+            """
+            INSERT INTO review_records(
+                id, task_id, classification_key, comment,
+                workflow_status, classification_json, revision,
+                updated_by, updated_at
+            ) VALUES ('legacy-review-failure', ?, ?, '旧评论', ?, ?, ?, ?, ?)
+            """,
+            (
+                context.task_id,
+                context.key,
+                *original_state.values(),
+            ),
+        )
+
+    transaction_modes: list[bool] = []
+    original_transaction = context.database.transaction
+
+    def tracked_transaction(immediate: bool = False):
+        transaction_modes.append(immediate)
+        return original_transaction(immediate)
+
+    committed_state: dict[str, object] = {}
+
+    def fail_rebuild(_task_id: str, _actor_id: str) -> None:
+        with context.database.connect() as connection:
+            committed_state.update(
+                dict(
+                    connection.execute(
+                        """
+                        SELECT workflow_status, classification_json, revision,
+                               updated_by, updated_at
+                        FROM review_records WHERE id = 'legacy-review-failure'
+                        """
+                    ).fetchone()
+                )
+            )
+            committed_state["revision_count"] = connection.execute(
+                """
+                SELECT COUNT(*) FROM review_revisions
+                WHERE review_record_id = 'legacy-review-failure'
+                """
+            ).fetchone()[0]
+        raise RuntimeError("模拟结果重建失败")
+
+    monkeypatch.setattr(context.database, "transaction", tracked_transaction)
+    monkeypatch.setattr(service, "_rebuild_result", fail_rebuild)
+    selected_label = service.standard_service.combined_taxonomy().labels[0].code
+
+    with pytest.raises(RuntimeError, match="模拟结果重建失败"):
+        service.resolve(
+            "legacy-review-failure",
+            original_state["revision"],
+            "user-1",
+            selected_label,
+            "验证补偿事务",
+        )
+
+    assert committed_state["workflow_status"] == "resolved"
+    assert committed_state["classification_json"] != original_classification
+    assert committed_state["revision"] == 8
+    assert committed_state["updated_by"] == "user-1"
+    assert committed_state["updated_at"] != original_state["updated_at"]
+    assert committed_state["revision_count"] == 1
+    assert transaction_modes == [True, True]
+
+    with context.database.connect() as connection:
+        restored = dict(
+            connection.execute(
+                """
+                SELECT workflow_status, classification_json, revision,
+                       updated_by, updated_at
+                FROM review_records WHERE id = 'legacy-review-failure'
+                """
+            ).fetchone()
+        )
+        revision_count = connection.execute(
+            """
+            SELECT COUNT(*) FROM review_revisions
+            WHERE review_record_id = 'legacy-review-failure'
+            """
+        ).fetchone()[0]
+        success_audit_count = connection.execute(
+            """
+            SELECT COUNT(*) FROM audit_logs
+            WHERE entity_type = 'review'
+              AND entity_id = 'legacy-review-failure'
+              AND action = 'resolve'
+            """
+        ).fetchone()[0]
+
+    assert restored == original_state
+    assert revision_count == 0
+    assert success_audit_count == 0
+
+
 def test_published_completed_with_errors_cannot_use_normal_retry(
     tmp_path: Path,
 ) -> None:
