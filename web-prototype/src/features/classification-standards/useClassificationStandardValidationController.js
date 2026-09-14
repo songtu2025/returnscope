@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { classificationStandardApi } from "../../shared/api/classificationStandardApi";
 
@@ -32,42 +32,94 @@ export function useClassificationStandardValidationController({
   );
   const [validationSourceId, setValidationSourceId] = useState("");
   const [validationSampleSize, setValidationSampleSize] = useState(20);
+  const requestOwnershipRef = useRef({
+    foreground: 0,
+    background: 0,
+    loading: false,
+    draftId: /** @type {string | null} */ (null),
+    runId: /** @type {string | null} */ (null),
+  });
 
   const loadValidation = useCallback(
     async (
       /** @type {string} */ draftId,
       /** @type {string | null} */ preferredRunId = null,
+      /** @type {boolean} */ background = false,
     ) => {
-      /** @type {[ValidationSource[], ValidationRun[]]} */
-      const [sources, runs] = await Promise.all([
-        classificationStandardApi.classificationStandardValidationSources(draftId),
-        classificationStandardApi.classificationStandardValidationRuns(draftId),
-      ]);
-      setValidationSources(sources);
-      setValidationRuns(runs);
-      setValidationSourceId((current) =>
-        sources.some((source) => source.result_version_id === current)
-          ? current
-          : sources[0]?.result_version_id || "",
-      );
-      const selectedRunId = preferredRunId || runs[0]?.id;
-      setSelectedValidation(
-        selectedRunId
-          ? await classificationStandardApi.classificationStandardValidationRun(
-              selectedRunId,
-            )
-          : null,
-      );
+      const ownership = requestOwnershipRef.current;
+      let foregroundGeneration = ownership.foreground;
+      let backgroundGeneration = ownership.background;
+      if (background) {
+        if (ownership.draftId !== draftId || ownership.loading) return;
+        backgroundGeneration = ++ownership.background;
+      } else {
+        ownership.draftId = draftId;
+        ownership.runId = preferredRunId;
+        foregroundGeneration = ++ownership.foreground;
+        ownership.background += 1;
+        ownership.loading = true;
+      }
+      const isCurrent = () =>
+        ownership.draftId === draftId &&
+        ownership.foreground === foregroundGeneration &&
+        (!background || ownership.background === backgroundGeneration);
+      try {
+        /** @type {[ValidationSource[], ValidationRun[]]} */
+        const [sources, runs] = await Promise.all([
+          classificationStandardApi.classificationStandardValidationSources(draftId),
+          classificationStandardApi.classificationStandardValidationRuns(draftId),
+        ]);
+        if (!isCurrent()) return;
+        setValidationSources(sources);
+        setValidationRuns(runs);
+        setValidationSourceId((current) =>
+          sources.some((source) => source.result_version_id === current)
+            ? current
+            : sources[0]?.result_version_id || "",
+        );
+        const selectedRunId = ownership.runId || runs[0]?.id || null;
+        ownership.runId = selectedRunId;
+        if (!selectedRunId) {
+          setSelectedValidation(null);
+          return;
+        }
+        const selected =
+          await classificationStandardApi.classificationStandardValidationRun(
+            selectedRunId,
+          );
+        if (isCurrent() && ownership.runId === selectedRunId) {
+          setSelectedValidation(selected);
+        }
+      } finally {
+        if (
+          !background &&
+          ownership.foreground === foregroundGeneration &&
+          ownership.draftId === draftId
+        ) {
+          ownership.loading = false;
+        }
+      }
     },
     [],
   );
 
   const clearValidation = useCallback(() => {
+    const ownership = requestOwnershipRef.current;
+    ownership.loading = false;
+    ownership.draftId = null;
+    ownership.runId = null;
     setValidationSources([]);
     setValidationRuns([]);
     setSelectedValidation(null);
     setValidationSourceId("");
   }, []);
+
+  useEffect(
+    () => () => {
+      requestOwnershipRef.current.draftId = null;
+    },
+    [],
+  );
 
   useEffect(() => {
     const active = validationRuns.some((run) =>
@@ -75,10 +127,10 @@ export function useClassificationStandardValidationController({
     );
     if (!draft || !active) return undefined;
     const timer = window.setInterval(() => {
-      loadValidation(draft.id, selectedValidation?.id).catch(() => undefined);
+      loadValidation(draft.id, null, true).catch(() => undefined);
     }, 2000);
     return () => window.clearInterval(timer);
-  }, [draft, loadValidation, selectedValidation?.id, validationRuns]);
+  }, [draft, loadValidation, validationRuns]);
 
   const startSampleValidation = async (
     /** @type {File | null} */
@@ -141,12 +193,30 @@ export function useClassificationStandardValidationController({
   };
 
   const selectValidation = async (/** @type {string} */ runId) => {
+    const ownership = requestOwnershipRef.current;
+    const draftId = ownership.draftId;
+    ownership.runId = runId;
+    const generation = ++ownership.foreground;
+    ownership.background += 1;
+    ownership.loading = false;
     try {
-      setSelectedValidation(
-        await classificationStandardApi.classificationStandardValidationRun(runId),
-      );
+      const selected =
+        await classificationStandardApi.classificationStandardValidationRun(runId);
+      if (
+        generation === ownership.foreground &&
+        ownership.draftId === draftId &&
+        ownership.runId === runId
+      ) {
+        setSelectedValidation(selected);
+      }
     } catch (error) {
-      notify(/** @type {Error} */ (error).message, "error");
+      if (
+        generation === ownership.foreground &&
+        ownership.draftId === draftId &&
+        ownership.runId === runId
+      ) {
+        notify(/** @type {Error} */ (error).message, "error");
+      }
     }
   };
 

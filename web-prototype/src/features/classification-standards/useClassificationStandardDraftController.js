@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { navigateHash } from "../../app/hashRouter";
 import { classificationStandardApi } from "../../shared/api/classificationStandardApi";
@@ -38,6 +38,7 @@ export function useClassificationStandardDraftController({
   const [pageLoading, setPageLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [validationAttempt, setValidationAttempt] = useState(0);
+  const loadGenerationRef = useRef(0);
 
   const validation = useClassificationStandardValidationController({
     draft,
@@ -62,6 +63,7 @@ export function useClassificationStandardDraftController({
 
   const loadSelected = useCallback(
     async (standardId) => {
+      const generation = ++loadGenerationRef.current;
       setPageLoading(true);
       try {
         const [standard, versionRows] = await Promise.all([
@@ -73,6 +75,7 @@ export function useClassificationStandardDraftController({
               standard.draft_id,
             )
           : null;
+        if (generation !== loadGenerationRef.current) return;
         setDetail(standard);
         setVersions(versionRows);
         setDraft(draftValue);
@@ -86,8 +89,10 @@ export function useClassificationStandardDraftController({
         setChangeReason(draftValue?.change_reason || `更新${standard.name}`);
         if (draftValue) await loadValidation(draftValue.id);
         else clearValidation();
+      } catch (error) {
+        if (generation === loadGenerationRef.current) throw error;
       } finally {
-        setPageLoading(false);
+        if (generation === loadGenerationRef.current) setPageLoading(false);
       }
     },
     [clearValidation, loadValidation],
@@ -95,6 +100,9 @@ export function useClassificationStandardDraftController({
 
   useEffect(() => {
     if (mode === "new") {
+      loadGenerationRef.current += 1;
+      setPageLoading(false);
+      clearValidation();
       setDetail(null);
       setVersions([]);
       setDraft(null);
@@ -103,11 +111,19 @@ export function useClassificationStandardDraftController({
       );
       setFieldErrors({});
       setChangeReason("新增分类标准");
-      return;
+      return undefined;
     }
-    if (!selectedId) return;
+    if (!selectedId) {
+      loadGenerationRef.current += 1;
+      setPageLoading(false);
+      clearValidation();
+      return undefined;
+    }
     loadSelected(selectedId).catch((error) => notify(error.message, "error"));
-  }, [loadSelected, mode, notify, selectedId]);
+    return () => {
+      loadGenerationRef.current += 1;
+    };
+  }, [clearValidation, loadSelected, mode, notify, selectedId]);
 
   const savedContent =
     draft?.content ??

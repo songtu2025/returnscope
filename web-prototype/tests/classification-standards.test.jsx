@@ -1,6 +1,14 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -38,6 +46,8 @@ vi.mock("../src/shared/api/classificationStandardApi", () => ({
 
 import { ClassificationStructureIssues } from "../src/features/classification-standards/ClassificationStructureIssues";
 import { ClassificationStandardsPage } from "../src/features/classification-standards/ClassificationStandardsPage";
+import { useClassificationStandardDraftController } from "../src/features/classification-standards/useClassificationStandardDraftController";
+import { useClassificationStandardValidationController } from "../src/features/classification-standards/useClassificationStandardValidationController";
 import {
   reconcileLabelRules,
   sameLabel,
@@ -199,7 +209,10 @@ beforeEach(() => {
   window.location.hash = "";
 });
 
-afterEach(() => cleanup());
+afterEach(() => {
+  vi.restoreAllMocks();
+  cleanup();
+});
 
 const validationSource = {
   result_version_id: "raw:returns-v1:products-v1",
@@ -231,11 +244,266 @@ function renderEditPage(notify = vi.fn()) {
   return notify;
 }
 
+function deferred() {
+  let resolve;
+  const promise = new Promise((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
+function renderDraftController(initialProps) {
+  const notify = vi.fn();
+  return renderHook(
+    (props) =>
+      useClassificationStandardDraftController({
+        ...props,
+        notify,
+        loadStandards: vi.fn(),
+        setBusy: vi.fn(),
+      }),
+    { initialProps },
+  );
+}
+
+function renderValidationController() {
+  const notify = vi.fn();
+  const setBusy = vi.fn();
+  return {
+    ...renderHook(() =>
+      useClassificationStandardValidationController({
+        draft: validDraft,
+        notify,
+        persistDraft: vi.fn().mockResolvedValue(validDraft),
+        setBusy,
+      }),
+    ),
+    notify,
+    setBusy,
+  };
+}
+
 async function openPublishReview() {
   await userEvent.click(
     await screen.findByRole("button", { name: "发布", exact: true }),
   );
 }
+
+test("详情加载仅提交最新标准，并在切换新建或列表页时失效", async () => {
+  const staleDetail = deferred();
+  const nextStandard = {
+    ...detail,
+    id: "classification-standard-gloves",
+    name: "手套分类标准",
+  };
+  standardApiMock.classificationStandard.mockImplementation((standardId) =>
+    standardId === standard.id ? staleDetail.promise : Promise.resolve(nextStandard),
+  );
+  standardApiMock.classificationStandardVersions.mockResolvedValue([]);
+  const { result, rerender, unmount } = renderDraftController({
+    mode: "edit",
+    selectedId: standard.id,
+  });
+
+  rerender({ mode: "edit", selectedId: nextStandard.id });
+  await waitFor(() => expect(result.current.detail?.id).toBe(nextStandard.id));
+  await act(async () => {
+    staleDetail.resolve(detail);
+    await staleDetail.promise;
+  });
+
+  expect(result.current.detail?.id).toBe(nextStandard.id);
+  expect(result.current.pageLoading).toBe(false);
+
+  for (const mode of ["new", "list"]) {
+    const staleRouteDetail = deferred();
+    standardApiMock.classificationStandard.mockReturnValueOnce(
+      staleRouteDetail.promise,
+    );
+    rerender({ mode: "edit", selectedId: `${standard.id}-${mode}` });
+    rerender({ mode, selectedId: "" });
+    await act(async () => {
+      staleRouteDetail.resolve({ ...detail, draft_id: validDraft.id });
+      await staleRouteDetail.promise;
+    });
+    expect(result.current.detail).toBeNull();
+  }
+  expect(validationApiMock.sources).not.toHaveBeenCalled();
+
+  const unmountedDetail = deferred();
+  standardApiMock.classificationStandard.mockReturnValueOnce(unmountedDetail.promise);
+  rerender({ mode: "edit", selectedId: `${standard.id}-unmounted` });
+  unmount();
+  await act(async () => {
+    unmountedDetail.resolve({ ...detail, draft_id: validDraft.id });
+    await unmountedDetail.promise;
+  });
+  expect(validationApiMock.sources).not.toHaveBeenCalled();
+  expect(validationApiMock.runs).not.toHaveBeenCalled();
+});
+
+test("验证状态仅提交最新加载且清空会使在途请求失效", async () => {
+  const staleRunDetail = deferred();
+  const oldRun = { ...readyRun, id: "validation-old" };
+  const nextRun = { ...readyRun, id: "validation-next" };
+  validationApiMock.sources.mockImplementation((draftId) =>
+    Promise.resolve([{ ...validationSource, result_version_id: `${draftId}:source` }]),
+  );
+  validationApiMock.runs.mockImplementation((draftId) =>
+    Promise.resolve([draftId === "draft-old" ? oldRun : nextRun]),
+  );
+  validationApiMock.run.mockImplementation((runId) =>
+    runId === oldRun.id ? staleRunDetail.promise : Promise.resolve(nextRun),
+  );
+  const { result } = renderValidationController();
+
+  let staleLoad;
+  await act(async () => {
+    staleLoad = result.current.loadValidation("draft-old");
+    await waitFor(() => expect(validationApiMock.run).toHaveBeenCalledWith(oldRun.id));
+  });
+  await act(async () => result.current.loadValidation("draft-next"));
+  await act(async () => {
+    staleRunDetail.resolve(oldRun);
+    await staleLoad;
+  });
+  expect(result.current.selectedValidation?.id).toBe(nextRun.id);
+  expect(result.current.validationSources[0]?.result_version_id).toBe(
+    "draft-next:source",
+  );
+
+  const pendingSources = deferred();
+  const pendingRuns = deferred();
+  validationApiMock.sources.mockReturnValueOnce(pendingSources.promise);
+  validationApiMock.runs.mockReturnValueOnce(pendingRuns.promise);
+  let pendingLoad;
+  act(() => {
+    pendingLoad = result.current.loadValidation("draft-pending");
+    result.current.clearValidation();
+  });
+  await act(async () => {
+    pendingSources.resolve([validationSource]);
+    pendingRuns.resolve([oldRun]);
+    await pendingLoad;
+  });
+  expect(result.current.validationSources).toEqual([]);
+  expect(result.current.validationRuns).toEqual([]);
+  expect(result.current.selectedValidation).toBeNull();
+});
+
+test("前台指定运行后轮询继续刷新该运行而不回选旧记录", async () => {
+  const oldRun = { ...readyRun, id: "validation-old", status: "running" };
+  const nextRun = { ...readyRun, id: "validation-next", status: "running" };
+  const pendingForeground = deferred();
+  validationApiMock.sources.mockResolvedValue([validationSource]);
+  validationApiMock.runs.mockResolvedValueOnce([oldRun]).mockResolvedValue([nextRun]);
+  validationApiMock.run.mockImplementation((runId) => {
+    if (runId !== nextRun.id) return Promise.resolve(oldRun);
+    return pendingForeground.promise;
+  });
+  const { result } = renderValidationController();
+
+  await act(async () => result.current.loadValidation(validDraft.id));
+  let foregroundLoad;
+  await act(async () => {
+    foregroundLoad = result.current.loadValidation(validDraft.id, nextRun.id);
+    await Promise.resolve();
+  });
+  await waitFor(() => expect(validationApiMock.run).toHaveBeenCalledWith(nextRun.id));
+  const sourceRequests = validationApiMock.sources.mock.calls.length;
+  const runListRequests = validationApiMock.runs.mock.calls.length;
+  let backgroundLoad;
+  await act(async () => {
+    backgroundLoad = result.current.loadValidation(validDraft.id, null, true);
+    await Promise.resolve();
+  });
+  expect(validationApiMock.sources).toHaveBeenCalledTimes(sourceRequests);
+  expect(validationApiMock.runs).toHaveBeenCalledTimes(runListRequests);
+  await act(async () => {
+    pendingForeground.resolve(nextRun);
+    await Promise.all([foregroundLoad, backgroundLoad]);
+  });
+  expect(result.current.validationRuns).toEqual([nextRun]);
+  expect(result.current.selectedValidation?.id).toBe(nextRun.id);
+});
+
+test("显式选择悬挂时轮询仍刷新用户期望的运行记录", async () => {
+  const oldRun = { ...readyRun, id: "validation-old", status: "running" };
+  const nextRun = { ...readyRun, id: "validation-next", status: "running" };
+  const pendingSelection = deferred();
+  validationApiMock.sources.mockResolvedValue([validationSource]);
+  validationApiMock.runs.mockResolvedValueOnce([oldRun]).mockResolvedValue([nextRun]);
+  validationApiMock.run.mockResolvedValue(oldRun);
+  const { result } = renderValidationController();
+  await act(async () => result.current.loadValidation(validDraft.id));
+  validationApiMock.run
+    .mockReturnValueOnce(pendingSelection.promise)
+    .mockResolvedValueOnce(nextRun);
+
+  let selectRequest;
+  act(() => {
+    selectRequest = result.current.selectValidation(nextRun.id);
+  });
+  await act(async () => result.current.loadValidation(validDraft.id, null, true));
+  expect(validationApiMock.sources).toHaveBeenCalledTimes(2);
+  expect(validationApiMock.runs).toHaveBeenCalledTimes(2);
+  expect(result.current.validationRuns).toEqual([nextRun]);
+  await waitFor(() => expect(result.current.selectedValidation?.id).toBe(nextRun.id));
+  expect(validationApiMock.run).toHaveBeenLastCalledWith(nextRun.id);
+  await act(async () => {
+    pendingSelection.resolve(nextRun);
+    await selectRequest;
+  });
+});
+
+test("验证创建、审批和详情选择失败均恢复操作状态并提示", async () => {
+  validationApiMock.sources.mockResolvedValue([validationSource]);
+  validationApiMock.runs.mockResolvedValue([readyRun]);
+  validationApiMock.start.mockRejectedValue(new Error("验证创建失败"));
+  standardApiMock.approveClassificationStandardValidationRun.mockRejectedValue(
+    new Error("验证审批失败"),
+  );
+  validationApiMock.run.mockRejectedValue(new Error("验证详情失败"));
+  const { result, notify, setBusy } = renderValidationController();
+
+  await act(async () => {
+    await result.current.loadValidation(validDraft.id).catch(() => undefined);
+  });
+  expect(result.current.validationRuns).toEqual([readyRun]);
+  await act(async () => result.current.startSampleValidation(null));
+  await act(async () => result.current.approveSampleValidation(readyRun.id, "确认"));
+  await act(async () => result.current.selectValidation(readyRun.id));
+
+  expect(notify).toHaveBeenCalledWith("验证创建失败", "error");
+  expect(notify).toHaveBeenCalledWith("验证审批失败", "error");
+  expect(notify).toHaveBeenCalledWith("验证详情失败", "error");
+  expect(setBusy.mock.calls).toEqual([["validation"], [""], ["approval"], [""]]);
+});
+
+test("轮询失败静默并在卸载时清理两秒定时器", async () => {
+  const runningRun = { ...readyRun, id: "validation-running", status: "running" };
+  const intervalCallbacks = [];
+  vi.spyOn(window, "setInterval").mockImplementation((callback, delay) => {
+    if (delay === 2000) intervalCallbacks.push(callback);
+    return 91;
+  });
+  const clearIntervalSpy = vi.spyOn(window, "clearInterval");
+  validationApiMock.sources.mockResolvedValue([validationSource]);
+  validationApiMock.runs.mockResolvedValue([runningRun]);
+  validationApiMock.run.mockResolvedValue(runningRun);
+  const { result, unmount, notify } = renderValidationController();
+
+  await act(async () => result.current.loadValidation(validDraft.id));
+  await waitFor(() => expect(intervalCallbacks).toHaveLength(1));
+
+  validationApiMock.sources.mockRejectedValueOnce(new Error("轮询失败"));
+  intervalCallbacks.at(-1)();
+  await waitFor(() => expect(validationApiMock.sources).toHaveBeenCalledTimes(2));
+  expect(notify).not.toHaveBeenCalled();
+
+  unmount();
+  expect(clearIntervalSpy).toHaveBeenCalledWith(91);
+});
 
 test("质量门槛分开展示发布阻断项与人工复核警告", async () => {
   const { ClassificationValidationQuality } =
