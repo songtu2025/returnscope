@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 
 import { ReviewBatchList } from "./ReviewBatchList";
+import { ReviewBatchProvider } from "./ReviewBatchProvider";
 import { ReviewBatchWorkspace } from "./ReviewBatchWorkspace";
 import { reviewBatchRouteState, writeReviewBatchRoute } from "./reviewBatchRoute";
 
@@ -11,14 +12,18 @@ export function ReviewBatchPage({ route: appRoute, notify, userId }) {
     [route],
   );
 
-  return route.batchId ? (
-    <ReviewBatchWorkspace
-      route={route}
-      updateRoute={updateRoute}
-      notify={notify}
-      userId={userId}
-    />
-  ) : (
-    <ReviewBatchList route={route} updateRoute={updateRoute} />
+  return (
+    <ReviewBatchProvider>
+      {route.batchId ? (
+        <ReviewBatchWorkspace
+          route={route}
+          updateRoute={updateRoute}
+          notify={notify}
+          userId={userId}
+        />
+      ) : (
+        <ReviewBatchList route={route} updateRoute={updateRoute} />
+      )}
+    </ReviewBatchProvider>
   );
 }

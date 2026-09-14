@@ -1,4 +1,12 @@
-import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -19,6 +27,25 @@ vi.mock("../src/shared/api/reviewBatchApi", () => ({
 }));
 
 import { ReviewBatchPage } from "../src/features/review-batches/ReviewBatchPage";
+
+function expectSelectedOption(label, option) {
+  expect(
+    screen.getByRole("combobox", { name: label }).closest(".ant-select"),
+  ).toHaveTextContent(option);
+}
+
+async function selectOption(label, option) {
+  const combobox = screen.getByRole("combobox", { name: label });
+  fireEvent.mouseDown(
+    combobox.closest(".ant-select").querySelector(".ant-select-content"),
+  );
+  await userEvent.click(
+    await screen.findByText(option, {
+      selector: ".ant-select-item-option-content",
+    }),
+  );
+  await waitFor(() => expect(combobox).toHaveAttribute("aria-expanded", "false"));
+}
 
 const baseBatch = {
   id: "review-batch-1",
@@ -196,6 +223,9 @@ test("待处理批次展示真实业务字段并阻止提前发布", async () =>
   ]) {
     expect(within(filters).getByText(label, { selector: "span" })).toBeVisible();
   }
+  expect(
+    within(filters).getByRole("button", { name: "筛选", exact: true }),
+  ).toBeVisible();
   expect(screen.queryByText("鞋履")).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "还剩 2 条需处理" })).toBeDisabled();
 
@@ -221,9 +251,9 @@ test("待处理记录回填已存在的复核质量判断", async () => {
   render(page(baseBatch, [assessedRecord]));
 
   await userEvent.click(await screen.findByRole("button", { name: "处理" }));
-  expect(screen.getByLabelText("标签正确性")).toHaveValue("incorrect");
-  expect(screen.getByLabelText("证据完整性")).toHaveValue("partial");
-  expect(screen.getByLabelText("路由合理性")).toHaveValue("should_auto_approve");
+  expectSelectedOption("标签正确性", "错误");
+  expectSelectedOption("证据完整性", "部分完整");
+  expectSelectedOption("路由合理性", "本应自动通过");
 });
 
 test("复核抽屉限制键盘焦点并在关闭后恢复触发按钮", async () => {
@@ -278,15 +308,12 @@ test("确认原结果同时提交标签、证据和路由质量判断", async ()
   render(view);
 
   await userEvent.click(await screen.findByRole("button", { name: "处理" }));
-  expect(screen.getByLabelText("标签正确性")).toHaveValue("correct");
-  expect(screen.getByLabelText("证据完整性")).toHaveValue("complete");
-  expect(screen.getByLabelText("路由合理性")).toHaveValue("correct");
-  await userEvent.selectOptions(screen.getByLabelText("标签正确性"), "partial");
-  await userEvent.selectOptions(screen.getByLabelText("证据完整性"), "missing");
-  await userEvent.selectOptions(
-    screen.getByLabelText("路由合理性"),
-    "should_auto_approve",
-  );
+  expectSelectedOption("标签正确性", "正确");
+  expectSelectedOption("证据完整性", "完整");
+  expectSelectedOption("路由合理性", "路由正确");
+  await selectOption("标签正确性", "部分正确");
+  await selectOption("证据完整性", "缺失");
+  await selectOption("路由合理性", "本应自动通过");
   await userEvent.type(
     screen.getByPlaceholderText("必填：说明确认、修改或排除的判断依据"),
     "证据与原标签一致",
@@ -408,10 +435,10 @@ test("单条 409 保留我的输入并可基于服务器新 revision 重试", as
   );
   await userEvent.click(await screen.findByRole("button", { name: "处理" }));
   await userEvent.click(screen.getByRole("button", { name: /修改分类/ }));
-  expect(screen.getByLabelText("标签正确性")).toHaveValue("partial");
-  expect(screen.getByLabelText("证据完整性")).toHaveValue("partial");
-  expect(screen.getByLabelText("路由合理性")).toHaveValue("should_manual_review");
-  await userEvent.selectOptions(screen.getByLabelText("修改分类标签"), "FIT_TOO_LARGE");
+  expectSelectedOption("标签正确性", "部分正确");
+  expectSelectedOption("证据完整性", "部分完整");
+  expectSelectedOption("路由合理性", "本应人工复核");
+  await selectOption("修改分类标签", "偏大 · FIT_TOO_LARGE");
   const reason = screen.getByPlaceholderText("必填：说明确认、修改或排除的判断依据");
   await userEvent.type(reason, "实物证据指向偏大");
   await userEvent.click(screen.getByRole("button", { name: "仅保存" }));

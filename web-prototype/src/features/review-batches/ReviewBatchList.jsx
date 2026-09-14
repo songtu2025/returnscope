@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Button from "antd/es/button";
+import Input from "antd/es/input";
+import Select from "antd/es/select";
 import {
   CaretRight,
   FunnelSimple,
@@ -84,36 +87,36 @@ export function ReviewBatchList({ route, updateRoute }) {
       <section className="review-batch-filters" aria-label="复核批次筛选">
         <label className="review-filter-field">
           <span>关键词</span>
-          <div className="review-batch-search">
-            <MagnifyingGlass size={18} />
-            <input
-              aria-label="搜索复核批次"
-              placeholder="搜索 Listing、批次或创建人"
-              value={filters.q}
-              onChange={(event) => setFilters({ ...filters, q: event.target.value })}
-            />
-          </div>
+          <Input
+            aria-label="搜索复核批次"
+            prefix={<MagnifyingGlass size={18} />}
+            placeholder="搜索 Listing、批次或创建人"
+            value={filters.q}
+            onChange={(event) => setFilters({ ...filters, q: event.target.value })}
+          />
         </label>
         <label className="review-filter-field">
           <span>批次状态</span>
-          <select
+          <Select
             aria-label="批次状态"
             value={filters.status}
-            onChange={(event) => setFilters({ ...filters, status: event.target.value })}
-          >
-            <option value="">全部批次</option>
-            <option value="draft">复核中</option>
-            <option value="in_review">处理中</option>
-            <option value="conflict">存在冲突</option>
-            <option value="published">已发布</option>
-          </select>
+            onChange={(status) => setFilters({ ...filters, status })}
+            options={[
+              { value: "", label: "全部批次" },
+              { value: "draft", label: "复核中" },
+              { value: "in_review", label: "处理中" },
+              { value: "conflict", label: "存在冲突" },
+              { value: "published", label: "已发布" },
+            ]}
+          />
         </label>
-        <button
-          className="primary-button"
+        <Button
+          type="primary"
+          icon={<FunnelSimple size={17} />}
           onClick={() => updateRoute({ ...filters, page: 1 })}
         >
-          <FunnelSimple size={17} /> 筛选
-        </button>
+          筛选
+        </Button>
       </section>
 
       <section className="review-batch-list-card">
@@ -130,9 +133,14 @@ export function ReviewBatchList({ route, updateRoute }) {
             }
             action={
               !route.q && !route.status ? (
-                <button className="primary-button" onClick={openNeedsReviewResults}>
-                  查看待复核结果 <CaretRight size={16} />
-                </button>
+                <Button
+                  type="primary"
+                  icon={<CaretRight size={16} />}
+                  iconPlacement="end"
+                  onClick={openNeedsReviewResults}
+                >
+                  查看待复核结果
+                </Button>
               ) : null
             }
           />
@@ -174,8 +182,10 @@ export function ReviewBatchList({ route, updateRoute }) {
                       <span>{formatTime(batch.updated_at || batch.created_at)}</span>
                     </div>
                     <div>
-                      <button
-                        className="secondary-button compact-button"
+                      <Button
+                        size="small"
+                        icon={<CaretRight size={15} />}
+                        iconPlacement="end"
                         onClick={() =>
                           updateRoute({
                             batchId: batch.id,
@@ -190,8 +200,8 @@ export function ReviewBatchList({ route, updateRoute }) {
                           })
                         }
                       >
-                        进入批次 <CaretRight size={15} />
-                      </button>
+                        进入批次
+                      </Button>
                     </div>
                   </article>
                 );

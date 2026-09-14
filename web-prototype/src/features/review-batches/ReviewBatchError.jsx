@@ -1,4 +1,5 @@
 import { WarningCircle } from "@phosphor-icons/react";
+import Button from "antd/es/button";
 
 export function ReviewBatchError({ error, onRetry }) {
   const serviceUnavailable = error?.status === 404;
@@ -19,9 +20,7 @@ export function ReviewBatchError({ error, onRetry }) {
           </details>
         )}
       </div>
-      <button className="secondary-button" onClick={onRetry}>
-        重新加载
-      </button>
+      <Button onClick={onRetry}>重新加载</Button>
     </div>
   );
 }

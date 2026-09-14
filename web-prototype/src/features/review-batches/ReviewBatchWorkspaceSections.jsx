@@ -7,6 +7,9 @@ import {
   MagnifyingGlass,
   PencilSimple,
 } from "@phosphor-icons/react";
+import Button from "antd/es/button";
+import Input from "antd/es/input";
+import Select from "antd/es/select";
 
 import { formatTime } from "../../lib/presentation";
 import { BATCH_STATUS_LABELS } from "./reviewBatchPresentation";
@@ -23,9 +26,14 @@ export function ReviewBatchSummary({
 }) {
   return (
     <>
-      <button className="text-button review-batch-back" onClick={onBack}>
-        <ArrowLeft size={17} /> 返回复核批次列表
-      </button>
+      <Button
+        className="review-batch-back"
+        type="text"
+        icon={<ArrowLeft size={17} />}
+        onClick={onBack}
+      >
+        返回复核批次列表
+      </Button>
 
       <header className="review-batch-workspace-header">
         <div>
@@ -39,21 +47,24 @@ export function ReviewBatchSummary({
           </p>
         </div>
         <div className="review-batch-header-actions">
-          <button className="secondary-button" onClick={onOpenSource}>
-            查看来源版本
-          </button>
+          <Button onClick={onOpenSource}>查看来源版本</Button>
           {readOnly ? (
             <>
-              <button className="primary-button" onClick={onOpenDerived}>
-                查看衍生版本 <CaretRight size={16} />
-              </button>
-              <button className="secondary-button" onClick={onCreateDashboard}>
-                <ChartBar size={17} /> 创建分析看板
-              </button>
+              <Button
+                type="primary"
+                icon={<CaretRight size={16} />}
+                iconPlacement="end"
+                onClick={onOpenDerived}
+              >
+                查看衍生版本
+              </Button>
+              <Button icon={<ChartBar size={17} />} onClick={onCreateDashboard}>
+                创建分析看板
+              </Button>
             </>
           ) : (
-            <button
-              className="primary-button"
+            <Button
+              type="primary"
               disabled={pending > 0 || Number(batch.record_count || 0) === 0}
               title={
                 Number(batch.record_count || 0) === 0
@@ -69,7 +80,7 @@ export function ReviewBatchSummary({
                 : pending > 0
                   ? `还剩 ${pending} 条需处理`
                   : "发布派生版本"}
-            </button>
+            </Button>
           )}
         </div>
       </header>
@@ -112,28 +123,27 @@ export function ReviewRecordFilters({ filters, onFilters, onApply }) {
     <section className="review-record-filters" aria-label="复核记录筛选">
       <label className="review-filter-field">
         <span>关键词</span>
-        <div className="review-record-search">
-          <MagnifyingGlass size={17} />
-          <input
-            aria-label="搜索复核记录"
-            placeholder="搜索评论、分类或业务字段"
-            value={filters.q}
-            onChange={(event) => onFilters({ ...filters, q: event.target.value })}
-          />
-        </div>
+        <Input
+          aria-label="搜索复核记录"
+          prefix={<MagnifyingGlass size={17} />}
+          placeholder="搜索评论、分类或业务字段"
+          value={filters.q}
+          onChange={(event) => onFilters({ ...filters, q: event.target.value })}
+        />
       </label>
       <label className="review-filter-field">
         <span>处理状态</span>
-        <select
+        <Select
           aria-label="处理状态"
           value={filters.status}
-          onChange={(event) => onFilters({ ...filters, status: event.target.value })}
-        >
-          <option value="">全部记录</option>
-          <option value="pending">待处理</option>
-          <option value="resolved">已处理</option>
-          <option value="excluded">已排除</option>
-        </select>
+          onChange={(status) => onFilters({ ...filters, status })}
+          options={[
+            { value: "", label: "全部记录" },
+            { value: "pending", label: "待处理" },
+            { value: "resolved", label: "已处理" },
+            { value: "excluded", label: "已排除" },
+          ]}
+        />
       </label>
       {[
         ["Listing", "筛选 Listing", "Listing", "listing"],
@@ -143,7 +153,7 @@ export function ReviewRecordFilters({ filters, onFilters, onApply }) {
       ].map(([title, ariaLabel, placeholder, field]) => (
         <label className="review-filter-field" key={field}>
           <span>{title}</span>
-          <input
+          <Input
             aria-label={ariaLabel}
             placeholder={placeholder}
             value={filters[field]}
@@ -151,9 +161,9 @@ export function ReviewRecordFilters({ filters, onFilters, onApply }) {
           />
         </label>
       ))}
-      <button className="primary-button" onClick={onApply}>
+      <Button type="primary" onClick={onApply}>
         筛选
-      </button>
+      </Button>
     </section>
   );
 }
@@ -165,18 +175,18 @@ export function ReviewBulkToolbar({ checkedCount, onBulk, onClear }) {
     <section className="review-bulk-toolbar" aria-label="批量复核操作">
       <b>已选择 {checkedCount} 条待处理记录</b>
       <div>
-        <button className="secondary-button" onClick={() => onBulk("confirm")}>
-          <CheckCircle size={17} /> 批量确认
-        </button>
-        <button className="secondary-button" onClick={() => onBulk("modify")}>
-          <PencilSimple size={17} /> 批量修改分类
-        </button>
-        <button className="secondary-button" onClick={() => onBulk("exclude")}>
-          <EyeSlash size={17} /> 批量排除
-        </button>
-        <button className="text-button" onClick={onClear}>
+        <Button icon={<CheckCircle size={17} />} onClick={() => onBulk("confirm")}>
+          批量确认
+        </Button>
+        <Button icon={<PencilSimple size={17} />} onClick={() => onBulk("modify")}>
+          批量修改分类
+        </Button>
+        <Button icon={<EyeSlash size={17} />} onClick={() => onBulk("exclude")}>
+          批量排除
+        </Button>
+        <Button type="text" onClick={onClear}>
           取消选择
-        </button>
+        </Button>
       </div>
     </section>
   );

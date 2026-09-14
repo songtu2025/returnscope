@@ -6,5 +6,14 @@ class EventSourceStub {
   close() {}
 }
 
+class ResizeObserverStub {
+  observe() {}
+
+  unobserve() {}
+
+  disconnect() {}
+}
+
 globalThis.EventSource = EventSourceStub;
+globalThis.ResizeObserver = ResizeObserverStub;
 globalThis.HTMLElement.prototype.scrollIntoView = () => {};

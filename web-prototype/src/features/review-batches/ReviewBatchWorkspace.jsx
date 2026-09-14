@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Checkbox from "antd/es/checkbox";
 import { ListChecks } from "@phosphor-icons/react";
 
 import { navigateHash } from "../../app/hashRouter";
@@ -374,9 +375,8 @@ export function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
             >
               <div className="review-record-table-head" role="row">
                 {!readOnly && (
-                  <label className="review-record-checkbox">
-                    <input
-                      type="checkbox"
+                  <span className="review-record-checkbox">
+                    <Checkbox
                       aria-label="选择本页待处理记录"
                       checked={
                         records.items.some(
@@ -393,7 +393,7 @@ export function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
                         setCheckedIds(event.target.checked ? pageIds : []);
                       }}
                     />
-                  </label>
+                  </span>
                 )}
                 <span>order-id / 产品名称</span>
                 <span>Listing / 产品SKU</span>

@@ -1,4 +1,7 @@
 import { EyeSlash, WarningCircle } from "@phosphor-icons/react";
+import Button from "antd/es/button";
+import Input from "antd/es/input";
+import Select from "antd/es/select";
 
 import { Modal } from "../../components/SharedUi";
 import { labelText } from "../../lib/taxonomyPresentation";
@@ -29,7 +32,7 @@ export function ReviewPublishDialog({
         </p>
         <label>
           发布原因
-          <textarea
+          <Input.TextArea
             rows="4"
             required
             value={reason}
@@ -43,16 +46,16 @@ export function ReviewPublishDialog({
           </div>
         )}
         <div className="modal-actions">
-          <button className="secondary-button" disabled={publishing} onClick={onClose}>
+          <Button disabled={publishing} onClick={onClose}>
             取消
-          </button>
-          <button
-            className="primary-button"
+          </Button>
+          <Button
+            type="primary"
             disabled={publishing || !reason.trim()}
             onClick={onPublish}
           >
             {publishing ? "正在发布…" : "确认生成新版本"}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>
@@ -97,23 +100,23 @@ export function ReviewBulkDialog({
         {action === "modify" && (
           <label>
             修改为
-            <select
+            <Select
               aria-label="批量修改分类标签"
               value={labelCode}
-              onChange={(event) => onLabelCode(event.target.value)}
-            >
-              <option value="">请选择分类标签</option>
-              {labels.map((label) => (
-                <option key={label.code} value={label.code}>
-                  {labelText(label)} · {label.code}
-                </option>
-              ))}
-            </select>
+              onChange={onLabelCode}
+              options={[
+                { value: "", label: "请选择分类标签" },
+                ...labels.map((label) => ({
+                  value: label.code,
+                  label: `${labelText(label)} · ${label.code}`,
+                })),
+              ]}
+            />
           </label>
         )}
         <label>
           处理原因
-          <textarea
+          <Input.TextArea
             rows="4"
             required
             value={reason}
@@ -127,16 +130,16 @@ export function ReviewBulkDialog({
           </div>
         )}
         <div className="modal-actions">
-          <button className="secondary-button" disabled={saving} onClick={onClose}>
+          <Button disabled={saving} onClick={onClose}>
             取消
-          </button>
-          <button
-            className="primary-button"
+          </Button>
+          <Button
+            type="primary"
             disabled={saving || !reason.trim() || (action === "modify" && !labelCode)}
             onClick={onSave}
           >
             {saving ? "正在处理…" : `确认处理 ${checkedCount} 条`}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>
