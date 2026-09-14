@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, UploadSimple } from "@phosphor-icons/react";
+import Button from "antd/es/button";
+import Input from "antd/es/input";
 import { Modal } from "../../components/SharedUi";
 import { ClassificationExcelImport } from "./ClassificationExcelImport";
 import { ClassificationHierarchyChanges } from "./ClassificationHierarchyEditor";
@@ -337,7 +339,7 @@ export function ClassificationStandardWorkspace({
         <section className="standard-change-reason">
           <label>
             变更说明
-            <input
+            <Input
               value={changeReason}
               onChange={(event) => onReasonChange(event.target.value)}
             />
@@ -393,14 +395,9 @@ export function ClassificationStandardWorkspace({
             {draft && !dirty && <span>草稿 r{draft.revision}，尚未发布</span>}
           </div>
           <div>
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={Boolean(busy)}
-              onClick={onSave}
-            >
+            <Button disabled={Boolean(busy)} onClick={onSave}>
               {busy === "save" ? "保存中" : "保存草稿"}
-            </button>
+            </Button>
             {section === "review" ? (
               <button
                 type="button"
@@ -412,14 +409,13 @@ export function ClassificationStandardWorkspace({
                 {busy === "publish" ? "启用中" : publishLabel}
               </button>
             ) : (
-              <button
-                type="button"
-                className="primary-button"
+              <Button
+                type="primary"
                 disabled={Boolean(busy) || (!dirty && !draft)}
                 onClick={() => setSection("review")}
               >
                 发布
-              </button>
+              </Button>
             )}
           </div>
         </footer>
@@ -433,16 +429,10 @@ export function ClassificationStandardWorkspace({
           <div className="label-action-confirm">
             <p>尚未保存的修改会丢失。可以继续编辑并保存草稿，或放弃本次未保存内容。</p>
             <div>
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => setConfirmBack(false)}
-              >
-                继续编辑
-              </button>
-              <button type="button" className="danger-button" onClick={onBack}>
+              <Button onClick={() => setConfirmBack(false)}>继续编辑</Button>
+              <Button type="primary" danger onClick={onBack}>
                 放弃修改并返回
-              </button>
+              </Button>
             </div>
           </div>
         </Modal>

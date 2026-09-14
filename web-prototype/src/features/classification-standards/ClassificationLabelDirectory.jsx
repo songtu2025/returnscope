@@ -1,4 +1,5 @@
 import { MagnifyingGlass, Plus } from "@phosphor-icons/react";
+import Input from "antd/es/input";
 import { taxonomyPath } from "../../lib/taxonomyPresentation";
 import { ClassificationHierarchyDirectory } from "./ClassificationHierarchyEditor";
 
@@ -70,16 +71,15 @@ export function ClassificationLabelDirectory({
           </button>
         )}
       </header>
-      <label className="standard-search-box">
-        <MagnifyingGlass size={16} />
-        <input
-          type="search"
-          aria-label="搜索标签"
-          placeholder="搜索标签或别名"
-          value={query}
-          onChange={(event) => onQueryChange(event.target.value)}
-        />
-      </label>
+      <Input
+        className="standard-search-box"
+        type="search"
+        aria-label="搜索标签"
+        prefix={<MagnifyingGlass size={16} />}
+        placeholder="搜索标签或别名"
+        value={query}
+        onChange={(event) => onQueryChange(event.target.value)}
+      />
       <select
         aria-label="筛选标签分组"
         value={group}

@@ -5,6 +5,8 @@ import {
   Plus,
   Tag,
 } from "@phosphor-icons/react";
+import Button from "antd/es/button";
+import Input from "antd/es/input";
 import { EmptyState, PageHeading } from "../../components/SharedUi";
 import { formatDate } from "../../lib/presentation";
 
@@ -31,9 +33,9 @@ export function ClassificationStandardList({
         title="分类标准"
         description="维护商品品类与退货问题标签，分析任务会自动读取当前启用版本。"
         action={
-          <button type="button" className="primary-button" onClick={onCreate}>
-            <Plus size={16} /> 新建分类标准
-          </button>
+          <Button type="primary" icon={<Plus size={16} />} onClick={onCreate}>
+            新建分类标准
+          </Button>
         }
       />
       <section className="standard-library-summary" aria-label="分类标准汇总">
@@ -55,15 +57,14 @@ export function ClassificationStandardList({
       </section>
       <section className="standard-library-card">
         <div className="standard-library-toolbar">
-          <label className="standard-search-box">
-            <MagnifyingGlass size={17} />
-            <input
-              aria-label="搜索分类标准"
-              placeholder="搜索标准名称或适用商品"
-              value={query}
-              onChange={(event) => onQueryChange(event.target.value)}
-            />
-          </label>
+          <Input
+            className="standard-search-box"
+            aria-label="搜索分类标准"
+            prefix={<MagnifyingGlass size={17} />}
+            placeholder="搜索标准名称或适用商品"
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+          />
           <div className="standard-status-filter" role="group" aria-label="标准状态">
             {[
               ["all", "全部状态"],

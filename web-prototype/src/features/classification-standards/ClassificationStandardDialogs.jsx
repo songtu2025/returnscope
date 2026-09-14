@@ -1,3 +1,4 @@
+import Button from "antd/es/button";
 import { Modal } from "../../components/SharedUi";
 
 export function ClassificationStandardDeleteDialog({
@@ -29,26 +30,16 @@ export function ClassificationStandardDeleteDialog({
         </p>
       )}
       <div className="standard-delete-actions">
-        <button
-          type="button"
-          className="secondary-button"
-          disabled={busy === "delete"}
-          onClick={onClose}
-        >
+        <Button disabled={busy === "delete"} onClick={onClose}>
           取消
-        </button>
-        <button
-          type="button"
-          className="danger-button"
-          disabled={busy === "delete"}
-          onClick={onConfirm}
-        >
+        </Button>
+        <Button type="primary" danger disabled={busy === "delete"} onClick={onConfirm}>
           {busy === "delete"
             ? "处理中"
             : target.delete_mode === "delete"
               ? "确认删除"
               : "确认停用"}
-        </button>
+        </Button>
       </div>
     </Modal>
   );
@@ -69,17 +60,10 @@ export function ClassificationStandardRestoreDialog({
       onClose={onClose}
     >
       <div className="standard-delete-actions">
-        <button type="button" className="secondary-button" onClick={onClose}>
-          取消
-        </button>
-        <button
-          type="button"
-          className="primary-button"
-          disabled={busy === "restore"}
-          onClick={onConfirm}
-        >
+        <Button onClick={onClose}>取消</Button>
+        <Button type="primary" disabled={busy === "restore"} onClick={onConfirm}>
           {busy === "restore" ? "创建中" : "创建恢复草稿"}
-        </button>
+        </Button>
       </div>
     </Modal>
   );

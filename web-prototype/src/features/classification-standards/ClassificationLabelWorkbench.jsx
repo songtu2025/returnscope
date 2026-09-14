@@ -1,6 +1,7 @@
 import { groups as BUSINESS_GROUPS } from "../../../../config/taxonomy_alignment.json";
 import { useEffect, useId, useRef, useState } from "react";
 import { ArrowCounterClockwise, Copy, Plus, X } from "@phosphor-icons/react";
+import Button from "antd/es/button";
 import { EmptyState, Modal } from "../../components/SharedUi";
 import { labelChanges, reconcileLabelRules, sameLabel } from "./labelDraftPolicy";
 import { taxonomyPath } from "../../lib/taxonomyPresentation";
@@ -325,24 +326,18 @@ export function ClassificationLabelWorkbench({
               </div>
               <div className="label-workspace-actions">
                 {editable && !removed && (
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() => setEditing((value) => !value)}
-                  >
+                  <Button onClick={() => setEditing((value) => !value)}>
                     {editing ? "完成编辑" : "编辑"}
-                  </button>
+                  </Button>
                 )}
                 {editable && labelDirty && (
-                  <button
-                    type="button"
-                    className="secondary-button"
+                  <Button
                     disabled={busy}
+                    icon={<ArrowCounterClockwise size={15} />}
                     onClick={undoLabel}
                   >
-                    <ArrowCounterClockwise size={15} />
                     撤销当前修改
-                  </button>
+                  </Button>
                 )}
                 {editable && !removed && (
                   <details className="standard-more-menu">
@@ -367,16 +362,14 @@ export function ClassificationLabelWorkbench({
                   <h3>此标签拟在下一版本停用</h3>
                   <p>当前线上标准与历史结果不受影响，发布草稿后才生效。</p>
                   {editable && (
-                    <button
-                      type="button"
-                      className="secondary-button"
+                    <Button
                       onClick={() => {
                         changeLabels([...content.labels, label], label.code);
                         selectLabel(content.labels.length);
                       }}
                     >
                       恢复到草稿
-                    </button>
+                    </Button>
                   )}
                 </div>
               ) : (
@@ -533,22 +526,15 @@ export function ClassificationLabelWorkbench({
                 : "仅修改当前草稿。相关标签校验引用会同步清理，已发布标准和历史结果保持原样。"}
             </p>
             <div>
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => setPending(null)}
-              >
-                继续编辑
-              </button>
-              <button
-                type="button"
-                className="primary-button"
+              <Button onClick={() => setPending(null)}>继续编辑</Button>
+              <Button
+                type="primary"
                 onClick={() =>
                   pending.type === "replace" ? addLabel(label) : retireLabel()
                 }
               >
                 {pending.type === "replace" ? "创建替代标签" : "确认移除"}
-              </button>
+              </Button>
             </div>
           </div>
         </Modal>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { navigateHash } from "../../app/hashRouter";
+import { AntdProvider } from "../../components/AntdProvider";
 import { classificationStandardApi } from "../../shared/api/classificationStandardApi";
 import {
   ClassificationStandardDeleteDialog,
@@ -436,99 +437,101 @@ export function ClassificationStandardsPage({ route, notify }) {
   if (loading) return <div className="inline-loading">正在读取分类标准…</div>;
 
   return (
-    <div className="standard-page classification-standard-page">
-      {mode === "list" && (
-        <ClassificationStandardList
-          standards={filteredStandards}
-          totals={totals}
-          query={query}
-          statusFilter={statusFilter}
-          onQueryChange={setQuery}
-          onStatusChange={setStatusFilter}
-          onCreate={() => navigateHash("classification-standards", { view: "new" })}
-          onView={(standard) =>
-            navigateHash("classification-standards", { standard: standard.id })
-          }
-          onDelete={setDeleteTarget}
-        />
-      )}
-
-      {(mode === "new" || mode === "edit") &&
-        (pageLoading ? (
-          <div className="inline-loading">正在读取分类标准…</div>
-        ) : (
-          <ClassificationStandardWorkspace
-            key={`${selectedId || "new"}-${detail?.standard_version_id || ""}`}
-            initiallyEditing={route.query.view === "edit" || mode === "new"}
-            versions={versions}
-            notify={notify}
-            onDelete={() => setDeleteTarget(detail)}
-            onRestore={setRestoreTarget}
-            savedContent={savedContent}
-            focusLabelCode={route.query.label}
-            isNew={mode === "new"}
-            detail={detail}
-            draft={draft}
-            content={content}
-            changeReason={changeReason}
-            busy={busy}
-            dirty={dirty}
-            validationSources={validationSources}
-            validationRuns={validationRuns}
-            selectedValidation={selectedValidation}
-            validationSourceId={validationSourceId}
-            validationSampleSize={validationSampleSize}
-            fieldErrors={fieldErrors}
-            validationAttempt={validationAttempt}
-            onContentChange={(value, field) => {
-              setContent(value);
-              setFieldErrors((current) =>
-                clearClassificationStandardContentFieldError(current, field),
-              );
-            }}
-            onReasonChange={setChangeReason}
-            onSave={saveDraft}
-            onPublish={publish}
-            onBack={() => navigateHash("classification-standards")}
-            onValidationSourceChange={setValidationSourceId}
-            onValidationSampleSizeChange={setValidationSampleSize}
-            onValidationRun={startSampleValidation}
-            onValidationApprove={approveSampleValidation}
-            onImport={importJson}
-            onPrepareExcel={prepareExcelDraft}
-            onApplyExcel={(value, filename) => {
-              setContent(value);
-              setChangeReason(`导入 ${filename}`);
-              setFieldErrors({});
-              notify("已采用层级预览，请检查层级和评价方向，保存后可运行样本验证");
-            }}
-            onValidationSelect={async (runId) => {
-              try {
-                setSelectedValidation(
-                  await classificationStandardApi.classificationStandardValidationRun(
-                    runId,
-                  ),
-                );
-              } catch (error) {
-                notify(error.message, "error");
-              }
-            }}
+    <AntdProvider>
+      <div className="standard-page classification-standard-page">
+        {mode === "list" && (
+          <ClassificationStandardList
+            standards={filteredStandards}
+            totals={totals}
+            query={query}
+            statusFilter={statusFilter}
+            onQueryChange={setQuery}
+            onStatusChange={setStatusFilter}
+            onCreate={() => navigateHash("classification-standards", { view: "new" })}
+            onView={(standard) =>
+              navigateHash("classification-standards", { standard: standard.id })
+            }
+            onDelete={setDeleteTarget}
           />
-        ))}
+        )}
 
-      <ClassificationStandardDeleteDialog
-        target={deleteTarget}
-        busy={busy}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={deleteStandard}
-      />
+        {(mode === "new" || mode === "edit") &&
+          (pageLoading ? (
+            <div className="inline-loading">正在读取分类标准…</div>
+          ) : (
+            <ClassificationStandardWorkspace
+              key={`${selectedId || "new"}-${detail?.standard_version_id || ""}`}
+              initiallyEditing={route.query.view === "edit" || mode === "new"}
+              versions={versions}
+              notify={notify}
+              onDelete={() => setDeleteTarget(detail)}
+              onRestore={setRestoreTarget}
+              savedContent={savedContent}
+              focusLabelCode={route.query.label}
+              isNew={mode === "new"}
+              detail={detail}
+              draft={draft}
+              content={content}
+              changeReason={changeReason}
+              busy={busy}
+              dirty={dirty}
+              validationSources={validationSources}
+              validationRuns={validationRuns}
+              selectedValidation={selectedValidation}
+              validationSourceId={validationSourceId}
+              validationSampleSize={validationSampleSize}
+              fieldErrors={fieldErrors}
+              validationAttempt={validationAttempt}
+              onContentChange={(value, field) => {
+                setContent(value);
+                setFieldErrors((current) =>
+                  clearClassificationStandardContentFieldError(current, field),
+                );
+              }}
+              onReasonChange={setChangeReason}
+              onSave={saveDraft}
+              onPublish={publish}
+              onBack={() => navigateHash("classification-standards")}
+              onValidationSourceChange={setValidationSourceId}
+              onValidationSampleSizeChange={setValidationSampleSize}
+              onValidationRun={startSampleValidation}
+              onValidationApprove={approveSampleValidation}
+              onImport={importJson}
+              onPrepareExcel={prepareExcelDraft}
+              onApplyExcel={(value, filename) => {
+                setContent(value);
+                setChangeReason(`导入 ${filename}`);
+                setFieldErrors({});
+                notify("已采用层级预览，请检查层级和评价方向，保存后可运行样本验证");
+              }}
+              onValidationSelect={async (runId) => {
+                try {
+                  setSelectedValidation(
+                    await classificationStandardApi.classificationStandardValidationRun(
+                      runId,
+                    ),
+                  );
+                } catch (error) {
+                  notify(error.message, "error");
+                }
+              }}
+            />
+          ))}
 
-      <ClassificationStandardRestoreDialog
-        target={restoreTarget}
-        busy={busy}
-        onClose={() => setRestoreTarget(null)}
-        onConfirm={restoreVersion}
-      />
-    </div>
+        <ClassificationStandardDeleteDialog
+          target={deleteTarget}
+          busy={busy}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={deleteStandard}
+        />
+
+        <ClassificationStandardRestoreDialog
+          target={restoreTarget}
+          busy={busy}
+          onClose={() => setRestoreTarget(null)}
+          onConfirm={restoreVersion}
+        />
+      </div>
+    </AntdProvider>
   );
 }
