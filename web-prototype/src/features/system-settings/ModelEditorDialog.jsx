@@ -1,3 +1,5 @@
+import Button from "antd/es/button";
+import Input from "antd/es/input";
 import { Modal } from "../../components/SharedUi";
 import { EFFORT_LABELS } from "../../constants";
 
@@ -44,9 +46,9 @@ export function ModelEditorDialog({
         </label>
         <label>
           显示名称
-          <input
+          <Input
             value={modelDraft.display_name}
-            maxLength="80"
+            maxLength={80}
             placeholder="留空则使用模型 ID"
             onChange={(event) =>
               onChange({
@@ -89,14 +91,14 @@ export function ModelEditorDialog({
           模型验证会使用当前接入最近保存的 Base URL 和 API 密钥发送最小请求。
         </p>
         <div className="modal-actions">
-          <button
-            type="button"
-            className="secondary-button"
+          <Button
+            autoInsertSpace={false}
+            htmlType="button"
             onClick={onClose}
             disabled={busy === "model-save"}
           >
             取消
-          </button>
+          </Button>
           <button className="primary-button" disabled={busy === "model-save"}>
             {busy === "model-save" ? "保存中…" : "保存模型"}
           </button>

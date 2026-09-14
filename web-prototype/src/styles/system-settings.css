@@ -141,9 +141,6 @@
   color: var(--muted);
   font-size: 11px;
 }
-.model-service-actions .text-button {
-  margin-left: auto;
-}
 .model-service-policy,
 .model-service-advanced {
   min-width: 0;
@@ -349,10 +346,10 @@
 }
 .model-service-catalog-head {
   min-height: 42px;
-  color: var(--muted);
+  color: #617069;
   background: var(--surface-soft);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 800;
 }
 .model-service-catalog-row {
   border-top: 1px solid var(--line-soft);

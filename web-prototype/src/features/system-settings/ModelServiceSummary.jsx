@@ -6,6 +6,7 @@ import {
   Power,
   WarningCircle,
 } from "@phosphor-icons/react";
+import Button from "antd/es/button";
 import { EFFORT_LABELS, MODEL_STATUS_LABELS } from "../../constants";
 import { classNames } from "../../lib/presentation";
 
@@ -101,15 +102,24 @@ export function ModelServiceSummary({
               {validationActive ? "验证中…" : "验证服务"}
             </button>
           ) : (
-            <button className="primary-button" onClick={onOpenNewConnection}>
-              <Plus size={18} />
+            <Button
+              autoInsertSpace={false}
+              type="primary"
+              icon={<Plus size={18} />}
+              onClick={onOpenNewConnection}
+            >
               新增模型服务
-            </button>
+            </Button>
           )}
           {selectedConnection && (
-            <button className="text-button" onClick={onEditConnection}>
+            <Button
+              autoInsertSpace={false}
+              size="small"
+              type="link"
+              onClick={onEditConnection}
+            >
               编辑连接
-            </button>
+            </Button>
           )}
           {selectedConnection && (
             <details className="model-service-more">
@@ -215,13 +225,17 @@ export function ModelServiceSummary({
             >
               {busy === "model-discover" ? "读取中…" : "同步目录"}
             </button>
-            <button
-              className="text-button"
+            <Button
+              autoInsertSpace={false}
+              size="small"
+              type="link"
+              icon={<ArrowRight size={15} />}
+              iconPosition="end"
               onClick={onOpenModelCatalog}
               disabled={!selectedConnection}
             >
-              管理目录 <ArrowRight size={15} />
-            </button>
+              管理目录
+            </Button>
           </div>
         </header>
         <div className="model-service-catalog-table" role="table">

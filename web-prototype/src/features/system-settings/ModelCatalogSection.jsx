@@ -1,4 +1,5 @@
 import { CheckCircle, Clock, Plus, Pulse, WarningCircle } from "@phosphor-icons/react";
+import Button from "antd/es/button";
 import { CardHeading } from "../../components/SharedUi";
 import { EFFORT_LABELS, MODEL_STATUS_LABELS } from "../../constants";
 import { classNames, formatTime } from "../../lib/presentation";
@@ -193,10 +194,13 @@ export function ModelCatalogSection({
             : "请添加接入方提供的模型 ID；保存后可同步真实目录并验证。"
         }
         action={
-          <button className="secondary-button" onClick={() => onOpenModelEditor()}>
-            <Plus size={16} />
+          <Button
+            autoInsertSpace={false}
+            icon={<Plus size={16} />}
+            onClick={() => onOpenModelEditor()}
+          >
             添加模型
-          </button>
+          </Button>
         }
       />
       <div className="model-catalog-list">

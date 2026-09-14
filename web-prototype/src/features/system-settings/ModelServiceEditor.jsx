@@ -4,6 +4,8 @@ import {
   SlidersHorizontal,
   WarningCircle,
 } from "@phosphor-icons/react";
+import Button from "antd/es/button";
+import Input from "antd/es/input";
 import { CardHeading } from "../../components/SharedUi";
 import { EFFORT_LABELS } from "../../constants";
 import { classNames, formatTime } from "../../lib/presentation";
@@ -107,16 +109,16 @@ export function ModelServiceEditor({
             )}
           </div>
           {selectedVersion && !editing && activePanel !== "models" && (
-            <button
-              className="secondary-button"
+            <Button
+              autoInsertSpace={false}
+              icon={<SlidersHorizontal size={17} />}
               disabled={validationActive || Boolean(busy)}
               onClick={() => {
                 onBeginEdit(activePanel);
               }}
             >
-              <SlidersHorizontal size={17} />
               创建新版本
-            </button>
+            </Button>
           )}
         </header>
         {activePanel === "connection" && (
@@ -125,7 +127,7 @@ export function ModelServiceEditor({
             <div className="config-fields">
               <label>
                 接入名称
-                <input
+                <Input
                   disabled={!editing}
                   value={form.name}
                   onChange={(event) =>
@@ -367,9 +369,9 @@ export function ModelServiceEditor({
           </div>
           {editing ? (
             <>
-              <button className="secondary-button" onClick={onCancelEdit}>
+              <Button autoInsertSpace={false} onClick={onCancelEdit}>
                 取消
-              </button>
+              </Button>
               <button
                 className="primary-button"
                 onClick={onSave}

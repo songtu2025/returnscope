@@ -3017,6 +3017,26 @@ describe("关键用户流程", () => {
     expect(screen.getByRole("status")).not.toHaveTextContent("配置变更原因");
   });
 
+  test("模型服务通用控件保留可访问名称和受控输入", async () => {
+    const user = userEvent.setup();
+    render(<ApiManagement notify={vi.fn()} />);
+
+    await user.click(await screen.findByRole("button", { name: "新增模型服务" }));
+    const connectionName = screen.getByRole("textbox", { name: "接入名称" });
+    await user.type(connectionName, "生产线路");
+    expect(connectionName).toHaveValue("生产线路");
+    expect(screen.getByRole("button", { name: "取消", exact: true })).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "添加模型" }));
+    const dialog = screen.getByRole("dialog", { name: "添加模型" });
+    const displayName = within(dialog).getByRole("textbox", { name: "显示名称" });
+    await user.type(displayName, "主分析模型");
+    expect(displayName).toHaveValue("主分析模型");
+    expect(
+      within(dialog).getByRole("button", { name: "取消", exact: true }),
+    ).toBeVisible();
+  });
+
   test("模型服务摘要展示未发布草稿并保留按需编辑入口", async () => {
     const user = userEvent.setup();
     const activeVersion = {

@@ -9,7 +9,6 @@ import "./styles/desktop-layout.css";
 import "./styles/analysis-dashboards.css";
 import "./styles/classification-results.css";
 import "./styles/operations.css";
-import "./styles/system-settings.css";
 import "./styles/visual-foundation.css";
 import "./styles/return-insights.css";
 import "./styles/ai-insight-reports.css";

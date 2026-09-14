@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import Button from "antd/es/button";
 import { api } from "../api";
+import { AntdProvider } from "../components/AntdProvider";
 import { PageHeading } from "../components/SharedUi";
 import { ModelEditorDialog } from "../features/system-settings/ModelEditorDialog";
 import { ModelServiceEditor } from "../features/system-settings/ModelServiceEditor";
@@ -519,7 +521,7 @@ export function ApiManagement({
   };
 
   return (
-    <>
+    <AntdProvider>
       <div className="standard-page api-page">
         <PageHeading
           eyebrow="共享系统配置"
@@ -527,9 +529,9 @@ export function ApiManagement({
           description="维护共享接入、模型可用性与运行限制；个人策略与任务选择在各自页面保存。"
           action={
             activePanel ? (
-              <button className="secondary-button" onClick={closePanel}>
+              <Button autoInsertSpace={false} onClick={closePanel}>
                 返回服务摘要
-              </button>
+              </Button>
             ) : null
           }
         />
@@ -612,6 +614,6 @@ export function ApiManagement({
         onClose={closeModelEditor}
         onSave={saveModel}
       />
-    </>
+    </AntdProvider>
   );
 }
