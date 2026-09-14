@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import threading
+from builtins import list as builtin_list
 from collections import Counter
 from copy import deepcopy
 from dataclasses import dataclass
@@ -583,7 +584,7 @@ class ReviewService:
     def update_batch_records(
         self,
         batch_id: str,
-        records: list[dict[str, Any]],
+        records: builtin_list[dict[str, Any]],
         actor_id: str,
         action: str,
         label_code: str | None,
@@ -1430,7 +1431,7 @@ class ReviewService:
                 )
 
     @staticmethod
-    def _top_problem_labels(dataset, results, taxonomy) -> list[dict[str, Any]]:
+    def _top_problem_labels(dataset, results, taxonomy) -> builtin_list[dict[str, Any]]:
         labels = {label.code: label for label in taxonomy.labels}
         record_counts = dataset.records["classification_key"].value_counts()
         counts: Counter[str] = Counter()
@@ -1496,7 +1497,7 @@ class ReviewService:
             )
 
     @staticmethod
-    def _version_quality(qualities: list[str]) -> str:
+    def _version_quality(qualities: builtin_list[str]) -> str:
         if qualities and all(value == "unusable" for value in qualities):
             return "unusable"
         if any(value not in {"ready", "excluded"} for value in qualities):

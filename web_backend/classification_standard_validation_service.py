@@ -619,7 +619,7 @@ class ClassificationStandardValidationService:
             (str(item["category_a"]), str(item["category_b"]))
             for item in draft["snapshot"]["variants"]
         }
-        candidates = []
+        candidates: list[dict[str, Any]] = []
         for row in dataset.unique_comments.itertuples(index=False):
             category = (str(row.category_a), str(row.category_b))
             if category not in categories or str(row.product_match_status) != "matched":
@@ -703,7 +703,7 @@ class ClassificationStandardValidationService:
             workbook = load_workbook(BytesIO(content), read_only=True, data_only=True)
         except Exception as exc:
             raise ValueError("无法读取 Review 表格，请检查文件格式") from exc
-        candidates = []
+        candidates: list[dict[str, Any]] = []
         skipped = 0
         try:
             references = self._read_references(workbook, draft["snapshot"]["taxonomy"])
@@ -770,7 +770,7 @@ class ClassificationStandardValidationService:
         variants: list[dict[str, Any]],
         references: dict[str, Any],
     ) -> tuple[list[dict[str, Any]], int]:
-        candidates = []
+        candidates: list[dict[str, Any]] = []
         seen = set()
         skipped = 0
         sorted_variants = sorted(variants, key=lambda item: -len(item["category_b"]))
@@ -857,7 +857,7 @@ class ClassificationStandardValidationService:
                 "人工参考答案表需包含评论编号、标签编码、评价方向、部位和证据列"
             )
         labels = {item["code"]: item for item in taxonomy["labels"]}
-        references = {}
+        references: dict[str, dict[str, Any]] = {}
         for values in rows:
             row = dict(zip(headers, values, strict=False))
             identity = str(row.get("评论编号") or "").strip()
@@ -913,7 +913,7 @@ class ClassificationStandardValidationService:
         for item in sorted(items, key=lambda value: value["classification_key"]):
             key = tuple(str(item[field]) for field in bucket_fields)
             buckets.setdefault(key, []).append(item)
-        output = []
+        output: list[dict[str, Any]] = []
         keys = sorted(buckets, key=lambda key: (-len(buckets[key]), key))
         while len(output) < sample_size and any(buckets.values()):
             for key in keys:
