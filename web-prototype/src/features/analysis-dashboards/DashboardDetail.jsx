@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import "../../styles/insight-generation.css";
+import "../../styles/classification-results.css";
+import "../../styles/return-insights.css";
+import "../../styles/ai-insight-reports.css";
 
 import { navigateHash } from "../../app/hashRouter";
 import { api } from "../../api";

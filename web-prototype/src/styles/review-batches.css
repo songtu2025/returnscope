@@ -1,3 +1,20 @@
+@media (min-width: 1600px) {
+  .review-batch-page .review-batch-table-head,
+  .review-batch-page .review-batch-row {
+    grid-template-columns: 0.8fr 1.55fr 0.95fr 1.05fr 0.72fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .review-batch-page .review-batch-progress {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .review-batch-page .review-batch-progress > div:nth-child(2) {
+    border-right: 0;
+  }
+}
+
 .review-batch-page {
   min-width: 0;
 }

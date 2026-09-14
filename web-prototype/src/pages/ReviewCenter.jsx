@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import "../styles/review-center.css";
+
 import { CheckCircle, ListChecks } from "@phosphor-icons/react";
 import { api } from "../api";
 import {

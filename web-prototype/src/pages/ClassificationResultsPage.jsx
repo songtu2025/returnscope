@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import "../styles/classification-results.css";
 
 import { AntdProvider } from "../components/AntdProvider";
 import { useHashRoute } from "../app/hashRouter";

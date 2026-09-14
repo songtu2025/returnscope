@@ -166,6 +166,90 @@
   gap: 12px;
 }
 
+.settings-hub-page .settings-tabs {
+  display: inline-flex;
+  width: fit-content;
+  padding: 4px;
+  border: 1px solid #d9e3dd;
+  border-radius: 10px;
+  background: #f6f9f7;
+  box-shadow: 0 3px 10px rgb(25 52 40 / 3%);
+}
+
+.settings-hub-page .settings-tabs button {
+  border-radius: 7px;
+}
+
+.model-preference-page .model-preference-card,
+.audit-page .audit-card {
+  border-color: #d9e3dd;
+  border-radius: 13px;
+  box-shadow: 0 10px 26px rgb(25 52 40 / 5%);
+}
+
+.model-preference-page .model-preference-row {
+  padding-block: 18px;
+  border-color: var(--line-soft);
+}
+
+.audit-page .audit-filter-form {
+  gap: 12px;
+  padding: 4px 4px 18px;
+}
+
+.audit-page .audit-list {
+  gap: 8px;
+}
+
+.audit-page .audit-list article {
+  padding: 16px;
+  border-color: #dfe7e2;
+  border-radius: 10px;
+  background: #fff;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.audit-page .audit-list article:hover {
+  border-color: #b8d8cc;
+  box-shadow: 0 5px 14px rgb(25 52 40 / 5%);
+}
+
+.audit-page .audit-diff {
+  padding-top: 2px;
+}
+
+.audit-page .audit-diff-table {
+  border-color: #dfe7e2;
+}
+
+.model-service-summary .model-service-runtime {
+  min-height: 118px;
+  border-color: #d9e3dd;
+  border-radius: 13px;
+  box-shadow: 0 10px 26px rgb(25 52 40 / 5%);
+}
+
+.model-service-summary .model-service-draft-strip {
+  min-height: 68px;
+  border-radius: 10px;
+}
+
+.model-service-summary .model-service-catalog {
+  border-color: #d9e3dd;
+  border-radius: 13px;
+  box-shadow: 0 8px 22px rgb(25 52 40 / 4%);
+}
+
+@media (max-width: 900px) {
+  .settings-hub-page .settings-tabs {
+    display: flex;
+    width: 100%;
+    overflow-x: auto;
+  }
+}
+
 .api-layout {
   display: grid;
   grid-template-columns: 210px minmax(660px, 1fr) 220px;

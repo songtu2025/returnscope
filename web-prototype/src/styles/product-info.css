@@ -1,4 +1,24 @@
 /* 数据资产 */
+.data-page .dataset-header > .dataset-actions {
+  gap: 12px;
+}
+
+.dataset-utility-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dataset-utility-actions .text-button {
+  min-height: var(--desktop-compact-height);
+  color: #62736a;
+  white-space: nowrap;
+}
+
+.dataset-utility-actions .text-button:hover {
+  color: var(--green-dark);
+}
+
 .product-master-page .dataset-detail,
 .product-master-page .dataset-view-panel {
   min-height: 0;
@@ -161,6 +181,10 @@
 }
 
 @media (max-width: 1180px) {
+  .product-master-impact {
+    grid-template-columns: 1fr;
+  }
+
   .product-master-page .dataset-header {
     grid-template-columns: minmax(240px, 1fr) auto;
   }
@@ -176,5 +200,11 @@
 
   .product-master-page .dimension-table-toolbar > div:last-child {
     grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 920px) {
+  .dataset-utility-actions {
+    width: 100%;
   }
 }

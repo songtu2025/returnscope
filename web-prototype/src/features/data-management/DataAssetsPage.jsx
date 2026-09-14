@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import "../../styles/operations.css";
 import "../../styles/product-info.css";
 
 import { navigateHash } from "../../app/hashRouter";

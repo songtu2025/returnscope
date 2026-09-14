@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import "../../styles/analysis-dashboards.css";
 import {
   CaretRight,
   ChartBar,

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import "../styles/analysis-workbench.css";
+
 import {
   ChartBar,
   CheckCircle,
