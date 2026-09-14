@@ -1,4 +1,6 @@
 import { CaretRight, DownloadSimple } from "@phosphor-icons/react";
+import Button from "antd/es/button";
+import Checkbox from "antd/es/checkbox";
 
 import { api } from "../../api";
 import { formatTime } from "../../lib/presentation";
@@ -28,16 +30,16 @@ export function ResultPoolRow({
   return (
     <article className={`result-pool-row ${selected ? "is-selected" : ""}`} role="row">
       {selectable && (
-        <label className="result-selection-cell" title={disabledReason}>
-          <input
-            type="checkbox"
-            aria-label={`选择 ${result.listing || "未提供 Listing"} 结果 v${result.version}`}
-            checked={selected}
-            disabled={Boolean(disabledReason)}
-            onChange={onToggle}
-          />
+        <Checkbox
+          className="result-selection-cell"
+          title={disabledReason}
+          aria-label={`选择 ${result.listing || "未提供 Listing"} 结果 v${result.version}`}
+          checked={selected}
+          disabled={Boolean(disabledReason)}
+          onChange={onToggle}
+        >
           {disabledReason && <small>{disabledReason}</small>}
-        </label>
+        </Checkbox>
       )}
       <div className="result-state-cell">
         <span className={`result-quality-badge ${policy.state}`}>{policy.label}</span>
@@ -71,15 +73,16 @@ export function ResultPoolRow({
         </span>
       </div>
       <div className="result-row-actions">
-        <button
-          className="secondary-button compact-button"
+        <Button
+          size="small"
           disabled={policy.primary.disabled}
           title={policy.primary.disabled ? policy.blockingReason : ""}
+          icon={<CaretRight size={15} />}
+          iconPlacement="end"
           onClick={onPrimary}
         >
           {policy.primary.label}
-          <CaretRight size={15} />
-        </button>
+        </Button>
         <a
           className="secondary-button compact-button"
           href={api.classificationResultDownloadUrl(result.version_id)}
@@ -100,12 +103,10 @@ export function InsightSelectionBar({ selected, totals, onCancel, onGenerate }) 
         <span>{totals.records.toLocaleString()} 条记录</span>
         <span>{totals.units.toLocaleString()} 个分类单元</span>
       </div>
-      <button className="primary-button" onClick={onGenerate}>
+      <Button type="primary" onClick={onGenerate}>
         生成 AI 洞察
-      </button>
-      <button className="secondary-button" onClick={onCancel}>
-        取消选择
-      </button>
+      </Button>
+      <Button onClick={onCancel}>取消选择</Button>
     </div>
   );
 }
@@ -120,16 +121,18 @@ export function DashboardSelectionBar({ selected, onClear, onContinue }) {
         <b>已选 {selected.length} 个结果版本</b>
         <span>覆盖 {listingCount} 个 Listing</span>
       </div>
-      <button className="text-button" disabled={!selected.length} onClick={onClear}>
+      <Button type="text" disabled={!selected.length} onClick={onClear}>
         清空
-      </button>
-      <button
-        className="primary-button"
+      </Button>
+      <Button
+        type="primary"
         disabled={!selected.length}
+        icon={<CaretRight size={17} />}
+        iconPlacement="end"
         onClick={onContinue}
       >
-        检查并生成 <CaretRight size={17} />
-      </button>
+        检查并生成
+      </Button>
     </aside>
   );
 }

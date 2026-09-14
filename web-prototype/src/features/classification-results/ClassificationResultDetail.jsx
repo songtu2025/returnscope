@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import Button from "antd/es/button";
+import Input from "antd/es/input";
 import {
   ArrowLeft,
   ChartBar,
@@ -179,33 +181,33 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
           </p>
         </div>
         <div className="result-detail-actions">
-          <button
-            className="primary-button"
+          <Button
+            type="primary"
             disabled={policy.primary.disabled}
             title={policy.primary.disabled ? policy.blockingReason : ""}
+            icon={
+              policy.primary.kind === "create-dashboard" ? (
+                <ChartBar size={18} />
+              ) : (
+                <ListChecks size={18} />
+              )
+            }
             onClick={runPrimaryAction}
           >
-            {policy.primary.kind === "create-dashboard" ? (
-              <ChartBar size={18} />
-            ) : (
-              <ListChecks size={18} />
-            )}
             {policy.primary.label}
-          </button>
+          </Button>
           {policy.secondary?.kind === "create-dashboard" && (
-            <button
-              className="secondary-button"
+            <Button
               disabled={policy.secondary.disabled}
               title={policy.secondary.disabled ? policy.blockingReason : ""}
+              icon={<ChartBar size={18} />}
               onClick={createDashboardFromResult}
             >
-              <ChartBar size={18} /> {policy.secondary.label}
-            </button>
+              {policy.secondary.label}
+            </Button>
           )}
           {policy.secondary?.kind === "view-records" && (
-            <button className="secondary-button" onClick={openOrderRecords}>
-              {policy.secondary.label}
-            </button>
+            <Button onClick={openOrderRecords}>{policy.secondary.label}</Button>
           )}
           <a
             className="secondary-button"
@@ -383,25 +385,22 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
                 <span>{Number(records?.total || 0).toLocaleString()} 条记录</span>
               </div>
               <div className="record-order-search">
-                <input
+                <Input
                   aria-label="搜索 order-id"
                   placeholder="输入 order-id 精确查询"
                   value={orderInput}
                   onChange={(event) => setOrderInput(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      updateRoute({ orderId: orderInput.trim(), recordPage: 1 });
-                    }
-                  }}
+                  onPressEnter={() =>
+                    updateRoute({ orderId: orderInput.trim(), recordPage: 1 })
+                  }
                 />
-                <button
-                  className="secondary-button"
+                <Button
                   onClick={() =>
                     updateRoute({ orderId: orderInput.trim(), recordPage: 1 })
                   }
                 >
                   查询
-                </button>
+                </Button>
               </div>
             </header>
 

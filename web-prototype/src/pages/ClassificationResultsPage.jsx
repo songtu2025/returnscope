@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 
+import { AntdProvider } from "../components/AntdProvider";
 import { useHashRoute } from "../app/hashRouter";
 import { ClassificationResultDetail } from "../features/classification-results/ClassificationResultDetail";
 import { ClassificationResultList } from "../features/classification-results/ClassificationResultList";
@@ -41,19 +42,23 @@ function ClassificationResultsContent({ notify, appRoute, userId }) {
     return <ReviewBatchPage route={appRoute} notify={notify} userId={userId} />;
   }
 
-  return route.version ? (
-    <ClassificationResultDetail
-      route={route}
-      updateRoute={updateRoute}
-      notify={notify}
-      userId={userId}
-    />
-  ) : (
-    <ClassificationResultList
-      route={route}
-      updateRoute={updateRoute}
-      notify={notify}
-      userId={userId}
-    />
+  return (
+    <AntdProvider>
+      {route.version ? (
+        <ClassificationResultDetail
+          route={route}
+          updateRoute={updateRoute}
+          notify={notify}
+          userId={userId}
+        />
+      ) : (
+        <ClassificationResultList
+          route={route}
+          updateRoute={updateRoute}
+          notify={notify}
+          userId={userId}
+        />
+      )}
+    </AntdProvider>
   );
 }

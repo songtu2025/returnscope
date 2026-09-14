@@ -40,32 +40,36 @@
 .result-filter-field > span {
   line-height: 1;
 }
-.result-pool-filters > .primary-button {
+.result-pool-filters > .ant-btn {
   align-self: end;
 }
-.result-pool-filters input,
-.result-pool-filters select,
-.record-order-search input {
-  width: 100%;
+.classification-results-page .ant-input,
+.classification-results-page .ant-input-affix-wrapper,
+.classification-results-page .ant-select {
   min-width: 0;
-  height: 40px;
-  padding: 0 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: var(--ink);
-  background: #fff;
 }
-.result-pool-search {
-  position: relative;
+.classification-results-page .ant-input-affix-wrapper > .ant-input,
+.classification-results-page .ant-select-input {
+  width: auto;
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
-.result-pool-search svg {
-  position: absolute;
-  top: 11px;
-  left: 11px;
-  color: var(--muted);
+.classification-results-page .ant-input-affix-wrapper > .ant-input,
+.classification-results-page .ant-select {
+  width: 100%;
 }
-.result-pool-search input {
-  padding-left: 36px;
+.classification-results-page .ant-checkbox-input {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 .result-pool-card,
 .result-drilldown-card,
@@ -176,6 +180,10 @@
 }
 .result-row-actions .compact-button {
   padding-inline: 9px;
+  white-space: nowrap;
+}
+.result-row-actions .ant-btn {
+  flex: none;
   white-space: nowrap;
 }
 .result-pagination {
@@ -406,6 +414,9 @@
   display: flex;
   gap: 7px;
   width: min(360px, 45%);
+}
+.record-order-search .ant-input {
+  min-width: 0;
 }
 .result-record-head,
 .result-record-row {
@@ -990,7 +1001,7 @@
   .result-pool-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .result-pool-filters > .primary-button {
+  .result-pool-filters > .ant-btn {
     grid-column: 1 / -1;
     width: 100%;
   }

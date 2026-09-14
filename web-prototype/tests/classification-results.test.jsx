@@ -254,15 +254,30 @@ test("结果池使用服务端筛选并展示多产品名称", async () => {
   }
 
   await user.type(screen.getByRole("textbox", { name: "搜索分类结果" }), "水鞋");
+  const qualitySelect = screen.getByRole("combobox", { name: "结果质量" });
+  fireEvent.mouseDown(
+    qualitySelect.closest(".ant-select").querySelector(".ant-select-content"),
+  );
+  await user.click(
+    await screen.findByText("需复核", {
+      selector: ".ant-select-item-option-content",
+    }),
+  );
   await user.click(screen.getByRole("button", { name: "筛选" }));
 
   await waitFor(() =>
     expect(apiMock.classificationResults).toHaveBeenLastCalledWith(
-      expect.objectContaining({ q: "水鞋", page: 1, page_size: 20 }),
+      expect.objectContaining({
+        q: "水鞋",
+        page: 1,
+        page_size: 20,
+        quality_status: "review_required",
+      }),
       expect.any(Object),
     ),
   );
   expect(window.location.hash).toContain("q=%E6%B0%B4%E9%9E%8B");
+  expect(window.location.hash).toContain("quality_status=review_required");
 
   await user.click(screen.getByRole("button", { name: "SR001" }));
   await waitFor(() =>
@@ -293,9 +308,18 @@ test("看板选择允许需复核版本并明确按可用范围统计", async ()
     dashboard_eligibility: true,
     blocking_reasons: [],
   };
+  const blocked = {
+    ...resultVersion,
+    version_id: "classification-version-blocked",
+    listing: "BLOCKED",
+    quality_status: "unusable",
+    delivery_status: "unusable",
+    dashboard_eligibility: false,
+    blocking_reasons: [{ message: "分类结果不可用于看板" }],
+  };
   apiMock.classificationResults.mockResolvedValue({
-    items: [derived, needsReview],
-    total: 2,
+    items: [derived, needsReview, blocked],
+    total: 3,
     page: 1,
     page_size: 20,
   });
@@ -304,6 +328,16 @@ test("看板选择允许需复核版本并明确按可用范围统计", async ()
   await userEvent.click(await screen.findByRole("button", { name: "新建分析看板" }));
   expect(screen.getByRole("checkbox", { name: "选择 DERIVED 结果 v2" })).toBeEnabled();
   expect(screen.getByRole("checkbox", { name: "选择 REVIEW 结果 v1" })).toBeEnabled();
+  const blockedCheckbox = screen.getByRole("checkbox", {
+    name: "选择 BLOCKED 结果 v1",
+  });
+  expect(blockedCheckbox).toBeDisabled();
+  const blockedSelectionCell = blockedCheckbox.closest("label.result-selection-cell");
+  expect(blockedCheckbox.parentElement).toHaveAttribute(
+    "title",
+    "分类结果不可用于看板",
+  );
+  expect(within(blockedSelectionCell).getByText("分类结果不可用于看板")).toBeVisible();
   expect(screen.getByText(/自动排除待复核和已排除记录/)).toBeVisible();
 });
 
@@ -315,7 +349,13 @@ test("从分类结果快速确认并创建 AI 洞察报告任务", async () => {
     <ClassificationResultsPage route={{ query: {} }} notify={notify} userId="user-1" />,
   );
 
-  await user.click(await screen.findByRole("checkbox", { name: "选择 SR001 结果 v1" }));
+  const selectionCheckbox = await screen.findByRole("checkbox", {
+    name: "选择 SR001 结果 v1",
+  });
+  const selectionCell = selectionCheckbox.closest("label.result-selection-cell");
+  expect(selectionCell).toBeVisible();
+  await user.click(selectionCell);
+  expect(selectionCheckbox).toBeChecked();
   expect(screen.getByText("已选 1 项")).toBeVisible();
   await user.click(screen.getByRole("button", { name: "生成 AI 洞察" }));
 
