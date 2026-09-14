@@ -254,7 +254,7 @@ function deferred() {
 
 function renderDraftController(initialProps) {
   const notify = vi.fn();
-  return renderHook(
+  const hook = renderHook(
     (props) =>
       useClassificationStandardDraftController({
         ...props,
@@ -264,6 +264,7 @@ function renderDraftController(initialProps) {
       }),
     { initialProps },
   );
+  return { ...hook, notify };
 }
 
 function renderValidationController() {
@@ -340,6 +341,34 @@ test("详情加载仅提交最新标准，并在切换新建或列表页时失�
   });
   expect(validationApiMock.sources).not.toHaveBeenCalled();
   expect(validationApiMock.runs).not.toHaveBeenCalled();
+});
+
+test("keyword_free_v1 草稿可读取但不能写回", async () => {
+  const keywordFreeContent = {
+    ...content,
+    recognition_profile: "keyword_free_v1",
+  };
+  mockEditableDraft();
+  standardApiMock.classificationStandardDraft.mockResolvedValue({
+    ...validDraft,
+    content: keywordFreeContent,
+  });
+  const { result, notify } = renderDraftController({
+    mode: "edit",
+    selectedId: standard.id,
+  });
+  await waitFor(() => expect(result.current.draft).not.toBeNull());
+
+  act(() => {
+    result.current.changeContent(
+      { ...keywordFreeContent, name: "不可写回的标准" },
+      "name",
+    );
+  });
+  await act(async () => result.current.saveDraft());
+
+  expect(notify).toHaveBeenCalledWith("keyword_free_v1 识别模式仅支持读取", "error");
+  expect(standardApiMock.updateClassificationStandardDraft).not.toHaveBeenCalled();
 });
 
 test("验证状态仅提交最新加载且清空会使在途请求失效", async () => {
