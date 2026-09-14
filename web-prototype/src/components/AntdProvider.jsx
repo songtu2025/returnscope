@@ -1,9 +1,7 @@
 import ConfigProvider from "antd/es/config-provider";
 import zhCN from "antd/es/locale/zh_CN";
 
-import "../../styles/review-batches.css";
-
-const reviewBatchTheme = {
+const antdTheme = {
   token: {
     colorPrimary: "#12765b",
     colorInfo: "#12765b",
@@ -19,13 +17,9 @@ const reviewBatchTheme = {
   },
 };
 
-export function ReviewBatchProvider({ children }) {
+export function AntdProvider({ children }) {
   return (
-    <ConfigProvider
-      button={{ autoInsertSpace: false }}
-      locale={zhCN}
-      theme={reviewBatchTheme}
-    >
+    <ConfigProvider button={{ autoInsertSpace: false }} locale={zhCN} theme={antdTheme}>
       {children}
     </ConfigProvider>
   );

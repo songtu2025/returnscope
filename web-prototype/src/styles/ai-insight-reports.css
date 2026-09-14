@@ -3064,16 +3064,16 @@
   background: linear-gradient(135deg, #fbfdfc, #f4f9f6);
 }
 
-.empty-state svg {
+.empty-state .ant-empty-image svg {
   color: #72a992;
 }
 
-.empty-state b {
+.empty-state-copy b {
   color: #314039;
   font-size: 15px;
 }
 
-.empty-state span {
+.empty-state-copy span {
   max-width: 320px;
   line-height: 1.6;
 }

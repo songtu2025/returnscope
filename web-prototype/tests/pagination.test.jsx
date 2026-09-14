@@ -24,19 +24,20 @@ describe("Pagination", () => {
     );
 
     expect(container.firstChild).toHaveClass("result-pagination");
+    expect(container.firstChild).toHaveClass("ant-pagination");
+    expect(
+      screen.getByRole("navigation", { name: "分页，第 2 页，共 25 页" }),
+    ).toBeVisible();
     expect(screen.getByText("共 1,234 条")).toBeVisible();
-    expect(screen.getByText("2 / 25")).toBeVisible();
+    expect(container.querySelector(".ant-pagination-item-active")).toHaveTextContent(
+      "2",
+    );
 
     const pageSize = screen.getByRole("combobox", { name: "每页数量" });
-    expect(pageSize).toHaveValue("50");
-    expect(Array.from(pageSize.options, (option) => Number(option.value))).toEqual(
-      PAGE_SIZES,
-    );
+    expect(pageSize.closest(".ant-select")).toHaveTextContent("50 条/页");
 
     const previous = screen.getByRole("button", { name: "上一页" });
     const next = screen.getByRole("button", { name: "下一页" });
-    expect(previous).toHaveClass("secondary-button", "compact-button");
-    expect(next).toHaveClass("secondary-button", "compact-button");
     expect(previous).toHaveAttribute("type", "button");
     expect(next).toHaveAttribute("type", "button");
     expect(previous).toBeEnabled();
@@ -44,11 +45,13 @@ describe("Pagination", () => {
 
     await user.click(previous);
     await user.click(next);
-    await user.selectOptions(pageSize, "100");
+    await user.click(pageSize);
+    await user.click(await screen.findByRole("option", { name: "100 条/页" }));
 
     expect(onPage).toHaveBeenNthCalledWith(1, 1);
     expect(onPage).toHaveBeenNthCalledWith(2, 3);
     expect(onPageSize).toHaveBeenCalledWith(100);
+    expect(PAGE_SIZES).toContain(100);
   });
 
   it("在首尾页保持翻页按钮禁用规则", () => {

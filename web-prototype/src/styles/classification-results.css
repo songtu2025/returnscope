@@ -179,7 +179,6 @@
   white-space: nowrap;
 }
 .result-pagination {
-  display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
@@ -189,21 +188,8 @@
   color: var(--muted);
   font-size: 12px;
 }
-.result-pagination > span {
+.result-pagination .ant-pagination-total-text {
   margin-right: auto;
-}
-.result-pagination label {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-}
-.result-pagination select {
-  height: 32px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: #fff;
 }
 .result-error-state {
   margin: 14px;

@@ -15,8 +15,8 @@ import {
   activeReviewBatch,
   resultActionPolicy,
 } from "../classification-results/resultActionPolicy";
+import { AntdProvider } from "../../components/AntdProvider";
 import { formatTime } from "../../lib/presentation";
-import { ReviewBatchProvider } from "./ReviewBatchProvider";
 
 function versionId(item) {
   return item.version_id || item.id;
@@ -363,5 +363,5 @@ export function ResultVersionReviewPanel({
     </section>
   );
 
-  return <ReviewBatchProvider>{content}</ReviewBatchProvider>;
+  return <AntdProvider>{content}</AntdProvider>;
 }

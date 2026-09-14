@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 
+import { AntdProvider } from "../../components/AntdProvider";
 import { ReviewBatchList } from "./ReviewBatchList";
-import { ReviewBatchProvider } from "./ReviewBatchProvider";
 import { ReviewBatchWorkspace } from "./ReviewBatchWorkspace";
 import { reviewBatchRouteState, writeReviewBatchRoute } from "./reviewBatchRoute";
 
@@ -13,7 +13,7 @@ export function ReviewBatchPage({ route: appRoute, notify, userId }) {
   );
 
   return (
-    <ReviewBatchProvider>
+    <AntdProvider>
       {route.batchId ? (
         <ReviewBatchWorkspace
           route={route}
@@ -24,6 +24,6 @@ export function ReviewBatchPage({ route: appRoute, notify, userId }) {
       ) : (
         <ReviewBatchList route={route} updateRoute={updateRoute} />
       )}
-    </ReviewBatchProvider>
+    </AntdProvider>
   );
 }

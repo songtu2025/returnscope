@@ -5979,22 +5979,27 @@ label small {
   color: var(--muted);
   text-align: center;
 }
-.empty-state svg {
+.empty-state .ant-empty-image {
+  height: auto;
   margin-bottom: 11px;
+  line-height: 0;
+}
+.empty-state .ant-empty-image svg {
   color: #9fb4ab;
 }
-.empty-state b {
+.empty-state-copy {
+  display: grid;
+  justify-items: center;
+}
+.empty-state-copy b {
   color: #55635c;
   font-size: 14px;
 }
-.empty-state span {
+.empty-state-copy span {
   margin-top: 5px;
   max-width: 230px;
   font-size: 13px;
   line-height: 1.5;
-}
-.empty-state > button {
-  margin-top: 16px;
 }
 .inline-loading {
   display: flex;
@@ -6004,14 +6009,6 @@ label small {
   min-height: 100px;
   color: var(--muted);
   font-size: 13px;
-}
-.inline-loading svg {
-  animation: spin 1s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 .muted-line {
   margin: 12px 0;

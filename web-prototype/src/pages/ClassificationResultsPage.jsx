@@ -38,6 +38,7 @@ import {
 import { semanticRecordStatus } from "../features/classification-results/semanticResultPresentation";
 import { ReviewBatchPage } from "../features/review-batches/ReviewBatchPage";
 import { formatTime } from "../lib/presentation";
+import "../styles/review-batches.css";
 import { resultLabelText } from "../lib/taxonomyPresentation";
 
 function routeState(query) {

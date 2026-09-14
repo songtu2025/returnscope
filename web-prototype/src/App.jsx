@@ -18,7 +18,7 @@ import { ApiError, api } from "./api";
 import { AppShell } from "./app/AppShell";
 import { navigateHash, useHashRoute } from "./app/hashRouter";
 import { PRIMARY_NAV_ITEMS, SETTINGS_NAV_ITEM } from "./app/navigation";
-import { Toast } from "./components/SharedUi";
+import { Toast } from "./components/Toast";
 import { STATUS_LABELS } from "./constants";
 import { useDialogFocus } from "./hooks/useDialogFocus";
 import { classNames } from "./lib/presentation";
