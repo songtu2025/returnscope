@@ -1,47 +1,28 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { resultLabelText } from "../../lib/taxonomyPresentation";
-import {
-  ArrowLeft,
-  ArrowsClockwise,
-  DownloadSimple,
-  GitBranch,
-  Info,
-  Sparkle,
-  X,
-} from "@phosphor-icons/react";
 
 import { navigateHash } from "../../app/hashRouter";
 import { api } from "../../api";
-import { InlineLoading } from "../../components/SharedUi";
-import { formatTime } from "../../lib/presentation";
 import { dashboardApi } from "../../shared/api/dashboardApi";
-import {
-  dashboardVersionNumber,
-  productCatalogVersionLabel,
-  resultSourceVersionNumber,
-} from "./dashboardFields";
+import { dashboardVersionNumber } from "./dashboardFields";
 import { createDashboardSelection } from "./dashboardSelectionStorage";
-import { AiInsightReport } from "./AiInsightReport";
+import { DashboardDetailContent } from "./DashboardDetailContent";
+import { DashboardDetailEvidenceDrawer } from "./DashboardDetailEvidenceDrawer";
+import { DashboardDetailHeader } from "./DashboardDetailHeader";
+import {
+  asItems,
+  dashboardVersionId,
+  isPublishedReport,
+} from "./DashboardDetailHelpers";
+import {
+  DashboardDetailError,
+  DashboardDetailLoading,
+} from "./DashboardDetailStateViews";
 import { InsightGenerationModal } from "./InsightGenerationModal";
-import { ReturnReasonInsights } from "./ReturnReasonInsights";
-import { SemanticResultPanel } from "../classification-results/SemanticResultPanel";
 import {
   insightModels,
   preferredInsightEffort,
   preferredInsightModel,
 } from "./insightModelOptions";
-
-function dashboardVersionId(version) {
-  return version.version_id || version.id;
-}
-
-function asItems(value) {
-  return Array.isArray(value) ? value : (value?.items ?? []);
-}
-
-function isPublishedReport(report) {
-  return report.status === "completed" && Boolean(report.version_no);
-}
 
 export function DashboardDetail({ route, updateRoute, notify, userId }) {
   const [main, setMain] = useState({
@@ -289,29 +270,15 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
   }, [activeReportId, notify]);
 
   if (main.loading && !main.dashboard) {
-    return (
-      <div className="standard-page analysis-dashboard-page">
-        <InlineLoading label="正在读取分析看板…" />
-      </div>
-    );
+    return <DashboardDetailLoading />;
   }
   if (main.error) {
     return (
-      <div className="standard-page analysis-dashboard-page">
-        <button
-          className="text-button result-back-button"
-          onClick={() => updateRoute({ dashboardId: "", versionId: "" })}
-        >
-          <ArrowLeft size={17} /> 返回分析看板
-        </button>
-        <section className="dashboard-error" role="alert">
-          <b>分析看板详情读取失败</b>
-          <span>{main.error}</span>
-          <button className="secondary-button" onClick={loadMain}>
-            重新加载
-          </button>
-        </section>
-      </div>
+      <DashboardDetailError
+        error={main.error}
+        onBack={() => updateRoute({ dashboardId: "", versionId: "" })}
+        onReload={loadMain}
+      />
     );
   }
 
@@ -426,225 +393,85 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
 
   return (
     <div className="standard-page analysis-dashboard-page dashboard-detail-page return-insight-page">
-      <header className="return-insight-page-header">
-        <div>
-          <button
-            className="return-insight-back"
-            aria-label="返回分析看板列表"
-            onClick={() =>
-              updateRoute({ dashboardId: "", versionId: "", tab: "overview" })
-            }
-          >
-            <ArrowLeft size={18} />
-          </button>
-          <h1>{showReport ? "AI退货洞察报告" : "退货原因洞察"}</h1>
-          <span>{dashboard.name || "未命名看板"}</span>
-        </div>
-        <div className="return-insight-header-actions">
-          {showReport ? (
-            <>
-              <button className="secondary-button" onClick={openReportGeneration}>
-                <ArrowsClockwise size={17} /> {selectedReport ? "重新生成" : "生成报告"}
-              </button>
-              <button
-                className="secondary-button"
-                disabled={selectedReport?.status !== "completed"}
-                onClick={() => window.print()}
-              >
-                <DownloadSimple size={17} /> 导出
-              </button>
-            </>
-          ) : (
-            <button
-              className="primary-button ai-report-open-button"
-              onClick={() =>
-                updateRoute({
-                  tab: "report",
-                  problem: "",
-                  labelGroup: "",
-                  recordPage: 1,
-                })
-              }
-            >
-              <Sparkle size={17} /> AI 洞察报告
-            </button>
-          )}
-          <button
-            className={`secondary-button return-insight-info-button ${
-              showDataInfo ? "active" : ""
-            }`}
-            aria-expanded={showDataInfo}
-            onClick={() => setShowDataInfo((visible) => !visible)}
-          >
-            <Info size={17} /> 数据说明
-          </button>
-        </div>
-      </header>
+      <DashboardDetailHeader
+        dashboard={dashboard}
+        selectedVersion={selectedVersion}
+        showReport={showReport}
+        selectedReport={selectedReport}
+        showDataInfo={showDataInfo}
+        versions={main.versions}
+        versionId={route.versionId}
+        activeTab={route.tab}
+        currentVersionId={currentVersionId}
+        isCurrentVersion={isCurrentVersion}
+        onBack={() => updateRoute({ dashboardId: "", versionId: "", tab: "overview" })}
+        onOpenReportGeneration={openReportGeneration}
+        onExport={() => window.print()}
+        onOpenReport={() =>
+          updateRoute({
+            tab: "report",
+            problem: "",
+            labelGroup: "",
+            recordPage: 1,
+          })
+        }
+        onToggleDataInfo={() => setShowDataInfo((visible) => !visible)}
+        onSelectVersion={(versionId) =>
+          updateRoute({
+            versionId,
+            reportId: "",
+            issueId: "",
+            tab: "overview",
+            recordPage: 1,
+            problem: "",
+            labelGroup: "",
+            listing: "",
+            productName: "",
+            productSku: "",
+            orderId: "",
+            dateFrom: "",
+            dateTo: "",
+          })
+        }
+        onShowSources={() => updateRoute({ tab: "source" })}
+        onShowHistory={() => updateRoute({ tab: "history" })}
+        onCreateVersion={createVersion}
+        onShowOverview={() => updateRoute({ tab: "overview" })}
+        onShowReport={() => updateRoute({ tab: "report", problem: "", labelGroup: "" })}
+      />
 
-      {showDataInfo && (
-        <section className="return-insight-data-info">
-          <div>
-            <b>{dashboard.description || "当前看板基于已发布分类结果生成"}</b>
-            <span>
-              看板版本 v{dashboardVersionNumber(selectedVersion)} · 历史版本只读且可追溯
-            </span>
-          </div>
-          <label>
-            看板版本
-            <select
-              aria-label="看板版本"
-              value={route.versionId}
-              onChange={(event) =>
-                updateRoute({
-                  versionId: event.target.value,
-                  reportId: "",
-                  issueId: "",
-                  tab: "overview",
-                  recordPage: 1,
-                  problem: "",
-                  labelGroup: "",
-                  listing: "",
-                  productName: "",
-                  productSku: "",
-                  orderId: "",
-                  dateFrom: "",
-                  dateTo: "",
-                })
-              }
-            >
-              {main.versions.map((version) => (
-                <option
-                  key={dashboardVersionId(version)}
-                  value={dashboardVersionId(version)}
-                >
-                  v{dashboardVersionNumber(version)}
-                  {dashboardVersionId(version) === currentVersionId ? "（当前）" : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            className="text-button"
-            onClick={() => updateRoute({ tab: "source" })}
-          >
-            数据来源
-          </button>
-          <button
-            className="text-button"
-            onClick={() => updateRoute({ tab: "history" })}
-          >
-            版本历史
-          </button>
-          <button
-            className="primary-button"
-            disabled={!isCurrentVersion}
-            title={isCurrentVersion ? "" : "历史版本只读，请切换到当前版本"}
-            onClick={createVersion}
-          >
-            创建新版本
-          </button>
-        </section>
-      )}
-
-      {!isCurrentVersion && (
-        <div className="dashboard-readonly-notice" role="status">
-          当前查看历史版本 v{dashboardVersionNumber(selectedVersion)}，数据与配置只读。
-        </div>
-      )}
-
-      {route.tab !== "overview" && (
-        <nav
-          className="result-detail-tabs return-insight-secondary-tabs"
-          aria-label="分析看板详情"
-        >
-          <button onClick={() => updateRoute({ tab: "overview" })}>洞察看板</button>
-          <button
-            className={route.tab === "report" ? "active" : ""}
-            onClick={() => updateRoute({ tab: "report", problem: "", labelGroup: "" })}
-          >
-            AI 洞察报告
-          </button>
-          <button
-            className={route.tab === "source" ? "active" : ""}
-            onClick={() => updateRoute({ tab: "source" })}
-          >
-            数据来源
-          </button>
-          <button
-            className={route.tab === "history" ? "active" : ""}
-            onClick={() => updateRoute({ tab: "history" })}
-          >
-            版本历史
-          </button>
-        </nav>
-      )}
-
-      {content.loading && !content.data && <InlineLoading label="正在读取看板数据…" />}
-      {content.error && (
-        <section className="dashboard-error" role="alert">
-          <b>看板数据读取失败</b>
-          <span>{content.error}</span>
-          <button className="secondary-button" onClick={loadContent}>
-            重新加载
-          </button>
-        </section>
-      )}
-      {!content.error && route.tab === "overview" && content.data && (
-        <ReturnReasonInsights
-          route={route}
-          updateRoute={updateRoute}
-          data={content.data}
-          loading={content.loading}
-          onEvidence={(record, trigger) => {
-            evidenceTriggerRef.current = trigger;
-            setSelectedRecord(record);
-          }}
-        />
-      )}
-      {route.tab === "report" && reports.loading && !reports.items.length && (
-        <InlineLoading label="正在读取 AI 洞察报告…" />
-      )}
-      {route.tab === "report" && reports.error && (
-        <section className="dashboard-error" role="alert">
-          <b>AI 洞察报告读取失败</b>
-          <span>{reports.error}</span>
-          <button className="secondary-button" onClick={loadReports}>
-            重新加载
-          </button>
-        </section>
-      )}
-      {route.tab === "report" && !reports.error && !reports.loading && (
-        <AiInsightReport
-          report={selectedReport}
-          reports={publishedReports}
-          attempts={generationAttempts}
-          latestReport={latestPublishedReport}
-          dashboard={dashboard}
-          version={selectedVersion}
-          onGenerate={openReportGeneration}
-          onRetry={retryReport}
-          selectedIssueId={route.issueId}
-          decisionState={decisionState}
-          onDecision={setIssueDecision}
-          onSelectIssue={(issueId) => updateRoute({ issueId }, { replace: true })}
-          onSelect={(reportId) =>
-            updateRoute({ reportId, issueId: "" }, { replace: true })
-          }
-        />
-      )}
-      {!content.error && route.tab === "source" && content.data && (
-        <DashboardSources data={content.data} version={selectedVersion} />
-      )}
-      {route.tab === "history" && (
-        <DashboardHistory
-          versions={main.versions}
-          currentVersionId={currentVersionId}
-          onSelect={(versionId) => updateRoute({ versionId, tab: "history" })}
-        />
-      )}
+      <DashboardDetailContent
+        route={route}
+        updateRoute={updateRoute}
+        content={content}
+        reports={reports}
+        selectedReport={selectedReport}
+        publishedReports={publishedReports}
+        generationAttempts={generationAttempts}
+        latestPublishedReport={latestPublishedReport}
+        dashboard={dashboard}
+        selectedVersion={selectedVersion}
+        versions={main.versions}
+        currentVersionId={currentVersionId}
+        decisionState={decisionState}
+        onReloadContent={loadContent}
+        onEvidence={(record, trigger) => {
+          evidenceTriggerRef.current = trigger;
+          setSelectedRecord(record);
+        }}
+        onReloadReports={loadReports}
+        onOpenReportGeneration={openReportGeneration}
+        onRetryReport={retryReport}
+        onIssueDecision={setIssueDecision}
+        onSelectIssue={(issueId) => updateRoute({ issueId }, { replace: true })}
+        onSelectReport={(reportId) =>
+          updateRoute({ reportId, issueId: "" }, { replace: true })
+        }
+        onSelectVersion={(versionId) => updateRoute({ versionId, tab: "history" })}
+      />
 
       {selectedRecord && (
-        <DashboardEvidenceDrawer
+        <DashboardDetailEvidenceDrawer
           record={selectedRecord}
           onClose={() => setSelectedRecord(null)}
           returnFocusRef={evidenceTriggerRef}
@@ -661,218 +488,13 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
           submitting={generationState.submitting}
           error={generationState.error}
           ready
-          scopeLabel={`${dashboard.name || "未命名看板"} · 数据版本 v${
-            dashboardVersionNumber(selectedVersion) || 1
-          }`}
+          scopeLabel={`${dashboard.name || "未命名看板"} · 数据版本 v${dashboardVersionNumber(selectedVersion) || 1}`}
           includedRecords={Number(reportSummary.record_count || 0)}
           unitCount={Number(reportSummary.unit_count || 0)}
           pendingRecords={Number(reportSummary.pending_review_record_count || 0)}
           excludedRecords={Number(reportSummary.excluded_record_count || 0)}
         />
       )}
-    </div>
-  );
-}
-
-function DashboardSources({ data, version }) {
-  const sources = asItems(data.sources ?? data);
-  return (
-    <section className="dashboard-lineage-card">
-      <header>
-        <GitBranch size={22} />
-        <div>
-          <b>数据来源与血缘</b>
-          <span>
-            看板 v{dashboardVersionNumber(version) ?? "-"} → 看板数据集 v
-            {dashboardVersionNumber(version) ?? "-"} → Listing 分类结果版本
-          </span>
-          <small className="dashboard-dataset-technical-id">
-            数据集ID：<code>{version?.dataset_version_id || "未提供"}</code>
-          </small>
-        </div>
-      </header>
-      <div className="dashboard-source-mapping">
-        <div className="dashboard-source-head">
-          <span>店铺/站点</span>
-          <span>Listing</span>
-          <span>分类结果版本</span>
-          <span>产品信息版本</span>
-          <span>记录数</span>
-          <span>质量</span>
-        </div>
-        {sources.map((source, index) => (
-          <div key={source.result_version_id || source.version_id || index}>
-            <span>{source.store_site || "未提供"}</span>
-            <b>{source.listing || "未提供"}</b>
-            <span>v{resultSourceVersionNumber(source) || "-"}</span>
-            <span title={productCatalogVersionLabel(source)}>
-              {productCatalogVersionLabel(source)}
-            </span>
-            <span>{Number(source.record_count || 0).toLocaleString()}</span>
-            <span>
-              {source.quality_status === "ready"
-                ? "可用"
-                : source.quality_status || "未提供"}
-            </span>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function DashboardHistory({ versions, currentVersionId, onSelect }) {
-  return (
-    <section className="dashboard-history-card">
-      <header>
-        <b>看板版本历史</b>
-        <span>旧版本始终只读，不会随分类结果变化。</span>
-      </header>
-      <ol>
-        {versions.map((version) => {
-          const id = dashboardVersionId(version);
-          return (
-            <li key={id} className={id === currentVersionId ? "current" : ""}>
-              <span>v{dashboardVersionNumber(version)}</span>
-              <div>
-                <b>看板数据集 v{dashboardVersionNumber(version)}</b>
-                <p>
-                  {version.source_change_summary || version.reason || "未提供版本原因"}
-                </p>
-                <small className="dashboard-dataset-technical-id">
-                  数据集ID：<code>{version.dataset_version_id || "未提供"}</code>
-                </small>
-                <small>
-                  {version.created_by_name || "未提供创建人"} ·{" "}
-                  {formatTime(version.created_at)}
-                </small>
-              </div>
-              <button
-                className="secondary-button compact-button"
-                onClick={() => onSelect(id)}
-              >
-                查看版本
-              </button>
-            </li>
-          );
-        })}
-      </ol>
-    </section>
-  );
-}
-
-function DashboardEvidenceDrawer({ record, onClose, returnFocusRef }) {
-  const classification = record.classification ?? {};
-  const drawerRef = useRef(null);
-  const closeButtonRef = useRef(null);
-
-  useEffect(() => {
-    const drawer = drawerRef.current;
-    if (!drawer) return undefined;
-    const returnFocus = returnFocusRef.current;
-    const handleKey = (event) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const focusable = Array.from(
-        drawer.querySelectorAll(
-          'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-        ),
-      );
-      if (!focusable.length) {
-        event.preventDefault();
-        return;
-      }
-      const first = focusable[0];
-      const last = focusable.at(-1);
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    closeButtonRef.current?.focus();
-    drawer.addEventListener("keydown", handleKey);
-    return () => {
-      drawer.removeEventListener("keydown", handleKey);
-      returnFocus?.focus();
-    };
-  }, [onClose, returnFocusRef]);
-
-  return (
-    <div className="evidence-drawer-layer" role="presentation" onMouseDown={onClose}>
-      <aside
-        ref={drawerRef}
-        className="evidence-drawer"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="dashboard-evidence-title"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <header>
-          <div>
-            <span id="dashboard-evidence-title">分类结果与证据</span>
-            <h2>{record.order_id || record.source_record_id || "未提供 order-id"}</h2>
-          </div>
-          <button
-            ref={closeButtonRef}
-            className="icon-button"
-            aria-label="关闭证据抽屉"
-            onClick={onClose}
-          >
-            <X size={19} />
-          </button>
-        </header>
-        <section className="drawer-section">
-          <b>业务信息</b>
-          <DrawerField label="店铺/站点" value={record.store_site} />
-          <DrawerField label="Listing" value={record.listing} />
-          <DrawerField label="产品名称" value={record.product_name} />
-          <DrawerField label="产品SKU" value={record.product_sku} />
-          <DrawerField label="退货SKU（MSKU）" value={record.source_sku} />
-          <DrawerField label="匹配MSKU" value={record.matched_msku} />
-        </section>
-        <section className="drawer-section">
-          <b>退货原文</b>
-          <DrawerField label="Amazon原因" value={record.amazon_reason} />
-          <blockquote>{record.comment || "未提供退货评论"}</blockquote>
-        </section>
-        <section className="drawer-section">
-          <b>业务标签</b>
-          <DrawerField
-            label="主要问题"
-            value={resultLabelText(record, classification.primary_label_codes)}
-          />
-          <DrawerField
-            label="问题标签"
-            value={resultLabelText(record, classification.problem_label_codes)}
-          />
-        </section>
-        <section className="drawer-section">
-          <SemanticResultPanel record={record} />
-        </section>
-        <section className="drawer-section drawer-lineage">
-          <b>运行来源</b>
-          <DrawerField label="模型" value={classification.model_name} />
-          <DrawerField label="提示词版本" value={classification.prompt_version} />
-          <DrawerField label="分类体系" value={classification.taxonomy_version} />
-          <DrawerField label="classification_key" value={record.classification_key} />
-        </section>
-      </aside>
-    </div>
-  );
-}
-
-function DrawerField({ label, value }) {
-  return (
-    <div className="drawer-field">
-      <span>{label}</span>
-      <b>{value || "未提供"}</b>
     </div>
   );
 }
