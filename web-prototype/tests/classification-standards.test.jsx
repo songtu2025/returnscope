@@ -1216,7 +1216,10 @@ test("样本验证按钮解释当前优先禁用原因", async () => {
 });
 
 test("发布前样本验证在目标宽度使用三段响应式布局", () => {
-  const styles = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
+  const styles = readFileSync(
+    resolve(process.cwd(), "src/styles/classification-standards.css"),
+    "utf8",
+  );
   expect(styles).toMatch(
     /\.standard-validation-configuration\s*{[^}]*grid-template-columns:\s*repeat\(2, minmax\(220px, 1fr\)\) auto;/s,
   );

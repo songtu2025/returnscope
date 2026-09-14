@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import "../../styles/classification-standards.css";
+
 import { navigateHash } from "../../app/hashRouter";
 import { AntdProvider } from "../../components/AntdProvider";
 import { classificationStandardApi } from "../../shared/api/classificationStandardApi";

@@ -475,24 +475,6 @@
   .standard-page {
     padding: 26px 24px 32px;
   }
-  .api-layout {
-    grid-template-columns: 190px minmax(0, 1fr);
-  }
-  .api-layout > .connection-list {
-    grid-row: 1 / span 2;
-  }
-  .api-layout > .config-inspector {
-    display: grid;
-    grid-column: 2;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-    border-top: 1px solid var(--line);
-    border-left: 0;
-  }
-  .api-layout > .config-inspector .content-card {
-    min-width: 0;
-    margin-bottom: 0;
-  }
 }
 
 @media (min-width: 1920px) {

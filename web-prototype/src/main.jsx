@@ -2,7 +2,6 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.jsx";
 import "./styles.css";
-import "./styles/classification-standards.css";
 import "./styles/insight-generation.css";
 import "./styles/task-flow.css";
 import "./styles/desktop-layout.css";
