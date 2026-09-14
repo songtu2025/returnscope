@@ -1,18 +1,12 @@
 import { groups as BUSINESS_GROUPS } from "../../../../config/taxonomy_alignment.json";
 import { useEffect, useId, useRef, useState } from "react";
-import {
-  ArrowCounterClockwise,
-  Copy,
-  MagnifyingGlass,
-  Plus,
-  X,
-} from "@phosphor-icons/react";
+import { ArrowCounterClockwise, Copy, Plus, X } from "@phosphor-icons/react";
 import { EmptyState, Modal } from "../../components/SharedUi";
 import { labelChanges, reconcileLabelRules, sameLabel } from "./labelDraftPolicy";
 import { taxonomyPath } from "../../lib/taxonomyPresentation";
-import { ClassificationHierarchyDirectory } from "./ClassificationHierarchyEditor";
-
-const SENTIMENTS = { NEGATIVE: "负向", POSITIVE: "正向", NEUTRAL: "中性" };
+import { ClassificationLabelBoundaries } from "./ClassificationLabelBoundaries";
+import { ClassificationLabelDefinition } from "./ClassificationLabelDefinition";
+import { ClassificationLabelDirectory } from "./ClassificationLabelDirectory";
 
 export function ClassificationLabelWorkbench({
   content,
@@ -277,101 +271,28 @@ export function ClassificationLabelWorkbench({
 
   return (
     <div className="label-workbench">
-      <aside className="label-directory" aria-label="标签目录">
-        <header>
-          <strong>
-            标签目录 <span>{content.labels.length}</span>
-          </strong>
-          {editable && (
-            <button
-              ref={addLabelRef}
-              type="button"
-              className="icon-button"
-              aria-label="增加标签"
-              disabled={busy}
-              onClick={() => addLabel()}
-            >
-              <Plus size={17} />
-            </button>
-          )}
-        </header>
-        <label className="standard-search-box">
-          <MagnifyingGlass size={16} />
-          <input
-            type="search"
-            aria-label="搜索标签"
-            placeholder="搜索标签或别名"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </label>
-        <select
-          aria-label="筛选标签分组"
-          value={group}
-          onChange={(event) => setGroup(event.target.value)}
-        >
-          <option value="">全部分组</option>
-          {groups.map((name) => (
-            <option key={name}>{name}</option>
-          ))}
-        </select>
-        <div className="label-directory-scroll">
-          {(() => {
-            const renderLabel = (item) => {
-              const value = item.index < 0 ? item.label.code : item.index;
-              return (
-                <button
-                  ref={selected === value ? selectedRef : undefined}
-                  key={item.index < 0 ? `removed-${item.label.code}` : item.index}
-                  type="button"
-                  aria-current={selected === value ? "true" : undefined}
-                  disabled={busy}
-                  onClick={() => selectLabel(value)}
-                >
-                  <span>
-                    <b>{item.label.name || "未命名标签"}</b>
-                    <small>
-                      {taxonomyPath(item.index < 0 ? baseContent : content, item.label)
-                        .slice(0, -1)
-                        .join(" → ") || "未分组"}
-                    </small>
-                  </span>
-                  {item.status !== "未修改" && (
-                    <span
-                      className={`label-change-badge ${item.status === "拟停用" ? "removed" : "changed"}`}
-                    >
-                      {item.status}
-                    </span>
-                  )}
-                </button>
-              );
-            };
-            return hierarchical ? (
-              <ClassificationHierarchyDirectory
-                content={content}
-                entries={matches}
-                renderLabel={renderLabel}
-              />
-            ) : (
-              matches.map(renderLabel)
-            );
-          })()}
-          {!matches.length && (
-            <p className="label-directory-empty">
-              没有匹配的标签。
-              <button
-                type="button"
-                onClick={() => {
-                  setQuery("");
-                  setGroup("");
-                }}
-              >
-                重置筛选
-              </button>
-            </p>
-          )}
-        </div>
-      </aside>
+      <ClassificationLabelDirectory
+        content={content}
+        baseContent={baseContent}
+        matches={matches}
+        groups={groups}
+        query={query}
+        group={group}
+        selected={selected}
+        hierarchical={hierarchical}
+        editable={editable}
+        busy={busy}
+        selectedRef={selectedRef}
+        addLabelRef={addLabelRef}
+        onAdd={() => addLabel()}
+        onSelect={selectLabel}
+        onQueryChange={setQuery}
+        onGroupChange={setGroup}
+        onResetFilters={() => {
+          setQuery("");
+          setGroup("");
+        }}
+      />
       <div className="label-workspace" aria-label="当前标签编辑区">
         {fieldErrors.labels_empty && (
           <p className="standard-field-error" id={`${errorId}-labels-empty`}>
@@ -460,264 +381,26 @@ export function ClassificationLabelWorkbench({
                 </div>
               ) : (
                 <>
-                  {hierarchical && editable && editing && (
-                    <label>
-                      上级分类
-                      <select
-                        ref={(node) =>
-                          labelFieldRefs.current.set(`${entry.index}.parent_code`, node)
-                        }
-                        aria-label="标签的上级分类"
-                        value={label.parent_code || ""}
-                        onChange={(event) => {
-                          const next = { ...label, parent_code: event.target.value };
-                          updateLabel({
-                            parent_code: next.parent_code,
-                            group: taxonomyPath(content, next)[0] || "",
-                          });
-                        }}
-                      >
-                        <option value="" disabled>
-                          请选择上级分类
-                        </option>
-                        {(content.categories ?? []).map((item) => (
-                          <option key={item.code} value={item.code}>
-                            {taxonomyPath(content, item).join(" → ")}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-                  {hierarchical && published && editable && editing && (
-                    <label>
-                      标签名称
-                      <input
-                        aria-label="已发布标签名称"
-                        value={label.name}
-                        onChange={(event) => updateLabel({ name: event.target.value })}
-                      />
-                    </label>
-                  )}
-                  {published || !editing ? (
-                    <>
-                      {editable && editing && published && (
-                        <div className="label-published-note">
-                          <span>已发布标签语义保持稳定，可直接补充关键词。</span>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => setPending({ type: "replace" })}
-                          >
-                            修改说明：创建替代标签 →
-                          </button>
-                        </div>
-                      )}
-                      <section className="label-business-definition">
-                        <dl>
-                          <div>
-                            <dt>{hierarchical ? "标签路径" : "标签分组"}</dt>
-                            <dd>
-                              {taxonomyPath(
-                                removed ? baseContent : content,
-                                label,
-                              ).join(" → ")}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt>评价方向</dt>
-                            <dd>
-                              {label.allowed_sentiments
-                                .map((value) => SENTIMENTS[value])
-                                .join(" / ")}
-                            </dd>
-                          </div>
-                        </dl>
-                        <h3>判定说明（可选）</h3>
-                        <p>{label.description || "依据标签名称和完整路径理解"}</p>
-                      </section>
-                    </>
-                  ) : (
-                    <section className="standard-editor-fields label-new-fields">
-                      <label>
-                        标签名称
-                        <input
-                          ref={(node) => {
-                            labelFieldRefs.current.set(`${entry.index}.name`, node);
-                          }}
-                          aria-label={`标签名称 ${entry.index + 1}`}
-                          aria-invalid={Boolean(
-                            fieldErrors.labels?.[entry.index]?.name,
-                          )}
-                          aria-describedby={
-                            fieldErrors.labels?.[entry.index]?.name
-                              ? `${errorId}-label-${entry.index}-name`
-                              : undefined
-                          }
-                          value={label.name}
-                          onChange={(event) =>
-                            updateLabel({ name: event.target.value })
-                          }
-                        />
-                        {fieldErrors.labels?.[entry.index]?.name && (
-                          <span
-                            className="standard-field-error"
-                            id={`${errorId}-label-${entry.index}-name`}
-                          >
-                            {fieldErrors.labels[entry.index].name}
-                          </span>
-                        )}
-                      </label>
-                      {!hierarchical && (
-                        <label>
-                          标签分组
-                          <select
-                            ref={(node) => {
-                              labelFieldRefs.current.set(`${entry.index}.group`, node);
-                            }}
-                            aria-label={`标签分组 ${entry.index + 1}`}
-                            aria-invalid={Boolean(
-                              fieldErrors.labels?.[entry.index]?.group,
-                            )}
-                            aria-describedby={
-                              fieldErrors.labels?.[entry.index]?.group
-                                ? `${errorId}-label-${entry.index}-group`
-                                : undefined
-                            }
-                            value={label.group}
-                            onChange={(event) =>
-                              updateLabel({ group: event.target.value })
-                            }
-                          >
-                            {!allowedGroups.includes(label.group) && (
-                              <option value={label.group}>
-                                {label.group || "请选择分组"}
-                              </option>
-                            )}
-                            {allowedGroups.map((name) => (
-                              <option key={name} value={name}>
-                                {name}
-                              </option>
-                            ))}
-                          </select>
-                          {fieldErrors.labels?.[entry.index]?.group && (
-                            <span
-                              className="standard-field-error"
-                              id={`${errorId}-label-${entry.index}-group`}
-                            >
-                              {fieldErrors.labels[entry.index].group}
-                            </span>
-                          )}
-                        </label>
-                      )}
-                      <label className="wide-field">
-                        标签编码
-                        <input
-                          ref={(node) => {
-                            labelFieldRefs.current.set(`${entry.index}.code`, node);
-                          }}
-                          aria-label={`标签编码 ${entry.index + 1}`}
-                          aria-invalid={Boolean(
-                            fieldErrors.labels?.[entry.index]?.code,
-                          )}
-                          aria-describedby={
-                            fieldErrors.labels?.[entry.index]?.code
-                              ? `${errorId}-label-${entry.index}-code`
-                              : undefined
-                          }
-                          value={label.code}
-                          onChange={(event) =>
-                            updateLabel({ code: event.target.value.toUpperCase() })
-                          }
-                        />
-                        {fieldErrors.labels?.[entry.index]?.code && (
-                          <span
-                            className="standard-field-error"
-                            id={`${errorId}-label-${entry.index}-code`}
-                          >
-                            {fieldErrors.labels[entry.index].code}
-                          </span>
-                        )}
-                      </label>
-                      <label className="wide-field">
-                        判定说明（可选）
-                        <textarea
-                          ref={(node) => {
-                            labelFieldRefs.current.set(
-                              `${entry.index}.description`,
-                              node,
-                            );
-                          }}
-                          rows={5}
-                          aria-label={`判定说明（可选） ${entry.index + 1}`}
-                          value={label.description ?? ""}
-                          placeholder="有特殊边界时补充，无需重复标签名称"
-                          onChange={(event) =>
-                            updateLabel({ description: event.target.value })
-                          }
-                        />
-                      </label>
-                      <fieldset className="wide-field label-sentiment-options">
-                        <legend>支持的评价方向</legend>
-                        {Object.entries(SENTIMENTS).map(([value, name]) => (
-                          <label key={value}>
-                            <input
-                              ref={(node) => {
-                                if (value === "NEGATIVE")
-                                  labelFieldRefs.current.set(
-                                    `${entry.index}.allowed_sentiments`,
-                                    node,
-                                  );
-                              }}
-                              type="checkbox"
-                              checked={label.allowed_sentiments.includes(value)}
-                              onChange={(event) =>
-                                updateLabel({
-                                  allowed_sentiments: event.target.checked
-                                    ? [...label.allowed_sentiments, value]
-                                    : label.allowed_sentiments.filter(
-                                        (item) => item !== value,
-                                      ),
-                                })
-                              }
-                            />
-                            {name}
-                          </label>
-                        ))}
-                      </fieldset>
-                      <fieldset className="wide-field label-sentiment-options">
-                        <legend>统计与复核</legend>
-                        {[
-                          ["required_review_labels", "使用此标签时必须人工复核"],
-                          ...(label.allowed_sentiments.includes("NEUTRAL")
-                            ? [["neutral_reason_labels", "中性反馈可作为退货原因"]]
-                            : []),
-                        ].map(([field, title]) => (
-                          <label key={field}>
-                            <input
-                              type="checkbox"
-                              checked={(
-                                content.validation_rules?.[field] ?? []
-                              ).includes(label.code)}
-                              onChange={(event) => {
-                                const values = content.validation_rules?.[field] ?? [];
-                                onChange({
-                                  ...content,
-                                  validation_rules: {
-                                    ...content.validation_rules,
-                                    [field]: event.target.checked
-                                      ? [...new Set([...values, label.code])]
-                                      : values.filter((code) => code !== label.code),
-                                  },
-                                });
-                              }}
-                            />
-                            {title}
-                          </label>
-                        ))}
-                      </fieldset>
-                    </section>
-                  )}
-                  <LabelBoundaries
+                  <ClassificationLabelDefinition
+                    hierarchical={hierarchical}
+                    editable={editable}
+                    editing={editing}
+                    published={published}
+                    removed={removed}
+                    busy={busy}
+                    label={label}
+                    entry={entry}
+                    content={content}
+                    baseContent={baseContent}
+                    allowedGroups={allowedGroups}
+                    fieldErrors={fieldErrors}
+                    errorId={errorId}
+                    labelFieldRefs={labelFieldRefs}
+                    updateLabel={updateLabel}
+                    onChange={onChange}
+                    onRequestReplacement={() => setPending({ type: "replace" })}
+                  />
+                  <ClassificationLabelBoundaries
                     label={label}
                     editing={editable && editing}
                     onChange={updateLabel}
@@ -871,159 +554,5 @@ export function ClassificationLabelWorkbench({
         </Modal>
       )}
     </div>
-  );
-}
-
-function LabelBoundaries({ label, editing, onChange, onFieldRef }) {
-  const exclusions = label.exclusions ?? [];
-  const examples = label.examples ?? [];
-  const updateExample = (index, change) =>
-    onChange({
-      examples: examples.map((item, position) =>
-        position === index ? { ...item, ...change } : item,
-      ),
-    });
-  if (!editing && !exclusions.length && !examples.length) return null;
-  return (
-    <section className="label-boundaries">
-      {(editing || exclusions.length > 0) && (
-        <div>
-          <h3>排除说明</h3>
-          {editing ? (
-            <textarea
-              aria-label="排除说明"
-              ref={(node) => onFieldRef("exclusions", node)}
-              rows={3}
-              placeholder="每行说明一种不适用情况；避免重复判定说明"
-              value={exclusions.join("\n")}
-              onChange={(event) =>
-                onChange({ exclusions: event.target.value.split("\n") })
-              }
-            />
-          ) : (
-            <ul>
-              {exclusions.map((text, index) => (
-                <li key={index}>{text}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-      {(editing || examples.length > 0) && (
-        <div tabIndex={-1} ref={(node) => onFieldRef("examples", node)}>
-          <h3>判定示例</h3>
-          <p>完整短句用于解释边界，不是必须命中的词语。</p>
-          {examples.map((example, index) => (
-            <article key={index} className="label-example">
-              {editing ? (
-                <>
-                  <label>
-                    原文表达
-                    <textarea
-                      aria-label={`示例原文 ${index + 1}`}
-                      value={example.text}
-                      onChange={(event) =>
-                        updateExample(index, { text: event.target.value })
-                      }
-                    />
-                  </label>
-                  <label>
-                    是否适用
-                    <select
-                      aria-label={`示例判定 ${index + 1}`}
-                      value={String(example.applies)}
-                      onChange={(event) => {
-                        const applies = event.target.value === "true";
-                        updateExample(index, {
-                          applies,
-                          sentiment: applies ? label.allowed_sentiments[0] : null,
-                        });
-                      }}
-                    >
-                      <option value="true">适用</option>
-                      <option value="false">不适用</option>
-                    </select>
-                  </label>
-                  {example.applies && (
-                    <label>
-                      评价方向
-                      <select
-                        aria-label={`示例评价方向 ${index + 1}`}
-                        value={example.sentiment ?? ""}
-                        onChange={(event) =>
-                          updateExample(index, { sentiment: event.target.value })
-                        }
-                      >
-                        {label.allowed_sentiments.map((value) => (
-                          <option key={value} value={value}>
-                            {
-                              { NEGATIVE: "负向", POSITIVE: "正向", NEUTRAL: "中性" }[
-                                value
-                              ]
-                            }
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-                  <label>
-                    判定说明
-                    <textarea
-                      aria-label={`示例说明 ${index + 1}`}
-                      value={example.explanation}
-                      onChange={(event) =>
-                        updateExample(index, { explanation: event.target.value })
-                      }
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() =>
-                      onChange({
-                        examples: examples.filter((_, position) => position !== index),
-                      })
-                    }
-                  >
-                    删除示例 {index + 1}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <b>
-                    {example.applies ? "适用" : "不适用"}
-                    {example.sentiment &&
-                      ` · ${{ NEGATIVE: "负向", POSITIVE: "正向", NEUTRAL: "中性" }[example.sentiment]}`}
-                  </b>
-                  <p>{example.text}</p>
-                  <small>{example.explanation}</small>
-                </>
-              )}
-            </article>
-          ))}
-          {editing && examples.length < 10 && (
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() =>
-                onChange({
-                  examples: [
-                    ...examples,
-                    {
-                      text: "",
-                      applies: true,
-                      sentiment: label.allowed_sentiments[0],
-                      explanation: "",
-                    },
-                  ],
-                })
-              }
-            >
-              增加示例
-            </button>
-          )}
-        </div>
-      )}
-    </section>
   );
 }

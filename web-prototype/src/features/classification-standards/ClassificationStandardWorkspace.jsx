@@ -1,0 +1,452 @@
+import { useEffect, useRef, useState } from "react";
+import { ArrowLeft, UploadSimple } from "@phosphor-icons/react";
+import { Modal } from "../../components/SharedUi";
+import { ClassificationExcelImport } from "./ClassificationExcelImport";
+import { ClassificationHierarchyChanges } from "./ClassificationHierarchyEditor";
+import { ClassificationRuleIssues } from "./ClassificationRuleIssues";
+import { ClassificationStandardEditor } from "./ClassificationStandardDraftEditor";
+import { ClassificationStandardValidation } from "./ClassificationStandardValidation";
+import { ClassificationStructureIssues } from "./ClassificationStructureIssues";
+import { ClassificationStandardVersionHistory } from "./ClassificationStandardVersionHistory";
+import { contentFromClassificationStandardSnapshot } from "./classificationStandardContent";
+import { labelChanges } from "./labelDraftPolicy";
+
+export function ClassificationStandardWorkspace({
+  initiallyEditing,
+  versions,
+  notify,
+  onDelete,
+  onRestore,
+  savedContent,
+  focusLabelCode,
+  isNew,
+  detail,
+  draft,
+  content,
+  changeReason,
+  busy,
+  dirty,
+  validationSources,
+  validationRuns,
+  selectedValidation,
+  validationSourceId,
+  validationSampleSize,
+  fieldErrors,
+  validationAttempt,
+  onContentChange,
+  onReasonChange,
+  onSave,
+  onPublish,
+  onBack,
+  onValidationSourceChange,
+  onValidationSampleSizeChange,
+  onValidationRun,
+  onValidationApprove,
+  onImport,
+  onPrepareExcel,
+  onApplyExcel,
+  onValidationSelect,
+}) {
+  const [section, setSection] = useState(isNew ? "settings" : "labels");
+  const [confirmBack, setConfirmBack] = useState(false);
+  const [fixRequest, setFixRequest] = useState(null);
+  const fixIssue = (issue) => {
+    setSection(
+      issue.kind === "invalid_rule" ||
+        (!issue.label_code &&
+          issue.label_index == null &&
+          issue.kind === "missing_field")
+        ? "settings"
+        : "labels",
+    );
+    setFixRequest({ ...issue });
+  };
+  const handledValidationAttempt = useRef(validationAttempt);
+  const editable = isNew || detail?.status === "active" || Boolean(draft);
+  const baseContent = draft?.base_snapshot
+    ? contentFromClassificationStandardSnapshot(draft.base_snapshot)
+    : detail?.snapshot
+      ? contentFromClassificationStandardSnapshot(detail.snapshot)
+      : null;
+  const changes = labelChanges(content.labels, baseContent?.labels).filter(
+    (entry) => entry.status !== "未修改",
+  );
+  const settingsChanges = Object.keys(content).filter(
+    (key) =>
+      key !== "labels" &&
+      JSON.stringify(content[key]) !== JSON.stringify(baseContent?.[key]),
+  ).length;
+  const changeCount = changes.length + settingsChanges;
+  const publicationReady = validationRuns.some((run) => run.publication_ready);
+  const awaitingApproval = validationRuns.some(
+    (run) =>
+      run.is_current &&
+      run.status === "completed" &&
+      (run.source?.comparison_type ?? "standard_version") === "standard_version" &&
+      Number(run.error_count) === 0 &&
+      !run.approved_at,
+  );
+  const publishDisabled = Boolean(busy) || !draft || dirty || !publicationReady;
+  const publishLabel = !draft
+    ? "请先保存草稿"
+    : dirty
+      ? "请先保存修改"
+      : publicationReady
+        ? "发布并启用"
+        : awaitingApproval
+          ? "等待人工确认"
+          : "等待样本验证";
+
+  useEffect(() => {
+    if (!validationAttempt || handledValidationAttempt.current === validationAttempt) {
+      return;
+    }
+    handledValidationAttempt.current = validationAttempt;
+    const hasSettingsError =
+      fieldErrors.name ||
+      fieldErrors.product_context ||
+      fieldErrors.variants_empty ||
+      fieldErrors.variants?.some((item) => item.category_a || item.category_b);
+    setSection(hasSettingsError ? "settings" : "labels");
+  }, [fieldErrors, validationAttempt]);
+
+  return (
+    <>
+      <div className="standard-subpage-heading editor-heading">
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="返回"
+          onClick={() => (dirty ? setConfirmBack(true) : onBack())}
+        >
+          <ArrowLeft size={18} />
+        </button>
+        <div>
+          <h1>{isNew ? "建立品类与标签体系" : detail?.name}</h1>
+          <span>
+            {draft
+              ? `未发布草稿 r${draft.revision} · 当前启用版本 V${draft.base_version_no}`
+              : detail
+                ? `${detail.status === "active" ? "当前启用版本" : "已停用版本"} V${detail.version_no}`
+                : "新建标准"}
+          </span>
+        </div>
+        {detail && (detail.status === "active" || detail.delete_mode === "delete") && (
+          <details className="standard-more-menu">
+            <summary>更多</summary>
+            <button type="button" disabled={Boolean(busy)} onClick={onDelete}>
+              {detail.delete_mode === "delete" ? "删除标准" : "停用标准"}
+            </button>
+          </details>
+        )}
+      </div>
+
+      <nav className="standard-editor-tabs" aria-label="标准管理分区">
+        {[
+          ["labels", "标签管理"],
+          ["settings", "标准设置"],
+        ].map(([value, title]) => (
+          <button
+            key={value}
+            type="button"
+            aria-current={section === value ? "page" : undefined}
+            onClick={() => setSection(value)}
+          >
+            {title}
+          </button>
+        ))}
+      </nav>
+
+      <ClassificationStandardEditor
+        section={section}
+        initiallyEditing={initiallyEditing}
+        editable={editable}
+        notify={notify}
+        busy={Boolean(busy)}
+        savedContent={savedContent}
+        focusLabelCode={focusLabelCode}
+        fixRequest={fixRequest}
+        content={content}
+        baseContent={baseContent}
+        onChange={onContentChange}
+        fieldErrors={fieldErrors}
+        validationAttempt={validationAttempt}
+      />
+
+      {editable && (
+        <section className="standard-json-transfer">
+          <div>
+            <b>Excel 标签框架</b>
+            <span>选择工作表与层级列，预览后采用。</span>
+          </div>
+          <ClassificationExcelImport
+            prepareDraft={onPrepareExcel}
+            onApply={onApplyExcel}
+            disabled={Boolean(busy)}
+          />
+        </section>
+      )}
+
+      <div className="standard-settings-extra" hidden={section !== "settings"}>
+        <ClassificationRuleIssues
+          content={content}
+          onChange={onContentChange}
+          focusRequest={fixRequest}
+          disabled={!editable || Boolean(busy)}
+        />
+        <section className="standard-detail-section">
+          <h2>识别策略</h2>
+          <label>
+            当前草稿使用
+            <select
+              aria-label="识别策略"
+              disabled={!editable}
+              value={content.recognition_profile ?? "legacy_v3"}
+              onChange={(event) =>
+                onContentChange({ ...content, recognition_profile: event.target.value })
+              }
+            >
+              <option value="legacy_v3">现有策略 · 定义与关键词</option>
+              <option value="semantic_v1">语义策略 · 定义、边界与证据</option>
+              <option value="fact_v2">事实策略 · 对象、条件与证据对齐</option>
+            </select>
+          </label>
+          <p>保存只修改草稿；通过发布验证并启用后，新任务才使用该策略。</p>
+        </section>
+        {!isNew && editable && (
+          <section className="standard-json-transfer">
+            <div>
+              <b>JSON 数据交换</b>
+              <span>导入只替换当前草稿的业务内容，不会直接发布。</span>
+            </div>
+            <label
+              className={`secondary-button standard-json-import-button ${
+                busy ? "disabled" : ""
+              }`}
+            >
+              <UploadSimple size={15} />
+              {busy === "import" ? "导入中" : "导入JSON"}
+              <input
+                type="file"
+                accept="application/json,.json"
+                aria-label="选择分类标准 JSON 文件"
+                disabled={Boolean(busy)}
+                onChange={onImport}
+              />
+            </label>
+          </section>
+        )}
+
+        {detail && (
+          <ClassificationStandardVersionHistory
+            standard={{ ...detail, draft_id: draft?.id }}
+            versions={versions}
+            onRestore={onRestore}
+          />
+        )}
+      </div>
+
+      <div className="standard-review-panel" hidden={section !== "review"}>
+        <section className="standard-editor-section standard-change-preview">
+          <header>
+            <h2>发布前检查</h2>
+            <span>对比当前启用版本</span>
+          </header>
+          <p>保存草稿不会影响运行中的标准。检查变更后，完成样本验证再发布。</p>
+          <ClassificationHierarchyChanges content={content} baseContent={baseContent} />
+          {content.recognition_profile !== baseContent?.recognition_profile && (
+            <p>
+              识别策略：
+              {baseContent?.recognition_profile === "fact_v2"
+                ? "事实策略"
+                : baseContent?.recognition_profile === "semantic_v1"
+                  ? "语义策略"
+                  : "现有策略"}
+              {" → "}
+              {content.recognition_profile === "fact_v2"
+                ? "事实策略（对象、条件与证据对齐）"
+                : content.recognition_profile === "semantic_v1"
+                  ? "语义策略（定义、边界与证据）"
+                  : "现有策略（定义与关键词）"}
+            </p>
+          )}
+          {changes.length ? (
+            changes.map(({ label, before, status }) => (
+              <article key={label.code}>
+                <header>
+                  <strong>{label.name || "未命名标签"}</strong>
+                  <span className="label-change-badge changed">{status}</span>
+                </header>
+                <code>{label.code}</code>
+                <p>{label.description || "依据标签名称和完整路径理解"}</p>
+                {status === "已修改" && (
+                  <div>
+                    <span>原搜索别名：{before.keywords?.join("、") || "无"}</span>
+                    <span>新搜索别名：{label.keywords?.join("、") || "无"}</span>
+                  </div>
+                )}
+                {[
+                  ["原", before],
+                  ["新", status === "拟停用" ? null : label],
+                ].map(
+                  ([title, value]) =>
+                    value &&
+                    Boolean(
+                      before?.exclusions?.length ||
+                      before?.examples?.length ||
+                      label.exclusions?.length ||
+                      label.examples?.length,
+                    ) && (
+                      <div key={title}>
+                        <span>
+                          {title}排除说明：{value.exclusions?.join("；") || "无"}
+                        </span>
+                        <span>
+                          {title}判定示例：{value.examples?.length ? "" : "无"}
+                        </span>
+                        {value.examples?.map((example, index) => (
+                          <p key={index}>
+                            {example.applies ? "适用" : "不适用"}
+                            {example.sentiment ? ` · ${example.sentiment}` : ""}：
+                            {example.text} — {example.explanation}
+                          </p>
+                        ))}
+                      </div>
+                    ),
+                )}
+              </article>
+            ))
+          ) : (
+            <p>标签没有变化。基本信息与分类设置的修改会随草稿一起保存。</p>
+          )}
+          {JSON.stringify(content.validation_rules) !==
+            JSON.stringify(baseContent?.validation_rules ?? {}) && (
+            <p className="label-unsaved-hint">
+              标签校验规则有变化，请检查相关语义边界、分类指令与 Listing 承诺配置。
+            </p>
+          )}
+          {!dirty && draft?.validation.blocking?.length > 0 && (
+            <ClassificationStructureIssues
+              validation={draft.validation}
+              content={content}
+              onFix={fixIssue}
+              busy={Boolean(busy)}
+            />
+          )}
+        </section>
+        <section className="standard-change-reason">
+          <label>
+            变更说明
+            <input
+              value={changeReason}
+              onChange={(event) => onReasonChange(event.target.value)}
+            />
+          </label>
+          <span>用于版本记录，不影响智能体判断。</span>
+        </section>
+
+        <section
+          className="standard-required-validation"
+          aria-labelledby="standard-required-validation-title"
+        >
+          <header className="standard-required-validation-heading">
+            <div>
+              <h2 id="standard-required-validation-title">发布前样本验证</h2>
+              <p>发布前必须完成样本验证，并确认当前草稿的分类效果。</p>
+            </div>
+            <span>必需</span>
+          </header>
+          {draft ? (
+            <ClassificationStandardValidation
+              draft={draft}
+              sources={validationSources}
+              runs={validationRuns}
+              selectedRun={selectedValidation}
+              sourceId={validationSourceId}
+              sampleSize={validationSampleSize}
+              busy={busy === "validation"}
+              approvalBusy={busy === "approval"}
+              dirty={dirty}
+              onSourceChange={onValidationSourceChange}
+              onSampleSizeChange={onValidationSampleSizeChange}
+              onRun={onValidationRun}
+              onApprove={onValidationApprove}
+              onSelectRun={onValidationSelect}
+            />
+          ) : (
+            <p>请先保存草稿，再运行样本验证；验证通过后才能启用新版本。</p>
+          )}
+        </section>
+      </div>
+      {editable && (
+        <footer className="standard-editor-footer">
+          <div role="status">
+            <strong>
+              {isNew && !draft
+                ? dirty
+                  ? `有 ${changeCount} 项变更 · 未保存`
+                  : "尚未保存"
+                : changeCount
+                  ? `有 ${changeCount} 项变更${dirty ? " · 未保存" : " · 已保存"}`
+                  : "暂无变更"}
+            </strong>
+            {draft && !dirty && <span>草稿 r{draft.revision}，尚未发布</span>}
+          </div>
+          <div>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={Boolean(busy)}
+              onClick={onSave}
+            >
+              {busy === "save" ? "保存中" : "保存草稿"}
+            </button>
+            {section === "review" ? (
+              <button
+                type="button"
+                className="primary-button"
+                disabled={publishDisabled}
+                title={publishDisabled ? publishLabel : undefined}
+                onClick={onPublish}
+              >
+                {busy === "publish" ? "启用中" : publishLabel}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="primary-button"
+                disabled={Boolean(busy) || (!dirty && !draft)}
+                onClick={() => setSection("review")}
+              >
+                发布
+              </button>
+            )}
+          </div>
+        </footer>
+      )}
+      {confirmBack && (
+        <Modal
+          eyebrow="未保存修改"
+          title="离开编辑页？"
+          onClose={() => setConfirmBack(false)}
+        >
+          <div className="label-action-confirm">
+            <p>尚未保存的修改会丢失。可以继续编辑并保存草稿，或放弃本次未保存内容。</p>
+            <div>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setConfirmBack(false)}
+              >
+                继续编辑
+              </button>
+              <button type="button" className="danger-button" onClick={onBack}>
+                放弃修改并返回
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </>
+  );
+}
