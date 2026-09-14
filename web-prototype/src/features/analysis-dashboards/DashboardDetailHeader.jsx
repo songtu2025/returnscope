@@ -5,6 +5,7 @@ import {
   Info,
   Sparkle,
 } from "@phosphor-icons/react";
+import Button from "antd/es/button";
 
 import { dashboardVersionNumber } from "./dashboardFields";
 import { dashboardVersionId } from "./DashboardDetailHelpers";
@@ -36,13 +37,12 @@ export function DashboardDetailHeader({
     <>
       <header className="return-insight-page-header">
         <div>
-          <button
-            className="return-insight-back"
+          <Button
+            size="small"
             aria-label="返回分析看板列表"
+            icon={<ArrowLeft size={18} />}
             onClick={onBack}
-          >
-            <ArrowLeft size={18} />
-          </button>
+          />
           <h1>{showReport ? "AI退货洞察报告" : "退货原因洞察"}</h1>
           <span>{dashboard.name || "未命名看板"}</span>
         </div>
@@ -61,22 +61,23 @@ export function DashboardDetailHeader({
               </button>
             </>
           ) : (
-            <button
-              className="primary-button ai-report-open-button"
+            <Button
+              type="primary"
+              className="ai-report-open-button"
+              icon={<Sparkle size={17} />}
               onClick={onOpenReport}
             >
-              <Sparkle size={17} /> AI 洞察报告
-            </button>
+              AI 洞察报告
+            </Button>
           )}
-          <button
-            className={`secondary-button return-insight-info-button ${
-              showDataInfo ? "active" : ""
-            }`}
+          <Button
+            className={`return-insight-info-button ${showDataInfo ? "active" : ""}`}
             aria-expanded={showDataInfo}
+            icon={<Info size={17} />}
             onClick={onToggleDataInfo}
           >
-            <Info size={17} /> 数据说明
-          </button>
+            数据说明
+          </Button>
         </div>
       </header>
 
@@ -106,12 +107,12 @@ export function DashboardDetailHeader({
               ))}
             </select>
           </label>
-          <button className="text-button" onClick={onShowSources}>
+          <Button type="link" onClick={onShowSources}>
             数据来源
-          </button>
-          <button className="text-button" onClick={onShowHistory}>
+          </Button>
+          <Button type="link" onClick={onShowHistory}>
             版本历史
-          </button>
+          </Button>
           <button
             className="primary-button"
             disabled={!isCurrentVersion}

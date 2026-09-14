@@ -268,19 +268,24 @@
   line-height: 1;
 }
 .dashboard-list-search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
   min-width: 0;
-  padding: 0 11px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #fff;
 }
-.dashboard-list-filters > .primary-button {
+.analysis-dashboard-page
+  .dashboard-list-search.ant-input-affix-wrapper
+  > input.ant-input.ant-input {
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.dashboard-list-filters > .ant-btn {
   align-self: end;
 }
-.dashboard-list-filters input,
 .dashboard-list-filters select,
 .dashboard-confirm-aside input,
 .dashboard-confirm-aside textarea,
@@ -292,11 +297,6 @@
   background: #fff;
   color: var(--ink);
   font: inherit;
-}
-.dashboard-list-filters input {
-  height: var(--desktop-control-height);
-  border: 0;
-  outline: 0;
 }
 .dashboard-list-filters select,
 .dashboard-confirm-aside input,

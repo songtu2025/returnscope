@@ -27,7 +27,7 @@
   letter-spacing: -0.02em;
 }
 
-.return-insight-page-header span {
+.return-insight-page-header > div:first-child > span {
   overflow: hidden;
   max-width: 360px;
   color: #66736d;
@@ -36,20 +36,6 @@
   white-space: nowrap;
 }
 
-.return-insight-back {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 1px solid #dce2dd;
-  border-radius: 8px;
-  color: #405049;
-  background: #fff;
-  cursor: pointer;
-  place-items: center;
-}
-
-.return-insight-back:hover,
 .return-insight-info-button.active {
   border-color: #9acabb;
   color: #0d5d47;
