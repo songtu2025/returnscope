@@ -116,6 +116,7 @@ test("点击 Review 上传控件触发真实文件输入，选择后显示文件
   expect(screen.getByText("已选择：独立验收.xlsx")).toBeVisible();
   await user.click(screen.getByRole("button", { name: "开始样本验证" }));
   expect(onRun).toHaveBeenCalledWith(file, "standard_version");
+  expect(onRun.mock.calls[0][0]).toBe(file);
 });
 
 const run = {

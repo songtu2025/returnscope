@@ -943,9 +943,11 @@ test("原始数据验证完成后必须人工确认才能发布", async () => {
   await userEvent.click(
     await screen.findByRole("button", { name: "发布", exact: true }),
   );
-  expect(
-    await screen.findByRole("option", { name: /真实手套退货评论/ }),
-  ).toBeInTheDocument();
+  await userEvent.selectOptions(
+    screen.getByRole("combobox", { name: "样本来源" }),
+    rawSource.result_version_id,
+  );
+  expect(screen.getByRole("option", { name: /真实手套退货评论/ })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "等待人工确认" })).toBeDisabled();
   await userEvent.click(screen.getByRole("checkbox", { name: /我已审阅/ }));
   await userEvent.type(
