@@ -164,6 +164,191 @@ const run = {
   ],
 };
 
+function validationItem(classificationKey, comment, changed = false) {
+  return {
+    classification_key: classificationKey,
+    comment,
+    category_a: "品类",
+    category_b: "子类",
+    changed,
+    baseline: {
+      status: "AUTO_APPROVED",
+      reason: "原始原因",
+      semantic_units: [],
+      review_reasons: [],
+      primary_label_codes: ["TOPIC"],
+    },
+    draft: {
+      status: "AUTO_APPROVED",
+      semantic_units: [],
+      review_reasons: [],
+      unknown_semantics: [],
+      primary_label_codes: ["TOPIC"],
+    },
+  };
+}
+
+const completedRun = {
+  id: "completed-run",
+  draft_revision: 3,
+  status: "completed",
+  is_current: true,
+  source: { listing: "contract-listing", comparison_type: "standard_version" },
+  sample_size: 20,
+  processed_count: 20,
+  model_names: ["contract-model"],
+  error_count: 0,
+  publication_ready: true,
+  quality_gate: { passed: true, status: "passed" },
+  summary: {
+    sample_size: 2,
+    changed_rate: 50,
+    changed_count: 1,
+    coverage_rate: 100,
+    coverage_count: 2,
+    review_rate: 0,
+    review_count: 0,
+    unknown_rate: 0,
+    unknown_count: 0,
+    error_rate: 0,
+    error_count: 0,
+  },
+  items: [
+    validationItem("changed", "仅结果不同记录", true),
+    validationItem("unchanged", "普通未变化记录"),
+  ],
+};
+
+function validationProps(overrides = {}) {
+  return {
+    draft: { is_new: false, validation: { blocking: [] } },
+    sources: [],
+    runs: [],
+    selectedRun: null,
+    sourceId: "source",
+    sampleSize: 20,
+    busy: false,
+    approvalBusy: false,
+    dirty: false,
+    onRun: vi.fn(),
+    onApprove: vi.fn(),
+    onSelectRun: vi.fn(),
+    onSourceChange: vi.fn(),
+    onSampleSizeChange: vi.fn(),
+    ...overrides,
+  };
+}
+
+test("样本验证呈现各运行状态并允许选择验证记录", async () => {
+  const user = userEvent.setup();
+  const onSelectRun = vi.fn();
+  const queuedRun = {
+    id: "queued-run",
+    draft_revision: 2,
+    status: "queued",
+    stage: "queued",
+    is_current: true,
+    sample_size: 20,
+    processed_count: 0,
+  };
+  const { rerender } = render(
+    <ClassificationStandardValidation
+      {...validationProps({
+        runs: [queuedRun, completedRun],
+        selectedRun: queuedRun,
+        onSelectRun,
+      })}
+    />,
+  );
+
+  expect(screen.getAllByText("等待运行").length).toBeGreaterThan(0);
+  expect(screen.getByText(/草稿已处理 0\/20 条/)).toBeVisible();
+  await user.click(
+    screen.getByRole("button", { name: /验证完成.*草稿 r3.*20\/20 条/ }),
+  );
+  expect(onSelectRun).toHaveBeenCalledWith("completed-run");
+
+  const runningRun = {
+    ...queuedRun,
+    id: "running-run",
+    status: "running",
+    stage: "comparing_baseline",
+    processed_count: 5,
+  };
+  rerender(
+    <ClassificationStandardValidation
+      {...validationProps({ runs: [runningRun], selectedRun: runningRun })}
+    />,
+  );
+  expect(screen.getByText("正在验证旧版标准")).toBeVisible();
+  expect(screen.getByText(/旧版已处理 5\/20 条/)).toBeVisible();
+
+  const failedRun = {
+    ...queuedRun,
+    id: "failed-run",
+    status: "failed",
+    error: "模型连接失败",
+  };
+  rerender(
+    <ClassificationStandardValidation
+      {...validationProps({ runs: [failedRun], selectedRun: failedRun })}
+    />,
+  );
+  expect(screen.getByRole("alert")).toHaveTextContent("样本验证失败模型连接失败");
+
+  rerender(
+    <ClassificationStandardValidation
+      {...validationProps({ runs: [completedRun], selectedRun: completedRun })}
+    />,
+  );
+  expect(screen.getByRole("heading", { name: "草稿 r3 验证结果" })).toBeVisible();
+  expect(screen.getByText("可用于发布")).toBeVisible();
+});
+
+test("完成态可筛选结果不同记录", async () => {
+  const user = userEvent.setup();
+  render(
+    <ClassificationStandardValidation
+      {...validationProps({ runs: [completedRun], selectedRun: completedRun })}
+    />,
+  );
+  const filter = screen.getByRole("combobox", { name: "验证结果筛选" });
+
+  await user.selectOptions(filter, "changed");
+  expect(screen.getByText("仅结果不同记录")).toBeVisible();
+  expect(screen.queryByText("普通未变化记录")).not.toBeInTheDocument();
+});
+
+test("人工确认要求勾选和非空结论并提交去除空白的内容", async () => {
+  const user = userEvent.setup();
+  const onApprove = vi.fn();
+  render(
+    <ClassificationStandardValidation
+      {...validationProps({
+        runs: [completedRun],
+        selectedRun: completedRun,
+        onApprove,
+      })}
+    />,
+  );
+  const submit = screen.getByRole("button", { name: "确认验证通过" });
+  const confirmation = screen.getByRole("checkbox", {
+    name: "我已审阅新旧版本差异和样本证据",
+  });
+  const note = screen.getByRole("textbox", { name: "验证结论" });
+
+  expect(submit).toBeDisabled();
+  await user.click(confirmation);
+  expect(submit).toBeDisabled();
+  await user.type(note, "   ");
+  expect(submit).toBeDisabled();
+  await user.type(note, "已核对样本和证据   ");
+  expect(submit).toBeEnabled();
+  await user.click(submit);
+
+  expect(onApprove).toHaveBeenCalledWith("completed-run", "已核对样本和证据");
+});
+
 test("质量问题按根因展开并显示事实状态和对象", async () => {
   const user = userEvent.setup();
   render(<ClassificationValidationQuality run={run} />);
