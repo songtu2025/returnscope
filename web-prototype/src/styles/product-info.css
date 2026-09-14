@@ -1,4 +1,4 @@
-/* 产品信息 */
+/* 数据资产 */
 .product-master-page .dataset-detail,
 .product-master-page .dataset-view-panel {
   min-height: 0;
@@ -32,7 +32,40 @@
 }
 
 .product-master-page .dimension-search {
+  display: flex;
+  height: var(--desktop-control-height);
+  align-items: center;
+  gap: 8px;
   width: 100%;
+}
+
+.product-master-page .dimension-search > .ant-input-affix-wrapper {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+.product-master-page .dimension-search > .ant-btn {
+  height: 100%;
+}
+
+.returns-assets-page .returns-registry-search.ant-input-affix-wrapper {
+  height: 38px;
+}
+
+.returns-assets-page .returns-source-trace-toggle.ant-btn {
+  min-height: 32px;
+  padding: 0 4px;
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.returns-assets-page .returns-source-trace-toggle.ant-btn:hover:not(:disabled) {
+  color: var(--green);
+  background: transparent;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .product-master-page .dimension-table-toolbar > div:last-child {

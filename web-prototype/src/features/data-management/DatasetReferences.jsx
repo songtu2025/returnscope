@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { ArrowClockwise, ArrowRight, Database } from "@phosphor-icons/react";
+import Button from "antd/es/button";
 import { api } from "../../api";
 import { CardHeading, EmptyState, InlineLoading } from "../../components/SharedUi";
 import { STATUS_LABELS } from "../../constants";
@@ -94,10 +95,9 @@ export function DatasetReferences({
             <b>任务引用读取失败</b>
             <p>{state.error}</p>
           </div>
-          <button className="secondary-button" onClick={() => load()}>
-            <ArrowClockwise size={16} />
+          <Button icon={<ArrowClockwise size={16} />} onClick={() => load()}>
             重新加载
-          </button>
+          </Button>
         </div>
       ) : !state.data?.items?.length ? (
         <EmptyState

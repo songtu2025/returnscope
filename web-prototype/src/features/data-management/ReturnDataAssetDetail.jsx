@@ -8,6 +8,7 @@ import {
   FileCsv,
   WarningCircle,
 } from "@phosphor-icons/react";
+import Button from "antd/es/button";
 
 import { InlineLoading, Modal } from "../../components/SharedUi";
 import { formatTime } from "../../lib/presentation";
@@ -62,10 +63,14 @@ export function SourceDetail({ source, notify, onStorageChanged, initiallyShowTr
               : "该数据源建立于结构化导入记录启用之前"}
           </span>
         </div>
-        <button className="text-button" onClick={() => setShowTrace((value) => !value)}>
-          <ClockCounterClockwise size={16} />
+        <Button
+          type="text"
+          className="returns-source-trace-toggle"
+          icon={<ClockCounterClockwise size={16} />}
+          onClick={() => setShowTrace((value) => !value)}
+        >
           {showTrace ? "收起追溯记录" : "查看追溯记录"}
-        </button>
+        </Button>
       </header>
       <dl className="returns-import-metrics">
         {metrics.map(([label, value]) => (

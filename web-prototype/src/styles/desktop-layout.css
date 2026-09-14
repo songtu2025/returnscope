@@ -116,8 +116,7 @@
   gap: 10px;
   margin-bottom: 10px;
 }
-.data-page .dimension-search,
-.data-page .dimension-search input {
+.data-page .dimension-search {
   height: var(--desktop-control-height);
 }
 .data-page .dimension-table > div {

@@ -5,6 +5,7 @@ import {
   DownloadSimple,
   UploadSimple,
 } from "@phosphor-icons/react";
+import Button from "antd/es/button";
 import { api } from "../api";
 import { DatasetUploadDialog } from "../components/DatasetUploadDialog";
 import { CardHeading, EmptyState, PageHeading } from "../components/SharedUi";
@@ -84,8 +85,9 @@ export function DataManagement({
         title="商品信息汇总"
         description="维护跨分析任务复用的产品名称、店铺映射和品类信息；退货明细在分析任务中导入。"
         action={
-          <button
-            className="primary-button"
+          <Button
+            type="primary"
+            icon={<UploadSimple size={18} />}
             onClick={() =>
               setDialog(
                 selected
@@ -94,9 +96,8 @@ export function DataManagement({
               )
             }
           >
-            <UploadSimple size={18} />
             {selected ? "更新产品信息" : "导入产品信息"}
-          </button>
+          </Button>
         }
       />
       <DataAssetTabs current="products" onChange={onAssetViewChange} />
@@ -135,13 +136,13 @@ export function DataManagement({
             title="尚未建立产品信息"
             description="导入首个产品信息版本后，可维护商品映射、版本和修改留痕。"
             action={
-              <button
-                className="primary-button"
+              <Button
+                type="primary"
+                icon={<UploadSimple size={17} />}
                 onClick={() => setDialog({ mode: "create", kind: "products" })}
               >
-                <UploadSimple size={17} />
                 导入首个产品信息版本
-              </button>
+              </Button>
             }
           />
         )}

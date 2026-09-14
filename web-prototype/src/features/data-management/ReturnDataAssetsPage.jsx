@@ -11,6 +11,8 @@ import {
   UploadSimple,
   WarningCircle,
 } from "@phosphor-icons/react";
+import Button from "antd/es/button";
+import Input from "antd/es/input";
 
 import { EmptyState, InlineLoading, PageHeading } from "../../components/SharedUi";
 import { formatTime } from "../../lib/presentation";
@@ -152,10 +154,13 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
         title="退货数据源管理"
         description="管理可复用的退货数据源和最近导入状态。"
         action={
-          <button className="primary-button" onClick={() => setUploadOpen(true)}>
-            <UploadSimple size={18} />
+          <Button
+            type="primary"
+            icon={<UploadSimple size={18} />}
+            onClick={() => setUploadOpen(true)}
+          >
             导入新批次
-          </button>
+          </Button>
         }
       />
       <DataAssetTabs
@@ -173,10 +178,13 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
           title="尚未建立退货数据源"
           description="导入首个批次后，系统会识别业务范围并建立可复用的数据源。"
           action={
-            <button className="primary-button" onClick={() => setUploadOpen(true)}>
-              <UploadSimple size={17} />
+            <Button
+              type="primary"
+              icon={<UploadSimple size={17} />}
+              onClick={() => setUploadOpen(true)}
+            >
               导入首个批次
-            </button>
+            </Button>
           }
         />
       ) : (
@@ -195,15 +203,14 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
               <span>最近导入：{formatTime(latestUpdate)}</span>
             </div>
             <div className="returns-registry-filters">
-              <label className="returns-registry-search">
-                <MagnifyingGlass size={17} />
-                <input
-                  aria-label="搜索退货数据源"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="搜索数据源或业务范围"
-                />
-              </label>
+              <Input
+                className="returns-registry-search"
+                aria-label="搜索退货数据源"
+                prefix={<MagnifyingGlass size={17} />}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="搜索数据源或业务范围"
+              />
               <label className="returns-registry-filter">
                 <Funnel size={17} />
                 <select

@@ -7,6 +7,8 @@ import {
   MagnifyingGlass,
   ShieldCheck,
 } from "@phosphor-icons/react";
+import Button from "antd/es/button";
+import Input from "antd/es/input";
 import { api } from "../../api";
 import { InlineLoading, Modal } from "../../components/SharedUi";
 
@@ -91,14 +93,16 @@ export function ProductDimensionRows({ dataset, notify, onChanged }) {
             setQuery(draftQuery);
           }}
         >
-          <MagnifyingGlass size={15} />
-          <input
+          <Input
             aria-label="搜索产品信息"
+            prefix={<MagnifyingGlass size={15} />}
             value={draftQuery}
             onChange={(event) => setDraftQuery(event.target.value)}
             placeholder="搜索 MSKU、商品名称或 Listing"
           />
-          <button type="submit">搜索</button>
+          <Button htmlType="submit" autoInsertSpace={false}>
+            搜索
+          </Button>
         </form>
         <div className="product-master-filters">
           <label>
@@ -138,13 +142,13 @@ export function ProductDimensionRows({ dataset, notify, onChanged }) {
         </div>
         <div>
           <span>共 {(data?.total ?? dataset.row_count).toLocaleString()} 条产品</span>
-          <button
-            type="button"
+          <Button
+            autoInsertSpace={false}
+            icon={<ArrowClockwise size={15} />}
             onClick={() => load().catch((error) => notify(error.message, "error"))}
           >
-            <ArrowClockwise size={15} />
             刷新
-          </button>
+          </Button>
         </div>
       </div>
       {!data && <InlineLoading label="读取产品信息…" />}
@@ -344,16 +348,12 @@ export function ProductDimensionRows({ dataset, notify, onChanged }) {
               </span>
             </div>
             <div className="modal-actions">
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => setEditing(null)}
-              >
+              <Button autoInsertSpace={false} onClick={() => setEditing(null)}>
                 取消
-              </button>
-              <button className="primary-button" disabled={saving}>
+              </Button>
+              <Button type="primary" htmlType="submit" disabled={saving}>
                 {saving ? "正在创建新版本…" : "保存并创建新版本"}
-              </button>
+              </Button>
             </div>
           </form>
         </Modal>
