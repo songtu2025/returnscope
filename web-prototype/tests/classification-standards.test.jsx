@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -24,6 +24,13 @@ const standardApiMock = vi.hoisted(() => ({
   classificationStandardValidationRun: vi.fn(),
   approveClassificationStandardValidationRun: vi.fn(),
 }));
+
+const validationApiMock = {
+  sources: standardApiMock.classificationStandardValidationSources,
+  runs: standardApiMock.classificationStandardValidationRuns,
+  run: standardApiMock.classificationStandardValidationRun,
+  start: standardApiMock.createClassificationStandardValidationRun,
+};
 
 vi.mock("../src/shared/api/classificationStandardApi", () => ({
   classificationStandardApi: standardApiMock,
@@ -193,6 +200,42 @@ beforeEach(() => {
 });
 
 afterEach(() => cleanup());
+
+const validationSource = {
+  result_version_id: "raw:returns-v1:products-v1",
+  source_kind: "raw_dataset",
+  return_dataset_name: "真实手套退货评论",
+  product_dataset_name: "商品信息汇总",
+  version_no: 1,
+};
+
+function mockEditableDraft({ sources = [], runs = [] } = {}) {
+  standardApiMock.classificationStandard.mockResolvedValue({
+    ...detail,
+    draft_id: validDraft.id,
+    draft_revision: validDraft.revision,
+  });
+  standardApiMock.classificationStandardDraft.mockResolvedValue(validDraft);
+  validationApiMock.sources.mockResolvedValue(sources);
+  validationApiMock.runs.mockResolvedValue(runs);
+  if (runs[0]) validationApiMock.run.mockResolvedValue(runs[0]);
+}
+
+function renderEditPage(notify = vi.fn()) {
+  render(
+    <ClassificationStandardsPage
+      route={{ query: { standard: standard.id, view: "edit" } }}
+      notify={notify}
+    />,
+  );
+  return notify;
+}
+
+async function openPublishReview() {
+  await userEvent.click(
+    await screen.findByRole("button", { name: "发布", exact: true }),
+  );
+}
 
 test("质量门槛分开展示发布阻断项与人工复核警告", async () => {
   const { ClassificationValidationQuality } =
@@ -903,15 +946,172 @@ test("草稿未完成样本验证时禁止发布", async () => {
   expect(standardApiMock.publishClassificationStandardDraft).not.toHaveBeenCalled();
 });
 
+test("草稿保存失败后保留未保存内容并恢复操作状态", async () => {
+  mockEditableDraft();
+  standardApiMock.updateClassificationStandardDraft.mockRejectedValue(
+    new Error("草稿保存冲突"),
+  );
+  const notify = renderEditPage();
+  await userEvent.click(
+    await screen.findByRole("button", { name: "标准设置", exact: true }),
+  );
+  const nameInput = screen.getByRole("textbox", { name: "标准名称" });
+  await userEvent.clear(nameInput);
+  await userEvent.type(nameInput, "保存失败仍保留的标准名称");
+  await userEvent.click(screen.getByRole("button", { name: "保存草稿" }));
+
+  await waitFor(() => expect(notify).toHaveBeenCalledWith("草稿保存冲突", "error"));
+  expect(nameInput).toHaveValue("保存失败仍保留的标准名称");
+  expect(screen.getByRole("button", { name: "保存草稿" })).toBeEnabled();
+  expect(standardApiMock.validateClassificationStandardDraft).not.toHaveBeenCalled();
+});
+
+test("发布失败后保留变更说明并恢复发布操作状态", async () => {
+  mockEditableDraft({ runs: [readyRun] });
+  standardApiMock.publishClassificationStandardDraft.mockRejectedValue(
+    new Error("发布版本冲突"),
+  );
+  const notify = renderEditPage();
+  await openPublishReview();
+  const reasonInput = screen.getByRole("textbox", { name: "变更说明" });
+  await userEvent.clear(reasonInput);
+  await userEvent.type(reasonInput, "发布失败后继续使用的说明");
+  await userEvent.click(screen.getByRole("button", { name: "发布并启用" }));
+
+  await waitFor(() =>
+    expect(standardApiMock.publishClassificationStandardDraft).toHaveBeenCalledWith(
+      validDraft.id,
+      {
+        expected_revision: validDraft.revision,
+        reason: "发布失败后继续使用的说明",
+      },
+    ),
+  );
+  expect(notify).toHaveBeenCalledWith("发布版本冲突", "error");
+  expect(reasonInput).toHaveValue("发布失败后继续使用的说明");
+  expect(screen.getByRole("button", { name: "发布并启用" })).toBeEnabled();
+});
+
+test("编辑页加载验证来源与运行记录并允许选择另一条记录", async () => {
+  const previousRun = {
+    ...readyRun,
+    id: "classification-standard-validation-previous",
+    draft_revision: 1,
+    is_current: false,
+    publication_ready: false,
+  };
+  mockEditableDraft({ sources: [validationSource], runs: [readyRun, previousRun] });
+  validationApiMock.run.mockImplementation(async (runId) =>
+    runId === previousRun.id ? previousRun : readyRun,
+  );
+  renderEditPage();
+  await waitFor(() => {
+    expect(validationApiMock.sources).toHaveBeenCalledWith(validDraft.id);
+    expect(validationApiMock.runs).toHaveBeenCalledWith(validDraft.id);
+    expect(validationApiMock.run).toHaveBeenCalledWith(readyRun.id);
+  });
+  await openPublishReview();
+  expect(screen.getByRole("combobox", { name: "样本来源" })).toHaveValue(
+    validationSource.result_version_id,
+  );
+  await userEvent.click(
+    screen.getByRole("button", {
+      name: /验证完成.*草稿 r1.*20\/20 条.*已失效/,
+    }),
+  );
+
+  await waitFor(() =>
+    expect(validationApiMock.run).toHaveBeenLastCalledWith(previousRun.id),
+  );
+  expect(screen.getByRole("heading", { name: "草稿 r1 验证结果" })).toBeVisible();
+});
+
+test("仅在验证运行中轮询并在运行完成后停止", async () => {
+  const runningRun = {
+    ...readyRun,
+    id: "classification-standard-validation-running",
+    status: "running",
+    processed_count: 5,
+    publication_ready: false,
+    approved_by_name: null,
+    approved_at: null,
+    approval_note: "",
+  };
+  const completedRun = {
+    ...runningRun,
+    status: "completed",
+    processed_count: 20,
+  };
+  const validationPolls = [];
+  const setIntervalSpy = vi
+    .spyOn(window, "setInterval")
+    .mockImplementation((callback, delay) => {
+      if (delay === 2000) validationPolls.push(callback);
+      return 73;
+    });
+  mockEditableDraft();
+  validationApiMock.runs
+    .mockResolvedValueOnce([runningRun])
+    .mockResolvedValueOnce([completedRun]);
+  validationApiMock.run
+    .mockResolvedValueOnce(runningRun)
+    .mockResolvedValueOnce(completedRun);
+
+  try {
+    renderEditPage();
+    await waitFor(() => expect(validationPolls).toHaveLength(1));
+    expect(validationApiMock.runs).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      validationPolls[0]();
+    });
+
+    await waitFor(() => expect(validationApiMock.runs).toHaveBeenCalledTimes(2));
+    expect(validationApiMock.run).toHaveBeenLastCalledWith(runningRun.id);
+    await screen.findByText("草稿 r2 验证结果");
+    expect(validationPolls).toHaveLength(1);
+  } finally {
+    setIntervalSpy.mockRestore();
+  }
+});
+
+test("开始样本验证提交当前草稿修订、来源、规模和验证目的", async () => {
+  const queuedRun = {
+    ...readyRun,
+    id: "classification-standard-validation-queued",
+    status: "queued",
+    processed_count: 0,
+    publication_ready: false,
+    approved_by_name: null,
+    approved_at: null,
+    approval_note: "",
+  };
+  mockEditableDraft({ sources: [validationSource] });
+  validationApiMock.start.mockResolvedValue(queuedRun);
+  validationApiMock.run.mockResolvedValue(queuedRun);
+  const notify = renderEditPage();
+  await openPublishReview();
+  await userEvent.selectOptions(
+    screen.getByRole("combobox", { name: "验证目的" }),
+    "semantic_ab",
+  );
+  await userEvent.click(screen.getByRole("button", { name: "50 条" }));
+  await userEvent.click(screen.getByRole("button", { name: "开始样本验证" }));
+
+  await waitFor(() =>
+    expect(validationApiMock.start).toHaveBeenCalledWith(validDraft.id, {
+      expected_revision: validDraft.revision,
+      source_result_version_id: validationSource.result_version_id,
+      sample_size: 50,
+      comparison_type: "semantic_ab",
+    }),
+  );
+  expect(validationApiMock.run).toHaveBeenLastCalledWith(queuedRun.id);
+  expect(notify).toHaveBeenCalledWith("样本验证已进入队列");
+});
+
 test("原始数据验证完成后必须人工确认才能发布", async () => {
   const notify = vi.fn();
-  const rawSource = {
-    result_version_id: "raw:returns-v1:products-v1",
-    source_kind: "raw_dataset",
-    return_dataset_name: "真实手套退货评论",
-    product_dataset_name: "商品信息汇总",
-    version_no: 1,
-  };
   standardApiMock.classificationStandard.mockResolvedValue({
     ...detail,
     draft_id: validDraft.id,
@@ -919,7 +1119,7 @@ test("原始数据验证完成后必须人工确认才能发布", async () => {
   });
   standardApiMock.classificationStandardDraft.mockResolvedValue(validDraft);
   standardApiMock.classificationStandardValidationSources.mockResolvedValue([
-    rawSource,
+    validationSource,
   ]);
   standardApiMock.classificationStandardValidationRuns.mockResolvedValue([
     awaitingApprovalRun,
@@ -945,7 +1145,7 @@ test("原始数据验证完成后必须人工确认才能发布", async () => {
   );
   await userEvent.selectOptions(
     screen.getByRole("combobox", { name: "样本来源" }),
-    rawSource.result_version_id,
+    validationSource.result_version_id,
   );
   expect(screen.getByRole("option", { name: /真实手套退货评论/ })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "等待人工确认" })).toBeDisabled();
