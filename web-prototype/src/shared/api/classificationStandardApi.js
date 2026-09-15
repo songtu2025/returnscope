@@ -1,29 +1,66 @@
 import { API_BASE, request } from "./request";
 
+/** @typedef {import("./classificationStandardContracts").ClassificationResultTaxonomy} ClassificationResultTaxonomy */
+/** @typedef {import("./classificationStandardContracts").ClassificationStandardActionPayload} ClassificationStandardActionPayload */
+/** @typedef {import("./classificationStandardContracts").ClassificationStandardCreatePayload} ClassificationStandardCreatePayload */
+/** @typedef {import("./classificationStandardContracts").ClassificationStandardDeleteResult} ClassificationStandardDeleteResult */
+/** @typedef {import("./classificationStandardContracts").ClassificationStandardDetail} ClassificationStandardDetail */
+/** @typedef {import("./classificationStandardContracts").ClassificationStandardDiscardResult} ClassificationStandardDiscardResult */
+/** @typedef {import("./classificationStandardContracts").ClassificationStandardDraft} ClassificationStandardDraft */
+/** @typedef {import("./classificationStandardContracts").ClassificationStandardExcelColumns} ClassificationStandardExcelColumns */
+/** @typedef {import("./classificationStandardContracts").ClassificationStandardExcelPreview} ClassificationStandardExcelPreview */
+/** @typedef {import("./classificationStandardContracts").ClassificationStandardImportPayload} ClassificationStandardImportPayload */
+/** @typedef {import("./classificationStandardContracts").ClassificationStandardSummary} ClassificationStandardSummary */
+/** @typedef {import("./classificationStandardContracts").ClassificationStandardUpdatePayload} ClassificationStandardUpdatePayload */
+/** @typedef {import("./classificationStandardContracts").ClassificationStandardValidationApprovalPayload} ClassificationStandardValidationApprovalPayload */
+/** @typedef {import("./classificationStandardContracts").ClassificationStandardValidationRunDetail} ClassificationStandardValidationRunDetail */
+/** @typedef {import("./classificationStandardContracts").ClassificationStandardValidationRunPayload} ClassificationStandardValidationRunPayload */
+/** @typedef {import("./classificationStandardContracts").ClassificationStandardValidationRunSummary} ClassificationStandardValidationRunSummary */
+/** @typedef {import("./classificationStandardContracts").ClassificationStandardValidationSource} ClassificationStandardValidationSource */
+/** @typedef {import("./classificationStandardContracts").ClassificationStandardVersion} ClassificationStandardVersion */
+/** @typedef {import("./classificationStandardContracts").ValidationComparisonType} ValidationComparisonType */
+/** @typedef {import("./classificationStandardContracts").ValidationSampleSize} ValidationSampleSize */
+
 export const classificationStandardApi = {
+  /** @returns {Promise<ClassificationStandardSummary[]>} */
   classificationStandards: () => request("/api/classification-standards"),
+  /**
+   * @param {ClassificationStandardCreatePayload} payload
+   * @returns {Promise<ClassificationStandardDraft>}
+   */
   createClassificationStandard: (payload) =>
     request("/api/classification-standards", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  classificationStandard: (standardId) =>
+  /** @returns {Promise<ClassificationStandardDetail>} */
+  classificationStandard: (/** @type {string} */ standardId) =>
     request(`/api/classification-standards/${standardId}`),
-  deleteClassificationStandard: (standardId) =>
+  /** @returns {Promise<ClassificationStandardDeleteResult>} */
+  deleteClassificationStandard: (/** @type {string} */ standardId) =>
     request(`/api/classification-standards/${standardId}`, {
       method: "DELETE",
     }),
-  classificationStandardVersions: (standardId) =>
+  /** @returns {Promise<ClassificationStandardVersion[]>} */
+  classificationStandardVersions: (/** @type {string} */ standardId) =>
     request(`/api/classification-standards/${standardId}/versions`),
-  classificationStandardVersionExportUrl: (versionId) =>
+  classificationStandardVersionExportUrl: (/** @type {string} */ versionId) =>
     `${API_BASE}/api/classification-standard-versions/${versionId}/export`,
-  restoreClassificationStandardVersion: (versionId) =>
+  /** @returns {Promise<ClassificationStandardDraft>} */
+  restoreClassificationStandardVersion: (/** @type {string} */ versionId) =>
     request(`/api/classification-standard-versions/${versionId}/restore-draft`, {
       method: "POST",
     }),
-  classificationStandardDraft: (draftId) =>
+  /** @returns {Promise<ClassificationStandardDraft>} */
+  classificationStandardDraft: (/** @type {string} */ draftId) =>
     request(`/api/classification-standard-drafts/${draftId}`),
-  previewClassificationExcel: (draftId, file, sheetName = "", columns = {}) => {
+  /** @returns {Promise<ClassificationStandardExcelPreview>} */
+  previewClassificationExcel: (
+    /** @type {string} */ draftId,
+    /** @type {File} */ file,
+    /** @type {string} */ sheetName = "",
+    /** @type {ClassificationStandardExcelColumns} */ columns = {},
+  ) => {
     const body = new FormData();
     body.append("file", file);
     body.append("sheet_name", sheetName);
@@ -33,55 +70,83 @@ export const classificationStandardApi = {
       body,
     });
   },
-  createClassificationStandardDraft: (standardId) =>
+  /** @returns {Promise<ClassificationStandardDraft>} */
+  createClassificationStandardDraft: (/** @type {string} */ standardId) =>
     request(`/api/classification-standards/${standardId}/draft`, {
       method: "POST",
     }),
-  updateClassificationStandardDraft: (draftId, payload) =>
+  /** @returns {Promise<ClassificationStandardDraft>} */
+  updateClassificationStandardDraft: (
+    /** @type {string} */ draftId,
+    /** @type {ClassificationStandardUpdatePayload} */ payload,
+  ) =>
     request(`/api/classification-standard-drafts/${draftId}`, {
       method: "PATCH",
       body: JSON.stringify(payload),
     }),
-  importClassificationStandardDraft: (draftId, payload) =>
+  /** @returns {Promise<ClassificationStandardDraft>} */
+  importClassificationStandardDraft: (
+    /** @type {string} */ draftId,
+    /** @type {ClassificationStandardImportPayload} */ payload,
+  ) =>
     request(`/api/classification-standard-drafts/${draftId}/import`, {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  validateClassificationStandardDraft: (draftId, expectedRevision) =>
+  /** @returns {Promise<ClassificationStandardDraft>} */
+  validateClassificationStandardDraft: (
+    /** @type {string} */ draftId,
+    /** @type {number} */ expectedRevision,
+  ) =>
     request(`/api/classification-standard-drafts/${draftId}/validate`, {
       method: "POST",
       body: JSON.stringify({ expected_revision: expectedRevision }),
     }),
-  publishClassificationStandardDraft: (draftId, payload) =>
+  /** @returns {Promise<ClassificationStandardDetail>} */
+  publishClassificationStandardDraft: (
+    /** @type {string} */ draftId,
+    /** @type {ClassificationStandardActionPayload} */ payload,
+  ) =>
     request(`/api/classification-standard-drafts/${draftId}/publish`, {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  discardClassificationStandardDraft: (draftId, payload) =>
+  /** @returns {Promise<ClassificationStandardDiscardResult>} */
+  discardClassificationStandardDraft: (
+    /** @type {string} */ draftId,
+    /** @type {ClassificationStandardActionPayload} */ payload,
+  ) =>
     request(`/api/classification-standard-drafts/${draftId}/discard`, {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  classificationStandardValidationSources: (draftId) =>
+  /** @returns {Promise<ClassificationStandardValidationSource[]>} */
+  classificationStandardValidationSources: (/** @type {string} */ draftId) =>
     request(`/api/classification-standard-drafts/${draftId}/validation-sources`),
-  classificationStandardValidationRuns: (draftId) =>
+  /** @returns {Promise<ClassificationStandardValidationRunSummary[]>} */
+  classificationStandardValidationRuns: (/** @type {string} */ draftId) =>
     request(`/api/classification-standard-drafts/${draftId}/validation-runs`),
-  createClassificationStandardValidationRun: (draftId, payload) =>
+  /** @returns {Promise<ClassificationStandardValidationRunDetail>} */
+  createClassificationStandardValidationRun: (
+    /** @type {string} */ draftId,
+    /** @type {ClassificationStandardValidationRunPayload} */ payload,
+  ) =>
     request(`/api/classification-standard-drafts/${draftId}/validation-runs`, {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  /** @returns {Promise<ClassificationStandardValidationRunDetail>} */
   createReviewStandardValidationRun: (
-    draftId,
-    file,
-    revision,
-    sampleSize,
-    comparisonType = "standard_version",
+    /** @type {string} */ draftId,
+    /** @type {File} */ file,
+    /** @type {number} */ revision,
+    /** @type {ValidationSampleSize} */ sampleSize,
+    /** @type {ValidationComparisonType} */ comparisonType = "standard_version",
   ) => {
     const body = new FormData();
     body.append("file", file);
-    body.append("expected_revision", revision);
-    body.append("sample_size", sampleSize);
+    body.append("expected_revision", String(revision));
+    body.append("sample_size", String(sampleSize));
     body.append("comparison_type", comparisonType);
     return request(
       `/api/classification-standard-drafts/${draftId}/review-validation-runs`,
@@ -91,13 +156,21 @@ export const classificationStandardApi = {
       },
     );
   },
-  classificationStandardValidationRun: (runId) =>
+  /** @returns {Promise<ClassificationStandardValidationRunDetail>} */
+  classificationStandardValidationRun: (/** @type {string} */ runId) =>
     request(`/api/classification-standard-validation-runs/${runId}`),
-  approveClassificationStandardValidationRun: (runId, payload) =>
+  /** @returns {Promise<ClassificationStandardValidationRunDetail>} */
+  approveClassificationStandardValidationRun: (
+    /** @type {string} */ runId,
+    /** @type {ClassificationStandardValidationApprovalPayload} */ payload,
+  ) =>
     request(`/api/classification-standard-validation-runs/${runId}/approve`, {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  resultTaxonomy: (resultVersionId, options = {}) =>
-    request(`/api/classification-results/${resultVersionId}/taxonomy`, options),
+  /** @returns {Promise<ClassificationResultTaxonomy>} */
+  resultTaxonomy: (
+    /** @type {string} */ resultVersionId,
+    /** @type {RequestInit} */ options = {},
+  ) => request(`/api/classification-results/${resultVersionId}/taxonomy`, options),
 };

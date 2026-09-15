@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { classificationStandardApi } from "../../shared/api/classificationStandardApi";
 
+/** @typedef {import("../../shared/api/classificationStandardContracts").ValidationComparisonType} ValidationComparisonType */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ValidationSampleSize} ValidationSampleSize */
 /** @typedef {{id: string, revision: number}} ValidationDraft */
 /** @typedef {{result_version_id: string}} ValidationSource */
 /** @typedef {{id: string, status: string}} ValidationRun */
@@ -13,6 +15,14 @@ import { classificationStandardApi } from "../../shared/api/classificationStanda
  * @property {() => Promise<ValidationDraft>} persistDraft
  * @property {(value: string) => void} setBusy
  */
+
+/**
+ * @param {string} value
+ * @returns {value is ValidationComparisonType}
+ */
+function isValidationComparisonType(value) {
+  return ["standard_version", "keyword_ab", "semantic_ab"].includes(value);
+}
 
 /** @param {ValidationControllerOptions} options */
 export function useClassificationStandardValidationController({
@@ -31,7 +41,9 @@ export function useClassificationStandardValidationController({
     /** @type {ValidationRun | null} */ (null),
   );
   const [validationSourceId, setValidationSourceId] = useState("");
-  const [validationSampleSize, setValidationSampleSize] = useState(20);
+  const [validationSampleSize, setValidationSampleSize] = useState(
+    /** @type {ValidationSampleSize} */ (20),
+  );
   const requestOwnershipRef = useRef({
     foreground: 0,
     background: 0,
@@ -140,6 +152,9 @@ export function useClassificationStandardValidationController({
   ) => {
     setBusy("validation");
     try {
+      if (!isValidationComparisonType(comparisonType)) {
+        throw new Error("不支持的验证目的");
+      }
       const saved = await persistDraft();
       if (!reviewFile && !validationSourceId) throw new Error("当前没有可用的样本来源");
       const value = reviewFile

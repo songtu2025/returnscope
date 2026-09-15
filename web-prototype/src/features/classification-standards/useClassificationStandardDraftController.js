@@ -9,114 +9,19 @@ import {
   contentFromClassificationStandardSnapshot,
   EMPTY_CLASSIFICATION_STANDARD_CONTENT,
   validateClassificationStandardContent,
+  writableClassificationStandardContent,
 } from "./classificationStandardContent";
 import { useClassificationStandardValidationController } from "./useClassificationStandardValidationController";
 
-/** @typedef {"legacy_v3" | "semantic_v1" | "fact_v2" | "keyword_free_v1"} RecognitionProfile */
-/** @typedef {"legacy_v3" | "semantic_v1" | "fact_v2"} WritableRecognitionProfile */
-/** @typedef {"NEGATIVE" | "POSITIVE" | "NEUTRAL"} SentimentCode */
-/** @typedef {{category_a: string, category_b: string, attributes: Record<string, string>}} ClassificationStandardVariant */
-/** @typedef {{text: string, applies: boolean, sentiment: SentimentCode | null, explanation: string}} LabelExample */
-/**
- * @typedef {object} ClassificationStandardLabel
- * @property {string} code
- * @property {string} name
- * @property {string} group
- * @property {string | null} [parent_code]
- * @property {string} description
- * @property {string[]} keywords
- * @property {string[]} exclusions
- * @property {LabelExample[]} examples
- * @property {SentimentCode[]} allowed_sentiments
- * @property {string[]} allowed_claim_ids
- */
-/**
- * @typedef {object} ClassificationStandardSnapshot
- * @property {string} name
- * @property {ClassificationStandardVariant[]} [variants]
- * @property {Record<string, unknown>[]} [import_sources]
- * @property {{
- *   product_context: string,
- *   recognition_profile?: RecognitionProfile,
- *   instructions?: string[],
- *   allowed_parts?: string[],
- *   validation_rules?: Record<string, unknown>,
- *   structure_version?: 1 | 2,
- *   categories?: Record<string, unknown>[],
- *   labels?: Record<string, unknown>[],
- * }} taxonomy
- */
-/**
- * @typedef {object} ClassificationStandardContent
- * @property {RecognitionProfile} recognition_profile
- * @property {string} name
- * @property {string} product_context
- * @property {string[]} instructions
- * @property {string[]} allowed_parts
- * @property {Record<string, unknown>} validation_rules
- * @property {ClassificationStandardVariant[]} variants
- * @property {ClassificationStandardLabel[]} labels
- * @property {1 | 2} [structure_version]
- * @property {Record<string, unknown>[]} [categories]
- * @property {Record<string, unknown>[]} [import_sources]
- */
-/** @typedef {Omit<ClassificationStandardContent, "recognition_profile"> & {recognition_profile: WritableRecognitionProfile}} WritableClassificationStandardContent */
-/**
- * @typedef {object} ClassificationStandardFieldErrors
- * @property {string} name
- * @property {string} product_context
- * @property {{category_a: string, category_b: string}[]} variants
- * @property {string} variants_empty
- * @property {{name: string, group: string, code: string}[]} labels
- * @property {string} labels_empty
- */
-/** @typedef {{id: string, version_no: number, version_reason: string, published_at: string}} ClassificationStandardVersion */
-/**
- * @typedef {object} ClassificationStandardDetail
- * @property {string} id
- * @property {string} name
- * @property {string | null} draft_id
- * @property {string} standard_version_id
- * @property {ClassificationStandardSnapshot} snapshot
- */
-/**
- * @typedef {object} ClassificationStandardDraft
- * @property {string} id
- * @property {string} standard_id
- * @property {number} base_version_no
- * @property {number} revision
- * @property {boolean} is_new
- * @property {string} change_reason
- * @property {ClassificationStandardContent} content
- * @property {ClassificationStandardSnapshot} snapshot
- * @property {ClassificationStandardSnapshot} base_snapshot
- * @property {{
- *   blocking: string[],
- *   warnings: string[],
- *   issues: {
- *     kind: string,
- *     message: string,
- *     field: string | null,
- *     label_code?: string,
- *     label_index?: number,
- *   }[],
- * }} validation
- */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardEditableContent} ClassificationStandardEditableContent */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardDetail} ClassificationStandardDetail */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardDraft} ClassificationStandardDraft */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardVersion} ClassificationStandardVersion */
+/** @typedef {import("./classificationStandardContent").ClassificationStandardFieldErrors} ClassificationStandardFieldErrors */
 
 /** @param {unknown} error */
 function errorMessage(error) {
   return error instanceof Error ? error.message : "请求失败";
-}
-
-/**
- * @param {ClassificationStandardContent} content
- * @returns {WritableClassificationStandardContent}
- */
-function writableClassificationStandardContent(content) {
-  if (content.recognition_profile === "keyword_free_v1") {
-    throw new Error("keyword_free_v1 识别模式仅支持读取");
-  }
-  return { ...content, recognition_profile: content.recognition_profile };
 }
 
 /**
@@ -145,7 +50,7 @@ export function useClassificationStandardDraftController({
     /** @type {ClassificationStandardDraft | null} */ (null),
   );
   const [content, setContent] = useState(
-    /** @type {ClassificationStandardContent} */ (
+    /** @type {ClassificationStandardEditableContent} */ (
       cloneClassificationStandardContent(EMPTY_CLASSIFICATION_STANDARD_CONTENT)
     ),
   );
@@ -188,12 +93,10 @@ export function useClassificationStandardDraftController({
       const generation = ++loadGenerationRef.current;
       setPageLoading(true);
       try {
-        /** @type {[ClassificationStandardDetail, ClassificationStandardVersion[]]} */
         const [standard, versionRows] = await Promise.all([
           classificationStandardApi.classificationStandard(standardId),
           classificationStandardApi.classificationStandardVersions(standardId),
         ]);
-        /** @type {ClassificationStandardDraft | null} */
         const draftValue = standard.draft_id
           ? await classificationStandardApi.classificationStandardDraft(
               standard.draft_id,
@@ -281,7 +184,6 @@ export function useClassificationStandardDraftController({
     if (!workingDraft) {
       if (mode === "new") {
         const firstCategory = content.variants[0];
-        /** @type {ClassificationStandardDraft} */
         const createdDraft =
           await classificationStandardApi.createClassificationStandard({
             name: content.name.trim(),
@@ -291,7 +193,6 @@ export function useClassificationStandardDraftController({
           });
         workingDraft = createdDraft;
       } else {
-        /** @type {ClassificationStandardDraft} */
         const createdDraft =
           await classificationStandardApi.createClassificationStandardDraft(
             requireDetail().id,
@@ -301,7 +202,6 @@ export function useClassificationStandardDraftController({
     }
 
     if (JSON.stringify(writableContent) !== JSON.stringify(workingDraft.content)) {
-      /** @type {ClassificationStandardDraft} */
       const updatedDraft =
         await classificationStandardApi.updateClassificationStandardDraft(
           workingDraft.id,
@@ -437,7 +337,7 @@ export function useClassificationStandardDraftController({
   };
 
   const changeContent = (
-    /** @type {ClassificationStandardContent} */ value,
+    /** @type {ClassificationStandardEditableContent} */ value,
     /** @type {string | undefined} */ field,
   ) => {
     setContent(value);
@@ -447,7 +347,7 @@ export function useClassificationStandardDraftController({
   };
 
   const applyExcel = (
-    /** @type {ClassificationStandardContent} */ value,
+    /** @type {ClassificationStandardEditableContent} */ value,
     /** @type {string} */ filename,
   ) => {
     setContent(value);

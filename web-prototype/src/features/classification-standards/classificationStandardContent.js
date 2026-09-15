@@ -1,8 +1,23 @@
 import { groups as BUSINESS_GROUPS } from "../../../../config/taxonomy_alignment.json";
 
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardEditableContent} ClassificationStandardEditableContent */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardDraftContentRequest} ClassificationStandardDraftContentRequest */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardSnapshot} ClassificationStandardSnapshot */
+/**
+ * @typedef {object} ClassificationStandardFieldErrors
+ * @property {string} name
+ * @property {string} product_context
+ * @property {{category_a: string, category_b: string}[]} variants
+ * @property {string} variants_empty
+ * @property {{name: string, group: string, code: string}[]} labels
+ * @property {string} labels_empty
+ */
+
+/** @type {(value: ClassificationStandardEditableContent) => ClassificationStandardEditableContent} */
 export const cloneClassificationStandardContent = (value) =>
   JSON.parse(JSON.stringify(value));
 
+/** @type {ClassificationStandardEditableContent} */
 export const EMPTY_CLASSIFICATION_STANDARD_CONTENT = {
   recognition_profile: "semantic_v1",
   name: "",
@@ -18,6 +33,10 @@ export const EMPTY_CLASSIFICATION_STANDARD_CONTENT = {
   labels: [],
 };
 
+/**
+ * @param {ClassificationStandardSnapshot} snapshot
+ * @returns {ClassificationStandardEditableContent}
+ */
 export function contentFromClassificationStandardSnapshot(snapshot) {
   return {
     name: snapshot.name,
@@ -41,6 +60,18 @@ export function contentFromClassificationStandardSnapshot(snapshot) {
   };
 }
 
+/**
+ * @param {ClassificationStandardEditableContent} content
+ * @returns {ClassificationStandardDraftContentRequest}
+ */
+export function writableClassificationStandardContent(content) {
+  if (content.recognition_profile === "keyword_free_v1") {
+    throw new Error("keyword_free_v1 识别模式仅支持读取");
+  }
+  return { ...content, recognition_profile: content.recognition_profile };
+}
+
+/** @param {ClassificationStandardEditableContent} content */
 export function validateClassificationStandardContent(content) {
   if (!content.name.trim() || !content.product_context.trim()) {
     return "请填写标准名称和适用商品说明";
@@ -65,6 +96,10 @@ export function validateClassificationStandardContent(content) {
   return "";
 }
 
+/**
+ * @param {ClassificationStandardEditableContent} content
+ * @returns {ClassificationStandardFieldErrors}
+ */
 export function classificationStandardContentFieldErrors(content) {
   return {
     name: content.name.trim() ? "" : "请填写标准名称",
@@ -83,10 +118,16 @@ export function classificationStandardContentFieldErrors(content) {
   };
 }
 
+/**
+ * @param {Partial<ClassificationStandardFieldErrors>} errors
+ * @param {string | undefined} field
+ * @returns {Partial<ClassificationStandardFieldErrors>}
+ */
 export function clearClassificationStandardContentFieldError(errors, field) {
   if (!field) return errors;
   if (!field.includes(".")) return { ...errors, [field]: "" };
   const [collection, indexText, key] = field.split(".");
+  if (collection !== "variants" && collection !== "labels") return errors;
   const index = Number(indexText);
   return {
     ...errors,
