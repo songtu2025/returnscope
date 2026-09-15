@@ -54,3 +54,20 @@ test("登录凭据错误不会触发已登录会话失效事件", async () => {
 
   window.removeEventListener(SESSION_EXPIRED_EVENT, listener);
 });
+
+test("JSON 错误对象缺少 detail 时保持通用错误文案", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ code: "BAD_REQUEST" }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      }),
+    ),
+  );
+
+  await expect(request("/api/tasks")).rejects.toMatchObject({
+    message: "请求失败",
+    status: 400,
+  });
+});

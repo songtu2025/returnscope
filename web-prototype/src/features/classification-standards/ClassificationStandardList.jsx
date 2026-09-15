@@ -10,11 +10,27 @@ import Input from "antd/es/input";
 import { EmptyState, PageHeading } from "../../components/SharedUi";
 import { formatDate } from "../../lib/presentation";
 
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardSummary} ClassificationStandardSummary */
+
+/** @param {ClassificationStandardSummary} standard */
 function statusLabel(standard) {
   if (standard.status === "active") return "使用中";
   return Number(standard.version_no) > 0 ? "已停用" : "未发布";
 }
 
+/**
+ * @param {{
+ *   standards: ClassificationStandardSummary[],
+ *   totals: {active: number, categories: number, labels: number},
+ *   query: string,
+ *   statusFilter: "all" | "active" | "inactive",
+ *   onQueryChange: (query: string) => void,
+ *   onStatusChange: (status: "all" | "active" | "inactive") => void,
+ *   onCreate: () => void,
+ *   onView: (standard: ClassificationStandardSummary) => void,
+ *   onDelete: (standard: ClassificationStandardSummary) => void,
+ * }} props
+ */
 export function ClassificationStandardList({
   standards,
   totals,
@@ -66,21 +82,23 @@ export function ClassificationStandardList({
             onChange={(event) => onQueryChange(event.target.value)}
           />
           <div className="standard-status-filter" role="group" aria-label="标准状态">
-            {[
-              ["all", "全部状态"],
-              ["active", "使用中"],
-              ["inactive", "未使用"],
-            ].map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                className={statusFilter === value ? "active" : ""}
-                aria-pressed={statusFilter === value}
-                onClick={() => onStatusChange(value)}
-              >
-                {label}
-              </button>
-            ))}
+            {
+              /** @type {const} */ ([
+                ["all", "全部状态"],
+                ["active", "使用中"],
+                ["inactive", "未使用"],
+              ]).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={statusFilter === value ? "active" : ""}
+                  aria-pressed={statusFilter === value}
+                  onClick={() => onStatusChange(value)}
+                >
+                  {label}
+                </button>
+              ))
+            }
           </div>
         </div>
         {standards.length === 0 ? (
