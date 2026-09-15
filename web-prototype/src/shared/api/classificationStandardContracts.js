@@ -145,6 +145,9 @@
  *   error_count: number,
  *   quality_gate: ClassificationStandardQualityGate,
  *   publication_ready: boolean,
+ *   approved_by_name: string | null,
+ *   approved_at: string | null,
+ *   approval_note: string,
  *   items: Record<string, unknown>[],
  * }} ClassificationStandardValidationRunDetail
  */

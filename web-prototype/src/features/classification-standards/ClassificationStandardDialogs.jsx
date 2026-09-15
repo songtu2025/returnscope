@@ -1,6 +1,17 @@
 import Button from "antd/es/button";
 import { Modal } from "../../components/SharedUi";
 
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardSummary} ClassificationStandardSummary */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardVersion} ClassificationStandardVersion */
+
+/**
+ * @param {{
+ *   target: ClassificationStandardSummary | null,
+ *   busy: string,
+ *   onClose: () => void,
+ *   onConfirm: () => void,
+ * }} props
+ */
 export function ClassificationStandardDeleteDialog({
   target,
   busy,
@@ -45,6 +56,14 @@ export function ClassificationStandardDeleteDialog({
   );
 }
 
+/**
+ * @param {{
+ *   target: ClassificationStandardVersion | null,
+ *   busy: string,
+ *   onClose: () => void,
+ *   onConfirm: () => void,
+ * }} props
+ */
 export function ClassificationStandardRestoreDialog({
   target,
   busy,

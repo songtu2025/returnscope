@@ -6,6 +6,15 @@ import { useDialogFocus } from "../hooks/useDialogFocus";
 import { classNames } from "../lib/presentation";
 import { AntdProvider } from "./AntdProvider";
 
+/**
+ * @param {{
+ *   eyebrow?: import("react").ReactNode,
+ *   title: import("react").ReactNode,
+ *   description: import("react").ReactNode,
+ *   action?: import("react").ReactNode,
+ *   titleRef?: import("react").Ref<HTMLHeadingElement>,
+ * }} props
+ */
 export function PageHeading({ eyebrow, title, description, action, titleRef }) {
   return (
     <header className="page-heading">
@@ -113,6 +122,14 @@ export function StatusBadge({ value }) {
   );
 }
 
+/**
+ * @param {{
+ *   icon: import("@phosphor-icons/react").Icon,
+ *   title: import("react").ReactNode,
+ *   description: import("react").ReactNode,
+ *   action?: import("react").ReactNode,
+ * }} props
+ */
 export function EmptyState({ icon: Icon, title, description, action }) {
   return (
     <AntdProvider>

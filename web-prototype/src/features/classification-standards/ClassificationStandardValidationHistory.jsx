@@ -1,5 +1,15 @@
 import { CheckCircle, SpinnerGap, WarningCircle } from "@phosphor-icons/react";
 
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardValidationRunSummary} ClassificationStandardValidationRunSummary */
+
+/**
+ * @param {{
+ *   runs: ClassificationStandardValidationRunSummary[],
+ *   selectedRun: Pick<ClassificationStandardValidationRunSummary, "id"> | null,
+ *   statusLabels: Record<ClassificationStandardValidationRunSummary["status"], string>,
+ *   onSelectRun: (runId: string) => void,
+ * }} props
+ */
 export function ClassificationStandardValidationHistory({
   runs,
   selectedRun,
