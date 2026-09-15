@@ -1,5 +1,21 @@
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardEditableLabel} ClassificationStandardEditableLabel */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardEditableLabelExample} ClassificationStandardEditableLabelExample */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardSentiment} ClassificationStandardSentiment */
+
+/** @type {Record<ClassificationStandardSentiment, string>} */
 const SENTIMENTS = { NEGATIVE: "负向", POSITIVE: "正向", NEUTRAL: "中性" };
 
+/**
+ * @param {string} value
+ * @returns {value is ClassificationStandardSentiment}
+ */
+function isSentiment(value) {
+  return value === "NEGATIVE" || value === "POSITIVE" || value === "NEUTRAL";
+}
+
+/** @typedef {{label: ClassificationStandardEditableLabel, editing: boolean, onChange: (updates: Partial<ClassificationStandardEditableLabel>) => void, onFieldRef: (field: string, node: HTMLElement | null) => void}} ClassificationLabelBoundariesProps */
+
+/** @param {ClassificationLabelBoundariesProps} props */
 export function ClassificationLabelBoundaries({
   label,
   editing,
@@ -8,6 +24,10 @@ export function ClassificationLabelBoundaries({
 }) {
   const exclusions = label.exclusions ?? [];
   const examples = label.examples ?? [];
+  /**
+   * @param {number} index
+   * @param {Partial<ClassificationStandardEditableLabelExample>} change
+   */
   const updateExample = (index, change) =>
     onChange({
       examples: examples.map((item, position) =>
@@ -81,9 +101,12 @@ export function ClassificationLabelBoundaries({
                       <select
                         aria-label={`示例评价方向 ${index + 1}`}
                         value={example.sentiment ?? ""}
-                        onChange={(event) =>
-                          updateExample(index, { sentiment: event.target.value })
-                        }
+                        onChange={(event) => {
+                          const sentiment = event.target.value;
+                          if (isSentiment(sentiment)) {
+                            updateExample(index, { sentiment });
+                          }
+                        }}
                       >
                         {label.allowed_sentiments.map((value) => (
                           <option key={value} value={value}>
@@ -131,19 +154,16 @@ export function ClassificationLabelBoundaries({
             <button
               type="button"
               className="secondary-button"
-              onClick={() =>
-                onChange({
-                  examples: [
-                    ...examples,
-                    {
-                      text: "",
-                      applies: true,
-                      sentiment: label.allowed_sentiments[0],
-                      explanation: "",
-                    },
-                  ],
-                })
-              }
+              onClick={() => {
+                /** @type {ClassificationStandardEditableLabelExample} */
+                const example = {
+                  text: "",
+                  applies: true,
+                  sentiment: label.allowed_sentiments[0],
+                  explanation: "",
+                };
+                onChange({ examples: [...examples, example] });
+              }}
             >
               增加示例
             </button>

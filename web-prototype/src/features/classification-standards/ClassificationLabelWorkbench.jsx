@@ -1,14 +1,19 @@
-import { groups as BUSINESS_GROUPS } from "../../../../config/taxonomy_alignment.json";
-import { useEffect, useId, useRef, useState } from "react";
+import { useId } from "react";
 import { ArrowCounterClockwise, Copy, Plus, X } from "@phosphor-icons/react";
 import Button from "antd/es/button";
 import { EmptyState, Modal } from "../../components/SharedUi";
-import { labelChanges, reconcileLabelRules, sameLabel } from "./labelDraftPolicy";
-import { taxonomyPath } from "../../lib/taxonomyPresentation";
 import { ClassificationLabelBoundaries } from "./ClassificationLabelBoundaries";
 import { ClassificationLabelDefinition } from "./ClassificationLabelDefinition";
 import { ClassificationLabelDirectory } from "./ClassificationLabelDirectory";
+import { useClassificationLabelWorkbenchController } from "./useClassificationLabelWorkbenchController";
 
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardEditableContent} ClassificationStandardEditableContent */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardValidationIssue} ClassificationStandardValidationIssue */
+/** @typedef {import("./classificationStandardContent").ClassificationStandardFieldErrors} ClassificationStandardFieldErrors */
+
+/** @typedef {{content: ClassificationStandardEditableContent, baseContent: ClassificationStandardEditableContent | null, savedContent: ClassificationStandardEditableContent | null, onChange: (content: ClassificationStandardEditableContent, field?: string) => void, focusLabelCode?: string, fixRequest: ClassificationStandardValidationIssue | null, busy: string, editable: boolean, initiallyEditing: boolean, notify: (message: string, tone?: string) => void, fieldErrors?: Partial<ClassificationStandardFieldErrors>, validationAttempt?: number, section: string}} ClassificationLabelWorkbenchProps */
+
+/** @param {ClassificationLabelWorkbenchProps} props */
 export function ClassificationLabelWorkbench({
   content,
   baseContent,
@@ -24,251 +29,53 @@ export function ClassificationLabelWorkbench({
   validationAttempt = 0,
   section,
 }) {
-  const [selected, setSelected] = useState(() =>
-    Math.max(
-      0,
-      content.labels.findIndex((label) => label.code === focusLabelCode),
-    ),
-  );
-  const [editing, setEditing] = useState(initiallyEditing);
-  const [query, setQuery] = useState("");
-  const [group, setGroup] = useState("");
-  const [pending, setPending] = useState(null);
-  const [keywordText, setKeywordText] = useState("");
-  const [origins, setOrigins] = useState({});
-  const selectedRef = useRef(null);
-  const addLabelRef = useRef(null);
-  const emptyLabelRef = useRef(null);
-  const labelFieldRefs = useRef(new Map());
-  const pendingFocusRef = useRef(null);
-  const handledFixRef = useRef(null);
-  const focusedAttemptRef = useRef(0);
   const errorId = useId();
-  useEffect(() => {
-    const target = selectedRef.current;
-    if (target)
-      target.parentElement.scrollTop =
-        target.offsetTop -
-        target.parentElement.clientHeight / 2 +
-        target.offsetHeight / 2;
-  }, [selected, query, group]);
-  const entries = labelChanges(content.labels, baseContent?.labels);
-  const entry =
-    typeof selected === "number"
-      ? entries.find((item) => item.index === selected)
-      : entries.find((item) => item.index < 0 && item.label.code === selected);
-  const label = entry?.label;
-  const published = Boolean(entry?.before) && !(label?.code in origins);
-  const removed = entry?.status === "拟停用";
-  const saved =
-    savedContent?.labels.find((item) => item.code === label?.code) ??
-    savedContent?.labels.find((item) => item.code === origins[label?.code]);
-  const labelDirty = label && (removed ? Boolean(saved) : !sameLabel(label, saved));
-  const groups = [...new Set(entries.map((item) => item.label.group).filter(Boolean))];
-  const hierarchical = content.structure_version === 2;
-  const allowedGroups = hierarchical
-    ? (content.categories ?? [])
-        .filter((item) => !item.parent_code)
-        .map((item) => item.name)
-    : content.validation_rules?.allowed_groups?.length
-      ? content.validation_rules.allowed_groups
-      : BUSINESS_GROUPS;
-  const matches = entries.filter(
-    ({ label: item }) =>
-      (!group || item.group === group) &&
-      [
-        item.name,
-        item.code,
-        item.description,
-        ...taxonomyPath(content, item),
-        ...(item.keywords ?? []),
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(query.trim().toLowerCase()),
-  );
-
-  const conflictCodes = new Set(
-    (content.validation_rules?.conflicting_label_sets ?? [])
-      .filter((codes) => codes.includes(label?.code))
-      .flat(),
-  );
-  const relatedLabels = content.labels.filter(
-    (item) => item.code !== label?.code && conflictCodes.has(item.code),
-  );
-
-  const updateLabel = (updates) => {
-    const field = Object.keys(updates)[0];
-    if (updates.code !== undefined && updates.code !== label.code) {
-      setOrigins((current) => {
-        const next = { ...current, [updates.code]: current[label.code] ?? label.code };
-        delete next[label.code];
-        return next;
-      });
-    }
-    onChange(
-      {
-        ...content,
-        labels: content.labels.map((item, index) =>
-          index === entry.index ? { ...item, ...updates } : item,
-        ),
-      },
-      `labels.${entry.index}.${field}`,
-    );
-  };
-  const changeLabels = (labels, restoredCode, field) =>
-    onChange(
-      {
-        ...content,
-        labels,
-        validation_rules: hierarchical
-          ? content.validation_rules
-          : reconcileLabelRules(
-              content.validation_rules,
-              labels,
-              baseContent?.validation_rules,
-              restoredCode,
-            ),
-      },
-      field,
-    );
-  const selectLabel = (value) => {
-    setSelected(value);
-    setKeywordText("");
-  };
-  const addLabel = (source) => {
-    setEditing(true);
-    const usedCodes = new Set(entries.map((item) => item.label.code));
-    const prefix = source
-      ? `${source.code}_V`
-      : hierarchical
-        ? `LABEL_${crypto.randomUUID().replaceAll("-", "").toUpperCase()}_`
-        : "NEW_LABEL_";
-    let suffix = source ? 2 : 1;
-    while (usedCodes.has(`${prefix}${suffix}`)) suffix += 1;
-    const newLabel = source
-      ? { ...source, code: `${prefix}${suffix}`, allowed_claim_ids: [] }
-      : {
-          code: `${prefix}${suffix}`,
-          name: "",
-          group: allowedGroups.includes(group) ? group : allowedGroups[0] || "",
-          ...(hierarchical
-            ? { parent_code: content.categories?.[0]?.code ?? null }
-            : {}),
-          description: "",
-          keywords: [],
-          allowed_sentiments: ["NEGATIVE"],
-          allowed_claim_ids: [],
-        };
-    const labels = source
-      ? content.labels.map((item, index) => (index === entry.index ? newLabel : item))
-      : [...content.labels, newLabel];
-    setOrigins((current) => ({ ...current, [newLabel.code]: source?.code ?? null }));
-    changeLabels(labels, undefined, "labels_empty");
-    selectLabel(source ? entry.index : labels.length - 1);
-    setQuery("");
-    setGroup("");
-    setPending(null);
-  };
-  const commitKeywords = (text) => {
-    const values = text
-      .split(/[,，;；\n]+/)
-      .map((word) => word.trim())
-      .filter(Boolean);
-    if (values.length)
-      updateLabel({ keywords: [...new Set([...(label.keywords ?? []), ...values])] });
-    setKeywordText("");
-  };
-  const retireLabel = () => {
-    const labels = content.labels.filter((_item, index) => index !== entry.index);
-    changeLabels(labels);
-    selectLabel(published ? label.code : Math.max(0, entry.index - 1));
-    setPending(null);
-  };
-  const undoLabel = () => {
-    setOrigins((current) => {
-      const next = { ...current };
-      delete next[label.code];
-      if (saved) delete next[saved.code];
-      return next;
-    });
-    if (removed && saved) {
-      changeLabels([...content.labels, saved], saved.code);
-      selectLabel(content.labels.length);
-    } else if (saved)
-      changeLabels(
-        content.labels.map((item, index) => (index === entry.index ? saved : item)),
-        saved.code,
-      );
-    else {
-      changeLabels(content.labels.filter((_item, index) => index !== entry.index));
-      selectLabel(0);
-    }
-    setKeywordText("");
-  };
-
-  useEffect(() => {
-    if (
-      !validationAttempt ||
-      busy ||
-      section !== "labels" ||
-      focusedAttemptRef.current === validationAttempt
-    ) {
-      return;
-    }
-    if (fieldErrors.labels_empty) {
-      const target = emptyLabelRef.current || addLabelRef.current;
-      if (target) {
-        focusedAttemptRef.current = validationAttempt;
-        target.focus();
-      }
-      return;
-    }
-    const index = fieldErrors.labels?.findIndex(
-      (item) => item.name || item.group || item.code,
-    );
-    if (index < 0) return;
-    const errors = fieldErrors.labels[index];
-    const field = ["name", "group", "code"].find((key) => errors[key]);
-    pendingFocusRef.current = { attempt: validationAttempt, index, field };
-    setSelected(index);
-    setEditing(true);
-  }, [busy, fieldErrors, section, validationAttempt]);
-
-  useEffect(() => {
-    if (!fixRequest || section !== "labels" || handledFixRef.current === fixRequest)
-      return;
-    const index = fixRequest.label_code
-      ? content.labels.findIndex((item) => item.code === fixRequest.label_code)
-      : fixRequest.label_index;
-    if (index < 0 || !content.labels[index]) return;
-    handledFixRef.current = fixRequest;
-    pendingFocusRef.current = { index, field: fixRequest.field || "description" };
-    setQuery("");
-    setGroup("");
-    setSelected(index);
-    setEditing(true);
-  }, [content.labels, fixRequest, section]);
-
-  useEffect(() => {
-    const pendingFocus = pendingFocusRef.current;
-    if (
-      !pendingFocus ||
-      busy ||
-      !editing ||
-      section !== "labels" ||
-      selected !== pendingFocus.index
-    ) {
-      return;
-    }
-    const target = labelFieldRefs.current.get(
-      `${pendingFocus.index}.${pendingFocus.field}`,
-    );
-    if (!target) return;
-    target.focus();
-    focusedAttemptRef.current = pendingFocus.attempt;
-    pendingFocusRef.current = null;
-  }, [busy, editing, section, selected, fixRequest]);
+  const {
+    selected,
+    editing,
+    query,
+    group,
+    pending,
+    keywordText,
+    selectedRef,
+    addLabelRef,
+    emptyLabelRef,
+    labelFieldRefs,
+    entry,
+    label,
+    published,
+    removed,
+    labelDirty,
+    groups,
+    hierarchical,
+    allowedGroups,
+    matches,
+    relatedLabels,
+    setEditing,
+    setQuery,
+    setGroup,
+    setPending,
+    setKeywordText,
+    updateLabel,
+    selectLabel,
+    addLabel,
+    commitKeywords,
+    retireLabel,
+    restoreLabel,
+    undoLabel,
+  } = useClassificationLabelWorkbenchController({
+    content,
+    baseContent,
+    savedContent,
+    onChange,
+    focusLabelCode,
+    fixRequest,
+    busy,
+    initiallyEditing,
+    fieldErrors,
+    validationAttempt,
+    section,
+  });
 
   return (
     <div className="label-workbench">
@@ -282,7 +89,7 @@ export function ClassificationLabelWorkbench({
         selected={selected}
         hierarchical={hierarchical}
         editable={editable}
-        busy={busy}
+        busy={Boolean(busy)}
         selectedRef={selectedRef}
         addLabelRef={addLabelRef}
         onAdd={() => addLabel()}
@@ -300,7 +107,7 @@ export function ClassificationLabelWorkbench({
             {fieldErrors.labels_empty}
           </p>
         )}
-        {label ? (
+        {label && entry ? (
           <>
             <header>
               <div>
@@ -332,7 +139,7 @@ export function ClassificationLabelWorkbench({
                 )}
                 {editable && labelDirty && (
                   <Button
-                    disabled={busy}
+                    disabled={Boolean(busy)}
                     icon={<ArrowCounterClockwise size={15} />}
                     onClick={undoLabel}
                   >
@@ -344,9 +151,10 @@ export function ClassificationLabelWorkbench({
                     <summary>更多</summary>
                     <button
                       type="button"
-                      disabled={busy || content.labels.length <= 1}
+                      disabled={Boolean(busy) || content.labels.length <= 1}
                       onClick={(event) => {
-                        event.currentTarget.closest("details").open = false;
+                        const menu = event.currentTarget.closest("details");
+                        if (menu) menu.open = false;
                         setPending({ type: "retire" });
                       }}
                     >
@@ -361,16 +169,7 @@ export function ClassificationLabelWorkbench({
                 <div className="label-workspace-notice">
                   <h3>此标签拟在下一版本停用</h3>
                   <p>当前线上标准与历史结果不受影响，发布草稿后才生效。</p>
-                  {editable && (
-                    <Button
-                      onClick={() => {
-                        changeLabels([...content.labels, label], label.code);
-                        selectLabel(content.labels.length);
-                      }}
-                    >
-                      恢复到草稿
-                    </Button>
-                  )}
+                  {editable && <Button onClick={restoreLabel}>恢复到草稿</Button>}
                 </div>
               ) : (
                 <>
@@ -379,12 +178,10 @@ export function ClassificationLabelWorkbench({
                     editable={editable}
                     editing={editing}
                     published={published}
-                    removed={removed}
-                    busy={busy}
+                    busy={Boolean(busy)}
                     label={label}
                     entry={entry}
                     content={content}
-                    baseContent={baseContent}
                     allowedGroups={allowedGroups}
                     fieldErrors={fieldErrors}
                     errorId={errorId}
@@ -397,9 +194,9 @@ export function ClassificationLabelWorkbench({
                     label={label}
                     editing={editable && editing}
                     onChange={updateLabel}
-                    onFieldRef={(field, node) =>
-                      labelFieldRefs.current.set(`${entry.index}.${field}`, node)
-                    }
+                    onFieldRef={(field, node) => {
+                      labelFieldRefs.current.set(`${entry.index}.${field}`, node);
+                    }}
                   />
                   <details className="label-keyword-editor">
                     <summary>搜索别名（可选） · {label.keywords?.length ?? 0}</summary>

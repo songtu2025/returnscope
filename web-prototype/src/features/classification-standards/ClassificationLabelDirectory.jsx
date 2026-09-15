@@ -3,6 +3,14 @@ import Input from "antd/es/input";
 import { taxonomyPath } from "../../lib/taxonomyPresentation";
 import { ClassificationHierarchyDirectory } from "./ClassificationHierarchyEditor";
 
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardEditableContent} ClassificationStandardEditableContent */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardEditableLabel} ClassificationStandardEditableLabel */
+/** @typedef {"新增" | "未修改" | "已修改" | "拟停用"} ClassificationLabelChangeStatus */
+/** @typedef {{label: ClassificationStandardEditableLabel, index: number, status: ClassificationLabelChangeStatus}} ClassificationLabelChange */
+
+/** @typedef {{content: ClassificationStandardEditableContent, baseContent: ClassificationStandardEditableContent | null, matches: ClassificationLabelChange[], groups: string[], query: string, group: string, selected: number | string, hierarchical: boolean, editable: boolean, busy: boolean, selectedRef: import("react").RefObject<HTMLButtonElement | null>, addLabelRef: import("react").RefObject<HTMLButtonElement | null>, onAdd: () => void, onSelect: (value: number | string) => void, onQueryChange: (value: string) => void, onGroupChange: (value: string) => void, onResetFilters: () => void}} ClassificationLabelDirectoryProps */
+
+/** @param {ClassificationLabelDirectoryProps} props */
 export function ClassificationLabelDirectory({
   content,
   baseContent,
@@ -22,6 +30,7 @@ export function ClassificationLabelDirectory({
   onGroupChange,
   onResetFilters,
 }) {
+  /** @param {ClassificationLabelChange} item */
   const renderLabel = (item) => {
     const value = item.index < 0 ? item.label.code : item.index;
     return (

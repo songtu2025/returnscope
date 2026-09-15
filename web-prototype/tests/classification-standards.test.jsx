@@ -45,7 +45,9 @@ vi.mock("../src/shared/api/classificationStandardApi", () => ({
 }));
 
 import { ClassificationStructureIssues } from "../src/features/classification-standards/ClassificationStructureIssues";
+import { ClassificationLabelBoundaries } from "../src/features/classification-standards/ClassificationLabelBoundaries";
 import { ClassificationStandardsPage } from "../src/features/classification-standards/ClassificationStandardsPage";
+import { contentFromClassificationStandardSnapshot } from "../src/features/classification-standards/classificationStandardContent";
 import { useClassificationStandardDraftController } from "../src/features/classification-standards/useClassificationStandardDraftController";
 import { useClassificationStandardValidationController } from "../src/features/classification-standards/useClassificationStandardValidationController";
 import {
@@ -65,9 +67,13 @@ const content = {
       code: "EYEWEAR_FIT_PRESSURE",
       name: "佩戴压迫",
       group: "尺码与适配",
+      parent_code: null,
       description: "镜框或镜腿造成压迫",
       keywords: ["pressure", "tight"],
+      exclusions: [],
+      examples: [],
       allowed_sentiments: ["NEGATIVE"],
+      allowed_claim_ids: [],
     },
   ],
 };
@@ -598,6 +604,65 @@ test("停用和恢复标签同步校验引用，且不修改原配置", () => {
   expect(
     sameLabel(content.labels[0], { ...content.labels[0], allowed_claim_ids: [] }),
   ).toBe(true);
+});
+
+test("历史快照标签在进入编辑态时统一补齐缺省字段", () => {
+  const legacyLabel = {
+    code: "EYEWEAR_FIT_PRESSURE",
+    name: "佩戴压迫",
+    allowed_sentiments: ["NEGATIVE"],
+  };
+  const source = {
+    name: "历史标准",
+    variants: [],
+    taxonomy: {
+      product_context: "眼镜",
+      labels: [legacyLabel],
+    },
+  };
+
+  const editable = contentFromClassificationStandardSnapshot(source);
+
+  expect(editable.labels[0]).toEqual({
+    ...legacyLabel,
+    group: "",
+    parent_code: null,
+    description: "",
+    keywords: [],
+    exclusions: [],
+    examples: [],
+    allowed_claim_ids: [],
+  });
+  expect(source.taxonomy.labels[0]).toBe(legacyLabel);
+});
+
+test("没有评价方向时新增示例仍保留用户选择的适用状态", async () => {
+  const onChange = vi.fn();
+  render(
+    <ClassificationLabelBoundaries
+      label={{
+        ...content.labels[0],
+        allowed_sentiments: [],
+        examples: [],
+      }}
+      editing
+      onChange={onChange}
+      onFieldRef={vi.fn()}
+    />,
+  );
+
+  await userEvent.click(screen.getByRole("button", { name: "增加示例" }));
+
+  expect(onChange).toHaveBeenCalledWith({
+    examples: [
+      {
+        text: "",
+        applies: true,
+        sentiment: undefined,
+        explanation: "",
+      },
+    ],
+  });
 });
 
 test("工作台切换标签保留批量关键词，保存草稿不触发发布", async () => {
@@ -1178,6 +1243,57 @@ test("已发布标签的编码和语义不可直接修改", async () => {
   expect(screen.getByText("镜框或镜腿造成压迫")).toBeVisible();
   expect(screen.getByRole("textbox", { name: "搜索别名 1" })).toBeEnabled();
   expect(screen.getByRole("button", { name: /修改说明：创建替代标签/ })).toBeVisible();
+});
+
+test("已发布标签支持停用、恢复和撤销停用", async () => {
+  const secondLabel = {
+    ...content.labels[0],
+    code: "QUALITY_DURABLE",
+    name: "耐用",
+  };
+  const lifecycleContent = {
+    ...content,
+    labels: [...content.labels, secondLabel],
+  };
+  const lifecycleSnapshot = {
+    ...snapshot,
+    taxonomy: { ...snapshot.taxonomy, labels: lifecycleContent.labels },
+  };
+  standardApiMock.classificationStandard.mockResolvedValue({
+    ...detail,
+    draft_id: validDraft.id,
+    draft_revision: validDraft.revision,
+    snapshot: lifecycleSnapshot,
+  });
+  standardApiMock.classificationStandardDraft.mockResolvedValue({
+    ...validDraft,
+    content: lifecycleContent,
+    base_snapshot: lifecycleSnapshot,
+  });
+  const user = userEvent.setup();
+  renderEditPage();
+  await screen.findByRole("complementary", { name: "标签目录" });
+
+  const retire = async () => {
+    const workspace = screen.getByLabelText("当前标签编辑区");
+    await user.click(within(workspace).getByText("更多"));
+    const retireButton = screen.getByRole("button", { name: "停用标签" });
+    await waitFor(() => expect(retireButton).toBeEnabled());
+    await user.click(retireButton);
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("heading", { name: "停用此标签？" })).toBeVisible();
+    await user.click(within(dialog).getByRole("button", { name: "确认移除" }));
+    expect(screen.getByText("此标签拟在下一版本停用")).toBeVisible();
+  };
+
+  await retire();
+  await user.click(screen.getByRole("button", { name: "恢复到草稿" }));
+  expect(screen.queryByText("此标签拟在下一版本停用")).toBeNull();
+
+  await retire();
+  await user.click(screen.getByRole("button", { name: "撤销当前修改" }));
+  expect(screen.queryByText("此标签拟在下一版本停用")).toBeNull();
+  expect(screen.getByText("镜框或镜腿造成压迫")).toBeVisible();
 });
 
 test("编辑页只允许发布当前修订已验证的草稿", async () => {

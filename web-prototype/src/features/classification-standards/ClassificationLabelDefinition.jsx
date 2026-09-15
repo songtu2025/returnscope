@@ -1,18 +1,32 @@
 import { taxonomyPath } from "../../lib/taxonomyPresentation";
 
-const SENTIMENTS = { NEGATIVE: "负向", POSITIVE: "正向", NEUTRAL: "中性" };
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardEditableContent} ClassificationStandardEditableContent */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardEditableLabel} ClassificationStandardEditableLabel */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardSentiment} ClassificationStandardSentiment */
+/** @typedef {import("./classificationStandardContent").ClassificationStandardFieldErrors} ClassificationStandardFieldErrors */
 
+/** @type {Record<ClassificationStandardSentiment, string>} */
+const SENTIMENTS = { NEGATIVE: "负向", POSITIVE: "正向", NEUTRAL: "中性" };
+/** @type {ClassificationStandardSentiment[]} */
+const SENTIMENT_VALUES = ["NEGATIVE", "POSITIVE", "NEUTRAL"];
+/** @type {{field: "required_review_labels" | "neutral_reason_labels", title: string}[]} */
+const REVIEW_RULE_OPTIONS = [
+  { field: "required_review_labels", title: "使用此标签时必须人工复核" },
+  { field: "neutral_reason_labels", title: "中性反馈可作为退货原因" },
+];
+
+/** @typedef {{hierarchical: boolean, editable: boolean, editing: boolean, published: boolean, busy: boolean, label: ClassificationStandardEditableLabel, entry: {index: number}, content: ClassificationStandardEditableContent, allowedGroups: string[], fieldErrors: Partial<ClassificationStandardFieldErrors>, errorId: string, labelFieldRefs: import("react").RefObject<Map<string, HTMLElement | null>>, updateLabel: (updates: Partial<ClassificationStandardEditableLabel>) => void, onChange: (content: ClassificationStandardEditableContent) => void, onRequestReplacement: () => void}} ClassificationLabelDefinitionProps */
+
+/** @param {ClassificationLabelDefinitionProps} props */
 export function ClassificationLabelDefinition({
   hierarchical,
   editable,
   editing,
   published,
-  removed,
   busy,
   label,
   entry,
   content,
-  baseContent,
   allowedGroups,
   fieldErrors,
   errorId,
@@ -27,9 +41,9 @@ export function ClassificationLabelDefinition({
         <label>
           上级分类
           <select
-            ref={(node) =>
-              labelFieldRefs.current.set(`${entry.index}.parent_code`, node)
-            }
+            ref={(node) => {
+              labelFieldRefs.current.set(`${entry.index}.parent_code`, node);
+            }}
             aria-label="标签的上级分类"
             value={label.parent_code || ""}
             onChange={(event) => {
@@ -75,9 +89,7 @@ export function ClassificationLabelDefinition({
             <dl>
               <div>
                 <dt>{hierarchical ? "标签路径" : "标签分组"}</dt>
-                <dd>
-                  {taxonomyPath(removed ? baseContent : content, label).join(" → ")}
-                </dd>
+                <dd>{taxonomyPath(content, label).join(" → ")}</dd>
               </div>
               <div>
                 <dt>评价方向</dt>
@@ -197,7 +209,7 @@ export function ClassificationLabelDefinition({
           </label>
           <fieldset className="wide-field label-sentiment-options">
             <legend>支持的评价方向</legend>
-            {Object.entries(SENTIMENTS).map(([value, name]) => (
+            {SENTIMENT_VALUES.map((value) => (
               <label key={value}>
                 <input
                   ref={(node) => {
@@ -217,18 +229,17 @@ export function ClassificationLabelDefinition({
                     })
                   }
                 />
-                {name}
+                {SENTIMENTS[value]}
               </label>
             ))}
           </fieldset>
           <fieldset className="wide-field label-sentiment-options">
             <legend>统计与复核</legend>
-            {[
-              ["required_review_labels", "使用此标签时必须人工复核"],
-              ...(label.allowed_sentiments.includes("NEUTRAL")
-                ? [["neutral_reason_labels", "中性反馈可作为退货原因"]]
-                : []),
-            ].map(([field, title]) => (
+            {REVIEW_RULE_OPTIONS.filter(
+              ({ field }) =>
+                field !== "neutral_reason_labels" ||
+                label.allowed_sentiments.includes("NEUTRAL"),
+            ).map(({ field, title }) => (
               <label key={field}>
                 <input
                   type="checkbox"

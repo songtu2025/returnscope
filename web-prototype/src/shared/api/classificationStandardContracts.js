@@ -2,23 +2,48 @@
 /** @typedef {"legacy_v3" | "semantic_v1" | "fact_v2"} WritableRecognitionProfile */
 /** @typedef {"standard_version" | "keyword_ab" | "semantic_ab"} ValidationComparisonType */
 /** @typedef {20 | 50 | 100} ValidationSampleSize */
+/** @typedef {"NEGATIVE" | "POSITIVE" | "NEUTRAL"} ClassificationStandardSentiment */
 /** @typedef {{code: string, name: string, parent_code: string | null}} ClassificationStandardCategory */
 /** @typedef {{category_a: string, category_b: string, attributes: Record<string, string>}} ClassificationStandardVariant */
-/** @typedef {{text: string, applies: boolean, sentiment: "NEGATIVE" | "POSITIVE" | "NEUTRAL" | null, explanation: string}} ClassificationStandardLabelExample */
+/** @typedef {{text: string, applies: true, sentiment: ClassificationStandardSentiment, explanation: string} | {text: string, applies: false, sentiment: null, explanation: string}} ClassificationStandardLabelExample */
+/** @typedef {{text: string, applies: boolean, sentiment?: ClassificationStandardSentiment | null, explanation: string}} ClassificationStandardEditableLabelExample */
 /**
  * @typedef {object} ClassificationStandardLabel
  * @property {string} code
  * @property {string} name
  * @property {string} group
- * @property {string | null} [parent_code]
+ * @property {string | null} parent_code
  * @property {string} description
  * @property {string[]} keywords
  * @property {string[]} exclusions
  * @property {ClassificationStandardLabelExample[]} examples
- * @property {("NEGATIVE" | "POSITIVE" | "NEUTRAL")[]} allowed_sentiments
+ * @property {ClassificationStandardSentiment[]} allowed_sentiments
  * @property {string[]} allowed_claim_ids
  */
+/** @typedef {Omit<ClassificationStandardLabel, "examples"> & {examples: ClassificationStandardEditableLabelExample[]}} ClassificationStandardEditableLabel */
+/** @typedef {Pick<ClassificationStandardEditableLabel, "code" | "name" | "allowed_sentiments"> & Partial<Omit<ClassificationStandardEditableLabel, "code" | "name" | "allowed_sentiments">>} ClassificationStandardSnapshotLabel */
 /** @typedef {{sheet?: string, row?: number, path?: string[], label_code?: string, source_label?: string, source_sentiment?: string}} ClassificationStandardImportSource */
+/** @typedef {{label_code: string, semantic_requirement?: string, cues: string[], unknown_opinion: string, unknown_reason: string}} ClassificationStandardEvidenceRequirement */
+/** @typedef {{label_code: string, semantic_requirement?: string, cues: string[]}} ClassificationStandardImplicitEvidenceRule */
+/** @typedef {{label_code: string, claim_id: string, semantic_requirement?: string, cues: string[]}} ClassificationStandardClaimEvidenceRequirement */
+/** @typedef {"source_ref" | "experiencer_ref" | "product_ref" | "variant_ref" | "event_ref" | "reference_basis" | "part" | "operation" | "condition"} ClassificationStandardDimensionScopeField */
+/** @typedef {{parent_code: string, verdict_label_codes: string[], scope_fields: ClassificationStandardDimensionScopeField[]}} ClassificationStandardDimensionContract */
+/**
+ * @typedef {Record<string, unknown> & {
+ *   allowed_groups?: string[],
+ *   neutral_reason_labels?: string[] | null,
+ *   required_review_labels?: string[],
+ *   boundary_required_labels?: string[],
+ *   fallback_label_codes?: string[],
+ *   conflict_scope?: "comment" | "evidence",
+ *   opposite_reason_labels?: Record<string, string[]>,
+ *   conflicting_label_sets?: string[][],
+ *   evidence_requirements?: ClassificationStandardEvidenceRequirement[],
+ *   implicit_evidence_rules?: ClassificationStandardImplicitEvidenceRule[],
+ *   claim_evidence_requirements?: ClassificationStandardClaimEvidenceRequirement[],
+ *   dimension_contracts?: ClassificationStandardDimensionContract[],
+ * }} ClassificationStandardValidationRules
+ */
 /**
  * @typedef {object} ClassificationStandardContentFields
  * @property {ReadableRecognitionProfile} recognition_profile
@@ -26,20 +51,19 @@
  * @property {string} product_context
  * @property {string[]} instructions
  * @property {string[]} allowed_parts
- * @property {Record<string, unknown>} validation_rules
+ * @property {ClassificationStandardValidationRules} validation_rules
  * @property {ClassificationStandardVariant[]} variants
- * @property {ClassificationStandardLabel[]} labels
  */
-/** @typedef {ClassificationStandardContentFields & {structure_version?: 1 | 2, categories?: ClassificationStandardCategory[], import_sources?: ClassificationStandardImportSource[]}} ClassificationStandardEditableContent */
-/** @typedef {ClassificationStandardContentFields & {structure_version: 1 | 2, categories: ClassificationStandardCategory[], import_sources: ClassificationStandardImportSource[]}} ClassificationStandardDraftContent */
-/** @typedef {Omit<ClassificationStandardLabel, "allowed_claim_ids"> & {allowed_claim_ids: string[] | null}} ClassificationStandardLabelRequest */
+/** @typedef {ClassificationStandardContentFields & {structure_version?: 1 | 2, categories?: ClassificationStandardCategory[], import_sources?: ClassificationStandardImportSource[], labels: ClassificationStandardEditableLabel[]}} ClassificationStandardEditableContent */
+/** @typedef {ClassificationStandardContentFields & {structure_version: 1 | 2, categories: ClassificationStandardCategory[], import_sources: ClassificationStandardImportSource[], labels: ClassificationStandardEditableLabel[]}} ClassificationStandardDraftContent */
+/** @typedef {Omit<ClassificationStandardEditableLabel, "allowed_claim_ids"> & {allowed_claim_ids: string[] | null}} ClassificationStandardLabelRequest */
 /** @typedef {Omit<ClassificationStandardEditableContent, "recognition_profile" | "labels"> & {recognition_profile: WritableRecognitionProfile, labels: ClassificationStandardLabelRequest[]}} ClassificationStandardDraftContentRequest */
 /**
  * @typedef {object} ClassificationStandardSnapshot
  * @property {string} name
  * @property {ClassificationStandardVariant[]} [variants]
  * @property {ClassificationStandardImportSource[]} [import_sources]
- * @property {{product_context: string, recognition_profile?: ReadableRecognitionProfile, instructions?: string[], allowed_parts?: string[], validation_rules?: Record<string, unknown>, structure_version?: 1 | 2, categories?: ClassificationStandardCategory[], labels?: ClassificationStandardLabel[]}} taxonomy
+ * @property {{product_context: string, recognition_profile?: ReadableRecognitionProfile, instructions?: string[], allowed_parts?: string[], validation_rules?: ClassificationStandardValidationRules, structure_version?: 1 | 2, categories?: ClassificationStandardCategory[], labels?: ClassificationStandardSnapshotLabel[]}} taxonomy
  */
 /** @typedef {{kind: string, message: string, field: string | null, label_code?: string, label_index?: number}} ClassificationStandardValidationIssue */
 /** @typedef {{blocking: string[], warnings: string[], issues?: ClassificationStandardValidationIssue[]}} ClassificationStandardValidation */

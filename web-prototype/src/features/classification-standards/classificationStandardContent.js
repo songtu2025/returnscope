@@ -55,7 +55,13 @@ export function contentFromClassificationStandardSnapshot(snapshot) {
       : {}),
     labels: (snapshot.taxonomy.labels ?? []).map((label) => ({
       ...label,
+      group: label.group ?? "",
+      parent_code: label.parent_code ?? null,
+      description: label.description ?? "",
       keywords: label.keywords ?? [],
+      exclusions: label.exclusions ?? [],
+      examples: label.examples ?? [],
+      allowed_claim_ids: label.allowed_claim_ids ?? [],
     })),
   };
 }
