@@ -1,0 +1,53 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "退货语义分析智能体｜业务流程",
+    "locale": "zh-CN",
+    "output": "docs/architecture/business-workflow.html",
+    "animation": "none",
+    "quality_profile": "showcase",
+    "viewBox": [1001, 528]
+  },
+  "lanes": [
+    { "id": "business_user", "label": "业务用户" },
+    { "id": "application", "label": "应用系统" },
+    { "id": "human_review", "label": "人工复核", "variant": "exception" }
+  ],
+  "phases": [
+    { "id": "prepare", "label": "准备", "fromCol": 0, "toCol": 2 },
+    { "id": "execute", "label": "执行与判定", "fromCol": 3, "toCol": 4, "variant": "emphasis" },
+    { "id": "deliver", "label": "发布与应用", "fromCol": 5, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": ["sign_in", "select_data", "configure_task", "create_task", "run_segments", "semantic_decision", "publish_result", "consume_result"],
+  "semanticChecks": {
+    "allowedRoots": ["sign_in"],
+    "allowedTerminals": ["consume_result"],
+    "requiredPaths": [
+      { "from": "sign_in", "to": "publish_result" },
+      { "from": "semantic_decision", "to": "manual_review" }
+    ]
+  },
+  "nodes": [
+    { "id": "sign_in", "lane": "business_user", "col": 0, "type": "frontend", "label": "登录工作台", "sublabel": "团队协作空间" },
+    { "id": "select_data", "lane": "business_user", "col": 1, "type": "database", "label": "选择数据", "sublabel": "文件或 MySQL" },
+    { "id": "configure_task", "lane": "business_user", "col": 2, "type": "frontend", "label": "配置分析任务", "sublabel": "范围、标准与模型", "width": 120 },
+    { "id": "create_task", "lane": "application", "col": 2, "type": "backend", "label": "生成执行计划", "sublabel": "品类与 Listing 分段" },
+    { "id": "run_segments", "lane": "application", "col": 3, "type": "backend", "label": "调度任务分段", "sublabel": "并发与失败恢复" },
+    { "id": "semantic_decision", "lane": "application", "col": 4, "type": "security", "label": "语义分类与规则校验", "sublabel": "模型分流、证据与规则", "width": 120 },
+    { "id": "manual_review", "lane": "human_review", "col": 4, "type": "frontend", "label": "人工复核", "sublabel": "修正并留痕" },
+    { "id": "publish_result", "lane": "application", "col": 5, "type": "database", "label": "发布结果版本", "sublabel": "结果版本与审计" },
+    { "id": "consume_result", "lane": "business_user", "col": 5, "type": "frontend", "label": "查看与应用结果", "sublabel": "看板、洞察与导出" }
+  ],
+  "edges": [
+    { "from": "sign_in", "to": "select_data", "role": "main" },
+    { "from": "select_data", "to": "configure_task", "label": "数据版本就绪", "role": "main" },
+    { "from": "configure_task", "to": "create_task", "label": "提交配置", "role": "main" },
+    { "from": "create_task", "to": "run_segments", "label": "确认执行计划", "variant": "emphasis", "role": "main" },
+    { "from": "run_segments", "to": "semantic_decision", "label": "评论与业务上下文", "variant": "emphasis", "role": "main" },
+    { "from": "semantic_decision", "to": "publish_result", "label": "自动通过", "variant": "emphasis", "role": "main" },
+    { "from": "semantic_decision", "to": "manual_review", "label": "冲突、证据不足或未知语义", "variant": "security", "role": "branch" },
+    { "from": "manual_review", "to": "publish_result", "label": "确认后的派生版本", "variant": "dashed", "role": "return" },
+    { "from": "publish_result", "to": "consume_result", "label": "可追溯交付", "variant": "emphasis", "role": "main" }
+  ]
+}

@@ -9,7 +9,7 @@ export function DatasetUploadDialog({ dialog, onClose, onDone, storeOptions = []
   const [note, setNote] = useState("");
   const [file, setFile] = useState(null);
   const [defaultStore, setDefaultStore] = useState(
-    storeOptions.length === 1 ? storeOptions[0] : "",
+    dialog.mode === "version" && storeOptions.length === 1 ? storeOptions[0] : "",
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -98,7 +98,7 @@ export function DatasetUploadDialog({ dialog, onClose, onDone, storeOptions = []
               onChange={(event) => setDefaultStore(event.target.value)}
               list="return-store-options"
               maxLength="100"
-              placeholder="例如 SEEKWAY:US"
+              placeholder="输入店铺/站点"
             />
             <small>仅填补空值，不会覆盖文件中已有的店铺/站点。</small>
             <datalist id="return-store-options">

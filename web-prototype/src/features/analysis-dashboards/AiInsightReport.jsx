@@ -24,6 +24,10 @@ import {
 } from "recharts";
 
 import { formatTime } from "../../lib/presentation";
+import {
+  AiInsightDecisionReport,
+  InsightReportVersionSelect,
+} from "./AiInsightDecisionReport";
 import { dashboardVersionNumber } from "./dashboardFields";
 
 const STATUS_LABELS = {
@@ -147,6 +151,139 @@ function hotspotGroups(diagnostics) {
 function signedPercentagePoints(value) {
   const numericValue = number(value);
   return `${numericValue > 0 ? "+" : ""}${numericValue.toFixed(1)}pp`;
+}
+
+function BusinessIssueCard({ issue }) {
+  const hotspots = issue.hotspots ?? [];
+  const leadHotspot = hotspots[0];
+  const trend = issue.trend_summary ?? {};
+  const contexts = issue.contexts ?? {};
+  const parts = (contexts.parts ?? []).filter(
+    (item) => !["UNSPECIFIED", "整体", "未说明"].includes(String(item.value)),
+  );
+  const opinions = contexts.opinions ?? [];
+  const samples = contexts.samples ?? [];
+  const baseline = number(leadHotspot?.overall_reason_rate);
+  const leadRate = number(leadHotspot?.product_reason_rate);
+
+  return (
+    <article className="ai-report-business-issue">
+      <header>
+        <div>
+          <span>{issue.role === "primary" ? "优先验证" : "辅助信号"}</span>
+          <h4>{issue.label || issue.reason_code}</h4>
+          <p>{issue.label_group || "评论问题"}</p>
+        </div>
+        <div className="ai-report-business-issue-share">
+          <strong>{percent(issue.percentage)}</strong>
+          <span>{number(issue.record_count).toLocaleString()} 条相关记录</span>
+        </div>
+      </header>
+
+      <div className="ai-report-business-issue-metrics">
+        <div>
+          <span>最集中{issue.hotspot_label || "商品变体"}</span>
+          <strong>{leadHotspot?.value || "尚未形成热点"}</strong>
+          {leadHotspot && (
+            <small>
+              {percent(leadRate)} · 比整体{signedPercentagePoints(leadRate - baseline)}
+            </small>
+          )}
+        </div>
+        <div>
+          <span>相对整体基线</span>
+          <strong>
+            {leadHotspot ? `${number(leadHotspot.lift).toFixed(2)}×` : "—"}
+          </strong>
+          <small>{leadHotspot ? `整体 ${percent(baseline)}` : "证据不足"}</small>
+        </div>
+        <div>
+          <span>近期样本变化</span>
+          <strong>
+            {trend.status === "available"
+              ? signedPercentagePoints(trend.delta_percentage_points)
+              : "—"}
+          </strong>
+          <small>
+            {trend.status === "available"
+              ? `${percent(trend.early_rate)} → ${percent(trend.recent_rate)}`
+              : "完整周期不足"}
+          </small>
+        </div>
+      </div>
+
+      {hotspots.length > 0 && (
+        <div className="ai-report-business-hotspots">
+          <div className="ai-report-business-hotspot-heading">
+            <span>{issue.hotspot_label || "商品变体"}</span>
+            <span>问题占比</span>
+            <span>整体基线</span>
+            <span>相对倍数</span>
+          </div>
+          {hotspots.map((hotspot, index) => (
+            <div key={`${hotspot.value}-${index}`}>
+              <b>{hotspot.value || `变体 ${index + 1}`}</b>
+              <span>{percent(hotspot.product_reason_rate)}</span>
+              <span>{percent(hotspot.overall_reason_rate)}</span>
+              <strong>{number(hotspot.lift).toFixed(2)}×</strong>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {(opinions.length > 0 || parts.length > 0 || samples.length > 0) && (
+        <div className="ai-report-business-context">
+          <div>
+            <span>评论具体在说什么</span>
+            {opinions.length > 0 ? (
+              <ul>
+                {opinions.slice(0, 3).map((opinion, index) => (
+                  <li key={`${opinion.opinion}-${index}`}>
+                    <b>{opinion.opinion}</b>
+                    <small>{number(opinion.record_count).toLocaleString()} 条</small>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>有效评论尚未形成稳定的具体表述。</p>
+            )}
+            {parts.length > 0 && (
+              <p>
+                具体部位：
+                {parts
+                  .slice(0, 3)
+                  .map((item) => item.value)
+                  .join("、")}
+              </p>
+            )}
+          </div>
+          {samples.length > 0 && (
+            <blockquote>
+              <Quotes size={18} weight="fill" />
+              <p>“{samples[0].comment || samples[0].reason}”</p>
+              <cite>{samples[0].product_name || "原始退货评论"}</cite>
+            </blockquote>
+          )}
+        </div>
+      )}
+
+      <footer>
+        <b>下一步验证</b>
+        <p>{issue.validation_focus}</p>
+      </footer>
+    </article>
+  );
+}
+
+function BusinessIssueGrid({ issues }) {
+  if (!issues.length) return null;
+  return (
+    <div className="ai-report-business-issues">
+      {issues.map((issue) => (
+        <BusinessIssueCard issue={issue} key={issue.id || issue.reason_code} />
+      ))}
+    </div>
+  );
 }
 
 function HotspotBenchmark({ group }) {
@@ -355,6 +492,10 @@ export function AiInsightReport({
   onGenerate,
   onRetry,
   onSelect,
+  selectedIssueId,
+  decisionState,
+  onDecision,
+  onSelectIssue,
 }) {
   if (!report) {
     return (
@@ -380,6 +521,20 @@ export function AiInsightReport({
     );
   }
 
+  if (report.prompt_version === "ai-return-insight-v6") {
+    return (
+      <AiInsightDecisionReport
+        report={report}
+        reports={reports}
+        selectedIssueId={selectedIssueId}
+        decisionState={decisionState}
+        onDecision={onDecision}
+        onSelect={onSelect}
+        onSelectIssue={onSelectIssue}
+      />
+    );
+  }
+
   const content = report.content ?? {};
   const evidence = report.evidence ?? {};
   const analysis = evidence.analysis ?? {};
@@ -389,6 +544,8 @@ export function AiInsightReport({
   const groups = analysis.label_group_breakdown ?? [];
   const findings = content.findings ?? [];
   const diagnostics = diagnosticMap(analysis);
+  const businessIssues = analysis.business_issues ?? [];
+  const hasBusinessIssues = businessIssues.length > 0;
   const structureFinding =
     findings.find((item) => item.kind === "structure") ?? findings[0];
   const diagnosticFinding = findings.find((item) => item.kind === "diagnostic");
@@ -401,8 +558,10 @@ export function AiInsightReport({
   );
   const primaryGroup = groups.find((item) => item.value !== "其他原因") ?? groups[0];
   const maxGroupCount = Math.max(...groups.map((item) => number(item.record_count)), 1);
-  const sizeTrend = mergeSizeTrend(diagnostics, source.date_range?.date_to);
-  const hotspotBenchmarks = hotspotGroups(diagnostics);
+  const sizeTrend = hasBusinessIssues
+    ? []
+    : mergeSizeTrend(diagnostics, source.date_range?.date_to);
+  const hotspotBenchmarks = hasBusinessIssues ? [] : hotspotGroups(diagnostics);
   const smallTrend = diagnostics.get("FIT_TOO_SMALL")?.trend_summary ?? {};
   const largeTrend = diagnostics.get("FIT_TOO_LARGE")?.trend_summary ?? {};
   const informationReasonCode = findingReasonCode(informationFinding);
@@ -420,11 +579,20 @@ export function AiInsightReport({
   const decisionReadiness = report.quality_gate?.decision_readiness;
   const inputTokens = number(report.usage?.input_tokens);
   const outputTokens = number(report.usage?.output_tokens);
-  const actions = [...(content.actions ?? [])].sort(
-    (left, right) =>
-      ({ P0: 0, P1: 1, P2: 2 })[left.priority] -
-      { P0: 0, P1: 1, P2: 2 }[right.priority],
-  );
+  const actionOrder = {
+    "action.mapping": 0,
+    "action.diagnostic": 1,
+    "action.text_quality": 2,
+    "action.information": 3,
+    "action.scope": 4,
+  };
+  const actions = [...(content.actions ?? [])].sort((left, right) => {
+    const priorityDifference =
+      { P0: 0, P1: 1, P2: 2 }[left.priority] - { P0: 0, P1: 1, P2: 2 }[right.priority];
+    return (
+      priorityDifference || (actionOrder[left.id] ?? 99) - (actionOrder[right.id] ?? 99)
+    );
+  });
   const [primaryAction, ...followupActions] = actions;
 
   const scrollTo = (id) => {
@@ -469,28 +637,21 @@ export function AiInsightReport({
               {decisionReadiness.label || decisionReadiness.status}
             </strong>
           )}
-          {reports.length > 1 && (
-            <label>
-              报告版本
-              <select
-                value={report.id}
-                onChange={(event) => onSelect(event.target.value)}
-              >
-                {reports.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {reportLabel(item)} · {STATUS_LABELS[item.status]}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+          <InsightReportVersionSelect
+            report={report}
+            reports={reports}
+            onSelect={onSelect}
+            optionLabel={(item) =>
+              `${reportLabel(item)} · ${STATUS_LABELS[item.status]}`
+            }
+          />
         </div>
       </header>
 
       <nav className="ai-report-chapters" aria-label="报告目录">
         <button onClick={() => scrollTo("report-summary")}>执行摘要</button>
         <button onClick={() => scrollTo("report-structure")}>问题结构</button>
-        <button onClick={() => scrollTo("report-diagnostic")}>尺码诊断</button>
+        <button onClick={() => scrollTo("report-diagnostic")}>问题诊断</button>
         <button onClick={() => scrollTo("report-actions")}>行动计划</button>
       </nav>
 
@@ -539,7 +700,8 @@ export function AiInsightReport({
           {textQuality.status === "needs_review" && (
             <div className="ai-report-review-note">
               <b>评论文本质量未通过：</b> {textQuality.note}
-              本报告只可用于定位数据问题，不可直接下发商品整改。
+              异常文本已从评论证据中排除；其余聚合结果仍可用于问题验证，
+              不可直接下发商品整改。
             </div>
           )}
         </section>
@@ -596,7 +758,10 @@ export function AiInsightReport({
           <EvidenceLine ids={structureFinding?.evidence_ids} catalog={catalog} />
         </section>
 
-        {(diagnosticFinding || sizeTrend.length > 0 || otherFindings.length > 0) && (
+        {(diagnosticFinding ||
+          hasBusinessIssues ||
+          sizeTrend.length > 0 ||
+          otherFindings.length > 0) && (
           <section className="ai-report-section" id="report-diagnostic">
             <SectionHeading
               number="02"
@@ -611,6 +776,8 @@ export function AiInsightReport({
                 <p>{diagnosticFinding.interpretation}</p>
               </div>
             )}
+
+            {hasBusinessIssues && <BusinessIssueGrid issues={businessIssues} />}
 
             {(smallTrend.status === "available" ||
               largeTrend.status === "available") && (

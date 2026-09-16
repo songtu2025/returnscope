@@ -5,13 +5,12 @@ import json
 import threading
 from collections import OrderedDict
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
-from return_semantics.data import load_return_dataset_auto
 from web_backend.database import Database
+from web_backend.dataset_cache import load_cached_dataset
 
 ISSUE_REASONS = {
     "missing_store": "缺少店铺/站点",
@@ -159,9 +158,14 @@ class DataQualityService:
             if cached is not None:
                 self._cache.move_to_end(cache_key)
                 return cached
-            dataset = load_return_dataset_auto(
-                Path(str(returns["file_path"])),
-                Path(str(products["file_path"])),
+            dataset = load_cached_dataset(
+                str(returns["file_path"]),
+                str(products["file_path"]),
+                "",
+                None,
+                "auto",
+                str(returns["sha256"]),
+                str(products["sha256"]),
             )
             records = dataset.records.copy(deep=True)
             entry = _QualityCacheEntry(

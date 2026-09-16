@@ -20,6 +20,7 @@ import { navigateHash, useHashRoute } from "./app/hashRouter";
 import { PRIMARY_NAV_ITEMS, SETTINGS_NAV_ITEM } from "./app/navigation";
 import { Toast } from "./components/SharedUi";
 import { STATUS_LABELS } from "./constants";
+import { useDialogFocus } from "./hooks/useDialogFocus";
 import { classNames } from "./lib/presentation";
 import { SESSION_EXPIRED_EVENT } from "./shared/api/request";
 
@@ -47,6 +48,11 @@ const DataAssetsPage = lazy(() =>
   import("./features/data-management/DataAssetsPage").then((module) => ({
     default: module.DataAssetsPage,
   })),
+);
+const ClassificationStandardsPage = lazy(() =>
+  import("./features/classification-standards/ClassificationStandardsPage").then(
+    (module) => ({ default: module.ClassificationStandardsPage }),
+  ),
 );
 const ResultsPage = lazy(() =>
   import("./pages/ResultsPage").then((module) => ({ default: module.ResultsPage })),
@@ -117,7 +123,6 @@ function App() {
         event.preventDefault();
         if (user) setSearchOpen(true);
       }
-      if (event.key === "Escape") setSearchOpen(false);
     };
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
@@ -174,15 +179,16 @@ function App() {
       }
       overlays={
         <>
-          <GlobalSearch
-            open={searchOpen}
-            onClose={() => setSearchOpen(false)}
-            onSelect={(destination, focus) => {
-              setSearchOpen(false);
-              navigate(destination, focus);
-            }}
-            notify={notify}
-          />
+          {searchOpen && (
+            <GlobalSearch
+              onClose={() => setSearchOpen(false)}
+              onSelect={(destination, focus) => {
+                setSearchOpen(false);
+                navigate(destination, focus);
+              }}
+              notify={notify}
+            />
+          )}
           {toast && <Toast {...toast} />}
         </>
       }
@@ -244,6 +250,9 @@ function App() {
             onNavigate={navigate}
             userId={user.id}
           />
+        )}
+        {page === "classification-standards" && (
+          <ClassificationStandardsPage route={route} notify={notify} />
         )}
         {page === "legacy-results" && (
           <Suspense fallback={<div className="empty-state">正在加载旧版任务分析…</div>}>
@@ -540,7 +549,7 @@ export function Topbar({ user, system, onRefresh, onNavigate, onSearch, onLogout
   );
 }
 
-function GlobalSearch({ open, onClose, onSelect, notify }) {
+function GlobalSearch({ onClose, onSelect, notify }) {
   const [query, setQuery] = useState("");
   const [resources, setResources] = useState({
     tasks: [],
@@ -548,18 +557,16 @@ function GlobalSearch({ open, onClose, onSelect, notify }) {
     reviews: [],
   });
   const [loading, setLoading] = useState(false);
+  const { dialogRef, constrainFocus } = useDialogFocus({ open: true, onClose });
 
   useEffect(() => {
-    if (!open) return;
-    setQuery("");
     setLoading(true);
     Promise.all([api.tasks(), api.datasets(), api.reviews()])
       .then(([tasks, datasets, reviews]) => setResources({ tasks, datasets, reviews }))
       .catch((error) => notify(error.message, "error"))
       .finally(() => setLoading(false));
-  }, [open, notify]);
+  }, [notify]);
 
-  if (!open) return null;
   const items = [
     ...resources.tasks.map((task) => ({
       id: task.id,
@@ -612,10 +619,13 @@ function GlobalSearch({ open, onClose, onSelect, notify }) {
       onMouseDown={(event) => event.target === event.currentTarget && onClose()}
     >
       <section
+        ref={dialogRef}
         className="command-dialog"
         role="dialog"
         aria-modal="true"
         aria-label="全局搜索"
+        tabIndex={-1}
+        onKeyDownCapture={constrainFocus}
       >
         <header>
           <MagnifyingGlass size={20} />
@@ -628,7 +638,7 @@ function GlobalSearch({ open, onClose, onSelect, notify }) {
                 onSelect(matches[0].page, matches[0].focus);
             }}
             placeholder="输入任务名、产品信息或评论…"
-            autoFocus
+            data-dialog-initial-focus
           />
           <kbd>Esc</kbd>
         </header>
@@ -678,4 +688,3 @@ function GlobalSearch({ open, onClose, onSelect, notify }) {
 }
 
 export { App };
-export default App;

@@ -1,5 +1,5 @@
 {
-  "version": "headwear-2026-08-10-v1",
+  "version": "headwear-unified-2026-09-06-v1-semantic1",
   "agent_family": "帽类智能体",
   "product_context": "遮阳帽或保暖帽",
   "allowed_parts": [
@@ -11,58 +11,98 @@
     "UNSPECIFIED"
   ],
   "instructions": [
+    "先阅读完整标题和正文，按独立事实拆分观点；关键词不替代语义判断。主题用标签，评价方向用sentiment，位置用part，时间、年龄和场景保留在opinion与逐字evidence中。",
+    "相同事件只选最具体标签，不把故障、故障后果和笼统质量评价重复统计；不同部位或独立事件可以并存。同一主题在不同对象或场景下的正负反馈分别保留，不自动判矛盾。",
+    "只有真实体验或明确评价才打标签；否定问题不自动等于好评。没有评价信息不判负向，明确负向但原因不明时保留原因不明标签并设置needs_review。",
+    "年龄、使用者与使用时长不是新的问题标签。品类默认属性不是具体Listing承诺；无对应Listing承诺时claim_relation必须为NONE，不推断描述有误或买家责任。",
+    "到货问题与使用后故障分别保留发生阶段；包装打开不推断二手。主体验证按实际语义选择PRODUCT、CUSTOMER、ORDER、DELIVERY、SERVICE，不由标签分组推断责任。",
     "只有评论明确提到帽檐、帽冠、下巴带、调节扣或内衬时才使用对应部位。",
     "儿童渔夫帽的松紧、遮阳和固定问题必须分开表达。"
   ],
   "labels": [
     {
-      "code": "HEADWEAR_FIT_TIGHT",
+      "code": "HEADWEAR_FIT_TIGHT_U1",
       "name": "偏紧",
       "group": "尺码与适配",
       "description": "帽围偏小、夹头或佩戴过紧",
-      "allowed_sentiments": ["NEGATIVE"]
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ]
     },
     {
-      "code": "HEADWEAR_FIT_LOOSE",
+      "code": "HEADWEAR_FIT_LOOSE_U1",
       "name": "偏松",
       "group": "尺码与适配",
       "description": "帽围偏大、容易滑落或无法固定",
-      "allowed_sentiments": ["NEGATIVE"]
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ]
     },
     {
-      "code": "HEADWEAR_SUN_PROTECTION",
+      "code": "HEADWEAR_SUN_PROTECTION_U1",
       "name": "遮阳表现",
       "group": "功能表现",
       "description": "帽檐覆盖、遮阳范围或防晒使用体验",
-      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ]
     },
     {
-      "code": "HEADWEAR_COMFORT",
+      "code": "HEADWEAR_COMFORT_U1",
       "name": "佩戴舒适性",
-      "group": "舒适性",
+      "group": "使用感受",
       "description": "闷热、刺痒、压迫或舒适体验",
-      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ]
     },
     {
-      "code": "HEADWEAR_QUALITY",
+      "code": "HEADWEAR_QUALITY_U1",
       "name": "材料与做工",
-      "group": "材料与做工",
+      "group": "质量与耐用",
       "description": "开线、破损、变形或材料质量问题",
-      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ]
     },
     {
-      "code": "HEADWEAR_APPEARANCE",
+      "code": "HEADWEAR_APPEARANCE_U1",
       "name": "外观与预期",
-      "group": "外观与预期",
+      "group": "外观与款式",
       "description": "颜色、款式或实物外观与预期不符",
-      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ]
     },
     {
-      "code": "HEADWEAR_BUYER_REASON",
+      "code": "HEADWEAR_BUYER_REASON_U1",
       "name": "买家原因",
-      "group": "其他原因",
-      "description": "误购、多买、不再需要或计划改变",
-      "allowed_sentiments": ["NEGATIVE", "NEUTRAL"]
+      "group": "其他反馈",
+      "description": "误购、多买、不再需要或计划改变；仅买家主动误购、需求变化等原因，不能从产品故障推断买家责任。",
+      "allowed_sentiments": [
+        "NEUTRAL"
+      ]
     }
-  ]
+  ],
+  "validation_rules": {
+    "allowed_groups": [
+      "尺码与适配",
+      "功能表现",
+      "质量与耐用",
+      "使用感受",
+      "外观与款式",
+      "履约与售后",
+      "其他反馈"
+    ],
+    "neutral_reason_labels": [
+      "HEADWEAR_BUYER_REASON_U1"
+    ],
+    "required_review_labels": [],
+    "conflict_scope": "evidence"
+  },
+  "recognition_profile": "semantic_v1"
 }

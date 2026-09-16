@@ -4,9 +4,13 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   quality:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -18,11 +22,20 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: web-prototype/package-lock.json
+      - name: Validate Docker Compose configuration
+        env:
+          APP_DOMAIN: example.invalid
+          WEBAPP_BOOTSTRAP_EMAIL: ci@example.invalid
+          WEBAPP_BOOTSTRAP_NAME: CI Placeholder
+          WEBAPP_BOOTSTRAP_PASSWORD: dummy-ci-password
+          WEBAPP_ENCRYPTION_KEY: dummy-ci-encryption-key
+          WEBAPP_MIGRATION_SOURCE: .
+        run: docker compose config --quiet
       - run: pip install -r requirements-dev.txt
-      - run: python -m ruff check web_backend return_semantics return_analysis tests
-      - run: python -m ruff format --check web_backend return_semantics return_analysis tests
-      - run: python -m pytest tests -q
       - run: npm ci
         working-directory: web-prototype
-      - run: npm run quality
-        working-directory: web-prototype
+      - name: Run blocking quality checks
+        run: python scripts/quality.py check
+      - name: Report historical quality debt
+        continue-on-error: true
+        run: python scripts/quality.py audit

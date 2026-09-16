@@ -1,0 +1,109 @@
+{
+  "version": "sk001-listing-2026-08-05-v1",
+  "claims": [
+    {
+      "claim_id": "CLM_SIZE_01",
+      "text": "临界两个尺码时建议选大一码",
+      "source": "页面尺码表",
+      "allowed_label_codes": [
+        "FIT_TOO_LARGE",
+        "FIT_TOO_SMALL",
+        "FIT_TOO_LONG",
+        "FIT_TOO_SHORT",
+        "SIZE_GUIDANCE_CONFUSING"
+      ]
+    },
+    {
+      "claim_id": "CLM_SIZE_02",
+      "text": "宽鞋头允许脚趾自然展开",
+      "source": "A+",
+      "allowed_label_codes": ["FIT_TOO_TIGHT_NARROW", "FIT_GOOD"]
+    },
+    {
+      "claim_id": "CLM_DRY_01",
+      "text": "鞋面和鞋底排水孔有助于快速干燥",
+      "source": "五点、A+",
+      "allowed_label_codes": ["FUNCTION_DRY_DRAINAGE"]
+    },
+    {
+      "claim_id": "CLM_SLIP_01",
+      "text": "湿滑表面或多种表面有稳定抓地力",
+      "source": "五点、A+",
+      "allowed_label_codes": ["FUNCTION_GRIP"]
+    },
+    {
+      "claim_id": "CLM_PROTECT_01",
+      "text": "鞋底可防护岩石、碎石、贝壳和热沙",
+      "source": "五点",
+      "allowed_label_codes": [
+        "FUNCTION_PROTECTION",
+        "FUNCTION_HEAT_INSULATION",
+        "EXPERIENCE_THIN"
+      ]
+    },
+    {
+      "claim_id": "CLM_DURABLE_01",
+      "text": "橡胶鞋底耐用",
+      "source": "A+",
+      "allowed_label_codes": [
+        "QUALITY_HOLE_WEAR",
+        "QUALITY_STITCH_TEAR",
+        "QUALITY_SEPARATION",
+        "QUALITY_DURABILITY",
+        "QUALITY_GENERAL"
+      ]
+    },
+    {
+      "claim_id": "CLM_COMFORT_01",
+      "text": "穿着舒适、贴合",
+      "source": "五点、A+",
+      "allowed_label_codes": [
+        "FIT_TOO_TIGHT_NARROW",
+        "FIT_TOO_LOOSE_WIDE",
+        "FIT_UNSPECIFIED",
+        "FIT_SLIPS_OFF",
+        "FIT_GOOD",
+        "EXPERIENCE_CHAFING_BLISTER",
+        "EXPERIENCE_ITCHING",
+        "EXPERIENCE_DISCOMFORT",
+        "EXPERIENCE_COMFORT_LIGHTWEIGHT"
+      ]
+    },
+    {
+      "claim_id": "CLM_CHAFE_01",
+      "text": "弹性鞋口可防止磨脚",
+      "source": "五点",
+      "allowed_label_codes": ["EXPERIENCE_CHAFING_BLISTER"]
+    },
+    {
+      "claim_id": "CLM_RETENTION_01",
+      "text": "运动时不易脱脚",
+      "source": "五点",
+      "allowed_label_codes": ["FIT_SLIPS_OFF", "FIT_GOOD"]
+    },
+    {
+      "claim_id": "CLM_ONOFF_01",
+      "text": "无鞋带设计方便穿脱",
+      "source": "五点",
+      "allowed_label_codes": ["FUNCTION_ON_OFF"]
+    },
+    {
+      "claim_id": "CLM_BREATH_01",
+      "text": "鞋面透气",
+      "source": "五点、A+",
+      "allowed_label_codes": ["FUNCTION_BREATHABILITY"]
+    },
+    {
+      "claim_id": "CLM_FLEX_01",
+      "text": "鞋体柔软、有弹性、活动自由",
+      "source": "五点、A+",
+      "allowed_label_codes": ["FUNCTION_FLEXIBILITY"]
+    },
+    {
+      "claim_id": "CLM_USE_01",
+      "text": "可用于水中和陆地，以及页面列出的活动",
+      "source": "五点",
+      "allowed_label_codes": ["OTHER_USE_SCENARIO"]
+    }
+  ]
+}

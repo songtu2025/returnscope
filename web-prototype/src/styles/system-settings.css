@@ -1,0 +1,528 @@
+/* 系统设置与模型服务 */
+.settings-hub-page {
+  padding-bottom: 0;
+}
+.settings-tabs {
+  min-height: var(--desktop-control-height);
+  margin-bottom: 0;
+}
+.settings-tabs button {
+  min-height: var(--desktop-control-height);
+}
+.settings-hub-page + .standard-page {
+  padding-top: var(--desktop-section-gap);
+}
+.model-service-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--desktop-section-gap);
+}
+.model-service-selector,
+.model-service-current {
+  grid-column: 1 / -1;
+}
+.model-service-summary.has-draft .model-service-current {
+  grid-column: 1;
+}
+.model-service-summary.has-draft .model-service-draft {
+  grid-column: 2;
+}
+.model-service-selector {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: var(--desktop-filter-height);
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.model-service-selector select {
+  height: var(--desktop-control-height);
+}
+.model-service-current > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--desktop-section-gap);
+}
+.model-service-draft {
+  display: grid;
+  gap: 14px;
+  border-color: #e8c58f;
+  background: var(--amber-pale);
+}
+.model-service-draft > div:first-child {
+  min-width: 0;
+}
+.model-service-draft-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--desktop-field-gap);
+}
+.model-service-draft span {
+  color: var(--amber);
+  font-size: 11px;
+  font-weight: 800;
+}
+.model-service-draft h3 {
+  margin: 4px 0 2px;
+  font-size: 16px;
+}
+.model-service-draft p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.model-service-discard-confirmation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.model-service-discard-confirmation span {
+  color: var(--red);
+}
+.model-service-current h2 {
+  margin: 7px 0 3px;
+  font-size: 20px;
+}
+.model-service-current header p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.model-service-status {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border-radius: 999px;
+  color: var(--amber);
+  background: var(--amber-pale);
+  font-size: 12px;
+  font-weight: 800;
+}
+.model-service-status.validated {
+  color: var(--green-dark);
+  background: var(--green-pale);
+}
+.model-service-status.failed {
+  color: var(--red);
+  background: var(--red-pale);
+}
+.model-service-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0 var(--desktop-section-gap);
+  margin-top: var(--desktop-section-gap);
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+.model-service-facts .info-row {
+  display: grid;
+  gap: 3px;
+  border: 0;
+}
+.model-service-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--desktop-field-gap);
+  margin-top: var(--desktop-section-gap);
+}
+.model-service-validation-action {
+  display: grid;
+  gap: 4px;
+}
+.model-service-validation-action small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.model-service-actions .text-button {
+  margin-left: auto;
+}
+.model-service-policy,
+.model-service-advanced {
+  min-width: 0;
+  grid-column: 1 / -1;
+}
+.model-service-policy-list {
+  display: grid;
+  gap: var(--desktop-field-gap);
+  margin: 12px 0 var(--desktop-section-gap);
+}
+.model-service-policy-list > div {
+  display: grid;
+  grid-template-columns: 26px minmax(100px, 1fr) minmax(120px, 1fr) 110px;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--desktop-record-height);
+  padding: 7px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+}
+.model-service-policy-list > div > span {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: var(--green-dark);
+  background: var(--green-pale);
+  font-size: 11px;
+  font-weight: 800;
+}
+.model-service-policy-list strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.model-service-policy-list small {
+  color: var(--muted);
+  text-align: right;
+}
+.model-service-advanced > div {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--desktop-field-gap);
+  margin-top: 12px;
+}
+.model-service-advanced > div > button {
+  display: grid;
+  gap: 3px;
+  min-height: 58px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  color: var(--ink);
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+}
+.model-service-advanced > div > button:hover {
+  border-color: #9fc8b7;
+  background: var(--green-pale);
+}
+.model-service-advanced > div > button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.model-service-advanced > div span {
+  color: var(--muted);
+  font-size: 12px;
+}
+/* 模型服务摘要：只呈现运行、待处理变更和模型可用性。 */
+.model-service-summary {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+}
+.model-service-runtime {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  min-height: 130px;
+  padding: 24px;
+}
+.model-service-runtime-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  color: var(--amber);
+}
+.model-service-runtime-icon.online {
+  color: var(--green);
+}
+.model-service-runtime-main {
+  min-width: 0;
+}
+.model-service-runtime-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+.model-service-runtime h2,
+.model-service-catalog h3 {
+  margin: 0;
+  font-size: 22px;
+}
+.model-service-runtime-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.model-service-runtime-meta b {
+  display: inline-block;
+  max-width: 420px;
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+.model-service-runtime-actions,
+.model-service-draft-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.model-service-draft-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  min-height: 72px;
+  padding: 14px 18px;
+  border: 1px solid #e8c58f;
+  border-radius: 8px;
+  background: var(--amber-pale);
+}
+.model-service-draft-copy {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  color: var(--amber);
+}
+.model-service-draft-copy p {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0;
+  font-size: 13px;
+}
+.model-service-draft-copy p span {
+  color: #856c42;
+}
+.model-service-discard-confirmation {
+  flex-wrap: nowrap;
+}
+.model-service-discard-confirmation span {
+  font-size: 12px;
+}
+.model-service-catalog {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.model-service-catalog > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.model-service-catalog > header p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.model-service-catalog-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+.model-service-catalog-table {
+  display: grid;
+}
+.model-service-catalog-head,
+.model-service-catalog-row {
+  display: grid;
+  grid-template-columns:
+    minmax(180px, 1.2fr) minmax(130px, 0.8fr) minmax(110px, 0.6fr)
+    64px;
+  align-items: center;
+  column-gap: 16px;
+  min-height: 58px;
+  padding: 0 20px;
+}
+.model-service-catalog-head {
+  min-height: 42px;
+  color: var(--muted);
+  background: var(--surface-soft);
+  font-size: 11px;
+  font-weight: 700;
+}
+.model-service-catalog-row {
+  border-top: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+.model-service-catalog-row strong {
+  font-size: 14px;
+}
+.model-service-catalog-row > span:not(.model-validation-badge) {
+  color: var(--muted);
+  font-size: 12px;
+}
+.model-service-catalog-row .text-button {
+  justify-self: start;
+}
+.model-service-catalog-empty {
+  margin: 0;
+  padding: 18px 20px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.model-service-more {
+  position: relative;
+}
+.model-service-more > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  padding: 0 4px;
+  list-style: none;
+  color: var(--green-dark);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.model-service-more > summary::-webkit-details-marker {
+  display: none;
+}
+.model-service-more[open] > summary svg {
+  transform: rotate(180deg);
+}
+.model-service-more-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  right: 0;
+  display: grid;
+  min-width: 164px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 12px 30px rgb(25 52 40 / 14%);
+}
+.model-service-more-menu button {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--ink);
+  background: transparent;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.model-service-more-menu button:hover,
+.model-service-more-menu button:focus-visible {
+  color: var(--green-dark);
+  background: var(--mint-pale);
+}
+@media (max-width: 860px) {
+  .model-service-runtime {
+    grid-template-columns: 36px minmax(0, 1fr);
+    padding: 18px;
+  }
+  .model-service-runtime-actions {
+    grid-column: 1 / -1;
+  }
+  .model-service-draft-strip {
+    grid-template-columns: 1fr;
+  }
+  .model-service-catalog-head,
+  .model-service-catalog-row {
+    grid-template-columns: minmax(130px, 1fr) 90px 74px;
+    padding: 0 14px;
+  }
+  .model-service-catalog-head span:nth-child(2),
+  .model-service-catalog-row > span:nth-child(2) {
+    display: none;
+  }
+}
+@media (max-width: 580px) {
+  .model-service-runtime-title,
+  .model-service-catalog > header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .model-service-catalog-head,
+  .model-service-catalog-row {
+    grid-template-columns: minmax(0, 1fr) 76px 52px;
+    column-gap: 8px;
+  }
+}
+.model-service-editor {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--desktop-section-gap);
+  align-items: start;
+}
+.model-service-editor.has-connections {
+  grid-template-columns: 190px minmax(0, 1fr);
+}
+.model-service-editor .api-editor {
+  min-width: 0;
+  padding: var(--desktop-detail-padding) var(--desktop-detail-padding) 72px;
+}
+.model-service-editor.panel-models .api-editor,
+.model-service-editor.panel-versions .api-editor {
+  padding-bottom: var(--desktop-detail-padding);
+}
+.model-service-editor.panel-connection:not(.is-new-connection) #available-models,
+.model-service-editor.panel-connection .runtime-grid,
+.model-service-editor.panel-models #model-pipeline,
+.model-service-editor.panel-models .runtime-grid,
+.model-service-editor.panel-strategy #available-models,
+.model-service-editor.panel-strategy .runtime-grid,
+.model-service-editor.panel-limits #available-models,
+.model-service-editor.panel-limits #model-pipeline,
+.model-service-editor.panel-models .config-change-reason,
+.model-service-editor.panel-models .sticky-config-bar {
+  display: none;
+}
+.model-service-editor:not(.panel-versions) > .config-inspector {
+  display: none;
+}
+.model-service-editor.panel-versions > .api-editor,
+.model-service-editor.panel-versions > .connection-list {
+  display: none;
+}
+.model-service-editor.panel-versions > .config-inspector {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: max-content;
+  gap: var(--desktop-section-gap);
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.model-service-editor.panel-versions .config-inspector .content-card {
+  align-self: start;
+  margin: 0;
+  padding: var(--desktop-card-padding);
+}
+.validation-process-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--desktop-field-gap);
+}
+.model-service-editor .validation-context-grid {
+  grid-template-columns: minmax(0, 1.4fr) 0.55fr 0.7fr minmax(0, 1.25fr);
+}
+.model-service-editor .config-field-error,
+.model-service-editor .config-save-disabled-reason {
+  display: block;
+  margin-top: 4px;
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 600;
+}
+.model-service-editor .config-save-disabled-reason {
+  line-height: 1.4;
+}

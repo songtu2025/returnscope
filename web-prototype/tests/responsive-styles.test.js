@@ -2,7 +2,24 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, test } from "vitest";
 
-const styles = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
+const styleFiles = [
+  "src/styles.css",
+  "src/styles/classification-standards.css",
+  "src/styles/insight-generation.css",
+  "src/styles/task-flow.css",
+  "src/styles/desktop-layout.css",
+  "src/styles/analysis-dashboards.css",
+  "src/styles/classification-results.css",
+  "src/styles/operations.css",
+  "src/styles/system-settings.css",
+  "src/styles/visual-foundation.css",
+  "src/styles/return-insights.css",
+  "src/styles/ai-insight-reports.css",
+  "src/styles/product-info.css",
+];
+const styles = styleFiles
+  .map((file) => readFileSync(resolve(process.cwd(), file), "utf8"))
+  .join("\n");
 
 test("business pages use tiered desktop work widths", () => {
   expect(styles).toMatch(/--layout-wide-max:\s*1680px/);
@@ -61,7 +78,7 @@ test("桌面端共享尺寸以分类结果页为统一基准", () => {
   );
 });
 
-test("工作台和创建任务使用冻结的桌面双栏比例", () => {
+test("工作台和创建任务使用冻结的桌面布局", () => {
   expect(styles).toMatch(
     /\.workbench-focus-grid\s*{[^}]*grid-template-columns:\s*minmax\(0, 3fr\) minmax\(0, 2fr\);/s,
   );
@@ -69,18 +86,11 @@ test("工作台和创建任务使用冻结的桌面双栏比例", () => {
     /\.workbench-grid\s*{[^}]*gap:\s*var\(--desktop-section-gap\);/s,
   );
   expect(styles).toMatch(
-    /\.task-create-layout\s*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) clamp\(320px, 24vw, 380px\);[^}]*gap:\s*var\(--desktop-section-gap\);/s,
-  );
-  expect(styles).toMatch(
-    /\.task-plan-layout\s*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) clamp\(320px, 24vw, 380px\);/s,
-  );
-  expect(styles).toMatch(
-    /\.task-create-summary\s*{[^}]*width:\s*100%;[^}]*max-width:\s*none;/s,
+    /\.task-plan-layout\s*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[^}]*gap:\s*14px;/s,
   );
   expect(styles).toMatch(
     /\.new-task-page \.task-config-choice,[\s\S]*?\.new-task-page \.task-data-quality\s*{[^}]*width:\s*100%;[^}]*max-width:\s*none;/,
   );
-  expect(styles).not.toMatch(/\.task-create-summary\s*{[^}]*max-width:\s*295px;/s);
 });
 
 test("关键筛选条、表格行和空状态复用共享尺寸", () => {
@@ -125,6 +135,12 @@ test("用户与安全和审计记录使用紧凑桌面布局", () => {
   );
   expect(styles).toMatch(
     /\.team-security-bar\s*{[^}]*justify-content:\s*space-between;[^}]*padding:\s*14px 16px;/s,
+  );
+  expect(styles).toMatch(
+    /@media \(max-width:\s*720px\)[\s\S]*?\.team-page \.member-table\s*{[^}]*max-width:\s*100%;[^}]*overflow-x:\s*auto;/,
+  );
+  expect(styles).toMatch(
+    /@media \(max-width:\s*720px\)[\s\S]*?\.team-page \.team-security-bar\s*{[^}]*flex-direction:\s*column;/,
   );
   expect(styles).toMatch(
     /\.audit-filter-form\s*{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);/s,

@@ -1,3 +1,4 @@
+import { groups as BUSINESS_GROUPS } from "../../../../config/taxonomy_alignment.json";
 import { useState } from "react";
 import {
   ArrowCounterClockwise,
@@ -18,8 +19,23 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { taxonomyPath } from "../../lib/taxonomyPresentation";
+import { SEMANTIC_STATUS_LABELS } from "../classification-results/semanticResultPresentation";
 
-const GROUP_ORDER = ["尺码与合脚", "外观", "体感", "功能", "其他原因"];
+const GROUP_ORDER = [
+  ...new Set([
+    ...BUSINESS_GROUPS,
+    "尺码与适配",
+    "尺码与合脚",
+    "功能表现",
+    "功能",
+    "质量与耐用性",
+    "穿戴体验",
+    "体感",
+    "外观",
+    "其他原因",
+  ]),
+];
 const PART_LABELS = {
   WHOLE_SHOE: "整鞋",
   TOE: "鞋头",
@@ -28,6 +44,45 @@ const PART_LABELS = {
   INSOLE: "鞋垫",
   UPPER: "鞋面",
   HEEL: "后跟",
+  HEEL_TAB: "后跟提拉片",
+  SOLE_UPPER_SEAM: "鞋底与鞋面结合处",
+  ARCH: "足弓",
+  INSTEP: "脚背部位",
+  SEAM: "接缝",
+  DRAINAGE_HOLE: "排水孔",
+  FASTENER: "扣件",
+  CUFF: "袖口",
+  PALM: "掌心",
+  BACK_OF_HAND: "手背",
+  FINGER: "手指",
+  FINGER_GUSSET: "指缝",
+  THUMB: "拇指",
+  THUMB_WEB: "虎口",
+  LINING: "内衬",
+  CLOSURE: "闭合结构",
+  FRAME: "镜框",
+  LENS: "镜片",
+  NOSE_PAD: "鼻托",
+  NOSE_BRIDGE: "鼻梁",
+  TEMPLE: "镜腿",
+  EAR_SIDE: "耳侧",
+  HINGE: "铰链",
+  SCREW: "螺丝",
+  FACE_COVERAGE: "脸部覆盖",
+  LENS_FRAME_JOINT: "镜片与镜框连接处",
+  STRAP: "绑带",
+  COATING: "镀膜",
+  RUBBER_SLEEVE: "橡胶套",
+  CASE: "眼镜盒",
+  CLEANING_CLOTH: "清洁布",
+  PACKAGING: "包装",
+  EDGE: "边缘",
+  CONNECTION: "连接处",
+  ACCESSORY: "配件",
+  CROWN: "帽身",
+  BRIM: "帽檐",
+  CHIN_STRAP: "下巴带",
+  SIZE_ADJUSTER: "调节扣",
   UNSPECIFIED: "未明确部位",
 };
 
@@ -58,6 +113,30 @@ function selectedSemanticUnit(record, labelCode) {
   return units.find((unit) => unit.label_code === labelCode) ?? units[0] ?? {};
 }
 
+const COMMENT_STATUS_ORDER = [
+  "POSITIVE",
+  "NEGATIVE",
+  "MIXED",
+  "CONFLICT",
+  "NO_CONFIRMED",
+];
+
+function commentStatusCounts(data, summary) {
+  const raw =
+    summary.comment_statuses ??
+    summary.semantic_statuses ??
+    data.comment_statuses ??
+    data.semantic_statuses;
+  if (!raw) return null;
+  if (!Array.isArray(raw)) return raw;
+  return Object.fromEntries(
+    raw.map((item) => [
+      String(item.status ?? item.summary_status ?? "").toUpperCase(),
+      Number(item.comment_count ?? item.record_count ?? item.count ?? 0),
+    ]),
+  );
+}
+
 export function ReturnReasonInsights({
   route,
   updateRoute: replaceRoute,
@@ -69,6 +148,10 @@ export function ReturnReasonInsights({
   const [showDefinition, setShowDefinition] = useState(false);
   const summary = data.summary ?? {};
   const reasons = data.reasons ?? [];
+  const hierarchy = data.hierarchy_problems ?? [];
+  const taxonomyLabels = new Map(
+    (data.taxonomy?.labels ?? []).map((label) => [label.code, label]),
+  );
   const selected = data.selected_reason;
   const products = data.products ?? [];
   const coReasons = data.co_reasons ?? [];
@@ -77,9 +160,11 @@ export function ReturnReasonInsights({
   const options = data.filter_options ?? {};
   const dateRange = data.date_range ?? {};
   const subjects = data.subject_breakdown ?? [];
-  const groups = GROUP_ORDER.filter((item) =>
-    (data.category_groups ?? []).includes(item),
-  );
+  const categoryGroups = data.category_groups ?? [];
+  const groups = [
+    ...GROUP_ORDER.filter((item) => categoryGroups.includes(item)),
+    ...categoryGroups.filter((item) => !GROUP_ORDER.includes(item)),
+  ];
   const visibleReasons = selectedSubject
     ? reasons.filter((reason) => reason.subjects?.includes(selectedSubject))
     : reasons;
@@ -87,9 +172,16 @@ export function ReturnReasonInsights({
     ...visibleReasons.map((item) => item.record_count),
     1,
   );
-  const includedCount = Number(summary.record_count || data.total_record_count || 0);
-  const totalCount = Number(summary.total_record_count ?? includedCount);
-  const pendingCount = Number(summary.pending_review_record_count || 0);
+  const includedCount = Number(
+    summary.comment_count ?? summary.record_count ?? data.total_comment_count ?? 0,
+  );
+  const totalCount = Number(
+    summary.total_comment_count ?? summary.total_record_count ?? includedCount,
+  );
+  const pendingCount = Number(
+    summary.pending_review_comment_count ?? summary.pending_review_record_count ?? 0,
+  );
+  const statusCounts = commentStatusCounts(data, summary);
   const updateRoute = (changes) => replaceRoute(changes, { replace: true });
 
   const updateFilters = (changes) =>
@@ -183,8 +275,8 @@ export function ReturnReasonInsights({
       <section className="return-insight-trust" aria-label="数据可信度">
         <div>
           <ShieldCheck size={19} weight="duotone" />
-          <span>有效样本</span>
-          <b>{Number(data.total_record_count || 0).toLocaleString()} 条</b>
+          <span>有效评论</span>
+          <b>{includedCount.toLocaleString()} 条</b>
         </div>
         <div>
           <TrendUp size={18} />
@@ -197,12 +289,34 @@ export function ReturnReasonInsights({
           <b>{pendingCount.toLocaleString()} 条</b>
         </div>
         <p>
-          当前洞察使用已确认与自动通过的数据；多标签原因占比之和可能超过 100%。
+          当前洞察使用已确认与自动通过的数据；同一评论在每个分组内只计一次，多标签原因占比之和可能超过
+          100%。
+          {data.group_alignment === "unified-v1" &&
+            " 跨版本已统一一级分组，具体标签保留原版本口径。"}
           <span>
-            已分析 {includedCount.toLocaleString()}/{totalCount.toLocaleString()} 条
+            已分析 {includedCount.toLocaleString()}/{totalCount.toLocaleString()}{" "}
+            条评论；事实数和事件数仅用于证据下钻
           </span>
         </p>
       </section>
+
+      {statusCounts && (
+        <section className="return-comment-statuses" aria-label="评论级结论分布">
+          <header>
+            <b>评论级结论</b>
+            <span>互斥口径，每条评论只进入一种状态</span>
+          </header>
+          <div>
+            {COMMENT_STATUS_ORDER.map((status) => (
+              <article key={status} className={`is-${status.toLowerCase()}`}>
+                <span>{SEMANTIC_STATUS_LABELS[status]}</span>
+                <b>{Number(statusCounts[status] || 0).toLocaleString()}</b>
+                <small>条评论</small>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="return-insight-workbench">
         <aside className="return-insight-explorer" aria-label="选择主题与退货原因">
@@ -231,7 +345,7 @@ export function ReturnReasonInsights({
               >
                 <div>
                   <b>{subject.label}</b>
-                  <span>{subject.record_count} 条记录</span>
+                  <span>{subject.record_count} 条评论</span>
                 </div>
                 <i aria-hidden="true">
                   <span style={{ width: `${Math.min(subject.percentage, 100)}%` }} />
@@ -262,13 +376,13 @@ export function ReturnReasonInsights({
             <header>
               <div>
                 <h3>具体退货原因</h3>
-                <p>按有效退货记录排序</p>
+                <p>按有效评论排序</p>
               </div>
               <span>{visibleReasons.length} 项</span>
             </header>
             {visibleReasons.length ? (
               <ol>
-                {visibleReasons.slice(0, 8).map((reason, index) => (
+                {visibleReasons.map((reason, index) => (
                   <li key={reason.value}>
                     <button
                       className={selected?.value === reason.value ? "active" : ""}
@@ -278,7 +392,14 @@ export function ReturnReasonInsights({
                     >
                       <span className="return-reason-rank">{index + 1}</span>
                       <div>
-                        <b>{reason.label}</b>
+                        <b>
+                          {taxonomyLabels.has(reason.value)
+                            ? taxonomyPath(
+                                data.taxonomy,
+                                taxonomyLabels.get(reason.value),
+                              ).join(" → ")
+                            : reason.label}
+                        </b>
                         <i aria-hidden="true">
                           <span
                             style={{
@@ -302,6 +423,35 @@ export function ReturnReasonInsights({
               <div className="return-insight-empty">当前对象下没有匹配原因</div>
             )}
           </section>
+          {hierarchy.length > 0 && (
+            <section className="return-reason-ranking" aria-label="标签层级统计">
+              <header>
+                <div>
+                  <h3>标签层级</h3>
+                  <p>父级按评论去重；选择末端标签查看诊断</p>
+                </div>
+                <span>{hierarchy.length} 项</span>
+              </header>
+              <ol>
+                {hierarchy.map((node) => (
+                  <li key={node.value}>
+                    <button
+                      disabled={!taxonomyLabels.has(node.value)}
+                      className={selected?.value === node.value ? "active" : ""}
+                      onClick={() =>
+                        updateRoute({ problem: node.value, recordPage: 1 })
+                      }
+                    >
+                      <div>
+                        <b>{node.label_path?.join(" → ") || node.label_name}</b>
+                      </div>
+                      <strong>{Number(node.record_count).toLocaleString()} 条</strong>
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
         </aside>
 
         <main className="return-insight-diagnostic">
@@ -316,7 +466,7 @@ export function ReturnReasonInsights({
                   </div>
                 </div>
                 <div className="return-diagnostic-metrics">
-                  <InsightStat label="相关退货" value={`${selected.record_count} 条`} />
+                  <InsightStat label="相关评论" value={`${selected.record_count} 条`} />
                   <InsightStat
                     label="占有效退货"
                     value={formatPercent(selected.percentage)}
@@ -339,7 +489,7 @@ export function ReturnReasonInsights({
                 <div className="return-diagnostic-definition">
                   <b>{selected.label}</b>
                   <span>
-                    统计包含该问题标签的去重退货记录；核心原因率表示该标签进入记录的
+                    统计包含该问题标签的去重评论；核心原因率表示该标签进入评论的
                     primary_label_codes，不等同于唯一责任归因。
                   </span>
                 </div>
@@ -477,7 +627,7 @@ export function ReturnReasonInsights({
                     <div>
                       <h3>语义特征</h3>
                       <span>
-                        {semanticProfile.record_count || 0} 条记录具有对应语义证据 ·
+                        {semanticProfile.record_count || 0} 条评论具有对应语义证据 ·
                         覆盖
                         {formatPercent(semanticProfile.coverage)}
                       </span>

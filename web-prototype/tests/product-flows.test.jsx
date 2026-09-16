@@ -1,15 +1,25 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
+    mysqlReturnSchema: vi.fn(),
     me: vi.fn(),
     login: vi.fn(),
     logout: vi.fn(),
     status: vi.fn(),
     tasks: vi.fn(),
     task: vi.fn(),
+    archiveTasks: vi.fn(),
     preflightTask: vi.fn(),
     preflightTaskReplan: vi.fn(),
     replanTask: vi.fn(),
@@ -37,6 +47,8 @@ const { apiMock } = vi.hoisted(() => ({
     productScopes: vi.fn(),
     createDataset: vi.fn(),
     addDatasetVersion: vi.fn(),
+    inspectReturnImport: vi.fn(),
+    importReturns: vi.fn(),
     configs: vi.fn(),
     activeValidation: vi.fn(),
     startModelValidation: vi.fn(),
@@ -81,6 +93,7 @@ import { ResultsPage } from "../src/pages/ResultsPage";
 import { TeamPage } from "../src/pages/TeamPage";
 import { NewTaskPage, TaskMonitor } from "../src/pages/Tasks";
 import { SESSION_EXPIRED_EVENT } from "../src/shared/api/request";
+import systemSettingsStyles from "../src/styles/system-settings.css?raw";
 
 const systemStatus = {
   worker_status: "ok",
@@ -165,8 +178,10 @@ const executionPlan = {
 };
 
 beforeEach(() => {
+  window.scrollTo = vi.fn();
   window.location.hash = "";
   Object.values(apiMock).forEach((mock) => mock.mockReset());
+  apiMock.mysqlReturnSchema.mockResolvedValue({ configured: false });
   apiMock.status.mockResolvedValue(systemStatus);
   apiMock.tasks.mockResolvedValue([]);
   apiMock.classificationResults.mockResolvedValue({ items: [], total: 0 });
@@ -222,6 +237,18 @@ describe("关键用户流程", () => {
     expect(await screen.findByText("还需要完成运行准备")).toBeVisible();
   });
 
+  test("读取配置失败时保留错误并允许重试，不误报缺少数据", async () => {
+    const user = userEvent.setup();
+    apiMock.dataVersions.mockRejectedValueOnce(new Error("服务暂时不可用"));
+    render(<NewTaskPage notify={vi.fn()} onChanged={vi.fn()} onNavigate={vi.fn()} />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("服务暂时不可用");
+    expect(screen.queryByText("还需要完成运行准备")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "重新加载" }));
+    expect(await screen.findByText("还需要完成运行准备")).toBeVisible();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(apiMock.dataVersions).toHaveBeenCalledTimes(2);
+  });
+
   test("用户登录后进入任务工作台", async () => {
     const user = userEvent.setup();
     apiMock.me.mockRejectedValue(new Error("未登录"));
@@ -269,6 +296,52 @@ describe("关键用户流程", () => {
     ).not.toBeInTheDocument();
   });
 
+  test("全局搜索约束焦点并在 Esc 与背景关闭后恢复触发点", async () => {
+    const user = userEvent.setup();
+    apiMock.me.mockResolvedValue({
+      id: "user-1",
+      email: "admin@example.com",
+      display_name: "管理员",
+    });
+    apiMock.tasks.mockResolvedValue([
+      {
+        id: "task-search-focus",
+        title: "焦点任务",
+        owner_name: "管理员",
+        status: "running",
+      },
+    ]);
+
+    render(<App />);
+    expect(await screen.findByRole("heading", { name: "首页" })).toBeVisible();
+    const trigger = screen.getByRole("button", {
+      name: "查找任务、数据或复核记录",
+    });
+
+    await user.click(trigger);
+    let dialog = screen.getByRole("dialog", { name: "全局搜索" });
+    const searchInput = within(dialog).getByRole("textbox", { name: "全局搜索" });
+    const resultButton = await within(dialog).findByRole("button", {
+      name: /焦点任务/,
+    });
+    expect(document.activeElement).toBe(searchInput);
+
+    expect(fireEvent.keyDown(searchInput, { key: "Tab", shiftKey: true })).toBe(false);
+    expect(document.activeElement).toBe(resultButton);
+    fireEvent.keyDown(resultButton, { key: "Tab" });
+    expect(document.activeElement).toBe(searchInput);
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "全局搜索" })).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(trigger);
+
+    await user.click(trigger);
+    dialog = screen.getByRole("dialog", { name: "全局搜索" });
+    fireEvent.mouseDown(dialog.parentElement);
+    expect(screen.queryByRole("dialog", { name: "全局搜索" })).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(trigger);
+  });
+
   test("浏览器前进后退可以恢复对应页面", async () => {
     apiMock.me.mockResolvedValue({
       id: "user-1",
@@ -282,7 +355,31 @@ describe("关键用户流程", () => {
     window.location.hash = "data";
     window.dispatchEvent(new HashChangeEvent("hashchange"));
 
-    expect(await screen.findByRole("heading", { name: "产品信息" })).toBeVisible();
+    expect(
+      await screen.findByRole("heading", { name: "商品信息汇总", level: 1 }),
+    ).toBeVisible();
+  });
+
+  test("旧匹配质量地址回落到商品信息汇总", async () => {
+    apiMock.me.mockResolvedValue({
+      id: "user-1",
+      email: "admin@example.com",
+      display_name: "管理员",
+    });
+    window.location.hash =
+      "data-assets?view=quality&returns_version_id=returns-v1&products_version_id=products-v1";
+
+    render(<App />);
+
+    await waitFor(() =>
+      expect(window.location.hash).toBe("#data-assets?view=products"),
+    );
+    expect(
+      await screen.findByRole("heading", { name: "商品信息汇总", level: 1 }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "匹配与质量" }),
+    ).not.toBeInTheDocument();
   });
 
   test("旧复核地址只进入历史单记录复核并明确与新版隔离", async () => {
@@ -556,7 +653,7 @@ describe("关键用户流程", () => {
     expect(onNavigate).toHaveBeenCalledWith("api");
   });
 
-  test("用户可以选择快照并创建分析任务", async () => {
+  test("用户可以留空任务名称并由系统自动命名", async () => {
     const user = userEvent.setup();
     const onNavigate = vi.fn();
     const onChanged = vi.fn();
@@ -587,6 +684,10 @@ describe("关键用户流程", () => {
           id: "cfg-1",
           version: 1,
           cheap_audit_percent: 5,
+          cheap_model: "gpt-cheap",
+          cheap_effort: "low",
+          secondary_model: "gpt-review",
+          secondary_effort: "high",
           primary_model: "gpt-main",
           primary_effort: "medium",
         },
@@ -628,45 +729,88 @@ describe("关键用户流程", () => {
         unmatched_records: 3,
       },
     });
-    apiMock.createTask.mockResolvedValue({ id: "task-1" });
+    apiMock.createTask
+      .mockRejectedValueOnce(new Error("创建服务暂时不可用"))
+      .mockResolvedValue({ id: "task-1" });
 
     render(
       <NewTaskPage notify={vi.fn()} onChanged={onChanged} onNavigate={onNavigate} />,
     );
 
-    expect(await screen.findByText("待分析数据")).toBeVisible();
+    expect(await screen.findByRole("region", { name: "选择分析数据" })).toBeVisible();
     expect(screen.queryByLabelText("商品维度版本")).not.toBeInTheDocument();
-    const planButton = screen.getByRole("button", { name: /生成执行计划/ });
-    expect(planButton).toBe(planButton.closest(".task-create-summary").children[1]);
-    await user.type(screen.getByLabelText("任务名称（可选）"), "US站退货分析");
+    const planButton = screen.getByRole("button", { name: /准备分析/ });
+    expect(planButton.closest(".task-step-actions")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^已有数据源/)).not.toBeInTheDocument();
+    expect(screen.getByText("选择店铺和日期，查看本次分析范围")).toBeVisible();
+    expect(planButton).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: /已有数据/ }));
+    await user.selectOptions(screen.getByLabelText(/^已有数据源/), "returns-v1");
+    expect(planButton).toBeEnabled();
+    expect(screen.queryByLabelText("任务名称")).not.toBeInTheDocument();
+    await user.click(planButton);
+    expect(await screen.findByText("将分析 8 组评论")).toBeVisible();
+    expect(apiMock.preflightTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model_policy: expect.objectContaining({ cheap_audit_percent: 5 }),
+      }),
+    );
+    expect(screen.getByText("2 组评论不进入语义分析")).toBeVisible();
+    expect(screen.getByText(/12 条退货记录 · 10 条有文本/)).toBeVisible();
+    expect(screen.queryByText("选择未解决品类处理方式")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /启动 8 组可执行评论/ })).toBeDisabled();
+    await user.click(screen.getByLabelText(/我确认本次仅分析 8 组评论/));
+    expect(screen.getByLabelText("任务名称")).toHaveValue("8月退货数据 · 退货分析");
+    const confirmation = screen.getByRole("region", { name: "确认并开始分析" });
+    expect(within(confirmation).getByRole("heading")).toHaveFocus();
+    expect(within(confirmation).getByText(/低成本初筛：gpt-cheap/)).toBeVisible();
+    expect(within(confirmation).getByText(/风险复核：gpt-review/)).toBeVisible();
+    expect(
+      within(confirmation).getByRole("button", { name: /启动 8 组可执行评论/ }),
+    ).toBeEnabled();
+    expect(screen.queryByRole("group", { name: "数据来源" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "查看或修改数据" }));
+    expect(screen.getByLabelText(/^已有数据源/)).toHaveValue("returns-v1");
+    await user.click(screen.getByRole("button", { name: "收起数据详情" }));
+    expect(apiMock.preflightTask).toHaveBeenCalledOnce();
+
+    expect(screen.getByLabelText(/^本次初筛抽检比例/)).not.toBeVisible();
+    await user.type(screen.getByLabelText("任务名称"), "临时任务");
+    await user.clear(screen.getByLabelText("任务名称"));
+    expect(apiMock.preflightTask).toHaveBeenCalledOnce();
+    await user.click(screen.getByLabelText("分析设置"));
     await user.clear(screen.getByLabelText(/^本次初筛抽检比例/));
     await user.type(screen.getByLabelText(/^本次初筛抽检比例/), "12");
-    await user.click(planButton);
-    expect(await screen.findByText("部分可执行")).toBeVisible();
-    expect(apiMock.preflightTask).toHaveBeenCalledWith(
+    expect(screen.queryByRole("button", { name: /启动 8 组/ })).not.toBeInTheDocument();
+    expect(await screen.findByText("将分析 8 组评论")).toBeVisible();
+    expect(screen.getByLabelText(/^本次初筛抽检比例/)).toHaveFocus();
+    expect(apiMock.preflightTask).toHaveBeenLastCalledWith(
       expect.objectContaining({
         model_policy: expect.objectContaining({ cheap_audit_percent: 12 }),
       }),
     );
-    expect(screen.getByText("2 组评论不进入语义分析")).toBeVisible();
-    expect(screen.getByText("75.00%")).toBeVisible();
-    expect(screen.getByText("去重评论已对账：10 = 8 + 2")).toBeVisible();
-    expect(screen.queryByText("选择未解决品类处理方式")).not.toBeInTheDocument();
-    for (const label of ["正在解析", "商品匹配", "品类路由", "生成计划"]) {
-      expect(screen.getByText(label)).toBeVisible();
-    }
-    await user.click(screen.getByRole("button", { name: "置顶 SK002" }));
-    const startButton = screen.getByRole("button", {
-      name: /启动 8 组可执行评论/,
-    });
-    expect(startButton).toBeDisabled();
+    expect(screen.getByRole("button", { name: /启动 8 组可执行评论/ })).toBeDisabled();
     await user.click(screen.getByLabelText(/我确认本次仅分析 8 组评论/));
-    await user.click(startButton);
+    await user.click(screen.getByText("查看 2 个执行分组及顺序"));
+    await user.click(screen.getByRole("button", { name: "置顶 SK002" }));
+    expect(screen.getByLabelText(/我确认本次仅分析 8 组评论/)).toBeChecked();
+    expect(apiMock.preflightTask).toHaveBeenCalledTimes(2);
+    await user.click(screen.getByRole("button", { name: /启动 8 组可执行评论/ }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("创建服务暂时不可用");
+    expect(screen.getByLabelText("任务名称")).toHaveValue("");
+    expect(screen.getByLabelText(/^本次初筛抽检比例/)).toHaveValue(12);
+    expect(screen.getByLabelText(/我确认本次仅分析 8 组评论/)).toBeChecked();
+    expect(apiMock.preflightTask).toHaveBeenCalledTimes(2);
+    expect(onNavigate).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "重试创建" }));
+    await waitFor(() => expect(apiMock.createTask).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 
     await waitFor(() =>
       expect(apiMock.createTask).toHaveBeenCalledWith(
         expect.objectContaining({
-          title: "US站退货分析",
+          title: "",
           dataset_version_id: "returns-v1",
           product_version_id: "products-v2",
           config_version_id: "cfg-1",
@@ -683,7 +827,7 @@ describe("关键用户流程", () => {
     expect(onNavigate).toHaveBeenCalledWith("tasks");
   });
 
-  test("新建任务时可以追加并自动选中退货数据新版本", async () => {
+  test("新建任务时导入新的退货数据集并自动选中", async () => {
     const user = userEvent.setup();
     const notify = vi.fn();
     const onChanged = vi.fn();
@@ -710,11 +854,11 @@ describe("关键用户流程", () => {
     const updatedVersions = [
       {
         kind: "returns",
-        dataset_id: "returns-old",
-        version_id: "returns-v2",
-        dataset_name: "原退货数据",
-        version: 2,
-        current_version: 2,
+        dataset_id: "returns-new",
+        version_id: "returns-new-v1",
+        dataset_name: "新站点退货数据",
+        version: 1,
+        current_version: 1,
         row_count: 20,
         quality: {
           matching_key_ready_rows: 20,
@@ -742,29 +886,67 @@ describe("关键用户流程", () => {
     apiMock.productScopes.mockResolvedValue([
       { store: "SEEKWAY:US", listings: ["SK001"] },
     ]);
-    apiMock.addDatasetVersion.mockResolvedValue({ id: "returns-old" });
+    apiMock.inspectReturnImport.mockResolvedValue({
+      inspection_id: "inspection-task-1",
+      original_name: "returns.csv",
+      suggested_name: "新站点退货数据",
+      stores: ["NEW:US"],
+      source_key: "NEW:US",
+      row_count: 20,
+      column_count: 10,
+      quality: { valid_comment_rows: 18 },
+      matches: [],
+      duplicate: null,
+    });
+    apiMock.importReturns.mockResolvedValue({
+      dataset: { id: "returns-new", usage_scope: "task_input" },
+      version_id: "returns-new-v1",
+      duplicate: false,
+      mode: "analyze_only",
+      summary: { imported_row_count: 20, skipped_row_count: 0 },
+    });
 
     const { container } = render(
       <NewTaskPage notify={notify} onChanged={onChanged} onNavigate={vi.fn()} />,
     );
 
-    await user.click(await screen.findByRole("button", { name: "导入退货明细" }));
-    await user.type(screen.getByLabelText("版本说明"), "删除无效数据后重新导入");
+    await user.click(await screen.findByRole("button", { name: "上传文件" }));
+    await user.click(screen.getByRole("button", { name: "选择文件" }));
+    expect(
+      screen.queryByLabelText(/文件缺少店铺\/站点时补充为/),
+    ).not.toBeInTheDocument();
     await user.upload(
       container.querySelector('input[type="file"]'),
       new File(["comment"], "returns.csv"),
     );
-    await user.click(screen.getByRole("button", { name: "创建不可变版本" }));
+    await user.click(screen.getByRole("button", { name: "检查文件" }));
+    expect(await screen.findByText("文件检查完成")).toBeVisible();
+    expect(screen.getByText("新站点退货数据")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "导入并分析本批" }));
 
     await waitFor(() =>
-      expect(screen.getByLabelText("退货明细")).toHaveValue("returns-v2"),
+      expect(notify).toHaveBeenCalledWith("退货明细已导入并自动选中"),
     );
-    expect(apiMock.addDatasetVersion).toHaveBeenCalledOnce();
-    const body = apiMock.addDatasetVersion.mock.calls[0][1];
-    expect(body.get("default_store")).toBe("SEEKWAY:US");
-    expect(body.get("change_note")).toBe("删除无效数据后重新导入");
+    expect(apiMock.addDatasetVersion).not.toHaveBeenCalled();
+    expect(apiMock.createDataset).not.toHaveBeenCalled();
+    expect(apiMock.inspectReturnImport).toHaveBeenCalledOnce();
+    expect(apiMock.inspectReturnImport.mock.calls[0][0].get("file").name).toBe(
+      "returns.csv",
+    );
+    expect(
+      apiMock.inspectReturnImport.mock.calls[0][0].get("default_store"),
+    ).toBeNull();
+    expect(apiMock.importReturns).toHaveBeenCalledOnce();
+    const body = apiMock.importReturns.mock.calls[0][0];
+    expect(body).toEqual({
+      inspection_id: "inspection-task-1",
+      mode: "analyze_only",
+      dataset_id: "",
+      name: "新站点退货数据",
+      change_note: "",
+    });
     expect(onChanged).toHaveBeenCalledOnce();
-    expect(notify).toHaveBeenCalledWith("新版本已上传并自动选中");
+    expect(notify).toHaveBeenCalledWith("退货明细已导入并自动选中");
   });
 
   test("存在未知品类时必须选择策略并处理计划过期", async () => {
@@ -844,21 +1026,28 @@ describe("关键用户流程", () => {
     );
 
     render(<NewTaskPage notify={vi.fn()} onChanged={vi.fn()} onNavigate={vi.fn()} />);
-    await screen.findByText("待分析数据");
-    await user.click(screen.getByRole("button", { name: /生成执行计划/ }));
+    await screen.findByRole("region", { name: "选择分析数据" });
+    await user.click(screen.getByRole("button", { name: /已有数据/ }));
+    await user.selectOptions(screen.getByLabelText(/^已有数据源/), "returns-v1");
+    await user.click(screen.getByRole("button", { name: /准备分析/ }));
     expect(await screen.findByText("需要处理")).toBeVisible();
     expect(await screen.findByText("鞋履 / 未知鞋型 · 3 条")).toBeVisible();
     const startButton = screen.getByRole("button", {
-      name: /选择处理方式后继续/,
+      name: "选择处理方式后继续",
     });
     expect(startButton).toBeDisabled();
+    await user.click(screen.getByLabelText(/等待品类配置完成后再运行所有片段/));
+    expect(
+      screen.getByRole("button", { name: "保存任务，等待问题处理" }),
+    ).toBeEnabled();
+    expect(screen.getByText("仅保存任务，处理完数据问题后再开始分析。")).toBeVisible();
     await user.click(screen.getByLabelText(/先运行已就绪/));
     const runReadyButton = screen.getByRole("button", {
       name: /启动 8 组已就绪评论/,
     });
     expect(runReadyButton).toBeDisabled();
     await user.click(screen.getByLabelText(/我确认本次仅分析 8 组评论/));
-    await user.click(runReadyButton);
+    await user.click(screen.getByRole("button", { name: /启动 8 组已就绪评论/ }));
 
     await waitFor(() =>
       expect(apiMock.createTask).toHaveBeenCalledWith(
@@ -994,8 +1183,10 @@ describe("关键用户流程", () => {
     render(
       <NewTaskPage notify={vi.fn()} onChanged={vi.fn()} onNavigate={onNavigate} />,
     );
-    await screen.findByText("待分析数据");
-    await user.click(screen.getByRole("button", { name: /生成执行计划/ }));
+    await screen.findByRole("region", { name: "选择分析数据" });
+    await user.click(screen.getByRole("button", { name: /已有数据/ }));
+    await user.selectOptions(screen.getByLabelText(/^已有数据源/), "returns-v1");
+    await user.click(screen.getByRole("button", { name: /准备分析/ }));
     await user.click(
       await screen.findByRole("button", { name: /处理 3 个商品匹配异常/ }),
     );
@@ -1083,9 +1274,69 @@ describe("关键用户流程", () => {
     expect(await screen.findByRole("button", { name: "产品列表" })).toHaveClass(
       "active",
     );
-    expect(screen.getByRole("heading", { name: "商品维度" })).toBeVisible();
+    expect(
+      screen.getByRole("heading", { name: "商品信息汇总", level: 2 }),
+    ).toBeVisible();
     await user.click(await screen.findByRole("button", { name: /返回任务并重新预检/ }));
     expect(onReturnToTask).toHaveBeenCalledWith("products-v2");
+  });
+
+  test("商品信息搜索支持回车提交并可从无结果清除筛选", async () => {
+    const user = userEvent.setup();
+    const productDataset = {
+      id: "products-dataset",
+      kind: "products",
+      name: "商品维度",
+      description: "",
+      current_version: 2,
+      row_count: 6,
+      column_count: 6,
+      updated_at: "2026-08-11T08:00:00Z",
+      quality: { complete_rate: 100 },
+      schema: [],
+      audit: [],
+      versions: [{ id: "products-v2", version: 2 }],
+    };
+    apiMock.datasets.mockResolvedValue([productDataset]);
+    apiMock.dataset.mockResolvedValue(productDataset);
+    apiMock.datasetRows.mockResolvedValue({
+      records: [],
+      total: 0,
+      facets: { stores: [], categories: [] },
+    });
+
+    render(<DataManagement notify={vi.fn()} onNavigate={vi.fn()} focus={null} />);
+
+    const input = await screen.findByRole("textbox", { name: "搜索产品信息" });
+    expect(screen.getByRole("button", { name: "搜索" })).toHaveAttribute(
+      "type",
+      "submit",
+    );
+    await user.type(input, "不存在的商品{Enter}");
+    await waitFor(() =>
+      expect(apiMock.datasetRows).toHaveBeenLastCalledWith(
+        productDataset.id,
+        "不存在的商品",
+        0,
+        15,
+        { store: "", category: "" },
+      ),
+    );
+    expect(screen.getByText("没有匹配的产品信息。")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "清除筛选" }));
+
+    expect(input).toHaveValue("");
+    await waitFor(() =>
+      expect(apiMock.datasetRows).toHaveBeenLastCalledWith(
+        productDataset.id,
+        "",
+        0,
+        15,
+        { store: "", category: "" },
+      ),
+    );
+    expect(screen.queryByRole("button", { name: "清除筛选" })).not.toBeInTheDocument();
   });
 
   test("任务跳转后只展示缺失商品并可批量补充后重新预检", async () => {
@@ -1231,7 +1482,7 @@ describe("关键用户流程", () => {
         notify={vi.fn()}
         onNavigate={vi.fn()}
         onChanged={vi.fn()}
-        focusId={null}
+        focusId={task.id}
       />,
     );
 
@@ -1308,6 +1559,7 @@ describe("关键用户流程", () => {
   });
 
   test("密集进度事件只触发一次批量刷新", async () => {
+    const user = userEvent.setup();
     let eventSource;
     class EventSourceProbe {
       constructor() {
@@ -1370,7 +1622,7 @@ describe("关键用户流程", () => {
           notify={vi.fn()}
           onNavigate={vi.fn()}
           onChanged={onChanged}
-          focusId={null}
+          focusId={task.id}
         />,
       );
       expect(
@@ -1394,8 +1646,12 @@ describe("关键用户流程", () => {
       });
       expect(apiMock.tasks).toHaveBeenCalledTimes(2);
       expect(apiMock.task).toHaveBeenCalledTimes(2);
-      expect(screen.getByText("已完成 12 组评论")).toBeVisible();
+      expect(screen.queryByText("已完成 12 组评论")).not.toBeInTheDocument();
+      await user.click(screen.getByRole("tab", { name: "运行日志" }));
       expect(screen.getAllByText("KP006 · Listing 分类")).toHaveLength(12);
+      expect(
+        screen.queryByRole("region", { name: "Listing 执行队列" }),
+      ).not.toBeInTheDocument();
     } finally {
       globalThis.EventSource = originalEventSource;
     }
@@ -1459,7 +1715,7 @@ describe("关键用户流程", () => {
         notify={vi.fn()}
         onNavigate={onNavigate}
         onChanged={vi.fn()}
-        focusId={null}
+        focusId={task.id}
       />,
     );
 
@@ -1471,15 +1727,14 @@ describe("关键用户流程", () => {
       segmentId: "segment-sr001",
       listing: "SR001",
     });
+    await user.click(screen.getByRole("button", { name: "查看详情" }));
     expect(screen.getByRole("link", { name: "下载" })).toHaveAttribute(
       "href",
       "/classification-download",
     );
     expect(screen.getByText("任务配置")).toBeVisible();
     expect(screen.queryByText("任务快照")).not.toBeInTheDocument();
-    expect(screen.getAllByText("Listing 分类").length).toBeGreaterThan(0);
-    expect(screen.getByText("发布分类版本")).toBeVisible();
-    expect(screen.getByText("任务结束")).toBeVisible();
+    expect(document.querySelector(".task-stage-rail")).not.toBeInTheDocument();
   });
 
   test("模型服务连续失败会显示请求明细和恢复入口", async () => {
@@ -1527,18 +1782,18 @@ describe("关键用户流程", () => {
         notify={vi.fn()}
         onNavigate={vi.fn()}
         onChanged={vi.fn()}
-        focusId={null}
+        focusId={task.id}
       />,
     );
 
     expect(await screen.findByText("模型服务异常，任务已自动暂停")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "查看详情" }));
     expect(screen.getByText("5 次请求")).toBeVisible();
     expect(screen.getByText("成功 0 · 失败 5")).toBeVisible();
-    expect(screen.getByText("下一步：继续全部后恢复执行")).toBeVisible();
     expect(
-      within(container.querySelector(".task-detail-header")).queryByText("已暂停"),
-    ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "继续全部" })).toBeVisible();
+      within(container.querySelector(".task-command-header")).getByText("已暂停"),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "继续未完成" })).toBeVisible();
   });
 
   test("审计任务目标会打开并高亮对应 Listing 片段", async () => {
@@ -1696,16 +1951,18 @@ describe("关键用户流程", () => {
         notify={vi.fn()}
         onNavigate={vi.fn()}
         onChanged={vi.fn()}
-        focusId={null}
+        focusId={task.id}
       />,
     );
 
     const publishingRow = await screen.findByRole("row", { name: /PUBLISHING/ });
     expect(within(publishingRow).getByText("正在生成结果")).toBeVisible();
     expect(
-      within(publishingRow).getByRole("button", { name: "查看分类结果" }),
-    ).toBeDisabled();
-    expect(within(publishingRow).getByRole("button", { name: "下载" })).toBeDisabled();
+      within(publishingRow).queryByRole("button", { name: "查看分类结果" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(publishingRow).queryByRole("link", { name: "下载" }),
+    ).not.toBeInTheDocument();
 
     const failedRow = screen.getByRole("row", { name: /FAILED/ });
     expect(within(failedRow).getByText("结果生成失败")).toBeVisible();
@@ -1727,15 +1984,16 @@ describe("关键用户流程", () => {
 
     const publishedRow = screen.getByRole("row", { name: /PUBLISHED/ });
     expect(within(publishedRow).getByText("可用")).toBeVisible();
-    expect(within(publishedRow).getByText("版本发布：已发布")).toBeVisible();
+    expect(within(publishedRow).getByText("已完成")).toBeVisible();
     expect(
       within(publishedRow).getByRole("button", { name: "查看分类结果" }),
     ).toBeEnabled();
+    await user.click(within(publishedRow).getByRole("button", { name: "查看详情" }));
     expect(within(publishedRow).getByRole("link", { name: "下载" })).toBeVisible();
 
     const reviewRow = screen.getByRole("row", { name: /REVIEW/ });
     expect(within(reviewRow).getByText("需复核")).toBeVisible();
-    expect(within(reviewRow).getByText("版本发布：已发布")).toBeVisible();
+    expect(within(reviewRow).getByText("完成但有异常")).toBeVisible();
     expect(
       within(reviewRow).getByRole("button", { name: "查看分类结果" }),
     ).toBeEnabled();
@@ -1745,7 +2003,7 @@ describe("关键用户流程", () => {
 
     const unusableRow = screen.getByRole("row", { name: /UNUSABLE/ });
     expect(within(unusableRow).getByText("不可用")).toBeVisible();
-    expect(within(unusableRow).getByText("版本发布：已发布")).toBeVisible();
+    expect(within(unusableRow).getByText("已完成")).toBeVisible();
     expect(
       within(unusableRow).getByRole("button", { name: "查看分类结果" }),
     ).toBeEnabled();
@@ -1800,8 +2058,12 @@ describe("关键用户流程", () => {
       />,
     );
 
-    expect(await screen.findByText("已交付（待治理）")).toBeVisible();
-    expect(screen.getByText("下一步：处理待复核与模型异常记录")).toBeVisible();
+    expect(await screen.findByRole("button", { name: "查看已有结果" })).toBeVisible();
+    expect(
+      within(screen.getByRole("region", { name: "任务运行总览" })).getByText(
+        "1 个需复核",
+      ),
+    ).toBeVisible();
     expect(
       screen.queryByRole("button", { name: "重新预检 / 规划" }),
     ).not.toBeInTheDocument();
@@ -1864,7 +2126,8 @@ describe("关键用户流程", () => {
       />,
     );
 
-    expect(await screen.findAllByRole("link", { name: "下载旧结果" })).toHaveLength(2);
+    await userEvent.click(await screen.findByRole("button", { name: "查看详情" }));
+    expect(screen.getAllByRole("link", { name: "下载旧结果" })).toHaveLength(1);
     expect(
       screen.queryByRole("button", { name: "查看分类结果" }),
     ).not.toBeInTheDocument();
@@ -1928,7 +2191,7 @@ describe("关键用户流程", () => {
         notify={vi.fn()}
         onNavigate={vi.fn()}
         onChanged={vi.fn()}
-        focusId={null}
+        focusId={task.id}
       />,
     );
 
@@ -1943,6 +2206,7 @@ describe("关键用户流程", () => {
       ),
     );
 
+    await user.click(screen.getByRole("button", { name: "查看详情" }));
     await user.click(screen.getByRole("button", { name: "取消" }));
     expect(screen.getByRole("button", { name: "取消" })).toHaveClass(
       "secondary-button",
@@ -2037,15 +2301,14 @@ describe("关键用户流程", () => {
       />,
     );
 
-    expect(await screen.findAllByText("已取消（有部分结果）")).not.toHaveLength(0);
+    expect(await screen.findByRole("button", { name: "查看已有结果" })).toBeVisible();
+    await user.click(screen.getByLabelText("更多任务操作"));
     expect(screen.getByRole("link", { name: "下载部分结果" })).toHaveAttribute(
       "href",
       "/partial-download",
     );
-    expect(screen.getByText("已取消")).toBeVisible();
-    expect(
-      screen.getByText("批量任务已取消，已完成 Listing 的分类结果仍然保留"),
-    ).toBeVisible();
+    expect(screen.getAllByText("已取消").length).toBeGreaterThan(0);
+    expect(document.querySelector(".task-stage-rail")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "查看分类结果" })).toBeEnabled();
     await user.click(screen.getByRole("button", { name: "重新排队未完成" }));
     await user.type(screen.getByLabelText("重新排队原因"), "补齐剩余 Listing");
@@ -2060,6 +2323,75 @@ describe("关键用户流程", () => {
         note: "补齐剩余 Listing",
       }),
     );
+  });
+
+  test("取消任务停在真实执行阶段并支持筛选 Listing", async () => {
+    const user = userEvent.setup();
+    const task = {
+      id: "task-cancelled-during-classification",
+      title: "分类中断任务",
+      status: "cancelled",
+      stage: "任务结束",
+      message: "用户请求取消任务",
+      revision: 2,
+      progress_percent: 18,
+      progress_current: 18,
+      progress_total: 100,
+      owner_name: "管理员",
+      created_at: "2026-08-16T01:14:00Z",
+      updated_at: "2026-08-16T01:20:00Z",
+      dataset_name: "退货数据",
+      dataset_version: 6,
+      product_name: "商品信息汇总",
+      product_version: 3,
+      connection_name: "生产线路",
+      config_version: 2,
+      primary_model: "gpt-5.6",
+      primary_effort: "medium",
+      metrics: {},
+      snapshot: { execution_plan: { unresolved_policy: "run_ready" } },
+      segments: [
+        {
+          id: "segment-sk002-cancelled",
+          segment_key: "SEEKWAY:US/SK002/footwear",
+          agent_key: "footwear",
+          agent_family: "鞋履智能体",
+          standard_name: "鞋履退货问题标准",
+          standard_version: 1,
+          scope: { store: "SEEKWAY:US", listing: "SK002" },
+          status: "cancelled",
+          record_count: 19724,
+          unique_comments: 8353,
+          progress_current: 1485,
+          progress_total: 8353,
+          model_calls: 1545,
+          model_failures: 72,
+          cache_hits: 220,
+          variants: [{ category_a: "鞋履", category_b: "薄底水鞋" }],
+          logic_version: "footwear-semantic-v1",
+          taxonomy_version: "taxonomy-v1",
+        },
+      ],
+    };
+    apiMock.tasks.mockResolvedValue([task]);
+    apiMock.task.mockResolvedValue(task);
+
+    render(
+      <TaskMonitor
+        notify={vi.fn()}
+        onNavigate={vi.fn()}
+        onChanged={vi.fn()}
+        focusId={task.id}
+      />,
+    );
+
+    expect(await screen.findAllByText("分类中断任务")).toHaveLength(2);
+    expect(document.querySelector(".task-stage-rail")).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("搜索 Listing"), "不存在的编号");
+    expect(await screen.findByText("没有匹配的 Listing。")).toBeVisible();
+    await user.clear(screen.getByLabelText("搜索 Listing"));
+    expect(await screen.findByText("SK002")).toBeVisible();
   });
 
   test("任务片段只对允许状态提供重试并显示 409 页面状态", async () => {
@@ -2235,11 +2567,13 @@ describe("关键用户流程", () => {
         notify={vi.fn()}
         onNavigate={vi.fn()}
         onChanged={vi.fn()}
-        focusId={null}
+        focusId={task.id}
       />,
     );
 
-    await user.click(await screen.findByRole("button", { name: "置顶 SK003" }));
+    const orderedRow = await screen.findByRole("row", { name: /SK003/ });
+    await user.click(within(orderedRow).getByRole("button", { name: "查看详情" }));
+    await user.click(screen.getByRole("button", { name: "置顶 SK003" }));
 
     await waitFor(() =>
       expect(apiMock.reorderTaskSegments).toHaveBeenCalledWith("task-order", {
@@ -2653,6 +2987,50 @@ describe("关键用户流程", () => {
     expect(screen.getByRole("button", { name: "模型服务" })).toHaveClass("active");
   });
 
+  test("模型服务编辑态说明保存禁用原因并就近校验地址", async () => {
+    const user = userEvent.setup();
+    render(<ApiManagement notify={vi.fn()} />);
+
+    await user.click(await screen.findByRole("button", { name: "新增模型服务" }));
+
+    const availableModelsHeading = screen.getByRole("heading", { name: "可用模型" });
+    expect(availableModelsHeading).toBeVisible();
+    expect(availableModelsHeading.closest(".model-service-editor")).toHaveClass(
+      "is-new-connection",
+    );
+    await user.click(screen.getByRole("button", { name: "添加模型" }));
+    await user.type(
+      screen.getByPlaceholderText("例如 deepseek-reasoner"),
+      "provider-model",
+    );
+    await user.click(screen.getByRole("button", { name: "保存模型" }));
+    expect(screen.getAllByText("provider-model")[0]).toBeVisible();
+    await user.selectOptions(screen.getByLabelText("模型"), "provider-model");
+
+    const saveButton = screen.getByRole("button", { name: "保存草稿" });
+    const baseUrlInput = screen.getByLabelText("Base URL");
+    expect(saveButton).toBeDisabled();
+    expect(screen.queryByText("请选择验证模型。")).not.toBeInTheDocument();
+    expect(screen.getAllByText("请填写配置变更原因。").length).toBeGreaterThan(0);
+    expect(baseUrlInput).toHaveAttribute("aria-invalid", "true");
+    expect(baseUrlInput).toHaveAttribute(
+      "aria-describedby",
+      "model-service-base-url-error",
+    );
+
+    await user.type(baseUrlInput, "http://api.example.com");
+    expect(screen.getByText("非本地 API 必须使用 HTTPS。")).toBeVisible();
+
+    await user.clear(baseUrlInput);
+    await user.type(baseUrlInput, "https://api.example.com/v1");
+    expect(screen.queryByText("非本地 API 必须使用 HTTPS。")).not.toBeInTheDocument();
+    expect(baseUrlInput).toHaveAttribute("aria-invalid", "false");
+
+    await user.type(screen.getByLabelText("配置变更原因"), "新增生产接入");
+    expect(saveButton).toBeEnabled();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
   test("模型服务摘要展示未发布草稿并保留按需编辑入口", async () => {
     const user = userEvent.setup();
     const activeVersion = {
@@ -2703,6 +3081,80 @@ describe("关键用户流程", () => {
     expect(screen.getByRole("heading", { name: "连接信息" })).toBeVisible();
     expect(screen.getByLabelText("API 密钥")).toHaveValue("");
     expect(screen.getByRole("button", { name: "取消" })).toBeVisible();
+  });
+
+  test("已有连接可替换停用的共享验证模型且不修改个人偏好", async () => {
+    const user = userEvent.setup();
+    const activeVersion = {
+      id: "cfg-1",
+      connection_id: "conn-1",
+      version: 1,
+      base_url: "https://api.example.com/v1",
+      primary_model: "retired-model",
+      primary_effort: "medium",
+      validation_status: "validated",
+      published_at: "2026-08-10T08:10:00Z",
+    };
+    apiMock.configs.mockResolvedValue([
+      {
+        id: "conn-1",
+        name: "生产模型服务",
+        active_version_id: "cfg-1",
+        active_version: activeVersion,
+        versions: [activeVersion],
+        models: [
+          {
+            id: "retired",
+            model_key: "retired-model",
+            display_name: "旧模型",
+            active: false,
+            supported_efforts: ["medium"],
+          },
+          {
+            id: "available",
+            model_key: "available-model",
+            display_name: "可用模型",
+            active: true,
+            validation_status: "validated",
+            supported_efforts: ["medium"],
+          },
+        ],
+      },
+    ]);
+    apiMock.createConfig.mockResolvedValue({
+      ...activeVersion,
+      id: "cfg-2",
+      version: 2,
+    });
+    render(
+      <>
+        <style>{systemSettingsStyles}</style>
+        <ApiManagement notify={vi.fn()} />
+      </>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "编辑连接" }));
+    const modelSelect = screen.getByRole("combobox", { name: "模型", exact: true });
+    expect(modelSelect).toBeVisible();
+    expect(modelSelect).toHaveValue("retired-model");
+    expect(screen.getByRole("option", { name: /旧模型.*已停用/ })).toBeVisible();
+    expect(screen.getByText(/分类标准的 Review 样本/)).toBeVisible();
+    await user.selectOptions(modelSelect, "available-model");
+    await user.type(screen.getByLabelText("配置变更原因"), "替换停用的样本验证模型");
+    await user.click(screen.getByRole("button", { name: "保存草稿" }));
+
+    await waitFor(() =>
+      expect(apiMock.createConfig).toHaveBeenCalledWith(
+        expect.objectContaining({
+          connection_id: "conn-1",
+          primary_model: "available-model",
+          primary_effort: "medium",
+          api_key: "",
+        }),
+      ),
+    );
+    expect(apiMock.saveModelPreference).not.toHaveBeenCalled();
+    expect(apiMock.publishConfig).not.toHaveBeenCalled();
   });
 
   test("模型服务低频操作收进更多菜单且已验证草稿发布入口可达", async () => {
@@ -2857,7 +3309,7 @@ describe("关键用户流程", () => {
     scrollProbe.mockRestore();
   });
 
-  test("移除历史任务焦点后回到进行中并选择首个可运行任务", async () => {
+  test("移除任务焦点后返回列表且不自动选择任务", async () => {
     const baseTask = {
       stage: "准备数据",
       message: "等待运行",
@@ -2904,10 +3356,7 @@ describe("关键用户流程", () => {
     );
     const detail = container.querySelector(".task-detail-panel");
     expect(await within(detail).findByText("已取消历史任务")).toBeVisible();
-    expect(screen.getByRole("button", { name: "全部" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    expect(screen.queryByRole("region", { name: "任务列表" })).not.toBeInTheDocument();
 
     rerender(
       <TaskMonitor
@@ -2918,12 +3367,104 @@ describe("关键用户流程", () => {
       />,
     );
 
-    expect(await within(detail).findByText("当前运行任务")).toBeVisible();
-    expect(screen.getByRole("button", { name: "进行中" })).toHaveAttribute(
+    expect(await screen.findByRole("table", { name: "任务管理表" })).toBeVisible();
+    expect(container.querySelector(".task-detail-panel")).not.toBeInTheDocument();
+    expect(apiMock.task).toHaveBeenCalledTimes(1);
+  });
+
+  test("只看需处理独立于执行状态，主动暂停不算异常", async () => {
+    const tasks = [
+      {
+        id: "review-running",
+        title: "运行中有待复核",
+        status: "running",
+        segments: [
+          {
+            status: "completed",
+            result_publish_status: "published",
+            result_quality_status: "needs_review",
+          },
+        ],
+      },
+      {
+        id: "paused-normal",
+        title: "正常暂停",
+        status: "paused",
+        segments: [{ status: "paused" }],
+      },
+      {
+        id: "failed-task",
+        title: "失败任务",
+        status: "failed",
+        segments: [{ status: "failed" }],
+      },
+    ];
+    apiMock.tasks.mockResolvedValue(tasks);
+    render(<TaskMonitor notify={vi.fn()} onNavigate={vi.fn()} onChanged={vi.fn()} />);
+    await screen.findByRole("table", { name: "任务管理表" });
+    await userEvent.click(screen.getByRole("checkbox", { name: "只看需处理" }));
+    expect(screen.getByText("运行中有待复核")).toBeVisible();
+    expect(screen.getByText("失败任务")).toBeVisible();
+    expect(screen.queryByText("正常暂停")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "未结束" }));
+    expect(screen.getByText("运行中有待复核")).toBeVisible();
+    expect(screen.queryByText("失败任务")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("checkbox", { name: "只看需处理" }));
+    expect(screen.getByText("正常暂停")).toBeVisible();
+    expect(apiMock.task).not.toHaveBeenCalled();
+  });
+
+  test("清空任务搜索后焦点回到搜索框", async () => {
+    const user = userEvent.setup();
+    apiMock.tasks.mockResolvedValue([
+      {
+        id: "paused-task",
+        title: "暂停任务",
+        status: "paused",
+        segments: [],
+      },
+    ]);
+    render(<TaskMonitor notify={vi.fn()} onNavigate={vi.fn()} onChanged={vi.fn()} />);
+    await screen.findByRole("table", { name: "任务管理表" });
+    const searchInput = screen.getByLabelText("搜索任务、店铺或 Listing");
+    await user.type(searchInput, "无匹配任务");
+
+    await user.click(screen.getByRole("button", { name: "清空搜索" }));
+
+    expect(searchInput).toHaveValue("");
+    expect(document.activeElement).toBe(searchInput);
+  });
+
+  test("返回列表保留搜索、状态筛选和滚动位置", async () => {
+    const task = {
+      id: "paused-task",
+      title: "暂停任务",
+      status: "paused",
+      segments: [],
+    };
+    apiMock.tasks.mockResolvedValue([
+      task,
+      { id: "ended-task", title: "已结束任务", status: "completed" },
+    ]);
+    apiMock.task.mockResolvedValue(task);
+    const navigate = vi.fn();
+    render(<TaskMonitor notify={vi.fn()} onNavigate={navigate} onChanged={vi.fn()} />);
+    await screen.findByRole("table", { name: "任务管理表" });
+    await userEvent.click(screen.getByRole("button", { name: "未结束" }));
+    await userEvent.type(screen.getByLabelText("搜索任务、店铺或 Listing"), "暂停");
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 240 });
+    await userEvent.click(screen.getByRole("button", { name: /暂停任务/ }));
+    expect(await screen.findByRole("heading", { name: "暂停任务" })).toBeVisible();
+    expect(screen.queryByRole("table", { name: "任务管理表" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "全部任务" }));
+    expect(screen.getByLabelText("搜索任务、店铺或 Listing")).toHaveValue("暂停");
+    expect(screen.getByRole("button", { name: "未结束" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    expect(within(detail).queryByText("已取消历史任务")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "暂停任务" })).not.toBeInTheDocument();
+    await waitFor(() => expect(window.scrollTo).toHaveBeenLastCalledWith(0, 240));
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 0 });
   });
 
   test("移除历史任务焦点且没有进行中任务时清空详情", async () => {
@@ -2971,12 +3512,11 @@ describe("关键用户流程", () => {
       />,
     );
 
-    expect(await screen.findByText("暂无任务")).toBeVisible();
-    expect(within(detail).getByText("选择一个任务")).toBeVisible();
-    expect(within(detail).queryByText("唯一已取消任务")).not.toBeInTheDocument();
+    expect(await screen.findByRole("table", { name: "任务管理表" })).toBeVisible();
+    expect(container.querySelector(".task-detail-panel")).not.toBeInTheDocument();
   });
 
-  test("直接打开分析任务列表时不会默认展示已结束任务", async () => {
+  test("直接打开任务页展示全部任务且不加载详情", async () => {
     const finishedTask = {
       id: "task-direct-finished",
       title: "不应默认展示的任务",
@@ -2993,15 +3533,82 @@ describe("关键用户流程", () => {
       />,
     );
 
-    expect(await screen.findByText("暂无任务")).toBeVisible();
-    expect(screen.getByRole("button", { name: "进行中" })).toHaveAttribute(
+    expect(await screen.findByRole("table", { name: "任务管理表" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "全部" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    expect(
-      within(container.querySelector(".task-detail-panel")).getByText("选择一个任务"),
-    ).toBeVisible();
+    expect(container.querySelector(".task-detail-panel")).not.toBeInTheDocument();
     expect(apiMock.task).not.toHaveBeenCalled();
+  });
+
+  test("任务管理表支持创建类似任务和批量归档", async () => {
+    const user = userEvent.setup();
+    const baseTask = {
+      status: "cancelled",
+      stage: "已取消",
+      message: "任务已取消",
+      revision: 1,
+      progress_percent: 0,
+      progress_current: 0,
+      progress_total: 1,
+      listing_count: 1,
+      owner_name: "管理员",
+      created_at: "2026-08-12T08:00:00Z",
+      updated_at: "2026-08-12T09:00:00Z",
+      metrics: {},
+      snapshot: {},
+      segments: [],
+      events: [],
+    };
+    const tasks = [
+      { ...baseTask, id: "task-manage-a", title: "已结束任务 A" },
+      {
+        ...baseTask,
+        id: "task-manage-b",
+        title: "已结束任务 B",
+        updated_at: "2026-08-12T08:30:00Z",
+      },
+    ];
+    apiMock.tasks.mockResolvedValue(tasks);
+    apiMock.task.mockImplementation((id) =>
+      Promise.resolve(tasks.find((task) => task.id === id)),
+    );
+    apiMock.archiveTasks.mockResolvedValue(tasks);
+    const onNavigate = vi.fn();
+
+    render(
+      <TaskMonitor
+        notify={vi.fn()}
+        onNavigate={onNavigate}
+        onChanged={vi.fn()}
+        focusId={null}
+      />,
+    );
+
+    expect(await screen.findByRole("table", { name: "任务管理表" })).toBeVisible();
+    await user.click(screen.getByLabelText("更多任务操作：已结束任务 A"));
+    const firstTaskRow = screen.getByRole("row", { name: /已结束任务 A/ });
+    await user.click(
+      within(firstTaskRow).getByRole("button", { name: "创建类似任务" }),
+    );
+    expect(onNavigate).toHaveBeenCalledWith("new", {
+      kind: "task-template",
+      id: "task-manage-a",
+    });
+
+    await user.click(screen.getByRole("checkbox", { name: "选择任务：已结束任务 A" }));
+    await user.click(screen.getByRole("checkbox", { name: "选择任务：已结束任务 B" }));
+    const batchActions = screen.getByRole("region", { name: "批量任务操作" });
+    expect(within(batchActions).getByText("已选择 2 个任务")).toBeVisible();
+    await user.click(within(batchActions).getByRole("button", { name: "归档" }));
+
+    await waitFor(() =>
+      expect(apiMock.archiveTasks).toHaveBeenCalledWith(
+        expect.arrayContaining(["task-manage-a", "task-manage-b"]),
+        true,
+      ),
+    );
   });
 
   test("任务列表读取失败后显示错误并允许重新加载", async () => {

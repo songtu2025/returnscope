@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowClockwise,
   ArrowRight,
@@ -80,11 +80,22 @@ export function AuditLogPage({ route }) {
   const page = numberParam(route.query.page);
   const [draft, setDraft] = useState(() => filtersFromRoute(route));
   const [state, setState] = useState({ loading: true, error: "", data: null });
+  const dateToRef = useRef(null);
+  const dateRangeError = getDateRangeError(draft);
 
   useEffect(() => setDraft(filtersFromRoute(route)), [route]);
 
   const load = useCallback(
     async (signal) => {
+      if (
+        getDateRangeError({
+          date_from: route.query.date_from || "",
+          date_to: route.query.date_to || "",
+        })
+      ) {
+        setState({ loading: false, error: "", data: null });
+        return;
+      }
       setState({ loading: true, error: "", data: null });
       try {
         const data = await auditApi.logs(
@@ -131,6 +142,10 @@ export function AuditLogPage({ route }) {
           className="audit-filter-form"
           onSubmit={(event) => {
             event.preventDefault();
+            if (dateRangeError) {
+              dateToRef.current?.focus();
+              return;
+            }
             writeAuditRoute(route, { ...draft, page: "" });
           }}
         >
@@ -180,15 +195,35 @@ export function AuditLogPage({ route }) {
           <label>
             结束日期
             <input
+              ref={dateToRef}
               type="date"
+              aria-label="结束日期"
               value={draft.date_to}
               onChange={(event) => setDraft({ ...draft, date_to: event.target.value })}
+              aria-invalid={Boolean(dateRangeError)}
+              aria-describedby={dateRangeError ? "audit-date-to-error" : undefined}
             />
+            {dateRangeError && (
+              <small
+                id="audit-date-to-error"
+                className="audit-filter-error"
+                role="alert"
+              >
+                {dateRangeError}
+              </small>
+            )}
           </label>
           <button className="primary-button">筛选</button>
         </form>
 
-        {state.loading ? (
+        {dateRangeError ? (
+          <div className="plan-state error audit-error">
+            <div>
+              <b>日期范围有误</b>
+              <p>请修正结束日期后重新筛选，当前审计结果已隐藏。</p>
+            </div>
+          </div>
+        ) : state.loading ? (
           <InlineLoading label="正在读取审计记录…" />
         ) : state.error ? (
           <div className="plan-state error audit-error" role="alert">
@@ -327,6 +362,13 @@ function filtersFromRoute(route) {
     date_from: route.query.date_from || "",
     date_to: route.query.date_to || "",
   };
+}
+
+function getDateRangeError(filters) {
+  if (filters.date_from && filters.date_to && filters.date_from > filters.date_to) {
+    return "结束日期不能早于开始日期。";
+  }
+  return "";
 }
 
 function flattenObject(value, prefix = "", result = {}) {

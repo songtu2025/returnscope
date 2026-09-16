@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+from dataclasses import dataclass
 from typing import Any, Callable
 
 from web_backend.common import add_audit, new_id
@@ -9,6 +10,12 @@ from web_backend.database import Database
 from web_backend.model_catalog import ModelCatalogService, validate_effort
 from web_backend.model_probe import ModelProbe, ModelValidationError
 from web_backend.security import utc_now
+
+
+@dataclass(frozen=True)
+class _ValidationRunContext:
+    run: dict[str, Any]
+    config: dict[str, Any]
 
 
 class ValidationRunService:
@@ -210,11 +217,25 @@ class ValidationRunService:
                 )
 
     def run_validation(self, run_id: str) -> None:
+        context = self._prepare_validation_context(run_id)
+        if context is None:
+            return
+        for index, item in enumerate(context.run["items"]):
+            error = self._run_validation_item(context, index, item)
+            if error is not None:
+                self._finish_failed_validation(context, index, error)
+                return
+        self._finish_successful_validation(context)
+
+    def _prepare_validation_context(
+        self,
+        run_id: str,
+    ) -> _ValidationRunContext | None:
         run = self.get_validation_run(run_id)
         if run is None or run["status"] != "queued":
-            return
+            return None
         if not self._start_validation_run(run_id):
-            return
+            return None
         run = self.get_validation_run(run_id) or run
         config = self.get_version(
             str(run["config_version_id"]),
@@ -228,121 +249,145 @@ class ValidationRunService:
                 "API 配置不存在",
                 "请重新保存 API 接入配置",
             )
-            return
-        for index, item in enumerate(run["items"]):
+            return None
+        return _ValidationRunContext(run=run, config=config)
+
+    def _run_validation_item(
+        self,
+        context: _ValidationRunContext,
+        index: int,
+        item: dict[str, Any],
+    ) -> ModelValidationError | None:
+        run = context.run
+        run_id = str(run["id"])
+        self._update_validation_item(
+            run_id,
+            index,
+            {
+                "status": "running",
+                "stage": "preparing",
+                "message": "正在检查模型与连接配置",
+                "started_at": utc_now(),
+            },
+            "model_started",
+            "正在检查模型与连接配置",
+        )
+
+        def on_stage(
+            stage: str,
+            message: str,
+            data: dict[str, Any],
+            item_index: int = index,
+        ) -> None:
             self._update_validation_item(
                 run_id,
-                index,
-                {
-                    "status": "running",
-                    "stage": "preparing",
-                    "message": "正在检查模型与连接配置",
-                    "started_at": utc_now(),
-                },
-                "model_started",
-                "正在检查模型与连接配置",
+                item_index,
+                {"stage": stage, "message": message, **data},
+                "stage",
+                message,
+                data,
             )
 
-            def on_stage(
-                stage: str,
-                message: str,
-                data: dict[str, Any],
-                item_index: int = index,
-            ) -> None:
-                self._update_validation_item(
-                    run_id,
-                    item_index,
-                    {"stage": stage, "message": message, **data},
-                    "stage",
-                    message,
-                    data,
-                )
-
-            started = time.monotonic()
-            try:
-                report = self.model_probe.test(
-                    config,
-                    str(item["model_key"]),
-                    str(item["effort"]),
-                    on_stage=on_stage,
-                )
-            except Exception as exc:
-                error = self._as_validation_error(exc)
-                duration_ms = round((time.monotonic() - started) * 1000)
-                model = self.model_catalog.get(str(item["model_id"]))
-                if model:
-                    self.model_catalog.set_validation(
-                        model,
-                        "failed",
-                        str(error)[:500],
-                        str(run["created_by"]),
-                    )
-                self._update_validation_item(
-                    run_id,
-                    index,
-                    {
-                        "status": "failed",
-                        "stage": "failed",
-                        "message": str(error),
-                        "duration_ms": duration_ms,
-                        "http_status": error.http_status,
-                        "error_category": error.category,
-                        "suggestion": error.suggestion,
-                        "completed_at": utc_now(),
-                    },
-                    "model_failed",
-                    str(error),
-                    {
-                        "duration_ms": duration_ms,
-                        "http_status": error.http_status,
-                        "error_category": error.category,
-                        "suggestion": error.suggestion,
-                    },
-                )
-                self._skip_validation_items(run_id, index + 1)
-                if run["kind"] == "config":
-                    self._set_config_validation(
-                        str(run["target_id"]),
-                        "failed",
-                        str(error)[:500],
-                        str(run["created_by"]),
-                    )
-                self._finish_validation_run(
-                    run,
-                    "failed",
-                    error.category,
-                    str(error),
-                    error.suggestion,
-                )
-                return
+        started = time.monotonic()
+        try:
+            report = self.model_probe.test(
+                context.config,
+                str(item["model_key"]),
+                str(item["effort"]),
+                on_stage=on_stage,
+            )
+        except Exception as exc:
+            error = self._as_validation_error(exc)
+            duration_ms = round((time.monotonic() - started) * 1000)
             model = self.model_catalog.get(str(item["model_id"]))
-            message = (
-                f"HTTP {report['http_status']} · {report['duration_ms']} ms · "
-                f"使用 {item['effort']} 推理强度测试通过"
-            )
             if model:
                 self.model_catalog.set_validation(
                     model,
-                    "validated",
-                    message,
+                    "failed",
+                    str(error)[:500],
                     str(run["created_by"]),
                 )
             self._update_validation_item(
                 run_id,
                 index,
                 {
-                    "status": "passed",
-                    "stage": "passed",
-                    "message": "模型响应与结构检查通过",
-                    "duration_ms": report["duration_ms"],
-                    "http_status": report["http_status"],
-                    "response_model": report["response_model"],
+                    "status": "failed",
+                    "stage": "failed",
+                    "message": str(error),
+                    "duration_ms": duration_ms,
+                    "http_status": error.http_status,
+                    "error_category": error.category,
+                    "suggestion": error.suggestion,
                     "completed_at": utc_now(),
                 },
-                "model_passed",
-                "模型响应与结构检查通过",
-                report,
+                "model_failed",
+                str(error),
+                {
+                    "duration_ms": duration_ms,
+                    "http_status": error.http_status,
+                    "error_category": error.category,
+                    "suggestion": error.suggestion,
+                },
             )
+            return error
+        model = self.model_catalog.get(str(item["model_id"]))
+        message = (
+            f"HTTP {report['http_status']} · {report['duration_ms']} ms · "
+            f"使用 {item['effort']} 推理强度测试通过"
+        )
+        if model:
+            self.model_catalog.set_validation(
+                model,
+                "validated",
+                message,
+                str(run["created_by"]),
+            )
+        self._update_validation_item(
+            run_id,
+            index,
+            {
+                "status": "passed",
+                "stage": "passed",
+                "message": "模型响应与结构检查通过",
+                "duration_ms": report["duration_ms"],
+                "http_status": report["http_status"],
+                "response_model": report["response_model"],
+                "completed_at": utc_now(),
+            },
+            "model_passed",
+            "模型响应与结构检查通过",
+            report,
+        )
+        return None
+
+    def _finish_failed_validation(
+        self,
+        context: _ValidationRunContext,
+        failed_index: int,
+        error: ModelValidationError,
+    ) -> None:
+        run = context.run
+        self._skip_validation_items(str(run["id"]), failed_index + 1)
+        if run["kind"] == "config":
+            self._set_config_validation(
+                str(run["target_id"]),
+                "failed",
+                str(error)[:500],
+                str(run["created_by"]),
+            )
+        self._finish_validation_run(
+            run,
+            "failed",
+            error.category,
+            str(error),
+            error.suggestion,
+        )
+
+    def _finish_successful_validation(
+        self,
+        context: _ValidationRunContext,
+    ) -> None:
+        run = context.run
         if run["kind"] == "config":
             self._set_config_validation(
                 str(run["target_id"]),

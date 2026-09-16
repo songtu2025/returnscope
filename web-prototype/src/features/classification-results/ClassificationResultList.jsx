@@ -428,41 +428,55 @@ export function ClassificationResultList({ route, updateRoute, notify, userId })
       )}
 
       <section className="result-pool-filters" aria-label="分类结果筛选">
-        <div className="result-pool-search">
-          <MagnifyingGlass size={18} />
+        <label className="result-filter-field">
+          <span>关键词</span>
+          <div className="result-pool-search">
+            <MagnifyingGlass size={18} />
+            <input
+              aria-label="搜索分类结果"
+              placeholder="搜索 Listing、产品名称或 SKU"
+              value={filters.q}
+              onChange={(event) => setFilters({ ...filters, q: event.target.value })}
+            />
+          </div>
+        </label>
+        <label className="result-filter-field">
+          <span>店铺/站点</span>
           <input
-            aria-label="搜索分类结果"
-            placeholder="搜索 Listing、产品名称或 SKU"
-            value={filters.q}
-            onChange={(event) => setFilters({ ...filters, q: event.target.value })}
+            aria-label="店铺或站点"
+            placeholder="店铺/站点"
+            value={filters.storeSite}
+            onChange={(event) =>
+              setFilters({ ...filters, storeSite: event.target.value })
+            }
           />
-        </div>
-        <input
-          aria-label="店铺或站点"
-          placeholder="店铺/站点"
-          value={filters.storeSite}
-          onChange={(event) =>
-            setFilters({ ...filters, storeSite: event.target.value })
-          }
-        />
-        <input
-          aria-label="Listing"
-          placeholder="Listing"
-          value={filters.listing}
-          onChange={(event) => setFilters({ ...filters, listing: event.target.value })}
-        />
-        <select
-          aria-label="结果质量"
-          value={filters.qualityStatus}
-          onChange={(event) =>
-            setFilters({ ...filters, qualityStatus: event.target.value })
-          }
-        >
-          <option value="">全部质量状态</option>
-          <option value="ready">可用</option>
-          <option value="review_required">需复核</option>
-          <option value="unusable">不可用</option>
-        </select>
+        </label>
+        <label className="result-filter-field">
+          <span>Listing</span>
+          <input
+            aria-label="Listing"
+            placeholder="Listing"
+            value={filters.listing}
+            onChange={(event) =>
+              setFilters({ ...filters, listing: event.target.value })
+            }
+          />
+        </label>
+        <label className="result-filter-field">
+          <span>结果质量</span>
+          <select
+            aria-label="结果质量"
+            value={filters.qualityStatus}
+            onChange={(event) =>
+              setFilters({ ...filters, qualityStatus: event.target.value })
+            }
+          >
+            <option value="">全部质量状态</option>
+            <option value="ready">可用</option>
+            <option value="review_required">需复核</option>
+            <option value="unusable">不可用</option>
+          </select>
+        </label>
         <button
           className="primary-button"
           onClick={() => updateRoute({ ...filters, page: 1 })}
@@ -631,7 +645,10 @@ function ResultPoolRow({ result, onOpen, onPrimary, selectable, selected, onTogg
       </div>
       <div className="result-time-cell">
         <b>{formatTime(result.published_at || result.created_at)}</b>
-        <span>{result.agent_family || "未提供智能体"}</span>
+        <span>
+          {result.standard_name || result.agent_family || "未提供分类标准"}
+          {result.standard_version ? ` · V${result.standard_version}` : ""}
+        </span>
       </div>
       <div className="result-row-actions">
         <button

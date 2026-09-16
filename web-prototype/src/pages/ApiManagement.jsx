@@ -44,6 +44,26 @@ function createDefaultModelCatalog() {
   return [];
 }
 
+function getBaseUrlError(value) {
+  const baseUrl = value.trim();
+  if (!baseUrl) return "请填写 Base URL。";
+  try {
+    const parsed = new URL(baseUrl);
+    if (!["http:", "https:"].includes(parsed.protocol) || !parsed.hostname) {
+      return "Base URL 必须是有效的 HTTP 或 HTTPS 地址。";
+    }
+    if (
+      parsed.protocol !== "https:" &&
+      !["127.0.0.1", "localhost"].includes(parsed.hostname)
+    ) {
+      return "非本地 API 必须使用 HTTPS。";
+    }
+  } catch {
+    return "Base URL 必须是有效的 HTTP 或 HTTPS 地址。";
+  }
+  return "";
+}
+
 function configValue(key, value) {
   if (key.endsWith("_effort")) return EFFORT_LABELS[value] ?? value ?? "未设置";
   return value === null || value === undefined || value === ""
@@ -127,6 +147,15 @@ export function ApiManagement({
         historical: true,
       })),
   ];
+  const baseUrlError = editing ? getBaseUrlError(form.base_url) : "";
+  const configFormErrors = editing
+    ? [
+        baseUrlError,
+        !form.primary_model ? "请选择验证模型。" : "",
+        !form.change_note?.trim() ? "请填写配置变更原因。" : "",
+      ].filter(Boolean)
+    : [];
+  const saveDisabled = busy === "save" || configFormErrors.length > 0;
   useEffect(() => {
     if (preserveConfigForm.current) {
       preserveConfigForm.current = false;
@@ -855,6 +884,7 @@ export function ApiManagement({
               "model-service-editor",
               `panel-${activePanel}`,
               connections.length > 1 && "has-connections",
+              !selectedConnection && "is-new-connection",
             )}
           >
             {connections.length > 1 && (
@@ -951,12 +981,26 @@ export function ApiManagement({
                       Base URL
                       <input
                         disabled={!editing}
+                        aria-label="Base URL"
                         value={form.base_url}
                         onChange={(event) =>
                           setForm({ ...form, base_url: event.target.value })
                         }
                         placeholder="https://api.example.com/v1"
+                        aria-invalid={Boolean(baseUrlError)}
+                        aria-describedby={
+                          baseUrlError ? "model-service-base-url-error" : undefined
+                        }
                       />
+                      {baseUrlError && (
+                        <small
+                          id="model-service-base-url-error"
+                          className="config-field-error"
+                          role="alert"
+                        >
+                          {baseUrlError}
+                        </small>
+                      )}
                     </label>
                     <label>
                       API 密钥
@@ -994,11 +1038,11 @@ export function ApiManagement({
                 validationEvents={validationEvents}
                 validationRun={validationRun}
               />
-              {!selectedConnection && (
+              {activePanel === "connection" && (
                 <div className="config-section" id="model-pipeline">
                   <CardHeading
-                    title="连接验证模型"
-                    note="新接入需要选择至少一个模型，用于保存与验证连接；任务策略由用户单独维护。"
+                    title="共享验证模型"
+                    note="用于验证连接及分类标准的 Review 样本；保存、验证并发布配置后生效。"
                   />
                   <div className="model-config-row primary">
                     <span className="model-number">1</span>
@@ -1006,12 +1050,13 @@ export function ApiManagement({
                       <b>
                         验证模型 <em>必选</em>
                       </b>
-                      <small>用于验证新接入是否可用，不会成为用户的任务策略。</small>
+                      <small>个人模型偏好与任务策略独立维护，不会随此选择更改。</small>
                     </div>
                     <label>
                       模型
                       <select
                         disabled={!editing}
+                        aria-label="模型"
                         required
                         value={form.primary_model ?? ""}
                         onChange={(event) =>
@@ -1040,6 +1085,9 @@ export function ApiManagement({
                           </option>
                         ))}
                       </select>
+                      {!form.primary_model && (
+                        <small className="config-field-error">请选择验证模型。</small>
+                      )}
                     </label>
                     <div className="effort-picker">
                       <span>推理强度</span>
@@ -1114,6 +1162,7 @@ export function ApiManagement({
                   配置变更原因
                   <textarea
                     disabled={!editing}
+                    aria-label="配置变更原因"
                     value={form.change_note ?? ""}
                     onChange={(event) =>
                       setForm({ ...form, change_note: event.target.value })
@@ -1123,6 +1172,9 @@ export function ApiManagement({
                     placeholder="必填：说明本次新增或调整配置的原因"
                     required
                   />
+                  {!form.change_note?.trim() && (
+                    <small className="config-field-error">请填写配置变更原因。</small>
+                  )}
                 </label>
               </div>
               <div className="sticky-config-bar">
@@ -1141,6 +1193,11 @@ export function ApiManagement({
                     {selectedVersion?.validation_message ||
                       (editing ? "修改会创建新草稿版本" : "配置尚未验证")}
                   </span>
+                  {configFormErrors.length > 0 && (
+                    <small className="config-save-disabled-reason" role="status">
+                      暂时无法保存：{configFormErrors.join("；")}
+                    </small>
+                  )}
                 </div>
                 {editing ? (
                   <>
@@ -1150,11 +1207,7 @@ export function ApiManagement({
                     <button
                       className="primary-button"
                       onClick={save}
-                      disabled={
-                        busy === "save" ||
-                        !form.change_note?.trim() ||
-                        !form.primary_model
-                      }
+                      disabled={saveDisabled}
                     >
                       {busy === "save" ? "保存中…" : "保存草稿"}
                     </button>
@@ -1218,7 +1271,7 @@ export function ApiManagement({
                   }
                 />
                 <InfoRow
-                  label="连接验证模型"
+                  label="共享验证模型"
                   value={selectedConnection?.active_version?.primary_model ?? "—"}
                 />
                 <InfoRow

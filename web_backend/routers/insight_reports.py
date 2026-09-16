@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from web_backend.api_schemas import (
     InsightReportFromResultsRequest,
     InsightReportGenerateRequest,
+    InsightReportIssueDecisionRequest,
 )
 from web_backend.dashboard_service import DashboardConflict, DashboardNotFound
 from web_backend.insight_report_service import (
@@ -87,5 +88,26 @@ def create_insight_report_router(
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except InsightReportConflict as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @router.put("/api/ai-insight-reports/{report_id}/issues/{issue_id}/decision")
+    def set_issue_decision(
+        report_id: str,
+        issue_id: str,
+        payload: InsightReportIssueDecisionRequest,
+        user: User,
+    ) -> dict[str, Any]:
+        try:
+            return service.set_issue_decision(
+                report_id,
+                issue_id,
+                payload.status,
+                str(user["id"]),
+            )
+        except InsightReportNotFound as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except InsightReportConflict as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return router

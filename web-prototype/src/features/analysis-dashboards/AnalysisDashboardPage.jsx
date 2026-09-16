@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   CaretRight,
   ChartBar,
@@ -7,15 +15,18 @@ import {
 } from "@phosphor-icons/react";
 
 import { navigateHash } from "../../app/hashRouter";
+import { Pagination } from "../../components/Pagination";
 import { EmptyState, InlineLoading, PageHeading } from "../../components/SharedUi";
 import { formatTime } from "../../lib/presentation";
+import { PAGE_SIZES } from "../../shared/pagination";
 import { dashboardApi } from "../../shared/api/dashboardApi";
 import { DashboardCreateFlow } from "./DashboardCreateFlow";
-import { DashboardDetail } from "./DashboardDetail";
-import { DashboardPagination } from "./DashboardPagination";
 import { createDashboardSelection } from "./dashboardSelectionStorage";
 
-const PAGE_SIZES = [20, 50, 100];
+const DashboardDetail = lazy(() =>
+  import("./DashboardDetail").then((module) => ({ default: module.DashboardDetail })),
+);
+
 const TABS = new Set(["overview", "report", "source", "history"]);
 
 function routeState(query) {
@@ -24,6 +35,7 @@ function routeState(query) {
     dashboardId: query.dashboard || "",
     versionId: query.version || "",
     reportId: query.report || "",
+    issueId: query.issue || "",
     tab: TABS.has(query.tab) ? query.tab : "overview",
     selectionToken: query.selection_token || "",
     step: ["check", "conflicts", "confirm"].includes(query.step) ? query.step : "check",
@@ -50,6 +62,7 @@ function writeRoute(route, options) {
       dashboard: route.dashboardId,
       version: route.versionId,
       report: route.reportId,
+      issue: route.issueId,
       tab: route.tab === "overview" ? "" : route.tab,
       selection_token: route.selectionToken,
       step: route.selectionToken && route.step !== "check" ? route.step : "",
@@ -73,19 +86,25 @@ function writeRoute(route, options) {
 
 export function AnalysisDashboardPage({ route: appRoute, notify, userId }) {
   const route = routeState(appRoute?.query ?? {});
+  const routeRef = useRef(route);
+  useEffect(() => {
+    routeRef.current = route;
+  }, [route]);
   const updateRoute = useCallback(
-    (changes, options) => writeRoute({ ...route, ...changes }, options),
-    [route],
+    (changes, options) => writeRoute({ ...routeRef.current, ...changes }, options),
+    [],
   );
 
   if (route.dashboardId) {
     return (
-      <DashboardDetail
-        route={route}
-        updateRoute={updateRoute}
-        notify={notify}
-        userId={userId}
-      />
+      <Suspense fallback={<InlineLoading label="正在加载分析看板…" />}>
+        <DashboardDetail
+          route={route}
+          updateRoute={updateRoute}
+          notify={notify}
+          userId={userId}
+        />
+      </Suspense>
     );
   }
   if (route.selectionToken) {
@@ -171,24 +190,30 @@ function DashboardList({ route, updateRoute, userId }) {
       />
 
       <section className="dashboard-list-filters" aria-label="分析看板筛选">
-        <div>
-          <MagnifyingGlass size={18} />
-          <input
-            aria-label="搜索分析看板"
-            placeholder="搜索看板名称"
-            value={filters.q}
-            onChange={(event) => setFilters({ ...filters, q: event.target.value })}
-          />
-        </div>
-        <select
-          aria-label="看板状态"
-          value={filters.status}
-          onChange={(event) => setFilters({ ...filters, status: event.target.value })}
-        >
-          <option value="">全部状态</option>
-          <option value="active">可用</option>
-          <option value="archived">已归档</option>
-        </select>
+        <label className="dashboard-filter-field">
+          <span>关键词</span>
+          <div className="dashboard-list-search">
+            <MagnifyingGlass size={18} />
+            <input
+              aria-label="搜索分析看板"
+              placeholder="搜索看板名称"
+              value={filters.q}
+              onChange={(event) => setFilters({ ...filters, q: event.target.value })}
+            />
+          </div>
+        </label>
+        <label className="dashboard-filter-field">
+          <span>看板状态</span>
+          <select
+            aria-label="看板状态"
+            value={filters.status}
+            onChange={(event) => setFilters({ ...filters, status: event.target.value })}
+          >
+            <option value="">全部状态</option>
+            <option value="active">可用</option>
+            <option value="archived">已归档</option>
+          </select>
+        </label>
         <button
           className="primary-button"
           onClick={() => updateRoute({ ...filters, page: 1 })}
@@ -229,7 +254,7 @@ function DashboardList({ route, updateRoute, userId }) {
                 <span>看板名称</span>
                 <span>当前版本</span>
                 <span>数据范围</span>
-                <span>记录数</span>
+                <span>评论数</span>
                 <span>最近更新</span>
                 <span>创建人</span>
                 <span>操作</span>
@@ -249,7 +274,7 @@ function DashboardList({ route, updateRoute, userId }) {
                 />
               ))}
             </div>
-            <DashboardPagination
+            <Pagination
               page={route.page}
               pageSize={route.pageSize}
               total={state.data.total}
@@ -278,7 +303,9 @@ function DashboardRow({ dashboard, onOpen }) {
       </div>
       <b>v{dashboard.current_version || dashboard.version || 1}</b>
       <span>{Number(summary.listing_count || 0).toLocaleString()} 个 Listing</span>
-      <span>{Number(summary.record_count || 0).toLocaleString()} 条</span>
+      <span>
+        {Number(summary.comment_count ?? summary.record_count ?? 0).toLocaleString()} 条
+      </span>
       <span>{formatTime(dashboard.updated_at || dashboard.created_at)}</span>
       <span>{dashboard.created_by_name || "未提供"}</span>
       <button className="secondary-button compact-button" onClick={onOpen}>

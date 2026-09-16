@@ -1,0 +1,477 @@
+/* 第四批运营工作台、数据资产与系统治理 */
+.workbench-focus-grid {
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+}
+.workbench-card > header,
+.import-rules-card > header,
+.quality-pair-card > header,
+.quality-plan-heading,
+.quality-issues-card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--desktop-section-gap);
+}
+.workbench-card > header > div,
+.import-rules-card > header > div,
+.quality-pair-card > header > div,
+.quality-plan-heading > div,
+.quality-issues-card > header > div {
+  display: grid;
+  gap: 4px;
+}
+.workbench-card > header span,
+.import-rules-card > header span,
+.quality-pair-card > header span,
+.quality-plan-heading span,
+.quality-issues-card > header span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.workbench-action-list,
+.workbench-output-list,
+.import-rule-list,
+.dataset-reference-list,
+.audit-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+.workbench-action-list > button,
+.workbench-output-list > button {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: #fff;
+  color: inherit;
+  text-align: left;
+}
+.workbench-action-list > button {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+}
+.workbench-action-copy,
+.workbench-output-list > button > span:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+.workbench-action-copy b,
+.workbench-output-list b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workbench-action-copy small,
+.workbench-action-copy em,
+.workbench-output-list small {
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+}
+.workbench-action-type,
+.workbench-output-list em {
+  width: max-content;
+  border-radius: 999px;
+  padding: 4px 7px;
+  background: #fff1db;
+  color: #9b5b0a;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+.workbench-action-status,
+.workbench-output-list > button > span:last-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--green-dark);
+  font-size: 12px;
+  font-weight: 700;
+}
+.workbench-output-list > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+}
+.workbench-local-error,
+.import-rules-error,
+.dataset-reference-error,
+.audit-error {
+  min-height: 112px;
+}
+
+.quality-version-selectors {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+  gap: 14px;
+  margin-top: 18px;
+}
+.quality-version-selectors label,
+.dataset-reference-toolbar label,
+.audit-filter-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.quality-match-arrow {
+  padding-bottom: 10px;
+  color: var(--green);
+  font-weight: 800;
+}
+.quality-stable-loading {
+  display: grid;
+  min-height: 132px;
+  place-content: center;
+  gap: 8px;
+  color: var(--muted);
+  text-align: center;
+}
+.quality-match-key {
+  display: flex !important;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px !important;
+  text-align: right;
+}
+.quality-count-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+.quality-count-grid article {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  background: var(--surface-soft);
+}
+.quality-count-grid span,
+.quality-technical-details,
+.quality-issue-table small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.quality-count-grid b {
+  font-size: 19px;
+}
+.quality-technical-details {
+  margin-top: 12px;
+}
+.quality-technical-details code {
+  display: block;
+  margin-top: 7px;
+  overflow-wrap: anywhere;
+}
+.quality-issue-search {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.quality-issue-search label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 220px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 9px;
+  background: #fff;
+}
+.quality-issue-search label input {
+  min-width: 0;
+  border: 0;
+  padding-inline: 0;
+}
+.quality-issue-table {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+.quality-issue-table article {
+  display: grid;
+  grid-template-columns: 130px repeat(3, minmax(100px, 1fr)) 92px;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 11px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+}
+.quality-issue-table article > span:not(.quality-issue-type) {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+.quality-issue-table article > span b {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.quality-issue-type {
+  align-self: start;
+  width: max-content;
+  border-radius: 999px;
+  padding: 4px 7px;
+  background: #fff1db;
+  color: #945c16;
+  font-size: 11px;
+  font-weight: 700;
+}
+.quality-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+.quality-pagination > span {
+  margin-right: auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+.quality-pagination label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.import-rule-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.import-rule-item {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 11px;
+}
+.import-rule-item > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.import-rule-item h3 {
+  margin: 8px 0 3px;
+}
+.import-rule-item > header p,
+.import-rule-item > header code {
+  color: var(--muted);
+  font-size: 11px;
+}
+.import-rule-item > header code {
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+.import-rule-item dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0 0;
+}
+.import-rule-item dl > div {
+  min-width: 0;
+  padding: 9px;
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+.import-rule-item dt {
+  color: var(--muted);
+  font-size: 11px;
+}
+.import-rule-item dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.dataset-reference-toolbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 14px 0;
+}
+.dataset-reference-toolbar label {
+  width: min(420px, 100%);
+}
+.dataset-reference-toolbar > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.dataset-reference-list article {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+}
+.dataset-reference-role {
+  width: max-content;
+  border-radius: 999px;
+  padding: 4px 7px;
+  background: #e7f5ef;
+  color: var(--green-dark);
+  font-size: 11px;
+  font-weight: 700;
+}
+.dataset-reference-list p,
+.dataset-reference-list details {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.snapshot-field-list {
+  display: grid;
+  gap: 4px;
+  margin: 7px 0 0;
+}
+.snapshot-field-list > div {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 8px;
+}
+.snapshot-field-list dt,
+.snapshot-field-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.audit-filter-form {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.audit-filter-form label {
+  min-width: 0;
+}
+.audit-filter-form label:nth-of-type(6) {
+  grid-row: 2;
+  grid-column: 3;
+  padding-right: 84px;
+}
+.audit-filter-form .primary-button {
+  grid-row: 2;
+  grid-column: 3;
+  align-self: end;
+  justify-self: end;
+  min-width: 74px;
+  min-height: var(--desktop-control-height);
+}
+.audit-filter-error {
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 600;
+}
+.audit-list article {
+  padding: var(--desktop-card-padding);
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+}
+.audit-list article > header,
+.audit-object-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.audit-list article > header > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.audit-list article > header span {
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: var(--surface-soft);
+  color: var(--green-dark);
+  font-size: 11px;
+  font-weight: 700;
+}
+.audit-technical-term,
+.audit-field-name {
+  display: inline-flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.audit-technical-term code,
+.audit-field-name code {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 500;
+}
+.audit-object-identity {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+.audit-list time,
+.audit-object-line {
+  color: var(--muted);
+  font-size: 11px;
+}
+.audit-object-line {
+  margin-top: 7px;
+}
+.audit-diff {
+  margin-top: 10px;
+  font-size: 12px;
+}
+.audit-diff-table {
+  margin-top: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.audit-diff-table > div {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.8fr) repeat(2, minmax(0, 1fr));
+}
+.audit-diff-table > div > * {
+  min-width: 0;
+  padding: 8px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+@media (max-width: 1180px) {
+  .workbench-focus-grid,
+  .import-rule-list {
+    grid-template-columns: 1fr;
+  }
+  .quality-count-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .quality-issue-table article {
+    grid-template-columns: 120px repeat(2, minmax(100px, 1fr)) 80px;
+  }
+  .audit-filter-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

@@ -126,6 +126,10 @@ test("批次列表从 URL 恢复服务端筛选并进入批次", async () => {
   );
 
   expect(await screen.findByText("复核员甲")).toBeVisible();
+  const filters = screen.getByRole("region", { name: "复核批次筛选" });
+  for (const label of ["关键词", "批次状态"]) {
+    expect(within(filters).getByText(label, { selector: "span" })).toBeVisible();
+  }
   expect(screen.getByRole("button", { name: "复核记录" })).toHaveAttribute(
     "aria-current",
     "page",
@@ -181,6 +185,17 @@ test("待处理批次展示真实业务字段并阻止提前发布", async () =>
   expect(screen.getByText("ORDER-001、ORDER-002")).toBeVisible();
   expect(screen.getByText("产品SKU：PRODUCT-SKU-1")).toBeVisible();
   expect(screen.getByText("匹配MSKU：SOURCE-MSKU-1")).toBeVisible();
+  const filters = screen.getByRole("region", { name: "复核记录筛选" });
+  for (const label of [
+    "关键词",
+    "处理状态",
+    "Listing",
+    "产品名称",
+    "产品 SKU",
+    "order-id",
+  ]) {
+    expect(within(filters).getByText(label, { selector: "span" })).toBeVisible();
+  }
   expect(screen.queryByText("鞋履")).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "还剩 2 条需处理" })).toBeDisabled();
 
@@ -189,6 +204,26 @@ test("待处理批次展示真实业务字段并阻止提前发布", async () =>
   expect(within(drawer).getByText("产品表名称")).toBeVisible();
   expect(within(drawer).getByText("PRODUCT-SKU-1")).toBeVisible();
   expect(within(drawer).getAllByText("SOURCE-MSKU-1")).toHaveLength(2);
+});
+
+test("待处理记录回填已存在的复核质量判断", async () => {
+  const assessedRecord = {
+    ...baseRecord,
+    classification: {
+      ...baseRecord.classification,
+      human_review_assessment: {
+        label_correctness: "incorrect",
+        evidence_completeness: "partial",
+        review_routing: "should_auto_approve",
+      },
+    },
+  };
+  render(page(baseBatch, [assessedRecord]));
+
+  await userEvent.click(await screen.findByRole("button", { name: "处理" }));
+  expect(screen.getByLabelText("标签正确性")).toHaveValue("incorrect");
+  expect(screen.getByLabelText("证据完整性")).toHaveValue("partial");
+  expect(screen.getByLabelText("路由合理性")).toHaveValue("should_auto_approve");
 });
 
 test("复核抽屉限制键盘焦点并在关闭后恢复触发按钮", async () => {
@@ -225,7 +260,7 @@ test("产品快照字段缺失时明确显示未提供且不用品类兜底", as
   expect(screen.queryByText("儿童水鞋")).not.toBeInTheDocument();
 });
 
-test("确认原结果只提交当前记录 revision 和必填原因", async () => {
+test("确认原结果同时提交标签、证据和路由质量判断", async () => {
   reviewBatchApiMock.updateReviewBatchRecord.mockResolvedValue({
     id: baseRecord.id,
     workflow_status: "resolved",
@@ -243,6 +278,15 @@ test("确认原结果只提交当前记录 revision 和必填原因", async () =
   render(view);
 
   await userEvent.click(await screen.findByRole("button", { name: "处理" }));
+  expect(screen.getByLabelText("标签正确性")).toHaveValue("correct");
+  expect(screen.getByLabelText("证据完整性")).toHaveValue("complete");
+  expect(screen.getByLabelText("路由合理性")).toHaveValue("correct");
+  await userEvent.selectOptions(screen.getByLabelText("标签正确性"), "partial");
+  await userEvent.selectOptions(screen.getByLabelText("证据完整性"), "missing");
+  await userEvent.selectOptions(
+    screen.getByLabelText("路由合理性"),
+    "should_auto_approve",
+  );
   await userEvent.type(
     screen.getByPlaceholderText("必填：说明确认、修改或排除的判断依据"),
     "证据与原标签一致",
@@ -258,6 +302,9 @@ test("确认原结果只提交当前记录 revision 和必填原因", async () =
         action: "confirm",
         label_code: null,
         reason: "证据与原标签一致",
+        label_correctness: "partial",
+        evidence_completeness: "missing",
+        review_routing: "should_auto_approve",
       },
     ),
   );
@@ -361,6 +408,9 @@ test("单条 409 保留我的输入并可基于服务器新 revision 重试", as
   );
   await userEvent.click(await screen.findByRole("button", { name: "处理" }));
   await userEvent.click(screen.getByRole("button", { name: /修改分类/ }));
+  expect(screen.getByLabelText("标签正确性")).toHaveValue("partial");
+  expect(screen.getByLabelText("证据完整性")).toHaveValue("partial");
+  expect(screen.getByLabelText("路由合理性")).toHaveValue("should_manual_review");
   await userEvent.selectOptions(screen.getByLabelText("修改分类标签"), "FIT_TOO_LARGE");
   const reason = screen.getByPlaceholderText("必填：说明确认、修改或排除的判断依据");
   await userEvent.type(reason, "实物证据指向偏大");
@@ -382,6 +432,30 @@ test("单条 409 保留我的输入并可基于服务器新 revision 重试", as
       expect.objectContaining({ expected_revision: 2, reason: "实物证据指向偏大" }),
     ),
   );
+});
+
+test("已处理记录展示分别保存的复核质量判断", async () => {
+  const resolvedRecord = {
+    ...baseRecord,
+    workflow_status: "resolved",
+    classification: {
+      ...baseRecord.classification,
+      human_review_assessment: {
+        label_correctness: "incorrect",
+        evidence_completeness: "partial",
+        review_routing: "should_manual_review",
+        assessed_by: "user-1",
+        assessed_at: "2026-08-12T10:00:00Z",
+      },
+    },
+  };
+  render(page(baseBatch, [resolvedRecord]));
+
+  await userEvent.click(await screen.findByRole("button", { name: "查看" }));
+  const summary = screen.getByRole("region", { name: "已保存的复核质量判断" });
+  expect(within(summary).getByText("错误")).toBeVisible();
+  expect(within(summary).getByText("部分完整")).toBeVisible();
+  expect(within(summary).getByText("本应人工复核")).toBeVisible();
 });
 
 test("发布 409 留在弹窗刷新 revision，确认后进入派生版本历史", async () => {

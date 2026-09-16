@@ -51,7 +51,7 @@ class FakeResponsesHandler(BaseHTTPRequestHandler):
                     "semantic_units": [
                         {
                             "subject": "PRODUCT",
-                            "label_code": "FIT_TOO_LARGE",
+                            "label_code": "FIT_TOO_LARGE_U1",
                             "opinion": "鞋子太大",
                             "sentiment": "NEGATIVE",
                             "assertion": "AFFIRMED",
@@ -63,7 +63,7 @@ class FakeResponsesHandler(BaseHTTPRequestHandler):
                         }
                     ],
                     "unknown_semantics": [],
-                    "primary_label_codes": ["FIT_TOO_LARGE"],
+                    "primary_label_codes": ["FIT_TOO_LARGE_U1"],
                     "needs_review": True,
                     "review_reasons": ["测试人工复核"],
                 }
@@ -204,7 +204,7 @@ def test_category_completion_updates_multiple_stores_in_one_version(
                 "items": [
                     {
                         "store": "SEEKWAY:US",
-                        "msku": "SKU-US",
+                        "msku": "SKU-1",
                         "listing": "US-LISTING",
                         "category_a": "眼镜",
                         "category_b": "儿童眼镜",
@@ -224,12 +224,105 @@ def test_category_completion_updates_multiple_stores_in_one_version(
         assert response.status_code == 200, response.text
         updated = response.json()
         assert updated["current_version"] == 2
+        assert updated["row_count"] == 2
         rows = client.get(f"/api/datasets/{products['id']}/rows", params={"limit": 10})
         by_key = {
             (item["店铺/站点"], item["MSKU"]): item for item in rows.json()["records"]
         }
-        assert by_key[("SEEKWAY:US", "SKU-US")]["Listing"] == "US-LISTING"
+        assert by_key[("SEEKWAY:US", "SKU-1")]["Listing"] == "US-LISTING"
+        assert by_key[("SEEKWAY:US", "SKU-1")]["产品名称"] == "旧名称"
         assert by_key[("SEEKWAY:CA", "SKU-CA")]["品类B"] == "儿童渔夫帽"
+
+
+def test_product_edit_rejections_do_not_create_partial_versions(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(
+        data_dir=tmp_path / "runtime",
+        database_path=tmp_path / "runtime" / "app.db",
+        session_days=14,
+        task_workers=1,
+        bootstrap_email="admin@example.com",
+        bootstrap_name="管理员",
+        bootstrap_password="test-password-123",
+        encryption_key=Fernet.generate_key().decode("ascii"),
+        secure_cookies=False,
+    )
+    app = create_app(start_worker=False, settings_override=settings)
+    _returns_path, products_path = _write_input_files(tmp_path)
+
+    with TestClient(app) as client:
+        assert (
+            client.post(
+                "/api/auth/login",
+                json={
+                    "email": "admin@example.com",
+                    "password": "test-password-123",
+                },
+            ).status_code
+            == 200
+        )
+        products = _upload_dataset(client, products_path, "商品维度", "products")
+        invalid_updates = [
+            ({"row_index": 9, "changes": {"Listing": "NEW"}}, "要修改的数据行不存在"),
+            ({"row_index": 0, "changes": {"未知字段": "NEW"}}, "没有可修改的字段"),
+        ]
+        for update, expected_detail in invalid_updates:
+            response = client.patch(
+                f"/api/datasets/{products['id']}/rows",
+                json={
+                    **update,
+                    "expected_version": 1,
+                    "change_note": "无效修改",
+                },
+            )
+            assert response.status_code == 400
+            assert response.json()["detail"] == expected_detail
+
+        conflict = client.patch(
+            f"/api/datasets/{products['id']}/rows",
+            json={
+                "row_index": 0,
+                "expected_version": 2,
+                "changes": {"Listing": "STALE"},
+                "change_note": "冲突修改",
+            },
+        )
+        assert conflict.status_code == 409
+        assert conflict.json()["detail"] == "商品维度已被其他用户修改，请刷新后重试"
+
+        duplicate_batch = client.post(
+            f"/api/datasets/{products['id']}/category-completion",
+            json={
+                "expected_version": 1,
+                "store": "SEEKWAY:US",
+                "items": [
+                    {
+                        "msku": "SKU-2",
+                        "listing": "SK002",
+                        "category_a": "水鞋",
+                        "category_b": "儿童水鞋",
+                    },
+                    {
+                        "msku": "SKU-2",
+                        "listing": "SK002-REPEAT",
+                        "category_a": "水鞋",
+                        "category_b": "儿童水鞋",
+                    },
+                ],
+                "change_note": "重复批次",
+            },
+        )
+        assert duplicate_batch.status_code == 400
+        assert duplicate_batch.json()["detail"] == "商品重复提交：SEEKWAY:US + SKU-2"
+
+        unchanged = client.get(f"/api/datasets/{products['id']}").json()
+        assert unchanged["current_version"] == 1
+        rows = client.get(
+            f"/api/datasets/{products['id']}/rows",
+            params={"q": "SKU-2"},
+        ).json()
+        assert rows["total"] == 0
 
 
 def test_return_version_fills_only_missing_store_values(tmp_path: Path) -> None:
@@ -283,6 +376,13 @@ def test_return_version_fills_only_missing_store_values(tmp_path: Path) -> None:
             "SEEKWAY:CA",
             "SEEKWAY:US",
         ]
+        first_snapshot = client.get(
+            f"/api/datasets/{returns['id']}/rows",
+            params={"limit": 10, "version": 1},
+        )
+        assert first_snapshot.status_code == 200
+        assert first_snapshot.json()["version"] == 1
+        assert first_snapshot.json()["source_total"] == 1
 
 
 def test_real_web_task_flow(tmp_path: Path) -> None:
@@ -689,17 +789,20 @@ def test_real_web_task_flow(tmp_path: Path) -> None:
             assert current["status"] == "completed", current
             assert current["progress_percent"] == 100
             assert current["metrics"]["top_problem_labels"][0]["name"] == "偏大"
-            assert current["metrics"]["category_registry_version"] == (
-                "category-capabilities-2026-08-10-v1"
+            assert current["metrics"]["category_registry_version"].startswith(
+                "classification-standards-"
             )
+            assert current["segments"][0]["standard_version_id"]
+            assert current["segments"][0]["standard_name"] == "鞋履退货问题标准"
+            assert current["segments"][0]["standard_version"] == 1
             category_segment = current["metrics"]["category_segments"][0]
             assert category_segment["agent_family"] == "鞋履智能体"
             assert category_segment["logic_version"] == (
-                "footwear-semantic-2026-08-10-v1"
+                "footwear-unified-semantic-2026-09-06-v1"
             )
             assert category_segment["record_count"] == 1
             assert category_segment["model_calls"] == 2
-            assert category_segment["claims_version"] == ("sk001-listing-2026-08-05-v1")
+            assert category_segment["claims_version"] == ("sk001-listing-2026-09-06-v2")
             assert category_segment["model_policy_version"] == (
                 "footwear-model-policy-2026-08-10-v1"
             )
@@ -773,7 +876,7 @@ def test_real_web_task_flow(tmp_path: Path) -> None:
                 f"/api/review-batches/{batch['id']}/records/{review['id']}",
                 json={
                     "expected_revision": review["revision"],
-                    "label_code": "FIT_TOO_SMALL",
+                    "label_code": "FIT_TOO_SMALL_U1",
                     "reason": "人工确认标签",
                 },
             )
@@ -783,7 +886,7 @@ def test_real_web_task_flow(tmp_path: Path) -> None:
                 f"/api/review-batches/{batch['id']}/records/{review['id']}",
                 json={
                     "expected_revision": review["revision"],
-                    "label_code": "FIT_TOO_LARGE",
+                    "label_code": "FIT_TOO_LARGE_U1",
                     "reason": "重复提交",
                 },
             )
@@ -895,6 +998,30 @@ def test_real_web_task_flow(tmp_path: Path) -> None:
                 ).status_code
                 == 200
             )
+            assert client.get("/api/users").status_code == 403
+            assert (
+                client.post(
+                    "/api/users",
+                    json={
+                        "email": "unauthorized@example.com",
+                        "display_name": "越权创建",
+                        "password": "unauthorized-password-123",
+                    },
+                ).status_code
+                == 403
+            )
+            assert (
+                client.patch(
+                    f"/api/users/{admin_id}",
+                    json={
+                        "active": False,
+                        "expected_active": True,
+                        "note": "普通成员不应停用管理员",
+                    },
+                ).status_code
+                == 403
+            )
+            assert client.get("/api/audit-logs").status_code == 403
             before_rename = client.get(f"/api/tasks/{task_id}").json()
             renamed = client.patch(
                 f"/api/tasks/{task_id}",
@@ -1001,7 +1128,22 @@ def test_login_is_rate_limited(tmp_path: Path) -> None:
         assert int(blocked.headers["Retry-After"]) > 0
 
 
-def test_health_fails_when_worker_stops(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("state_name", "worker_name"),
+    [
+        ("worker", "listing"),
+        ("insight_report_worker", "insight_report"),
+        (
+            "standard_validation_worker",
+            "classification_standard_validation",
+        ),
+    ],
+)
+def test_health_fails_when_worker_stops(
+    tmp_path: Path,
+    state_name: str,
+    worker_name: str,
+) -> None:
     settings = Settings(
         data_dir=tmp_path / "runtime",
         database_path=tmp_path / "runtime" / "app.db",
@@ -1016,10 +1158,47 @@ def test_health_fails_when_worker_stops(tmp_path: Path) -> None:
     app = create_app(start_worker=True, settings_override=settings)
 
     with TestClient(app) as client:
-        app.state.worker.stop()
+        getattr(app.state, state_name).stop()
         response = client.get("/api/health")
         assert response.status_code == 503
         assert response.json()["detail"]["worker"] == "unavailable"
+        assert response.json()["detail"]["workers"][worker_name]["status"] == (
+            "unavailable"
+        )
+
+
+def test_health_reports_recent_worker_error(tmp_path: Path) -> None:
+    settings = Settings(
+        data_dir=tmp_path / "runtime",
+        database_path=tmp_path / "runtime" / "app.db",
+        session_days=14,
+        task_workers=1,
+        bootstrap_email="admin@example.com",
+        bootstrap_name="管理员",
+        bootstrap_password="test-password-123",
+        encryption_key=Fernet.generate_key().decode("ascii"),
+        secure_cookies=False,
+    )
+    app = create_app(start_worker=True, settings_override=settings)
+
+    with TestClient(app) as client:
+        app.state.insight_report_worker._health.record_error(
+            RuntimeError("报告监督异常")
+        )
+        response = client.get("/api/health")
+
+    assert response.status_code == 200
+    payload = response.json()
+    worker_health = payload["workers"]["insight_report"]
+    assert payload["status"] == "degraded"
+    assert payload["worker"] == "degraded"
+    assert worker_health["status"] == "degraded"
+    assert worker_health["last_error"] == "RuntimeError"
+    assert worker_health["last_error_at"] is not None
+    assert "报告监督异常" not in response.text
+    assert "领取失败" not in response.text
+    assert app.state.standard_validation_service is not None
+    assert app.state.standard_validation_worker is not None
 
 
 def test_production_settings_reject_development_defaults(monkeypatch) -> None:

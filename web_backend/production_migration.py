@@ -11,11 +11,12 @@ from pathlib import Path, PurePosixPath
 from typing import Sequence
 
 from web_backend.backup import _validate_archive, create_backup
-from web_backend.settings import Settings
+from web_backend.settings import RUNTIME_DIRECTORIES, Settings
 
-RUNTIME_DIRECTORIES = ("uploads", "results", "cache")
+OPTIONAL_SOURCE_DIRECTORIES = {"imports"}
 PATH_COLUMNS = (
     ("dataset_versions", "file_path"),
+    ("dataset_imports", "raw_file_path"),
     ("tasks", "result_file_path"),
     ("tasks", "results_json_path"),
     ("task_segments", "result_file_path"),
@@ -61,6 +62,12 @@ def _validate_source(source_root: Path) -> tuple[Path, int]:
         raise ProductionMigrationError("源运行目录缺少 app.db")
     for directory_name in RUNTIME_DIRECTORIES:
         path = source_root / directory_name
+        if (
+            directory_name in OPTIONAL_SOURCE_DIRECTORIES
+            and not path.exists()
+            and not path.is_symlink()
+        ):
+            continue
         if not path.is_dir():
             raise ProductionMigrationError(f"源运行目录缺少 {directory_name}")
         if path.is_symlink() or not path.resolve().is_relative_to(source_root):

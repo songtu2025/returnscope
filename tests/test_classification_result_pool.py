@@ -215,7 +215,7 @@ def _seed_result_context(tmp_path: Path) -> SimpleNamespace:
             "semantic_units": [
                 {
                     "subject": "PRODUCT",
-                    "label_code": "FIT_TOO_SMALL",
+                    "label_code": "FIT_TOO_SMALL_U1",
                     "opinion": "尺码偏小",
                     "sentiment": "NEGATIVE",
                     "assertion": "AFFIRMED",
@@ -227,9 +227,9 @@ def _seed_result_context(tmp_path: Path) -> SimpleNamespace:
                 }
             ],
             "unknown_semantics": [],
-            "problem_label_codes": ["FIT_TOO_SMALL"],
+            "problem_label_codes": ["FIT_TOO_SMALL_U1"],
             "positive_label_codes": [],
-            "primary_label_codes": ["FIT_TOO_SMALL"],
+            "primary_label_codes": ["FIT_TOO_SMALL_U1"],
             "status": ProcessingStatus.AUTO_APPROVED.value,
             "review_reasons": [],
             "model_name": "model-primary",
@@ -634,7 +634,7 @@ def test_result_api_paginates_filters_drills_down_and_downloads(
         params={"group_by": "problem"},
     )
     assert by_problem.status_code == 200
-    assert by_problem.json()["items"][0]["value"] == "FIT_TOO_SMALL"
+    assert by_problem.json()["items"][0]["value"] == "FIT_TOO_SMALL_U1"
     assert by_problem.json()["items"][0]["record_count"] == 3
 
     by_product = client.get(
@@ -684,7 +684,7 @@ def test_result_records_filter_product_name_before_pagination(
         product_name="产品表权威名称",
         listing="L1",
         product_sku="PRODUCT-SKU-1",
-        problem="FIT_TOO_SMALL",
+        problem="FIT_TOO_SMALL_U1",
         page=1,
         page_size=1,
     )
@@ -706,7 +706,7 @@ def test_result_records_filter_product_name_before_pagination(
             "product_name": "产品表权威名称",
             "listing": "L1",
             "product_sku": "PRODUCT-SKU-1",
-            "problem": "FIT_TOO_SMALL",
+            "problem": "FIT_TOO_SMALL_U1",
             "page": 1,
             "page_size": 1,
         },

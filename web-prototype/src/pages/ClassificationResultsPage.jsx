@@ -31,8 +31,14 @@ import {
   PUBLISH_LABELS,
   RESULT_PAGE_SIZES,
 } from "../features/classification-results/classificationResultConstants";
+import {
+  SemanticResultPanel,
+  SemanticStatusBadge,
+} from "../features/classification-results/SemanticResultPanel";
+import { semanticRecordStatus } from "../features/classification-results/semanticResultPresentation";
 import { ReviewBatchPage } from "../features/review-batches/ReviewBatchPage";
 import { formatTime } from "../lib/presentation";
+import { resultLabelText } from "../lib/taxonomyPresentation";
 
 function routeState(query) {
   const number = (key) => Number(query[key]);
@@ -390,7 +396,10 @@ function ClassificationResultDetail({ route, updateRoute, notify, userId }) {
           <h1>{result.listing || "未提供 Listing"} 分类结果</h1>
           <p>
             {result.store_site || "未提供店铺/站点"} · 结果 v{result.version} · 产品信息
-            v{result.product_version} · {formatTime(result.published_at)}
+            v{result.product_version} ·{" "}
+            {result.standard_name || result.agent_family || "历史分类逻辑"}
+            {result.standard_version ? ` V${result.standard_version}` : ""} ·{" "}
+            {formatTime(result.published_at)}
           </p>
         </div>
         <div className="result-detail-actions">
@@ -545,8 +554,13 @@ function ClassificationResultDetail({ route, updateRoute, notify, userId }) {
             </header>
             <div className="drilldown-columns">
               <DrilldownColumn
-                title="问题"
-                items={drilldowns.problem}
+                title={summary?.hierarchy_problems?.length ? "问题层级" : "问题"}
+                items={
+                  summary?.hierarchy_problems?.length
+                    ? summary.hierarchy_problems
+                    : drilldowns.problem
+                }
+                limit={summary?.hierarchy_problems?.length ? Infinity : 12}
                 selected={route.problem}
                 emptyTitle={
                   allNeedReviewWithoutProblems ? "尚未形成问题标签" : "暂无数据"
@@ -690,6 +704,7 @@ function DrilldownColumn({
   emptyLabel = "未标注",
   emptyTitle = "暂无数据",
   emptyDescription = "",
+  limit = 12,
 }) {
   return (
     <div className="drilldown-column">
@@ -706,9 +721,10 @@ function DrilldownColumn({
             )}
           </span>
         )}
-        {items.slice(0, 12).map((item) => {
+        {items.slice(0, limit).map((item) => {
           const value = item.value ?? "";
-          const label = item.label_name || value || emptyLabel;
+          const label =
+            item.label_path?.join(" → ") || item.label_name || value || emptyLabel;
           return (
             <button
               key={`${title}-${value || "empty"}`}
@@ -749,7 +765,8 @@ function ResultRecordRow({ record, onOpen }) {
         <span className={`result-quality-badge ${resultState(record)}`}>
           {resultStateLabel(record)}
         </span>
-        <b>{problems.join("、") || "未形成问题标签"}</b>
+        <SemanticStatusBadge status={semanticRecordStatus(record)} />
+        <b>{resultLabelText(record, problems) || "未形成问题标签"}</b>
       </div>
       <div className="result-row-actions">
         <button
@@ -766,8 +783,6 @@ function ResultRecordRow({ record, onOpen }) {
 
 function EvidenceDrawer({ record, onClose, returnFocusRef }) {
   const classification = record.classification ?? {};
-  const units = classification.semantic_units ?? [];
-  const unknowns = classification.unknown_semantics ?? [];
   const drawerRef = useRef(null);
   const closeButtonRef = useRef(null);
 
@@ -855,14 +870,14 @@ function EvidenceDrawer({ record, onClose, returnFocusRef }) {
         </section>
 
         <section className="drawer-section">
-          <b>分类结论</b>
+          <b>业务标签</b>
           <DrawerField
             label="主要问题"
-            value={classification.primary_label_codes?.join("、")}
+            value={resultLabelText(record, classification.primary_label_codes)}
           />
           <DrawerField
             label="问题标签"
-            value={classification.problem_label_codes?.join("、")}
+            value={resultLabelText(record, classification.problem_label_codes)}
           />
           <DrawerField label="处理状态" value={record.processing_status} />
           <DrawerField
@@ -872,23 +887,7 @@ function EvidenceDrawer({ record, onClose, returnFocusRef }) {
         </section>
 
         <section className="drawer-section">
-          <b>原文证据</b>
-          {units.length === 0 && <p className="drawer-empty">没有提取到有效证据。</p>}
-          {units.map((unit, index) => (
-            <div className="evidence-unit" key={`${unit.label_code}-${index}`}>
-              <span>{unit.label_code || "未标注"}</span>
-              <blockquote>“{unit.evidence || "未提供证据"}”</blockquote>
-              <small>
-                部位：{unit.part || "未提供"} · 观点：{unit.opinion || "未提供"}
-              </small>
-            </div>
-          ))}
-          {unknowns.map((unknown, index) => (
-            <div className="evidence-unit is-unknown" key={`unknown-${index}`}>
-              <span>未知语义</span>
-              <blockquote>“{unknown.evidence || unknown.text || "未提供"}”</blockquote>
-            </div>
-          ))}
+          <SemanticResultPanel record={record} />
         </section>
 
         <section className="drawer-section drawer-lineage">

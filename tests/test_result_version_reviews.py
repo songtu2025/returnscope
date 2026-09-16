@@ -11,6 +11,7 @@ from test_classification_result_pool import _publish, _seed_result_context
 
 from return_semantics.schemas import ProcessingStatus
 from web_backend.classification_result_service import ClassificationResultService
+from web_backend.classification_standard_service import ClassificationStandardService
 from web_backend.common import json_text
 from web_backend.dashboard_service import DashboardService
 from web_backend.review_service import (
@@ -38,7 +39,15 @@ def _publish_review_required(tmp_path: Path):
         )
     }
     version = _publish(context)
+    standards = ClassificationStandardService(context.database)
+    standard = next(
+        item for item in standards.list() if item["standard_key"] == "footwear"
+    )
     with context.database.transaction() as connection:
+        connection.execute(
+            "UPDATE classification_results SET standard_version_id = ? WHERE id = ?",
+            (standard["standard_version_id"], version["result_id"]),
+        )
         connection.execute(
             """
             INSERT INTO users(id, email, display_name, password_hash, created_at)
@@ -81,7 +90,18 @@ def test_system_status_excludes_legacy_review_records(tmp_path: Path) -> None:
             address_login_limiter=object(),
             dummy_password_hash="unused",
             task_service=TaskService(context.database),
-            worker=SimpleNamespace(is_alive=True),
+            worker=SimpleNamespace(
+                is_alive=True,
+                health={"last_error_type": None, "last_error_at": None},
+            ),
+            insight_report_worker=SimpleNamespace(
+                is_alive=True,
+                health={"last_error_type": None, "last_error_at": None},
+            ),
+            standard_validation_worker=SimpleNamespace(
+                is_alive=True,
+                health={"last_error_type": None, "last_error_at": None},
+            ),
             start_worker=False,
             current_user=lambda: {"id": "user-1"},
         )
@@ -90,6 +110,175 @@ def test_system_status_excludes_legacy_review_records(tmp_path: Path) -> None:
     payload = TestClient(app).get("/api/system/status").json()
     assert payload["pending_reviews"] == 1
     assert payload["pending_review_batches"] == 1
+
+
+def test_review_record_keeps_independent_quality_assessment(tmp_path: Path) -> None:
+    context, base = _publish_review_required(tmp_path)
+    service = ReviewService(context.database)
+    batch = service.create_batch(str(base["version_id"]), "user-1", "验证复核口径")
+    review = service.batch_records(batch["id"])["items"][0]
+
+    updated = service.update_batch_record(
+        batch_id=batch["id"],
+        review_id=review["id"],
+        expected_revision=review["revision"],
+        actor_id="user-1",
+        label_code=None,
+        note="标签正确，但证据展示不完整且本条无需人工复核",
+        action="confirm",
+        review_assessment={
+            "label_correctness": "correct",
+            "evidence_completeness": "partial",
+            "review_routing": "should_auto_approve",
+        },
+    )
+
+    assessment = updated["classification"]["human_review_assessment"]
+    assert assessment["label_correctness"] == "correct"
+    assert assessment["evidence_completeness"] == "partial"
+    assert assessment["review_routing"] == "should_auto_approve"
+    assert assessment["assessed_by"] == "user-1"
+    assert assessment["assessed_at"]
+    assert updated["revisions"][0]["after"]["human_review_assessment"] == assessment
+
+    current_batch = service.get_batch(batch["id"])
+    derived = service.publish_batch(
+        batch["id"],
+        current_batch["revision"],
+        "user-1",
+        "发布包含人工评估的复核结果",
+    )
+    published = ClassificationResultService(context.database).records(
+        derived["version_id"],
+        page_size=200,
+    )["items"][0]["classification"]
+    assert published["human_review_assessment"] == assessment
+
+
+def test_review_modify_preserves_other_semantic_units_and_indexes(
+    tmp_path: Path,
+) -> None:
+    context, base = _publish_review_required(tmp_path)
+    classification = context.results[context.key].model_dump(mode="json")
+    original_unit = dict(classification["semantic_units"][0])
+    second_unit = {
+        **original_unit,
+        "label_code": "FIT_TOO_LONG_U1",
+        "opinion": "鞋子长度偏长",
+        "evidence": "鞋子太大。",
+    }
+    classification["semantic_units"] = [original_unit, second_unit]
+    classification["problem_label_codes"] = [
+        original_unit["label_code"],
+        second_unit["label_code"],
+    ]
+    classification["primary_label_codes"] = [original_unit["label_code"]]
+    classification["comment_summary"]["negative_label_codes"] = list(
+        classification["problem_label_codes"]
+    )
+    with context.database.transaction() as connection:
+        connection.execute(
+            """
+            UPDATE classification_units SET classification_json = ?
+            WHERE result_version_id = ? AND classification_key = ?
+            """,
+            (json_text(classification), base["version_id"], context.key),
+        )
+
+    service = ReviewService(context.database)
+    batch = service.create_batch(str(base["version_id"]), "user-1", "验证多语义修改")
+    review = service.batch_records(batch["id"])["items"][0]
+    updated = service.update_batch_record(
+        batch["id"],
+        review["id"],
+        review["revision"],
+        "user-1",
+        "FIT_TOO_SMALL_U1",
+        "只修正主问题语义",
+    )["classification"]
+
+    assert [unit["label_code"] for unit in updated["semantic_units"]] == [
+        "FIT_TOO_SMALL_U1",
+        "FIT_TOO_LONG_U1",
+    ]
+    assert updated["problem_label_codes"] == [
+        "FIT_TOO_SMALL_U1",
+        "FIT_TOO_LONG_U1",
+    ]
+    assert updated["primary_label_codes"] == ["FIT_TOO_SMALL_U1"]
+    assert updated["comment_summary"]["negative_label_codes"] == [
+        "FIT_TOO_SMALL_U1",
+        "FIT_TOO_LONG_U1",
+    ]
+
+    current_batch = service.get_batch(batch["id"])
+    derived = service.publish_batch(
+        batch["id"],
+        current_batch["revision"],
+        "user-1",
+        "发布多语义修正",
+    )
+    with context.database.connect() as connection:
+        problem_codes = {
+            row["label_code"]
+            for row in connection.execute(
+                """
+                SELECT label_code FROM classification_unit_labels
+                WHERE result_version_id = ? AND label_kind = 'problem'
+                """,
+                (derived["version_id"],),
+            ).fetchall()
+        }
+    assert problem_codes == {"FIT_TOO_SMALL_U1", "FIT_TOO_LONG_U1"}
+
+
+def test_publish_batch_rejects_outdated_base_version(tmp_path: Path) -> None:
+    context, base = _publish_review_required(tmp_path)
+    base_id = str(base["version_id"])
+    service = ReviewService(context.database)
+
+    first_batch = service.create_batch(base_id, "user-1", "发布首轮修正")
+    first_review = service.batch_records(first_batch["id"])["items"][0]
+    service.update_batch_record(
+        first_batch["id"],
+        first_review["id"],
+        first_review["revision"],
+        "user-1",
+        "FIT_TOO_SMALL_U1",
+        "首轮修正",
+    )
+    service.publish_batch(
+        first_batch["id"],
+        service.get_batch(first_batch["id"])["revision"],
+        "user-1",
+        "发布第二版",
+    )
+
+    stale_batch = service.create_batch(base_id, "user-2", "从旧版本再次创建复核")
+    stale_review = service.batch_records(stale_batch["id"])["items"][0]
+    service.update_batch_record(
+        stale_batch["id"],
+        stale_review["id"],
+        stale_review["revision"],
+        "user-2",
+        "FIT_TOO_LARGE_U1",
+        "不应覆盖第二版",
+    )
+
+    with pytest.raises(ReviewBatchConflict, match="基准分类结果版本已过期"):
+        service.publish_batch(
+            stale_batch["id"],
+            service.get_batch(stale_batch["id"])["revision"],
+            "user-2",
+            "尝试发布旧基线",
+        )
+    with context.database.connect() as connection:
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM classification_result_versions"
+            ).fetchone()[0]
+            == 2
+        )
 
 
 def _replace_with_legacy_review_schema(context: SimpleNamespace) -> None:
@@ -197,7 +386,7 @@ def test_review_batch_publishes_immutable_complete_v2_without_model(
         review["id"],
         1,
         "user-1",
-        "FIT_TOO_SMALL",
+        "FIT_TOO_SMALL_U1",
         "确认尺码偏小",
     )
     assert updated["classification"]["status"] == "MANUAL_RESOLVED"
@@ -209,7 +398,7 @@ def test_review_batch_publishes_immutable_complete_v2_without_model(
             review["id"],
             1,
             "user-2",
-            "FIT_TOO_SMALL",
+            "FIT_TOO_SMALL_U1",
             "并发覆盖",
         )
 
@@ -221,6 +410,7 @@ def test_review_batch_publishes_immutable_complete_v2_without_model(
         "发布人工确认结果",
     )
     derived_id = str(derived["version_id"])
+    published_batch = review_service.get_batch(batch["id"])
 
     assert derived["version"] == 2
     assert derived["parent_version_id"] == base_id
@@ -231,6 +421,9 @@ def test_review_batch_publishes_immutable_complete_v2_without_model(
     assert derived["parent_version_no"] == 1
     assert derived["changed_unit_count"] == 0
     assert derived["inherited_unit_count"] == 1
+    assert published_batch["status"] == "published"
+    assert published_batch["published_version_id"] == derived_id
+    assert published_batch["revision"] == current_batch["revision"] + 1
     assert result_service.get(base_id) == base_detail
     derived_records = result_service.records(derived_id, page_size=200)
     assert derived_records["total"] == base_records["total"] == 3
@@ -314,6 +507,121 @@ def test_review_batch_publishes_immutable_complete_v2_without_model(
     assert {"create", "update_record", "publish", "conflict"}.issubset(actions)
 
 
+def test_publish_batch_rejects_stale_revision_and_pending_records(
+    tmp_path: Path,
+) -> None:
+    context, base = _publish_review_required(tmp_path)
+    review_service = ReviewService(context.database)
+    batch = review_service.create_batch(
+        str(base["version_id"]),
+        "user-1",
+        "验证发布阻断",
+    )
+
+    with pytest.raises(
+        RevisionConflict,
+        match="批次已被其他用户修改，请刷新后重试",
+    ):
+        review_service.publish_batch(
+            batch["id"],
+            batch["revision"] + 1,
+            "user-2",
+            "陈旧修订发布",
+        )
+    with pytest.raises(
+        ReviewBatchConflict,
+        match="复核批次仍有 1 条记录未完成",
+    ):
+        review_service.publish_batch(
+            batch["id"],
+            batch["revision"],
+            "user-1",
+            "未完成记录发布",
+        )
+
+    current_batch = review_service.get_batch(batch["id"])
+    assert current_batch["status"] == "draft"
+    assert current_batch["revision"] == batch["revision"]
+    assert current_batch["published_version_id"] is None
+    with context.database.connect() as connection:
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM classification_result_versions"
+            ).fetchone()[0]
+            == 1
+        )
+
+
+def test_publish_batch_rolls_back_failed_derived_version(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context, base = _publish_review_required(tmp_path)
+    base_id = str(base["version_id"])
+    result_service = ClassificationResultService(context.database)
+    review_service = ReviewService(context.database, result_service)
+    batch = review_service.create_batch(base_id, "user-1", "验证发布回滚")
+    review = review_service.batch_records(batch["id"])["items"][0]
+    review_service.update_batch_record(
+        batch["id"],
+        review["id"],
+        review["revision"],
+        "user-1",
+        "FIT_TOO_SMALL_U1",
+        "完成复核后模拟发布失败",
+    )
+    current_batch = review_service.get_batch(batch["id"])
+
+    def fail_insert_records(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("模拟派生记录写入失败")
+
+    monkeypatch.setattr(result_service, "_insert_records", fail_insert_records)
+    with pytest.raises(RuntimeError, match="模拟派生记录写入失败"):
+        review_service.publish_batch(
+            batch["id"],
+            current_batch["revision"],
+            "user-1",
+            "不应留下半成品",
+        )
+
+    rolled_back_batch = review_service.get_batch(batch["id"])
+    assert rolled_back_batch["status"] == "draft"
+    assert rolled_back_batch["revision"] == current_batch["revision"]
+    assert rolled_back_batch["published_version_id"] is None
+    assert rolled_back_batch["published_at"] is None
+    with context.database.connect() as connection:
+        assert (
+            connection.execute(
+                """
+                SELECT COUNT(*) FROM classification_result_versions
+                WHERE parent_version_id = ? OR publish_status = 'publishing'
+                """,
+                (base_id,),
+            ).fetchone()[0]
+            == 0
+        )
+        assert (
+            connection.execute(
+                """
+                SELECT COUNT(*) FROM classification_units
+                WHERE result_version_id != ?
+                """,
+                (base_id,),
+            ).fetchone()[0]
+            == 0
+        )
+        assert (
+            connection.execute(
+                """
+                SELECT COUNT(*) FROM audit_logs
+                WHERE entity_id = ? AND action = 'publish'
+                """,
+                (batch["id"],),
+            ).fetchone()[0]
+            == 0
+        )
+
+
 def test_review_batch_api_and_version_history_contract(tmp_path: Path) -> None:
     context, base = _publish_review_required(tmp_path)
     result_service = ClassificationResultService(context.database)
@@ -344,7 +652,7 @@ def test_review_batch_api_and_version_history_contract(tmp_path: Path) -> None:
         f"/api/review-batches/{batch['id']}/records/{record['id']}",
         json={
             "expected_revision": 1,
-            "label_code": "FIT_TOO_SMALL",
+            "label_code": "FIT_TOO_SMALL_U1",
             "reason": "API 修改",
         },
     )
@@ -527,7 +835,7 @@ def test_version_lineage_counts_changed_label_and_missing_batch_history(
         review["id"],
         review["revision"],
         "user-1",
-        "FIT_TOO_LARGE",
+        "FIT_TOO_LARGE_U1",
         "确认应为尺码偏大",
     )
     derived = review_service.publish_batch(

@@ -434,7 +434,7 @@ export function DashboardCreateFlow({ route, updateRoute, notify, userId }) {
                     required
                     value={form.name}
                     onChange={(event) => setForm({ ...form, name: event.target.value })}
-                    placeholder="例如：美国站水鞋退货问题"
+                    placeholder="输入看板名称"
                   />
                 </label>
                 <label>

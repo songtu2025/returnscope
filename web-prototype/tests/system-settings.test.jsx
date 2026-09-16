@@ -92,9 +92,7 @@ test("审计记录按字段对齐展示差异、掩码敏感值并精确跳转",
   );
 });
 
-test("审计日期参数由 URL 恢复且 400 错误就地显示", async () => {
-  logs.mockRejectedValue(new Error("开始日期不能晚于结束日期"));
-
+test("审计日期参数由 URL 恢复且错误范围不发请求", async () => {
   render(
     <AuditLogPage
       route={{
@@ -107,8 +105,51 @@ test("审计日期参数由 URL 恢复且 400 错误就地显示", async () => {
     />,
   );
 
-  expect(await screen.findByText("审计记录读取失败")).toBeVisible();
-  expect(screen.getByText("开始日期不能晚于结束日期")).toBeVisible();
+  expect(await screen.findByText("日期范围有误")).toBeVisible();
+  expect(screen.getByText("结束日期不能早于开始日期。")).toBeVisible();
   expect(screen.getByLabelText("开始日期")).toHaveValue("2026-08-12");
   expect(screen.getByLabelText("结束日期")).toHaveValue("2026-08-01");
+  expect(logs).not.toHaveBeenCalled();
+});
+
+test("审计筛选拒绝错误日期并隐藏旧结果", async () => {
+  const user = userEvent.setup();
+  const originalHash = "#settings?tab=audit&entity_type=task";
+  window.location.hash = originalHash;
+  logs.mockResolvedValue({
+    total: 1,
+    page: 1,
+    page_size: 20,
+    items: [
+      {
+        id: "audit-old",
+        actor_name: "原有记录",
+        action: "task_create",
+        entity_type: "task",
+        entity_id: "task-1",
+        created_at: "2026-08-01T10:00:00Z",
+        before: null,
+        after: null,
+      },
+    ],
+  });
+
+  render(<AuditLogPage route={{ query: { entity_type: "task" } }} />);
+
+  expect(await screen.findByText("原有记录")).toBeVisible();
+  const dateFrom = screen.getByLabelText("开始日期");
+  const dateTo = screen.getByLabelText("结束日期");
+  await user.type(dateFrom, "2026-08-12");
+  await user.type(dateTo, "2026-08-01");
+
+  expect(screen.getByText("结束日期不能早于开始日期。")).toBeVisible();
+  expect(screen.queryByText("原有记录")).not.toBeInTheDocument();
+  expect(dateTo).toHaveAttribute("aria-invalid", "true");
+  expect(dateTo).toHaveAttribute("aria-describedby", "audit-date-to-error");
+
+  await user.click(screen.getByRole("button", { name: "筛选" }));
+
+  expect(document.activeElement).toBe(dateTo);
+  expect(window.location.hash).toBe(originalHash);
+  expect(logs).toHaveBeenCalledTimes(1);
 });

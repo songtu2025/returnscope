@@ -1,20 +1,16 @@
-import { useEffect } from "react";
-import {
-  ArrowClockwise,
-  CheckCircle,
-  ShieldCheck,
-  WarningCircle,
-  X,
-} from "@phosphor-icons/react";
+import { ArrowClockwise, CheckCircle, WarningCircle, X } from "@phosphor-icons/react";
 import { STATUS_LABELS } from "../constants";
+import { useDialogFocus } from "../hooks/useDialogFocus";
 import { classNames } from "../lib/presentation";
 
-export function PageHeading({ eyebrow, title, description, action }) {
+export function PageHeading({ eyebrow, title, description, action, titleRef }) {
   return (
     <header className="page-heading">
       <div>
-        <p className="eyebrow">{eyebrow}</p>
-        <h1>{title}</h1>
+        {eyebrow && <p className="eyebrow">{eyebrow}</p>}
+        <h1 ref={titleRef} tabIndex={titleRef ? -1 : undefined}>
+          {title}
+        </h1>
         <span>{description}</span>
       </div>
       {action && <div className="heading-action">{action}</div>}
@@ -51,11 +47,7 @@ export function Modal({
   onClose,
   children,
 }) {
-  useEffect(() => {
-    const closeOnEscape = (event) => event.key === "Escape" && onClose();
-    document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
+  const { dialogRef, constrainFocus } = useDialogFocus({ open: true, onClose });
 
   return (
     <div
@@ -63,10 +55,13 @@ export function Modal({
       onMouseDown={(event) => event.target === event.currentTarget && onClose()}
     >
       <section
+        ref={dialogRef}
         className={classNames("modal", className)}
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        tabIndex={-1}
+        onKeyDownCapture={constrainFocus}
       >
         <header>
           <div>
@@ -74,7 +69,12 @@ export function Modal({
             <h2>{title}</h2>
             {description && <span className="modal-description">{description}</span>}
           </div>
-          <button type="button" onClick={onClose} aria-label="关闭">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="关闭"
+            data-dialog-initial-focus
+          >
             <X size={20} />
           </button>
         </header>
@@ -107,16 +107,6 @@ export function StatusBadge({ value }) {
     <span className={classNames("status-badge", value?.toLowerCase())}>
       {labels[value] ?? value}
     </span>
-  );
-}
-
-export function Kpi({ label, value, note }) {
-  return (
-    <div className="kpi-card">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{note}</small>
-    </div>
   );
 }
 
@@ -153,38 +143,6 @@ export function Toast({ message, tone }) {
         <CheckCircle size={20} weight="fill" />
       )}
       {message}
-    </div>
-  );
-}
-
-export function SectionTitle({ number, title, description }) {
-  return (
-    <div className="section-title">
-      <span>{number}</span>
-      <div>
-        <h2>{title}</h2>
-        <p>{description}</p>
-      </div>
-    </div>
-  );
-}
-
-export function SnapshotNotice({ text }) {
-  return (
-    <div className="snapshot-notice">
-      <ShieldCheck size={20} />
-      <span>{text}</span>
-    </div>
-  );
-}
-
-export function Confirmation({ icon: Icon, label, value, note }) {
-  return (
-    <div className="confirmation">
-      <Icon size={22} />
-      <span>{label}</span>
-      <b>{value}</b>
-      <small>{note}</small>
     </div>
   );
 }

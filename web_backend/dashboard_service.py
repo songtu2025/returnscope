@@ -7,14 +7,29 @@ import sqlite3
 from datetime import date
 from typing import Any
 
-from web_backend.common import json_text, json_value, new_id
+from return_semantics.schemas import TaxonomyConfig
+from return_semantics.taxonomy import aligned_label_group
+from return_semantics.taxonomy_hierarchy import descendant_label_codes
+from web_backend.common import insert_audit, json_text, json_value, new_id
 from web_backend.database import Database
+from web_backend.result_hierarchy import (
+    enrich_record,
+    hierarchy_counts,
+    result_taxonomy,
+)
 from web_backend.security import utc_now
 
 PAGE_SIZE_DEFAULT = 50
 PAGE_SIZE_MAX = 200
 PLAN_VERSION = "dashboard-dataset-plan-v1"
 QUALITY_STATUSES = {"ready", "review_required", "unusable", "excluded"}
+COMMENT_SUMMARY_STATUSES = (
+    "POSITIVE",
+    "NEGATIVE",
+    "MIXED",
+    "CONFLICT",
+    "NO_CONFIRMED",
+)
 FILTER_COLUMNS = {
     "listing": "listing",
     "product_name": "product_name",
@@ -34,10 +49,46 @@ SUBJECT_LABELS = {
     "CUSTOMER": "顾客相关",
     "ORDER": "订单相关",
     "DELIVERY": "配送相关",
+    "SERVICE": "服务相关",
 }
 TEXT_ENCODING_ANOMALY = re.compile(
-    r"(?:[A-Za-z][\u4e00-\u9fff]|[\u4e00-\u9fff][A-Za-z])"
+    r"(?:[A-Za-z][\u4e00-\u9fff]|[\u4e00-\u9fff][A-Za-z]|\ufffd)"
 )
+
+
+def _classification_comment_status(payload: dict[str, Any]) -> str:
+    summary = payload.get("comment_summary")
+    if isinstance(summary, dict):
+        status = str(summary.get("status") or "")
+        is_explicit = status != "NO_CONFIRMED" or any(
+            summary.get(field)
+            for field in ("fact_ids", "positive_label_codes", "negative_label_codes")
+        )
+        if is_explicit and status in COMMENT_SUMMARY_STATUSES:
+            return status
+
+    legacy_status = str(payload.get("comment_summary_status") or "")
+    if legacy_status in COMMENT_SUMMARY_STATUSES:
+        return legacy_status
+
+    sentiments = {
+        str(unit.get("sentiment") or "")
+        for unit in payload.get("semantic_units", [])
+        if isinstance(unit, dict)
+        and str(unit.get("assertion") or "AFFIRMED") == "AFFIRMED"
+    }
+    if {"POSITIVE", "NEGATIVE"}.issubset(sentiments):
+        relation_types = {
+            str(relation.get("relation_type") or "")
+            for relation in payload.get("semantic_relations", [])
+            if isinstance(relation, dict)
+        }
+        return "CONFLICT" if "CONFLICT" in relation_types else "MIXED"
+    if "NEGATIVE" in sentiments:
+        return "NEGATIVE"
+    if "POSITIVE" in sentiments:
+        return "POSITIVE"
+    return "NO_CONFIRMED"
 
 
 class DashboardConflict(ValueError):
@@ -299,6 +350,7 @@ class DashboardService:
                 context["source_ids"],
                 context["filters"],
                 context["sources"],
+                include_comment_metrics=False,
             )
         return {
             "dashboard_id": dashboard_id,
@@ -460,6 +512,46 @@ class DashboardService:
 
         with self.database.connect() as connection:
             context = self._version_context(connection, dashboard_id, version_id)
+            if self._mixed_hierarchy(connection, context["sources"]):
+                return {
+                    "dashboard_id": dashboard_id,
+                    "version_id": version_id,
+                    "hierarchy_conflict": True,
+                    "message": "该看板包含不同层级标准版本，请按标准版本分别建立看板。",
+                    "reasons": [],
+                    "hierarchy_problems": [],
+                }
+            taxonomy = (
+                result_taxonomy(connection, context["source_ids"][0])
+                if context["source_ids"]
+                else None
+            )
+            source_taxonomies = {
+                source["result_version_id"]: source for source in context["sources"]
+            }
+            mixed_versions = (
+                len(
+                    {
+                        (source["agent_key"], source["taxonomy_version"])
+                        for source in context["sources"]
+                    }
+                )
+                > 1
+            )
+
+            def group_for_result(group, code, result_id):
+                source = source_taxonomies.get(result_id, {})
+                original = group or "其他原因"
+                if not mixed_versions or (taxonomy and taxonomy.structure_version == 2):
+                    return original
+                return aligned_label_group(
+                    source.get("agent_key", ""),
+                    source.get("taxonomy_version", ""),
+                    code,
+                    original,
+                )
+
+            connection.create_function("aligned_group", 3, group_for_result)
             summary = self._summarize_sources(
                 connection,
                 context["source_ids"],
@@ -481,6 +573,36 @@ class DashboardService:
             if clean_date_to:
                 where_sql += " AND date(r.return_date) <= date(?)"
                 params.append(clean_date_to)
+            comment_scope_filters = {
+                key: value
+                for key, value in context["filters"].items()
+                if key != "quality_status"
+            }
+            comment_scope_where, comment_scope_params = self._record_where(
+                context["source_ids"],
+                comment_scope_filters,
+                runtime_filters,
+            )
+            if clean_date_from:
+                comment_scope_where += " AND date(r.return_date) >= date(?)"
+                comment_scope_params.append(clean_date_from)
+            if clean_date_to:
+                comment_scope_where += " AND date(r.return_date) <= date(?)"
+                comment_scope_params.append(clean_date_to)
+            summary.update(
+                self._comment_summary_metrics(
+                    connection,
+                    where_sql,
+                    params,
+                    comment_scope_where,
+                    comment_scope_params,
+                )
+            )
+            hierarchy_problems = (
+                hierarchy_counts(connection, taxonomy, where_sql, params)
+                if taxonomy and taxonomy.structure_version == 2
+                else []
+            )
             unit_rollup = (
                 report_mode
                 and not runtime_filters
@@ -580,7 +702,7 @@ class DashboardService:
             ]
             group_rows = connection.execute(
                 f"""
-                SELECT COALESCE(NULLIF(TRIM(l.label_group), ''), '其他原因') AS value,
+                SELECT aligned_group(l.label_group, l.label_code, r.result_version_id) AS value,
                        COUNT(DISTINCT r.id) AS record_count
                 FROM classification_result_records r
                 JOIN classification_unit_labels l
@@ -670,16 +792,14 @@ class DashboardService:
             reason_group_filter = ""
             reason_params = list(params)
             if clean_group:
-                reason_group_filter = (
-                    " AND COALESCE(NULLIF(TRIM(l.label_group), ''), '其他原因') = ?"
-                )
+                reason_group_filter = " AND aligned_group(l.label_group, l.label_code, r.result_version_id) = ?"
                 reason_params.append(clean_group)
             if report_mode:
                 reason_sql = f"""
                     SELECT l.label_code AS value,
                            COALESCE(NULLIF(TRIM(l.label_name), ''), l.label_code)
                                AS label,
-                           COALESCE(NULLIF(TRIM(l.label_group), ''), '其他原因')
+                           aligned_group(l.label_group, l.label_code, r.result_version_id)
                                AS label_group,
                            COUNT(r.id) AS record_count,
                            NULL AS primary_record_count
@@ -689,14 +809,14 @@ class DashboardService:
                      AND l.classification_key = r.classification_key
                      AND l.label_kind = 'problem'
                     WHERE {where_sql}{reason_group_filter}
-                    GROUP BY l.label_code, l.label_name, l.label_group
+                    GROUP BY l.label_code, l.label_name, label_group
                     ORDER BY record_count DESC, label COLLATE NOCASE ASC
                 """
             else:
                 reason_sql = f"""
                 SELECT l.label_code AS value,
                        COALESCE(NULLIF(TRIM(l.label_name), ''), l.label_code) AS label,
-                       COALESCE(NULLIF(TRIM(l.label_group), ''), '其他原因') AS label_group,
+                       aligned_group(l.label_group, l.label_code, r.result_version_id) AS label_group,
                        COUNT(r.id) AS record_count,
                        SUM(CASE WHEN EXISTS (
                            SELECT 1
@@ -715,7 +835,7 @@ class DashboardService:
                   ON u.result_version_id = r.result_version_id
                  AND u.classification_key = r.classification_key
                 WHERE {where_sql}{reason_group_filter}
-                GROUP BY l.label_code, l.label_name, l.label_group
+                GROUP BY l.label_code, l.label_name, label_group
                 ORDER BY record_count DESC, label COLLATE NOCASE ASC
                 """
             reason_rows = connection.execute(
@@ -832,6 +952,7 @@ class DashboardService:
 
             trend: list[dict[str, Any]] = []
             products: list[dict[str, Any]] = []
+            variants: list[dict[str, Any]] = []
             co_reasons: list[dict[str, Any]] = []
             semantic_parts: list[dict[str, Any]] = []
             semantic_opinions: list[dict[str, Any]] = []
@@ -928,6 +1049,56 @@ class DashboardService:
                         "reliable": int(row["total_record_count"]) >= 15,
                     }
                     for row in product_rows
+                ]
+                variant_rows = connection.execute(
+                    f"""
+                    SELECT COALESCE(NULLIF(TRIM(r.product_sku), ''), '未提供 SKU')
+                               AS value,
+                           COALESCE(NULLIF(TRIM(r.product_name), ''), '未提供产品')
+                               AS product_name,
+                           COUNT(r.id) AS total_record_count,
+                           SUM(CASE WHEN EXISTS (
+                               SELECT 1 FROM classification_unit_labels selected
+                               WHERE selected.result_version_id = r.result_version_id
+                                 AND selected.classification_key = r.classification_key
+                                 AND selected.label_kind = 'problem'
+                                 AND selected.label_code = ?
+                           ) THEN 1 ELSE 0 END) AS record_count
+                    FROM classification_result_records r
+                    WHERE {where_sql}
+                    GROUP BY value, product_name
+                    HAVING record_count > 0
+                    ORDER BY record_count DESC, value COLLATE NOCASE ASC
+                    LIMIT 12
+                    """,
+                    (selected_code, *params),
+                ).fetchall()
+                variants = [
+                    {
+                        "value": str(row["value"]),
+                        "product_name": str(row["product_name"]),
+                        "record_count": int(row["record_count"]),
+                        "total_record_count": int(row["total_record_count"]),
+                        "reason_share": self._percentage(
+                            int(row["record_count"]), selected_count
+                        ),
+                        "product_reason_rate": self._percentage(
+                            int(row["record_count"]),
+                            int(row["total_record_count"]),
+                        ),
+                        "overall_reason_rate": self._percentage(
+                            selected_count, total_records
+                        ),
+                        "lift": round(
+                            (int(row["record_count"]) / int(row["total_record_count"]))
+                            / (selected_count / total_records),
+                            2,
+                        )
+                        if total_records and selected_count
+                        else 0.0,
+                        "reliable": int(row["total_record_count"]) >= 10,
+                    }
+                    for row in variant_rows
                 ]
                 co_reason_rows = connection.execute(
                     f"""
@@ -1114,6 +1285,12 @@ class DashboardService:
             "dashboard_id": dashboard_id,
             "version_id": version_id,
             "summary": summary,
+            "group_alignment": "unified-v1"
+            if mixed_versions and not (taxonomy and taxonomy.structure_version == 2)
+            else "original",
+            "hierarchy_problems": hierarchy_problems,
+            "taxonomy": taxonomy.model_dump(mode="json") if taxonomy else None,
+            "counting_note": "按原始记录在每个分组内去重；多标签占比之和可能超过100%。",
             "date_range": date_range,
             "filter_options": filter_options,
             "category_groups": [str(row["value"]) for row in group_rows],
@@ -1136,6 +1313,7 @@ class DashboardService:
             "selected_reason": selected_reason,
             "trend": trend,
             "products": products,
+            "variants": variants,
             "co_reasons": co_reasons,
             "semantic_profile": {
                 "record_count": semantic_record_count,
@@ -1151,6 +1329,455 @@ class DashboardService:
                 "total": evidence_total,
             },
         }
+
+    def issue_cases(
+        self,
+        dashboard_id: str,
+        version_id: str,
+        reason_codes: list[str],
+        *,
+        max_cases_per_reason: int = 3,
+    ) -> list[dict[str, Any]]:
+        clean_codes = list(
+            dict.fromkeys(
+                str(code).strip() for code in reason_codes if str(code).strip()
+            )
+        )
+        if not clean_codes:
+            return []
+        if not 1 <= max_cases_per_reason <= 10:
+            raise ValueError("每个问题的案例数量必须在 1 到 10 之间")
+
+        with self.database.connect() as connection:
+            context = self._version_context(connection, dashboard_id, version_id)
+            where_sql, params = self._record_where(
+                context["source_ids"],
+                context["filters"],
+            )
+            placeholders = ",".join("?" for _ in clean_codes)
+            total_record_count = int(
+                connection.execute(
+                    f"SELECT COUNT(*) FROM classification_result_records r "
+                    f"WHERE {where_sql}",
+                    tuple(params),
+                ).fetchone()[0]
+            )
+            if not total_record_count:
+                return []
+
+            overall_rows = connection.execute(
+                f"""
+                SELECT label.label_code,
+                       COALESCE(NULLIF(TRIM(MAX(label.label_name)), ''),
+                                label.label_code) AS label,
+                       COALESCE(NULLIF(TRIM(MAX(label.label_group)), ''), '')
+                           AS label_group,
+                       COUNT(DISTINCT r.id) AS record_count
+                FROM classification_result_records r
+                JOIN classification_unit_labels label
+                  ON label.result_version_id = r.result_version_id
+                 AND label.classification_key = r.classification_key
+                 AND label.label_kind = 'problem'
+                WHERE {where_sql}
+                  AND label.label_code IN ({placeholders})
+                GROUP BY label.label_code
+                """,
+                (*params, *clean_codes),
+            ).fetchall()
+            overall_by_code = {
+                str(row["label_code"]): {
+                    "label": str(row["label"]),
+                    "label_group": str(row["label_group"]),
+                    "record_count": int(row["record_count"]),
+                }
+                for row in overall_rows
+            }
+            if not overall_by_code:
+                return []
+
+            candidate_rows = connection.execute(
+                f"""
+                WITH scoped_records AS (
+                    SELECT r.*,
+                           TRIM(r.product_name) AS case_product_name,
+                           TRIM(r.product_sku) AS case_product_sku
+                    FROM classification_result_records r
+                    WHERE {where_sql}
+                ),
+                variant_totals AS (
+                    SELECT case_product_name, case_product_sku,
+                           COUNT(*) AS total_record_count
+                    FROM scoped_records
+                    WHERE case_product_name <> '' AND case_product_sku <> ''
+                    GROUP BY case_product_name, case_product_sku
+                ),
+                case_counts AS (
+                    SELECT label.label_code,
+                           r.case_product_name AS product_name,
+                           r.case_product_sku AS product_sku,
+                           COUNT(*) AS record_count
+                    FROM scoped_records r
+                    JOIN classification_unit_labels label
+                      ON label.result_version_id = r.result_version_id
+                     AND label.classification_key = r.classification_key
+                     AND label.label_kind = 'problem'
+                    WHERE r.case_product_name <> ''
+                      AND r.case_product_sku <> ''
+                      AND label.label_code IN ({placeholders})
+                    GROUP BY label.label_code,
+                             r.case_product_name, r.case_product_sku
+                )
+                SELECT cases.*, totals.total_record_count
+                FROM case_counts cases
+                JOIN variant_totals totals
+                  ON totals.case_product_name = cases.product_name
+                 AND totals.case_product_sku = cases.product_sku
+                ORDER BY cases.label_code,
+                         cases.record_count DESC,
+                         cases.product_name COLLATE NOCASE ASC,
+                         cases.product_sku COLLATE NOCASE ASC
+                """,
+                (*params, *clean_codes),
+            ).fetchall()
+
+            cases_by_code: dict[str, list[dict[str, Any]]] = {
+                code: [] for code in clean_codes
+            }
+            for row in candidate_rows:
+                code = str(row["label_code"])
+                overall = overall_by_code.get(code)
+                if overall is None:
+                    continue
+                record_count = int(row["record_count"])
+                variant_total = int(row["total_record_count"])
+                baseline = overall["record_count"] / total_record_count
+                lift = round((record_count / variant_total) / baseline, 2)
+                excess = round(record_count - variant_total * baseline)
+                if variant_total < 10 or record_count < 10 or lift < 1.1 or excess <= 0:
+                    continue
+                product_name = str(row["product_name"])
+                product_sku = str(row["product_sku"])
+                identity = f"{code}\x1f{product_name}\x1f{product_sku}"
+                cases_by_code[code].append(
+                    {
+                        "id": (
+                            f"issue_case.{code}."
+                            f"{hashlib.sha256(identity.encode('utf-8')).hexdigest()[:12]}"
+                        ),
+                        "reason_code": code,
+                        "label": overall["label"],
+                        "label_group": overall["label_group"],
+                        "product_name": product_name,
+                        "product_sku": product_sku,
+                        "record_count": record_count,
+                        "total_record_count": variant_total,
+                        "reason_record_count": overall["record_count"],
+                        "reason_share": self._percentage(
+                            record_count,
+                            overall["record_count"],
+                        ),
+                        "issue_rate": self._percentage(
+                            record_count,
+                            variant_total,
+                        ),
+                        "overall_rate": self._percentage(
+                            overall["record_count"],
+                            total_record_count,
+                        ),
+                        "lift": lift,
+                        "excess_record_count": excess,
+                        "reliable": True,
+                    }
+                )
+
+            selected_cases = []
+            for code in clean_codes:
+                ranked = sorted(
+                    cases_by_code[code],
+                    key=lambda item: (
+                        int(item["excess_record_count"]),
+                        float(item["lift"]),
+                        int(item["record_count"]),
+                        str(item["product_name"]),
+                        str(item["product_sku"]),
+                    ),
+                    reverse=True,
+                )
+                selected_cases.extend(ranked[:max_cases_per_reason])
+            return self._populate_issue_case_details(
+                connection,
+                selected_cases,
+                where_sql,
+                params,
+            )
+
+    def _populate_issue_case_details(
+        self,
+        connection: sqlite3.Connection,
+        cases: list[dict[str, Any]],
+        where_sql: str,
+        params: list[Any],
+    ) -> list[dict[str, Any]]:
+        for case in cases:
+            code = str(case["reason_code"])
+            product_name = str(case["product_name"])
+            product_sku = str(case["product_sku"])
+            case_where = (
+                f"{where_sql} AND TRIM(r.product_name) = ? AND TRIM(r.product_sku) = ?"
+            )
+            case_params = (*params, product_name, product_sku)
+
+            trend_rows = connection.execute(
+                f"""
+                SELECT date(
+                           r.return_date,
+                           '-' || ((CAST(strftime('%w', r.return_date) AS INTEGER)
+                           + 6) % 7) || ' days'
+                       ) AS period_start,
+                       date(
+                           r.return_date,
+                           '-' || ((CAST(strftime('%w', r.return_date) AS INTEGER)
+                           + 6) % 7) || ' days',
+                           '+6 days'
+                       ) AS period_end,
+                       COUNT(*) AS total_record_count,
+                       SUM(CASE WHEN EXISTS (
+                           SELECT 1 FROM classification_unit_labels selected
+                           WHERE selected.result_version_id = r.result_version_id
+                             AND selected.classification_key = r.classification_key
+                             AND selected.label_kind = 'problem'
+                             AND selected.label_code = ?
+                       ) THEN 1 ELSE 0 END) AS record_count
+                FROM classification_result_records r
+                WHERE {case_where} AND r.return_date IS NOT NULL
+                GROUP BY period_start, period_end
+                ORDER BY period_start
+                """,
+                (code, *case_params),
+            ).fetchall()
+            case["trend"] = [
+                {
+                    "period_start": row["period_start"],
+                    "period_end": row["period_end"],
+                    "record_count": int(row["record_count"] or 0),
+                    "total_record_count": int(row["total_record_count"] or 0),
+                    "percentage": self._percentage(
+                        int(row["record_count"] or 0),
+                        int(row["total_record_count"] or 0),
+                    ),
+                    "low_sample": int(row["total_record_count"] or 0) < 10,
+                }
+                for row in trend_rows
+            ]
+
+            co_reason_rows = connection.execute(
+                f"""
+                SELECT other.label_code AS value,
+                       COALESCE(NULLIF(TRIM(other.label_name), ''),
+                                other.label_code) AS label,
+                       COUNT(DISTINCT r.id) AS record_count
+                FROM classification_result_records r
+                JOIN classification_unit_labels selected
+                  ON selected.result_version_id = r.result_version_id
+                 AND selected.classification_key = r.classification_key
+                 AND selected.label_kind = 'problem'
+                 AND selected.label_code = ?
+                JOIN classification_unit_labels other
+                  ON other.result_version_id = r.result_version_id
+                 AND other.classification_key = r.classification_key
+                 AND other.label_kind = 'problem'
+                 AND other.label_code <> ?
+                WHERE {case_where}
+                GROUP BY other.label_code, other.label_name
+                ORDER BY record_count DESC, label COLLATE NOCASE ASC
+                LIMIT 6
+                """,
+                (code, code, *case_params),
+            ).fetchall()
+            case["co_reasons"] = [
+                {
+                    "value": str(row["value"]),
+                    "label": str(row["label"]),
+                    "record_count": int(row["record_count"]),
+                    "percentage": self._percentage(
+                        int(row["record_count"]),
+                        int(case["record_count"]),
+                    ),
+                }
+                for row in co_reason_rows
+            ]
+
+            semantic_row = connection.execute(
+                f"""
+                SELECT COUNT(DISTINCT r.id) AS record_count,
+                       COUNT(DISTINCT CASE
+                           WHEN UPPER(COALESCE(
+                               NULLIF(json_extract(unit.value, '$.part'), ''),
+                               'UNSPECIFIED'
+                           )) <> 'UNSPECIFIED'
+                           THEN r.id
+                       END) AS specified_part_record_count
+                FROM classification_result_records r
+                JOIN classification_units u
+                  ON u.result_version_id = r.result_version_id
+                 AND u.classification_key = r.classification_key
+                JOIN json_each(u.classification_json, '$.semantic_units') unit
+                WHERE {case_where}
+                  AND json_extract(unit.value, '$.label_code') = ?
+                """,
+                (*case_params, code),
+            ).fetchone()
+            semantic_count = int(semantic_row["record_count"] or 0)
+            specified_count = int(semantic_row["specified_part_record_count"] or 0)
+            part_rows = connection.execute(
+                f"""
+                SELECT COALESCE(
+                           NULLIF(json_extract(unit.value, '$.part'), ''),
+                           'UNSPECIFIED'
+                       ) AS value,
+                       COUNT(DISTINCT r.id) AS record_count
+                FROM classification_result_records r
+                JOIN classification_units u
+                  ON u.result_version_id = r.result_version_id
+                 AND u.classification_key = r.classification_key
+                JOIN json_each(u.classification_json, '$.semantic_units') unit
+                WHERE {case_where}
+                  AND json_extract(unit.value, '$.label_code') = ?
+                GROUP BY value
+                ORDER BY record_count DESC, value ASC
+                LIMIT 6
+                """,
+                (*case_params, code),
+            ).fetchall()
+            opinion_rows = connection.execute(
+                f"""
+                SELECT json_extract(unit.value, '$.opinion') AS opinion,
+                       json_extract(unit.value, '$.subject') AS subject,
+                       COALESCE(
+                           NULLIF(json_extract(unit.value, '$.part'), ''),
+                           'UNSPECIFIED'
+                       ) AS part,
+                       COUNT(DISTINCT r.id) AS record_count,
+                       MIN(json_extract(unit.value, '$.evidence')) AS evidence
+                FROM classification_result_records r
+                JOIN classification_units u
+                  ON u.result_version_id = r.result_version_id
+                 AND u.classification_key = r.classification_key
+                JOIN json_each(u.classification_json, '$.semantic_units') unit
+                WHERE {case_where}
+                  AND json_extract(unit.value, '$.label_code') = ?
+                  AND NULLIF(json_extract(unit.value, '$.opinion'), '') IS NOT NULL
+                GROUP BY opinion, subject, part
+                ORDER BY record_count DESC, opinion ASC
+                LIMIT 6
+                """,
+                (*case_params, code),
+            ).fetchall()
+            case["semantic_profile"] = {
+                "record_count": semantic_count,
+                "coverage": self._percentage(
+                    semantic_count,
+                    int(case["record_count"]),
+                ),
+                "specified_part_record_count": specified_count,
+                "specified_part_coverage": self._percentage(
+                    specified_count,
+                    semantic_count,
+                ),
+                "parts": [
+                    {
+                        "value": str(row["value"]),
+                        "record_count": int(row["record_count"]),
+                        "percentage": self._percentage(
+                            int(row["record_count"]),
+                            semantic_count,
+                        ),
+                    }
+                    for row in part_rows
+                ],
+                "opinions": [
+                    {
+                        "opinion": str(row["opinion"]),
+                        "subject": row["subject"],
+                        "part": str(row["part"]),
+                        "record_count": int(row["record_count"]),
+                        "evidence": row["evidence"],
+                    }
+                    for row in opinion_rows
+                ],
+            }
+
+            sample_rows = connection.execute(
+                f"""
+                WITH samples AS (
+                    SELECT r.classification_key, r.comment, r.reason,
+                           COUNT(*) AS record_count,
+                           MAX(r.return_date) AS latest_return_date,
+                           MAX(CASE WHEN EXISTS (
+                               SELECT 1
+                               FROM json_each(
+                                   u.classification_json,
+                                   '$.semantic_units'
+                               ) semantic
+                               WHERE json_extract(
+                                   semantic.value,
+                                   '$.label_code'
+                               ) = ?
+                                 AND UPPER(COALESCE(
+                                     NULLIF(json_extract(
+                                         semantic.value,
+                                         '$.part'
+                                     ), ''),
+                                     'UNSPECIFIED'
+                                 )) <> 'UNSPECIFIED'
+                           ) THEN 1 ELSE 0 END) AS has_specific_part
+                    FROM classification_result_records r
+                    JOIN classification_units u
+                      ON u.result_version_id = r.result_version_id
+                     AND u.classification_key = r.classification_key
+                    JOIN classification_unit_labels selected
+                      ON selected.result_version_id = r.result_version_id
+                     AND selected.classification_key = r.classification_key
+                     AND selected.label_kind = 'problem'
+                     AND selected.label_code = ?
+                    WHERE {case_where}
+                    GROUP BY r.classification_key, r.comment, r.reason
+                )
+                SELECT * FROM samples
+                ORDER BY has_specific_part DESC,
+                         record_count DESC,
+                         LENGTH(COALESCE(comment, reason, '')) DESC,
+                         classification_key ASC
+                LIMIT 12
+                """,
+                (code, code, *case_params),
+            ).fetchall()
+            samples = []
+            for row in sample_rows:
+                if self._has_text_anomaly(row["comment"], row["reason"]):
+                    continue
+                samples.append(
+                    {
+                        "classification_key": str(row["classification_key"]),
+                        "comment": row["comment"],
+                        "reason": row["reason"],
+                        "product_name": product_name,
+                        "product_sku": product_sku,
+                        "record_count": int(row["record_count"]),
+                        "latest_return_date": row["latest_return_date"],
+                        "has_specific_part": bool(row["has_specific_part"]),
+                    }
+                )
+                if len(samples) >= 6:
+                    break
+            case["samples"] = samples
+        return cases
+
+    @staticmethod
+    def _has_text_anomaly(*values: Any) -> bool:
+        return any(
+            TEXT_ENCODING_ANOMALY.search(str(value)) for value in values if value
+        )
 
     def records(
         self,
@@ -1180,11 +1807,14 @@ class DashboardService:
             rows = connection.execute(
                 f"""
                 SELECT r.*, u.processing_status, u.problem_labels_json,
-                       u.classification_json
+                       u.classification_json, standard.snapshot_json AS hierarchy_snapshot_json
                 FROM classification_result_records r
                 JOIN classification_units u
                   ON u.result_version_id = r.result_version_id
                  AND u.classification_key = r.classification_key
+                JOIN classification_result_versions result_version ON result_version.id = r.result_version_id
+                JOIN classification_results result ON result.id = result_version.result_id
+                LEFT JOIN classification_standard_versions standard ON standard.id = result.standard_version_id
                 WHERE {where_sql}
                 ORDER BY r.store_site ASC, r.listing ASC,
                          r.source_row ASC, r.id ASC
@@ -1192,8 +1822,18 @@ class DashboardService:
                 """,
                 (*params, page_size, (page - 1) * page_size),
             ).fetchall()
+        items = []
+        for row in rows:
+            item = dict(row)
+            snapshot = json_value(item.pop("hierarchy_snapshot_json", None), {})
+            taxonomy = (
+                TaxonomyConfig.model_validate(snapshot["taxonomy"])
+                if snapshot
+                else None
+            )
+            items.append(enrich_record(self._serialize_record(item), taxonomy))
         return {
-            "items": [self._serialize_record(dict(row)) for row in rows],
+            "items": items,
             "total": total,
             "page": page,
             "page_size": page_size,
@@ -1296,7 +1936,7 @@ class DashboardService:
                    product_dataset.name AS product_dataset_name,
                    product_version.version AS product_version,
                    r.store_site, r.listing, r.agent_key, r.agent_family,
-                   r.logic_version, r.taxonomy_version,
+                   r.logic_version, r.taxonomy_version, r.standard_version_id,
                    r.model_policy_version, r.claims_version,
                    COALESCE((
                        SELECT COUNT(DISTINCT revision.review_record_id)
@@ -1360,6 +2000,13 @@ class DashboardService:
             for version_id in clean_ids
             if version_id not in found_ids
         ]
+        if self._mixed_hierarchy(connection, sources):
+            blockers.append(
+                {
+                    "type": "incompatible_hierarchy_versions",
+                    "message": "层级框架必须按标准版本分别建立看板，不能合并不同标准版本的标签。",
+                }
+            )
         warnings: list[dict[str, Any]] = []
         for source in sources:
             if source["publish_status"] != "published":
@@ -1505,6 +2152,8 @@ class DashboardService:
         source_ids: list[str],
         filters: dict[str, list[str]],
         sources: list[dict[str, Any]],
+        *,
+        include_comment_metrics: bool = True,
     ) -> dict[str, Any]:
         if source_ids:
             where_sql, params = self._record_where(source_ids, filters)
@@ -1539,6 +2188,13 @@ class DashboardService:
             ),
             "record_count": record_count,
             "unit_count": unit_count,
+            "comment_count": 0,
+            "total_comment_count": 0,
+            "pending_review_comment_count": 0,
+            "comment_statuses": [
+                {"status": status, "comment_count": 0}
+                for status in COMMENT_SUMMARY_STATUSES
+            ],
             "product_name_missing_count": missing_count,
             "product_unmatched_count": unmatched_count,
             "review_changed_unit_count": sum(
@@ -1560,6 +2216,16 @@ class DashboardService:
                 source_ids,
                 scope_filters,
             )
+            if include_comment_metrics:
+                summary.update(
+                    self._comment_summary_metrics(
+                        connection,
+                        where_sql,
+                        params,
+                        scope_where,
+                        scope_params,
+                    )
+                )
             coverage = connection.execute(
                 f"""
                 SELECT COUNT(*) AS total_record_count,
@@ -1596,6 +2262,66 @@ class DashboardService:
                     }
                 )
         return summary
+
+    @staticmethod
+    def _comment_summary_metrics(
+        connection: sqlite3.Connection,
+        where_sql: str,
+        params: list[Any],
+        total_where_sql: str,
+        total_params: list[Any],
+    ) -> dict[str, Any]:
+        rows = connection.execute(
+            f"""
+            SELECT u.classification_json, COUNT(r.id) AS comment_count
+            FROM classification_result_records r
+            JOIN classification_units u
+              ON u.result_version_id = r.result_version_id
+             AND u.classification_key = r.classification_key
+            WHERE {where_sql}
+            GROUP BY r.result_version_id, r.classification_key
+            """,
+            tuple(params),
+        ).fetchall()
+        status_counts = {status: 0 for status in COMMENT_SUMMARY_STATUSES}
+        for row in rows:
+            payload = json_value(row["classification_json"], {})
+            status = _classification_comment_status(payload)
+            status_counts[status] += int(row["comment_count"] or 0)
+
+        coverage = connection.execute(
+            f"""
+            SELECT COALESCE(SUM(comment_count), 0) AS total_comment_count,
+                   COALESCE(SUM(
+                       CASE WHEN pending_review = 1 THEN comment_count ELSE 0 END
+                   ), 0) AS pending_review_comment_count
+            FROM (
+                SELECT COUNT(r.id) AS comment_count,
+                       MAX(
+                           CASE WHEN u.quality_status NOT IN ('ready', 'excluded')
+                                THEN 1 ELSE 0 END
+                       ) AS pending_review
+                FROM classification_result_records r
+                JOIN classification_units u
+                  ON u.result_version_id = r.result_version_id
+                 AND u.classification_key = r.classification_key
+                WHERE {total_where_sql}
+                GROUP BY r.result_version_id, r.classification_key
+            ) scoped_comments
+            """,
+            tuple(total_params),
+        ).fetchone()
+        return {
+            "comment_count": sum(int(row["comment_count"] or 0) for row in rows),
+            "total_comment_count": int(coverage["total_comment_count"] or 0),
+            "pending_review_comment_count": int(
+                coverage["pending_review_comment_count"] or 0
+            ),
+            "comment_statuses": [
+                {"status": status, "comment_count": status_counts[status]}
+                for status in COMMENT_SUMMARY_STATUSES
+            ],
+        }
 
     def _insert_version(
         self,
@@ -1696,7 +2422,7 @@ class DashboardService:
                    product_dataset.name AS product_dataset_name,
                    product_version.version AS product_version,
                    r.store_site, r.listing, r.agent_key, r.agent_family,
-                   r.logic_version, r.taxonomy_version,
+                   r.logic_version, r.taxonomy_version, r.standard_version_id,
                    r.model_policy_version, r.claims_version,
                    COALESCE((
                        SELECT COUNT(DISTINCT revision.review_record_id)
@@ -1808,6 +2534,21 @@ class DashboardService:
         return value
 
     @staticmethod
+    def _mixed_hierarchy(
+        connection: sqlite3.Connection, sources: list[dict[str, Any]]
+    ) -> bool:
+        versions = {source.get("standard_version_id") for source in sources}
+        if len(versions) < 2:
+            return False
+        return any(
+            taxonomy is not None and taxonomy.structure_version == 2
+            for taxonomy in (
+                result_taxonomy(connection, source["result_version_id"])
+                for source in sources
+            )
+        )
+
+    @staticmethod
     def _normalize_filters(filters: dict[str, Any]) -> dict[str, list[str]]:
         unknown = sorted(set(filters) - ALLOWED_FILTERS)
         if unknown:
@@ -1830,8 +2571,8 @@ class DashboardService:
             raise ValueError("quality_status 不合法")
         return output
 
-    @staticmethod
     def _record_where(
+        self,
         source_ids: list[str],
         *filter_sets: dict[str, list[str]],
     ) -> tuple[str, list[Any]]:
@@ -1843,6 +2584,29 @@ class DashboardService:
             for key, values in filters.items():
                 placeholders = ",".join("?" for _ in values)
                 if key == "problem":
+                    scoped = []
+                    with self.database.connect() as connection:
+                        for source in source_ids:
+                            taxonomy = result_taxonomy(connection, source)
+                            codes = sorted(
+                                {
+                                    code
+                                    for value in values
+                                    for code in (
+                                        (
+                                            descendant_label_codes(taxonomy, value)
+                                            or [value]
+                                        )
+                                        if taxonomy
+                                        else [value]
+                                    )
+                                }
+                            )
+                            code_placeholders = ",".join("?" for _ in codes)
+                            scoped.append(
+                                f"(f.result_version_id = ? AND f.label_code IN ({code_placeholders}))"
+                            )
+                            params.extend([source, *codes])
                     where.append(
                         """
                         EXISTS (
@@ -1850,13 +2614,13 @@ class DashboardService:
                             WHERE f.result_version_id = r.result_version_id
                               AND f.classification_key = r.classification_key
                               AND f.label_kind = 'problem'
-                              AND f.label_code IN ("""
-                        + placeholders
+                              AND ("""
+                        + " OR ".join(scoped)
                         + ") )"
                     )
                 else:
                     where.append(f"r.{FILTER_COLUMNS[key]} IN ({placeholders})")
-                params.extend(values)
+                    params.extend(values)
         return " AND ".join(where), params
 
     @staticmethod
@@ -1900,23 +2664,15 @@ class DashboardService:
         now: str,
         before: dict[str, Any] | None = None,
     ) -> None:
-        connection.execute(
-            """
-            INSERT INTO audit_logs(
-                id, entity_type, entity_id, action, before_json,
-                after_json, actor_id, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                new_id("audit"),
-                entity_type,
-                entity_id,
-                action,
-                json_text(before) if before is not None else None,
-                json_text(after),
-                actor_id,
-                now,
-            ),
+        insert_audit(
+            connection,
+            entity_type,
+            entity_id,
+            action,
+            actor_id,
+            before,
+            after,
+            now,
         )
 
     @staticmethod

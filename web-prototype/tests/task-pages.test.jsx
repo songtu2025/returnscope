@@ -1,10 +1,13 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 
-const { newTaskPageProbe, taskMonitorProbe } = vi.hoisted(() => ({
+const { apiProbe, newTaskPageProbe, taskMonitorProbe } = vi.hoisted(() => ({
+  apiProbe: { task: vi.fn() },
   newTaskPageProbe: vi.fn(),
   taskMonitorProbe: vi.fn(),
 }));
+
+vi.mock("../src/api", () => ({ api: apiProbe }));
 
 vi.mock("../src/features/task-create/NewTaskPage", () => ({
   NewTaskPage: (props) => {
@@ -21,6 +24,10 @@ vi.mock("../src/features/task-runtime/TaskMonitor", () => ({
 }));
 
 import { TaskCreatePage } from "../src/features/task-create/TaskCreatePage";
+import {
+  readTaskDraft,
+  writeTaskDraft,
+} from "../src/features/task-create/taskDraftStorage";
 import { TaskRuntimePage } from "../src/features/task-runtime/TaskRuntimePage";
 
 afterEach(() => {
@@ -44,7 +51,123 @@ test("任务创建页将数据版本写入用户草稿并保留业务归属", ()
     "分析任务/创建任务",
   );
   expect(newTaskPageProbe.mock.calls.at(-1)[0].draft).toMatchObject({
+    dataEntryMode: "existing",
+    selectedDataLabel: "当前完整数据",
     form: { dataset_version_id: "returns-v7" },
+  });
+});
+
+test("重新进入任务创建页时保留已选数据和输入", () => {
+  writeTaskDraft("user-1", {
+    step: 1,
+    resumePreflight: false,
+    form: {
+      title: "待创建任务",
+      dataset_version_id: "returns-v6",
+    },
+    dataEntryMode: "existing",
+    selectedDataLabel: "当前完整数据",
+  });
+
+  render(
+    <TaskCreatePage
+      route={{ query: {} }}
+      notify={vi.fn()}
+      onNavigate={vi.fn()}
+      onChanged={vi.fn()}
+      userId="user-1"
+    />,
+  );
+
+  expect(newTaskPageProbe.mock.calls.at(-1)[0].draft).toMatchObject({
+    dataEntryMode: "existing",
+    selectedDataLabel: "当前完整数据",
+    form: { title: "待创建任务", dataset_version_id: "returns-v6" },
+  });
+  expect(readTaskDraft("user-1")).toMatchObject({
+    dataEntryMode: "existing",
+    selectedDataLabel: "当前完整数据",
+    form: { dataset_version_id: "returns-v6" },
+  });
+});
+
+test("商品修复返回任务创建页时保留待恢复的退货版本", () => {
+  writeTaskDraft("user-1", {
+    step: 3,
+    resumePreflight: true,
+    form: { dataset_version_id: "returns-v6" },
+  });
+
+  render(
+    <TaskCreatePage
+      route={{ query: {} }}
+      notify={vi.fn()}
+      onNavigate={vi.fn()}
+      onChanged={vi.fn()}
+      userId="user-1"
+    />,
+  );
+
+  expect(newTaskPageProbe.mock.calls.at(-1)[0].draft).toMatchObject({
+    step: 3,
+    resumePreflight: true,
+    form: { dataset_version_id: "returns-v6" },
+  });
+});
+
+test("创建类似任务时只继承名称和模型策略", async () => {
+  apiProbe.task.mockResolvedValue({
+    id: "task-template",
+    title: "历史分析任务",
+    dataset_name: "退货数据",
+    dataset_version: 7,
+    dataset_version_id: "returns-v7",
+    product_version_id: "products-v3",
+    config_version_id: "config-v2",
+    snapshot: {
+      config: {
+        connection_id: "connection-1",
+        cheap_model: "gpt-5.6-luna",
+        cheap_effort: "low",
+        primary_model: "gpt-5.6-terra",
+        primary_effort: "medium",
+        secondary_model: "gpt-5.6-sol",
+        secondary_effort: "high",
+        cheap_audit_percent: 10,
+      },
+    },
+  });
+
+  render(
+    <TaskCreatePage
+      route={{ query: { template_task: "task-template" } }}
+      notify={vi.fn()}
+      onNavigate={vi.fn()}
+      onChanged={vi.fn()}
+      userId="user-1"
+    />,
+  );
+
+  expect(screen.getByText("正在读取原任务配置…")).toBeVisible();
+  await waitFor(() => expect(newTaskPageProbe).toHaveBeenCalled());
+  expect(newTaskPageProbe.mock.calls.at(-1)[0].draft).toMatchObject({
+    step: 1,
+    dataEntryMode: "existing",
+    selectedDataLabel: "",
+    form: {
+      title: "历史分析任务（副本）",
+      dataset_version_id: "",
+      product_version_id: "",
+      config_version_id: "config-v2",
+      store: "",
+      listing: "",
+      model_policy: {
+        connection_id: "connection-1",
+        cheap_model: "gpt-5.6-luna",
+        primary_model: "gpt-5.6-terra",
+        secondary_model: "gpt-5.6-sol",
+      },
+    },
   });
 });
 

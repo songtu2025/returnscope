@@ -1,0 +1,1029 @@
+import { groups as BUSINESS_GROUPS } from "../../../../config/taxonomy_alignment.json";
+import { useEffect, useId, useRef, useState } from "react";
+import {
+  ArrowCounterClockwise,
+  Copy,
+  MagnifyingGlass,
+  Plus,
+  X,
+} from "@phosphor-icons/react";
+import { EmptyState, Modal } from "../../components/SharedUi";
+import { labelChanges, reconcileLabelRules, sameLabel } from "./labelDraftPolicy";
+import { taxonomyPath } from "../../lib/taxonomyPresentation";
+import { ClassificationHierarchyDirectory } from "./ClassificationHierarchyEditor";
+
+const SENTIMENTS = { NEGATIVE: "负向", POSITIVE: "正向", NEUTRAL: "中性" };
+
+export function ClassificationLabelWorkbench({
+  content,
+  baseContent,
+  savedContent,
+  onChange,
+  focusLabelCode,
+  fixRequest,
+  busy,
+  editable,
+  initiallyEditing,
+  notify,
+  fieldErrors = {},
+  validationAttempt = 0,
+  section,
+}) {
+  const [selected, setSelected] = useState(() =>
+    Math.max(
+      0,
+      content.labels.findIndex((label) => label.code === focusLabelCode),
+    ),
+  );
+  const [editing, setEditing] = useState(initiallyEditing);
+  const [query, setQuery] = useState("");
+  const [group, setGroup] = useState("");
+  const [pending, setPending] = useState(null);
+  const [keywordText, setKeywordText] = useState("");
+  const [origins, setOrigins] = useState({});
+  const selectedRef = useRef(null);
+  const addLabelRef = useRef(null);
+  const emptyLabelRef = useRef(null);
+  const labelFieldRefs = useRef(new Map());
+  const pendingFocusRef = useRef(null);
+  const handledFixRef = useRef(null);
+  const focusedAttemptRef = useRef(0);
+  const errorId = useId();
+  useEffect(() => {
+    const target = selectedRef.current;
+    if (target)
+      target.parentElement.scrollTop =
+        target.offsetTop -
+        target.parentElement.clientHeight / 2 +
+        target.offsetHeight / 2;
+  }, [selected, query, group]);
+  const entries = labelChanges(content.labels, baseContent?.labels);
+  const entry =
+    typeof selected === "number"
+      ? entries.find((item) => item.index === selected)
+      : entries.find((item) => item.index < 0 && item.label.code === selected);
+  const label = entry?.label;
+  const published = Boolean(entry?.before) && !(label?.code in origins);
+  const removed = entry?.status === "拟停用";
+  const saved =
+    savedContent?.labels.find((item) => item.code === label?.code) ??
+    savedContent?.labels.find((item) => item.code === origins[label?.code]);
+  const labelDirty = label && (removed ? Boolean(saved) : !sameLabel(label, saved));
+  const groups = [...new Set(entries.map((item) => item.label.group).filter(Boolean))];
+  const hierarchical = content.structure_version === 2;
+  const allowedGroups = hierarchical
+    ? (content.categories ?? [])
+        .filter((item) => !item.parent_code)
+        .map((item) => item.name)
+    : content.validation_rules?.allowed_groups?.length
+      ? content.validation_rules.allowed_groups
+      : BUSINESS_GROUPS;
+  const matches = entries.filter(
+    ({ label: item }) =>
+      (!group || item.group === group) &&
+      [
+        item.name,
+        item.code,
+        item.description,
+        ...taxonomyPath(content, item),
+        ...(item.keywords ?? []),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(query.trim().toLowerCase()),
+  );
+
+  const conflictCodes = new Set(
+    (content.validation_rules?.conflicting_label_sets ?? [])
+      .filter((codes) => codes.includes(label?.code))
+      .flat(),
+  );
+  const relatedLabels = content.labels.filter(
+    (item) => item.code !== label?.code && conflictCodes.has(item.code),
+  );
+
+  const updateLabel = (updates) => {
+    const field = Object.keys(updates)[0];
+    if (updates.code !== undefined && updates.code !== label.code) {
+      setOrigins((current) => {
+        const next = { ...current, [updates.code]: current[label.code] ?? label.code };
+        delete next[label.code];
+        return next;
+      });
+    }
+    onChange(
+      {
+        ...content,
+        labels: content.labels.map((item, index) =>
+          index === entry.index ? { ...item, ...updates } : item,
+        ),
+      },
+      `labels.${entry.index}.${field}`,
+    );
+  };
+  const changeLabels = (labels, restoredCode, field) =>
+    onChange(
+      {
+        ...content,
+        labels,
+        validation_rules: hierarchical
+          ? content.validation_rules
+          : reconcileLabelRules(
+              content.validation_rules,
+              labels,
+              baseContent?.validation_rules,
+              restoredCode,
+            ),
+      },
+      field,
+    );
+  const selectLabel = (value) => {
+    setSelected(value);
+    setKeywordText("");
+  };
+  const addLabel = (source) => {
+    setEditing(true);
+    const usedCodes = new Set(entries.map((item) => item.label.code));
+    const prefix = source
+      ? `${source.code}_V`
+      : hierarchical
+        ? `LABEL_${crypto.randomUUID().replaceAll("-", "").toUpperCase()}_`
+        : "NEW_LABEL_";
+    let suffix = source ? 2 : 1;
+    while (usedCodes.has(`${prefix}${suffix}`)) suffix += 1;
+    const newLabel = source
+      ? { ...source, code: `${prefix}${suffix}`, allowed_claim_ids: [] }
+      : {
+          code: `${prefix}${suffix}`,
+          name: "",
+          group: allowedGroups.includes(group) ? group : allowedGroups[0] || "",
+          ...(hierarchical
+            ? { parent_code: content.categories?.[0]?.code ?? null }
+            : {}),
+          description: "",
+          keywords: [],
+          allowed_sentiments: ["NEGATIVE"],
+          allowed_claim_ids: [],
+        };
+    const labels = source
+      ? content.labels.map((item, index) => (index === entry.index ? newLabel : item))
+      : [...content.labels, newLabel];
+    setOrigins((current) => ({ ...current, [newLabel.code]: source?.code ?? null }));
+    changeLabels(labels, undefined, "labels_empty");
+    selectLabel(source ? entry.index : labels.length - 1);
+    setQuery("");
+    setGroup("");
+    setPending(null);
+  };
+  const commitKeywords = (text) => {
+    const values = text
+      .split(/[,，;；\n]+/)
+      .map((word) => word.trim())
+      .filter(Boolean);
+    if (values.length)
+      updateLabel({ keywords: [...new Set([...(label.keywords ?? []), ...values])] });
+    setKeywordText("");
+  };
+  const retireLabel = () => {
+    const labels = content.labels.filter((_item, index) => index !== entry.index);
+    changeLabels(labels);
+    selectLabel(published ? label.code : Math.max(0, entry.index - 1));
+    setPending(null);
+  };
+  const undoLabel = () => {
+    setOrigins((current) => {
+      const next = { ...current };
+      delete next[label.code];
+      if (saved) delete next[saved.code];
+      return next;
+    });
+    if (removed && saved) {
+      changeLabels([...content.labels, saved], saved.code);
+      selectLabel(content.labels.length);
+    } else if (saved)
+      changeLabels(
+        content.labels.map((item, index) => (index === entry.index ? saved : item)),
+        saved.code,
+      );
+    else {
+      changeLabels(content.labels.filter((_item, index) => index !== entry.index));
+      selectLabel(0);
+    }
+    setKeywordText("");
+  };
+
+  useEffect(() => {
+    if (
+      !validationAttempt ||
+      busy ||
+      section !== "labels" ||
+      focusedAttemptRef.current === validationAttempt
+    ) {
+      return;
+    }
+    if (fieldErrors.labels_empty) {
+      const target = emptyLabelRef.current || addLabelRef.current;
+      if (target) {
+        focusedAttemptRef.current = validationAttempt;
+        target.focus();
+      }
+      return;
+    }
+    const index = fieldErrors.labels?.findIndex(
+      (item) => item.name || item.group || item.code,
+    );
+    if (index < 0) return;
+    const errors = fieldErrors.labels[index];
+    const field = ["name", "group", "code"].find((key) => errors[key]);
+    pendingFocusRef.current = { attempt: validationAttempt, index, field };
+    setSelected(index);
+    setEditing(true);
+  }, [busy, fieldErrors, section, validationAttempt]);
+
+  useEffect(() => {
+    if (!fixRequest || section !== "labels" || handledFixRef.current === fixRequest)
+      return;
+    const index = fixRequest.label_code
+      ? content.labels.findIndex((item) => item.code === fixRequest.label_code)
+      : fixRequest.label_index;
+    if (index < 0 || !content.labels[index]) return;
+    handledFixRef.current = fixRequest;
+    pendingFocusRef.current = { index, field: fixRequest.field || "description" };
+    setQuery("");
+    setGroup("");
+    setSelected(index);
+    setEditing(true);
+  }, [content.labels, fixRequest, section]);
+
+  useEffect(() => {
+    const pendingFocus = pendingFocusRef.current;
+    if (
+      !pendingFocus ||
+      busy ||
+      !editing ||
+      section !== "labels" ||
+      selected !== pendingFocus.index
+    ) {
+      return;
+    }
+    const target = labelFieldRefs.current.get(
+      `${pendingFocus.index}.${pendingFocus.field}`,
+    );
+    if (!target) return;
+    target.focus();
+    focusedAttemptRef.current = pendingFocus.attempt;
+    pendingFocusRef.current = null;
+  }, [busy, editing, section, selected, fixRequest]);
+
+  return (
+    <div className="label-workbench">
+      <aside className="label-directory" aria-label="标签目录">
+        <header>
+          <strong>
+            标签目录 <span>{content.labels.length}</span>
+          </strong>
+          {editable && (
+            <button
+              ref={addLabelRef}
+              type="button"
+              className="icon-button"
+              aria-label="增加标签"
+              disabled={busy}
+              onClick={() => addLabel()}
+            >
+              <Plus size={17} />
+            </button>
+          )}
+        </header>
+        <label className="standard-search-box">
+          <MagnifyingGlass size={16} />
+          <input
+            type="search"
+            aria-label="搜索标签"
+            placeholder="搜索标签或别名"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+        <select
+          aria-label="筛选标签分组"
+          value={group}
+          onChange={(event) => setGroup(event.target.value)}
+        >
+          <option value="">全部分组</option>
+          {groups.map((name) => (
+            <option key={name}>{name}</option>
+          ))}
+        </select>
+        <div className="label-directory-scroll">
+          {(() => {
+            const renderLabel = (item) => {
+              const value = item.index < 0 ? item.label.code : item.index;
+              return (
+                <button
+                  ref={selected === value ? selectedRef : undefined}
+                  key={item.index < 0 ? `removed-${item.label.code}` : item.index}
+                  type="button"
+                  aria-current={selected === value ? "true" : undefined}
+                  disabled={busy}
+                  onClick={() => selectLabel(value)}
+                >
+                  <span>
+                    <b>{item.label.name || "未命名标签"}</b>
+                    <small>
+                      {taxonomyPath(item.index < 0 ? baseContent : content, item.label)
+                        .slice(0, -1)
+                        .join(" → ") || "未分组"}
+                    </small>
+                  </span>
+                  {item.status !== "未修改" && (
+                    <span
+                      className={`label-change-badge ${item.status === "拟停用" ? "removed" : "changed"}`}
+                    >
+                      {item.status}
+                    </span>
+                  )}
+                </button>
+              );
+            };
+            return hierarchical ? (
+              <ClassificationHierarchyDirectory
+                content={content}
+                entries={matches}
+                renderLabel={renderLabel}
+              />
+            ) : (
+              matches.map(renderLabel)
+            );
+          })()}
+          {!matches.length && (
+            <p className="label-directory-empty">
+              没有匹配的标签。
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  setGroup("");
+                }}
+              >
+                重置筛选
+              </button>
+            </p>
+          )}
+        </div>
+      </aside>
+      <div className="label-workspace" aria-label="当前标签编辑区">
+        {fieldErrors.labels_empty && (
+          <p className="standard-field-error" id={`${errorId}-labels-empty`}>
+            {fieldErrors.labels_empty}
+          </p>
+        )}
+        {label ? (
+          <>
+            <header>
+              <div>
+                <h2>{label.name || "新建标签"}</h2>
+                <div className="label-code-line">
+                  <code>{label.code}</code>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label="复制标签编码"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(label.code);
+                        notify("标签编码已复制");
+                      } catch {
+                        notify("复制失败，请选中编码手动复制", "error");
+                      }
+                    }}
+                  >
+                    <Copy size={14} />
+                  </button>
+                </div>
+              </div>
+              <div className="label-workspace-actions">
+                {editable && !removed && (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => setEditing((value) => !value)}
+                  >
+                    {editing ? "完成编辑" : "编辑"}
+                  </button>
+                )}
+                {editable && labelDirty && (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={busy}
+                    onClick={undoLabel}
+                  >
+                    <ArrowCounterClockwise size={15} />
+                    撤销当前修改
+                  </button>
+                )}
+                {editable && !removed && (
+                  <details className="standard-more-menu">
+                    <summary>更多</summary>
+                    <button
+                      type="button"
+                      disabled={busy || content.labels.length <= 1}
+                      onClick={(event) => {
+                        event.currentTarget.closest("details").open = false;
+                        setPending({ type: "retire" });
+                      }}
+                    >
+                      {published ? "停用标签" : "移除新标签"}
+                    </button>
+                  </details>
+                )}
+              </div>
+            </header>
+            <div className="label-workspace-scroll" key={`${selected}-${removed}`}>
+              {removed ? (
+                <div className="label-workspace-notice">
+                  <h3>此标签拟在下一版本停用</h3>
+                  <p>当前线上标准与历史结果不受影响，发布草稿后才生效。</p>
+                  {editable && (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => {
+                        changeLabels([...content.labels, label], label.code);
+                        selectLabel(content.labels.length);
+                      }}
+                    >
+                      恢复到草稿
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <>
+                  {hierarchical && editable && editing && (
+                    <label>
+                      上级分类
+                      <select
+                        ref={(node) =>
+                          labelFieldRefs.current.set(`${entry.index}.parent_code`, node)
+                        }
+                        aria-label="标签的上级分类"
+                        value={label.parent_code || ""}
+                        onChange={(event) => {
+                          const next = { ...label, parent_code: event.target.value };
+                          updateLabel({
+                            parent_code: next.parent_code,
+                            group: taxonomyPath(content, next)[0] || "",
+                          });
+                        }}
+                      >
+                        <option value="" disabled>
+                          请选择上级分类
+                        </option>
+                        {(content.categories ?? []).map((item) => (
+                          <option key={item.code} value={item.code}>
+                            {taxonomyPath(content, item).join(" → ")}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  {hierarchical && published && editable && editing && (
+                    <label>
+                      标签名称
+                      <input
+                        aria-label="已发布标签名称"
+                        value={label.name}
+                        onChange={(event) => updateLabel({ name: event.target.value })}
+                      />
+                    </label>
+                  )}
+                  {published || !editing ? (
+                    <>
+                      {editable && editing && published && (
+                        <div className="label-published-note">
+                          <span>已发布标签语义保持稳定，可直接补充关键词。</span>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => setPending({ type: "replace" })}
+                          >
+                            修改说明：创建替代标签 →
+                          </button>
+                        </div>
+                      )}
+                      <section className="label-business-definition">
+                        <dl>
+                          <div>
+                            <dt>{hierarchical ? "标签路径" : "标签分组"}</dt>
+                            <dd>
+                              {taxonomyPath(
+                                removed ? baseContent : content,
+                                label,
+                              ).join(" → ")}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>评价方向</dt>
+                            <dd>
+                              {label.allowed_sentiments
+                                .map((value) => SENTIMENTS[value])
+                                .join(" / ")}
+                            </dd>
+                          </div>
+                        </dl>
+                        <h3>判定说明（可选）</h3>
+                        <p>{label.description || "依据标签名称和完整路径理解"}</p>
+                      </section>
+                    </>
+                  ) : (
+                    <section className="standard-editor-fields label-new-fields">
+                      <label>
+                        标签名称
+                        <input
+                          ref={(node) => {
+                            labelFieldRefs.current.set(`${entry.index}.name`, node);
+                          }}
+                          aria-label={`标签名称 ${entry.index + 1}`}
+                          aria-invalid={Boolean(
+                            fieldErrors.labels?.[entry.index]?.name,
+                          )}
+                          aria-describedby={
+                            fieldErrors.labels?.[entry.index]?.name
+                              ? `${errorId}-label-${entry.index}-name`
+                              : undefined
+                          }
+                          value={label.name}
+                          onChange={(event) =>
+                            updateLabel({ name: event.target.value })
+                          }
+                        />
+                        {fieldErrors.labels?.[entry.index]?.name && (
+                          <span
+                            className="standard-field-error"
+                            id={`${errorId}-label-${entry.index}-name`}
+                          >
+                            {fieldErrors.labels[entry.index].name}
+                          </span>
+                        )}
+                      </label>
+                      {!hierarchical && (
+                        <label>
+                          标签分组
+                          <select
+                            ref={(node) => {
+                              labelFieldRefs.current.set(`${entry.index}.group`, node);
+                            }}
+                            aria-label={`标签分组 ${entry.index + 1}`}
+                            aria-invalid={Boolean(
+                              fieldErrors.labels?.[entry.index]?.group,
+                            )}
+                            aria-describedby={
+                              fieldErrors.labels?.[entry.index]?.group
+                                ? `${errorId}-label-${entry.index}-group`
+                                : undefined
+                            }
+                            value={label.group}
+                            onChange={(event) =>
+                              updateLabel({ group: event.target.value })
+                            }
+                          >
+                            {!allowedGroups.includes(label.group) && (
+                              <option value={label.group}>
+                                {label.group || "请选择分组"}
+                              </option>
+                            )}
+                            {allowedGroups.map((name) => (
+                              <option key={name} value={name}>
+                                {name}
+                              </option>
+                            ))}
+                          </select>
+                          {fieldErrors.labels?.[entry.index]?.group && (
+                            <span
+                              className="standard-field-error"
+                              id={`${errorId}-label-${entry.index}-group`}
+                            >
+                              {fieldErrors.labels[entry.index].group}
+                            </span>
+                          )}
+                        </label>
+                      )}
+                      <label className="wide-field">
+                        标签编码
+                        <input
+                          ref={(node) => {
+                            labelFieldRefs.current.set(`${entry.index}.code`, node);
+                          }}
+                          aria-label={`标签编码 ${entry.index + 1}`}
+                          aria-invalid={Boolean(
+                            fieldErrors.labels?.[entry.index]?.code,
+                          )}
+                          aria-describedby={
+                            fieldErrors.labels?.[entry.index]?.code
+                              ? `${errorId}-label-${entry.index}-code`
+                              : undefined
+                          }
+                          value={label.code}
+                          onChange={(event) =>
+                            updateLabel({ code: event.target.value.toUpperCase() })
+                          }
+                        />
+                        {fieldErrors.labels?.[entry.index]?.code && (
+                          <span
+                            className="standard-field-error"
+                            id={`${errorId}-label-${entry.index}-code`}
+                          >
+                            {fieldErrors.labels[entry.index].code}
+                          </span>
+                        )}
+                      </label>
+                      <label className="wide-field">
+                        判定说明（可选）
+                        <textarea
+                          ref={(node) => {
+                            labelFieldRefs.current.set(
+                              `${entry.index}.description`,
+                              node,
+                            );
+                          }}
+                          rows={5}
+                          aria-label={`判定说明（可选） ${entry.index + 1}`}
+                          value={label.description ?? ""}
+                          placeholder="有特殊边界时补充，无需重复标签名称"
+                          onChange={(event) =>
+                            updateLabel({ description: event.target.value })
+                          }
+                        />
+                      </label>
+                      <fieldset className="wide-field label-sentiment-options">
+                        <legend>支持的评价方向</legend>
+                        {Object.entries(SENTIMENTS).map(([value, name]) => (
+                          <label key={value}>
+                            <input
+                              ref={(node) => {
+                                if (value === "NEGATIVE")
+                                  labelFieldRefs.current.set(
+                                    `${entry.index}.allowed_sentiments`,
+                                    node,
+                                  );
+                              }}
+                              type="checkbox"
+                              checked={label.allowed_sentiments.includes(value)}
+                              onChange={(event) =>
+                                updateLabel({
+                                  allowed_sentiments: event.target.checked
+                                    ? [...label.allowed_sentiments, value]
+                                    : label.allowed_sentiments.filter(
+                                        (item) => item !== value,
+                                      ),
+                                })
+                              }
+                            />
+                            {name}
+                          </label>
+                        ))}
+                      </fieldset>
+                      <fieldset className="wide-field label-sentiment-options">
+                        <legend>统计与复核</legend>
+                        {[
+                          ["required_review_labels", "使用此标签时必须人工复核"],
+                          ...(label.allowed_sentiments.includes("NEUTRAL")
+                            ? [["neutral_reason_labels", "中性反馈可作为退货原因"]]
+                            : []),
+                        ].map(([field, title]) => (
+                          <label key={field}>
+                            <input
+                              type="checkbox"
+                              checked={(
+                                content.validation_rules?.[field] ?? []
+                              ).includes(label.code)}
+                              onChange={(event) => {
+                                const values = content.validation_rules?.[field] ?? [];
+                                onChange({
+                                  ...content,
+                                  validation_rules: {
+                                    ...content.validation_rules,
+                                    [field]: event.target.checked
+                                      ? [...new Set([...values, label.code])]
+                                      : values.filter((code) => code !== label.code),
+                                  },
+                                });
+                              }}
+                            />
+                            {title}
+                          </label>
+                        ))}
+                      </fieldset>
+                    </section>
+                  )}
+                  <LabelBoundaries
+                    label={label}
+                    editing={editable && editing}
+                    onChange={updateLabel}
+                    onFieldRef={(field, node) =>
+                      labelFieldRefs.current.set(`${entry.index}.${field}`, node)
+                    }
+                  />
+                  <details className="label-keyword-editor">
+                    <summary>搜索别名（可选） · {label.keywords?.length ?? 0}</summary>
+                    <p>
+                      {["semantic_v1", "fact_v2"].includes(content.recognition_profile)
+                        ? "仅用于管理页面搜索，不参与当前语义策略分类。"
+                        : "当前仍使用旧策略：这些词同时用于搜索和模型提示。切换语义策略并发布后，仅用于搜索。"}
+                    </p>
+                    <h3>
+                      搜索别名 <span>{label.keywords?.length ?? 0}</span>
+                    </h3>
+
+                    <div className="label-keyword-tokens">
+                      {label.keywords?.map((word, index) => (
+                        <span key={index}>
+                          {word}
+                          {editable && editing && (
+                            <button
+                              type="button"
+                              aria-label={`移除搜索别名 ${word}`}
+                              onClick={() =>
+                                updateLabel({
+                                  keywords: label.keywords.filter(
+                                    (_word, i) => i !== index,
+                                  ),
+                                })
+                              }
+                            >
+                              <X size={13} />
+                            </button>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                    {editable && editing && (
+                      <input
+                        aria-label={`搜索别名 ${entry.index + 1}`}
+                        value={keywordText}
+                        placeholder="添加搜索别名，回车确认；支持逗号分隔"
+                        onChange={(event) => setKeywordText(event.target.value)}
+                        onBlur={() => commitKeywords(keywordText)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+                            event.preventDefault();
+                            commitKeywords(keywordText);
+                          }
+                        }}
+                      />
+                    )}
+                    {!label.keywords?.length && !editing && <p>未配置搜索别名。</p>}
+                  </details>
+                  {relatedLabels.length > 0 && (
+                    <section className="label-related-rules">
+                      <h3>同时出现时需复核</h3>
+                      <p>这些标签同时出现时，需检查各自的证据与适用范围。</p>
+                      {relatedLabels.map((item) => (
+                        <button
+                          type="button"
+                          key={item.code}
+                          className="secondary-button"
+                          onClick={() => {
+                            setQuery("");
+                            setGroup("");
+                            selectLabel(content.labels.indexOf(item));
+                          }}
+                        >
+                          {item.name}
+                        </button>
+                      ))}
+                    </section>
+                  )}
+                  {label.allowed_claim_ids?.length > 0 && (
+                    <details className="label-related-rules">
+                      <summary>关联承诺（{label.allowed_claim_ids.length}）</summary>
+                      <p>实际适用范围以具体 Listing 的承诺配置为准。</p>
+                      {label.allowed_claim_ids.map((id) => (
+                        <code key={id}>{id} </code>
+                      ))}
+                    </details>
+                  )}
+                </>
+              )}
+            </div>
+          </>
+        ) : (
+          <EmptyState
+            icon={Plus}
+            title="开始建立标签体系"
+            description="新增标签后，在右侧填写名称，并按需补充判定说明和关键词。"
+            action={
+              editable && (
+                <button
+                  ref={emptyLabelRef}
+                  type="button"
+                  className="primary-button"
+                  aria-describedby={
+                    fieldErrors.labels_empty ? `${errorId}-labels-empty` : undefined
+                  }
+                  onClick={() => addLabel()}
+                >
+                  创建第一个标签
+                </button>
+              )
+            }
+          />
+        )}
+      </div>
+      {pending && (
+        <Modal
+          eyebrow="标签草稿"
+          title={
+            pending.type === "replace"
+              ? "创建替代标签"
+              : published
+                ? "停用此标签？"
+                : "移除新标签？"
+          }
+          onClose={() => setPending(null)}
+        >
+          <div className="label-action-confirm">
+            <p>
+              {pending.type === "replace"
+                ? "将复制名称、判定说明和关键词，生成新编码，并将旧标签标记为拟停用。新标签不继承旧标签的承诺关联与专用校验规则；发布前请在标准设置中核对相关指令。"
+                : "仅修改当前草稿。相关标签校验引用会同步清理，已发布标准和历史结果保持原样。"}
+            </p>
+            <div>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setPending(null)}
+              >
+                继续编辑
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() =>
+                  pending.type === "replace" ? addLabel(label) : retireLabel()
+                }
+              >
+                {pending.type === "replace" ? "创建替代标签" : "确认移除"}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function LabelBoundaries({ label, editing, onChange, onFieldRef }) {
+  const exclusions = label.exclusions ?? [];
+  const examples = label.examples ?? [];
+  const updateExample = (index, change) =>
+    onChange({
+      examples: examples.map((item, position) =>
+        position === index ? { ...item, ...change } : item,
+      ),
+    });
+  if (!editing && !exclusions.length && !examples.length) return null;
+  return (
+    <section className="label-boundaries">
+      {(editing || exclusions.length > 0) && (
+        <div>
+          <h3>排除说明</h3>
+          {editing ? (
+            <textarea
+              aria-label="排除说明"
+              ref={(node) => onFieldRef("exclusions", node)}
+              rows={3}
+              placeholder="每行说明一种不适用情况；避免重复判定说明"
+              value={exclusions.join("\n")}
+              onChange={(event) =>
+                onChange({ exclusions: event.target.value.split("\n") })
+              }
+            />
+          ) : (
+            <ul>
+              {exclusions.map((text, index) => (
+                <li key={index}>{text}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {(editing || examples.length > 0) && (
+        <div tabIndex={-1} ref={(node) => onFieldRef("examples", node)}>
+          <h3>判定示例</h3>
+          <p>完整短句用于解释边界，不是必须命中的词语。</p>
+          {examples.map((example, index) => (
+            <article key={index} className="label-example">
+              {editing ? (
+                <>
+                  <label>
+                    原文表达
+                    <textarea
+                      aria-label={`示例原文 ${index + 1}`}
+                      value={example.text}
+                      onChange={(event) =>
+                        updateExample(index, { text: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    是否适用
+                    <select
+                      aria-label={`示例判定 ${index + 1}`}
+                      value={String(example.applies)}
+                      onChange={(event) => {
+                        const applies = event.target.value === "true";
+                        updateExample(index, {
+                          applies,
+                          sentiment: applies ? label.allowed_sentiments[0] : null,
+                        });
+                      }}
+                    >
+                      <option value="true">适用</option>
+                      <option value="false">不适用</option>
+                    </select>
+                  </label>
+                  {example.applies && (
+                    <label>
+                      评价方向
+                      <select
+                        aria-label={`示例评价方向 ${index + 1}`}
+                        value={example.sentiment ?? ""}
+                        onChange={(event) =>
+                          updateExample(index, { sentiment: event.target.value })
+                        }
+                      >
+                        {label.allowed_sentiments.map((value) => (
+                          <option key={value} value={value}>
+                            {
+                              { NEGATIVE: "负向", POSITIVE: "正向", NEUTRAL: "中性" }[
+                                value
+                              ]
+                            }
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  <label>
+                    判定说明
+                    <textarea
+                      aria-label={`示例说明 ${index + 1}`}
+                      value={example.explanation}
+                      onChange={(event) =>
+                        updateExample(index, { explanation: event.target.value })
+                      }
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() =>
+                      onChange({
+                        examples: examples.filter((_, position) => position !== index),
+                      })
+                    }
+                  >
+                    删除示例 {index + 1}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <b>
+                    {example.applies ? "适用" : "不适用"}
+                    {example.sentiment &&
+                      ` · ${{ NEGATIVE: "负向", POSITIVE: "正向", NEUTRAL: "中性" }[example.sentiment]}`}
+                  </b>
+                  <p>{example.text}</p>
+                  <small>{example.explanation}</small>
+                </>
+              )}
+            </article>
+          ))}
+          {editing && examples.length < 10 && (
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() =>
+                onChange({
+                  examples: [
+                    ...examples,
+                    {
+                      text: "",
+                      applies: true,
+                      sentiment: label.allowed_sentiments[0],
+                      explanation: "",
+                    },
+                  ],
+                })
+              }
+            >
+              增加示例
+            </button>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}

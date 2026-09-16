@@ -14,12 +14,32 @@ from return_semantics.schemas import (
     TaxonomyConfig,
     ValidatedClassification,
 )
+from return_semantics.taxonomy_hierarchy import (
+    descendant_label_codes,
+    label_path,
+    label_path_codes,
+)
 from web_backend.common import json_text, json_value, new_id
 from web_backend.database import Database
+from web_backend.result_hierarchy import (
+    enrich_record,
+    hierarchy_counts,
+    result_taxonomy,
+)
 from web_backend.result_state import result_delivery_state
 from web_backend.security import utc_now
 
 QUALITY_STATUSES = {"ready", "review_required", "unusable", "excluded"}
+SEMANTIC_DISPOSITIONS = {
+    "MAPPED",
+    "EXPECTED_ABSTENTION",
+    "EVIDENCE_ONLY",
+    "TAXONOMY_GAP",
+    "MAPPING_UNCERTAIN",
+    "OUT_OF_SCOPE",
+}
+REVIEW_DISPOSITIONS = {"TAXONOMY_GAP", "MAPPING_UNCERTAIN"}
+CONFIRMED_STATEMENT_TYPES = {"EXPERIENCE", "EVALUATION", "REPORTED"}
 PAGE_SIZE_DEFAULT = 50
 PAGE_SIZE_MAX = 200
 
@@ -43,12 +63,379 @@ def _nullable_text(value: Any) -> str | None:
     return text or None
 
 
-def _classification_quality(result: ValidatedClassification) -> str:
+def _classification_quality(
+    result: ValidatedClassification,
+    semantic_disposition: str | None = None,
+) -> str:
     if result.status == ProcessingStatus.MODEL_ERROR:
         return "unusable"
+    if semantic_disposition in REVIEW_DISPOSITIONS:
+        return "review_required"
+    if semantic_disposition in {
+        "EXPECTED_ABSTENTION",
+        "EVIDENCE_ONLY",
+        "OUT_OF_SCOPE",
+    }:
+        return "ready"
     if result.status.value in REVIEW_STATUSES:
         return "review_required"
     return "ready"
+
+
+def _unknown_disposition(value: dict[str, Any]) -> str:
+    disposition = str(value.get("disposition") or "").strip().upper()
+    return disposition if disposition in SEMANTIC_DISPOSITIONS else "MAPPING_UNCERTAIN"
+
+
+def _classification_disposition(
+    payload: dict[str, Any],
+    processing_status: str,
+) -> str:
+    dispositions = {
+        _unknown_disposition(value)
+        for value in payload.get("unknown_semantics", [])
+        if isinstance(value, dict)
+    }
+    if "TAXONOMY_GAP" in dispositions:
+        return "TAXONOMY_GAP"
+    if "MAPPING_UNCERTAIN" in dispositions:
+        return "MAPPING_UNCERTAIN"
+    if payload.get("semantic_units"):
+        return "MAPPED"
+    if "EXPECTED_ABSTENTION" in dispositions:
+        return "EXPECTED_ABSTENTION"
+    if "EVIDENCE_ONLY" in dispositions:
+        return "EVIDENCE_ONLY"
+    if "OUT_OF_SCOPE" in dispositions:
+        return "OUT_OF_SCOPE"
+    if processing_status == ProcessingStatus.NO_TEXT_EVIDENCE.value:
+        return "EXPECTED_ABSTENTION"
+    return "MAPPED"
+
+
+def _fact_id_by_label(payload: dict[str, Any]) -> dict[str, str]:
+    candidates: dict[str, set[str]] = {}
+    for mapping in payload.get("fact_mappings", []):
+        if not isinstance(mapping, dict):
+            continue
+        fact_id = str(mapping.get("fact_id") or "").strip()
+        if not fact_id:
+            continue
+        for label_code in mapping.get("label_codes", []):
+            candidates.setdefault(str(label_code), set()).add(fact_id)
+    return {
+        label_code: next(iter(fact_ids))
+        for label_code, fact_ids in candidates.items()
+        if len(fact_ids) == 1
+    }
+
+
+def _normalize_semantic_facts(
+    payload: dict[str, Any],
+    taxonomy: TaxonomyConfig | None,
+) -> list[dict[str, Any]]:
+    facts = {
+        str(value.get("fact_id")): value
+        for value in payload.get("extracted_facts", [])
+        if isinstance(value, dict) and value.get("fact_id")
+    }
+    fact_ids_by_label = _fact_id_by_label(payload)
+    normalized: list[dict[str, Any]] = []
+    for source in payload.get("semantic_units", []):
+        if not isinstance(source, dict):
+            continue
+        unit = dict(source)
+        label_code = str(unit.get("label_code") or "")
+        fact_id = str(
+            unit.get("fact_id") or fact_ids_by_label.get(label_code) or ""
+        ).strip()
+        fact = facts.get(fact_id, {})
+        unit["fact_id"] = fact_id or None
+        for field in (
+            "actor_ref",
+            "source_ref",
+            "experiencer_ref",
+            "product_ref",
+            "variant_ref",
+            "event_ref",
+            "reference_basis",
+            "statement_type",
+            "fact_role",
+            "operation",
+            "condition",
+            "causal_attribution",
+            "causal_attribution_reason",
+            "decision_reason",
+            "context_fact_ids",
+        ):
+            fact_value = fact.get(field)
+            if unit.get(field) in (None, "", "UNSPECIFIED") and fact_value not in (
+                None,
+                "",
+            ):
+                unit[field] = fact_value
+        unit["condition"] = unit.get("condition") or ""
+        unit["evidence_source"] = str(
+            unit.get("evidence_source") or fact.get("evidence_source") or "UNKNOWN"
+        )
+        unit.setdefault("fact_role", "CONCLUSION")
+        unit.setdefault("causal_attribution", "UNKNOWN")
+        unit.setdefault("causal_attribution_reason", "")
+        unit.setdefault("decision_reason", "")
+        unit.setdefault("context_fact_ids", [])
+        if taxonomy:
+            unit["label_code_path"] = label_path_codes(taxonomy, label_code)
+            unit["label_path"] = label_path(taxonomy, label_code)
+        else:
+            unit.setdefault("label_code_path", [])
+            unit.setdefault("label_path", [])
+        normalized.append(unit)
+    return normalized
+
+
+def _topic_identity(
+    taxonomy: TaxonomyConfig | None,
+    label_code: str,
+) -> tuple[str, str, list[str], list[str]]:
+    if taxonomy is None:
+        return label_code, label_code, [], []
+    label = next((value for value in taxonomy.labels if value.code == label_code), None)
+    if label is None:
+        return label_code, label_code, [], []
+    code_path = label_path_codes(taxonomy, label_code)
+    name_path = label_path(taxonomy, label_code)
+    if taxonomy.structure_version == 2 and len(code_path) > 1:
+        return code_path[-2], name_path[-2], code_path[:-1], name_path[:-1]
+    topic_code = label.group or label.code
+    topic_name = label.group or label.name
+    return topic_code, topic_name, [topic_code], [topic_name]
+
+
+def _is_confirmed_fact(unit: dict[str, Any]) -> bool:
+    if str(unit.get("assertion") or "AFFIRMED") != "AFFIRMED":
+        return False
+    statement_type = str(unit.get("statement_type") or "")
+    return not statement_type or statement_type in CONFIRMED_STATEMENT_TYPES
+
+
+def _scope_key(unit: dict[str, Any]) -> tuple[str, ...] | None:
+    values = tuple(
+        str(unit.get(field) or "").strip()
+        for field in (
+            "actor_ref",
+            "product_ref",
+            "event_ref",
+            "operation",
+            "part",
+            "condition",
+        )
+    )
+    return values if all(values) and "UNSPECIFIED" not in values else None
+
+
+def _unit_fact_ids(unit: dict[str, Any]) -> list[str]:
+    values = [
+        str(value).strip() for value in unit.get("fact_ids", []) if str(value).strip()
+    ]
+    fact_id = str(unit.get("fact_id") or "").strip()
+    if fact_id:
+        values.insert(0, fact_id)
+    return list(dict.fromkeys(values))
+
+
+def _topic_summaries(
+    facts: list[dict[str, Any]],
+    taxonomy: TaxonomyConfig | None,
+    relations: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    topics: dict[str, dict[str, Any]] = {}
+    for fact in facts:
+        label_code = str(fact.get("label_code") or "")
+        topic_code, topic_name, code_path, name_path = _topic_identity(
+            taxonomy, label_code
+        )
+        topic = topics.setdefault(
+            topic_code,
+            {
+                "topic_code": topic_code,
+                "topic_name": topic_name,
+                "topic_code_path": code_path,
+                "topic_path": name_path,
+                "facts": [],
+            },
+        )
+        topic["facts"].append(fact)
+
+    summaries: list[dict[str, Any]] = []
+    for topic_code in sorted(topics):
+        topic = topics[topic_code]
+        facts_for_topic = topic.pop("facts")
+        confirmed = [value for value in facts_for_topic if _is_confirmed_fact(value)]
+        sentiments = {
+            str(value.get("sentiment") or "")
+            for value in confirmed
+            if value.get("sentiment")
+        }
+        label_codes = {
+            str(value["label_code"])
+            for value in facts_for_topic
+            if value.get("label_code")
+        }
+        related_types = {
+            str(relation.get("relation_type") or "")
+            for relation in relations or []
+            if isinstance(relation, dict)
+            and label_codes.intersection(
+                str(value) for value in relation.get("label_codes", [])
+            )
+        }
+        if "CONFLICT" in related_types:
+            status = "CONFLICT"
+        elif "MIXED" in related_types:
+            status = "MIXED"
+        elif not confirmed or not sentiments.intersection({"POSITIVE", "NEGATIVE"}):
+            status = "NO_CONFIRMED"
+        elif {"POSITIVE", "NEGATIVE"}.issubset(sentiments):
+            positive_scopes = {
+                scope
+                for value in confirmed
+                if value.get("sentiment") == "POSITIVE"
+                if (scope := _scope_key(value)) is not None
+            }
+            negative_scopes = {
+                scope
+                for value in confirmed
+                if value.get("sentiment") == "NEGATIVE"
+                if (scope := _scope_key(value)) is not None
+            }
+            status = "CONFLICT" if positive_scopes & negative_scopes else "MIXED"
+        elif "NEGATIVE" in sentiments:
+            status = "NEGATIVE"
+        else:
+            status = "POSITIVE"
+        fact_ids = [
+            fact_id for value in facts_for_topic for fact_id in _unit_fact_ids(value)
+        ]
+        event_ids = {
+            str(value["event_ref"])
+            for value in facts_for_topic
+            if value.get("event_ref") not in (None, "", "UNSPECIFIED")
+        }
+        summaries.append(
+            {
+                **topic,
+                "status": status,
+                "supporting_fact_ids": list(dict.fromkeys(fact_ids)),
+                "label_codes": sorted(label_codes),
+                "fact_count": len(facts_for_topic),
+                "event_count": len(event_ids),
+            }
+        )
+    return summaries
+
+
+def _comment_summary_status(
+    payload: dict[str, Any],
+    summaries: list[dict[str, Any]],
+) -> str:
+    summary = payload.get("comment_summary")
+    if isinstance(summary, dict):
+        status = str(summary.get("status") or "")
+        is_explicit = status != "NO_CONFIRMED" or any(
+            summary.get(field)
+            for field in ("fact_ids", "positive_label_codes", "negative_label_codes")
+        )
+        if is_explicit and status in {
+            "POSITIVE",
+            "NEGATIVE",
+            "MIXED",
+            "CONFLICT",
+            "NO_CONFIRMED",
+        }:
+            return status
+    statuses = {str(value["status"]) for value in summaries}
+    if "CONFLICT" in statuses:
+        return "CONFLICT"
+    if "MIXED" in statuses or {"POSITIVE", "NEGATIVE"}.issubset(statuses):
+        return "MIXED"
+    if "NEGATIVE" in statuses:
+        return "NEGATIVE"
+    if "POSITIVE" in statuses:
+        return "POSITIVE"
+    return "NO_CONFIRMED"
+
+
+def _prepare_classification_payload(
+    payload: dict[str, Any],
+    taxonomy: TaxonomyConfig | None,
+    processing_status: str,
+    *,
+    include_api_fields: bool = True,
+) -> dict[str, Any]:
+    normalized = dict(payload)
+    unknown_semantics = []
+    for source in normalized.get("unknown_semantics", []):
+        if not isinstance(source, dict):
+            continue
+        unknown = dict(source)
+        unknown["disposition"] = _unknown_disposition(unknown)
+        unknown_semantics.append(unknown)
+    normalized["unknown_semantics"] = unknown_semantics
+    facts = _normalize_semantic_facts(normalized, taxonomy)
+    if include_api_fields:
+        for fact in facts:
+            fact["fact_text_zh"] = str(fact.get("opinion") or "")
+            fact["original_evidence"] = str(fact.get("evidence") or "")
+            fact["object_ref"] = str(fact.get("product_ref") or "CURRENT")
+            fact["usage_task"] = str(fact.get("operation") or "")
+            fact["scenario"] = str(fact.get("condition") or "")
+            fact["certainty"] = str(fact.get("assertion") or "AFFIRMED")
+    normalized["semantic_units"] = facts
+    normalized["semantic_disposition"] = _classification_disposition(
+        normalized, processing_status
+    )
+    summaries = _topic_summaries(
+        facts,
+        taxonomy,
+        normalized.get("semantic_relations", []),
+    )
+    comment_status = _comment_summary_status(normalized, summaries)
+    current_summary = normalized.get("comment_summary")
+    summary_is_default = isinstance(current_summary, dict) and (
+        str(current_summary.get("status") or "") == "NO_CONFIRMED"
+        and not any(
+            current_summary.get(field)
+            for field in ("fact_ids", "positive_label_codes", "negative_label_codes")
+        )
+    )
+    if not isinstance(current_summary, dict) or summary_is_default:
+        normalized["comment_summary"] = {
+            "status": comment_status,
+            "fact_ids": list(
+                dict.fromkeys(
+                    fact_id for fact in facts for fact_id in _unit_fact_ids(fact)
+                )
+            ),
+            "positive_label_codes": sorted(
+                {
+                    str(fact["label_code"])
+                    for fact in facts
+                    if fact.get("sentiment") == "POSITIVE" and fact.get("label_code")
+                }
+            ),
+            "negative_label_codes": sorted(
+                {
+                    str(fact["label_code"])
+                    for fact in facts
+                    if fact.get("sentiment") == "NEGATIVE" and fact.get("label_code")
+                }
+            ),
+        }
+    if include_api_fields:
+        normalized["atomic_facts"] = facts
+        normalized["comment_conclusions"] = summaries
+        normalized["comment_summary_status"] = comment_status
+    return normalized
 
 
 def _version_quality(qualities: list[str]) -> str:
@@ -161,8 +548,9 @@ class ClassificationResultService:
                             dataset_version_id, product_version_id,
                             store_site, listing, agent_key, agent_family,
                             logic_version, taxonomy_version,
-                            model_policy_version, claims_version, created_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            model_policy_version, standard_version_id,
+                            claims_version, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             result_id,
@@ -177,6 +565,7 @@ class ClassificationResultService:
                             segment["logic_version"],
                             segment["taxonomy_version"],
                             segment["model_policy_version"],
+                            segment["standard_version_id"],
                             segment["claims_version"],
                             now,
                         ),
@@ -438,6 +827,10 @@ class ClassificationResultService:
         with self.database.connect() as connection:
             return self._get_version_with_connection(connection, version_id)
 
+    def taxonomy(self, version_id: str) -> TaxonomyConfig | None:
+        with self.database.connect() as connection:
+            return result_taxonomy(connection, version_id)
+
     def history(self, version_id: str) -> list[dict[str, Any]]:
         current = self.get(version_id)
         with self.database.connect() as connection:
@@ -453,6 +846,7 @@ class ClassificationResultService:
 
     def summary(self, version_id: str) -> dict[str, Any]:
         self.get(version_id)
+        taxonomy = self.taxonomy(version_id)
         with self.database.connect() as connection:
             quality_rows = connection.execute(
                 """
@@ -490,11 +884,118 @@ class ClassificationResultService:
                 """,
                 (version_id,),
             ).fetchall()
+            unit_rows = connection.execute(
+                """
+                SELECT classification_key, record_count, processing_status,
+                       quality_status, classification_json
+                FROM classification_units
+                WHERE result_version_id = ?
+                ORDER BY classification_key
+                """,
+                (version_id,),
+            ).fetchall()
+
+        disposition_counts: dict[str, dict[str, int]] = {}
+        comment_status_counts: dict[str, int] = {}
+        topic_counts: dict[str, dict[str, Any]] = {}
+        fact_count = 0
+        event_count = 0
+        for row in unit_rows:
+            comment_weight = int(row["record_count"] or 0)
+            payload = _prepare_classification_payload(
+                json_value(row["classification_json"], {}),
+                taxonomy,
+                str(row["processing_status"]),
+            )
+            disposition = str(payload["semantic_disposition"])
+            disposition_count = disposition_counts.setdefault(
+                disposition,
+                {"comment_count": 0, "record_count": 0},
+            )
+            disposition_count["comment_count"] += comment_weight
+            disposition_count["record_count"] += comment_weight
+            comment_status = str(payload["comment_summary_status"])
+            comment_status_counts[comment_status] = (
+                comment_status_counts.get(comment_status, 0) + comment_weight
+            )
+            facts = payload["atomic_facts"]
+            fact_count += len(facts) * comment_weight
+            event_count += (
+                len(
+                    {
+                        str(value["event_ref"])
+                        for value in facts
+                        if value.get("event_ref") not in (None, "", "UNSPECIFIED")
+                    }
+                )
+                * comment_weight
+            )
+            for topic in payload["comment_conclusions"]:
+                topic_code = str(topic["topic_code"])
+                aggregate = topic_counts.setdefault(
+                    topic_code,
+                    {
+                        "topic_code": topic_code,
+                        "topic_name": topic["topic_name"],
+                        "topic_code_path": topic["topic_code_path"],
+                        "topic_path": topic["topic_path"],
+                        "comment_count": 0,
+                        "fact_count": 0,
+                        "event_count": 0,
+                        "status_counts": {},
+                    },
+                )
+                aggregate["comment_count"] += comment_weight
+                aggregate["fact_count"] += int(topic["fact_count"]) * comment_weight
+                aggregate["event_count"] += int(topic["event_count"]) * comment_weight
+                status = str(topic["status"])
+                aggregate["status_counts"][status] = (
+                    aggregate["status_counts"].get(status, 0) + comment_weight
+                )
+        source_record_count = sum(int(row["record_count"] or 0) for row in unit_rows)
+        comment_count = source_record_count
         return {
             "version_id": version_id,
-            "quality": [dict(row) for row in quality_rows],
-            "processing_statuses": [dict(row) for row in status_rows],
-            "top_problems": [dict(row) for row in problem_rows],
+            "comment_count": comment_count,
+            "total_comment_count": comment_count,
+            "metrics": {
+                "primary_unit": "comment",
+                "comment_count": comment_count,
+                "source_record_count": source_record_count,
+                "fact_count": fact_count,
+                "event_count": event_count,
+            },
+            "quality": [
+                {**dict(row), "comment_count": int(row["record_count"])}
+                for row in quality_rows
+            ],
+            "processing_statuses": [
+                {**dict(row), "comment_count": int(row["record_count"])}
+                for row in status_rows
+            ],
+            "semantic_dispositions": [
+                {"semantic_disposition": disposition, **counts}
+                for disposition, counts in sorted(disposition_counts.items())
+            ],
+            "comment_statuses": [
+                {"status": status, "comment_count": count}
+                for status, count in sorted(comment_status_counts.items())
+            ],
+            "topic_summaries": sorted(
+                topic_counts.values(),
+                key=lambda value: (-value["comment_count"], value["topic_code"]),
+            ),
+            "top_problems": [
+                {
+                    **dict(row),
+                    "comment_count": int(row["unit_count"]),
+                    "label_path": label_path(taxonomy, row["label_code"])
+                    if taxonomy
+                    else [],
+                }
+                for row in problem_rows
+            ],
+            "hierarchy_problems": self.drilldown(version_id, "category")["items"],
         }
 
     def records(
@@ -509,6 +1010,7 @@ class ClassificationResultService:
         page, page_size = self._validate_page(page, page_size)
         where_sql, params = self._record_filters(version_id, filters)
         select_sql = self._records_select()
+        taxonomy = self.taxonomy(version_id)
         with self.database.connect() as connection:
             total = int(
                 connection.execute(
@@ -527,7 +1029,11 @@ class ClassificationResultService:
                 (*params, page_size, (page - 1) * page_size),
             ).fetchall()
         return {
-            "items": [self._serialize_record(dict(row)) for row in rows],
+            "taxonomy": taxonomy.model_dump(mode="json") if taxonomy else None,
+            "items": [
+                self._enrich_record(self._serialize_record(dict(row)), taxonomy)
+                for row in rows
+            ],
             "total": total,
             "page": page,
             "page_size": page_size,
@@ -543,10 +1049,28 @@ class ClassificationResultService:
         **filters: str | None,
     ) -> dict[str, Any]:
         self.get(version_id)
-        if group_by not in {"problem", "product_name", "product_sku"}:
-            raise ValueError("group_by 仅支持 problem、product_name、product_sku")
+        if group_by not in {"category", "problem", "product_name", "product_sku"}:
+            raise ValueError(
+                "group_by 仅支持 category、problem、product_name、product_sku"
+            )
         page, page_size = self._validate_page(page, page_size)
         where_sql, params = self._record_filters(version_id, filters)
+        if group_by == "category":
+            taxonomy = self.taxonomy(version_id)
+            with self.database.connect() as connection:
+                items = (
+                    hierarchy_counts(connection, taxonomy, where_sql, params)
+                    if taxonomy
+                    else []
+                )
+            return {
+                "group_by": group_by,
+                "items": items[(page - 1) * page_size : page * page_size],
+                "total": len(items),
+                "page": page,
+                "page_size": page_size,
+            }
+        taxonomy = self.taxonomy(version_id) if group_by == "problem" else None
         if group_by == "problem":
             join_sql = """
                 JOIN classification_unit_labels l
@@ -589,7 +1113,12 @@ class ClassificationResultService:
             ).fetchall()
         return {
             "group_by": group_by,
-            "items": [dict(row) for row in rows],
+            "items": [
+                {**dict(row), "label_path": label_path(taxonomy, row["value"])}
+                if taxonomy
+                else dict(row)
+                for row in rows
+            ],
             "total": total,
             "page": page,
             "page_size": page_size,
@@ -607,8 +1136,40 @@ class ClassificationResultService:
                 (version_id,),
             ).fetchall()
         output = []
+        semantics = []
+        taxonomy = self.taxonomy(version_id)
         for row in rows:
-            item = self._serialize_record(dict(row))
+            item = self._enrich_record(self._serialize_record(dict(row)), taxonomy)
+            for unit in item["atomic_facts"]:
+                path = unit.get("label_path", [])
+                semantics.append(
+                    {
+                        "source_record_id": item["source_record_id"],
+                        "source_row": item["source_row"],
+                        "label_code": unit["label_code"],
+                        "完整路径": " → ".join(path),
+                        "中文事实": unit.get("fact_text_zh") or "",
+                        "原文证据": unit.get("original_evidence") or "",
+                        "事实编号": unit.get("fact_id") or "",
+                        "使用者": unit.get("actor_ref") or "",
+                        "商品": unit.get("product_ref") or "",
+                        "事件": unit.get("event_ref") or "",
+                        "陈述类型": unit.get("statement_type") or "",
+                        "操作": unit.get("operation") or "",
+                        "条件": unit.get("condition") or "",
+                        "确定性": unit.get("certainty") or "AFFIRMED",
+                        "因果归属": unit.get("causal_attribution") or "UNKNOWN",
+                        "因果说明": unit.get("causal_attribution_reason") or "",
+                        "判定理由": unit.get("decision_reason") or "",
+                        "证据来源": unit.get("evidence_source") or "UNKNOWN",
+                        **{
+                            f"第{index}级标签": name
+                            for index, name in enumerate(path, 1)
+                        },
+                        "证据原文": unit.get("evidence", ""),
+                        "标准版本": version.get("standard_version_id", ""),
+                    }
+                )
             output.append(
                 {
                     "source_record_id": item["source_record_id"],
@@ -629,6 +1190,7 @@ class ClassificationResultService:
                     "product_match_status": item["product_match_status"],
                     "quality_status": item["quality_status"],
                     "processing_status": item["processing_status"],
+                    "semantic_disposition": item["semantic_disposition"],
                     "problem_labels": " | ".join(item["problem_labels"]),
                     "classification_json": json.dumps(
                         item["classification"],
@@ -643,6 +1205,7 @@ class ClassificationResultService:
                 sheet_name="分类结果",
                 index=False,
             )
+            pd.DataFrame(semantics).to_excel(writer, sheet_name="语义层级", index=False)
         filename = (
             f"classification-{version['listing'] or version['result_id']}"
             f"-v{version['version']}.xlsx"
@@ -659,18 +1222,34 @@ class ClassificationResultService:
         comments = dataset.unique_comments.set_index("classification_key")
         units: list[dict[str, Any]] = []
         labels: list[dict[str, Any]] = []
+        quality_by_key: dict[str, str] = {}
         for key in sorted(results):
             result = results[key]
             source = comments.loc[key]
-            quality_status = _classification_quality(result)
+            processing_status = result.status.value
+            classification = _prepare_classification_payload(
+                result.model_dump(mode="json"),
+                taxonomy,
+                processing_status,
+                include_api_fields=False,
+            )
+            quality_status = _classification_quality(
+                result,
+                str(classification["semantic_disposition"]),
+            )
+            classification.pop("semantic_disposition", None)
+            for semantic_unit in classification.get("semantic_units", []):
+                semantic_unit.pop("label_code_path", None)
+                semantic_unit.pop("label_path", None)
+            quality_by_key[key] = quality_status
             units.append(
                 {
                     "classification_key": key,
                     "reason": _nullable_text(source.get("reason")),
                     "comment": _nullable_text(source.get("comment_normalized")),
-                    "classification": result.model_dump(mode="json"),
+                    "classification": classification,
                     "problem_labels": list(result.problem_label_codes),
-                    "processing_status": result.status.value,
+                    "processing_status": processing_status,
                     "quality_status": quality_status,
                     "record_count": int(source.get("record_count", 0)),
                     "model_name": result.model_name,
@@ -700,10 +1279,10 @@ class ClassificationResultService:
         ].copy()
         records: list[dict[str, Any]] = []
         for row in selected.sort_values("source_row").to_dict(orient="records"):
-            result = results[str(row["classification_key"])]
+            classification_key = str(row["classification_key"])
             records.append(
                 {
-                    "classification_key": str(row["classification_key"]),
+                    "classification_key": classification_key,
                     "source_row": int(row["source_row"]),
                     "return_date": _nullable_text(row.get("return-date")),
                     "order_id": _nullable_text(row.get("order-id")),
@@ -722,7 +1301,7 @@ class ClassificationResultService:
                     "product_match_status": str(
                         row.get("product_match_status") or "unmatched"
                     ),
-                    "quality_status": _classification_quality(result),
+                    "quality_status": quality_by_key[classification_key],
                 }
             )
         scopes = {(value["store_site"], value["listing"]) for value in records}
@@ -931,7 +1510,11 @@ class ClassificationResultService:
                    r.dataset_version_id, r.product_version_id,
                    r.store_site, r.listing, r.agent_key, r.agent_family,
                    r.logic_version, r.taxonomy_version,
-                   r.model_policy_version, r.claims_version,
+                   r.model_policy_version, r.standard_version_id,
+                   standard.id AS standard_id,
+                   standard.name AS standard_name,
+                   standard_version.version_no AS standard_version,
+                   r.claims_version,
                    rd.name AS dataset_name, dv.version AS dataset_version,
                    pd.name AS product_dataset_name,
                    pv.version AS product_version,
@@ -953,6 +1536,10 @@ class ClassificationResultService:
             JOIN datasets rd ON rd.id = dv.dataset_id
             JOIN dataset_versions pv ON pv.id = r.product_version_id
             JOIN datasets pd ON pd.id = pv.dataset_id
+            LEFT JOIN classification_standard_versions standard_version
+              ON standard_version.id = r.standard_version_id
+            LEFT JOIN classification_standards standard
+              ON standard.id = standard_version.standard_id
             LEFT JOIN users creator ON creator.id = v.created_by
         """
 
@@ -1020,6 +1607,43 @@ class ClassificationResultService:
         )
         return value
 
+    @staticmethod
+    def _enrich_record(
+        value: dict[str, Any],
+        taxonomy: TaxonomyConfig | None,
+    ) -> dict[str, Any]:
+        value = enrich_record(value, taxonomy)
+        classification = _prepare_classification_payload(
+            value.get("classification", {}),
+            taxonomy,
+            str(value.get("processing_status") or ""),
+        )
+        value["semantic_disposition"] = classification.pop("semantic_disposition")
+        value["comment_summary_status"] = classification.pop("comment_summary_status")
+        value["atomic_facts"] = classification.pop("atomic_facts")
+        value["comment_conclusions"] = classification.pop("comment_conclusions")
+        all_unknown_semantics = classification.get("unknown_semantics", [])
+        value["unknown_semantics"] = [
+            item
+            for item in all_unknown_semantics
+            if _unknown_disposition(item) in REVIEW_DISPOSITIONS
+        ]
+        value["ignored_semantics"] = [
+            item
+            for item in all_unknown_semantics
+            if _unknown_disposition(item) not in REVIEW_DISPOSITIONS
+        ]
+        value["classification"] = classification
+        value["fact_count"] = len(value["atomic_facts"])
+        value["event_count"] = len(
+            {
+                str(fact["event_ref"])
+                for fact in value["atomic_facts"]
+                if fact.get("event_ref") not in (None, "", "UNSPECIFIED")
+            }
+        )
+        return value
+
     def _record_filters(
         self,
         version_id: str,
@@ -1048,17 +1672,21 @@ class ClassificationResultService:
             params.append(quality_status)
         problem = filters.get("problem")
         if problem:
+            taxonomy = self.taxonomy(version_id)
+            codes = descendant_label_codes(taxonomy, problem) if taxonomy else [problem]
+            codes = codes or [problem]
+            placeholders = ",".join("?" for _ in codes)
             where.append(
-                """
+                f"""
                 EXISTS (
                     SELECT 1 FROM classification_unit_labels f
                     WHERE f.result_version_id = r.result_version_id
                       AND f.classification_key = r.classification_key
-                      AND f.label_kind = 'problem' AND f.label_code = ?
+                      AND f.label_kind = 'problem' AND f.label_code IN ({placeholders})
                 )
                 """
             )
-            params.append(problem)
+            params.extend(codes)
         return " AND ".join(where), params
 
     @staticmethod

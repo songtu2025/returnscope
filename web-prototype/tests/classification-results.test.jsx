@@ -248,6 +248,10 @@ test("结果池使用服务端筛选并展示多产品名称", async () => {
 
   expect(await screen.findByText("产品表权威名称")).toBeVisible();
   expect(screen.getByText("另有 1 个产品名称")).toBeVisible();
+  const filters = screen.getByRole("region", { name: "分类结果筛选" });
+  for (const label of ["关键词", "店铺/站点", "Listing", "结果质量"]) {
+    expect(within(filters).getByText(label, { selector: "span" })).toBeVisible();
+  }
 
   await user.type(screen.getByRole("textbox", { name: "搜索分类结果" }), "水鞋");
   await user.click(screen.getByRole("button", { name: "筛选" }));
@@ -596,6 +600,19 @@ test("结果池区分初始空状态和接口错误", async () => {
   render(<ClassificationResultsPage notify={vi.fn()} />);
   expect(await screen.findByText("分类结果读取失败")).toBeVisible();
   expect(screen.getByText("服务暂不可用")).toBeVisible();
+});
+
+test("不存在的分类结果详情只显示页面内联错误", async () => {
+  const notify = vi.fn();
+  apiMock.classificationResult.mockRejectedValueOnce(new Error("分类结果不存在"));
+  window.location.hash =
+    "classification-results?result_version_id=missing-classification-version";
+
+  render(<ClassificationResultsPage notify={notify} />);
+
+  expect(await screen.findByText("分类结果读取失败")).toBeVisible();
+  expect(screen.getByText("分类结果不存在")).toBeVisible();
+  expect(notify).not.toHaveBeenCalled();
 });
 
 test("旧筛选轮询晚返回不会覆盖当前列表或触发新结果提示", async () => {

@@ -1,6 +1,7 @@
 .env
 .env.*
 !.env.example
+!.env.mysql.example
 __pycache__/
 .pytest_cache/
 .ruff_cache/
@@ -15,3 +16,9 @@ design-qa.md
 web-prototype/node_modules/
 web-prototype/dist/
 web-prototype/*.log
+/node_modules/
+.audit/
+seekway-codex-standards/
+20260903_四品类Review原始样本100条_补充店铺MSKU/
+/标签框架-手套.xlsx
+/水鞋标签框架.xlsx

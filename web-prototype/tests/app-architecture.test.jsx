@@ -24,10 +24,11 @@ describe("应用壳层与路由", () => {
 
   afterEach(() => cleanup());
 
-  test("一级导航只保留五个稳定业务入口并单列系统设置", () => {
+  test("一级导航只保留六个稳定业务入口并单列系统设置", () => {
     expect(PRIMARY_NAV_ITEMS.map((item) => item.label)).toEqual([
       "首页",
-      "产品信息",
+      "数据资产",
+      "分类标准",
       "分析任务",
       "分类结果",
       "分析看板",
@@ -117,6 +118,9 @@ describe("应用壳层与路由", () => {
     expect(
       routeForDestination("analysis-tasks", { kind: "task", id: "task-1" }),
     ).toEqual({ page: "analysis-tasks", query: { task_id: "task-1" } });
+    expect(routeForDestination("new", { kind: "task-template", id: "task-1" })).toEqual(
+      { page: "task-create", query: { template_task: "task-1" } },
+    );
     expect(
       routeForDestination("classification-results", {
         kind: "classification-result",
@@ -135,8 +139,8 @@ describe("应用壳层与路由", () => {
       page: "classification-results",
       query: { view: "reviews", review_batch_id: "batch-1" },
     });
-    expect(buildHash("data-assets", { view: "quality", page: 2, empty: "" })).toBe(
-      "#data-assets?view=quality&page=2",
+    expect(buildHash("data-assets", { view: "products", page: 2, empty: "" })).toBe(
+      "#data-assets?view=products&page=2",
     );
     expect(buildHash("settings", { tab: "audit", page: 3 })).toBe(
       "#settings?tab=audit&page=3",

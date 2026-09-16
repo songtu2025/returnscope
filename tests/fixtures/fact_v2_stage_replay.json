@@ -1,0 +1,549 @@
+{
+  "schema_version": 1,
+  "data_origin": "synthetic",
+  "stages": [
+    "extraction",
+    "coverage_audit",
+    "mapping",
+    "evidence_adjudication",
+    "dimension_decision"
+  ],
+  "cases": [
+    {
+      "id": "coverage_recovers_lightweight_beside_warmth",
+      "risk": "warmth_and_lightweight_preserved",
+      "comment": "The gloves kept my hands warm and felt lightweight during the morning commute.",
+      "stages": {
+        "extraction": {
+          "facts": [
+            {
+              "fact_id": "F1",
+              "actor_ref": "REVIEWER",
+              "source_ref": "REVIEWER",
+              "experiencer_ref": "REVIEWER",
+              "product_ref": "CURRENT",
+              "event_ref": "E1",
+              "statement_type": "EXPERIENCE",
+              "opinion": "The gloves kept the reviewer warm.",
+              "sentiment": "POSITIVE",
+              "part": "UNSPECIFIED",
+              "condition": "morning commute",
+              "candidate_branch_codes": [
+                "THERMAL"
+              ],
+              "evidence_spans": [
+                {
+                  "text": "kept my hands warm"
+                }
+              ]
+            }
+          ]
+        },
+        "coverage_audit": {
+          "facts": [
+            {
+              "fact_id": "F2",
+              "actor_ref": "REVIEWER",
+              "source_ref": "REVIEWER",
+              "experiencer_ref": "REVIEWER",
+              "product_ref": "CURRENT",
+              "event_ref": "E1",
+              "statement_type": "EVALUATION",
+              "opinion": "The gloves felt lightweight.",
+              "sentiment": "POSITIVE",
+              "part": "UNSPECIFIED",
+              "condition": "morning commute",
+              "candidate_branch_codes": [
+                "WEIGHT"
+              ],
+              "evidence_spans": [
+                {
+                  "text": "felt lightweight during the morning commute"
+                }
+              ]
+            }
+          ]
+        },
+        "mapping": {
+          "mappings": [
+            {
+              "fact_id": "F1",
+              "label_codes": [
+                "WARM_POSITIVE"
+              ],
+              "reason": "The evidence directly reports warmth."
+            },
+            {
+              "fact_id": "F2",
+              "label_codes": [
+                "LIGHTWEIGHT_POSITIVE"
+              ],
+              "reason": "The evidence directly reports low weight."
+            }
+          ]
+        },
+        "evidence_adjudication": {
+          "adjudications": [
+            {
+              "fact_id": "F1",
+              "action": "ACCEPT",
+              "label_code": "WARM_POSITIVE",
+              "reason": "The evidence directly entails warmth."
+            },
+            {
+              "fact_id": "F2",
+              "action": "ACCEPT",
+              "label_code": "LIGHTWEIGHT_POSITIVE",
+              "reason": "The evidence directly entails lightweight feel."
+            }
+          ]
+        },
+        "dimension_decision": {
+          "decisions": [
+            {
+              "parent_code": "THERMAL",
+              "scope": {
+                "product_ref": "CURRENT",
+                "condition": "morning commute"
+              },
+              "verdict_label_code": "WARM_POSITIVE",
+              "supporting_fact_ids": [
+                "F1"
+              ],
+              "context_fact_ids": [],
+              "reason": "The warmth fact determines the thermal verdict."
+            },
+            {
+              "parent_code": "WEIGHT",
+              "scope": {
+                "product_ref": "CURRENT",
+                "condition": "morning commute"
+              },
+              "verdict_label_code": "LIGHTWEIGHT_POSITIVE",
+              "supporting_fact_ids": [
+                "F2"
+              ],
+              "context_fact_ids": [],
+              "reason": "The weight fact determines the weight verdict."
+            }
+          ]
+        }
+      },
+      "expected": {
+        "call_stages": [
+          "extraction",
+          "coverage_audit",
+          "mapping",
+          "evidence_adjudication",
+          "dimension_decision"
+        ],
+        "fact_ids": [
+          "F1",
+          "F2"
+        ],
+        "extraction_sources": {
+          "F1": "PRIMARY",
+          "F2": "COVERAGE"
+        },
+        "adjudication_fact_ids": [
+          "F1",
+          "F2"
+        ],
+        "final_units": [
+          {
+            "label_code": "WARM_POSITIVE",
+            "fact_ids": [
+              "F1"
+            ],
+            "opinion": "The gloves kept the reviewer warm.",
+            "evidence": "kept my hands warm"
+          },
+          {
+            "label_code": "LIGHTWEIGHT_POSITIVE",
+            "fact_ids": [
+              "F2"
+            ],
+            "opinion": "The gloves felt lightweight.",
+            "evidence": "felt lightweight during the morning commute"
+          }
+        ],
+        "dispositions": {},
+        "status": "AUTO_APPROVED"
+      }
+    },
+    {
+      "id": "touchscreen_usable_but_imprecise_keeps_negative_limit",
+      "risk": "touchscreen_precision_limit_preserved",
+      "comment": "The touchscreen responds to taps, but typing is not precise.",
+      "stages": {
+        "extraction": {
+          "facts": [
+            {
+              "fact_id": "F1",
+              "actor_ref": "REVIEWER",
+              "source_ref": "REVIEWER",
+              "experiencer_ref": "REVIEWER",
+              "product_ref": "CURRENT",
+              "event_ref": "E1",
+              "fact_role": "EVIDENCE",
+              "statement_type": "EXPERIENCE",
+              "opinion": "Basic taps register on the touchscreen.",
+              "sentiment": "POSITIVE",
+              "part": "UNSPECIFIED",
+              "operation": "taps",
+              "candidate_branch_codes": [
+                "TOUCHSCREEN"
+              ],
+              "evidence_spans": [
+                {
+                  "text": "touchscreen responds to taps"
+                }
+              ]
+            },
+            {
+              "fact_id": "F2",
+              "actor_ref": "REVIEWER",
+              "source_ref": "REVIEWER",
+              "experiencer_ref": "REVIEWER",
+              "product_ref": "CURRENT",
+              "event_ref": "E1",
+              "statement_type": "EXPERIENCE",
+              "opinion": "Typing input is not precise.",
+              "sentiment": "NEGATIVE",
+              "part": "UNSPECIFIED",
+              "operation": "typing",
+              "candidate_branch_codes": [
+                "TOUCHSCREEN"
+              ],
+              "evidence_spans": [
+                {
+                  "text": "typing is not precise"
+                }
+              ]
+            }
+          ]
+        },
+        "coverage_audit": {
+          "facts": []
+        },
+        "mapping": {
+          "mappings": [
+            {
+              "fact_id": "F1",
+              "label_codes": [
+                "TOUCH_USABLE_POSITIVE"
+              ],
+              "reason": "Basic taps are usable."
+            },
+            {
+              "fact_id": "F2",
+              "label_codes": [
+                "TOUCH_IMPRECISE_NEGATIVE"
+              ],
+              "reason": "Typing precision is directly limited."
+            }
+          ]
+        },
+        "evidence_adjudication": {
+          "adjudications": [
+            {
+              "fact_id": "F1",
+              "action": "ACCEPT",
+              "label_code": "TOUCH_USABLE_POSITIVE",
+              "reason": "The evidence establishes minimum usability."
+            },
+            {
+              "fact_id": "F2",
+              "action": "ACCEPT",
+              "label_code": "TOUCH_IMPRECISE_NEGATIVE",
+              "reason": "The evidence directly establishes poor precision."
+            }
+          ]
+        },
+        "dimension_decision": {
+          "decisions": [
+            {
+              "parent_code": "TOUCHSCREEN",
+              "scope": {
+                "product_ref": "CURRENT"
+              },
+              "verdict_label_code": "TOUCH_IMPRECISE_NEGATIVE",
+              "supporting_fact_ids": [
+                "F2"
+              ],
+              "context_fact_ids": [
+                "F1"
+              ],
+              "reason": "The explicit precision limit controls the touchscreen verdict."
+            }
+          ]
+        }
+      },
+      "expected": {
+        "call_stages": [
+          "extraction",
+          "coverage_audit",
+          "mapping",
+          "evidence_adjudication",
+          "dimension_decision"
+        ],
+        "fact_ids": [
+          "F1",
+          "F2"
+        ],
+        "extraction_sources": {
+          "F1": "PRIMARY",
+          "F2": "PRIMARY"
+        },
+        "adjudication_fact_ids": [
+          "F1",
+          "F2"
+        ],
+        "final_units": [
+          {
+            "label_code": "TOUCH_IMPRECISE_NEGATIVE",
+            "fact_ids": [
+              "F2"
+            ],
+            "opinion": "Typing input is not precise.",
+            "evidence": "typing is not precise"
+          }
+        ],
+        "dispositions": {
+          "F1": "EVIDENCE_ONLY"
+        },
+        "status": "AUTO_APPROVED"
+      }
+    },
+    {
+      "id": "background_plan_and_not_tested_are_normal_abstentions",
+      "risk": "non_evaluative_context_does_not_become_business_unknown",
+      "comment": "I bought these last week for a trip next month, and I have not tested them outdoors yet.",
+      "stages": {
+        "extraction": {
+          "facts": [
+            {
+              "fact_id": "F1",
+              "actor_ref": "REVIEWER",
+              "source_ref": "REVIEWER",
+              "experiencer_ref": "REVIEWER",
+              "product_ref": "CURRENT",
+              "event_ref": "PURCHASE1",
+              "fact_role": "CONTEXT",
+              "statement_type": "EXPERIENCE",
+              "opinion": "The purchase happened last week.",
+              "sentiment": "NEUTRAL",
+              "part": "UNSPECIFIED",
+              "condition": "last week",
+              "candidate_branch_codes": [],
+              "evidence_spans": [
+                {
+                  "text": "bought these last week"
+                }
+              ]
+            },
+            {
+              "fact_id": "F2",
+              "actor_ref": "REVIEWER",
+              "source_ref": "REVIEWER",
+              "experiencer_ref": "REVIEWER",
+              "product_ref": "CURRENT",
+              "event_ref": "PLAN1",
+              "fact_role": "CONTEXT",
+              "statement_type": "INTENT",
+              "opinion": "The gloves are intended for a future trip.",
+              "sentiment": "NEUTRAL",
+              "part": "UNSPECIFIED",
+              "condition": "next month",
+              "candidate_branch_codes": [],
+              "evidence_spans": [
+                {
+                  "text": "for a trip next month"
+                }
+              ]
+            },
+            {
+              "fact_id": "F3",
+              "actor_ref": "REVIEWER",
+              "source_ref": "REVIEWER",
+              "experiencer_ref": "REVIEWER",
+              "product_ref": "CURRENT",
+              "event_ref": "TEST1",
+              "statement_type": "NOT_TESTED",
+              "opinion": "Outdoor performance has not been tested.",
+              "sentiment": "NEUTRAL",
+              "part": "UNSPECIFIED",
+              "condition": "outdoors",
+              "candidate_branch_codes": [
+                "THERMAL"
+              ],
+              "evidence_spans": [
+                {
+                  "text": "have not tested them outdoors yet"
+                }
+              ]
+            }
+          ]
+        },
+        "coverage_audit": {
+          "facts": []
+        },
+        "mapping": {
+          "mappings": [
+            {
+              "fact_id": "F1",
+              "label_codes": [],
+              "disposition": "EVIDENCE_ONLY",
+              "reason": "Purchase timing is background context."
+            },
+            {
+              "fact_id": "F2",
+              "label_codes": [],
+              "disposition": "MAPPING_UNCERTAIN",
+              "reason": "A future plan is not observed product performance."
+            },
+            {
+              "fact_id": "F3",
+              "label_codes": [],
+              "disposition": "MAPPING_UNCERTAIN",
+              "reason": "No outdoor test has occurred."
+            }
+          ]
+        },
+        "evidence_adjudication": null,
+        "dimension_decision": {
+          "decisions": []
+        }
+      },
+      "expected": {
+        "call_stages": [
+          "extraction",
+          "coverage_audit",
+          "mapping",
+          "dimension_decision"
+        ],
+        "fact_ids": [
+          "F1",
+          "F2",
+          "F3"
+        ],
+        "extraction_sources": {
+          "F1": "PRIMARY",
+          "F2": "PRIMARY",
+          "F3": "PRIMARY"
+        },
+        "adjudication_fact_ids": [],
+        "final_units": [],
+        "dispositions": {
+          "F1": "EVIDENCE_ONLY",
+          "F2": "EXPECTED_ABSTENTION",
+          "F3": "EXPECTED_ABSTENTION"
+        },
+        "status": "AUTO_APPROVED"
+      }
+    },
+    {
+      "id": "listing_image_mismatch_is_not_color_dislike",
+      "risk": "expectation_mismatch_not_rewritten_as_preference",
+      "comment": "The pair I received has a different pattern from the listing photo; this is not merely a color preference.",
+      "stages": {
+        "extraction": {
+          "facts": [
+            {
+              "fact_id": "F1",
+              "actor_ref": "REVIEWER",
+              "source_ref": "REVIEWER",
+              "experiencer_ref": "REVIEWER",
+              "product_ref": "CURRENT",
+              "event_ref": "E1",
+              "reference_basis": "LISTING",
+              "statement_type": "EVALUATION",
+              "opinion": "The received product does not match the listing image.",
+              "sentiment": "NEGATIVE",
+              "part": "UNSPECIFIED",
+              "candidate_branch_codes": [
+                "EXPECTATION"
+              ],
+              "evidence_spans": [
+                {
+                  "text": "different pattern from the listing photo"
+                }
+              ]
+            }
+          ]
+        },
+        "coverage_audit": {
+          "facts": []
+        },
+        "mapping": {
+          "mappings": [
+            {
+              "fact_id": "F1",
+              "label_codes": [
+                "EXPECTATION_MISMATCH_NEGATIVE"
+              ],
+              "reason": "The received item differs from the listing reference."
+            }
+          ]
+        },
+        "evidence_adjudication": {
+          "adjudications": [
+            {
+              "fact_id": "F1",
+              "action": "ACCEPT",
+              "label_code": "EXPECTATION_MISMATCH_NEGATIVE",
+              "reason": "The evidence directly compares the received item with the listing."
+            }
+          ]
+        },
+        "dimension_decision": {
+          "decisions": [
+            {
+              "parent_code": "EXPECTATION",
+              "scope": {
+                "product_ref": "CURRENT",
+                "reference_basis": "LISTING"
+              },
+              "verdict_label_code": "EXPECTATION_MISMATCH_NEGATIVE",
+              "supporting_fact_ids": [
+                "F1"
+              ],
+              "context_fact_ids": [],
+              "reason": "The listing comparison determines the expectation verdict."
+            }
+          ]
+        }
+      },
+      "expected": {
+        "call_stages": [
+          "extraction",
+          "coverage_audit",
+          "mapping",
+          "evidence_adjudication",
+          "dimension_decision"
+        ],
+        "fact_ids": [
+          "F1"
+        ],
+        "extraction_sources": {
+          "F1": "PRIMARY"
+        },
+        "adjudication_fact_ids": [
+          "F1"
+        ],
+        "final_units": [
+          {
+            "label_code": "EXPECTATION_MISMATCH_NEGATIVE",
+            "fact_ids": [
+              "F1"
+            ],
+            "opinion": "The received product does not match the listing image.",
+            "evidence": "different pattern from the listing photo"
+          }
+        ],
+        "dispositions": {},
+        "status": "AUTO_APPROVED"
+      }
+    }
+  ]
+}

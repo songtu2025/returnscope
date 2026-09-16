@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, replace
 from typing import Any
 from urllib.parse import urlparse
 
@@ -25,6 +26,102 @@ def _validate_url(value: str) -> str:
     if parsed.scheme != "https" and parsed.hostname not in {"127.0.0.1", "localhost"}:
         raise ValueError("非本地 API 必须使用 HTTPS")
     return url
+
+
+@dataclass(frozen=True)
+class _CreateVersionInput:
+    actor_id: str
+    name: str
+    provider: str
+    base_url: str
+    api_key: str
+    primary_model: str
+    primary_effort: str
+    cheap_model: str | None
+    cheap_effort: str
+    secondary_model: str | None
+    secondary_effort: str
+    cheap_audit_percent: int
+    requests_per_minute: int
+    max_workers: int
+    timeout_seconds: int
+    change_note: str
+    connection_id: str | None
+    models: list[dict[str, Any]] | None
+
+
+@dataclass(frozen=True)
+class _CreateVersionContext:
+    values: _CreateVersionInput
+    connection_id: str
+    version_id: str
+    now: str
+    model_definitions: list[dict[str, Any]]
+    model_keys: list[str]
+    selected_models: list[tuple[str | None, str]]
+
+
+@dataclass(frozen=True)
+class _ConnectionVersionContext:
+    version: int
+    api_key_ciphertext: str
+    is_new_connection: bool
+
+
+def _prepare_create_version(values: _CreateVersionInput) -> _CreateVersionContext:
+    base_url = _validate_url(values.base_url)
+    primary_model = values.primary_model.strip()
+    if not primary_model:
+        raise ValueError("主模型不能为空")
+    primary_effort = validate_effort(values.primary_effort, "主模型推理强度")
+    cheap_model = (values.cheap_model or "").strip() or None
+    cheap_effort = validate_effort(values.cheap_effort, "低成本模型推理强度")
+    secondary_model = (values.secondary_model or "").strip() or None
+    secondary_effort = validate_effort(
+        values.secondary_effort,
+        "二次复核模型推理强度",
+    )
+    if not 0 <= values.cheap_audit_percent <= 100:
+        raise ValueError("低成本模型抽检比例必须在 0 到 100 之间")
+    if not 1 <= values.requests_per_minute <= 10000:
+        raise ValueError("每分钟请求数必须在 1 到 10000 之间")
+    if not 1 <= values.max_workers <= 16:
+        raise ValueError("单任务并发必须在 1 到 16 之间")
+    if not 5 <= values.timeout_seconds <= 600:
+        raise ValueError("请求超时必须在 5 到 600 秒之间")
+    change_note = values.change_note.strip()
+    if not change_note:
+        raise ValueError("请填写配置变更原因")
+    model_definitions = [
+        clean_model_definition(value) for value in (values.models or [])
+    ]
+    model_keys = [value["model_key"] for value in model_definitions]
+    if len(model_keys) != len(set(model_keys)):
+        raise ValueError("模型列表中存在重复的模型 ID")
+    normalized_values = replace(
+        values,
+        base_url=base_url,
+        primary_model=primary_model,
+        primary_effort=primary_effort,
+        cheap_model=cheap_model,
+        cheap_effort=cheap_effort,
+        secondary_model=secondary_model,
+        secondary_effort=secondary_effort,
+        change_note=change_note,
+    )
+    return _CreateVersionContext(
+        values=normalized_values,
+        connection_id=values.connection_id or new_id("conn"),
+        version_id=new_id("cfg"),
+        now=utc_now(),
+        model_definitions=model_definitions,
+        model_keys=model_keys,
+        selected_models=[
+            (primary_model, primary_effort),
+            (cheap_model, cheap_effort),
+            (secondary_model, secondary_effort),
+        ],
+    )
 
 
 class ConfigService:
@@ -326,163 +423,191 @@ class ConfigService:
         connection_id: str | None = None,
         models: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        base_url = _validate_url(base_url)
-        primary_model = primary_model.strip()
-        if not primary_model:
-            raise ValueError("主模型不能为空")
-        primary_effort = validate_effort(primary_effort, "主模型推理强度")
-        cheap_model = (cheap_model or "").strip() or None
-        cheap_effort = validate_effort(cheap_effort, "低成本模型推理强度")
-        secondary_model = (secondary_model or "").strip() or None
-        secondary_effort = validate_effort(
-            secondary_effort,
-            "二次复核模型推理强度",
+        context = _prepare_create_version(
+            _CreateVersionInput(
+                actor_id=actor_id,
+                name=name,
+                provider=provider,
+                base_url=base_url,
+                api_key=api_key,
+                primary_model=primary_model,
+                primary_effort=primary_effort,
+                cheap_model=cheap_model,
+                cheap_effort=cheap_effort,
+                secondary_model=secondary_model,
+                secondary_effort=secondary_effort,
+                cheap_audit_percent=cheap_audit_percent,
+                requests_per_minute=requests_per_minute,
+                max_workers=max_workers,
+                timeout_seconds=timeout_seconds,
+                change_note=change_note,
+                connection_id=connection_id,
+                models=models,
+            )
         )
-        if not 0 <= cheap_audit_percent <= 100:
-            raise ValueError("低成本模型抽检比例必须在 0 到 100 之间")
-        if not 1 <= requests_per_minute <= 10000:
-            raise ValueError("每分钟请求数必须在 1 到 10000 之间")
-        if not 1 <= max_workers <= 16:
-            raise ValueError("单任务并发必须在 1 到 16 之间")
-        if not 5 <= timeout_seconds <= 600:
-            raise ValueError("请求超时必须在 5 到 600 秒之间")
-        change_note = change_note.strip()
-        if not change_note:
-            raise ValueError("请填写配置变更原因")
-        model_definitions = [clean_model_definition(value) for value in (models or [])]
-        model_keys = [value["model_key"] for value in model_definitions]
-        if len(model_keys) != len(set(model_keys)):
-            raise ValueError("模型列表中存在重复的模型 ID")
-        selected_models = [
-            (primary_model, primary_effort),
-            (cheap_model, cheap_effort),
-            (secondary_model, secondary_effort),
-        ]
-
-        connection_id = connection_id or new_id("conn")
-        version_id = new_id("cfg")
-        now = utc_now()
-        with self.database.transaction(immediate=True) as connection:
-            existing = connection.execute(
-                "SELECT * FROM api_connections WHERE id = ?",
-                (connection_id,),
-            ).fetchone()
-            if existing is None:
-                if not name.strip():
-                    raise ValueError("接入名称不能为空")
-                connection.execute(
-                    """
-                    INSERT INTO api_connections(
-                        id, name, provider, created_by, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        connection_id,
-                        name.strip(),
-                        provider.strip() or "responses-compatible",
-                        actor_id,
-                        now,
-                        now,
-                    ),
-                )
-                version = 1
-            else:
-                latest = connection.execute(
-                    """
-                    SELECT version, api_key_ciphertext
-                    FROM api_config_versions
-                    WHERE connection_id = ?
-                    ORDER BY version DESC LIMIT 1
-                    """,
-                    (connection_id,),
-                ).fetchone()
-                version = int(latest["version"]) + 1
-                if not api_key.strip():
-                    api_key_ciphertext = str(latest["api_key_ciphertext"])
-            if api_key.strip():
-                api_key_ciphertext = self.secret_box.encrypt(api_key.strip())
-            elif existing is None:
-                raise ValueError("API 密钥不能为空")
-            if existing is None:
-                for definition in model_definitions:
-                    self.model_catalog.insert_model_row(
-                        connection,
-                        connection_id,
-                        actor_id,
-                        now,
-                        definition,
-                    )
-                for model_key, _effort in selected_models:
-                    if not model_key or model_key in model_keys:
-                        continue
-                    self.model_catalog.insert_model_row(
-                        connection,
-                        connection_id,
-                        actor_id,
-                        now,
-                        {
-                            "model_key": model_key,
-                            "display_name": model_key,
-                            "supported_efforts": DEFAULT_EFFORTS,
-                            "active": True,
-                        },
-                    )
-            elif model_definitions:
-                raise ValueError("已有接入请通过模型列表单独维护模型")
-            self.model_catalog.ensure_pipeline_models(
-                connection,
-                connection_id,
-                selected_models,
-            )
-            connection.execute(
-                """
-                INSERT INTO api_config_versions(
-                    id, connection_id, version, base_url, api_key_ciphertext,
-                    primary_model, primary_effort, cheap_model, cheap_effort,
-                    secondary_model, secondary_effort, cheap_audit_percent,
-                    requests_per_minute, max_workers, timeout_seconds,
-                    change_note, validation_status, created_by, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                          ?, 'draft', ?, ?)
-                """,
-                (
-                    version_id,
-                    connection_id,
-                    version,
-                    base_url,
-                    api_key_ciphertext,
-                    primary_model,
-                    primary_effort,
-                    cheap_model,
-                    cheap_effort,
-                    secondary_model,
-                    secondary_effort,
-                    cheap_audit_percent,
-                    requests_per_minute,
-                    max_workers,
-                    timeout_seconds,
-                    change_note,
-                    actor_id,
-                    now,
-                ),
-            )
-            connection.execute(
-                "UPDATE api_connections SET updated_at = ? WHERE id = ?",
-                (now, connection_id),
-            )
+        connection_context = self._persist_created_version(context)
         add_audit(
             self.database,
             "api_connection",
-            connection_id,
+            context.connection_id,
             "create_version",
             actor_id,
             after={
-                "version": version,
-                "version_id": version_id,
-                "note": change_note,
+                "version": connection_context.version,
+                "version_id": context.version_id,
+                "note": context.values.change_note,
             },
         )
-        return self.get_version(version_id) or {}
+        return self.get_version(context.version_id) or {}
+
+    def _persist_created_version(
+        self,
+        context: _CreateVersionContext,
+    ) -> _ConnectionVersionContext:
+        with self.database.transaction(immediate=True) as connection:
+            connection_context = self._prepare_connection_version(
+                connection,
+                context,
+            )
+            self._prepare_model_catalog(connection, context, connection_context)
+            self._insert_config_version(connection, context, connection_context)
+        return connection_context
+
+    def _prepare_connection_version(
+        self,
+        connection: Any,
+        context: _CreateVersionContext,
+    ) -> _ConnectionVersionContext:
+        values = context.values
+        existing = connection.execute(
+            "SELECT * FROM api_connections WHERE id = ?",
+            (context.connection_id,),
+        ).fetchone()
+        is_new_connection = existing is None
+        api_key_ciphertext = ""
+        if is_new_connection:
+            if not values.name.strip():
+                raise ValueError("接入名称不能为空")
+            connection.execute(
+                """
+                INSERT INTO api_connections(
+                    id, name, provider, created_by, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    context.connection_id,
+                    values.name.strip(),
+                    values.provider.strip() or "responses-compatible",
+                    values.actor_id,
+                    context.now,
+                    context.now,
+                ),
+            )
+            version = 1
+        else:
+            latest = connection.execute(
+                """
+                SELECT version, api_key_ciphertext
+                FROM api_config_versions
+                WHERE connection_id = ?
+                ORDER BY version DESC LIMIT 1
+                """,
+                (context.connection_id,),
+            ).fetchone()
+            version = int(latest["version"]) + 1
+            if not values.api_key.strip():
+                api_key_ciphertext = str(latest["api_key_ciphertext"])
+        if values.api_key.strip():
+            api_key_ciphertext = self.secret_box.encrypt(values.api_key.strip())
+        elif is_new_connection:
+            raise ValueError("API 密钥不能为空")
+        return _ConnectionVersionContext(
+            version=version,
+            api_key_ciphertext=api_key_ciphertext,
+            is_new_connection=is_new_connection,
+        )
+
+    def _prepare_model_catalog(
+        self,
+        connection: Any,
+        context: _CreateVersionContext,
+        connection_context: _ConnectionVersionContext,
+    ) -> None:
+        if connection_context.is_new_connection:
+            for definition in context.model_definitions:
+                self.model_catalog.insert_model_row(
+                    connection,
+                    context.connection_id,
+                    context.values.actor_id,
+                    context.now,
+                    definition,
+                )
+            for model_key, _effort in context.selected_models:
+                if not model_key or model_key in context.model_keys:
+                    continue
+                self.model_catalog.insert_model_row(
+                    connection,
+                    context.connection_id,
+                    context.values.actor_id,
+                    context.now,
+                    {
+                        "model_key": model_key,
+                        "display_name": model_key,
+                        "supported_efforts": DEFAULT_EFFORTS,
+                        "active": True,
+                    },
+                )
+        elif context.model_definitions:
+            raise ValueError("已有接入请通过模型列表单独维护模型")
+        self.model_catalog.ensure_pipeline_models(
+            connection,
+            context.connection_id,
+            context.selected_models,
+        )
+
+    @staticmethod
+    def _insert_config_version(
+        connection: Any,
+        context: _CreateVersionContext,
+        connection_context: _ConnectionVersionContext,
+    ) -> None:
+        values = context.values
+        connection.execute(
+            """
+            INSERT INTO api_config_versions(
+                id, connection_id, version, base_url, api_key_ciphertext,
+                primary_model, primary_effort, cheap_model, cheap_effort,
+                secondary_model, secondary_effort, cheap_audit_percent,
+                requests_per_minute, max_workers, timeout_seconds,
+                change_note, validation_status, created_by, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                      ?, 'draft', ?, ?)
+            """,
+            (
+                context.version_id,
+                context.connection_id,
+                connection_context.version,
+                values.base_url,
+                connection_context.api_key_ciphertext,
+                values.primary_model,
+                values.primary_effort,
+                values.cheap_model,
+                values.cheap_effort,
+                values.secondary_model,
+                values.secondary_effort,
+                values.cheap_audit_percent,
+                values.requests_per_minute,
+                values.max_workers,
+                values.timeout_seconds,
+                values.change_note,
+                values.actor_id,
+                context.now,
+            ),
+        )
+        connection.execute(
+            "UPDATE api_connections SET updated_at = ? WHERE id = ?",
+            (context.now, context.connection_id),
+        )
 
     def discard_draft(self, version_id: str, actor_id: str) -> dict[str, Any]:
         """放弃未发布的草稿及其验证记录。"""

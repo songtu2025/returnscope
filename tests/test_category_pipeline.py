@@ -6,6 +6,9 @@ import pytest
 
 from return_semantics.capabilities import (
     CapabilityRegistry,
+    CategoryCapability,
+    CategoryVariant,
+    ModelPolicy,
     load_capability_registry,
     resolve_model_policy,
 )
@@ -13,8 +16,10 @@ from return_semantics.category_pipeline import classify_category_segments
 from return_semantics.data import ReturnDataset
 from return_semantics.pipeline import PipelineRun
 from return_semantics.schemas import (
+    LabelDefinition,
     ListingClaimsConfig,
     ProcessingStatus,
+    TaxonomyConfig,
     ValidatedClassification,
 )
 from return_semantics.task_plan import build_category_execution_plan
@@ -27,6 +32,98 @@ def registry():
     return load_capability_registry(
         PROJECT_ROOT / "config" / "category_capabilities.json"
     )
+
+
+def _capability_with_label(
+    key: str,
+    category: str,
+    label: LabelDefinition,
+) -> CategoryCapability:
+    return CategoryCapability(
+        key=key,
+        agent_family=f"{key}-agent",
+        logic_version=f"{key}-logic-v1",
+        model_policy=ModelPolicy(
+            version=f"{key}-policy-v1",
+            first_pass_role="primary",
+            review_role=None,
+        ),
+        variants=(
+            CategoryVariant(
+                category_a=category,
+                category_b=category,
+                attributes={},
+            ),
+        ),
+        taxonomy=TaxonomyConfig(
+            version=f"{key}-taxonomy-v1",
+            agent_family=f"{key}-agent",
+            product_context=category,
+            allowed_parts=["UNSPECIFIED"],
+            labels=[label],
+        ),
+    )
+
+
+def test_combined_taxonomy_reuses_shared_label_code() -> None:
+    shared = LabelDefinition(
+        code="ORDER_WRONG_ITEM",
+        name="发错商品",
+        group="订单原因",
+        description="收到的商品与下单商品不一致",
+        keywords=["wrong item"],
+        exclusions=["late"],
+        allowed_sentiments=["NEGATIVE"],
+        allowed_claim_ids=["C1"],
+    )
+    registry = CapabilityRegistry(
+        version="shared-label-test",
+        capabilities=(
+            _capability_with_label("gloves", "手套", shared),
+            _capability_with_label(
+                "eyewear",
+                "眼镜",
+                shared.model_copy(
+                    update={
+                        "keywords": ["incorrect item", "wrong item"],
+                        "exclusions": ["damaged", "late"],
+                        "allowed_claim_ids": ["C2", "C1"],
+                    }
+                ),
+            ),
+        ),
+    )
+
+    combined = registry.combined_taxonomy()
+
+    assert [label.code for label in combined.labels] == ["ORDER_WRONG_ITEM"]
+    assert combined.labels[0].keywords == ["wrong item", "incorrect item"]
+    assert combined.labels[0].exclusions == ["late", "damaged"]
+    assert combined.labels[0].allowed_claim_ids == ["C1", "C2"]
+
+
+def test_combined_taxonomy_rejects_shared_code_with_different_semantics() -> None:
+    shared = LabelDefinition(
+        code="BUYER_REASON",
+        name="买家原因",
+        group="其他原因",
+        description="买家改变计划或不再需要",
+        allowed_sentiments=["NEGATIVE", "NEUTRAL"],
+    )
+    registry = CapabilityRegistry(
+        version="shared-label-conflict-test",
+        capabilities=(
+            _capability_with_label("gloves", "手套", shared),
+            _capability_with_label(
+                "eyewear",
+                "眼镜",
+                shared.model_copy(update={"description": "商品配送延误"}),
+            ),
+        ),
+    )
+
+    with pytest.raises(ValueError, match="跨品类标签编码语义冲突: BUYER_REASON"):
+        registry.combined_taxonomy()
 
 
 @pytest.mark.parametrize(
@@ -168,13 +265,19 @@ def test_mixed_task_loads_each_family_taxonomy_and_excludes_unknown(
     )
 
     assert loaded_taxonomies == [
-        "headwear-2026-08-10-v1",
-        "eyewear-2026-08-10-v1",
-        "water-shoes-2026-08-05-v1",
-        "gloves-2026-08-10-v1",
+        "headwear-unified-2026-09-06-v1-semantic1",
+        "eyewear-unified-2026-09-06-v1-semantic1",
+        "footwear-unified-2026-09-06-v1-semantic1",
+        "gloves-unified-2026-09-08-v1-semantic1",
     ]
     assert result.pipeline.model_calls == 4
     assert result.pipeline.cache_hits == 4
+    assert result.pipeline.usage == {"input_tokens": 4}
+    assert result.pipeline.usage_by_model == {"fake-model": {"input_tokens": 4}}
+    assert result.pipeline.cache_hits_by_model == {"fake-model": 4}
+    assert result.pipeline.model_calls_by_model == {"fake-model": 4}
+    assert result.pipeline.request_metrics == {"requests": 4}
+    assert result.pipeline.routing == {"primary": 4}
     assert "unknown" not in result.pipeline.classifications
     assert len(result.segments) == 4
     assert {segment["agent_family"] for segment in result.segments} == {
@@ -188,6 +291,73 @@ def test_mixed_task_loads_each_family_taxonomy_and_excludes_unknown(
         assert "model_calls" in segment
         assert "cache_hits" in segment
         assert "status" in segment
+
+
+def test_failed_segment_does_not_discard_later_segment_or_success_counts(
+    monkeypatch,
+    registry,
+) -> None:
+    dataset = _dataset(
+        [
+            {
+                "classification_key": "hat",
+                "reason": "reason",
+                "comment_normalized": "hat comment",
+                "category_a": "遮阳帽",
+                "category_b": "儿童渔夫帽",
+            },
+            {
+                "classification_key": "eye",
+                "reason": "reason",
+                "comment_normalized": "eye comment",
+                "category_a": "眼镜",
+                "category_b": "儿童眼镜",
+            },
+        ]
+    )
+    progress_updates = []
+
+    def fake_classify_comments(**kwargs) -> PipelineRun:
+        taxonomy = kwargs["taxonomy"]
+        if taxonomy.agent_family == "帽类智能体":
+            raise RuntimeError("segment failed")
+        kwargs["progress"](1, 1)
+        return PipelineRun(
+            classifications={"eye": _validated("eye", taxonomy.version)},
+            usage={"input_tokens": 3},
+            usage_by_model={"fake-model": {"input_tokens": 3}},
+            cache_hits=0,
+            cache_hits_by_model={},
+            model_calls=1,
+            model_calls_by_model={"fake-model": 1},
+            request_metrics={"requests": 1},
+            routing={"primary": 1},
+        )
+
+    monkeypatch.setattr(
+        "return_semantics.category_pipeline.classify_comments",
+        fake_classify_comments,
+    )
+
+    result = classify_category_segments(
+        dataset=dataset,
+        registry=registry,
+        client=object(),
+        cache=object(),
+        progress=lambda current, total: progress_updates.append((current, total)),
+    )
+
+    assert [segment["status"] for segment in result.segments] == [
+        "failed",
+        "completed",
+    ]
+    assert result.segments[0]["error"] == "segment failed"
+    assert result.pipeline.classifications == {
+        "eye": _validated("eye", "eyewear-unified-2026-09-06-v1-semantic1")
+    }
+    assert result.pipeline.usage == {"input_tokens": 3}
+    assert result.pipeline.model_calls == 1
+    assert progress_updates == [(2, 2)]
 
 
 def test_unknown_category_never_calls_model(monkeypatch, registry) -> None:
@@ -229,8 +399,8 @@ def test_existing_water_shoe_uses_original_taxonomy(registry) -> None:
     assert capability is not None
     taxonomy = registry.load_taxonomy(capability)
     assert capability.agent_family == "鞋履智能体"
-    assert taxonomy.version == "water-shoes-2026-08-05-v1"
-    assert taxonomy.labels[0].code == "FIT_TOO_LARGE"
+    assert taxonomy.version == "footwear-unified-2026-09-06-v1-semantic1"
+    assert taxonomy.labels[0].code == "FIT_TOO_LARGE_U1"
 
 
 def test_four_families_resolve_versioned_model_roles_and_fallback(registry) -> None:

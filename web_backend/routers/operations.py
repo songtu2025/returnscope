@@ -16,6 +16,10 @@ def create_operations_router(
     router = APIRouter()
     User = Annotated[dict[str, Any], Depends(current_user)]
 
+    def require_admin(user: dict[str, Any]) -> None:
+        if not user.get("is_admin"):
+            raise HTTPException(status_code=403, detail="仅系统管理员可查看审计日志")
+
     @router.get("/api/workbench/summary")
     def workbench_summary(
         _user: User,
@@ -65,7 +69,7 @@ def create_operations_router(
 
     @router.get("/api/audit-logs")
     def list_audit_logs(
-        _user: User,
+        user: User,
         actor_id: str | None = Query(default=None),
         entity_type: str | None = Query(default=None),
         entity_id: str | None = Query(default=None),
@@ -75,6 +79,7 @@ def create_operations_router(
         page: int = Query(default=1, ge=1),
         page_size: int = Query(default=50, ge=1, le=200),
     ) -> dict[str, Any]:
+        require_admin(user)
         try:
             return audit_log_service.list(
                 actor_id=actor_id,

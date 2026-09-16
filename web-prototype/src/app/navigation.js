@@ -1,4 +1,5 @@
 import {
+  BookOpenText,
   ChartLineUp,
   Database,
   GearSix,
@@ -9,7 +10,8 @@ import {
 
 export const PRIMARY_NAV_ITEMS = [
   { id: "workbench", label: "首页", icon: SquaresFour },
-  { id: "data-assets", label: "产品信息", icon: Database },
+  { id: "data-assets", label: "数据资产", icon: Database },
+  { id: "classification-standards", label: "分类标准", icon: BookOpenText },
   { id: "analysis-tasks", label: "分析任务", icon: PlayCircle },
   { id: "classification-results", label: "分类结果", icon: TreeStructure },
   { id: "analysis-dashboards", label: "分析看板", icon: ChartLineUp },
@@ -49,6 +51,7 @@ export function routeForDestination(destination, focus = null) {
 
   if (!focus) return { page, query };
   if (focus.kind === "task") query.task_id = focus.id;
+  if (focus.kind === "task-template") query.template_task = focus.id;
   if (focus.kind === "result") {
     query.task_id = focus.id;
     if (focus.listing) query.listing = focus.listing;

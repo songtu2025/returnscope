@@ -1,6 +1,105 @@
-from typing import Literal
+from datetime import date
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from return_semantics.schemas import LabelExample
+
+
+class ClassificationSemanticFactResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    fact_id: str | None = None
+    label_code: str
+    label_code_path: list[str] = Field(default_factory=list)
+    label_path: list[str] = Field(default_factory=list)
+    actor_ref: str | None = None
+    product_ref: str | None = None
+    event_ref: str | None = None
+    statement_type: str | None = None
+    condition: str | dict[str, Any] = ""
+    evidence: str = ""
+    evidence_source: str = "UNKNOWN"
+
+
+class ClassificationUnknownSemanticResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    opinion: str = ""
+    evidence: str = ""
+    reason: str = ""
+    disposition: str
+
+
+class ClassificationTopicSummaryResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    topic_code: str
+    topic_name: str
+    topic_code_path: list[str] = Field(default_factory=list)
+    topic_path: list[str] = Field(default_factory=list)
+    status: Literal["POSITIVE", "NEGATIVE", "MIXED", "CONFLICT", "NO_CONFIRMED"]
+    supporting_fact_ids: list[str] = Field(default_factory=list)
+    label_codes: list[str] = Field(default_factory=list)
+    fact_count: int = 0
+    event_count: int = 0
+
+
+class ClassificationResultRecordResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    processing_status: str
+    semantic_disposition: str
+    comment_summary_status: str
+    quality_status: str
+    fact_count: int
+    event_count: int
+    atomic_facts: list[ClassificationSemanticFactResponse] = Field(default_factory=list)
+    comment_conclusions: list[ClassificationTopicSummaryResponse] = Field(
+        default_factory=list
+    )
+    unknown_semantics: list[ClassificationUnknownSemanticResponse] = Field(
+        default_factory=list
+    )
+    classification: dict[str, Any]
+
+
+class ClassificationResultRecordsResponse(BaseModel):
+    taxonomy: dict[str, Any] | None = None
+    items: list[ClassificationResultRecordResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class ClassificationResultSummaryResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    version_id: str
+    comment_count: int
+    total_comment_count: int
+    metrics: dict[str, int | str]
+    comment_statuses: list[dict[str, int | str]] = Field(default_factory=list)
+    semantic_dispositions: list[dict[str, int | str]] = Field(default_factory=list)
+    topic_summaries: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class MySQLReturnImportRequest(BaseModel):
+    mapping: dict[str, str] = Field(max_length=10)
+    default_store: str = Field(default="", max_length=100)
+    date_from: date | None = None
+    date_to: date | None = None
+    store: str = Field(default="", max_length=100)
+    sku: str = Field(default="", max_length=200)
+
+
+class ReturnImportRequest(BaseModel):
+    inspection_id: str = Field(min_length=1, max_length=100)
+    mode: str
+    dataset_id: str = Field(default="", max_length=100)
+    name: str = Field(default="", max_length=100)
+    change_note: str = Field(default="", max_length=500)
 
 
 class LoginRequest(BaseModel):
@@ -150,6 +249,11 @@ class TaskActionRequest(BaseModel):
     note: str = Field(min_length=1, max_length=500)
 
 
+class TaskArchiveRequest(BaseModel):
+    task_ids: list[str] = Field(min_length=1, max_length=100)
+    archived: bool
+
+
 class ReviewResolveRequest(BaseModel):
     expected_revision: int = Field(ge=1)
     label_code: str | None = Field(default=None, max_length=100)
@@ -165,6 +269,13 @@ class ReviewBatchRecordUpdateRequest(BaseModel):
     action: Literal["confirm", "modify", "exclude"] = "confirm"
     label_code: str | None = Field(default=None, max_length=100)
     reason: str = Field(min_length=1, max_length=500)
+    label_correctness: (
+        Literal["correct", "partial", "incorrect", "not_applicable"] | None
+    ) = None
+    evidence_completeness: Literal["complete", "partial", "missing"] | None = None
+    review_routing: (
+        Literal["correct", "should_auto_approve", "should_manual_review"] | None
+    ) = None
 
 
 class ReviewBatchRecordRevision(BaseModel):
@@ -177,11 +288,105 @@ class ReviewBatchRecordBulkUpdateRequest(BaseModel):
     action: Literal["confirm", "modify", "exclude"]
     label_code: str | None = Field(default=None, max_length=100)
     reason: str = Field(min_length=1, max_length=500)
+    label_correctness: (
+        Literal["correct", "partial", "incorrect", "not_applicable"] | None
+    ) = None
+    evidence_completeness: Literal["complete", "partial", "missing"] | None = None
+    review_routing: (
+        Literal["correct", "should_auto_approve", "should_manual_review"] | None
+    ) = None
 
 
 class ReviewBatchPublishRequest(BaseModel):
     expected_revision: int = Field(ge=1)
     reason: str = Field(min_length=1, max_length=500)
+
+
+class ClassificationStandardVariantRequest(BaseModel):
+    category_a: str = Field(min_length=1, max_length=100)
+    category_b: str = Field(min_length=1, max_length=100)
+    attributes: dict[str, str] = Field(default_factory=dict)
+
+
+class ClassificationStandardLabelRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=100)
+    name: str = Field(min_length=1, max_length=100)
+    group: str = Field(default="", max_length=100)
+    parent_code: str | None = None
+    description: str = Field(default="", max_length=500)
+    keywords: list[str] = Field(default_factory=list, max_length=100)
+    exclusions: list[str] = Field(default_factory=list, max_length=10)
+    examples: list[LabelExample] = Field(default_factory=list, max_length=10)
+    allowed_sentiments: list[str] = Field(max_length=3)
+    allowed_claim_ids: list[str] | None = None
+
+
+class ClassificationStandardDraftContentRequest(BaseModel):
+    structure_version: Literal[1, 2] = 1
+    categories: list[dict[str, object]] = Field(default_factory=list)
+    import_sources: list[dict[str, object]] = Field(default_factory=list)
+    recognition_profile: Literal["legacy_v3", "semantic_v1", "fact_v2"] = "legacy_v3"
+    name: str = Field(min_length=1, max_length=120)
+    product_context: str = Field(min_length=1, max_length=500)
+    instructions: list[str] = Field(max_length=100)
+    allowed_parts: list[str] = Field(min_length=1, max_length=50)
+    validation_rules: dict[str, object] = Field(default_factory=dict)
+    variants: list[ClassificationStandardVariantRequest] = Field(
+        min_length=1,
+        max_length=200,
+    )
+    labels: list[ClassificationStandardLabelRequest] = Field(
+        max_length=500,
+    )
+
+
+class ClassificationStandardCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    product_context: str = Field(min_length=1, max_length=500)
+    category_a: str = Field(min_length=1, max_length=100)
+    category_b: str = Field(min_length=1, max_length=100)
+
+
+class ClassificationStandardDraftUpdateRequest(BaseModel):
+    expected_revision: int = Field(ge=1)
+    content: ClassificationStandardDraftContentRequest
+    change_reason: str = Field(default="", max_length=500)
+
+
+class ClassificationStandardImportDocument(BaseModel):
+    format: Literal["classification-standard"]
+    format_version: Literal[1]
+    content_hash: str = Field(min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$")
+    snapshot: dict[str, object]
+
+
+class ClassificationStandardDraftImportRequest(BaseModel):
+    expected_revision: int = Field(ge=1)
+    document: ClassificationStandardImportDocument
+    change_reason: str = Field(min_length=1, max_length=500)
+
+
+class ClassificationStandardDraftRevisionRequest(BaseModel):
+    expected_revision: int = Field(ge=1)
+
+
+class ClassificationStandardDraftActionRequest(BaseModel):
+    expected_revision: int = Field(ge=1)
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class ClassificationStandardSampleValidationRequest(BaseModel):
+    comparison_type: Literal["standard_version", "keyword_ab", "semantic_ab"] = (
+        "standard_version"
+    )
+    expected_revision: int = Field(ge=1)
+    source_result_version_id: str = Field(min_length=1, max_length=120)
+    sample_size: Literal[20, 50, 100] = 20
+
+
+class ClassificationStandardValidationApprovalRequest(BaseModel):
+    expected_revision: int = Field(ge=1)
+    note: str = Field(min_length=1, max_length=500)
 
 
 DashboardFilterValue = str | list[str] | None
@@ -208,6 +413,10 @@ class DashboardVersionCreateRequest(DashboardPlanRequest):
 class InsightReportGenerateRequest(BaseModel):
     model_id: str = Field(min_length=1, max_length=120)
     reasoning_effort: str = Field(min_length=1, max_length=20)
+
+
+class InsightReportIssueDecisionRequest(BaseModel):
+    status: Literal["pending", "ignored", "watching", "verify"]
 
 
 class InsightReportFromResultsRequest(DashboardPlanRequest):
@@ -237,3 +446,9 @@ class CategoryCompletionRequest(BaseModel):
     store: str = Field(default="", max_length=100)
     items: list[CategoryCompletionItem] = Field(min_length=1, max_length=500)
     change_note: str = Field(min_length=1, max_length=500)
+
+
+class DatasetStorageCleanupRequest(BaseModel):
+    dataset_ids: list[str] = Field(min_length=1, max_length=100)
+    retention_days: int = Field(default=30, ge=7, le=3650)
+    retain_latest: int = Field(default=2, ge=1, le=50)

@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  Archive,
   ArrowClockwise,
-  CaretRight,
   ChartBar,
-  Check,
-  CheckCircle,
+  DotsThreeVertical,
   DownloadSimple,
   GearSix,
   Pause,
@@ -13,7 +12,7 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { api } from "../../api";
-import { CardHeading, InfoRow, InlineLoading, Modal } from "../../components/SharedUi";
+import { InfoRow, InlineLoading, Modal } from "../../components/SharedUi";
 import { EFFORT_LABELS, STATUS_LABELS } from "../../constants";
 import { classNames, formatTime } from "../../lib/presentation";
 import { ExecutionPlanSummary } from "../task-planning/ExecutionPlanSummary";
@@ -25,13 +24,15 @@ import {
   TaskResumeDialog,
 } from "./TaskActionDialogs";
 import { SegmentBoard } from "./SegmentBoard";
-import {
-  isLegacyResult,
-  isPublishedResult,
-  resultPublishStatus,
-} from "./taskSegmentPolicy";
+
+import { FINAL_TASK_STATUSES, taskSummary } from "./taskRegistryPolicy";
 
 const TASK_STAGES = ["准备数据", "Listing 分类", "发布分类版本", "任务结束"];
+const DETAIL_TABS = [
+  ["execution", "Listing"],
+  ["events", "运行日志"],
+  ["config", "任务配置"],
+];
 const TASK_STAGE_INDEX = {
   准备数据: 0,
   语义分析: 1,
@@ -59,6 +60,69 @@ function eventListing(task, event) {
   return segment?.scope?.listing ?? "";
 }
 
+function TaskEventList({ task, events }) {
+  const [visibleCount, setVisibleCount] = useState(100);
+  const values = events.slice(-visibleCount).reverse();
+  return (
+    <div className="event-log">
+      {values.length === 0 && <p className="muted-line">暂无运行动态。</p>}
+      {values.map((event) => {
+        const listing = eventListing(task, event);
+        const message = listing
+          ? event.message.replace(/^Listing\s*/, "")
+          : event.message;
+        return (
+          <div key={event.id}>
+            <time>{formatTime(event.created_at)}</time>
+            <span className={classNames("event-dot", event.event_type)} />
+            <p>
+              <b>
+                {listing
+                  ? `${listing} · ${taskStageLabel(event.stage)}`
+                  : taskStageLabel(event.stage)}
+              </b>
+              {message}
+              {event.data?.before?.title && (
+                <small>
+                  原值：{event.data.before.title}
+                  <br />
+                  新值：{event.data.after.title}
+                  <br />
+                  原因：{event.data.note}
+                </small>
+              )}
+              {event.data?.before?.status && (
+                <small>
+                  原状态：
+                  {STATUS_LABELS[event.data.before.status] ?? event.data.before.status}
+                  <br />
+                  新状态：
+                  {STATUS_LABELS[event.data.after.status] ?? event.data.after.status}
+                  {event.data.note && (
+                    <>
+                      <br />
+                      原因：{event.data.note}
+                    </>
+                  )}
+                </small>
+              )}
+              {event.actor_name && <small>操作人：{event.actor_name}</small>}
+            </p>
+          </div>
+        );
+      })}
+      {events.length > visibleCount && (
+        <button
+          className="secondary-button"
+          onClick={() => setVisibleCount((count) => count + 100)}
+        >
+          加载更早日志（已显示 {values.length} / {events.length} 条）
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function TaskDetail({
   task,
   focusSegmentId,
@@ -67,6 +131,7 @@ export function TaskDetail({
   actionError,
   onClearActionError,
   onRename,
+  onArchive,
   onCancel,
   onPause,
   onResume,
@@ -85,19 +150,20 @@ export function TaskDetail({
   const [retrySegment, setRetrySegment] = useState(null);
   const [cancelSegment, setCancelSegment] = useState(null);
   const [replanOpen, setReplanOpen] = useState(false);
-  const stages = TASK_STAGES;
-  const terminalTask = ["completed", "failed", "cancelled", "partial"].includes(
-    task.status,
-  );
-  const currentStage = Math.max(
-    TASK_STAGE_INDEX[task.stage] ?? 0,
-    terminalTask ? 3 : 0,
-  );
-  const pendingReviews = Math.max(
-    (task.metrics?.review_count ?? 0) - (task.metrics?.review_resolved ?? 0),
-    0,
-  );
+  const [activeTab, setActiveTab] = useState("execution");
+  const [listingFilter, setListingFilter] = useState("all");
+  const summary = taskSummary(task);
   const isActive = ["queued", "running", "paused"].includes(task.status);
+  useEffect(() => {
+    if (focusSegmentId) {
+      setActiveTab("execution");
+      setListingFilter("all");
+    }
+  }, [focusSegmentId]);
+  const showListings = (filter) => {
+    setListingFilter(filter);
+    setActiveTab("execution");
+  };
   const hasUnfinishedSegments = task.segments?.some((segment) =>
     [
       "cancelled",
@@ -111,69 +177,30 @@ export function TaskDetail({
   const executableSegments =
     task.segments?.filter((segment) => segment.agent_key !== "unknown") ?? [];
   const modelServiceIssue = executableSegments.find(
-    (segment) => Number(segment.model_failures || 0) >= 3 && segment.error,
+    (segment) =>
+      ["paused", "failed", "running"].includes(segment.status) &&
+      Number(segment.model_failures || 0) >= 3 &&
+      segment.error,
   );
-  const completedSegments = executableSegments.filter((segment) =>
-    ["completed", "completed_with_errors"].includes(segment.status),
-  );
-  const deliveredSegments = completedSegments.filter(
-    (segment) => isPublishedResult(segment) || isLegacyResult(segment),
-  );
-  const publishingSegments = completedSegments.filter(
-    (segment) => resultPublishStatus(segment) === "publishing",
-  );
-  const activeSegments = executableSegments.filter((segment) =>
-    ["running", "pause_pending", "cancel_pending"].includes(
-      segment.display_status || segment.status,
-    ),
-  );
-  const waitingSegments = Math.max(
-    executableSegments.length -
-      deliveredSegments.length -
-      publishingSegments.length -
-      activeSegments.length,
-    0,
-  );
-  const remainingSegments =
-    waitingSegments + activeSegments.length + publishingSegments.length;
-  const deliveredWithIssues =
-    task.status === "partial" &&
-    remainingSegments === 0 &&
-    deliveredSegments.some((segment) => segment.status === "completed_with_errors");
-  const nextAction =
-    {
-      queued: "等待后台领取",
-      running: "后台继续执行，需要时可安全暂停",
-      paused: "继续全部后恢复执行",
-      blocked: "重新预检后继续",
-      partial: deliveredWithIssues
-        ? "处理待复核与模型异常记录"
-        : "重新预检并处理未完成 Listing",
-      completed: "查看或下载分类结果",
-      failed: "检查失败片段后重试",
-      cancelled: hasUnfinishedSegments ? "重新排队未完成 Listing" : "查看部分结果",
-    }[task.status] ?? "查看执行详情";
+  const remainingSegments = summary.remaining;
+  const firstStandard = executableSegments.find((segment) => segment.standard_name);
+
   return (
     <>
-      <header className="task-detail-header">
+      <header className="task-command-header">
         <div className="task-detail-summary">
           <div className="task-title-row">
             <h2>{task.title}</h2>
+            <span className={classNames("task-status-badge", task.status)}>
+              {summary.statusLabel}
+            </span>
           </div>
           <p>
-            {task.owner_name} · {formatTime(task.created_at)} · 已交付{" "}
-            {deliveredSegments.length}/{executableSegments.length} · 剩余{" "}
-            {remainingSegments} 个 Listing · 待复核 {pendingReviews.toLocaleString()}
+            {task.store || task.dataset_name} · {task.owner_name} ·{" "}
+            {formatTime(task.created_at)}
           </p>
-          <span className="task-next-action">下一步：{nextAction}</span>
         </div>
         <div className="detail-actions">
-          {task.result_file_path && (
-            <a className="primary-button" href={api.downloadUrl(task.id)}>
-              <DownloadSimple size={18} />
-              {task.status === "cancelled" ? "下载部分结果" : "下载结果"}
-            </a>
-          )}
           {(task.status === "blocked" ||
             (task.status === "partial" && remainingSegments > 0)) && (
             <button className="primary-button" onClick={() => setReplanOpen(true)}>
@@ -181,40 +208,68 @@ export function TaskDetail({
               重新预检 / 规划
             </button>
           )}
-          {task.status === "completed" && (
-            <button className="secondary-button" onClick={onRetry}>
-              <ArrowClockwise size={17} />
-              再次运行
-            </button>
-          )}
           {["paused", "cancelled"].includes(task.status) && hasUnfinishedSegments && (
-            <button className="secondary-button" onClick={() => setResumeOpen(true)}>
+            <button className="primary-button" onClick={() => setResumeOpen(true)}>
               <PlayCircle size={17} />
-              {task.status === "cancelled" ? "重新排队未完成" : "继续全部"}
+              {task.status === "cancelled" ? "重新排队未完成" : "继续未完成"}
             </button>
           )}
           {["queued", "running"].includes(task.status) && (
-            <button className="secondary-button" onClick={onPause}>
-              <Pause size={17} />
-              暂停全部
+            <button className="primary-button" onClick={onPause}>
+              <Pause size={17} /> 暂停未完成
             </button>
           )}
-          {["queued", "running", "paused"].includes(task.status) && (
-            <button className="danger-button" onClick={() => setCancelOpen(true)}>
-              <X size={17} />
-              取消未完成
+          {task.status === "failed" && (
+            <button className="primary-button" onClick={onRetry}>
+              <ArrowClockwise size={17} /> 重新运行
             </button>
           )}
-          <button
-            className="secondary-button task-rename-action"
-            onClick={() => setRenameOpen(true)}
-            aria-label="修改名称"
-            title="修改名称"
-          >
-            <GearSix size={17} />
-          </button>
+          {summary.generated > 0 && (
+            <button
+              className={
+                task.status === "completed" ? "primary-button" : "secondary-button"
+              }
+              onClick={() => showListings("delivered")}
+            >
+              <ChartBar size={17} /> 查看已有结果
+            </button>
+          )}
+          <details className="task-more-actions">
+            <summary aria-label="更多任务操作" title="更多任务操作">
+              <DotsThreeVertical size={19} />
+            </summary>
+            <div>
+              {task.result_file_path && (
+                <a href={api.downloadUrl(task.id)}>
+                  <DownloadSimple size={16} />
+                  {task.status === "cancelled" ? "下载部分结果" : "下载结果"}
+                </a>
+              )}
+              <button onClick={() => setRenameOpen(true)}>
+                <GearSix size={16} /> 修改名称
+              </button>
+              {task.status === "completed" && (
+                <button onClick={onRetry}>
+                  <ArrowClockwise size={16} /> 再次运行
+                </button>
+              )}
+              {(task.archived_at || FINAL_TASK_STATUSES.includes(task.status)) && (
+                <button onClick={onArchive}>
+                  <Archive size={16} />
+                  {task.archived_at ? "恢复任务" : "归档任务"}
+                </button>
+              )}
+              {["queued", "running", "paused"].includes(task.status) && (
+                <button className="danger" onClick={() => setCancelOpen(true)}>
+                  <X size={16} />
+                  取消未完成
+                </button>
+              )}
+            </div>
+          </details>
         </div>
       </header>
+
       {actionError && !retrySegment && (
         <div className="task-action-error" role="alert">
           <WarningCircle size={18} />
@@ -222,6 +277,18 @@ export function TaskDetail({
           <button onClick={onClearActionError}>关闭</button>
         </div>
       )}
+
+      {["failed", "blocked", "partial"].includes(task.status) && task.message && (
+        <section className="task-action-banner" role="status">
+          <WarningCircle size={19} />
+          <div>
+            <b>{summary.issueDescription}</b>
+            <p>{task.message}</p>
+            <small>查看下方 Listing 的原因和可执行操作；已生成的结果仍可查看。</small>
+          </div>
+        </section>
+      )}
+
       {modelServiceIssue && (
         <div className="task-model-service-alert" role="alert">
           <WarningCircle size={20} weight="fill" />
@@ -231,7 +298,9 @@ export function TaskDetail({
                 ? "模型服务异常，任务已自动暂停"
                 : task.status === "paused"
                   ? "模型服务异常，任务已暂停"
-                  : "模型服务异常，正在自动重试"}
+                  : task.status === "failed"
+                    ? "模型服务异常，执行已停止"
+                    : "模型服务异常，请检查连接与运行日志"}
             </b>
             <span>{modelServiceIssue.error}</span>
           </div>
@@ -242,203 +311,146 @@ export function TaskDetail({
           </small>
         </div>
       )}
-      {isActive && (
-        <section className="progress-hero">
-          <div className="progress-copy">
-            <span>当前阶段</span>
-            <h3>{taskStageLabel(task.stage)}</h3>
-            <p>{task.message}</p>
-          </div>
-          <div className="progress-number">
-            <strong>{Math.round(task.progress_percent)}</strong>
-            <span>%</span>
+
+      <section className="task-overview-band" aria-label="任务运行总览">
+        <div className="task-overview-metrics">
+          <div className="primary">
+            <span>评论处理进度</span>
+            <b>{Math.round(task.progress_percent || 0)}%</b>
             <small>
-              {task.progress_current}/{task.progress_total || "—"}
+              {(task.progress_current || 0).toLocaleString()} /{" "}
+              {(task.progress_total || 0).toLocaleString()} 组评论
             </small>
           </div>
-          <div className="hero-progress">
-            <span style={{ width: `${task.progress_percent}%` }} />
-          </div>
-        </section>
-      )}
-      <div className="stage-strip">
-        {stages.map((stage, index) => (
-          <div
-            key={stage}
-            className={classNames(
-              index <= currentStage && "active",
-              index < currentStage && "done",
-            )}
-          >
-            <span>{index < currentStage ? <Check size={14} /> : index + 1}</span>
-            <b>{stage}</b>
-          </div>
-        ))}
-      </div>
-      {task.status === "cancelled" && deliveredSegments.some(isPublishedResult) && (
-        <div className="task-result-retained" role="status">
-          <CheckCircle size={18} />
           <div>
-            <b>批量任务已取消，已完成 Listing 的分类结果仍然保留</b>
-            <span>可在下方对应 Listing 行查看分类结果，或进入分类结果池继续处理。</span>
+            <span>已生成结果</span>
+            <b>
+              {summary.generated}
+              <small> / {summary.total} 个 Listing</small>
+            </b>
+            <small>{summary.resultDescription || "分析完成后生成结果"}</small>
+          </div>
+          <div>
+            <span>需要处理</span>
+            <b>
+              {summary.issues || (summary.needsAttention ? "待确认" : 0)}
+              {(!summary.needsAttention || summary.issues > 0) && (
+                <small> 个 Listing</small>
+              )}
+            </b>
+            {summary.needsAttention ? (
+              <button
+                className="task-inline-action"
+                onClick={() => showListings("attention")}
+              >
+                查看需处理事项
+              </button>
+            ) : (
+              <small>
+                {task.status === "paused"
+                  ? "未完成部分已暂停，可随时继续"
+                  : "暂无需介入的问题"}
+              </small>
+            )}
           </div>
         </div>
-      )}
-      <SegmentBoard
-        task={task}
-        focusSegmentId={focusSegmentId}
-        onRetry={(segment) => {
-          onClearActionError();
-          setRetrySegment(segment);
-        }}
-        onRetryPublish={onRetryResultPublish}
-        onCancel={(segment) => setCancelSegment(segment)}
-        onAction={onSegmentAction}
-        onParallelism={onParallelism}
-        onReorder={onReorderSegments}
-        onViewClassification={onViewClassification}
-      />
-      <div className="task-detail-grid">
-        <section className="content-card event-card">
-          <CardHeading
-            title="运行日志"
-            note="来自后台执行器的真实事件"
-            action={
+      </section>
+
+      <div className="task-detail-tabs" role="tablist" aria-label="任务详情视图">
+        {DETAIL_TABS.map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            id={`task-tab-${value}`}
+            aria-controls="task-view-panel"
+            aria-selected={activeTab === value}
+            className={activeTab === value ? "active" : ""}
+            onClick={() => {
+              setActiveTab(value);
+              if (value === "execution") setListingFilter("all");
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <section
+        className="task-detail-tab-panel"
+        id="task-view-panel"
+        role="tabpanel"
+        aria-labelledby={`task-tab-${activeTab}`}
+      >
+        {activeTab === "execution" && (
+          <SegmentBoard
+            key={listingFilter}
+            initialFilter={listingFilter}
+            task={task}
+            focusSegmentId={listingFilter === "all" ? focusSegmentId : null}
+            onRetry={(segment) => {
+              onClearActionError();
+              setRetrySegment(segment);
+            }}
+            onRetryPublish={onRetryResultPublish}
+            onCancel={(segment) => setCancelSegment(segment)}
+            onAction={onSegmentAction}
+            onParallelism={onParallelism}
+            onReorder={onReorderSegments}
+            onViewClassification={onViewClassification}
+            onResumeUnfinished={() => setResumeOpen(true)}
+          />
+        )}
+
+        {activeTab === "events" && (
+          <section className="task-secondary-section full-event-section">
+            <header>
+              <div>
+                <h3>完整运行日志</h3>
+                <p>来自后台执行器的真实事件，按时间倒序排列。</p>
+              </div>
               <span className="live-tag">
                 {isActive && <i />}
                 {isActive ? "实时更新" : "完整记录"}
               </span>
-            }
-          />
-          <div className="event-log">
-            {events.length === 0 && <p className="muted-line">等待新的运行事件…</p>}
-            {events
-              .slice()
-              .reverse()
-              .map((event) => {
-                const listing = eventListing(task, event);
-                const message = listing
-                  ? event.message.replace(/^Listing\s*/, "")
-                  : event.message;
-                return (
-                  <div key={event.id}>
-                    <time>{formatTime(event.created_at)}</time>
-                    <span className={classNames("event-dot", event.event_type)} />
-                    <p>
-                      <b>
-                        {listing
-                          ? `${listing} · ${taskStageLabel(event.stage)}`
-                          : taskStageLabel(event.stage)}
-                      </b>
-                      {message}
-                      {event.data?.before?.title && (
-                        <small>
-                          原值：{event.data.before.title}
-                          <br />
-                          新值：{event.data.after.title}
-                          <br />
-                          原因：{event.data.note}
-                        </small>
-                      )}
-                      {event.data?.before?.status && (
-                        <small>
-                          原状态：
-                          {STATUS_LABELS[event.data.before.status] ??
-                            event.data.before.status}
-                          <br />
-                          新状态：
-                          {STATUS_LABELS[event.data.after.status] ??
-                            event.data.after.status}
-                          {event.data.note && (
-                            <>
-                              <br />
-                              原因：{event.data.note}
-                            </>
-                          )}
-                        </small>
-                      )}
-                      {event.actor_name && <small>操作人：{event.actor_name}</small>}
-                    </p>
-                  </div>
-                );
-              })}
-          </div>
-        </section>
-        <aside className="task-inspector">
-          <section className="content-card delivery-card">
-            <CardHeading title="交付进度" note="完成一个 Listing 即可查看" />
-            <div className="delivery-counts">
-              <div>
-                <b>{deliveredSegments.length}</b>
-                <span>已交付</span>
-              </div>
-              <div>
-                <b>{activeSegments.length + publishingSegments.length}</b>
-                <span>运行中</span>
-              </div>
-              <div>
-                <b>{waitingSegments}</b>
-                <span>待处理</span>
-              </div>
-            </div>
-            {deliveredSegments.some(isPublishedResult) ? (
-              <button
-                className="primary-button delivery-button"
-                onClick={() =>
-                  onViewClassification(deliveredSegments.find(isPublishedResult))
-                }
-              >
-                <ChartBar size={17} />
-                查看首个已交付分类结果
-              </button>
-            ) : deliveredSegments.some(isLegacyResult) ? (
-              <a
-                className="primary-button delivery-button"
-                href={api.segmentDownloadUrl(
-                  task.id,
-                  deliveredSegments.find(isLegacyResult).segment_key,
-                )}
-              >
-                <DownloadSimple size={17} />
-                下载旧结果
-              </a>
-            ) : (
-              <p className="muted-line">
-                首个 Listing 发布后，分类结果入口会显示在这里。
-              </p>
-            )}
+            </header>
+            <TaskEventList task={task} events={events} />
           </section>
-          <details className="content-card task-config-details">
-            <summary>
+        )}
+
+        {activeTab === "config" && (
+          <section className="task-secondary-section task-config-panel">
+            <header>
               <div>
-                <b>任务配置</b>
-                <span>
-                  数据 v{task.dataset_version} · {task.primary_model}
-                </span>
+                <h3>任务配置</h3>
+                <p>任务运行期间始终使用创建时固化的版本。</p>
               </div>
-              <CaretRight size={16} />
-            </summary>
+            </header>
             <div className="task-config-body">
+              <InfoRow label="分类标准" value={firstStandard?.standard_name || "—"} />
+              <InfoRow label="并行数" value={task.max_parallel_segments ?? 3} />
+              <InfoRow label="任务 ID" value={task.id} />
               <InfoRow
                 label="退货明细"
-                value={`${task.dataset_name} · v${task.dataset_version}`}
+                value={`${task.dataset_name || "—"} · v${task.dataset_version || "—"}`}
               />
               <InfoRow
                 label="产品信息"
-                value={`${task.product_name} · v${task.product_version}`}
+                value={`${task.product_name || "—"} · v${task.product_version || "—"}`}
               />
               <InfoRow
                 label="模型配置"
-                value={`${task.connection_name} · #${task.config_version}`}
+                value={`${task.connection_name || "—"} · #${task.config_version || "—"}`}
               />
               <InfoRow
                 label="主模型"
-                value={`${task.primary_model} · ${EFFORT_LABELS[task.primary_effort] ?? task.primary_effort}`}
+                value={`${task.primary_model || "—"} · ${EFFORT_LABELS[task.primary_effort] ?? task.primary_effort ?? "—"}`}
               />
             </div>
-          </details>
-        </aside>
-      </div>
+          </section>
+        )}
+      </section>
+
       {renameOpen && (
         <TaskRenameDialog
           task={task}

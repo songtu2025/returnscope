@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "退货语义分析智能体｜部署架构",
+    "locale": "zh-CN",
+    "output": "docs/architecture/deployment-architecture.html",
+    "animation": "none",
+    "quality_profile": "showcase",
+    "viewBox": [1320, 800]
+  },
+  "components": [
+    { "id": "browser_user", "type": "external", "label": "用户浏览器", "sublabel": "团队工作台", "pos": [28, 302], "size": [142, 66] },
+    { "id": "caddy_proxy", "type": "security", "label": "Caddy 容器", "sublabel": "TLS、压缩、安全响应头", "pos": [222, 302], "size": [158, 66], "tag": ":80 / :443" },
+    { "id": "app_container", "type": "backend", "label": "app 容器", "sublabel": "FastAPI + React 静态资源 + 工作器", "pos": [442, 302], "size": [190, 72], "tag": ":8000" },
+    { "id": "app_data", "type": "database", "label": "app_data 数据卷", "sublabel": "SQLite、上传、缓存、结果", "pos": [710, 420], "size": [174, 68] },
+    { "id": "backup_service", "type": "backend", "label": "backup 容器", "sublabel": "每日备份与保留策略", "pos": [710, 558], "size": [174, 68] },
+    { "id": "backup_data", "type": "database", "label": "backup_data 数据卷", "sublabel": "可恢复备份", "pos": [950, 558], "size": [174, 68] },
+    { "id": "migration_job", "type": "backend", "label": "migrate 迁移任务", "sublabel": "按需启用的 Compose profile", "pos": [442, 638], "size": [190, 68] },
+    { "id": "legacy_source", "type": "external", "label": "历史数据目录", "sublabel": "只读挂载 /source", "pos": [188, 638], "size": [168, 66] },
+    { "id": "sub2api_external", "type": "external", "label": "Sub2API", "sublabel": "外部模型网关", "pos": [950, 118], "size": [174, 66] },
+    { "id": "mysql_external", "type": "external", "label": "MySQL 数据库", "sublabel": "可选退货数据源", "pos": [950, 302], "size": [174, 66] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "单机 Docker Compose 部署", "wraps": ["caddy_proxy", "app_container", "app_data", "backup_service", "backup_data", "migration_job"], "pad": 20 },
+    { "kind": "security-group", "label": "只读容器与持久化数据卷", "wraps": ["app_container", "app_data", "backup_service", "backup_data", "migration_job"], "pad": 12 }
+  ],
+  "connections": [
+    { "from": "browser_user", "to": "caddy_proxy", "label": "HTTPS :443", "variant": "security", "labelDy": 57 },
+    { "from": "caddy_proxy", "to": "app_container", "label": "反向代理 :8000", "variant": "emphasis", "labelDy": 63 },
+    { "from": "app_container", "to": "app_data", "label": "读写 /app/runtime", "variant": "emphasis" },
+    { "from": "app_container", "to": "sub2api_external", "label": "HTTPS /responses", "variant": "security" },
+    { "from": "app_container", "to": "mysql_external", "label": "可选 MySQL 查询", "variant": "security", "labelAt": [900, 390] },
+    { "from": "backup_service", "to": "app_data", "label": "读取运行时状态", "variant": "dashed" },
+    { "from": "backup_service", "to": "backup_data", "label": "每日写入备份", "variant": "emphasis" },
+    { "from": "legacy_source", "to": "migration_job", "label": "只读迁移源", "variant": "security" },
+    { "from": "migration_job", "to": "app_data", "label": "迁入应用状态", "variant": "dashed" },
+    { "from": "migration_job", "to": "backup_data", "label": "迁移前备份", "variant": "dashed", "labelDy": 11 }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "请求路径", "items": ["公网流量由 Caddy 终止 TLS 后转发到单个应用容器", "FastAPI 同时提供 API 和构建后的 React 静态资源"] },
+    { "dot": "emerald", "title": "状态持久化", "items": ["应用容器保持只读，业务状态集中写入 app_data", "独立 backup 服务定期写入 backup_data"] },
+    { "dot": "orange", "title": "外部与运维", "items": ["模型网关和 MySQL 位于 Compose 边界之外", "历史数据迁移仅通过显式 migration profile 启用"] }
+  ]
+}

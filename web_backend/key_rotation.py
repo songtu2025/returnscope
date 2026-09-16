@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
@@ -23,6 +24,19 @@ class KeyRotationResult:
     backup_path: Path
 
 
+@dataclass(frozen=True)
+class _RotationBoxes:
+    old_box: SecretBox
+    new_box: SecretBox
+
+
+@dataclass(frozen=True)
+class _PreparedCiphertext:
+    version_id: str
+    old_ciphertext: str
+    new_ciphertext: str
+
+
 def _keys_match(first: SecretBox, second: SecretBox) -> bool:
     probe = first.encrypt("key-rotation-probe")
     try:
@@ -32,14 +46,13 @@ def _keys_match(first: SecretBox, second: SecretBox) -> bool:
     return True
 
 
-def rotate_api_config_keys(
-    settings: Settings,
+def _validate_rotation_keys(
     *,
     app_stopped: bool,
     new_key: str,
     old_key: str | None,
     from_development_key: bool,
-) -> KeyRotationResult:
+) -> _RotationBoxes:
     if not app_stopped:
         raise KeyRotationError("轮换前必须停止应用，并传入 --app-stopped")
 
@@ -64,8 +77,10 @@ def rotate_api_config_keys(
         raise KeyRotationError("从开发默认密钥迁移必须传入 --from-development-key")
     if _keys_match(old_box, new_box):
         raise KeyRotationError("新旧加密密钥不能相同")
+    return _RotationBoxes(old_box=old_box, new_box=new_box)
 
-    database = Database(settings.database_path)
+
+def _load_ciphertext_rows(database: Database) -> list[sqlite3.Row]:
     with database.connect() as connection:
         rows = connection.execute(
             """
@@ -78,30 +93,68 @@ def rotate_api_config_keys(
         ).fetchall()
     if not rows:
         raise KeyRotationError("没有可轮换的 API 密钥密文")
+    return rows
 
-    prepared: list[tuple[str, str, str]] = []
+
+def _prepare_ciphertexts(
+    rows: Sequence[sqlite3.Row],
+    boxes: _RotationBoxes,
+) -> list[_PreparedCiphertext]:
+    prepared: list[_PreparedCiphertext] = []
     for row in rows:
         version_id = str(row["id"])
         old_ciphertext = str(row["api_key_ciphertext"])
-        plaintext = old_box.decrypt(old_ciphertext)
-        new_ciphertext = new_box.encrypt(plaintext)
-        if new_box.decrypt(new_ciphertext) != plaintext:
+        plaintext = boxes.old_box.decrypt(old_ciphertext)
+        new_ciphertext = boxes.new_box.encrypt(plaintext)
+        if boxes.new_box.decrypt(new_ciphertext) != plaintext:
             raise KeyRotationError("新密钥内存验证失败")
-        prepared.append((version_id, old_ciphertext, new_ciphertext))
+        prepared.append(
+            _PreparedCiphertext(
+                version_id=version_id,
+                old_ciphertext=old_ciphertext,
+                new_ciphertext=new_ciphertext,
+            )
+        )
+    return prepared
 
-    backup_path = create_backup(settings)
+
+def _commit_rotation(
+    database: Database,
+    prepared: Sequence[_PreparedCiphertext],
+) -> None:
     with database.transaction(immediate=True) as connection:
-        for version_id, old_ciphertext, new_ciphertext in prepared:
+        for item in prepared:
             updated = connection.execute(
                 """
                 UPDATE api_config_versions
                 SET api_key_ciphertext = ?
                 WHERE id = ? AND api_key_ciphertext = ?
                 """,
-                (new_ciphertext, version_id, old_ciphertext),
+                (item.new_ciphertext, item.version_id, item.old_ciphertext),
             )
             if updated.rowcount != 1:
                 raise KeyRotationError("配置在轮换期间发生变化，数据库未修改")
+
+
+def rotate_api_config_keys(
+    settings: Settings,
+    *,
+    app_stopped: bool,
+    new_key: str,
+    old_key: str | None,
+    from_development_key: bool,
+) -> KeyRotationResult:
+    boxes = _validate_rotation_keys(
+        app_stopped=app_stopped,
+        new_key=new_key,
+        old_key=old_key,
+        from_development_key=from_development_key,
+    )
+
+    database = Database(settings.database_path)
+    prepared = _prepare_ciphertexts(_load_ciphertext_rows(database), boxes)
+    backup_path = create_backup(settings)
+    _commit_rotation(database, prepared)
 
     return KeyRotationResult(
         rotated_count=len(prepared),

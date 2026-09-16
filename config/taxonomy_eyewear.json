@@ -1,84 +1,945 @@
 {
-  "version": "eyewear-2026-08-10-v1",
   "agent_family": "眼镜智能体",
-  "product_context": "婴儿眼镜、儿童眼镜或成人骑行眼镜",
   "allowed_parts": [
     "FRAME",
     "LENS",
+    "NOSE_BRIDGE",
     "NOSE_PAD",
     "TEMPLE",
+    "EAR_SIDE",
+    "FACE_COVERAGE",
     "HINGE",
+    "SCREW",
+    "CONNECTION",
+    "LENS_FRAME_JOINT",
+    "COATING",
     "STRAP",
+    "RUBBER_SLEEVE",
+    "CASE",
+    "CLEANING_CLOTH",
+    "PACKAGING",
+    "EDGE",
+    "ACCESSORY",
     "UNSPECIFIED"
   ],
   "instructions": [
-    "婴儿眼镜适用0至2岁，儿童眼镜适用3至8岁，骑行眼镜主要面向成人。",
-    "年龄适配只依据结构化品类和评论明示内容，不得从评论语气猜测年龄。",
-    "镜片起雾、视野、清晰度和镜架佩戴问题必须分开表达。"
+    "先阅读完整标题和正文，按独立事实拆分观点；关键词不替代语义判断。主题用标签，评价方向用sentiment，位置用part，时间、年龄和场景保留在opinion与逐字evidence中。",
+    "相同事件只选最具体标签，不把故障、故障后果和笼统质量评价重复统计；不同部位或独立事件可以并存。同一主题在不同对象或场景下的正负反馈分别保留，不自动判矛盾。",
+    "只有真实体验或明确评价才打标签；否定问题不自动等于好评。没有评价信息不判负向，明确负向但原因不明时保留原因不明标签并设置needs_review。",
+    "年龄、使用者与使用时长不是新的问题标签。品类默认属性不是具体Listing承诺；无对应Listing承诺时claim_relation必须为NONE，不推断描述有误或买家责任。",
+    "到货问题与使用后故障分别保留发生阶段；包装打开不推断二手。主体验证按实际语义选择PRODUCT、CUSTOMER、ORDER、DELIVERY、SERVICE，不由标签分组推断责任。",
+    "先完整理解评论标题和正文，拆分独立语义，再判断具体问题、评价方向和部位。关键词仅辅助检索，不能替代完整语义与否定关系。",
+    "具体标签优先。同一现象不重复计数，具体质量或体感问题不得同时追加对应兜底标签；相互独立的正负反馈可以同时保留。",
+    "年龄与尺码：在opinion和evidence中保留原文明确的使用者年龄、头围、尺码和适用范围。品类属性中的默认age_range仅为品类背景，不是具体Listing的年龄承诺。",
+    "例如适用于3～7岁的眼镜被用于10岁孩子：原文明示戴不下时记录偏小及10岁，不推断标称年龄不符、商品质量差或买家误购。只有具体Listing承诺有明确依据，且评论直接支持冲突时，才判断承诺关系。没有Listing承诺则claim_relation为NONE。",
+    "仅滑落而没有尺寸证据时使用固定/防脱效果差；明确偏大导致滑落只记尺码。同一固定带断裂及其导致脱落只记具体配件故障；独立证据成立才多标签。",
+    "偏光不足、遮光不足、镜片过暗、视觉模糊和色彩/HUD显示问题分别判断；不能从遮光或眩光体验推断UV防护不合格，也不能把否定效果中的polarized误判正向。",
+    "头痛、压鼻和不舒服不能自动推断光学畸变或重量过大。只有原文明示视觉原因或重量原因时使用对应功能或重量标签；原因不明时保留原话并标记needs_review。",
+    "镜片破裂、镜片脱落、镜架断裂、铰链失效、配件损坏分别识别；在part中保留镜片、镜腿、鼻托等部位，发生时间、频次和使用场景保留在opinion及evidence中。",
+    "到货已损坏与使用后损坏分别记录发生阶段。已存在具体故障标签时，到货时间保留在该观点中；只有额外独立到货状态才追加履约标签。到货已有划痕不能推断容易刮花，包装打开不能推断二手。",
+    "按实际语义选择subject：商品故障用PRODUCT，配送用DELIVERY，订单错发缺件用ORDER，客服退换服务用SERVICE，买家自身原因用CUSTOMER。不因分组名推断责任方；PACKAGING只可作为part。",
+    "信息不足/原因不明确只用于明确负向但原因不明的评价，必须设置needs_review=true并说明原因未明。待确认是复核状态，不是情绪方向；没有评价信息时不输出负向标签，保留未知语义或无文本状态。",
+    "若对比的对象、尺码、使用者或场景不同，在观点中保留差异，不将不同对象的反馈拼成同一产品的矛盾事实；不能仅为解释一个问题的场景对比额外生成未知语义。"
   ],
   "labels": [
     {
-      "code": "EYEWEAR_FIT_TIGHT",
-      "name": "夹头或偏紧",
+      "code": "EYEWEAR_FIT_TIGHT_V2_U1",
+      "name": "偏小/偏紧",
       "group": "尺码与适配",
-      "description": "镜架、镜腿或绑带过紧并产生夹压",
-      "allowed_sentiments": ["NEGATIVE"]
+      "description": "评论明确整体尺寸偏小、夹头或镜腿过紧；保留使用者年龄、头围及尺码原文。仅具体鼻梁、耳侧或贴脸结构不适使用局部贴合；不能仅因年龄超出适用范围而推断商品质量或描述有误。",
+      "keywords": [
+        "too small",
+        "tight",
+        "narrow"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
     },
     {
-      "code": "EYEWEAR_FIT_LOOSE",
-      "name": "偏松或易滑落",
+      "code": "EYEWEAR_FIT_LOOSE_V2_U1",
+      "name": "偏大/偏松",
       "group": "尺码与适配",
-      "description": "眼镜偏松、下滑或无法稳定佩戴",
-      "allowed_sentiments": ["NEGATIVE"]
+      "description": "评论明确整体尺寸偏大、过松，或明确因尺寸松大而滑落。只说滑落但没有尺码证据时使用固定/防脱效果差，不重复推断偏大。",
+      "keywords": [
+        "too big",
+        "loose"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
     },
     {
-      "code": "EYEWEAR_AGE_MISMATCH",
-      "name": "年龄段不适配",
+      "code": "EYEWEAR_FIT_LOCAL_U1",
+      "name": "局部贴合问题",
       "group": "尺码与适配",
-      "description": "评论明确表示商品不适合标定年龄段",
-      "allowed_sentiments": ["NEGATIVE"]
+      "description": "明确鼻梁、鼻托、镜腿、耳侧或脸部覆盖间隙及接触位置不合理。整体偏大或偏小使用对应方向标签；同一处不贴合不重复拆分。",
+      "keywords": [
+        "gap around face",
+        "nose pad rides high"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
     },
     {
-      "code": "EYEWEAR_NOSE_COMFORT",
-      "name": "鼻托不适",
-      "group": "舒适性",
-      "description": "鼻托压迫、疼痛、留下痕迹或位置不适",
-      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+      "code": "EYEWEAR_FIT_UNSPECIFIED_U1",
+      "name": "整体不合适/尺码跨度不适配",
+      "group": "尺码与适配",
+      "description": "只说明不合适但无法判断方向，或相邻尺码一个太小一个太大而没有适合的尺码。若描述的是单一所购尺码，且能判断偏大或偏小，则不用本标签。",
+      "keywords": [
+        "doesn't fit",
+        "no suitable size"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
     },
     {
-      "code": "EYEWEAR_LENS_VISIBILITY",
-      "name": "镜片与视野",
+      "code": "EYEWEAR_POLARIZATION_INSUFFICIENT_U1",
+      "name": "偏光功能缺失/不足",
       "group": "功能表现",
-      "description": "镜片清晰度、畸变、视野或遮挡问题",
-      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+      "description": "明确测试或使用后认为不偏光、偏光效果弱。镜片只是太暗或太浅时不用。",
+      "keywords": [
+        "not polarized",
+        "polarization test failed"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
     },
     {
-      "code": "EYEWEAR_FOGGING",
-      "name": "镜片起雾",
+      "code": "EYEWEAR_SUN_PROTECTION_INSUFFICIENT_U1",
+      "name": "遮光/防晒不足",
       "group": "功能表现",
-      "description": "使用时镜片起雾或防雾表现",
-      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+      "description": "用户明确阳光下仍刺眼、眯眼、镜片太浅、遮光不足或声称防晒效果不足。保留用户实际说法；遮光不足不能推断偏光失效或UV防护不达标，反驳Listing承诺需要独立证据。",
+      "keywords": [
+        "not dark enough",
+        "still squinting"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
     },
     {
-      "code": "EYEWEAR_QUALITY",
-      "name": "材料与做工",
-      "group": "材料与做工",
-      "description": "镜架、镜片、铰链或绑带的质量和耐用问题",
-      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+      "code": "EYEWEAR_LENS_TOO_DARK_U1",
+      "name": "镜片过暗/视野灰暗",
+      "group": "功能表现",
+      "description": "镜片过暗，明显降低环境亮度或影响正常使用。色彩偏色使用色彩失真/显示兼容问题。",
+      "keywords": [
+        "too dark"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
     },
     {
-      "code": "EYEWEAR_APPEARANCE",
-      "name": "外观与预期",
-      "group": "外观与预期",
-      "description": "颜色、造型或实物外观与预期不符",
-      "allowed_sentiments": ["NEGATIVE", "POSITIVE"]
+      "code": "EYEWEAR_VISIBILITY_U1",
+      "name": "视觉清晰度与畸变表现",
+      "group": "功能表现",
+      "description": "明确评价视野清晰、模糊、畸变或视觉引起的眩晕，正负分别判断；独立色彩/HUD显示问题使用对应标签。只有明确视觉原因才能关联头痛。",
+      "keywords": [
+        "blurry",
+        "magnifying",
+        "headache"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
     },
     {
-      "code": "EYEWEAR_BUYER_REASON",
-      "name": "买家原因",
-      "group": "其他原因",
-      "description": "误购、多买、不再需要或计划改变",
-      "allowed_sentiments": ["NEGATIVE", "NEUTRAL"]
+      "code": "EYEWEAR_COLOR_DISPLAY_ISSUE_U1",
+      "name": "色彩失真/显示兼容问题",
+      "group": "功能表现",
+      "description": "颜色变灰或失真，无法看清车载HUD、屏幕等显示。普通视野模糊使用视觉不清/畸变/眩晕。",
+      "keywords": [
+        "colors look grey",
+        "cannot see HUD"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_RETENTION_U1",
+      "name": "固定与防脱表现",
+      "group": "功能表现",
+      "description": "明确评价眼镜或固定带是否稳固防脱；偏大导致脱落只记录偏大，配件断裂导致脱落只记录配件故障。",
+      "keywords": [
+        "strap does not hold",
+        "falls off"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_FOGGING_PERFORMANCE_U1",
+      "name": "防雾表现",
+      "group": "功能表现",
+      "description": "明确反馈镜片容易起雾或不起雾，分别标负向或正向；未提起雾不使用。",
+      "keywords": [
+        "fogging",
+        "fogs up"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_LENS_SCRATCHING_U1",
+      "name": "镜片易刮花",
+      "group": "质量与耐用",
+      "description": "正常或轻度使用即出现明显划痕，或用户明确抱怨镜片容易刮花。仅到货已有划痕不能推断易刮花，使用到货状态标签；保留使用时长与场景。",
+      "keywords": [
+        "scratches easily"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_LENS_COATING_FAILURE_U1",
+      "name": "镜片涂层脱落/起泡/变质",
+      "group": "质量与耐用",
+      "description": "偏光膜、镀膜剥落、分层、起泡、发黏或变色。单纯划痕使用镜片易刮花。",
+      "keywords": [
+        "coating peeling",
+        "delaminating",
+        "bubbled"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_LENS_DETACHMENT_U1",
+      "name": "镜片脱落",
+      "group": "质量与耐用",
+      "description": "镜片从镜框中弹出、掉落或无法装回。镜片自身裂开、破碎使用镜片破裂/碎裂；只有两种故障均有独立原文证据时同时保留。",
+      "keywords": [
+        "lens popped",
+        "lens fell out"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_LENS_BREAKAGE_U1",
+      "name": "镜片破裂/碎裂",
+      "group": "质量与耐用",
+      "description": "镜片本体出现裂纹、开裂、破裂或碎裂。划痕、镀膜脱落、镜片从镜框脱出分别用对应标签；保留部位、发生时间和使用条件，不从破裂推断责任方。",
+      "keywords": [
+        "lens cracked",
+        "lenses cracked",
+        "lens shattered",
+        "lens broke",
+        "broken lens",
+        "cracked lens"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_SCREW_HINGE_FAILURE_U1",
+      "name": "螺丝/铰链松脱",
+      "group": "质量与耐用",
+      "description": "镜腿连接螺丝反复松动、脱落，或铰链松垮、损坏、失效。收到时已有此故障仍保留具体故障，并在观点中记录到货即存在；到货状态仅在有独立履约信息时另标。",
+      "keywords": [
+        "screw backs out",
+        "hinge loose"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_FRAME_TEMPLE_BREAKAGE_U1",
+      "name": "镜架/镜腿破裂或散架",
+      "group": "质量与耐用",
+      "description": "镜架、镜腿或连接结构断裂、开裂、散开。镜片脱落、配件损坏分别使用对应标签。",
+      "keywords": [
+        "frame broke",
+        "came apart"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_ACCESSORY_FAILURE_U1",
+      "name": "配件破损/脱落/功能异常",
+      "group": "质量与耐用",
+      "description": "固定带、鼻托、橡胶套、眼镜盒拉链等配件断裂、脱落、变质或无法使用。到货缺少配件归入缺件/数量不符。",
+      "keywords": [
+        "strap broke",
+        "nose pad fell off",
+        "zipper stuck"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_DURABILITY_SHORT_U1",
+      "name": "不耐用/寿命短",
+      "group": "质量与耐用",
+      "description": "明确很快失效或不能继续使用，但没有说明具体损坏类型。已明确镜片、螺丝、镜架等具体问题时不再追加。",
+      "keywords": [
+        "didn't last",
+        "unusable quickly"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_QUALITY_GENERAL_U1",
+      "name": "材料与做工评价",
+      "group": "质量与耐用",
+      "description": "独立评价材料和做工好坏；具体破裂、变形、脱落等故障优先，不因故障重复追加笼统质量差。耐用或柔韧认可可保留实际属性，不从短期外观推断长期耐用。",
+      "keywords": [
+        "cheaply made",
+        "poor materials"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_PRESSURE_FRICTION_DISCOMFORT_U1",
+      "name": "压迫/摩擦/尖锐不适",
+      "group": "使用感受",
+      "description": "评论明确镜腿、鼻托、边缘或裸露部件压迫、摩擦、扎人、留下压痕或疼痛。仅说尺寸紧而没有独立不适信息时只打尺码；鼻托压迫不能自动推断眼镜过重。",
+      "keywords": [
+        "sharp tip",
+        "rubs temple",
+        "digs in"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_TOO_HEAVY_U1",
+      "name": "过重/佩戴负担",
+      "group": "使用感受",
+      "description": "评论明确眼镜过重、沉重，或明确重量导致压鼻和长时间佩戴负担。仅有压鼻、头痛或不舒服但无重量证据时不用。",
+      "keywords": [
+        "heavy",
+        "pressure on nose"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_COMFORT_U1",
+      "name": "整体佩戴舒适性",
+      "group": "使用感受",
+      "description": "明确评价佩戴舒适或不舒适但没有更具体原因；轻重、压迫、摩擦等具体体验优先，不能从舒适推断尺寸。",
+      "keywords": [
+        "uncomfortable"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_APPEARANCE_GENERAL_U1",
+      "name": "外观与款式评价",
+      "group": "外观与款式",
+      "description": "明确评价颜色、造型、款式的喜好或不满；明确与图片或描述不符使用描述不符，发错颜色使用错发。",
+      "keywords": [
+        "don't like the style",
+        "don't like the color"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_ARRIVAL_CONDITION_U1",
+      "name": "到货二手/脏污/破损/包装问题",
+      "group": "履约与售后",
+      "description": "用户明确收到时有脏污、划痕、破损、包装问题，或明确声称收到使用过的商品。包装打开不能直接推断二手。若已有具体故障标签，收到时这一时间信息保留在观点中；只在独立到货状态成立时另标。",
+      "keywords": [
+        "used",
+        "dirty",
+        "opened",
+        "damaged on arrival"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_WRONG_ITEM_U1",
+      "name": "错发商品/规格/颜色",
+      "group": "履约与售后",
+      "description": "实际收到的商品、尺码、颜色或款式与订单不一致。买家选错尺码不属于错发。",
+      "keywords": [
+        "wrong item",
+        "wrong size was sent",
+        "wrong color was sent"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_MISSING_PARTS_U1",
+      "name": "缺件/数量不符",
+      "group": "履约与售后",
+      "description": "到货时缺少配件、少一件或数量不符。使用后配件丢失或断裂归入质量或功能。",
+      "keywords": [
+        "missing strap",
+        "missing parts",
+        "wrong quantity"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_DESCRIPTION_MISMATCH_U1",
+      "name": "商品描述/图片不符",
+      "group": "履约与售后",
+      "description": "实物设计、材质、功能或外观与页面描述或图片明确不符。普通尺码偏大偏小不重复打；尺码表不准按实际尺码问题归类。",
+      "keywords": [
+        "not as pictured",
+        "not as described"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_DELIVERY_ISSUE_U1",
+      "name": "物流延迟/未收到",
+      "group": "履约与售后",
+      "description": "配送延迟、包裹未收到或送错地址。商品使用问题不属于物流。",
+      "keywords": [
+        "late",
+        "never arrived",
+        "delivered elsewhere"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_SERVICE_U1",
+      "name": "客服与售后体验",
+      "group": "履约与售后",
+      "description": "明确评价客服沟通、退换、质保或售后处理，使用SERVICE；无法找到质保信息是负向，明确客服解决问题是正向，不推断产品故障。",
+      "keywords": [
+        "warranty",
+        "replacement refused",
+        "customer service"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_VALUE_U1",
+      "name": "价格与性价比评价",
+      "group": "其他反馈",
+      "description": "明确评价价格和实际价值的匹配程度，正负分别保留；仅因质量差说浪费钱优先具体故障，独立价格判断才能追加。",
+      "keywords": [
+        "overpriced",
+        "cheaper elsewhere",
+        "not worth the price"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE",
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_BUYER_REASON_V2_U1",
+      "name": "买家自身原因/不需要",
+      "group": "其他反馈",
+      "description": "买家自行选错、改变需求、主动损坏或明确与产品质量无关。产品固定不牢导致丢失不属于买家自身原因。；仅买家主动误购、需求变化等原因，不能从产品故障推断买家责任。",
+      "keywords": [
+        "ordered by mistake",
+        "no longer needed"
+      ],
+      "allowed_sentiments": [
+        "NEUTRAL"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_REASON_UNSPECIFIED_U1",
+      "name": "信息不足/原因不明确",
+      "group": "其他反馈",
+      "description": "明确表达不好、失望或不合预期，但标题和正文均没有具体原因。只承接明确负向评价并要求复核；空白、无意见、没有信息不能判负向。有具体问题时不追加本标签。",
+      "keywords": [
+        "not good",
+        "disappointed",
+        "not as expected"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_FIT_POSITIVE_U1",
+      "name": "尺码合适/贴合",
+      "group": "尺码与适配",
+      "description": "明确表示尺寸合适、贴脸或适合对应年龄。仅笼统满意时使用整体满意/推荐。",
+      "keywords": [
+        "fits perfectly"
+      ],
+      "allowed_sentiments": [
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_PROTECTION_POSITIVE_U1",
+      "name": "偏光/防晒保护认可",
+      "group": "功能表现",
+      "description": "用户明确认可偏光、UV保护、遮光或减少眩光的具体效果，保留认可的实际属性。只提到polarized或UV等商品特性、否定其效果，或只说晴天戴过，不构成正向认可。",
+      "keywords": [
+        "UV protection",
+        "polarized",
+        "blocks glare"
+      ],
+      "allowed_sentiments": [
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_COMFORT_POSITIVE_U1",
+      "name": "舒适/轻便认可",
+      "group": "使用感受",
+      "description": "明确表示轻便、柔软、无刺激或长时间舒适。仅尺寸合适不用重复。",
+      "keywords": [
+        "lightweight",
+        "comfortable",
+        "soft"
+      ],
+      "allowed_sentiments": [
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_ACCESSORY_POSITIVE_U1",
+      "name": "配件/包装认可",
+      "group": "履约与售后",
+      "description": "明确认可眼镜盒、清洁布、固定带或包装的质量、外观和使用体验。仅陈述包含配件不自动判正向；固定牢靠使用固定稳固/防脱认可。",
+      "keywords": [
+        "nice case",
+        "cleaning cloth included"
+      ],
+      "allowed_sentiments": [
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_OVERALL_POSITIVE_U1",
+      "name": "整体满意/推荐",
+      "group": "其他反馈",
+      "description": "仅表达喜欢、满意或推荐，没有任何可落到具体正向标签的信息。存在具体正向标签时不再追加。",
+      "keywords": [
+        "love it",
+        "great product",
+        "recommend"
+      ],
+      "allowed_sentiments": [
+        "POSITIVE"
+      ],
+      "allowed_claim_ids": []
+    },
+    {
+      "code": "EYEWEAR_FRAME_DEFORMATION_U1",
+      "name": "镜架或镜腿变形",
+      "group": "质量与耐用",
+      "description": "镜架或镜腿永久弯曲、拉伸、歪斜或失去原形，保留部位、时间和原因原文；正常柔韧弯折且可恢复不是变形，断裂用对应故障标签。",
+      "keywords": [
+        "bent",
+        "crooked",
+        "stretched out"
+      ],
+      "allowed_sentiments": [
+        "NEGATIVE"
+      ]
     }
-  ]
+  ],
+  "product_context": "婴儿眼镜、儿童眼镜或成人骑行眼镜",
+  "version": "eyewear-unified-2026-09-06-v1-semantic1",
+  "validation_rules": {
+    "conflicting_label_sets": [
+      [
+        "EYEWEAR_ACCESSORY_FAILURE_U1",
+        "EYEWEAR_DURABILITY_SHORT_U1"
+      ],
+      [
+        "EYEWEAR_ACCESSORY_FAILURE_U1",
+        "EYEWEAR_QUALITY_GENERAL_U1"
+      ],
+      [
+        "EYEWEAR_ACCESSORY_FAILURE_U1",
+        "EYEWEAR_REASON_UNSPECIFIED_U1"
+      ],
+      [
+        "EYEWEAR_ACCESSORY_POSITIVE_U1",
+        "EYEWEAR_OVERALL_POSITIVE_U1"
+      ],
+      [
+        "EYEWEAR_APPEARANCE_GENERAL_U1",
+        "EYEWEAR_OVERALL_POSITIVE_U1"
+      ],
+      [
+        "EYEWEAR_APPEARANCE_GENERAL_U1",
+        "EYEWEAR_REASON_UNSPECIFIED_U1"
+      ],
+      [
+        "EYEWEAR_ARRIVAL_CONDITION_U1",
+        "EYEWEAR_REASON_UNSPECIFIED_U1"
+      ],
+      [
+        "EYEWEAR_BUYER_REASON_V2_U1",
+        "EYEWEAR_REASON_UNSPECIFIED_U1"
+      ],
+      [
+        "EYEWEAR_COLOR_DISPLAY_ISSUE_U1",
+        "EYEWEAR_REASON_UNSPECIFIED_U1"
+      ],
+      [
+        "EYEWEAR_COMFORT_POSITIVE_U1",
+        "EYEWEAR_OVERALL_POSITIVE_U1"
+      ],
+      [
+        "EYEWEAR_COMFORT_U1",
+        "EYEWEAR_FIT_LOCAL_U1"
+      ],
+      [
+        "EYEWEAR_COMFORT_U1",
+        "EYEWEAR_FIT_LOOSE_V2_U1"
+      ],
+      [
+        "EYEWEAR_COMFORT_U1",
+        "EYEWEAR_FIT_TIGHT_V2_U1"
+      ],
+      [
+        "EYEWEAR_COMFORT_U1",
+        "EYEWEAR_FIT_UNSPECIFIED_U1"
+      ],
+      [
+        "EYEWEAR_COMFORT_U1",
+        "EYEWEAR_PRESSURE_FRICTION_DISCOMFORT_U1"
+      ],
+      [
+        "EYEWEAR_COMFORT_U1",
+        "EYEWEAR_REASON_UNSPECIFIED_U1"
+      ],
+      [
+        "EYEWEAR_COMFORT_U1",
+        "EYEWEAR_TOO_HEAVY_U1"
+      ],
+      [
+        "EYEWEAR_DELIVERY_ISSUE_U1",
+        "EYEWEAR_REASON_UNSPECIFIED_U1"
+      ],
+      [
+        "EYEWEAR_DESCRIPTION_MISMATCH_U1",
+        "EYEWEAR_REASON_UNSPECIFIED_U1"
+      ],
+      [
+        "EYEWEAR_DURABILITY_SHORT_U1",
+        "EYEWEAR_FRAME_TEMPLE_BREAKAGE_U1"
+      ],
+      [
+        "EYEWEAR_DURABILITY_SHORT_U1",
+        "EYEWEAR_LENS_BREAKAGE_U1"
+      ],
+      [
+        "EYEWEAR_DURABILITY_SHORT_U1",
+        "EYEWEAR_LENS_COATING_FAILURE_U1"
+      ],
+      [
+        "EYEWEAR_DURABILITY_SHORT_U1",
+        "EYEWEAR_LENS_DETACHMENT_U1"
+      ],
+      [
+        "EYEWEAR_DURABILITY_SHORT_U1",
+        "EYEWEAR_LENS_SCRATCHING_U1"
+      ],
+      [
+        "EYEWEAR_DURABILITY_SHORT_U1",
+        "EYEWEAR_QUALITY_GENERAL_U1"
+      ],
+      [
+        "EYEWEAR_DURABILITY_SHORT_U1",
+        "EYEWEAR_REASON_UNSPECIFIED_U1"
+      ],
+      [
+        "EYEWEAR_DURABILITY_SHORT_U1",
+        "EYEWEAR_SCREW_HINGE_FAILURE_U1"
+      ],
+      [
+        "EYEWEAR_FIT_LOCAL_U1",
+        "EYEWEAR_REASON_UNSPECIFIED_U1"
+      ],
+      [
+        "EYEWEAR_FIT_LOOSE_V2_U1",
+        "EYEWEAR_FIT_TIGHT_V2_U1"
+      ],
+      [
+        "EYEWEAR_FIT_LOOSE_V2_U1",
+        "EYEWEAR_REASON_UNSPECIFIED_U1"
+      ],
+      [
+        "EYEWEAR_FIT_POSITIVE_U1",
+        "EYEWEAR_OVERALL_POSITIVE_U1"
+      ],
+      [
+        "EYEWEAR_FIT_TIGHT_V2_U1",
+        "EYEWEAR_REASON_UNSPECIFIED_U1"
+      ],
+      [
+        "EYEWEAR_FIT_UNSPECIFIED_U1",
+        "EYEWEAR_REASON_UNSPECIFIED_U1"
+      ],
+      [
+        "EYEWEAR_FOGGING_PERFORMANCE_U1",
+        "EYEWEAR_OVERALL_POSITIVE_U1"
+      ],
+      [
+        "EYEWEAR_FOGGING_PERFORMANCE_U1",
+        "EYEWEAR_REASON_UNSPECIFIED_U1"
+      ],
+      [
+        "EYEWEAR_FRAME_TEMPLE_BREAKAGE_U1",
+        "EYEWEAR_QUALITY_GENERAL_U1"
+      ],
+      [
+        "EYEWEAR_FRAME_TEMPLE_BREAKAGE_U1",
+        "EYEWEAR_REASON_UNSPECIFIED_U1"
+      ],
+      [
+        "EYEWEAR_LENS_BREAKAGE_U1",
+        "EYEWEAR_QUALITY_GENERAL_U1"
+      ],
+      [
+        "EYEWEAR_LENS_BREAKAGE_U1",
+        "EYEWEAR_REASON_UNSPECIFIED_U1"
+      ],
+      [
+        "EYEWEAR_LENS_COATING_FAILURE_U1",
+        "EYEWEAR_QUALITY_GENERAL_U1"
+      ],
+      [
+        "EYEWEAR_LENS_COATING_FAILURE_U1",
+        "EYEWEAR_REASON_UNSPECIFIED_U1"
+      ],
+      [
+        "EYEWEAR_LENS_DETACHMENT_U1",
+        "EYEWEAR_QUALITY_GENERAL_U1"
+      ],
+      [
+        "EYEWEAR_LENS_DETACHMENT_U1",
+        "EYEWEAR_REASON_UNSPECIFIED_U1"
+      ],
+      [
+        "EYEWEAR_LENS_SCRATCHING_U1",
+        "EYEWEAR_QUALITY_GENERAL_U1"
+      ],
+      [
+        "EYEWEAR_LENS_SCRATCHING_U1",
+        "EYEWEAR_REASON_UNSPECIFIED_U1"
+      ],
+      [
+        "EYEWEAR_LENS_TOO_DARK_U1",
+        "EYEWEAR_REASON_UNSPECIFIED_U1"
+      ],
+      [
+        "EYEWEAR_MISSING_PARTS_U1",
+        "EYEWEAR_REASON_UNSPECIFIED_U1"
+      ],
+      [
+        "EYEWEAR_OVERALL_POSITIVE_U1",
+        "EYEWEAR_PROTECTION_POSITIVE_U1"
+      ],
+      [
+        "EYEWEAR_OVERALL_POSITIVE_U1",
+        "EYEWEAR_QUALITY_GENERAL_U1"
+      ],
+      [
+        "EYEWEAR_OVERALL_POSITIVE_U1",
+        "EYEWEAR_RETENTION_U1"
+      ],
+      [
+        "EYEWEAR_OVERALL_POSITIVE_U1",
+        "EYEWEAR_VALUE_U1"
+      ],
+      [
+        "EYEWEAR_OVERALL_POSITIVE_U1",
+        "EYEWEAR_VISIBILITY_U1"
+      ],
+      [
+        "EYEWEAR_POLARIZATION_INSUFFICIENT_U1",
+        "EYEWEAR_REASON_UNSPECIFIED_U1"
+      ],
+      [
+        "EYEWEAR_PRESSURE_FRICTION_DISCOMFORT_U1",
+        "EYEWEAR_REASON_UNSPECIFIED_U1"
+      ],
+      [
+        "EYEWEAR_QUALITY_GENERAL_U1",
+        "EYEWEAR_REASON_UNSPECIFIED_U1"
+      ],
+      [
+        "EYEWEAR_QUALITY_GENERAL_U1",
+        "EYEWEAR_SCREW_HINGE_FAILURE_U1"
+      ],
+      [
+        "EYEWEAR_REASON_UNSPECIFIED_U1",
+        "EYEWEAR_RETENTION_U1"
+      ],
+      [
+        "EYEWEAR_REASON_UNSPECIFIED_U1",
+        "EYEWEAR_SCREW_HINGE_FAILURE_U1"
+      ],
+      [
+        "EYEWEAR_REASON_UNSPECIFIED_U1",
+        "EYEWEAR_SERVICE_U1"
+      ],
+      [
+        "EYEWEAR_REASON_UNSPECIFIED_U1",
+        "EYEWEAR_SUN_PROTECTION_INSUFFICIENT_U1"
+      ],
+      [
+        "EYEWEAR_REASON_UNSPECIFIED_U1",
+        "EYEWEAR_TOO_HEAVY_U1"
+      ],
+      [
+        "EYEWEAR_REASON_UNSPECIFIED_U1",
+        "EYEWEAR_VALUE_U1"
+      ],
+      [
+        "EYEWEAR_REASON_UNSPECIFIED_U1",
+        "EYEWEAR_VISIBILITY_U1"
+      ],
+      [
+        "EYEWEAR_REASON_UNSPECIFIED_U1",
+        "EYEWEAR_WRONG_ITEM_U1"
+      ]
+    ],
+    "evidence_requirements": [
+      {
+        "label_code": "EYEWEAR_TOO_HEAVY_U1",
+        "cues": [
+          "heavy",
+          "heavier",
+          "heaviest",
+          "weight",
+          "weigh",
+          "重",
+          "pesad",
+          "schwer",
+          "lourd",
+          "pesant"
+        ],
+        "unknown_opinion": "佩戴负担原因待确认",
+        "unknown_reason": "缺少重量表述，不能从压鼻或疼痛推断过重。",
+        "semantic_requirement": "只有明确表达重量或佩戴重量负担时才判断过重；不能从压鼻、疼痛或不舒服推断重量。允许同义表达，不要求出现指定单词。"
+      },
+      {
+        "label_code": "EYEWEAR_REASON_UNSPECIFIED_U1",
+        "cues": [
+          "bad",
+          "poor",
+          "disappoint",
+          "not good",
+          "not as expected",
+          "unhappy",
+          "unsatisfied",
+          "dissatisfied",
+          "awful",
+          "terrible",
+          "hate",
+          "horrible",
+          "不满意",
+          "失望",
+          "不好",
+          "差",
+          "不符合预期",
+          "不合预期"
+        ],
+        "unknown_opinion": "评价方向与原因待确认",
+        "unknown_reason": "没有明确负向评价，不把信息不足自动判为负面。",
+        "semantic_requirement": "仅在明确负向评价且缺少具体原因时使用；信息缺失本身不等于负面，有具体问题时不用该笼统标签，并要求人工复核。"
+      }
+    ],
+    "allowed_groups": [
+      "尺码与适配",
+      "功能表现",
+      "质量与耐用",
+      "使用感受",
+      "外观与款式",
+      "履约与售后",
+      "其他反馈"
+    ],
+    "neutral_reason_labels": [
+      "EYEWEAR_BUYER_REASON_V2_U1"
+    ],
+    "required_review_labels": [
+      "EYEWEAR_REASON_UNSPECIFIED_U1"
+    ],
+    "fallback_label_codes": [
+      "EYEWEAR_FIT_UNSPECIFIED_U1",
+      "EYEWEAR_REASON_UNSPECIFIED_U1"
+    ],
+    "conflict_scope": "evidence"
+  },
+  "recognition_profile": "semantic_v1"
 }

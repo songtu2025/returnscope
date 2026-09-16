@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { resultLabelText } from "../../lib/taxonomyPresentation";
 import {
   ArrowLeft,
   ArrowsClockwise,
@@ -23,6 +24,7 @@ import { createDashboardSelection } from "./dashboardSelectionStorage";
 import { AiInsightReport } from "./AiInsightReport";
 import { InsightGenerationModal } from "./InsightGenerationModal";
 import { ReturnReasonInsights } from "./ReturnReasonInsights";
+import { SemanticResultPanel } from "../classification-results/SemanticResultPanel";
 import {
   insightModels,
   preferredInsightEffort,
@@ -50,6 +52,11 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
   });
   const [content, setContent] = useState({ loading: true, error: "", data: null });
   const [reports, setReports] = useState({ loading: false, error: "", items: [] });
+  const [decisionState, setDecisionState] = useState({
+    issueId: "",
+    loading: false,
+    error: "",
+  });
   const [generationOpen, setGenerationOpen] = useState(false);
   const [generationState, setGenerationState] = useState({
     loading: false,
@@ -207,19 +214,12 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
       if (reportGenerationRef.current !== generation) return;
       const reportItems = asItems(items);
       setReports({ loading: false, error: "", items: reportItems });
-      const selected = reportItems.find((item) => item.id === route.reportId);
-      const latestPublished = reportItems.find(isPublishedReport);
-      const nextReportId =
-        selected?.id || latestPublished?.id || reportItems[0]?.id || "";
-      if (nextReportId !== route.reportId) {
-        updateRoute({ reportId: nextReportId }, { replace: true });
-      }
     } catch (error) {
       if (reportGenerationRef.current === generation && error.name !== "AbortError") {
         setReports((current) => ({ ...current, loading: false, error: error.message }));
       }
     }
-  }, [route.dashboardId, route.reportId, route.tab, route.versionId, updateRoute]);
+  }, [route.dashboardId, route.tab, route.versionId]);
 
   useEffect(() => {
     loadReports();
@@ -239,6 +239,30 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
     latestPublishedReport ||
     generationAttempts[0] ||
     null;
+
+  useEffect(() => {
+    if (route.tab !== "report" || reports.loading || reports.error || !selectedReport) {
+      return;
+    }
+    const issues =
+      selectedReport.prompt_version === "ai-return-insight-v6" &&
+      selectedReport.status === "completed"
+        ? (selectedReport.content?.issues ?? [])
+        : [];
+    const issueId =
+      issues.find((issue) => issue.id === route.issueId)?.id || issues[0]?.id || "";
+    if (selectedReport.id === route.reportId && issueId === route.issueId) return;
+    // 一次补全报告与问题，避免两个更新互相覆盖并反复加载正文。
+    updateRoute({ reportId: selectedReport.id, issueId }, { replace: true });
+  }, [
+    reports.error,
+    reports.loading,
+    route.issueId,
+    route.reportId,
+    route.tab,
+    selectedReport,
+    updateRoute,
+  ]);
   const activeReportId = generationAttempts.find((report) =>
     ["queued", "running"].includes(report.status),
   )?.id;
@@ -348,7 +372,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
         items: [report, ...current.items],
       }));
       setGenerationOpen(false);
-      updateRoute({ reportId: report.id }, { replace: true });
+      updateRoute({ reportId: report.id, issueId: "" }, { replace: true });
       notify?.("AI 洞察报告已加入生成队列");
     } catch (error) {
       setGenerationState((current) => ({
@@ -366,10 +390,35 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
         ...current,
         items: [report, ...current.items],
       }));
-      updateRoute({ reportId: report.id }, { replace: true });
+      updateRoute({ reportId: report.id, issueId: "" }, { replace: true });
       notify?.("新的生成尝试已加入队列，原失败记录已保留");
     } catch (error) {
       setReports((current) => ({ ...current, error: error.message }));
+    }
+  };
+  const setIssueDecision = async (issueId, status) => {
+    if (!selectedReport) return;
+    setDecisionState({ issueId, loading: true, error: "" });
+    try {
+      const decision = await dashboardApi.setInsightReportIssueDecision(
+        selectedReport.id,
+        issueId,
+        status,
+      );
+      setReports((current) => ({
+        ...current,
+        items: current.items.map((item) => {
+          if (item.id !== selectedReport.id) return item;
+          const decisions = (item.decisions ?? []).filter(
+            (value) => value.issue_id !== issueId,
+          );
+          return { ...item, decisions: [decision, ...decisions] };
+        }),
+      }));
+      setDecisionState({ issueId: "", loading: false, error: "" });
+      notify?.("问题状态已更新");
+    } catch (error) {
+      setDecisionState({ issueId, loading: false, error: error.message });
     }
   };
   const reportSummary =
@@ -449,6 +498,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
                 updateRoute({
                   versionId: event.target.value,
                   reportId: "",
+                  issueId: "",
                   tab: "overview",
                   recordPage: 1,
                   problem: "",
@@ -573,7 +623,13 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
           version={selectedVersion}
           onGenerate={openReportGeneration}
           onRetry={retryReport}
-          onSelect={(reportId) => updateRoute({ reportId }, { replace: true })}
+          selectedIssueId={route.issueId}
+          decisionState={decisionState}
+          onDecision={setIssueDecision}
+          onSelectIssue={(issueId) => updateRoute({ issueId }, { replace: true })}
+          onSelect={(reportId) =>
+            updateRoute({ reportId, issueId: "" }, { replace: true })
+          }
         />
       )}
       {!content.error && route.tab === "source" && content.data && (
@@ -707,12 +763,6 @@ function DashboardHistory({ versions, currentVersionId, onSelect }) {
 
 function DashboardEvidenceDrawer({ record, onClose, returnFocusRef }) {
   const classification = record.classification ?? {};
-  const semanticUnits = classification.semantic_units ?? [];
-  const units = semanticUnits.length
-    ? semanticUnits
-    : (record.evidence ?? []).map((evidence) =>
-        typeof evidence === "string" ? { evidence } : evidence,
-      );
   const drawerRef = useRef(null);
   const closeButtonRef = useRef(null);
 
@@ -793,28 +843,18 @@ function DashboardEvidenceDrawer({ record, onClose, returnFocusRef }) {
           <blockquote>{record.comment || "未提供退货评论"}</blockquote>
         </section>
         <section className="drawer-section">
-          <b>分类结论</b>
+          <b>业务标签</b>
           <DrawerField
             label="主要问题"
-            value={classification.primary_label_codes?.join("、")}
+            value={resultLabelText(record, classification.primary_label_codes)}
           />
           <DrawerField
             label="问题标签"
-            value={classification.problem_label_codes?.join("、")}
+            value={resultLabelText(record, classification.problem_label_codes)}
           />
         </section>
         <section className="drawer-section">
-          <b>原文证据</b>
-          {units.length === 0 && <p className="drawer-empty">没有提取到有效证据。</p>}
-          {units.map((unit, index) => (
-            <div className="evidence-unit" key={`${unit.label_code}-${index}`}>
-              <span>{unit.label_code || "未标注"}</span>
-              <blockquote>“{unit.evidence || "未提供证据"}”</blockquote>
-              <small>
-                部位：{unit.part || "未提供"} · 观点：{unit.opinion || "未提供"}
-              </small>
-            </div>
-          ))}
+          <SemanticResultPanel record={record} />
         </section>
         <section className="drawer-section drawer-lineage">
           <b>运行来源</b>

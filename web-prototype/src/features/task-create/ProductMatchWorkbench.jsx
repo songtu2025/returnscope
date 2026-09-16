@@ -7,7 +7,7 @@ function buildProductMatchGroups(items) {
   items.forEach((item) => {
     const listing =
       item.suggested_listing || item.match_candidate?.listing || "待补充 Listing";
-    const key = `${item.store}\u001f${listing}`;
+    const key = productMatchGroupKey(item);
     if (!byListing.has(key)) {
       byListing.set(key, {
         key,
@@ -67,6 +67,12 @@ function productMatchKey(item) {
   return `${item.store}\u001f${item.msku}`;
 }
 
+function productMatchGroupKey(item) {
+  const listing =
+    item.suggested_listing || item.match_candidate?.listing || "待补充 Listing";
+  return `${item.store}\u001f${listing}`;
+}
+
 function initialProductMatch(item) {
   const candidate = item.match_candidate ?? {};
   return {
@@ -94,10 +100,13 @@ export function ProductMatchWorkbench({ plan, saving, onBack, onSave }) {
   }));
   const groups = buildProductMatchGroups(matchedItems);
   const [filter, setFilter] = useState("all");
-  const [selected, setSelected] = useState(() => new Set());
+  const [selectedGroupKeys, setSelectedGroupKeys] = useState(() => new Set());
+  const [selectedProductKeys, setSelectedProductKeys] = useState(() => new Set());
   const [confirmed, setConfirmed] = useState(() => new Set());
   const [expanded, setExpanded] = useState(groups[0]?.key ?? "");
   const [showAll, setShowAll] = useState(() => new Set());
+  const [bulkCategoryA, setBulkCategoryA] = useState("");
+  const [bulkCategoryB, setBulkCategoryB] = useState("");
   const categoryAs = Array.from(
     new Set((plan.category_options ?? []).map((item) => item.category_a)),
   ).sort();
@@ -114,16 +123,17 @@ export function ProductMatchWorkbench({ plan, saving, onBack, onSave }) {
   const confirmedComments = groups
     .filter((group) => confirmed.has(group.key))
     .reduce((total, group) => total + group.commentCount, 0);
-  const selectedGroups = groups.filter((group) => selected.has(group.key));
+  const selectedGroups = groups.filter((group) => selectedGroupKeys.has(group.key));
   const selectedComments = selectedGroups.reduce(
     (total, group) => total + group.commentCount,
     0,
   );
+  const selectedProductCount = selectedProductKeys.size;
   const allConfirmed =
     readyGroups.length === groups.length && confirmed.size === groups.length;
 
   const toggleSelected = (groupKey) => {
-    setSelected((current) => {
+    setSelectedGroupKeys((current) => {
       const next = new Set(current);
       if (next.has(groupKey)) next.delete(groupKey);
       else next.add(groupKey);
@@ -150,14 +160,56 @@ export function ProductMatchWorkbench({ plan, saving, onBack, onSave }) {
       ...current,
       [itemKey]: { ...current[itemKey], ...changes },
     }));
-    const groupKey = `${item.store}\u001f${
-      item.suggested_listing || item.match_candidate?.listing || "待补充 Listing"
-    }`;
+    const groupKey = productMatchGroupKey(item);
     setConfirmed((current) => {
       const next = new Set(current);
       next.delete(groupKey);
       return next;
     });
+  };
+  const toggleProductSelected = (itemKey) => {
+    setSelectedProductKeys((current) => {
+      const next = new Set(current);
+      if (next.has(itemKey)) next.delete(itemKey);
+      else next.add(itemKey);
+      return next;
+    });
+  };
+  const toggleGroupProducts = (group) => {
+    const itemKeys = group.items.map(productMatchKey);
+    const allSelected = itemKeys.every((itemKey) => selectedProductKeys.has(itemKey));
+    setSelectedProductKeys((current) => {
+      const next = new Set(current);
+      itemKeys.forEach((itemKey) =>
+        allSelected ? next.delete(itemKey) : next.add(itemKey),
+      );
+      return next;
+    });
+  };
+  const applyBulkCategories = () => {
+    if (!selectedProductCount || !bulkCategoryA || !bulkCategoryB) return;
+    const selectedItems = sourceItems.filter((item) =>
+      selectedProductKeys.has(productMatchKey(item)),
+    );
+    setDrafts((current) => {
+      const next = { ...current };
+      selectedItems.forEach((item) => {
+        const itemKey = productMatchKey(item);
+        next[itemKey] = {
+          ...next[itemKey],
+          category_a: bulkCategoryA,
+          category_b: bulkCategoryB,
+        };
+      });
+      return next;
+    });
+    const affectedGroups = new Set(selectedItems.map(productMatchGroupKey));
+    setConfirmed((current) => {
+      const next = new Set(current);
+      affectedGroups.forEach((groupKey) => next.delete(groupKey));
+      return next;
+    });
+    setSelectedProductKeys(new Set());
   };
   const save = () => {
     const items = groups.flatMap((group) =>
@@ -265,6 +317,70 @@ export function ProductMatchWorkbench({ plan, saving, onBack, onSave }) {
             ))}
           </div>
 
+          <section className="product-match-bulk-toolbar" aria-label="批量修改商品品类">
+            <div className="product-match-bulk-summary">
+              <b>批量修改商品品类</b>
+              <span>
+                已选择 {selectedProductCount} 个销售 SKU；应用后需重新确认对应 Listing。
+              </span>
+            </div>
+            <label>
+              品类A
+              <select
+                aria-label="批量品类A"
+                disabled={!selectedProductCount}
+                value={bulkCategoryA}
+                onChange={(event) => {
+                  const categoryA = event.target.value;
+                  const allowedBs = categoryBs(categoryA);
+                  setBulkCategoryA(categoryA);
+                  setBulkCategoryB((current) =>
+                    allowedBs.includes(current) ? current : "",
+                  );
+                }}
+              >
+                <option value="">请选择</option>
+                {categoryAs.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              品类B
+              <select
+                aria-label="批量品类B"
+                disabled={!selectedProductCount || !bulkCategoryA}
+                value={bulkCategoryB}
+                onChange={(event) => setBulkCategoryB(event.target.value)}
+              >
+                <option value="">请选择</option>
+                {categoryBs(bulkCategoryA).map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="primary-button"
+              disabled={!selectedProductCount || !bulkCategoryA || !bulkCategoryB}
+              onClick={applyBulkCategories}
+            >
+              应用到 {selectedProductCount} 个商品
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={!selectedProductCount}
+              onClick={() => setSelectedProductKeys(new Set())}
+            >
+              清空选择
+            </button>
+          </section>
+
           <div className="product-match-table">
             <div className="product-match-table-head">
               <span />
@@ -289,7 +405,7 @@ export function ProductMatchWorkbench({ plan, saving, onBack, onSave }) {
                   <div className="product-match-row">
                     <input
                       type="checkbox"
-                      checked={selected.has(group.key)}
+                      checked={selectedGroupKeys.has(group.key)}
                       onChange={() => toggleSelected(group.key)}
                       aria-label={`选择 ${group.store} ${group.listing} 组`}
                     />
@@ -340,8 +456,20 @@ export function ProductMatchWorkbench({ plan, saving, onBack, onSave }) {
                   {isExpanded && (
                     <div className="product-match-examples">
                       <div className="product-match-examples-heading">
-                        <b>补充商品信息</b>
-                        <span>可修改 Listing，并从系统品类规则中选择品类。</span>
+                        <div>
+                          <b>补充商品信息</b>
+                          <span>可修改 Listing，并从系统品类规则中选择品类。</span>
+                        </div>
+                        <label className="product-match-select-group-products">
+                          <input
+                            type="checkbox"
+                            checked={group.items.every((item) =>
+                              selectedProductKeys.has(productMatchKey(item)),
+                            )}
+                            onChange={() => toggleGroupProducts(group)}
+                          />
+                          选择本组全部 {group.items.length} 个商品
+                        </label>
                       </div>
                       <div className="product-match-editor-list">
                         {(showAll.has(group.key)
@@ -354,6 +482,14 @@ export function ProductMatchWorkbench({ plan, saving, onBack, onSave }) {
                               className="product-match-editor-row"
                               key={item.product_key}
                             >
+                              <input
+                                type="checkbox"
+                                checked={selectedProductKeys.has(productMatchKey(item))}
+                                onChange={() =>
+                                  toggleProductSelected(productMatchKey(item))
+                                }
+                                aria-label={`选择商品 ${item.store} ${item.msku}`}
+                              />
                               <div className="product-match-editor-product">
                                 <span>{item.store}</span>
                                 <code>{displayProductText(item.msku)}</code>
@@ -450,10 +586,10 @@ export function ProductMatchWorkbench({ plan, saving, onBack, onSave }) {
         <div>
           <input
             type="checkbox"
-            checked={groups.length > 0 && selected.size === groups.length}
+            checked={groups.length > 0 && selectedGroupKeys.size === groups.length}
             onChange={() =>
-              setSelected(
-                selected.size === groups.length
+              setSelectedGroupKeys(
+                selectedGroupKeys.size === groups.length
                   ? new Set()
                   : new Set(groups.map((group) => group.key)),
               )
@@ -461,7 +597,7 @@ export function ProductMatchWorkbench({ plan, saving, onBack, onSave }) {
             aria-label="选择全部 Listing 组"
           />
           <span>
-            已选择 <b>{selected.size}</b> 组 · 覆盖{" "}
+            已选择 <b>{selectedGroupKeys.size}</b> 组 · 覆盖{" "}
             <b>{selectedComments.toLocaleString()}</b> 条评论
           </span>
         </div>
@@ -472,7 +608,7 @@ export function ProductMatchWorkbench({ plan, saving, onBack, onSave }) {
           <button
             type="button"
             className="secondary-button match-confirm-selected"
-            disabled={selected.size === 0}
+            disabled={selectedGroupKeys.size === 0}
             onClick={confirmSelected}
           >
             确认所选关联

@@ -37,11 +37,12 @@ def _settings(data_dir: Path, encryption_key: str = "") -> Settings:
 
 def _seed_source(tmp_path: Path) -> tuple[Path, str]:
     source = tmp_path / "source"
-    for directory_name in ("uploads", "results", "cache"):
+    for directory_name in ("uploads", "imports", "results", "cache"):
         (source / directory_name).mkdir(parents=True)
     files = {
         "uploads/returns.csv": "return-data",
         "uploads/products.xlsx": "product-data",
+        "imports/return-import.csv": "raw-return-data",
         "results/task.xlsx": "task-result",
         "results/task.json": "{}",
         "results/segment.xlsx": "segment-result",
@@ -104,6 +105,19 @@ def _seed_source(tmp_path: Path) -> tuple[Path, str]:
                     now,
                 ),
             )
+        connection.execute(
+            """
+            INSERT INTO dataset_imports(
+                id, dataset_id, resulting_version_id, mode, raw_file_path,
+                original_name, content_type, size_bytes, raw_sha256,
+                row_count, column_count, schema_json, quality_json,
+                imported_row_count, skipped_row_count, created_by, created_at
+            ) VALUES ('import-1', 'returns-dataset', 'returns-version', 'create',
+                      ?, 'return-import.csv', 'text/csv', 1, 'raw-sha',
+                      1, 1, '[]', '{}', 1, 0, 'user-1', ?)
+            """,
+            (f"{OLD_RUNTIME_ROOT}/imports/return-import.csv", now),
+        )
         connection.execute(
             """
             INSERT INTO api_connections(
@@ -174,13 +188,17 @@ def test_migrates_to_empty_target_rebases_paths_and_preserves_cache(
     )
 
     assert result.encrypted_config_count == 1
-    assert result.rebased_path_count == 6
+    assert result.rebased_path_count == 7
     assert result.backup_path.is_file()
     assert (target / "cache/config-1.jsonl").read_text(encoding="utf-8") == (
         "cache-entry\n"
     )
+    assert (target / "imports/return-import.csv").read_text(encoding="utf-8") == (
+        "raw-return-data"
+    )
     with zipfile.ZipFile(result.backup_path) as archive:
         assert "cache/config-1.jsonl" in archive.namelist()
+        assert "imports/return-import.csv" in archive.namelist()
     with sqlite3.connect(target / "app.db") as connection:
         paths = [
             row[0]
@@ -188,6 +206,9 @@ def test_migrates_to_empty_target_rebases_paths_and_preserves_cache(
                 "SELECT file_path FROM dataset_versions ORDER BY id"
             ).fetchall()
         ]
+        raw_import_path = connection.execute(
+            "SELECT raw_file_path FROM dataset_imports WHERE id = 'import-1'"
+        ).fetchone()[0]
         target_ciphertext = connection.execute(
             "SELECT api_key_ciphertext FROM api_config_versions"
         ).fetchone()[0]
@@ -196,6 +217,8 @@ def test_migrates_to_empty_target_rebases_paths_and_preserves_cache(
         ]
     assert all(Path(path).is_relative_to(target) for path in paths)
     assert all(Path(path).is_file() for path in paths)
+    assert Path(raw_import_path).is_relative_to(target)
+    assert Path(raw_import_path).is_file()
     assert target_ciphertext == ciphertext
     assert session_count == 0
     with sqlite3.connect(source / "app.db") as connection:
@@ -207,6 +230,27 @@ def test_migrates_to_empty_target_rebases_paths_and_preserves_cache(
             .fetchone()[0]
             .startswith(OLD_RUNTIME_ROOT)
         )
+
+
+def test_migrates_legacy_source_without_imports_directory(tmp_path: Path) -> None:
+    source, _ = _seed_source(tmp_path)
+    with sqlite3.connect(source / "app.db") as connection:
+        connection.execute("DELETE FROM dataset_imports")
+        connection.commit()
+    (source / "imports" / "return-import.csv").unlink()
+    (source / "imports").rmdir()
+    target = tmp_path / "production"
+
+    result = migrate_production_data(
+        source_root=source,
+        target_root=target,
+        backup_dir=tmp_path / "backups",
+        app_stopped=True,
+    )
+
+    assert result.rebased_path_count == 6
+    assert (target / "imports").is_dir()
+    assert not list((target / "imports").iterdir())
 
 
 def test_key_rotation_runs_on_imported_target_before_start(

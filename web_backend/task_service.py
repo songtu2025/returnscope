@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
@@ -26,6 +27,19 @@ class TaskPlanConflict(ValueError):
 
 class TaskResultPublishConflict(ValueError):
     pass
+
+
+@dataclass(frozen=True)
+class _ReplanSegmentSyncContext:
+    prepared: Any
+    old_segments: list[Any]
+    preserved: dict[str, Any]
+    planned_segments: dict[str, Any]
+    planned_keys: dict[str, list[str]]
+    record_counts: Any
+    current_hash: str
+    unresolved_policy: str
+    now: str
 
 
 class TaskService:
@@ -90,29 +104,13 @@ class TaskService:
         unresolved_policy: str,
         reason: str,
     ) -> dict[str, Any]:
-        clean_reason = reason.strip()
-        if not clean_reason:
-            raise ValueError("请填写重新规划原因")
-        if unresolved_policy not in {"block_all", "run_ready"}:
-            raise ValueError("未解决品类策略仅支持 block_all 或 run_ready")
-        source = self.get(task_id)
-        if source is None:
-            raise ValueError("任务不存在")
-        source_scope = source.get("snapshot", {}).get("scope", {})
-        model_policy = self._snapshot_model_policy(source)
-        prepared = self.plan_service.prepare(
-            dataset_version_id=str(source["dataset_version_id"]),
+        clean_reason, model_policy, prepared, current_hash = self._prepare_replan(
+            task_id=task_id,
             product_version_id=product_version_id,
-            store=(
-                None if source_scope.get("mode") == "auto" else str(source["store"])
-            ),
-            listing=(None if source_scope.get("mode") == "auto" else source["listing"]),
-            config_version_id=str(source["config_version_id"]),
-            model_policy=model_policy,
+            plan_hash=plan_hash,
+            unresolved_policy=unresolved_policy,
+            reason=reason,
         )
-        current_hash = str(prepared.response["plan_hash"])
-        if current_hash != plan_hash:
-            raise TaskPlanConflict("执行计划已变化，请重新预检后再提交")
         planned_segments = {
             str(segment["segment_key"]): segment
             for segment in prepared.response["segments"]
@@ -123,101 +121,31 @@ class TaskService:
         record_counts = prepared.dataset.records["classification_key"].value_counts()
         now = utc_now()
         with self.database.transaction(immediate=True) as connection:
-            row = connection.execute(
-                """
-                SELECT revision, status, snapshot_json, product_version_id
-                FROM tasks WHERE id = ?
-                """,
-                (task_id,),
-            ).fetchone()
-            if row is None:
-                raise ValueError("任务不存在")
-            if int(row["revision"]) != expected_revision:
-                raise TaskRevisionConflict("任务已被他人修改，请刷新后重试")
-            if row["status"] not in {"blocked", "partial"}:
-                raise ValueError("仅阻断或部分完成的任务可以重新规划")
+            row = self._replan_task_row(connection, task_id, expected_revision)
             old_segments = connection.execute(
                 "SELECT * FROM task_segments WHERE task_id = ?",
                 (task_id,),
             ).fetchall()
-            preserved: dict[str, Any] = {}
-            protected_statuses = {
-                "completed",
-                "completed_with_errors",
-            }
-            for old_segment in old_segments:
-                agent_key = str(old_segment["agent_key"])
-                segment_key = str(old_segment["segment_key"])
-                if (
-                    agent_key == "unknown"
-                    or old_segment["status"] not in protected_statuses
-                    or segment_key not in planned_segments
-                ):
-                    continue
-                keys = set(json_value(old_segment["classification_keys_json"], []))
-                new_keys = set(planned_keys.get(segment_key, []))
-                if old_segment["status"] in {
-                    "completed",
-                    "completed_with_errors",
-                } and (not keys or not keys.issubset(new_keys)):
-                    raise TaskPlanConflict(
-                        f"已完成片段 {segment_key} 的数据范围发生变化，不能覆盖原结果"
-                    )
-                preserved[str(old_segment["segment_key"])] = old_segment
-
-            for old_segment in old_segments:
-                if str(old_segment["segment_key"]) not in preserved:
-                    connection.execute(
-                        "DELETE FROM task_segments WHERE id = ?",
-                        (old_segment["id"],),
-                    )
-
-            preserved_keys_by_segment: dict[str, set[str]] = {}
-            for old_segment in preserved.values():
-                preserved_keys_by_segment.setdefault(
-                    str(old_segment["segment_key"]), set()
-                ).update(json_value(old_segment["classification_keys_json"], []))
-
-            has_blocked = int(prepared.response["blocked_count"]) > 0
-            next_execution_order = max(
-                (int(value["execution_order"]) for value in preserved.values()),
-                default=0,
+            preserved = self._preserved_replan_segments(
+                old_segments,
+                planned_segments,
+                planned_keys,
             )
-            for planned_segment_key, segment in planned_segments.items():
-                remaining_keys = [
-                    key
-                    for key in planned_keys.get(planned_segment_key, [])
-                    if key
-                    not in preserved_keys_by_segment.get(planned_segment_key, set())
-                ]
-                if not remaining_keys:
-                    continue
-                segment_key = planned_segment_key
-                if any(
-                    str(value["segment_key"]) == planned_segment_key
-                    for value in preserved.values()
-                ):
-                    segment_key = f"{planned_segment_key}:{current_hash[:12]}"
-                next_execution_order += 1
-                self._insert_segment(
-                    connection,
-                    task_id=task_id,
-                    segment=segment,
-                    segment_key=segment_key,
-                    classification_keys=remaining_keys,
-                    record_count=int(
-                        sum(record_counts.get(key, 0) for key in remaining_keys)
-                    ),
-                    unique_comments=len(remaining_keys),
-                    variants=self._variants_for_keys(
-                        prepared.dataset,
-                        remaining_keys,
-                    ),
-                    execution_order=next_execution_order,
+            self._sync_replan_segments(
+                connection,
+                task_id,
+                _ReplanSegmentSyncContext(
+                    prepared=prepared,
+                    old_segments=old_segments,
+                    preserved=preserved,
+                    planned_segments=planned_segments,
+                    planned_keys=planned_keys,
+                    record_counts=record_counts,
+                    current_hash=current_hash,
                     unresolved_policy=unresolved_policy,
-                    has_blocked=has_blocked,
-                    created_at=now,
-                )
+                    now=now,
+                ),
+            )
 
             statuses = [
                 str(value["status"])
@@ -316,6 +244,138 @@ class TaskService:
                 now,
             )
         return self.get(task_id) or {}
+
+    def _prepare_replan(
+        self,
+        *,
+        task_id: str,
+        product_version_id: str,
+        plan_hash: str,
+        unresolved_policy: str,
+        reason: str,
+    ) -> tuple[str, dict[str, Any] | None, Any, str]:
+        clean_reason = reason.strip()
+        if not clean_reason:
+            raise ValueError("请填写重新规划原因")
+        if unresolved_policy not in {"block_all", "run_ready"}:
+            raise ValueError("未解决品类策略仅支持 block_all 或 run_ready")
+        source = self.get(task_id)
+        if source is None:
+            raise ValueError("任务不存在")
+        source_scope = source.get("snapshot", {}).get("scope", {})
+        model_policy = self._snapshot_model_policy(source)
+        prepared = self.plan_service.prepare(
+            dataset_version_id=str(source["dataset_version_id"]),
+            product_version_id=product_version_id,
+            store=(
+                None if source_scope.get("mode") == "auto" else str(source["store"])
+            ),
+            listing=(None if source_scope.get("mode") == "auto" else source["listing"]),
+            config_version_id=str(source["config_version_id"]),
+            model_policy=model_policy,
+        )
+        current_hash = str(prepared.response["plan_hash"])
+        if current_hash != plan_hash:
+            raise TaskPlanConflict("执行计划已变化，请重新预检后再提交")
+        return clean_reason, model_policy, prepared, current_hash
+
+    def _replan_task_row(
+        self,
+        connection: Any,
+        task_id: str,
+        expected_revision: int,
+    ) -> Any:
+        row = connection.execute(
+            """
+            SELECT revision, status, snapshot_json, product_version_id
+            FROM tasks WHERE id = ?
+            """,
+            (task_id,),
+        ).fetchone()
+        self._validate_task_revision(row, expected_revision)
+        if row["status"] not in {"blocked", "partial"}:
+            raise ValueError("仅阻断或部分完成的任务可以重新规划")
+        return row
+
+    @staticmethod
+    def _preserved_replan_segments(
+        old_segments: list[Any],
+        planned_segments: dict[str, Any],
+        planned_keys: dict[str, list[str]],
+    ) -> dict[str, Any]:
+        preserved: dict[str, Any] = {}
+        protected_statuses = {"completed", "completed_with_errors"}
+        for old_segment in old_segments:
+            agent_key = str(old_segment["agent_key"])
+            segment_key = str(old_segment["segment_key"])
+            if (
+                agent_key == "unknown"
+                or old_segment["status"] not in protected_statuses
+                or segment_key not in planned_segments
+            ):
+                continue
+            keys = set(json_value(old_segment["classification_keys_json"], []))
+            new_keys = set(planned_keys.get(segment_key, []))
+            if not keys or not keys.issubset(new_keys):
+                raise TaskPlanConflict(
+                    f"已完成片段 {segment_key} 的数据范围发生变化，不能覆盖原结果"
+                )
+            preserved[segment_key] = old_segment
+        return preserved
+
+    def _sync_replan_segments(
+        self,
+        connection: Any,
+        task_id: str,
+        context: _ReplanSegmentSyncContext,
+    ) -> None:
+        for old_segment in context.old_segments:
+            if str(old_segment["segment_key"]) not in context.preserved:
+                connection.execute(
+                    "DELETE FROM task_segments WHERE id = ?",
+                    (old_segment["id"],),
+                )
+
+        preserved_keys_by_segment = {
+            segment_key: set(json_value(segment["classification_keys_json"], []))
+            for segment_key, segment in context.preserved.items()
+        }
+        has_blocked = int(context.prepared.response["blocked_count"]) > 0
+        next_execution_order = max(
+            (int(value["execution_order"]) for value in context.preserved.values()),
+            default=0,
+        )
+        for planned_segment_key, segment in context.planned_segments.items():
+            remaining_keys = [
+                key
+                for key in context.planned_keys.get(planned_segment_key, [])
+                if key not in preserved_keys_by_segment.get(planned_segment_key, set())
+            ]
+            if not remaining_keys:
+                continue
+            segment_key = planned_segment_key
+            if planned_segment_key in context.preserved:
+                segment_key = f"{planned_segment_key}:{context.current_hash[:12]}"
+            next_execution_order += 1
+            self._insert_segment(
+                connection,
+                task_id=task_id,
+                segment=segment,
+                segment_key=segment_key,
+                classification_keys=remaining_keys,
+                record_count=int(
+                    sum(context.record_counts.get(key, 0) for key in remaining_keys)
+                ),
+                unique_comments=len(remaining_keys),
+                variants=self._variants_for_keys(
+                    context.prepared.dataset,
+                    remaining_keys,
+                ),
+                execution_order=next_execution_order,
+                unresolved_policy=context.unresolved_policy,
+                has_blocked=has_blocked,
+                created_at=context.now,
+            )
 
     def reorder_segments(
         self,
@@ -533,44 +593,15 @@ class TaskService:
         expected_revision: int,
         reason: str,
     ) -> dict[str, Any]:
-        clean_reason = reason.strip()
-        if not clean_reason:
-            raise ValueError("请填写结果发布重试原因")
-        if self.result_publisher is None:
-            raise TaskResultPublishConflict("结果发布重试服务未配置")
+        clean_reason, publisher = self._validate_result_publish_retry(reason)
         now = utc_now()
         with self.database.transaction(immediate=True) as connection:
-            task = connection.execute(
-                "SELECT revision, stage FROM tasks WHERE id = ?",
-                (task_id,),
-            ).fetchone()
-            if task is None:
-                raise ValueError("任务不存在")
-            if int(task["revision"]) != expected_revision:
-                raise TaskRevisionConflict("任务已被他人修改，请刷新后重试")
-            segment = connection.execute(
-                """
-                SELECT * FROM task_segments
-                WHERE task_id = ? AND id = ?
-                """,
-                (task_id, segment_id),
-            ).fetchone()
-            if segment is None:
-                raise ValueError("Listing 片段不存在")
-            publish_status = str(segment["result_publish_status"] or "")
-            if publish_status == "publishing":
-                raise TaskResultPublishConflict(
-                    "Listing 分类结果正在发布，请勿重复提交"
-                )
-            if publish_status == "published" or segment["result_version_id"]:
-                raise TaskResultPublishConflict("Listing 分类结果已经发布")
-            if publish_status != "failed":
-                raise TaskResultPublishConflict("Listing 分类结果不处于发布失败状态")
-            if segment["status"] not in {"completed", "completed_with_errors"}:
-                raise TaskResultPublishConflict("仅分类已完成的 Listing 可以重试发布")
-            checkpoint_path = str(segment["result_json_path"] or "").strip()
-            if not checkpoint_path or not Path(checkpoint_path).is_file():
-                raise TaskResultPublishConflict("没有可用的分类检查点，不能重试发布")
+            task, segment = self._result_publish_retry_target(
+                connection,
+                task_id,
+                segment_id,
+                expected_revision,
+            )
 
             connection.execute(
                 """
@@ -624,8 +655,55 @@ class TaskService:
                 now,
             )
 
-        self.result_publisher(task_id, segment_id)
+        publisher(task_id, segment_id)
         return self.get(task_id) or {}
+
+    def _validate_result_publish_retry(
+        self,
+        reason: str,
+    ) -> tuple[str, Callable[[str, str], dict[str, Any]]]:
+        clean_reason = reason.strip()
+        if not clean_reason:
+            raise ValueError("请填写结果发布重试原因")
+        publisher = self.result_publisher
+        if publisher is None:
+            raise TaskResultPublishConflict("结果发布重试服务未配置")
+        return clean_reason, publisher
+
+    def _result_publish_retry_target(
+        self,
+        connection: Any,
+        task_id: str,
+        segment_id: str,
+        expected_revision: int,
+    ) -> tuple[Any, Any]:
+        task = connection.execute(
+            "SELECT revision, stage FROM tasks WHERE id = ?",
+            (task_id,),
+        ).fetchone()
+        self._validate_task_revision(task, expected_revision)
+        segment = connection.execute(
+            """
+            SELECT * FROM task_segments
+            WHERE task_id = ? AND id = ?
+            """,
+            (task_id, segment_id),
+        ).fetchone()
+        if segment is None:
+            raise ValueError("Listing 片段不存在")
+        publish_status = str(segment["result_publish_status"] or "")
+        if publish_status == "publishing":
+            raise TaskResultPublishConflict("Listing 分类结果正在发布，请勿重复提交")
+        if publish_status == "published" or segment["result_version_id"]:
+            raise TaskResultPublishConflict("Listing 分类结果已经发布")
+        if publish_status != "failed":
+            raise TaskResultPublishConflict("Listing 分类结果不处于发布失败状态")
+        if segment["status"] not in {"completed", "completed_with_errors"}:
+            raise TaskResultPublishConflict("仅分类已完成的 Listing 可以重试发布")
+        checkpoint_path = str(segment["result_json_path"] or "").strip()
+        if not checkpoint_path or not Path(checkpoint_path).is_file():
+            raise TaskResultPublishConflict("没有可用的分类检查点，不能重试发布")
+        return task, segment
 
     def set_parallelism(
         self,
@@ -701,56 +779,21 @@ class TaskService:
         expected_revision: int,
         note: str = "",
     ) -> dict[str, Any]:
-        if action not in {"pause", "resume", "cancel"}:
-            raise ValueError("不支持的 Listing 操作")
-        clean_note = note.strip()
-        if action == "cancel" and not clean_note:
-            raise ValueError("请填写取消原因")
+        clean_note = self._validate_segment_action(action, note)
         now = utc_now()
         with self.database.transaction(immediate=True) as connection:
-            task = connection.execute(
-                "SELECT revision, stage, pause_requested FROM tasks WHERE id = ?",
-                (task_id,),
-            ).fetchone()
-            if task is None:
-                raise ValueError("任务不存在")
-            if int(task["revision"]) != expected_revision:
-                raise TaskRevisionConflict("任务已被他人修改，请刷新后重试")
-            segment = connection.execute(
-                """
-                SELECT id, status, requested_action, agent_key
-                FROM task_segments
-                WHERE task_id = ? AND segment_key = ?
-                """,
-                (task_id, segment_key),
-            ).fetchone()
-            if segment is None:
-                raise ValueError("Listing 片段不存在")
-            if segment["agent_key"] == "unknown" or segment["status"] == "blocked":
-                raise ValueError("未配置品类不会进入 Listing 执行队列")
+            task, segment = self._segment_action_target(
+                connection,
+                task_id,
+                segment_key,
+                expected_revision,
+            )
 
             before_status = str(segment["status"])
-            requested_action: str | None = None
-            if action == "pause":
-                if before_status in WAITING_SEGMENT_STATUSES:
-                    after_status = "paused"
-                elif before_status == "running":
-                    after_status = "running"
-                    requested_action = "pause"
-                else:
-                    raise ValueError("当前状态不能暂停")
-            elif action == "resume":
-                if before_status != "paused":
-                    raise ValueError("仅已暂停的 Listing 可以继续")
-                after_status = "queued"
-            else:
-                if before_status == "running":
-                    after_status = "running"
-                    requested_action = "cancel"
-                elif before_status in WAITING_SEGMENT_STATUSES | {"paused", "failed"}:
-                    after_status = "cancelled"
-                else:
-                    raise ValueError("当前状态不能取消")
+            after_status, requested_action = self._segment_action_transition(
+                before_status,
+                action,
+            )
 
             connection.execute(
                 """
@@ -845,6 +888,69 @@ class TaskService:
                 now,
             )
         return self.get(task_id) or {}
+
+    @staticmethod
+    def _validate_segment_action(action: str, note: str) -> str:
+        if action not in {"pause", "resume", "cancel"}:
+            raise ValueError("不支持的 Listing 操作")
+        clean_note = note.strip()
+        if action == "cancel" and not clean_note:
+            raise ValueError("请填写取消原因")
+        return clean_note
+
+    def _segment_action_target(
+        self,
+        connection: Any,
+        task_id: str,
+        segment_key: str,
+        expected_revision: int,
+    ) -> tuple[Any, Any]:
+        task = connection.execute(
+            "SELECT revision, stage, pause_requested FROM tasks WHERE id = ?",
+            (task_id,),
+        ).fetchone()
+        self._validate_task_revision(task, expected_revision)
+        segment = connection.execute(
+            """
+            SELECT id, status, requested_action, agent_key
+            FROM task_segments
+            WHERE task_id = ? AND segment_key = ?
+            """,
+            (task_id, segment_key),
+        ).fetchone()
+        if segment is None:
+            raise ValueError("Listing 片段不存在")
+        if segment["agent_key"] == "unknown" or segment["status"] == "blocked":
+            raise ValueError("未配置品类不会进入 Listing 执行队列")
+        return task, segment
+
+    @staticmethod
+    def _validate_task_revision(task: Any, expected_revision: int) -> None:
+        if task is None:
+            raise ValueError("任务不存在")
+        if int(task["revision"]) != expected_revision:
+            raise TaskRevisionConflict("任务已被他人修改，请刷新后重试")
+
+    @staticmethod
+    def _segment_action_transition(
+        before_status: str,
+        action: str,
+    ) -> tuple[str, str | None]:
+        if action == "pause":
+            if before_status in WAITING_SEGMENT_STATUSES:
+                return "paused", None
+            if before_status == "running":
+                return "running", "pause"
+            raise ValueError("当前状态不能暂停")
+        if action == "resume":
+            if before_status != "paused":
+                raise ValueError("仅已暂停的 Listing 可以继续")
+            return "queued", None
+        if before_status == "running":
+            return "running", "cancel"
+        if before_status in WAITING_SEGMENT_STATUSES | {"paused", "failed"}:
+            return "cancelled", None
+        raise ValueError("当前状态不能取消")
 
     def create(
         self,
@@ -943,8 +1049,7 @@ class TaskService:
                 """,
                 (
                     task_id,
-                    title.strip()
-                    or f"{'自动识别' if clean_store == 'AUTO' else clean_store} 退货语义分析",
+                    title.strip() or f"{returns['dataset_name']} · 分析任务",
                     actor_id,
                     dataset_version_id,
                     product_version_id,
@@ -1079,6 +1184,7 @@ class TaskService:
         self,
         status: str | None = None,
         owner_id: str | None = None,
+        include_archived: bool = False,
     ) -> list[dict[str, Any]]:
         query = """
             SELECT t.*, u.display_name AS owner_name,
@@ -1086,6 +1192,13 @@ class TaskService:
                    pd.name AS product_name, pv.version AS product_version,
                    c.name AS connection_name, cv.version AS config_version,
                    cv.primary_model,
+                   COALESCE(t.completed_at, t.heartbeat_at, t.started_at,
+                            t.created_at) AS updated_at,
+                   (SELECT COUNT(*) FROM task_segments segment
+                    WHERE segment.task_id = t.id) AS listing_count,
+                   (SELECT GROUP_CONCAT(segment.scope_json, ' ')
+                    FROM task_segments segment
+                    WHERE segment.task_id = t.id) AS listing_search_text,
                    CASE WHEN t.status = 'queued' THEN (
                        SELECT COUNT(*) + 1 FROM tasks q
                        WHERE q.status = 'queued' AND q.created_at < t.created_at
@@ -1107,10 +1220,29 @@ class TaskService:
         if owner_id:
             query += " AND t.owner_id = ?"
             params.append(owner_id)
+        if not include_archived:
+            query += " AND t.archived_at IS NULL"
         query += " ORDER BY t.created_at DESC"
         with self.database.connect() as connection:
             rows = connection.execute(query, tuple(params)).fetchall()
-        return [self._serialize(dict(row)) for row in rows]
+            items = {row["id"]: self._serialize(dict(row)) for row in rows}
+            for item in items.values():
+                item["segments"] = []
+            # 一次读取列表所需的执行与结果状态，避免逐任务加载完整详情。
+            segments = connection.execute(
+                """
+                SELECT task_id, agent_key, status, result_publish_status,
+                       result_version_id, result_quality_status,
+                       result_file_path, error, model_failures
+                FROM task_segments
+                WHERE task_id IN (SELECT value FROM json_each(?))
+                """,
+                (json_text(list(items)),),
+            ).fetchall()
+            for segment in segments:
+                value = dict(segment)
+                items[value.pop("task_id")]["segments"].append(value)
+        return list(items.values())
 
     def get(self, task_id: str) -> dict[str, Any] | None:
         with self.database.connect() as connection:
@@ -1141,9 +1273,16 @@ class TaskService:
             ).fetchone()
             segment_rows = connection.execute(
                 """
-                SELECT * FROM task_segments
-                WHERE task_id = ?
-                ORDER BY execution_order, segment_key
+                SELECT segment.*, standard.name AS standard_name,
+                       standard.id AS standard_id,
+                       standard_version.version_no AS standard_version
+                FROM task_segments segment
+                LEFT JOIN classification_standard_versions standard_version
+                  ON standard_version.id = segment.standard_version_id
+                LEFT JOIN classification_standards standard
+                  ON standard.id = standard_version.standard_id
+                WHERE segment.task_id = ?
+                ORDER BY segment.execution_order, segment.segment_key
                 """,
                 (task_id,),
             ).fetchall()
@@ -1219,6 +1358,91 @@ class TaskService:
         item["owner_running_segments"] = owner_running
         item["owner_segment_limit"] = SEGMENT_USER_LIMIT
         return item
+
+    def set_archived(
+        self,
+        task_ids: list[str],
+        archived: bool,
+        actor_id: str,
+    ) -> list[dict[str, Any]]:
+        unique_ids = list(dict.fromkeys(task_ids))
+        if not unique_ids:
+            raise ValueError("请选择任务")
+        placeholders = ",".join("?" for _ in unique_ids)
+        now = utc_now()
+        with self.database.transaction(immediate=True) as connection:
+            rows = connection.execute(
+                f"""
+                SELECT id, status, stage, archived_at
+                FROM tasks
+                WHERE id IN ({placeholders})
+                """,
+                tuple(unique_ids),
+            ).fetchall()
+            rows_by_id = {str(row["id"]): row for row in rows}
+            missing = [task_id for task_id in unique_ids if task_id not in rows_by_id]
+            if missing:
+                raise ValueError("部分任务不存在")
+            if archived:
+                invalid = [
+                    task_id
+                    for task_id in unique_ids
+                    if rows_by_id[task_id]["status"] not in FINAL_STATUSES
+                ]
+                if invalid:
+                    raise ValueError("仅已结束任务可以归档")
+
+            action = "archive" if archived else "restore"
+            event_type = "task_archived" if archived else "task_restored"
+            message = "任务已归档" if archived else "任务已恢复"
+            for task_id in unique_ids:
+                row = rows_by_id[task_id]
+                was_archived = bool(row["archived_at"])
+                if was_archived == archived:
+                    continue
+                connection.execute(
+                    """
+                    UPDATE tasks
+                    SET archived_at = ?, archived_by = ?, revision = revision + 1
+                    WHERE id = ?
+                    """,
+                    (
+                        now if archived else None,
+                        actor_id if archived else None,
+                        task_id,
+                    ),
+                )
+                event_data = {
+                    "before": {"archived": was_archived},
+                    "after": {"archived": archived},
+                }
+                connection.execute(
+                    """
+                    INSERT INTO task_events(
+                        task_id, event_type, stage, message, actor_id,
+                        data_json, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        task_id,
+                        event_type,
+                        row["stage"],
+                        message,
+                        actor_id,
+                        json_text(event_data),
+                        now,
+                    ),
+                )
+                self._insert_audit(
+                    connection,
+                    task_id,
+                    action,
+                    actor_id,
+                    event_data["before"],
+                    event_data["after"],
+                    now,
+                )
+        return [self.get(task_id) or {} for task_id in unique_ids]
 
     def events(self, task_id: str, after_id: int = 0) -> list[dict[str, Any]]:
         with self.database.connect() as connection:
@@ -1665,11 +1889,12 @@ class TaskService:
             INSERT INTO task_segments(
                 id, task_id, segment_key, agent_key, agent_family,
                 logic_version, taxonomy_version, model_policy_version,
-                model_policy_json, claims_version, scope_json, status,
+                standard_version_id, model_policy_json, claims_version,
+                scope_json, status,
                 record_count, unique_comments, progress_total,
                 variants_json, classification_keys_json, execution_order,
                 created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 new_id("segment"),
@@ -1680,6 +1905,7 @@ class TaskService:
                 segment["logic_version"],
                 segment["taxonomy_version"],
                 segment["model_policy_version"],
+                segment.get("standard_version_id"),
                 json_text(segment["model_policy"]),
                 segment["claims_version"],
                 json_text(segment.get("scope", {})),

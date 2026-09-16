@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CaretRight, Check, WarningCircle } from "@phosphor-icons/react";
 import { api } from "../../api";
-import { DatasetUploadDialog } from "../../components/DatasetUploadDialog";
 import { InlineLoading, PageHeading } from "../../components/SharedUi";
 import { taskPlanCounts } from "../task-planning/taskPlanPolicy";
-import { classNames } from "../../lib/presentation";
 import { ProductMatchWorkbench } from "./ProductMatchWorkbench";
+import { ReturnImportDialog } from "./ReturnImportDialog";
+import { TaskDataStep } from "./TaskDataStep";
 import { TaskConfigurationStep } from "./TaskConfigurationStep";
 import { TaskPlanReviewStep } from "./TaskPlanReviewStep";
 
@@ -40,11 +40,22 @@ export function NewTaskPage({
   onDraftChange,
   onDraftComplete,
 }) {
-  const [step, setStep] = useState(draft?.step === 3 ? 3 : 1);
+  const [prepared, setPrepared] = useState(Boolean(draft?.resumePreflight));
+  const [mysqlState, setMysqlState] = useState({ ready: false, busy: "", rowCount: 0 });
+  const preflightRequest = useRef(0);
+  const headingRef = useRef(null);
+  const confirmationRef = useRef(null);
+  const focusAfterPreparation = useRef(false);
+
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, []);
   const [versions, setVersions] = useState([]);
   const [configs, setConfigs] = useState([]);
   const [system, setSystem] = useState(null);
   const [loadingSetup, setLoadingSetup] = useState(true);
+  const [setupError, setSetupError] = useState("");
+  const [setupAttempt, setSetupAttempt] = useState(0);
   const [form, setForm] = useState({
     title: "",
     dataset_version_id: "",
@@ -55,6 +66,7 @@ export function NewTaskPage({
     ...draft?.form,
   });
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const [preflight, setPreflight] = useState({
     status: "idle",
     data: null,
@@ -66,9 +78,17 @@ export function NewTaskPage({
   const [segmentOrder, setSegmentOrder] = useState([]);
   const [matchingOpen, setMatchingOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [productScopes, setProductScopes] = useState([]);
+  const [mysqlDraft, setMysqlDraft] = useState(draft?.mysqlDraft);
+  const [dataEntryMode, setDataEntryMode] = useState(
+    draft?.dataEntryMode ?? (draft?.form?.dataset_version_id ? "existing" : "mysql"),
+  );
+  const [selectedDataLabel, setSelectedDataLabel] = useState(
+    draft?.selectedDataLabel ?? "",
+  );
 
   useEffect(() => {
+    setLoadingSetup(true);
+    setSetupError("");
     Promise.all([
       api.dataVersions(),
       api.configs(),
@@ -79,14 +99,12 @@ export function NewTaskPage({
         setVersions(data);
         setConfigs(connections);
         setSystem(status);
-        const returns = data.find((item) => item.kind === "returns");
         const products = data.find((item) => item.kind === "products");
         const activeConfig = connections.find(
           (item) => item.active_version,
         )?.active_version;
         setForm((current) => ({
           ...current,
-          dataset_version_id: current.dataset_version_id || returns?.version_id || "",
           product_version_id: current.product_version_id || products?.version_id || "",
           config_version_id:
             current.config_version_id ||
@@ -108,26 +126,25 @@ export function NewTaskPage({
               : undefined),
         }));
       })
-      .catch((error) => notify(error.message, "error"))
+      .catch((error) => setSetupError(error.message || "暂时无法读取数据与模型配置。"))
       .finally(() => setLoadingSetup(false));
-  }, [notify]);
+  }, [setupAttempt]);
 
   useEffect(() => {
-    if (!form.product_version_id) {
-      setProductScopes([]);
-      return;
-    }
-    api
-      .productScopes(form.product_version_id)
-      .then(setProductScopes)
-      .catch((error) => notify(error.message, "error"));
-  }, [form.product_version_id, notify]);
+    onDraftChange?.({
+      form,
+      step: prepared ? 2 : 1,
+      resumePreflight: prepared,
+      dataEntryMode,
+      selectedDataLabel,
+      mysqlDraft,
+    });
+  }, [dataEntryMode, form, mysqlDraft, onDraftChange, selectedDataLabel, prepared]);
 
-  useEffect(() => {
-    onDraftChange?.({ form, step, resumePreflight: step === 3 });
-  }, [form, onDraftChange, step]);
-
-  const returns = versions.filter((item) => item.kind === "returns");
+  const allReturns = versions
+    .filter((item) => item.kind === "returns")
+    .map(normalizeReturnVersion);
+  const returns = canonicalManagedReturns(allReturns);
   const products = versions.filter((item) => item.kind === "products");
   const publishedConfigs = configs
     .filter((item) => item.active_version)
@@ -143,7 +160,26 @@ export function NewTaskPage({
   );
   const modelPolicy = resolveTaskModelPolicy(configs, form);
 
+  const invalidatePreflight = () => {
+    preflightRequest.current += 1;
+    focusAfterPreparation.current = false;
+    setSubmitError("");
+    setPreflight({ status: "idle", data: null, error: "" });
+    setScopeConfirmed(false);
+    setUnresolvedPolicy("");
+  };
+
+  const updateForm = (next) => {
+    if (next.dataset_version_id !== form.dataset_version_id) {
+      invalidatePreflight();
+      setPrepared(false);
+    }
+    setForm(next);
+  };
+
   const runPreflight = useCallback(async () => {
+    const requestId = ++preflightRequest.current;
+    setSubmitError("");
     setPreflight({ status: "loading", data: null, error: "" });
     setDataQuality(null);
     setUnresolvedPolicy("");
@@ -161,11 +197,13 @@ export function NewTaskPage({
         }),
         api.qualityPreflight(form.dataset_version_id, form.product_version_id),
       ]);
+      if (requestId !== preflightRequest.current) return;
       setDataQuality(quality);
       setPreflight({ status: "ready", data, error: "" });
       setSegmentOrder(data.segments.map((segment) => segment.segment_key));
       setUnresolvedPolicy(data.blocked_count > 0 ? "" : "block_all");
     } catch (error) {
+      if (requestId !== preflightRequest.current) return;
       const message =
         error.status === 405
           ? "当前运行服务未加载任务预检能力，请重启服务后重试（PF-405）。"
@@ -175,32 +213,54 @@ export function NewTaskPage({
   }, [configs, form]);
 
   useEffect(() => {
-    if (step === 3) runPreflight();
-  }, [runPreflight, step]);
+    if (
+      prepared &&
+      !loadingSetup &&
+      form.dataset_version_id &&
+      preflight.status === "idle"
+    ) {
+      const timer = setTimeout(runPreflight, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [form.dataset_version_id, loadingSetup, preflight.status, runPreflight, prepared]);
 
-  const updateModelPolicy = (changes) =>
+  useEffect(
+    () => () => {
+      preflightRequest.current += 1;
+    },
+    [],
+  );
+
+  const updateModelPolicy = (changes) => {
+    invalidatePreflight();
     setForm({ ...form, model_policy: { ...modelPolicy, ...changes } });
+  };
   const selectConnection = (configId) => {
     const next = publishedConfigs.find((item) => item.id === configId);
     if (!next) return;
+    invalidatePreflight();
     setForm((current) => ({
       ...current,
       config_version_id: configId,
       model_policy: {
-        ...current.model_policy,
         connection_id: next.connection_id,
+        cheap_model: next.cheap_model ?? "",
+        cheap_effort: next.cheap_effort ?? "low",
+        primary_model: next.primary_model,
+        primary_effort: next.primary_effort ?? "medium",
+        secondary_model: next.secondary_model ?? "",
+        secondary_effort: next.secondary_effort ?? "high",
         cheap_audit_percent: next.cheap_audit_percent ?? 5,
       },
     }));
   };
-  const selectedReturns = returns.find(
+  const selectedReturns = allReturns.find(
     (item) => item.version_id === form.dataset_version_id,
   );
   const selectedProducts = products.find(
     (item) => item.version_id === form.product_version_id,
   );
-  const ready =
-    returns.length > 0 && products.length > 0 && publishedConfigs.length > 0;
+  const ready = products.length > 0 && publishedConfigs.length > 0;
   const planCounts = taskPlanCounts(preflight.data);
   const blocked = (preflight.data?.blocked_count ?? 0) > 0;
   const categoryCompletionRequired = Boolean(
@@ -217,6 +277,8 @@ export function NewTaskPage({
 
   const submit = async () => {
     if (
+      submitting ||
+      preflight.status !== "ready" ||
       !preflight.data ||
       !unresolvedPolicy ||
       categoryCompletionRequired ||
@@ -227,12 +289,13 @@ export function NewTaskPage({
       return;
     }
     setSubmitting(true);
+    setSubmitError("");
     try {
       await api.createTask({
         ...form,
         store: null,
         listing: null,
-        title: form.title || `${selectedReturns?.dataset_name || "退货明细"} 语义分析`,
+        title: form.title.trim(),
         plan_hash: preflight.data.plan_hash,
         unresolved_policy: unresolvedPolicy,
         segment_order: segmentOrder,
@@ -243,12 +306,15 @@ export function NewTaskPage({
       onNavigate("tasks");
     } catch (error) {
       if (error.status === 409) {
+        setPrepared(true);
         setPreflight({
           status: "error",
           data: null,
           error: "执行计划已变化，请重新预检后再启动任务。",
         });
         setUnresolvedPolicy("");
+      } else {
+        setSubmitError(error.message || "暂时无法创建任务，请重试。");
       }
       notify(error.message, "error");
     } finally {
@@ -268,14 +334,20 @@ export function NewTaskPage({
     const productVersion = products.find(
       (item) => item.version_id === form.product_version_id,
     );
-    onDraftChange?.({ form, step: 3, resumePreflight: true });
+    onDraftChange?.({
+      form,
+      step: 2,
+      resumePreflight: true,
+      dataEntryMode,
+      selectedDataLabel,
+      mysqlDraft,
+    });
     onNavigate("data", {
       kind: "dataset",
       id: productVersion?.dataset_id,
       datasetKind: "products",
       returnToTask: true,
-      taskTitle:
-        form.title || `${selectedReturns?.dataset_name || "退货明细"} 语义分析`,
+      taskTitle: form.title.trim() || "待创建分析任务",
       store: primaryPlanStore(preflight.data),
       unresolvedProducts: preflight.data?.unresolved_products ?? [],
       categoryOptions: preflight.data?.category_options ?? [],
@@ -306,7 +378,7 @@ export function NewTaskPage({
       }
       setVersions(await api.dataVersions());
       setMatchingOpen(false);
-      setPreflight({ status: "idle", data: null, error: "" });
+      invalidatePreflight();
       setForm((current) => ({
         ...current,
         product_version_id: latestVersion.id,
@@ -319,7 +391,47 @@ export function NewTaskPage({
     }
   };
 
-  const creationStage = step === 1 ? 1 : preflight.status === "ready" ? 3 : 2;
+  const finishImport = async (result, source) => {
+    setVersions(await api.dataVersions());
+    invalidatePreflight();
+    setDataEntryMode(source);
+    setSelectedDataLabel(
+      source === "mysql" ? "本次数据库取数快照" : importSelectionLabel(result),
+    );
+    setForm((current) => ({
+      ...current,
+      dataset_version_id: result.version_id,
+      title:
+        current.title ||
+        `${source === "mysql" ? mysqlDraft?.store || "全部店铺" : "退货数据"} · 退货分析`,
+    }));
+    setUploadOpen(false);
+    onChanged();
+    notify(
+      source === "mysql"
+        ? "数据库退货明细已导入并自动选中"
+        : importNotification(result),
+    );
+    focusAfterPreparation.current = true;
+    setPrepared(true);
+  };
+
+  const canContinue =
+    preflight.status === "ready" &&
+    unresolvedPolicy &&
+    !categoryCompletionRequired &&
+    !countMismatch &&
+    !noExecutable &&
+    (!requiresScopeConfirmation || scopeConfirmed);
+
+  useEffect(() => {
+    // 只在用户主动准备成功后引导一次，恢复草稿和修改模型不移动焦点。
+    if (prepared && canContinue && focusAfterPreparation.current && !matchingOpen) {
+      focusAfterPreparation.current = false;
+      confirmationRef.current?.focus();
+    }
+  }, [prepared, canContinue, matchingOpen]);
+
   const submitLabel = categoryCompletionRequired
     ? "请先补齐商品品类"
     : countMismatch
@@ -334,7 +446,79 @@ export function NewTaskPage({
               : "选择处理方式后继续"
           : partialPlan
             ? `启动 ${planCounts.executable.toLocaleString()} 组可执行评论`
-            : "确认计划并启动";
+            : "开始分析";
+
+  let launchStatus = "确认任务名称与模型后，即可开始分析。";
+  if (submitting) launchStatus = "正在创建任务，请稍候…";
+  else if (submitError) launchStatus = "配置已保留，可以重试创建。";
+  else if (preflight.status === "loading" || preflight.status === "idle") {
+    launchStatus = "正在检查数据，不会调用模型…";
+  } else if (preflight.status === "error") {
+    launchStatus = "检查未完成，请在上方重新检查数据。";
+  } else if (categoryCompletionRequired) launchStatus = "请先补齐上方提示的商品品类。";
+  else if (countMismatch) launchStatus = "评论数量校验未通过，请重新检查数据。";
+  else if (noExecutable) launchStatus = "当前范围没有可执行评论，请修改分析数据。";
+  else if (blocked && !unresolvedPolicy)
+    launchStatus = "请在上方选择未解决问题的处理方式。";
+  else if (blocked && unresolvedPolicy === "block_all") {
+    launchStatus = "仅保存任务，处理完数据问题后再开始分析。";
+  } else if (requiresScopeConfirmation && !scopeConfirmed) {
+    launchStatus = "请先确认上方的分析范围与排除项。";
+  } else if ((system?.my_running_tasks ?? 0) >= 3) {
+    launchStatus = "并行名额已满，启动后将进入队列。";
+  }
+
+  const taskActions = (
+    <footer className={prepared ? "task-launch-actions" : "task-step-actions"}>
+      <span role="status" id="task-action-status">
+        {prepared
+          ? launchStatus
+          : dataEntryMode === "mysql"
+            ? mysqlState.busy === "import"
+              ? "正在保存本次数据…"
+              : mysqlState.ready
+                ? `已选 ${mysqlState.rowCount.toLocaleString()} 条退货记录`
+                : "选择店铺和日期，查看本次分析范围"
+            : selectedReturns
+              ? `已选 ${selectedReturns.row_count.toLocaleString()} 条退货记录`
+              : "请选择本次分析数据"}
+      </span>
+      {prepared ? (
+        <button
+          className="primary-button"
+          disabled={submitting || !canContinue}
+          aria-describedby="task-action-status"
+          onClick={submit}
+        >
+          {submitting ? "正在创建…" : submitError ? "重试创建" : submitLabel}
+        </button>
+      ) : dataEntryMode === "mysql" ? (
+        <button
+          type="submit"
+          form="mysql-prepare-form"
+          className="primary-button"
+          disabled={!mysqlState.ready || Boolean(mysqlState.busy)}
+        >
+          {mysqlState.busy === "import" ? "正在准备…" : "准备分析"}
+        </button>
+      ) : (
+        <button
+          className="primary-button"
+          disabled={!selectedReturns || submitting}
+          onClick={() => {
+            focusAfterPreparation.current = true;
+            setForm((current) => ({
+              ...current,
+              title: current.title || `${selectedReturns.dataset_name} · 退货分析`,
+            }));
+            setPrepared(true);
+          }}
+        >
+          准备分析
+        </button>
+      )}
+    </footer>
+  );
 
   if (!loadingSetup && ready && matchingOpen && preflight.data) {
     return (
@@ -350,53 +534,31 @@ export function NewTaskPage({
   return (
     <div className="standard-page new-task-page">
       <PageHeading
-        eyebrow="创建分析任务"
-        title={step === 3 ? "确认执行计划" : "创建退货语义分析任务"}
-        description={
-          step === 3
-            ? "系统已按商品品类拆分任务；确认排除与阻断规则后即可执行。"
-            : "导入或选择退货明细并设置模型策略，系统会自动完成商品匹配并生成执行计划。"
-        }
+        titleRef={headingRef}
+        title="创建分析任务"
+        description="选择退货数据，准备好后开始分析。"
       />
-      <nav className="task-create-progress" aria-label="任务创建步骤">
-        {[
-          ["配置任务", "导入退货明细与设置模型策略"],
-          ["商品匹配与检查", "确认匹配范围与异常处理"],
-          ["确认并启动", "创建后进入运行监控"],
-        ].map(([label, note], index) => {
-          const stage = index + 1;
-          const stepState =
-            stage < creationStage
-              ? "已完成"
-              : stage === creationStage
-                ? "当前步骤"
-                : "未开始";
-          return (
-            <div
-              className={classNames(
-                stage === creationStage && "active",
-                stage < creationStage && "complete",
-              )}
-              key={label}
-              role="group"
-              aria-label={`${label}，${stepState}`}
-              aria-current={stage === creationStage ? "step" : undefined}
-            >
-              <span aria-hidden="true">
-                {stage < creationStage ? <Check size={14} /> : stage}
-              </span>
-              <b>{label}</b>
-              <small>{note}</small>
-            </div>
-          );
-        })}
-      </nav>
       {loadingSetup && (
         <section className="new-task-loading">
           <InlineLoading label="正在读取数据与模型配置…" />
         </section>
       )}
-      {!loadingSetup && !ready && (
+      {!loadingSetup && setupError && (
+        <section className="plan-state error" role="alert">
+          <WarningCircle size={20} />
+          <div>
+            <b>暂时无法读取创建任务所需的信息</b>
+            <p>{setupError}</p>
+          </div>
+          <button
+            className="secondary-button"
+            onClick={() => setSetupAttempt((value) => value + 1)}
+          >
+            重新加载
+          </button>
+        </section>
+      )}
+      {!loadingSetup && !setupError && !ready && (
         <SetupBlock
           onNavigate={onNavigate}
           onUploadReturns={() => setUploadOpen(true)}
@@ -405,90 +567,143 @@ export function NewTaskPage({
           hasConfig={publishedConfigs.length > 0}
         />
       )}
-      {!loadingSetup && ready && step !== 3 && (
-        <TaskConfigurationStep
+      {!loadingSetup && ready && (
+        <TaskDataStep
           form={form}
-          onFormChange={setForm}
+          onFormChange={updateForm}
           returns={returns}
           selectedReturns={selectedReturns}
-          selectedProducts={selectedProducts}
+          dataEntryMode={dataEntryMode}
+          selectedDataLabel={selectedDataLabel}
+          onDataEntryModeChange={(nextMode) => {
+            if (nextMode === dataEntryMode) return;
+            setDataEntryMode(nextMode);
+            setSelectedDataLabel("");
+            updateForm({ ...form, dataset_version_id: "" });
+          }}
+          onSelectedDataLabelChange={setSelectedDataLabel}
           onUploadReturns={() => setUploadOpen(true)}
-          publishedConfigs={publishedConfigs}
-          selectedConfig={selectedConfig}
-          availableModels={availableModels}
-          modelPolicy={modelPolicy}
-          onConnectionChange={selectConnection}
-          onModelPolicyChange={updateModelPolicy}
-          system={system}
-          onGeneratePlan={() => setStep(3)}
-        />
-      )}
-      {!loadingSetup && ready && step === 3 && (
-        <TaskPlanReviewStep
-          preflight={preflight}
-          onRetryPreflight={runPreflight}
-          categoryCompletionRequired={categoryCompletionRequired}
-          blocked={blocked}
-          countMismatch={countMismatch}
-          noExecutable={noExecutable}
-          partialPlan={partialPlan}
-          planCounts={planCounts}
-          dataQuality={dataQuality}
-          unresolvedPolicy={unresolvedPolicy}
-          onPolicyChange={(nextPolicy) => {
-            setUnresolvedPolicy(nextPolicy);
-            setScopeConfirmed(false);
-          }}
-          onResolveCategories={resolveCategories}
-          segmentOrder={segmentOrder}
-          onSegmentOrderChange={setSegmentOrder}
-          form={form}
-          selectedReturns={selectedReturns}
-          modelPolicy={modelPolicy}
-          system={system}
-          requiresScopeConfirmation={requiresScopeConfirmation}
-          scopeConfirmed={scopeConfirmed}
-          onScopeConfirmationChange={setScopeConfirmed}
-          submitting={submitting}
-          submitLabel={submitLabel}
-          onSubmit={submit}
-          onBack={() => setStep(1)}
-        />
-      )}
-      {uploadOpen && (
-        <DatasetUploadDialog
-          dialog={
-            selectedReturns?.dataset_id
-              ? {
-                  mode: "version",
-                  dataset: {
-                    id: selectedReturns.dataset_id,
-                    name: selectedReturns.dataset_name,
-                    kind: "returns",
-                  },
-                }
-              : { mode: "create", kind: "returns" }
+          mysqlDraft={mysqlDraft}
+          onMysqlDraftChange={setMysqlDraft}
+          onMysqlDone={(result) => finishImport(result, "mysql")}
+          onMysqlStateChange={setMysqlState}
+          busy={submitting || mysqlState.busy === "import"}
+          prepared={prepared}
+          scopeLabel={
+            dataEntryMode === "mysql"
+              ? `${mysqlDraft?.store || mysqlDraft?.default_store || "全部店铺"} · ${mysqlDraft?.date_from || "不限开始日期"} — ${mysqlDraft?.date_to || "不限结束日期"}${mysqlDraft?.sku ? ` · 商品：${mysqlDraft.sku}` : ""}`
+              : `${dataEntryMode === "upload" ? "上传文件" : "已有数据"} · ${selectedReturns?.dataset_name || selectedDataLabel}${selectedReturns?.version ? ` · 版本 ${selectedReturns.version}` : ""}`
           }
-          storeOptions={productScopes.map((scope) => scope.store)}
-          onClose={() => setUploadOpen(false)}
-          onDone={async (dataset) => {
-            const data = await api.dataVersions();
-            const uploaded = data.find(
-              (item) => item.kind === "returns" && item.dataset_id === dataset.id,
-            );
-            setVersions(data);
-            setForm((current) => ({
-              ...current,
-              dataset_version_id: uploaded?.version_id ?? current.dataset_version_id,
-            }));
-            setUploadOpen(false);
-            onChanged();
-            notify("新版本已上传并自动选中");
+          onInvalidateMysql={() => {
+            invalidatePreflight();
+            setPrepared(false);
+            setForm((current) => ({ ...current, dataset_version_id: "" }));
           }}
+        >
+          {prepared && (
+            <TaskPlanReviewStep
+              preflight={preflight}
+              onRetryPreflight={runPreflight}
+              categoryCompletionRequired={categoryCompletionRequired}
+              blocked={blocked}
+              countMismatch={countMismatch}
+              noExecutable={noExecutable}
+              partialPlan={partialPlan}
+              planCounts={planCounts}
+              dataQuality={dataQuality}
+              unresolvedPolicy={unresolvedPolicy}
+              onPolicyChange={(nextPolicy) => {
+                setUnresolvedPolicy(nextPolicy);
+                setScopeConfirmed(false);
+              }}
+              onResolveCategories={resolveCategories}
+              segmentOrder={segmentOrder}
+              onSegmentOrderChange={setSegmentOrder}
+              requiresScopeConfirmation={requiresScopeConfirmation}
+              scopeConfirmed={scopeConfirmed}
+              onScopeConfirmationChange={setScopeConfirmed}
+            />
+          )}
+        </TaskDataStep>
+      )}
+      {!loadingSetup && ready && prepared && (
+        <fieldset className="task-settings-lock" disabled={submitting}>
+          <TaskConfigurationStep
+            headingRef={confirmationRef}
+            form={form}
+            onFormChange={updateForm}
+            publishedConfigs={publishedConfigs}
+            selectedConfig={selectedConfig}
+            availableModels={availableModels}
+            modelPolicy={modelPolicy}
+            onConnectionChange={selectConnection}
+            onModelPolicyChange={updateModelPolicy}
+          >
+            {submitError && (
+              <div className="task-launch-error" role="alert">
+                <strong>任务创建失败</strong>
+                <p>{submitError}</p>
+              </div>
+            )}
+            {taskActions}
+          </TaskConfigurationStep>
+        </fieldset>
+      )}
+      {!loadingSetup && ready && !prepared && taskActions}
+      {uploadOpen && (
+        <ReturnImportDialog
+          onClose={() => setUploadOpen(false)}
+          onDone={(result) => finishImport(result, "upload")}
         />
       )}
     </div>
   );
+}
+
+function canonicalManagedReturns(items) {
+  const grouped = new Map();
+  items
+    .filter(
+      (item) =>
+        item.usage_scope !== "task_input" && item.version === item.current_version,
+    )
+    .forEach((item) => {
+      const stores = item.quality?.stores ?? [];
+      const key = item.source_key || stores.slice().sort().join("|") || item.dataset_id;
+      if (!grouped.has(key)) grouped.set(key, item);
+    });
+  return [...grouped.values()];
+}
+
+function normalizeReturnVersion(item) {
+  const stores = item.quality?.stores ?? [];
+  return {
+    ...item,
+    dataset_name: item.source_name || returnSourceName(stores, item.dataset_name),
+  };
+}
+
+function returnSourceName(stores, fallback) {
+  if (!stores.length) return fallback;
+  const labels = stores.map((value) => value.replace(/[:_/\\-]+/g, " ").trim());
+  return `${labels.join("、")} 退货数据`;
+}
+
+function importSelectionLabel(result) {
+  if (result.duplicate) return "已导入批次 · 直接复用";
+  if (result.mode === "append") return "合并后的当前完整数据";
+  if (result.mode === "replace") return "替换后的当前完整数据";
+  if (result.mode === "create") return "新建数据源 · 当前完整数据";
+  return "本次上传数据";
+}
+
+function importNotification(result) {
+  if (result.duplicate) return "文件已导入过，已直接复用现有数据";
+  const imported = Number(result.summary?.imported_row_count ?? 0).toLocaleString();
+  const skipped = Number(result.summary?.skipped_row_count ?? 0).toLocaleString();
+  return result.mode === "append"
+    ? `已追加 ${imported} 行，跳过 ${skipped} 行重复记录`
+    : "退货明细已导入并自动选中";
 }
 
 function primaryPlanStore(plan) {

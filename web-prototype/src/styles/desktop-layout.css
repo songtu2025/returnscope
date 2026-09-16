@@ -1,0 +1,523 @@
+/* 全站桌面端尺寸基线：以 1280 × 720 分类结果页为准 */
+.standard-page {
+  min-width: 0;
+  padding-right: var(--desktop-page-padding);
+  padding-left: var(--desktop-page-padding);
+}
+.page-heading {
+  min-height: 74px;
+  margin-bottom: var(--desktop-section-gap);
+}
+.page-heading h1 {
+  margin-bottom: 6px;
+}
+.content-card {
+  padding: var(--desktop-card-padding);
+}
+.primary-button,
+.secondary-button,
+.danger-button {
+  min-height: var(--desktop-control-height);
+}
+.compact-button {
+  min-height: var(--desktop-compact-height);
+}
+.icon-button {
+  width: var(--desktop-control-height);
+  height: var(--desktop-control-height);
+}
+.standard-page
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
+    [type="file"]
+  ),
+.standard-page select {
+  min-height: var(--desktop-control-height);
+}
+.empty-state {
+  min-height: var(--desktop-empty-height);
+  padding: var(--desktop-detail-padding);
+}
+
+/* 工作台 */
+.workbench-card > header {
+  gap: var(--desktop-section-gap);
+  margin-bottom: var(--desktop-section-gap);
+}
+.workbench-action-list,
+.workbench-output-list {
+  gap: var(--desktop-field-gap);
+  margin-top: var(--desktop-section-gap);
+}
+.workbench-action-list > button,
+.workbench-output-list > button {
+  min-height: 72px;
+  padding: 12px;
+}
+.new-task-page .task-config-choice,
+.new-task-page .task-data-picker,
+.new-task-page .task-data-quality {
+  width: 100%;
+  max-width: none;
+}
+.new-task-page .task-data-picker .task-config-choice,
+.new-task-page .task-config-choice input,
+.new-task-page .task-config-choice select {
+  min-width: 0;
+}
+.task-config-section {
+  padding: var(--desktop-detail-padding);
+}
+.task-data-picker,
+.task-config-choice {
+  margin-bottom: var(--desktop-section-gap);
+}
+.task-data-upload {
+  min-height: var(--desktop-control-height);
+}
+.task-plan-button {
+  min-height: 40px;
+}
+
+/* 数据资产 */
+.data-asset-strip {
+  gap: 10px;
+  min-height: var(--desktop-filter-height);
+  padding: 10px 12px;
+}
+.dataset-selector > button {
+  min-width: 156px;
+  min-height: var(--desktop-control-height);
+  padding: 6px 10px;
+}
+.dataset-selector > button.active {
+  min-width: 280px;
+}
+.dataset-selector > .dataset-selector-add {
+  min-width: 120px;
+}
+.data-page .dataset-detail {
+  margin-top: var(--desktop-section-gap);
+}
+.data-page .dataset-header {
+  gap: var(--desktop-section-gap);
+  padding: var(--desktop-card-padding);
+}
+.dataset-view-tabs {
+  min-height: var(--desktop-table-head-height);
+  padding: 0 var(--desktop-card-padding);
+}
+.dataset-view-tabs button {
+  min-height: var(--desktop-table-head-height);
+}
+.dataset-view {
+  padding: var(--desktop-card-padding);
+}
+.dimension-table-toolbar {
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.data-page .dimension-search,
+.data-page .dimension-search input {
+  height: var(--desktop-control-height);
+}
+.data-page .dimension-table > div {
+  min-height: var(--desktop-record-height);
+}
+.data-page .dimension-table .table-head {
+  min-height: var(--desktop-table-head-height);
+}
+.dimension-pagination button {
+  min-width: var(--desktop-compact-height);
+  height: var(--desktop-compact-height);
+}
+
+/* 分析任务 */
+.task-layout {
+  gap: var(--desktop-section-gap);
+}
+.task-list-panel .segmented.compact {
+  min-height: var(--desktop-control-height);
+  margin: 10px 12px;
+}
+.task-detail-header,
+.task-detail-grid {
+  gap: var(--desktop-section-gap);
+  padding: var(--desktop-detail-padding);
+}
+.progress-hero {
+  margin: var(--desktop-section-gap) var(--desktop-detail-padding) 0;
+  padding: var(--desktop-card-padding) var(--desktop-detail-padding) 22px;
+}
+.stage-strip {
+  padding: var(--desktop-section-gap) var(--desktop-detail-padding);
+}
+.segment-board {
+  margin: var(--desktop-section-gap) var(--desktop-detail-padding) 0;
+  padding: var(--desktop-card-padding);
+}
+.listing-queue-header {
+  gap: var(--desktop-section-gap);
+  margin-bottom: var(--desktop-section-gap);
+}
+.listing-table-head {
+  min-height: var(--desktop-table-head-height);
+  padding: 0 12px;
+}
+.listing-row {
+  min-height: var(--desktop-business-row-height);
+  padding: 10px 12px;
+}
+.listing-order-actions .icon-button {
+  width: var(--desktop-control-height);
+  min-height: var(--desktop-control-height);
+}
+
+/* 分类结果、复核中心与分析看板 */
+.result-pool-filters,
+.review-batch-filters,
+.review-record-filters,
+.dashboard-list-filters {
+  gap: 10px;
+  min-height: var(--desktop-filter-height);
+  margin: 0 0 var(--desktop-section-gap);
+  padding: 10px 12px;
+}
+.result-pool-filters input,
+.result-pool-filters select,
+.record-order-search input,
+.dashboard-list-filters input,
+.dashboard-list-filters select,
+.review-batch-filters input,
+.review-batch-filters select,
+.review-record-filters input,
+.review-record-filters select {
+  height: var(--desktop-control-height);
+}
+.result-pool-head,
+.result-record-head,
+.review-batch-table-head,
+.review-record-table-head,
+.dashboard-list-head {
+  min-height: var(--desktop-table-head-height);
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.result-pool-row,
+.result-record-row,
+.review-batch-row,
+.review-record-row,
+.dashboard-list-row {
+  min-height: var(--desktop-business-row-height);
+}
+.result-pool-row,
+.result-record-row,
+.review-batch-row,
+.review-record-row,
+.dashboard-list-row {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+.result-detail-header,
+.review-batch-workspace-header,
+.dashboard-conflict-page,
+.dashboard-confirm-main,
+.dashboard-confirm-aside {
+  padding: var(--desktop-detail-padding);
+}
+.review-batch-progress,
+.dashboard-create-steps {
+  gap: 10px;
+  margin-bottom: var(--desktop-section-gap);
+}
+.review-batch-list-card .empty-state,
+.review-record-card .empty-state,
+.dashboard-list-card .empty-state,
+.dashboard-create-empty,
+.dashboard-unavailable-state {
+  min-height: var(--desktop-empty-height);
+}
+
+/* 系统设置 */
+@media (min-width: 1024px) and (max-height: 720px) {
+  .page-heading {
+    min-height: 72px;
+    margin-bottom: var(--desktop-section-gap);
+  }
+}
+
+@media (max-width: 720px) {
+  .team-page .member-table {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .team-page .team-security-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .team-page .team-security-actions {
+    flex-wrap: wrap;
+  }
+}
+
+.listing-row.is-targeted,
+.model-catalog-row.is-targeted,
+.member-table > div.is-targeted {
+  position: relative;
+  z-index: 1;
+  background: #eef8f4;
+  box-shadow:
+    inset 4px 0 0 var(--green),
+    inset 0 0 0 1px #80c4ac;
+  scroll-margin-block: 96px;
+}
+.segment-item header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.segment-card-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+}
+.segment-card-actions .icon-button {
+  width: 30px;
+  height: 30px;
+}
+.segment-item header > div {
+  min-width: 0;
+}
+.segment-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+  margin-top: 11px;
+}
+.segment-metrics span {
+  color: var(--muted);
+  font-size: 9px;
+}
+.segment-metrics b {
+  display: block;
+  color: var(--ink);
+  font-size: 12px;
+}
+.segment-progress {
+  height: 5px;
+  margin-top: 10px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #e6ece8;
+}
+.segment-progress span {
+  display: block;
+  height: 100%;
+  background: var(--green);
+}
+.segment-error {
+  margin: 9px 0 0;
+  color: var(--red);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.status-pill.blocked {
+  color: var(--red);
+  background: var(--red-pale);
+}
+.status-pill.partial {
+  color: #8b5415;
+  background: var(--amber-pale);
+}
+.modal:has(.replan-form) {
+  width: min(760px, calc(100vw - 40px));
+}
+.replan-form {
+  max-height: calc(100vh - 150px);
+  overflow-y: auto;
+}
+
+@media (max-width: 1199px) {
+  .app-shell {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+  .sidebar {
+    width: 72px;
+    padding: 22px 8px 18px;
+  }
+  .brand {
+    justify-content: center;
+    padding: 0;
+  }
+  .brand > div,
+  .sidebar-status b,
+  .sidebar-status p,
+  .sidebar-status small {
+    display: none;
+  }
+  .nav-item {
+    position: relative;
+    grid-template-columns: 24px;
+    justify-content: center;
+    padding: 0;
+  }
+  .nav-item > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .nav-item em {
+    position: absolute;
+    top: 3px;
+    right: 2px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    line-height: 18px;
+  }
+  .sidebar-status {
+    display: flex;
+    justify-content: center;
+    padding: 14px 0 5px;
+  }
+  .topbar {
+    padding: 0 16px;
+  }
+  .topbar-search {
+    justify-content: center;
+    width: 40px;
+    padding: 0;
+  }
+  .topbar-search span,
+  .topbar-search kbd,
+  .capacity-chip span,
+  .user-block div {
+    display: none;
+  }
+  .capacity-chip {
+    gap: 0;
+  }
+  .user-block {
+    margin-left: 0;
+    padding: 0;
+  }
+  .system-warning {
+    padding: 0 16px;
+    white-space: nowrap;
+  }
+  .system-warning span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .standard-page {
+    padding: 20px 16px 28px;
+  }
+  .plan-overview,
+  .segment-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .data-layout {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+  .review-layout {
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+  .analysis-context-bar {
+    grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.2fr) auto;
+    gap: 12px;
+  }
+  .analysis-filter-grid,
+  .analysis-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .diagnosis-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .data-page .dataset-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .dataset-summary {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .dataset-summary > span:first-child {
+    border-left: 0;
+    padding-left: 0;
+  }
+  .task-detail-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .detail-actions {
+    justify-content: flex-start;
+  }
+  .task-detail-grid {
+    grid-template-columns: 1fr;
+  }
+  .task-inspector {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1200px) and (max-width: 1439px) {
+  .topbar {
+    padding-inline: 24px;
+  }
+  .system-warning {
+    padding-inline: 24px;
+  }
+  .standard-page {
+    padding: 26px 24px 32px;
+  }
+  .api-layout {
+    grid-template-columns: 190px minmax(0, 1fr);
+  }
+  .api-layout > .connection-list {
+    grid-row: 1 / span 2;
+  }
+  .api-layout > .config-inspector {
+    display: grid;
+    grid-column: 2;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+  .api-layout > .config-inspector .content-card {
+    min-width: 0;
+    margin-bottom: 0;
+  }
+}
+
+@media (min-width: 1920px) {
+  :root {
+    --layout-wide-max: 2200px;
+    --layout-workflow-max: 2040px;
+  }
+}
+
+@media (min-width: 3200px) {
+  :root {
+    --layout-wide-max: 2800px;
+    --layout-workflow-max: 2480px;
+  }
+}
+
+@media (min-width: 1760px) {
+  .task-page,
+  .review-page,
+  .data-page,
+  .product-match-page {
+    width: 100%;
+    max-width: var(--page-max-width);
+    margin-inline: auto;
+  }
+}

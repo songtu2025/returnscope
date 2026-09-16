@@ -12,6 +12,7 @@ from return_semantics.schemas import (
     TaxonomyConfig,
     ValidatedClassification,
 )
+from return_semantics.taxonomy_hierarchy import label_path, label_path_codes
 
 REVIEW_STATUSES = {
     ProcessingStatus.SECONDARY_REVIEW.value,
@@ -25,9 +26,26 @@ def _format_labels(codes: list[str], label_names: dict[str, str]) -> str:
     return " | ".join(f"{code}:{label_names.get(code, '')}" for code in codes)
 
 
+def _path_columns(taxonomy: TaxonomyConfig, code: str) -> dict[str, str]:
+    path = label_path(taxonomy, code)
+    return {
+        "完整路径": " → ".join(path),
+        "标签编码路径": " → ".join(label_path_codes(taxonomy, code)),
+        **{f"第{index}级标签": name for index, name in enumerate(path, 1)},
+    }
+
+
 def _display_key(classification_key: str) -> str:
     return "".join(
         character if ord(character) >= 32 else " " for character in classification_key
+    )
+
+
+def _format_relations(result: ValidatedClassification) -> str:
+    return " | ".join(
+        f"{relation.relation_type.value}:"
+        f"{','.join(relation.fact_ids)}:{relation.reason}"
+        for relation in result.semantic_relations
     )
 
 
@@ -82,8 +100,38 @@ def _build_detail_rows(
                     result.primary_label_codes if result else [],
                     label_names,
                 ),
-                "部位": " | ".join(unit.part.value for unit in units),
+                "完整标签路径": " | ".join(
+                    " → ".join(label_path(taxonomy, unit.label_code)) for unit in units
+                ),
+                "事实编号": " | ".join(
+                    ",".join(unit.fact_ids or ([unit.fact_id] if unit.fact_id else []))
+                    for unit in units
+                ),
+                "使用者引用": " | ".join(unit.actor_ref for unit in units),
+                "观点来源引用": " | ".join(unit.source_ref for unit in units),
+                "实际体验者引用": " | ".join(unit.experiencer_ref for unit in units),
+                "商品引用": " | ".join(unit.product_ref for unit in units),
+                "规格引用": " | ".join(unit.variant_ref for unit in units),
+                "事件引用": " | ".join(unit.event_ref for unit in units),
+                "比较基准": " | ".join(unit.reference_basis.value for unit in units),
+                "陈述类型": " | ".join(unit.statement_type for unit in units),
+                "事实角色": " | ".join(unit.fact_role.value for unit in units),
+                "操作": " | ".join(unit.operation for unit in units),
+                "条件": " | ".join(unit.condition for unit in units),
+                "部位": " | ".join(unit.part for unit in units),
+                "因果归属": " | ".join(unit.causal_attribution.value for unit in units),
+                "因果说明": " | ".join(
+                    unit.causal_attribution_reason for unit in units
+                ),
+                "判定理由": " | ".join(unit.decision_reason for unit in units),
                 "证据原文": " | ".join(unit.evidence for unit in units),
+                "证据来源": " | ".join(unit.evidence_source.value for unit in units),
+                "未映射处置": " | ".join(
+                    item.disposition.value
+                    for item in (result.unknown_semantics if result else [])
+                ),
+                "评论摘要状态": (result.comment_summary.status.value if result else ""),
+                "语义关系": _format_relations(result) if result else "",
                 "Listing承诺关系": " | ".join(
                     unit.claim_relation.value for unit in units
                 ),
@@ -120,16 +168,38 @@ def _build_semantic_rows(
                     "标签编码": unit.label_code,
                     "标签名称": label.name,
                     "一级分类": label.group,
+                    **_path_columns(taxonomy, label.code),
                     "对象": unit.subject.value,
+                    "事实编号": ",".join(
+                        unit.fact_ids or ([unit.fact_id] if unit.fact_id else [])
+                    ),
+                    "使用者引用": unit.actor_ref,
+                    "观点来源引用": unit.source_ref,
+                    "实际体验者引用": unit.experiencer_ref,
+                    "商品引用": unit.product_ref,
+                    "规格引用": unit.variant_ref,
+                    "事件引用": unit.event_ref,
+                    "比较基准": unit.reference_basis.value,
+                    "陈述类型": unit.statement_type,
+                    "事实角色": unit.fact_role.value,
+                    "操作": unit.operation,
                     "观点": unit.opinion,
+                    "中文事实": unit.opinion,
                     "正负面": unit.sentiment.value,
                     "断言状态": unit.assertion.value,
-                    "部位": unit.part.value,
+                    "部位": unit.part,
+                    "条件": unit.condition,
+                    "因果归属": unit.causal_attribution.value,
+                    "因果说明": unit.causal_attribution_reason,
+                    "判定理由": unit.decision_reason,
+                    "上下文事实编号": ",".join(unit.context_fact_ids),
                     "证据原文": unit.evidence,
+                    "证据来源": unit.evidence_source.value,
                     "是否隐含": unit.implicit,
                     "Listing承诺关系": unit.claim_relation.value,
                     "Listing承诺编号": unit.claim_id or "",
                     "处理状态": result.status.value,
+                    "评论摘要状态": result.comment_summary.status.value,
                 }
             )
     return rows
@@ -151,8 +221,53 @@ def _build_unknown_rows(
                     "Amazon原因": source["reason"],
                     "标准化评论": source["comment_normalized"],
                     "标准化观点": unknown.opinion,
+                    "事实编号": unknown.fact_id or "",
+                    "使用者引用": unknown.actor_ref,
+                    "观点来源引用": unknown.source_ref,
+                    "实际体验者引用": unknown.experiencer_ref,
+                    "商品引用": unknown.product_ref,
+                    "规格引用": unknown.variant_ref,
+                    "事件引用": unknown.event_ref,
+                    "比较基准": unknown.reference_basis.value,
+                    "陈述类型": unknown.statement_type,
+                    "事实角色": unknown.fact_role.value,
+                    "操作": unknown.operation,
+                    "条件": unknown.condition,
+                    "因果归属": unknown.causal_attribution.value,
+                    "因果说明": unknown.causal_attribution_reason,
                     "证据原文": unknown.evidence,
+                    "证据来源": unknown.evidence_source.value,
+                    "处置类型": unknown.disposition.value,
                     "未映射原因": unknown.reason,
+                }
+            )
+    return rows
+
+
+def _build_dimension_decision_rows(
+    results: dict[str, ValidatedClassification],
+) -> list[dict[str, object]]:
+    rows = []
+    for classification_key, result in results.items():
+        for index, decision in enumerate(result.dimension_decisions, start=1):
+            rows.append(
+                {
+                    "分类键": _display_key(classification_key),
+                    "裁决序号": index,
+                    "父维度编码": decision.parent_code,
+                    "结论标签编码": decision.verdict_label_code,
+                    "支持事实编号": ",".join(decision.supporting_fact_ids),
+                    "上下文事实编号": ",".join(decision.context_fact_ids),
+                    "观点来源引用": decision.scope.source_ref,
+                    "实际体验者引用": decision.scope.experiencer_ref,
+                    "商品引用": decision.scope.product_ref,
+                    "规格引用": decision.scope.variant_ref,
+                    "事件引用": decision.scope.event_ref,
+                    "比较基准": decision.scope.reference_basis.value,
+                    "部位": decision.scope.part,
+                    "操作": decision.scope.operation,
+                    "条件": decision.scope.condition,
+                    "裁决理由": decision.reason,
                 }
             )
     return rows
@@ -189,6 +304,7 @@ def _build_statistics(
                     "标签编码": code,
                     "标签名称": label.name,
                     "一级分类": label.group,
+                    **_path_columns(taxonomy, label.code),
                     "退货记录数": count,
                 }
             )
@@ -227,6 +343,7 @@ def export_results(
     )
     review.insert(2, "重复记录数", review["分类键"].map(review_counts))
     unknown = pd.DataFrame(_build_unknown_rows(dataset, results))
+    decisions = pd.DataFrame(_build_dimension_decision_rows(results))
     statistics = pd.DataFrame(_build_statistics(dataset, results, taxonomy))
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -235,5 +352,6 @@ def export_results(
         semantics.to_excel(writer, sheet_name="语义单元", index=False)
         review.to_excel(writer, sheet_name="人工复核", index=False)
         unknown.to_excel(writer, sheet_name="未知语义", index=False)
+        decisions.to_excel(writer, sheet_name="维度裁决", index=False)
         statistics.to_excel(writer, sheet_name="标签统计", index=False)
         _style_workbook(writer)

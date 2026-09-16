@@ -8,8 +8,12 @@ from web_backend.api_schemas import (
     UserCreateRequest,
     UserStatusRequest,
 )
+from web_backend.classification_standard_validation_worker import (
+    ClassificationStandardValidationWorker,
+)
 from web_backend.common import add_audit, list_audit, new_id
 from web_backend.database import Database
+from web_backend.insight_report_worker import InsightReportWorker
 from web_backend.security import (
     LoginAttemptLimiter,
     SessionService,
@@ -22,6 +26,25 @@ from web_backend.task_service import TaskService
 from web_backend.worker import TaskWorker
 
 SESSION_COOKIE = "seekway_session"
+
+
+def _worker_health(worker: Any, enabled: bool) -> dict[str, Any]:
+    health = (
+        worker.health if enabled else {"last_error_type": None, "last_error_at": None}
+    )
+    if not enabled:
+        status = "ok"
+    elif not worker.is_alive:
+        status = "unavailable"
+    elif health["last_error_type"]:
+        status = "degraded"
+    else:
+        status = "ok"
+    return {
+        "status": status,
+        "last_error": health["last_error_type"],
+        "last_error_at": health["last_error_at"],
+    }
 
 
 def _email(value: str) -> str:
@@ -40,24 +63,46 @@ def create_account_router(
     dummy_password_hash: str,
     task_service: TaskService,
     worker: TaskWorker,
+    insight_report_worker: InsightReportWorker,
+    standard_validation_worker: ClassificationStandardValidationWorker,
     start_worker: bool,
     current_user: Callable[..., dict[str, Any]],
 ) -> APIRouter:
     router = APIRouter()
     User = Annotated[dict[str, Any], Depends(current_user)]
 
+    def require_admin(user: dict[str, Any]) -> None:
+        if not user.get("is_admin"):
+            raise HTTPException(status_code=403, detail="仅系统管理员可管理团队账号")
+
     @router.get("/api/health")
     def health() -> dict[str, Any]:
         with database.connect() as connection:
             connection.execute("SELECT 1").fetchone()
-        worker_ready = not start_worker or worker.is_alive
+        workers = {
+            "listing": _worker_health(worker, start_worker),
+            "insight_report": _worker_health(insight_report_worker, start_worker),
+            "classification_standard_validation": _worker_health(
+                standard_validation_worker,
+                start_worker,
+            ),
+        }
+        worker_statuses = {item["status"] for item in workers.values()}
+        worker_status = (
+            "unavailable"
+            if "unavailable" in worker_statuses
+            else "degraded"
+            if "degraded" in worker_statuses
+            else "ok"
+        )
         payload = {
-            "status": "ok" if worker_ready else "degraded",
+            "status": "ok" if worker_status == "ok" else "degraded",
             "database": "ok",
-            "worker": "ok" if worker_ready else "unavailable",
+            "worker": worker_status,
+            "workers": workers,
             "time": utc_now(),
         }
-        if not worker_ready:
+        if worker_status == "unavailable":
             raise HTTPException(status_code=503, detail=payload)
         return payload
 
@@ -175,7 +220,8 @@ def create_account_router(
         return response
 
     @router.get("/api/users")
-    def users(_user: User) -> list[dict[str, Any]]:
+    def users(user: User) -> list[dict[str, Any]]:
+        require_admin(user)
         with database.connect() as connection:
             rows = connection.execute(
                 """
@@ -192,6 +238,7 @@ def create_account_router(
 
     @router.post("/api/users", status_code=201)
     def create_user(payload: UserCreateRequest, actor: User) -> dict[str, Any]:
+        require_admin(actor)
         try:
             email = _email(payload.email)
             password_hash = hash_password(payload.password)
@@ -250,6 +297,7 @@ def create_account_router(
         payload: UserStatusRequest,
         actor: User,
     ) -> dict[str, Any]:
+        require_admin(actor)
         if user_id == actor["id"] and not payload.active:
             raise HTTPException(status_code=400, detail="不能停用自己的账号")
         clean_note = payload.note.strip()
