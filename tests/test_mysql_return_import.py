@@ -67,6 +67,20 @@ def test_schema_suggests_mapping_without_exposing_credentials(source):
     assert cursor.execute.call_args_list[0].args == ("SET TRANSACTION READ ONLY",)
 
 
+def test_market_store_metadata_uses_configured_return_accounts(source):
+    service, cursor, connect, _ = source
+    service.settings = replace(service.settings, mysql_table="return`archive")
+
+    service._metadata_rows(connect.return_value, "markets")
+
+    query = cursor.execute.call_args.args[0]
+    assert "FROM `return``archive`" in query
+    assert "records.jijia_account_id = accounts.jijia_account_id" in query
+    assert "records.api_code = 'amazon_shop_page'" in query
+    assert "GROUP BY records.jijia_account_id, shops.market_id" in query
+    assert "HAVING COUNT(DISTINCT shops.market_name) = 1" in query
+
+
 def test_sale_return_schema_joins_real_comments_and_store_names(source):
     service, cursor, connect, _ = source
     names = [
