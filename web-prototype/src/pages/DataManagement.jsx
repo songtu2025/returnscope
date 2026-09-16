@@ -17,6 +17,27 @@ import { formatTime } from "../lib/presentation";
 
 export { DatasetReferences } from "../features/data-management/DatasetReferences";
 
+/** @typedef {import("../app/navigation").Navigate} Navigate */
+/** @typedef {import("../shared/api/dataManagementContracts").DatasetRecord} DatasetRecord */
+/** @typedef {import("../features/task-create/taskCreateContracts").TaskDraft} TaskDraft */
+/** @typedef {import("../features/task-create/taskCreateContracts").TaskRepairContext} TaskRepairContext */
+/** @typedef {{mode: "create", kind: string} | {mode: "version", dataset: DatasetRecord}} UploadDialog */
+
+/**
+ * @param {{
+ *   notify: (message: string, tone?: string) => void,
+ *   onNavigate: Navigate,
+ *   focus?: TaskRepairContext | null,
+ *   taskDraft?: TaskDraft | null,
+ *   onReturnToTask?: (productVersionId: string) => void,
+ *   routeDetailTab?: string,
+ *   onDetailTabChange?: (tab: string) => void,
+ *   routeReferenceVersion?: string,
+ *   routeReferencePage?: string | number,
+ *   onReferenceRouteChange?: (changes: Record<string, string | number>) => void,
+ *   onAssetViewChange?: (view: string) => void,
+ * }} props
+ */
 export function DataManagement({
   notify,
   onNavigate,
@@ -30,9 +51,9 @@ export function DataManagement({
   onReferenceRouteChange,
   onAssetViewChange = () => {},
 }) {
-  const [selectedId, setSelectedId] = useState(null);
-  const [selected, setSelected] = useState(null);
-  const [dialog, setDialog] = useState(null);
+  const [selectedId, setSelectedId] = useState(/** @type {string | null} */ (null));
+  const [selected, setSelected] = useState(/** @type {DatasetRecord | null} */ (null));
+  const [dialog, setDialog] = useState(/** @type {UploadDialog | null} */ (null));
   const [detailTab, setDetailTab] = useState("rows");
 
   const load = useCallback(async () => {
@@ -53,7 +74,7 @@ export function DataManagement({
   }, [load, notify]);
   useEffect(() => {
     if (!focus || focus.datasetKind !== "products") return;
-    setSelectedId(focus.id);
+    setSelectedId(focus.id ?? null);
     setDetailTab("rows");
   }, [focus]);
   useEffect(() => {
@@ -114,21 +135,25 @@ export function DataManagement({
           <button
             className="primary-button"
             disabled={!currentProductVersionId}
-            onClick={() => onReturnToTask?.(currentProductVersionId)}
+            onClick={() => {
+              if (currentProductVersionId) onReturnToTask?.(currentProductVersionId);
+            }}
           >
             返回任务并重新预检
             <ArrowRight size={17} />
           </button>
         </section>
       )}
-      {focus?.returnToTask && focus.unresolvedProducts?.length > 0 && selected && (
-        <TaskCategoryCompletion
-          dataset={selected}
-          focus={focus}
-          notify={notify}
-          onReturnToTask={onReturnToTask}
-        />
-      )}
+      {focus?.returnToTask &&
+        (focus.unresolvedProducts?.length ?? 0) > 0 &&
+        selected && (
+          <TaskCategoryCompletion
+            dataset={selected}
+            focus={focus}
+            notify={notify}
+            onReturnToTask={onReturnToTask}
+          />
+        )}
       <section className="dataset-detail">
         {!selected && (
           <EmptyState
@@ -211,7 +236,7 @@ export function DataManagement({
                   onDetailTabChange?.("impact");
                   onReferenceRouteChange?.({
                     tab: "impact",
-                    reference_version: routeReferenceVersion || currentVersionId,
+                    reference_version: routeReferenceVersion || currentVersionId || "",
                     reference_page: 1,
                   });
                 }}
@@ -231,7 +256,7 @@ export function DataManagement({
                 <section className="dataset-view-panel">
                   <CardHeading title="版本记录" note="每次更新都会保留不可变快照" />
                   <div className="version-list">
-                    {selected.versions.map((version) => (
+                    {(selected.versions ?? []).map((version) => (
                       <div key={version.id}>
                         <span>v{version.version}</span>
                         <div>
@@ -239,7 +264,7 @@ export function DataManagement({
                           <p>{version.change_note || "未填写变更说明"}</p>
                           <small>
                             {version.creator_name} · {formatTime(version.created_at)} ·{" "}
-                            {version.row_count.toLocaleString()} 行
+                            {Number(version.row_count ?? 0).toLocaleString()} 行
                           </small>
                         </div>
                         <div className="version-actions">
@@ -297,9 +322,9 @@ export function DataManagement({
                             {changes.map((field) => (
                               <p key={field}>
                                 <span>{field}</span>
-                                <code>{entry.before.values[field] || "空"}</code>
+                                <code>{entry.before?.values?.[field] || "空"}</code>
                                 <ArrowRight size={12} />
-                                <code>{entry.after.values[field] || "空"}</code>
+                                <code>{entry.after?.values?.[field] || "空"}</code>
                               </p>
                             ))}
                             <small>

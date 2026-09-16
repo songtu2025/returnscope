@@ -12,12 +12,28 @@ import {
 } from "../components/SharedUi";
 import { formatTime } from "../lib/presentation";
 
+/** @typedef {import("../shared/api/reviewBatchContracts").LegacyReviewRecord} LegacyReviewRecord */
+/** @typedef {import("../shared/api/reviewBatchContracts").ReviewClassification} ReviewClassification */
+/** @typedef {import("../shared/api/reviewBatchContracts").ReviewLabel} ReviewLabel */
+/** @typedef {import("../shared/api/reviewBatchContracts").ReviewRequestError} ReviewRequestError */
+/** @typedef {{notify: (message: string, tone?: string) => void, onChanged: () => void | Promise<void>, focus?: {kind?: "review", id: string, status?: string} | null}} ReviewCenterProps */
+
+/** @param {unknown} error */
+function reviewError(error) {
+  return /** @type {ReviewRequestError} */ (
+    error instanceof Error ? error : new Error("复核请求失败")
+  );
+}
+
+/** @param {ReviewCenterProps} props */
 export function ReviewCenter({ notify, onChanged, focus }) {
   const [status, setStatus] = useState("pending");
-  const [rows, setRows] = useState([]);
-  const [selectedId, setSelectedId] = useState(null);
-  const [selected, setSelected] = useState(null);
-  const [labels, setLabels] = useState([]);
+  const [rows, setRows] = useState(/** @type {LegacyReviewRecord[]} */ ([]));
+  const [selectedId, setSelectedId] = useState(/** @type {string | null} */ (null));
+  const [selected, setSelected] = useState(
+    /** @type {LegacyReviewRecord | null} */ (null),
+  );
+  const [labels, setLabels] = useState(/** @type {ReviewLabel[]} */ ([]));
   const [labelCode, setLabelCode] = useState("");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
@@ -33,11 +49,11 @@ export function ReviewCenter({ notify, onChanged, focus }) {
     );
   }, [status]);
   useEffect(() => {
-    load().catch((error) => notify(error.message, "error"));
+    load().catch((error) => notify(reviewError(error).message, "error"));
   }, [load, notify]);
   useEffect(() => {
     if (!focus) return;
-    setStatus(focus.status);
+    setStatus(focus.status ?? "pending");
     setSelectedId(focus.id);
   }, [focus]);
   useEffect(() => {
@@ -60,10 +76,11 @@ export function ReviewCenter({ notify, onChanged, focus }) {
       .then((value) => {
         if (value) setLabels(value.labels ?? []);
       })
-      .catch((error) => notify(error.message, "error"));
+      .catch((error) => notify(reviewError(error).message, "error"));
   }, [selectedId, notify]);
 
   const resolve = async () => {
+    if (!selected) return;
     setSaving(true);
     try {
       await api.resolveReview(selected.id, {
@@ -75,15 +92,19 @@ export function ReviewCenter({ notify, onChanged, focus }) {
       await load();
       onChanged();
     } catch (error) {
+      const requestError = reviewError(error);
       notify(
-        error.status === 409 ? "该记录已被他人修改，已为你刷新" : error.message,
+        requestError.status === 409
+          ? "该记录已被他人修改，已为你刷新"
+          : requestError.message,
         "error",
       );
-      if (error.status === 409) setSelected(await api.review(selected.id));
+      if (requestError.status === 409) setSelected(await api.review(selected.id));
     } finally {
       setSaving(false);
     }
   };
+  /** @param {ReviewClassification | null | undefined} classification */
   const revisionLabel = (classification) => {
     const codes = classification?.primary_label_codes ?? [];
     return (
@@ -205,7 +226,7 @@ export function ReviewCenter({ notify, onChanged, focus }) {
                       disabled={selected.workflow_status === "resolved"}
                       value={note}
                       onChange={(event) => setNote(event.target.value)}
-                      rows="4"
+                      rows={4}
                       placeholder="必填：说明判断依据，便于后续追溯"
                       required
                     />

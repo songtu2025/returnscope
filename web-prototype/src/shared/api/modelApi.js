@@ -1,5 +1,30 @@
 import { API_BASE, request } from "./request";
 
+/** @typedef {object} ModelPayload */
+/** @typedef {ReturnType<typeof request>} ModelRequest */
+/** @typedef {import("./systemSettingsContracts").ModelConnection} ModelConnection */
+/** @typedef {import("./systemSettingsContracts").ModelPreference} ModelPreference */
+
+/**
+ * @type {{
+ *   configs: () => Promise<ModelConnection[]>,
+ *   modelPreference: () => Promise<ModelPreference | null>,
+ *   saveModelPreference: (payload: ModelPayload) => Promise<ModelPreference>,
+ *   createConfig: (payload: ModelPayload) => ModelRequest,
+ *   discardConfig: (id: string) => ModelRequest,
+ *   createModel: (connectionId: string, payload: ModelPayload) => ModelRequest,
+ *   discoverModels: (connectionId: string) => ModelRequest,
+ *   updateModel: (id: string, payload: ModelPayload) => ModelRequest,
+ *   validateModel: (id: string, effort?: string | null) => ModelRequest,
+ *   startModelValidation: (id: string, effort?: string | null) => ModelRequest,
+ *   validateConfig: (id: string) => ModelRequest,
+ *   startConfigValidation: (id: string) => ModelRequest,
+ *   activeValidation: (connectionId: string) => ModelRequest,
+ *   validationRun: (id: string) => ModelRequest,
+ *   validationEventUrl: (id: string) => string,
+ *   publishConfig: (id: string) => ModelRequest
+ * }}
+ */
 export const modelApi = {
   configs: () => request("/api/configs"),
   modelPreference: () => request("/api/model-preferences/me"),

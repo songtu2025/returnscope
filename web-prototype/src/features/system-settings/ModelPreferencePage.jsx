@@ -3,12 +3,20 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../../api";
 import { InlineLoading, PageHeading } from "../../components/SharedUi";
 
+/** @typedef {import("../../shared/api/systemSettingsContracts").ModelConnection} ModelConnection */
+/** @typedef {import("../../shared/api/systemSettingsContracts").CatalogModel} CatalogModel */
+/** @typedef {import("../../shared/api/systemSettingsContracts").ModelPreference} ModelPreference */
+/** @typedef {import("../../shared/api/systemSettingsContracts").PipelineModelKey} PipelineModelKey */
+/** @typedef {import("../../shared/api/systemSettingsContracts").PipelineEffortKey} PipelineEffortKey */
+
+/** @type {Array<[string, string]>} */
 const EFFORT_OPTIONS = [
   ["low", "低"],
   ["medium", "中"],
   ["high", "高"],
 ];
 
+/** @type {ModelPreference} */
 const EMPTY_POLICY = {
   connection_id: "",
   cheap_model: "",
@@ -20,15 +28,18 @@ const EMPTY_POLICY = {
   cheap_audit_percent: 5,
 };
 
+/** @param {ModelConnection | null | undefined} connection @returns {CatalogModel[]} */
 function verifiedModels(connection) {
   return (connection?.models ?? []).filter(
     (model) => model.active && model.validation_status === "validated",
   );
 }
 
+/** @param {ModelConnection | null | undefined} connection @param {ModelPreference} [current] @returns {ModelPreference} */
 function policyForConnection(connection, current = EMPTY_POLICY) {
   const models = verifiedModels(connection);
   const firstModel = models[0]?.model_key ?? "";
+  /** @param {string} modelKey */
   const keepIfAvailable = (modelKey) =>
     models.some((model) => model.model_key === modelKey) ? modelKey : firstModel;
   return {
@@ -47,9 +58,10 @@ function policyForConnection(connection, current = EMPTY_POLICY) {
   };
 }
 
+/** @param {{notify: (message: string, tone?: string) => void}} props */
 export function ModelPreferencePage({ notify }) {
-  const [connections, setConnections] = useState([]);
-  const [policy, setPolicy] = useState(EMPTY_POLICY);
+  const [connections, setConnections] = useState(/** @type {ModelConnection[]} */ ([]));
+  const [policy, setPolicy] = useState(/** @type {ModelPreference} */ (EMPTY_POLICY));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -68,7 +80,7 @@ export function ModelPreferencePage({ notify }) {
       setConnections(published);
       setPolicy(policyForConnection(selected, preference ?? EMPTY_POLICY));
     } catch (error) {
-      notify(error.message, "error");
+      notify(error instanceof Error ? error.message : "模型偏好读取失败", "error");
     } finally {
       setLoading(false);
     }
@@ -88,9 +100,12 @@ export function ModelPreferencePage({ notify }) {
     [models],
   );
 
+  /** @param {PipelineModelKey} field @param {string} value */
   const updateModel = (field, value) => {
     const model = modelByKey.get(value);
-    const effortField = field.replace("_model", "_effort");
+    const effortField = /** @type {PipelineEffortKey} */ (
+      field.replace("_model", "_effort")
+    );
     setPolicy((current) => ({
       ...current,
       [field]: value,
@@ -115,7 +130,7 @@ export function ModelPreferencePage({ notify }) {
       setPolicy(value);
       notify("默认模型策略已保存", "success");
     } catch (error) {
-      notify(error.message, "error");
+      notify(error instanceof Error ? error.message : "模型偏好保存失败", "error");
     } finally {
       setSaving(false);
     }
@@ -217,6 +232,19 @@ export function ModelPreferencePage({ notify }) {
   );
 }
 
+/**
+ * @param {{
+ *   label: string,
+ *   note: string,
+ *   modelField: PipelineModelKey,
+ *   effortField: PipelineEffortKey,
+ *   optional?: boolean,
+ *   policy: ModelPreference,
+ *   models: CatalogModel[],
+ *   onModelChange: (field: PipelineModelKey, value: string) => void,
+ *   onEffortChange: (field: PipelineEffortKey, value: string) => void,
+ * }} props
+ */
 function PolicyRow({
   label,
   note,

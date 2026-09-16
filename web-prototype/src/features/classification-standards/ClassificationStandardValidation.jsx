@@ -9,36 +9,25 @@ const STATUS_LABELS = {
   failed: "验证失败",
 };
 
-/**
- * @typedef {object} ValidationSource
- * @property {string} result_version_id
- * @property {string} source_kind
- * @property {string} return_dataset_name
- * @property {number} version_no
- * @property {string} product_dataset_name
- * @property {string=} listing
- * @property {number=} available_sample_count
- */
-
-/**
- * @typedef {object} ValidationRun
- * @property {string} id
- * @property {string} status
- */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardDraft} ClassificationStandardDraft */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardValidationRunDetail} ClassificationStandardValidationRunDetail */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardValidationRunSummary} ClassificationStandardValidationRunSummary */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardValidationSource} ClassificationStandardValidationSource */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ValidationSampleSize} ValidationSampleSize */
 
 /**
  * @typedef {object} ClassificationStandardValidationProps
- * @property {{is_new: boolean, validation: {blocking: unknown[]}}} draft
- * @property {ValidationSource[]} sources
- * @property {ValidationRun[]} runs
- * @property {(object & {id: string}) | null} selectedRun
+ * @property {ClassificationStandardDraft} draft
+ * @property {ClassificationStandardValidationSource[]} sources
+ * @property {ClassificationStandardValidationRunSummary[]} runs
+ * @property {ClassificationStandardValidationRunDetail | null} selectedRun
  * @property {string} sourceId
- * @property {number} sampleSize
+ * @property {ValidationSampleSize} sampleSize
  * @property {boolean} busy
  * @property {boolean} approvalBusy
  * @property {boolean} dirty
  * @property {(sourceId: string) => void} onSourceChange
- * @property {(sampleSize: number) => void} onSampleSizeChange
+ * @property {(sampleSize: ValidationSampleSize) => void} onSampleSizeChange
  * @property {(file: File | null, comparisonType: string) => void} onRun
  * @property {(runId: string, note: string) => void} onApprove
  * @property {(runId: string) => void} onSelectRun

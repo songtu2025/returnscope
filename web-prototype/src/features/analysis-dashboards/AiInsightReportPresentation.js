@@ -1,57 +1,65 @@
-export const STATUS_LABELS = {
+export const STATUS_LABELS = /** @type {Record<string, string>} */ ({
   queued: "等待生成",
   running: "正在生成",
   completed: "生成完成",
   failed: "生成失败",
-};
+});
 
-export const QUALITY_GATE_LABELS = {
+export const QUALITY_GATE_LABELS = /** @type {Record<string, string>} */ ({
   passed: "质量通过",
   warning: "质量警告",
   blocked: "质量阻断",
-};
+});
 
-export const STAGE_LABELS = {
+export const STAGE_LABELS = /** @type {Record<string, string>} */ ({
   queued: "等待生成",
   preparing_evidence: "正在准备确定性证据",
   calling_model: "模型正在解释证据",
   assembling_report: "正在装配报告",
   publishing: "正在发布报告",
-};
+});
 
+/** @param {InsightReport} report */
 export function reportLabel(report) {
   return report.version_no
     ? `报告 V${report.version_no}`
     : `生成尝试 ${report.attempt_no ?? "-"}`;
 }
 
+/** @param {unknown} value */
 export function number(value) {
   return Number(value || 0);
 }
 
+/** @param {unknown} value */
 export function percent(value) {
   return `${number(value).toFixed(1)}%`;
 }
 
+/** @param {unknown} value */
 export function date(value) {
   return value ? String(value).slice(0, 10).replaceAll("-", "/") : "未提供";
 }
 
+/** @param {unknown} value */
 export function shortDate(value) {
   const text = date(value);
   return text === "未提供" ? text : text.slice(5);
 }
 
+/** @template T @param {string[] | null | undefined} ids @param {Record<string, T>} catalog @returns {T[]} */
 export function evidenceItems(ids, catalog) {
   return (ids ?? []).map((id) => catalog[id]).filter(Boolean);
 }
 
+/** @param {InsightAnalysis} analysis @returns {Map<string, InsightDiagnostic>} */
 export function diagnosticMap(analysis) {
   return new Map(
     (analysis.diagnostics ?? []).map((item) => [String(item.reason_code), item]),
   );
 }
 
+/** @param {InsightFinding | null | undefined} finding */
 export function findingReasonCode(finding) {
   const reasonId = (finding?.evidence_ids ?? []).find((item) =>
     String(item).startsWith("reason."),
@@ -59,8 +67,10 @@ export function findingReasonCode(finding) {
   return reasonId ? String(reasonId).slice("reason.".length) : "";
 }
 
+/** @param {Map<string, InsightDiagnostic>} diagnostics @param {string | undefined} dateTo @returns {SizeTrendRow[]} */
 export function mergeSizeTrend(diagnostics, dateTo) {
-  const rows = new Map();
+  const rows = /** @type {Map<string, SizeTrendRow>} */ (new Map());
+  /** @param {string} code @param {"too_small" | "too_large"} field */
   const append = (code, field) => {
     const diagnostic = diagnostics.get(code);
     for (const item of diagnostic?.trend ?? []) {
@@ -81,8 +91,10 @@ export function mergeSizeTrend(diagnostics, dateTo) {
     .sort((left, right) => String(left.period_start).localeCompare(right.period_start));
 }
 
+/** @param {Map<string, InsightDiagnostic>} diagnostics */
 export function hotspotGroups(diagnostics) {
-  const groups = [];
+  const groups =
+    /** @type {Array<{code: string, label: string, rows: DiagnosticHotspot[]}>} */ ([]);
   for (const code of ["FIT_TOO_SMALL", "FIT_TOO_LARGE"]) {
     const diagnostic = diagnostics.get(code);
     const label = diagnostic?.selected_reason?.label || code;
@@ -98,11 +110,13 @@ export function hotspotGroups(diagnostics) {
   return groups;
 }
 
+/** @param {unknown} value */
 export function signedPercentagePoints(value) {
   const numericValue = number(value);
   return `${numericValue > 0 ? "+" : ""}${numericValue.toFixed(1)}pp`;
 }
 
+/** @param {InsightDiagnostic | null | undefined} diagnostic */
 export function reasonSamples(diagnostic) {
   return (diagnostic?.samples ?? []).filter(
     (item, index, items) =>
@@ -113,3 +127,11 @@ export function reasonSamples(diagnostic) {
       ),
   );
 }
+/** @typedef {import("./analysisDashboardContracts").InsightReport} InsightReport */
+/** @typedef {{period_start: string, period_end: string, total_record_count?: number, percentage?: number, low_sample?: boolean}} DiagnosticTrend */
+/** @typedef {import("./analysisDashboardContracts").ReportHotspot} DiagnosticHotspot */
+/** @typedef {import("./analysisDashboardContracts").ReportSample} DiagnosticSample */
+/** @typedef {import("./analysisDashboardContracts").ReportDiagnostic} InsightDiagnostic */
+/** @typedef {{diagnostics?: InsightDiagnostic[]}} InsightAnalysis */
+/** @typedef {{evidence_ids?: string[]}} InsightFinding */
+/** @typedef {{period_start: string, period_end?: string, total_record_count?: number, too_small?: number, too_large?: number}} SizeTrendRow */

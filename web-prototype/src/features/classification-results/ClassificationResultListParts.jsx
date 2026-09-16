@@ -7,6 +7,18 @@ import { formatTime } from "../../lib/presentation";
 import { PUBLISH_LABELS } from "./classificationResultConstants";
 import { resultActionPolicy } from "./resultActionPolicy";
 
+/**
+ * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultVersionResponse & { product_name?: string | null }} ClassificationResultVersion
+ * @typedef {{
+ *   result_version_id: string,
+ *   store_site: string,
+ *   listing: string,
+ *   record_count: number,
+ *   unit_count: number
+ * }} SelectedResult
+ */
+
+/** @param {ClassificationResultVersion} result @returns {string[]} */
 function productNames(result) {
   const names = Array.isArray(result.product_names)
     ? result.product_names.filter(Boolean)
@@ -16,6 +28,16 @@ function productNames(result) {
   return names;
 }
 
+/**
+ * @param {{
+ *   result: ClassificationResultVersion,
+ *   onOpen: () => void,
+ *   onPrimary: () => void,
+ *   selectable: boolean,
+ *   selected: boolean,
+ *   onToggle: () => void
+ * }} props
+ */
 export function ResultPoolRow({
   result,
   onOpen,
@@ -95,6 +117,14 @@ export function ResultPoolRow({
   );
 }
 
+/**
+ * @param {{
+ *   selected: SelectedResult[],
+ *   totals: { records: number, units: number },
+ *   onCancel: () => void,
+ *   onGenerate: () => void
+ * }} props
+ */
 export function InsightSelectionBar({ selected, totals, onCancel, onGenerate }) {
   return (
     <div className="insight-selection-bar" role="status">
@@ -111,6 +141,13 @@ export function InsightSelectionBar({ selected, totals, onCancel, onGenerate }) 
   );
 }
 
+/**
+ * @param {{
+ *   selected: SelectedResult[],
+ *   onClear: () => void,
+ *   onContinue: () => void
+ * }} props
+ */
 export function DashboardSelectionBar({ selected, onClear, onContinue }) {
   const listingCount = new Set(
     selected.map((item) => `${item.store_site}::${item.listing}`),

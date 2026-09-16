@@ -3,11 +3,22 @@ import { UploadSimple, WarningCircle } from "@phosphor-icons/react";
 import { api } from "../api";
 import { Modal } from "./SharedUi";
 
+/** @typedef {{id: string, name: string, kind: string}} UploadDataset */
+/** @typedef {{mode: "create", kind: string} | {mode: "version", dataset: UploadDataset}} UploadDialog */
+
+/**
+ * @param {{
+ *   dialog: UploadDialog,
+ *   onClose: () => void,
+ *   onDone: (result: unknown) => void | Promise<void>,
+ *   storeOptions?: string[],
+ * }} props
+ */
 export function DatasetUploadDialog({ dialog, onClose, onDone, storeOptions = [] }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [note, setNote] = useState("");
-  const [file, setFile] = useState(null);
+  const [file, setFile] = useState(/** @type {File | null} */ (null));
   const [defaultStore, setDefaultStore] = useState(
     dialog.mode === "version" && storeOptions.length === 1 ? storeOptions[0] : "",
   );
@@ -15,6 +26,7 @@ export function DatasetUploadDialog({ dialog, onClose, onDone, storeOptions = []
   const [error, setError] = useState("");
   const kind = dialog.mode === "create" ? dialog.kind : dialog.dataset.kind;
 
+  /** @param {import("react").FormEvent<HTMLFormElement>} event */
   const submit = async (event) => {
     event.preventDefault();
     if (!file) {
@@ -41,7 +53,7 @@ export function DatasetUploadDialog({ dialog, onClose, onDone, storeOptions = []
       }
       await onDone(result);
     } catch (requestError) {
-      setError(requestError.message);
+      setError(requestError instanceof Error ? requestError.message : "上传失败");
     } finally {
       setSubmitting(false);
     }
@@ -75,7 +87,7 @@ export function DatasetUploadDialog({ dialog, onClose, onDone, storeOptions = []
               <textarea
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
-                rows="2"
+                rows={2}
               />
             </label>
           </>
@@ -97,7 +109,7 @@ export function DatasetUploadDialog({ dialog, onClose, onDone, storeOptions = []
               value={defaultStore}
               onChange={(event) => setDefaultStore(event.target.value)}
               list="return-store-options"
-              maxLength="100"
+              maxLength={100}
               placeholder="输入店铺/站点"
             />
             <small>仅填补空值，不会覆盖文件中已有的店铺/站点。</small>
@@ -113,7 +125,7 @@ export function DatasetUploadDialog({ dialog, onClose, onDone, storeOptions = []
           <input
             value={note}
             onChange={(event) => setNote(event.target.value)}
-            maxLength="500"
+            maxLength={500}
             placeholder="必填：例如补充 8 月 1—7 日数据"
             required
           />

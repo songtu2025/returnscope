@@ -4,6 +4,58 @@ import { api } from "../../api";
 import { EmptyState, InlineLoading, PageHeading } from "../../components/SharedUi";
 import { TaskDetail } from "./TaskDetail";
 import { TaskRegistry } from "./TaskRegistry";
+
+/**
+ * @typedef {import("./taskRuntimeContracts").TaskSegment} TaskSegment
+ * @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask
+ * @typedef {import("./taskRuntimeContracts").TaskPayload} TaskPayload
+ * @typedef {import("./taskRuntimeContracts").TaskEvent} TaskEvent
+ * @typedef {import("./taskRuntimeContracts").SegmentAction} SegmentAction
+ *
+ * @typedef {Object} TaskMonitorProps
+ * @property {(message: string, type?: "success" | "error") => void} notify
+ * @property {import("../../app/navigation").Navigate} onNavigate
+ * @property {() => void | Promise<unknown>} onChanged
+ * @property {string | null} [focusId]
+ * @property {string | null} [focusSegmentId]
+ */
+
+/**
+ * 当前组件使用的任务 API 响应契约。静态类型集中在消费边界，不改变请求行为。
+ * @type {{
+ *   tasks: (filters?: Record<string, string | number | boolean | null | undefined>, options?: RequestInit) => Promise<AnalysisTask[]>,
+ *   task: (id: string, options?: RequestInit) => Promise<AnalysisTask>,
+ *   archiveTasks: (taskIds: string[], archived: boolean) => Promise<unknown>,
+ *   eventUrl: (taskId: string, after?: number) => string,
+ *   renameTask: (id: string, payload: TaskPayload) => Promise<AnalysisTask>,
+ *   cancelTask: (id: string, payload: TaskPayload) => Promise<unknown>,
+ *   pauseTask: (id: string, payload: TaskPayload) => Promise<AnalysisTask>,
+ *   resumeTask: (id: string, payload: TaskPayload) => Promise<AnalysisTask>,
+ *   retryTask: (id: string) => Promise<AnalysisTask>,
+ *   retryTaskSegment: (id: string, segmentKey: string, payload: TaskPayload) => Promise<AnalysisTask>,
+ *   retrySegmentResultPublish: (id: string, segmentId: string, payload: TaskPayload) => Promise<AnalysisTask>,
+ *   controlTaskSegment: (id: string, segmentKey: string, action: SegmentAction, payload: TaskPayload) => Promise<AnalysisTask>,
+ *   setTaskParallelism: (id: string, payload: TaskPayload) => Promise<AnalysisTask>,
+ *   reorderTaskSegments: (id: string, payload: TaskPayload) => Promise<AnalysisTask>,
+ *   preflightTaskReplan: (id: string, payload: TaskPayload) => Promise<import("../task-planning/taskPlanContracts").TaskExecutionPlan>,
+ *   replanTask: (id: string, payload: TaskPayload) => Promise<AnalysisTask>
+ * }}
+ */
+const taskMonitorApi = api;
+
+/** @param {unknown} error */
+function errorMessage(error) {
+  return error instanceof Error ? error.message : "请求失败";
+}
+
+/** @param {unknown} error */
+function errorStatus(error) {
+  return typeof error === "object" && error !== null && "status" in error
+    ? error.status
+    : undefined;
+}
+
+/** @param {TaskMonitorProps} props */
 export function TaskMonitor({
   notify,
   onNavigate,
@@ -11,30 +63,31 @@ export function TaskMonitor({
   focusId,
   focusSegmentId = null,
 }) {
-  const [tasks, setTasks] = useState([]);
-  const [selectedId, setSelectedId] = useState(null);
-  const [selected, setSelected] = useState(null);
-  const [events, setEvents] = useState([]);
+  const [tasks, setTasks] = useState(/** @type {AnalysisTask[]} */ ([]));
+  const [selectedId, setSelectedId] = useState(/** @type {string | null} */ (null));
+  const [selected, setSelected] = useState(/** @type {AnalysisTask | null} */ (null));
+  const [events, setEvents] = useState(/** @type {TaskEvent[]} */ ([]));
   const [filter, setFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState("");
   const [eventStreamVersion, setEventStreamVersion] = useState(0);
   const [actionError, setActionError] = useState("");
   const selectedRequestGeneration = useRef(0);
-  const previousFocusId = useRef(focusId);
+  const previousFocusId = useRef(/** @type {string | null | undefined} */ (focusId));
   const listScroll = useRef(0);
   const [detailError, setDetailError] = useState("");
 
   const loadTasks = useCallback(
+    /** @param {boolean} [silent] */
     async (silent = false) => {
       if (!silent) setLoading(true);
       setListError("");
       try {
-        const values = await api.tasks({ include_archived: true });
+        const values = await taskMonitorApi.tasks({ include_archived: true });
         setTasks(values);
       } catch (error) {
-        setListError(error.message);
-        if (!silent) notify(error.message, "error");
+        setListError(errorMessage(error));
+        if (!silent) notify(errorMessage(error), "error");
       } finally {
         setLoading(false);
       }
@@ -43,10 +96,11 @@ export function TaskMonitor({
   );
 
   const loadSelected = useCallback(
+    /** @param {RequestInit} [options] */
     async (options = {}) => {
       if (!selectedId) return null;
       const generation = ++selectedRequestGeneration.current;
-      const value = await api.task(selectedId, options);
+      const value = await taskMonitorApi.task(selectedId, options);
       if (selectedRequestGeneration.current === generation) setSelected(value);
       return value;
     },
@@ -78,8 +132,11 @@ export function TaskMonitor({
       return () => controller.abort();
     }
     loadSelected({ signal: controller.signal }).catch((error) => {
-      if (error.name !== "AbortError" && !controller.signal.aborted)
-        setDetailError(error.message);
+      if (
+        (!(error instanceof Error) || error.name !== "AbortError") &&
+        !controller.signal.aborted
+      )
+        setDetailError(errorMessage(error));
     });
     return () => {
       controller.abort();
@@ -89,13 +146,15 @@ export function TaskMonitor({
   useEffect(() => {
     if (!selectedId) return undefined;
     setEvents([]);
+    /** @type {number | null} */
     let refreshTimer = null;
+    /** @type {TaskEvent[]} */
     let pendingEvents = [];
-    const source = new EventSource(api.eventUrl(selectedId), {
+    const source = new EventSource(taskMonitorApi.eventUrl(selectedId), {
       withCredentials: true,
     });
     source.addEventListener("task", (event) => {
-      const value = JSON.parse(event.data);
+      const value = /** @type {TaskEvent} */ (JSON.parse(event.data));
       pendingEvents.push(value);
       if (refreshTimer !== null) return;
       refreshTimer = window.setTimeout(() => {
@@ -104,7 +163,7 @@ export function TaskMonitor({
         pendingEvents = [];
         setEvents((current) => [...current, ...nextEvents]);
         Promise.all([loadSelected(), loadTasks(true), onChanged()]).catch((error) =>
-          notify(error.message, "error"),
+          notify(errorMessage(error), "error"),
         );
       }, 500);
     });
@@ -135,15 +194,16 @@ export function TaskMonitor({
     onNavigate("analysis-tasks");
   };
 
+  /** @param {string[]} taskIds @param {boolean} archived */
   const archiveTasks = async (taskIds, archived) => {
     try {
-      await api.archiveTasks(taskIds, archived);
+      await taskMonitorApi.archiveTasks(taskIds, archived);
       await loadTasks();
       if (selectedId && taskIds.includes(selectedId)) await loadSelected();
       notify(archived ? "任务已归档" : "任务已恢复");
       return true;
     } catch (error) {
-      notify(error.message, "error");
+      notify(errorMessage(error), "error");
       return false;
     }
   };
@@ -170,13 +230,13 @@ export function TaskMonitor({
           error={listError}
           onReload={loadTasks}
           onCreate={() => onNavigate("new")}
-          onOpen={(task) => {
+          onOpen={(/** @type {AnalysisTask} */ task) => {
             listScroll.current = window.scrollY;
             window.scrollTo(0, 0);
             setSelectedId(task.id);
             onNavigate("analysis-tasks", { kind: "task", id: task.id });
           }}
-          onCreateSimilar={(task) =>
+          onCreateSimilar={(/** @type {AnalysisTask} */ task) =>
             onNavigate("new", { kind: "task-template", id: task.id })
           }
           onArchive={archiveTasks}
@@ -198,7 +258,9 @@ export function TaskMonitor({
                   className="secondary-button"
                   onClick={() => {
                     setDetailError("");
-                    loadSelected().catch((error) => setDetailError(error.message));
+                    loadSelected().catch((error) =>
+                      setDetailError(errorMessage(error)),
+                    );
                   }}
                 >
                   重新加载
@@ -213,7 +275,9 @@ export function TaskMonitor({
               onArchive={() => archiveTasks([selected.id], !selected.archived_at)}
               focusSegmentId={focusSegmentId}
               events={events}
-              onViewClassification={(segment) =>
+              onViewClassification={(
+                /** @type {TaskSegment & {result_version_id: string}} */ segment,
+              ) =>
                 onNavigate("classification-results", {
                   kind: "classification-result",
                   id: segment.result_version_id,
@@ -224,36 +288,36 @@ export function TaskMonitor({
               }
               actionError={actionError}
               onClearActionError={() => setActionError("")}
-              onRename={async (payload) => {
+              onRename={async (/** @type {TaskPayload} */ payload) => {
                 try {
-                  const updated = await api.renameTask(selected.id, payload);
+                  const updated = await taskMonitorApi.renameTask(selected.id, payload);
                   setSelected(updated);
                   await loadTasks();
                   setEventStreamVersion((current) => current + 1);
                   notify("任务名称已修改并记录操作人");
                   return true;
                 } catch (error) {
-                  if (error.status === 409) await loadSelected();
-                  notify(error.message, "error");
+                  if (errorStatus(error) === 409) await loadSelected();
+                  notify(errorMessage(error), "error");
                   return false;
                 }
               }}
-              onCancel={async (payload) => {
+              onCancel={async (/** @type {TaskPayload} */ payload) => {
                 try {
-                  await api.cancelTask(selected.id, payload);
+                  await taskMonitorApi.cancelTask(selected.id, payload);
                   notify("取消请求已提交");
                   await loadTasks();
                   await loadSelected();
                   return true;
                 } catch (error) {
-                  if (error.status === 409) await loadSelected();
-                  notify(error.message, "error");
+                  if (errorStatus(error) === 409) await loadSelected();
+                  notify(errorMessage(error), "error");
                   return false;
                 }
               }}
               onPause={async () => {
                 try {
-                  const updated = await api.pauseTask(selected.id, {
+                  const updated = await taskMonitorApi.pauseTask(selected.id, {
                     expected_revision: selected.revision,
                   });
                   setSelected(updated);
@@ -261,14 +325,14 @@ export function TaskMonitor({
                   notify("未完成 Listing 正在安全暂停");
                   return true;
                 } catch (error) {
-                  if (error.status === 409) await loadSelected();
-                  notify(error.message, "error");
+                  if (errorStatus(error) === 409) await loadSelected();
+                  notify(errorMessage(error), "error");
                   return false;
                 }
               }}
-              onResume={async (payload) => {
+              onResume={async (/** @type {TaskPayload} */ payload) => {
                 try {
-                  const updated = await api.resumeTask(selected.id, payload);
+                  const updated = await taskMonitorApi.resumeTask(selected.id, payload);
                   setSelected(updated);
                   setActionError("");
                   await loadTasks();
@@ -280,17 +344,17 @@ export function TaskMonitor({
                   );
                   return true;
                 } catch (error) {
-                  if (error.status === 409) {
+                  if (errorStatus(error) === 409) {
                     setActionError("任务版本已变化，请查看刷新后的状态再操作。");
                     await loadSelected();
                   }
-                  notify(error.message, "error");
+                  notify(errorMessage(error), "error");
                   return false;
                 }
               }}
               onRetry={async () => {
                 try {
-                  const retried = await api.retryTask(selected.id);
+                  const retried = await taskMonitorApi.retryTask(selected.id);
                   await loadTasks();
                   setSelectedId(retried.id);
                   onNavigate("analysis-tasks", { kind: "task", id: retried.id });
@@ -300,12 +364,15 @@ export function TaskMonitor({
                       : "重试任务已进入队列",
                   );
                 } catch (error) {
-                  notify(error.message, "error");
+                  notify(errorMessage(error), "error");
                 }
               }}
-              onRetrySegment={async (segmentKey, payload) => {
+              onRetrySegment={async (
+                /** @type {string} */ segmentKey,
+                /** @type {TaskPayload} */ payload,
+              ) => {
                 try {
-                  const updated = await api.retryTaskSegment(
+                  const updated = await taskMonitorApi.retryTaskSegment(
                     selected.id,
                     segmentKey,
                     payload,
@@ -316,19 +383,19 @@ export function TaskMonitor({
                   notify("任务片段已重新排队");
                   return true;
                 } catch (error) {
-                  if (error.status === 409) {
+                  if (errorStatus(error) === 409) {
                     setActionError("任务版本已变化，请查看刷新后的片段状态再操作。");
                     await loadSelected();
                   } else {
-                    setActionError(error.message);
+                    setActionError(errorMessage(error));
                   }
-                  notify(error.message, "error");
+                  notify(errorMessage(error), "error");
                   return false;
                 }
               }}
-              onRetryResultPublish={async (segmentId) => {
+              onRetryResultPublish={async (/** @type {string} */ segmentId) => {
                 try {
-                  const updated = await api.retrySegmentResultPublish(
+                  const updated = await taskMonitorApi.retrySegmentResultPublish(
                     selected.id,
                     segmentId,
                     {
@@ -342,14 +409,18 @@ export function TaskMonitor({
                   notify("分类结果正在重新生成");
                   return true;
                 } catch (error) {
-                  if (error.status === 409) await loadSelected();
-                  notify(error.message, "error");
+                  if (errorStatus(error) === 409) await loadSelected();
+                  notify(errorMessage(error), "error");
                   return false;
                 }
               }}
-              onSegmentAction={async (segmentKey, action, note = "") => {
+              onSegmentAction={async (
+                /** @type {string} */ segmentKey,
+                /** @type {SegmentAction} */ action,
+                /** @type {string} */ note = "",
+              ) => {
                 try {
-                  const updated = await api.controlTaskSegment(
+                  const updated = await taskMonitorApi.controlTaskSegment(
                     selected.id,
                     segmentKey,
                     action,
@@ -370,14 +441,14 @@ export function TaskMonitor({
                   );
                   return true;
                 } catch (error) {
-                  if (error.status === 409) await loadSelected();
-                  notify(error.message, "error");
+                  if (errorStatus(error) === 409) await loadSelected();
+                  notify(errorMessage(error), "error");
                   return false;
                 }
               }}
-              onParallelism={async (maxParallelSegments) => {
+              onParallelism={async (/** @type {number} */ maxParallelSegments) => {
                 try {
-                  const updated = await api.setTaskParallelism(selected.id, {
+                  const updated = await taskMonitorApi.setTaskParallelism(selected.id, {
                     expected_revision: selected.revision,
                     max_parallel_segments: maxParallelSegments,
                   });
@@ -386,47 +457,50 @@ export function TaskMonitor({
                   notify(`Listing 并行数已调整为 ${maxParallelSegments}`);
                   return true;
                 } catch (error) {
-                  if (error.status === 409) await loadSelected();
-                  notify(error.message, "error");
+                  if (errorStatus(error) === 409) await loadSelected();
+                  notify(errorMessage(error), "error");
                   return false;
                 }
               }}
-              onReorderSegments={async (segmentKeys) => {
+              onReorderSegments={async (/** @type {string[]} */ segmentKeys) => {
                 try {
-                  const updated = await api.reorderTaskSegments(selected.id, {
-                    expected_revision: selected.revision,
-                    segment_keys: segmentKeys,
-                  });
+                  const updated = await taskMonitorApi.reorderTaskSegments(
+                    selected.id,
+                    {
+                      expected_revision: selected.revision,
+                      segment_keys: segmentKeys,
+                    },
+                  );
                   setSelected(updated);
                   setActionError("");
                   notify("执行顺序已更新，将在当前片段完成后生效");
                   return true;
                 } catch (error) {
-                  if (error.status === 409) {
+                  if (errorStatus(error) === 409) {
                     setActionError("等待片段已经变化，请刷新后重新排序。");
                     await loadSelected();
                   }
-                  notify(error.message, "error");
+                  notify(errorMessage(error), "error");
                   return false;
                 }
               }}
-              onPreflightReplan={(payload) =>
-                api.preflightTaskReplan(selected.id, payload)
+              onPreflightReplan={(/** @type {TaskPayload} */ payload) =>
+                taskMonitorApi.preflightTaskReplan(selected.id, payload)
               }
-              onReplan={async (payload) => {
+              onReplan={async (/** @type {TaskPayload} */ payload) => {
                 try {
-                  const updated = await api.replanTask(selected.id, payload);
+                  const updated = await taskMonitorApi.replanTask(selected.id, payload);
                   setSelected(updated);
                   setActionError("");
                   await loadTasks();
                   notify("任务执行计划已更新");
                   return true;
                 } catch (error) {
-                  if (error.status === 409) {
+                  if (errorStatus(error) === 409) {
                     setActionError("执行计划或任务版本已变化，请重新预检后再提交。");
                     await loadSelected();
                   }
-                  notify(error.message, "error");
+                  notify(errorMessage(error), "error");
                   return false;
                 }
               }}

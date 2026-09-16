@@ -2,16 +2,23 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { api } from "../../api";
 
+/**
+ * @param {NonNullable<import("../../shared/api/generated/classification-results/types.gen").ListResultsApiClassificationResultsGetData["query"]>} query
+ */
 export function useClassificationResultListData(query) {
-  const [data, setData] = useState(null);
+  const [data, setData] = useState(
+    /** @type {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultListResponse | null} */ (
+      null
+    ),
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [hasNewResults, setHasNewResults] = useState(false);
   const firstResultRef = useRef("");
   const listGenerationRef = useRef(0);
-  const listControllerRef = useRef(null);
+  const listControllerRef = useRef(/** @type {AbortController | null} */ (null));
   const pollGenerationRef = useRef(0);
-  const pollControllerRef = useRef(null);
+  const pollControllerRef = useRef(/** @type {AbortController | null} */ (null));
 
   const load = useCallback(async () => {
     const generation = listGenerationRef.current + 1;
@@ -30,8 +37,11 @@ export function useClassificationResultListData(query) {
       firstResultRef.current = value.items?.[0]?.version_id ?? "";
       setHasNewResults(false);
     } catch (loadError) {
-      if (listGenerationRef.current === generation && loadError.name !== "AbortError") {
-        setError(loadError.message);
+      if (
+        listGenerationRef.current === generation &&
+        (!(loadError instanceof Error) || loadError.name !== "AbortError")
+      ) {
+        setError(loadError instanceof Error ? loadError.message : "请求失败");
       }
     } finally {
       if (listGenerationRef.current === generation) setLoading(false);
@@ -60,9 +70,9 @@ export function useClassificationResultListData(query) {
       .catch((loadError) => {
         if (
           listGenerationRef.current === generation &&
-          loadError.name !== "AbortError"
+          (!(loadError instanceof Error) || loadError.name !== "AbortError")
         ) {
-          setError(loadError.message);
+          setError(loadError instanceof Error ? loadError.message : "请求失败");
         }
       })
       .finally(() => {
@@ -97,7 +107,7 @@ export function useClassificationResultListData(query) {
           }
         })
         .catch((pollError) => {
-          if (pollError.name !== "AbortError") return;
+          if (!(pollError instanceof Error) || pollError.name !== "AbortError") return;
         })
         .finally(() => {
           if (pollControllerRef.current === controller) {

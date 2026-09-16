@@ -5,7 +5,10 @@ import "./styles.css";
 import "./styles/desktop-layout.css";
 import "./styles/visual-foundation.css";
 
-createRoot(document.getElementById("root")).render(
+const root = document.getElementById("root");
+if (!root) throw new Error("缺少应用挂载节点 #root");
+
+createRoot(root).render(
   <React.StrictMode>
     <App />
   </React.StrictMode>,

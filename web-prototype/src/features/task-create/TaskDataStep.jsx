@@ -2,6 +2,24 @@ import { useEffect, useState } from "react";
 import { Database, FileArrowUp, FolderOpen, UploadSimple } from "@phosphor-icons/react";
 import { MysqlReturnImportForm } from "./MysqlReturnImportForm";
 
+/** @typedef {import("./taskCreateContracts").DataVersion} DataVersion */
+/** @typedef {import("./taskCreateContracts").MysqlFormState} MysqlFormState */
+/** @typedef {import("./taskCreateContracts").TaskForm} TaskForm */
+/** @typedef {import("./MysqlReturnImportForm").MysqlImportResult} MysqlImportResult */
+/** @typedef {import("./MysqlReturnImportForm").MysqlReturnFormState} MysqlReturnFormState */
+/** @typedef {readonly ["mysql" | "upload" | "existing", string, import("react").ElementType]} DataEntryOption */
+
+/** @type {readonly DataEntryOption[]} */
+const DATA_ENTRY_OPTIONS = [
+  ["mysql", "数据库", Database],
+  ["upload", "上传文件", FileArrowUp],
+  ["existing", "已有数据", FolderOpen],
+];
+
+/**
+ * @param {{form: TaskForm, onFormChange: (form: TaskForm) => void, returns: DataVersion[], selectedReturns?: DataVersion, dataEntryMode: "mysql" | "upload" | "existing", selectedDataLabel: string, onDataEntryModeChange: (mode: "mysql" | "upload" | "existing") => void, onSelectedDataLabelChange: (label: string) => void, onUploadReturns: () => void, mysqlDraft?: Partial<MysqlReturnFormState>, onMysqlDraftChange: (draft: MysqlReturnFormState) => void, onMysqlDone: (result: MysqlImportResult) => void | Promise<void>, onMysqlStateChange: (state: MysqlFormState) => void, onInvalidateMysql: () => void, busy: boolean, prepared: boolean, scopeLabel: string, children?: import("react").ReactNode}} props
+ */
+
 export function TaskDataStep({
   form,
   onFormChange,
@@ -49,11 +67,7 @@ export function TaskDataStep({
         </header>
         <div id="task-source-controls" hidden={prepared && !expanded}>
           <div className="task-data-entry-options" role="group" aria-label="数据来源">
-            {[
-              ["mysql", "数据库", Database],
-              ["upload", "上传文件", FileArrowUp],
-              ["existing", "已有数据", FolderOpen],
-            ].map(([mode, label, Icon]) => (
+            {DATA_ENTRY_OPTIONS.map(([mode, label, Icon]) => (
               <button
                 key={mode}
                 type="button"

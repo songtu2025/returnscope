@@ -4,8 +4,16 @@ import { WarningCircle } from "@phosphor-icons/react";
 import { InlineLoading, Modal } from "../../components/SharedUi";
 import { ExecutionPlanSummary } from "../task-planning/ExecutionPlanSummary";
 
+/** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
+/** @typedef {import("./taskRuntimeContracts").TaskPayload} TaskPayload */
+/** @typedef {import("../task-planning/taskPlanContracts").TaskExecutionPlan} TaskExecutionPlan */
+
+/**
+ * @param {{task: AnalysisTask, onClose: () => void, onPreflight: (payload: TaskPayload) => Promise<TaskExecutionPlan>, onSave: (payload: TaskPayload) => Promise<unknown>}} props
+ */
+
 export function TaskReplanDialog({ task, onClose, onPreflight, onSave }) {
-  const [plan, setPlan] = useState(null);
+  const [plan, setPlan] = useState(/** @type {TaskExecutionPlan | null} */ (null));
   const [policy, setPolicy] = useState("");
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(true);
@@ -20,7 +28,7 @@ export function TaskReplanDialog({ task, onClose, onPreflight, onSave }) {
       setPlan(value);
       setPolicy(value.blocked_count > 0 ? "" : "block_all");
     } catch (loadError) {
-      setError(loadError.message);
+      setError(loadError instanceof Error ? loadError.message : "重新预检失败");
     } finally {
       setLoading(false);
     }
@@ -30,6 +38,7 @@ export function TaskReplanDialog({ task, onClose, onPreflight, onSave }) {
     loadPlan();
   }, [loadPlan]);
 
+  /** @param {import("react").FormEvent<HTMLFormElement>} event */
   const submit = async (event) => {
     event.preventDefault();
     if (!plan || !policy) return;
@@ -72,8 +81,8 @@ export function TaskReplanDialog({ task, onClose, onPreflight, onSave }) {
           <textarea
             value={reason}
             onChange={(event) => setReason(event.target.value)}
-            maxLength="500"
-            rows="3"
+            maxLength={500}
+            rows={3}
             placeholder="必填，说明本次重新规划依据"
             required
           />

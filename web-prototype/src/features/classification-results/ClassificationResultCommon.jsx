@@ -2,6 +2,7 @@ import { WarningCircle } from "@phosphor-icons/react";
 
 export { Pagination } from "../../components/Pagination";
 
+/** @param {{ message: string, onRetry: () => void }} props */
 export function ResultError({ message, onRetry }) {
   return (
     <div className="result-error-state" role="alert">

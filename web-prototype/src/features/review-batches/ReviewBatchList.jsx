@@ -18,11 +18,29 @@ import { ResultWorkspaceNav } from "../classification-results/ResultWorkspaceNav
 import { ReviewBatchError } from "./ReviewBatchError";
 import { BATCH_STATUS_LABELS, pendingCount } from "./reviewBatchPresentation";
 
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewBatchPage} ReviewBatchPage */
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewBatchRoute} ReviewBatchRoute */
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewRequestError} ReviewRequestError */
+
+/** @param {unknown} error @returns {ReviewRequestError} */
+function requestError(error) {
+  return error instanceof Error
+    ? /** @type {ReviewRequestError} */ (error)
+    : /** @type {ReviewRequestError} */ (new Error("复核批次读取失败"));
+}
+
+/** @param {{route: ReviewBatchRoute, updateRoute: (changes: Partial<ReviewBatchRoute>) => void}} props */
 export function ReviewBatchList({ route, updateRoute }) {
-  const [state, setState] = useState({ loading: true, error: null, data: null });
+  const [state, setState] = useState(
+    /** @type {{loading: boolean, error: ReviewRequestError | null, data: ReviewBatchPage | null}} */ ({
+      loading: true,
+      error: null,
+      data: null,
+    }),
+  );
   const [filters, setFilters] = useState({ q: route.q, status: route.status });
   const generationRef = useRef(0);
-  const controllerRef = useRef(null);
+  const controllerRef = useRef(/** @type {AbortController | null} */ (null));
 
   useEffect(() => {
     setFilters({ q: route.q, status: route.status });
@@ -54,8 +72,9 @@ export function ReviewBatchList({ route, updateRoute }) {
         setState({ loading: false, error: null, data });
       }
     } catch (error) {
-      if (generationRef.current === generation && error.name !== "AbortError") {
-        setState({ loading: false, error, data: null });
+      const failure = requestError(error);
+      if (generationRef.current === generation && failure.name !== "AbortError") {
+        setState({ loading: false, error: failure, data: null });
       }
     }
   }, [query]);
@@ -210,10 +229,12 @@ export function ReviewBatchList({ route, updateRoute }) {
             <Pagination
               page={route.page}
               pageSize={route.pageSize}
-              total={state.data.total}
+              total={state.data?.total ?? 0}
               totalPages={totalPages}
-              onPage={(page) => updateRoute({ page })}
-              onPageSize={(pageSize) => updateRoute({ page: 1, pageSize })}
+              onPage={(/** @type {number} */ page) => updateRoute({ page })}
+              onPageSize={(/** @type {number} */ pageSize) =>
+                updateRoute({ page: 1, pageSize })
+              }
             />
           </>
         )}

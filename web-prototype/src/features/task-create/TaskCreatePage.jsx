@@ -11,9 +11,18 @@ import {
   writeTaskDraft,
 } from "./taskDraftStorage";
 
+/** @typedef {import("./taskCreateContracts").TaskDraft} TaskDraft */
+/** @typedef {import("./taskCreateContracts").TaskModelPolicy} TaskModelPolicy */
+/** @typedef {import("../task-runtime/taskRuntimeContracts").AnalysisTask} AnalysisTask */
+/**
+ * @param {{route: import("../../app/navigation").AppRoute, notify: (message: string, type?: "success" | "error") => void, onNavigate: import("../../app/navigation").Navigate, onChanged: () => void | Promise<unknown>, userId: string}} props
+ */
+
 export function TaskCreatePage({ route, notify, onNavigate, onChanged, userId }) {
   const templateTaskId = route.query.template_task;
-  const [templateTask, setTemplateTask] = useState(null);
+  const [templateTask, setTemplateTask] = useState(
+    /** @type {AnalysisTask | null} */ (null),
+  );
   const [templateLoading, setTemplateLoading] = useState(Boolean(templateTaskId));
 
   useEffect(() => {
@@ -48,8 +57,10 @@ export function TaskCreatePage({ route, notify, onNavigate, onChanged, userId })
   const draft = useMemo(() => {
     const stored = readTaskDraft(userId);
     if (templateTask) {
-      const config = templateTask.snapshot?.config ?? {};
-      const next = {
+      const config = /** @type {Partial<TaskModelPolicy>} */ (
+        templateTask.snapshot?.config ?? {}
+      );
+      const next = /** @type {TaskDraft} */ ({
         step: 1,
         resumePreflight: false,
         dataEntryMode: "existing",
@@ -62,22 +73,22 @@ export function TaskCreatePage({ route, notify, onNavigate, onChanged, userId })
           store: "",
           listing: "",
           model_policy: {
-            connection_id: config.connection_id,
-            cheap_model: config.cheap_model,
-            cheap_effort: config.cheap_effort,
-            primary_model: config.primary_model,
-            primary_effort: config.primary_effort,
-            secondary_model: config.secondary_model,
-            secondary_effort: config.secondary_effort,
-            cheap_audit_percent: config.cheap_audit_percent,
+            connection_id: config.connection_id ?? "",
+            cheap_model: config.cheap_model ?? "",
+            cheap_effort: config.cheap_effort ?? "low",
+            primary_model: config.primary_model ?? "",
+            primary_effort: config.primary_effort ?? "medium",
+            secondary_model: config.secondary_model ?? "",
+            secondary_effort: config.secondary_effort ?? "high",
+            cheap_audit_percent: config.cheap_audit_percent ?? 5,
           },
         },
-      };
+      });
       writeTaskDraft(userId, next);
       return next;
     }
     if (!route.query.dataset_version) return stored;
-    const next = {
+    const next = /** @type {TaskDraft} */ ({
       ...stored,
       step: 1,
       resumePreflight: false,
@@ -87,14 +98,15 @@ export function TaskCreatePage({ route, notify, onNavigate, onChanged, userId })
         ...stored?.form,
         dataset_version_id: route.query.dataset_version,
       },
-    };
+    });
     writeTaskDraft(userId, next);
     return next;
   }, [route.query.dataset_version, templateTask, userId]);
 
   const navigate = useCallback(
+    /** @type {import("../../app/navigation").Navigate} */
     (destination, focus) => {
-      if (destination === "data" && focus?.returnToTask) {
+      if (destination === "data" && focus?.kind === "dataset" && focus.returnToTask) {
         updateTaskDraft(userId, { repairContext: focus });
       }
       onNavigate(destination, focus);

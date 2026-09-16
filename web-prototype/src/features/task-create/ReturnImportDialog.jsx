@@ -10,6 +10,11 @@ import {
 import { api } from "../../api";
 import { Modal } from "../../components/SharedUi";
 
+/** @typedef {"analyze_only" | "create" | "append" | "replace"} ReturnImportMode */
+/** @typedef {import("./taskCreateContracts").ReturnImportInspection} ReturnImportInspection */
+/** @typedef {import("./taskCreateContracts").ReturnImportResult} ReturnImportResult */
+
+/** @type {Record<ReturnImportMode, {title: string, description: string}>} */
 const IMPORT_MODES = {
   analyze_only: {
     title: "仅分析本批",
@@ -29,10 +34,15 @@ const IMPORT_MODES = {
   },
 };
 
+/**
+ * @param {{onClose: () => void, onDone: (result: ReturnImportResult) => void | Promise<void>, purpose?: "task" | "asset"}} props
+ */
 export function ReturnImportDialog({ onClose, onDone, purpose = "task" }) {
-  const [file, setFile] = useState(null);
-  const [inspection, setInspection] = useState(null);
-  const [mode, setMode] = useState("analyze_only");
+  const [file, setFile] = useState(/** @type {File | null} */ (null));
+  const [inspection, setInspection] = useState(
+    /** @type {ReturnImportInspection | null} */ (null),
+  );
+  const [mode, setMode] = useState(/** @type {ReturnImportMode} */ ("analyze_only"));
   const [datasetId, setDatasetId] = useState("");
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
@@ -40,6 +50,7 @@ export function ReturnImportDialog({ onClose, onDone, purpose = "task" }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  /** @param {import("react").FormEvent<HTMLFormElement>} event */
   const inspect = async (event) => {
     event.preventDefault();
     if (!file) {
@@ -51,7 +62,9 @@ export function ReturnImportDialog({ onClose, onDone, purpose = "task" }) {
     try {
       const body = new FormData();
       body.append("file", file);
-      const result = await api.inspectReturnImport(body);
+      const result = /** @type {ReturnImportInspection} */ (
+        await api.inspectReturnImport(body)
+      );
       const firstMatch = result.matches?.[0];
       setInspection(result);
       setDatasetId(firstMatch?.dataset_id ?? "");
@@ -81,13 +94,15 @@ export function ReturnImportDialog({ onClose, onDone, purpose = "task" }) {
     setError("");
     try {
       await onDone(
-        await api.importReturns({
-          inspection_id: inspection.inspection_id,
-          mode,
-          dataset_id: datasetId,
-          name: name.trim(),
-          change_note: note.trim(),
-        }),
+        /** @type {ReturnImportResult} */ (
+          await api.importReturns({
+            inspection_id: inspection.inspection_id,
+            mode,
+            dataset_id: datasetId,
+            name: name.trim(),
+            change_note: note.trim(),
+          })
+        ),
       );
     } catch (requestError) {
       setError(importErrorMessage(requestError, "请检查导入方式和目标数据源后重试。"));
@@ -97,6 +112,7 @@ export function ReturnImportDialog({ onClose, onDone, purpose = "task" }) {
   };
 
   const matches = inspection?.matches ?? [];
+  /** @type {ReturnImportMode[]} */
   const availableModes =
     purpose === "asset"
       ? matches.length
@@ -266,7 +282,7 @@ export function ReturnImportDialog({ onClose, onDone, purpose = "task" }) {
               <input
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                maxLength="100"
+                maxLength={100}
               />
             </label>
           )}
@@ -278,7 +294,7 @@ export function ReturnImportDialog({ onClose, onDone, purpose = "task" }) {
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
                 placeholder="说明这次为什么追加或替换数据"
-                maxLength="500"
+                maxLength={500}
               />
             </label>
           )}
@@ -316,6 +332,7 @@ export function ReturnImportDialog({ onClose, onDone, purpose = "task" }) {
   );
 }
 
+/** @param {{message: string}} props */
 function ImportError({ message }) {
   return (
     <div className="form-error">
@@ -325,8 +342,9 @@ function ImportError({ message }) {
   );
 }
 
+/** @param {unknown} error @param {string} nextStep */
 function importErrorMessage(error, nextStep) {
-  const detail = String(error?.message || "").trim();
+  const detail = error instanceof Error ? error.message.trim() : "";
   if (/failed to fetch|network\s*error|networkerror|load failed/i.test(detail)) {
     return `无法连接服务，${nextStep}`;
   }

@@ -18,6 +18,12 @@ import { SnapshotStorageOverview } from "./ReturnDataAssetStorage";
 
 const SNAPSHOT_PAGE_SIZE = 5;
 
+/** @typedef {import("../../shared/api/dataManagementContracts").DatasetSource} DatasetSource */
+/** @typedef {import("../../shared/api/dataManagementContracts").DatasetVersion} DatasetVersion */
+/** @typedef {import("../../shared/api/dataManagementContracts").DatasetRowsPage} DatasetRowsPage */
+/** @typedef {(message: string, tone?: string) => void} Notify */
+
+/** @param {{source: DatasetSource, notify: Notify, onStorageChanged?: () => void | Promise<void>, initiallyShowTrace?: boolean}} props */
 export function SourceDetail({ source, notify, onStorageChanged, initiallyShowTrace }) {
   const [showTrace, setShowTrace] = useState(initiallyShowTrace);
   const latestImport = source.imports?.[0];
@@ -91,8 +97,11 @@ export function SourceDetail({ source, notify, onStorageChanged, initiallyShowTr
   );
 }
 
+/** @param {{source: DatasetSource, notify: Notify, onStorageChanged?: () => void | Promise<void>}} props */
 function SourceTrace({ source, notify, onStorageChanged }) {
-  const [selectedSnapshot, setSelectedSnapshot] = useState(null);
+  const [selectedSnapshot, setSelectedSnapshot] = useState(
+    /** @type {DatasetVersion | null} */ (null),
+  );
   const [snapshotPage, setSnapshotPage] = useState(1);
   const versions = source.versions ?? [];
   const snapshotPages = Math.max(1, Math.ceil(versions.length / SNAPSHOT_PAGE_SIZE));
@@ -202,8 +211,9 @@ function SourceTrace({ source, notify, onStorageChanged }) {
   );
 }
 
+/** @param {{source: DatasetSource, snapshot: DatasetVersion, onClose: () => void}} props */
 function SnapshotPreviewDialog({ source, snapshot, onClose }) {
-  const [preview, setPreview] = useState(null);
+  const [preview, setPreview] = useState(/** @type {DatasetRowsPage | null} */ (null));
   const [error, setError] = useState("");
   const datasetId = snapshot.dataset_id || source.id;
   const current = snapshot.id === source.version_id;
@@ -221,7 +231,9 @@ function SnapshotPreviewDialog({ source, snapshot, onClose }) {
       )
       .then(setPreview)
       .catch((requestError) => {
-        if (requestError.name !== "AbortError") setError(requestError.message);
+        const errorValue =
+          requestError instanceof Error ? requestError : new Error("快照读取失败");
+        if (errorValue.name !== "AbortError") setError(errorValue.message);
       });
     return () => controller.abort();
   }, [datasetId, snapshot.version]);

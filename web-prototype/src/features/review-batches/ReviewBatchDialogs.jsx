@@ -6,6 +6,13 @@ import Select from "antd/es/select";
 import { Modal } from "../../components/SharedUi";
 import { labelText } from "../../lib/taxonomyPresentation";
 
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewAction} ReviewAction */
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewBatch} ReviewBatch */
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewLabel} ReviewLabel */
+
+/**
+ * @param {{open: boolean, batch: ReviewBatch | null, reason: string, error: string, publishing: boolean, onReason: (reason: string) => void, onClose: () => void, onPublish: () => void | Promise<void>}} props
+ */
 export function ReviewPublishDialog({
   open,
   batch,
@@ -16,7 +23,7 @@ export function ReviewPublishDialog({
   onClose,
   onPublish,
 }) {
-  if (!open) return null;
+  if (!open || !batch) return null;
 
   return (
     <Modal
@@ -33,7 +40,7 @@ export function ReviewPublishDialog({
         <label>
           发布原因
           <Input.TextArea
-            rows="4"
+            rows={4}
             required
             value={reason}
             onChange={(event) => onReason(event.target.value)}
@@ -62,6 +69,9 @@ export function ReviewPublishDialog({
   );
 }
 
+/**
+ * @param {{action: ReviewAction | "", checkedCount: number, labels: ReviewLabel[], labelCode: string, reason: string, error: string, saving: boolean, onLabelCode: (code: string) => void, onReason: (reason: string) => void, onClose: () => void, onSave: () => void | Promise<void>}} props
+ */
 export function ReviewBulkDialog({
   action,
   checkedCount,
@@ -117,7 +127,7 @@ export function ReviewBulkDialog({
         <label>
           处理原因
           <Input.TextArea
-            rows="4"
+            rows={4}
             required
             value={reason}
             onChange={(event) => onReason(event.target.value)}

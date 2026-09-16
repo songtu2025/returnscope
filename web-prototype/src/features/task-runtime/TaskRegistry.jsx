@@ -19,6 +19,34 @@ import {
   taskSummary,
 } from "./taskRegistryPolicy";
 
+/** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
+/**
+ * @typedef {Object} TaskRegistryProps
+ * @property {AnalysisTask[]} tasks
+ * @property {string | null} selectedId
+ * @property {string} filter
+ * @property {(filter: string) => void} onFilterChange
+ * @property {boolean} loading
+ * @property {string} error
+ * @property {() => void | Promise<unknown>} onReload
+ * @property {() => void} onCreate
+ * @property {(task: AnalysisTask) => void} onOpen
+ * @property {(taskIds: string[], archived: boolean) => Promise<boolean>} onArchive
+ * @property {(task: AnalysisTask) => void} onCreateSimilar
+ */
+/**
+ * @typedef {Object} TaskRegistryRowProps
+ * @property {AnalysisTask} task
+ * @property {boolean} active
+ * @property {boolean} selected
+ * @property {boolean} selectable
+ * @property {boolean} saving
+ * @property {() => void} onToggle
+ * @property {() => void} onOpen
+ * @property {() => void} onCreateSimilar
+ * @property {() => void} onArchive
+ */
+
 const FILTERS = [
   ["all", "全部"],
   ["active", "未结束"],
@@ -26,10 +54,12 @@ const FILTERS = [
   ["archived", "已归档"],
 ];
 
+/** @param {AnalysisTask} task */
 function canArchiveTask(task) {
   return Boolean(task.archived_at) || FINAL_TASK_STATUSES.includes(task.status);
 }
 
+/** @param {AnalysisTask} task @param {string} query */
 function matchesQuery(task, query) {
   if (!query) return true;
   const source = [
@@ -46,6 +76,7 @@ function matchesQuery(task, query) {
   return source.includes(query);
 }
 
+/** @param {AnalysisTask[]} tasks @param {string} sort */
 function sortTasks(tasks, sort) {
   return [...tasks].sort((left, right) => {
     if (sort === "created_desc") {
@@ -60,6 +91,7 @@ function sortTasks(tasks, sort) {
   });
 }
 
+/** @param {TaskRegistryProps} props */
 export function TaskRegistry({
   tasks,
   selectedId,
@@ -77,11 +109,13 @@ export function TaskRegistry({
   const deferredQuery = useDeferredValue(query.trim().toLocaleLowerCase());
   const [owner, setOwner] = useState("all");
   const [sort, setSort] = useState("updated_desc");
-  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [selectedIds, setSelectedIds] = useState(
+    () => new Set(/** @type {string[]} */ ([])),
+  );
   const [attentionOnly, setAttentionOnly] = useState(false);
   const [saving, setSaving] = useState(false);
-  const selectAllRef = useRef(null);
-  const searchInputRef = useRef(null);
+  const selectAllRef = useRef(/** @type {HTMLInputElement | null} */ (null));
+  const searchInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
 
   const owners = useMemo(
     () =>
@@ -98,7 +132,12 @@ export function TaskRegistry({
           if (!task.archived_at) current.all += 1;
           return current;
         },
-        { all: 0, active: 0, finished: 0, archived: 0 },
+        /** @type {Record<string, number>} */ ({
+          all: 0,
+          active: 0,
+          finished: 0,
+          archived: 0,
+        }),
       ),
     [tasks],
   );
@@ -139,6 +178,7 @@ export function TaskRegistry({
     selectAllRef.current.indeterminate = selectedVisibleIds.length > 0 && !allSelected;
   }, [allSelected, selectedVisibleIds.length]);
 
+  /** @param {string} taskId */
   const toggleTask = (taskId) => {
     setSelectedIds((current) => {
       const next = new Set(current);
@@ -157,6 +197,7 @@ export function TaskRegistry({
     });
   };
 
+  /** @param {string[]} taskIds @param {boolean} archived */
   const applyArchive = async (taskIds, archived) => {
     setSaving(true);
     try {
@@ -347,6 +388,7 @@ export function TaskRegistry({
   );
 }
 
+/** @param {TaskRegistryRowProps} props */
 function TaskRegistryRow({
   task,
   active,

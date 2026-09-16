@@ -15,6 +15,11 @@ import { EmptyState, InlineLoading, PageHeading } from "../../components/SharedU
 import { formatTime } from "../../lib/presentation";
 import { workbenchApi } from "../../shared/api/workbenchApi";
 
+/** @typedef {import("../../shared/api/workbenchContracts").WorkbenchTarget} WorkbenchTarget */
+/** @typedef {import("../../shared/api/workbenchContracts").WorkbenchAction} WorkbenchAction */
+/** @typedef {import("../../shared/api/workbenchContracts").WorkbenchOutput} WorkbenchOutput */
+
+/** @type {Record<string, string>} */
 const ACTION_LABELS = {
   blocked: "阻断",
   failed: "失败",
@@ -24,6 +29,7 @@ const ACTION_LABELS = {
   report_failed: "报告失败",
 };
 
+/** @type {Record<string, string>} */
 const OUTPUT_LABELS = {
   classification_result: "分类结果",
   derived_result: "复核派生结果",
@@ -31,6 +37,7 @@ const OUTPUT_LABELS = {
   insight_report: "AI 洞察报告",
 };
 
+/** @param {WorkbenchTarget} target */
 function openTarget(target) {
   const destination = routeForTarget(target);
   if (!destination) return;
@@ -41,22 +48,30 @@ function openTarget(target) {
   navigateHash(destination.page, destination.query);
 }
 
+/** @param {WorkbenchAction} action */
 function nextActionLabel(action) {
   if (action.type === "review_required") return "创建复核批次";
   if (action.type === "report_running") return "查看进度";
   if (action.type === "report_failed") return "查看并重试";
-  return ACTION_LABELS[action.status] ?? action.status ?? "查看详情";
+  return (
+    (action.status ? ACTION_LABELS[action.status] : undefined) ??
+    action.status ??
+    "查看详情"
+  );
 }
 
+/** @param {{onNavigate: (destination: string) => void}} props */
 export function WorkbenchPage({ onNavigate }) {
-  const [state, setState] = useState({
-    loading: true,
-    error: "",
-    actions: [],
-    recentOutputs: [],
-    counts: {},
-  });
-  const controllerRef = useRef(null);
+  const [state, setState] = useState(
+    /** @type {{loading: boolean, error: string, actions: WorkbenchAction[], recentOutputs: WorkbenchOutput[], counts: Record<string, number>}} */ ({
+      loading: true,
+      error: "",
+      actions: [],
+      recentOutputs: [],
+      counts: {},
+    }),
+  );
+  const controllerRef = useRef(/** @type {AbortController | null} */ (null));
   const generationRef = useRef(0);
 
   const load = useCallback(async () => {
@@ -77,8 +92,14 @@ export function WorkbenchPage({ onNavigate }) {
         counts: value.counts ?? {},
       });
     } catch (error) {
-      if (generationRef.current === generation && error.name !== "AbortError") {
-        setState((current) => ({ ...current, loading: false, error: error.message }));
+      const requestError =
+        error instanceof Error ? error : new Error("首页数据读取失败");
+      if (generationRef.current === generation && requestError.name !== "AbortError") {
+        setState((current) => ({
+          ...current,
+          loading: false,
+          error: requestError.message,
+        }));
       }
     }
   }, []);
@@ -215,6 +236,7 @@ export function WorkbenchPage({ onNavigate }) {
   );
 }
 
+/** @param {{title: string, message: string, onRetry: () => void}} props */
 function WorkbenchError({ title, message, onRetry }) {
   return (
     <div className="plan-state error workbench-local-error" role="alert">

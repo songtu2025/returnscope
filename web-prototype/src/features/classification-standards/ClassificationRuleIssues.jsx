@@ -10,29 +10,51 @@ const RULE_NAMES = {
   claim_evidence_requirements: "承诺证据要求",
 };
 
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardEditableContent} ClassificationStandardEditableContent */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardValidationIssue} ClassificationStandardValidationIssue */
+/** @typedef {keyof typeof RULE_NAMES} RuleField */
+/** @typedef {{field: RuleField, name: string, key: string | number, value: unknown, missing: string[]}} InvalidRuleRow */
+/** @typedef {{content: ClassificationStandardEditableContent, onChange: (content: ClassificationStandardEditableContent) => void, focusRequest: ClassificationStandardValidationIssue | null, disabled: boolean}} ClassificationRuleIssuesProps */
+
+/** @param {ClassificationRuleIssuesProps} props */
 export function ClassificationRuleIssues({
   content,
   onChange,
   focusRequest,
   disabled,
 }) {
-  const headingRef = useRef(null);
+  const headingRef = useRef(/** @type {HTMLHeadingElement | null} */ (null));
   useEffect(() => {
     if (focusRequest?.kind === "invalid_rule") headingRef.current?.focus();
   }, [focusRequest]);
   const rules = content.validation_rules ?? {};
   const codes = new Set(content.labels.map((label) => label.code));
-  const invalidRows = Object.entries(RULE_NAMES).flatMap(([field, name]) => {
+  const ruleNames = /** @type {[RuleField, string][]} */ (Object.entries(RULE_NAMES));
+  /** @type {InvalidRuleRow[]} */
+  const invalidRows = ruleNames.flatMap(([field, name]) => {
+    const current = rules[field];
+    /** @type {[string | number, unknown][]} */
     const entries =
       field === "opposite_reason_labels"
-        ? Object.entries(rules[field] ?? {})
-        : (rules[field] ?? []).map((value, index) => [index, value]);
+        ? Object.entries(
+            typeof current === "object" && current !== null && !Array.isArray(current)
+              ? current
+              : {},
+          )
+        : Array.isArray(current)
+          ? current.map((value, index) => [index, value])
+          : [];
     return entries.flatMap(([key, value]) => {
       const references = Array.isArray(value)
-        ? value
+        ? value.filter((item) => typeof item === "string")
         : typeof value === "string"
           ? [value]
-          : [value.label_code];
+          : typeof value === "object" &&
+              value !== null &&
+              "label_code" in value &&
+              typeof value.label_code === "string"
+            ? [value.label_code]
+            : [];
       const missing = references.filter((code) => !codes.has(code));
       return missing.length ? [{ field, name, key, value, missing }] : [];
     });
@@ -65,14 +87,18 @@ export function ClassificationRuleIssues({
                 className="secondary-button compact-button"
                 disabled={disabled}
                 onClick={() => {
+                  const current = rules[row.field];
                   const next =
-                    row.field === "opposite_reason_labels"
+                    row.field === "opposite_reason_labels" &&
+                    typeof current === "object" &&
+                    current !== null &&
+                    !Array.isArray(current)
                       ? Object.fromEntries(
-                          Object.entries(rules[row.field]).filter(
-                            ([key]) => key !== row.key,
-                          ),
+                          Object.entries(current).filter(([key]) => key !== row.key),
                         )
-                      : rules[row.field].filter((_, index) => index !== row.key);
+                      : Array.isArray(current)
+                        ? current.filter((_item, index) => index !== row.key)
+                        : [];
                   onChange({
                     ...content,
                     validation_rules: { ...rules, [row.field]: next },

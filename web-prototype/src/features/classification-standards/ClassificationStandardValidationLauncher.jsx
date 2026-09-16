@@ -2,8 +2,16 @@ import { useState } from "react";
 import Button from "antd/es/button";
 import { Flask, Play, SpinnerGap } from "@phosphor-icons/react";
 
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardDraft} ClassificationStandardDraft */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardValidationSource} ClassificationStandardValidationSource */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ValidationComparisonType} ValidationComparisonType */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ValidationSampleSize} ValidationSampleSize */
+/** @typedef {{draft: ClassificationStandardDraft, sources: ClassificationStandardValidationSource[], sourceId: string, sampleSize: ValidationSampleSize, busy: boolean, active: boolean, dirty: boolean, onSourceChange: (sourceId: string) => void, onSampleSizeChange: (sampleSize: ValidationSampleSize) => void, onRun: (file: File | null, comparisonType: ValidationComparisonType) => void}} ClassificationStandardValidationLauncherProps */
+
+/** @type {ValidationSampleSize[]} */
 const SAMPLE_SIZES = [20, 50, 100];
 
+/** @param {ClassificationStandardValidationLauncherProps} props */
 export function ClassificationStandardValidationLauncher({
   draft,
   sources,
@@ -16,8 +24,10 @@ export function ClassificationStandardValidationLauncher({
   onSampleSizeChange,
   onRun,
 }) {
-  const [reviewFile, setReviewFile] = useState(null);
-  const [comparisonType, setComparisonType] = useState("standard_version");
+  const [reviewFile, setReviewFile] = useState(/** @type {File | null} */ (null));
+  const [comparisonType, setComparisonType] = useState(
+    /** @type {ValidationComparisonType} */ ("standard_version"),
+  );
   const reviewMode = sourceId === "__review_file__" || !sourceId;
   const runDisabledReason = busy
     ? "正在创建验证任务，请稍候。"
@@ -59,7 +69,11 @@ export function ClassificationStandardValidationLauncher({
             <select
               aria-label="验证目的"
               value={comparisonType}
-              onChange={(event) => setComparisonType(event.target.value)}
+              onChange={(event) =>
+                setComparisonType(
+                  /** @type {ValidationComparisonType} */ (event.target.value),
+                )
+              }
             >
               <option value="standard_version">发布验证 · 当前标准与草稿</option>
               <option value="keyword_ab">关键词对照 · 同标签，仅移除关键词</option>
@@ -76,7 +90,7 @@ export function ClassificationStandardValidationLauncher({
               <option value="__review_file__">上传 Review 样本</option>
               {sources.map((source) => (
                 <option key={source.result_version_id} value={source.result_version_id}>
-                  {source.source_kind === "raw_dataset"
+                  {"return_dataset_name" in source
                     ? `${source.return_dataset_name} V${source.version_no} · ${source.product_dataset_name}`
                     : `${source.listing || "未指定 Listing"} · 结果 V${source.version_no} · 可抽样 ${source.available_sample_count} 条`}
                 </option>

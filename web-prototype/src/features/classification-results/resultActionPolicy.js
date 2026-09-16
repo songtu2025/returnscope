@@ -1,3 +1,55 @@
+/**
+ * @typedef {"ready" | "needs_review" | "review-derived" | "unusable" | "unknown"} ResultState
+ * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultVersionResponse} GeneratedResultVersion
+ * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultBlockingReasonResponse} GeneratedBlockingReason
+ * @typedef {object} CompatibilityResultFields
+ * @property {string} [version_id]
+ * @property {string} [result_version_id]
+ * @property {string} [id]
+ * @property {string} [delivery_status]
+ * @property {string} [result_state]
+ * @property {string} [action_state]
+ * @property {string} [workflow_state]
+ * @property {string} [publish_origin]
+ * @property {string | null} [source_review_batch_id]
+ * @property {string} [publish_status]
+ * @property {string} [quality_status]
+ * @property {string} [result_quality_status]
+ * @property {boolean} [dashboard_eligibility]
+ * @property {Array<string | GeneratedBlockingReason>} [blocking_reasons]
+ * @property {string} [blocking_reason]
+ * @property {string} [action_blocking_reason]
+ * @property {string} [unusable_reason]
+ * @property {string} [quality_reason]
+ * @property {string} [derived_result_version_id]
+ * @property {string} [derived_version_id]
+ * @property {string} [source_task_id]
+ * @property {string} [task_id]
+ * @typedef {CompatibilityResultFields & Record<string, unknown>} CompatibilityResult
+ * @typedef {GeneratedResultVersion | CompatibilityResult} ResultPolicyInput
+ *
+ * @typedef {{ id: string, status: string }} ReviewBatch
+ * @typedef {{ activeBatch?: ReviewBatch | null, derivedVersionId?: string, taskId?: string }} ResultPolicyOptions
+ * @typedef {
+ *   | { kind: "create-dashboard", label: string, disabled?: boolean }
+ *   | { kind: "enter-review", label: string, reviewBatchId: string, disabled?: boolean }
+ *   | { kind: "create-review", label: string, disabled?: boolean }
+ *   | { kind: "view-derived", label: string, resultVersionId: string, disabled?: boolean }
+ *   | { kind: "repair-source", label: string, taskId: string, disabled?: boolean }
+ *   | { kind: "view-blocker", label: string, disabled?: boolean }
+ * } ResultPrimaryAction
+ * @typedef {{ kind: "create-dashboard", label: string, disabled: boolean }} ResultSecondaryAction
+ * @typedef {{
+ *   state: ResultState,
+ *   label: string,
+ *   dashboardSelectable: boolean,
+ *   primary: ResultPrimaryAction,
+ *   secondary: ResultSecondaryAction | null,
+ *   blockingReason: string
+ * }} ResultPolicy
+ */
+
+/** @type {Readonly<Record<string, ResultState>>} */
 const STATE_ALIASES = {
   ready: "ready",
   needs_review: "needs_review",
@@ -8,6 +60,7 @@ const STATE_ALIASES = {
   unusable: "unusable",
 };
 
+/** @type {Readonly<Record<ResultState, string>>} */
 const RESULT_STATE_LABELS = {
   ready: "可用",
   needs_review: "需复核",
@@ -18,17 +71,32 @@ const RESULT_STATE_LABELS = {
 
 const ACTIVE_REVIEW_STATUSES = new Set(["draft", "in_review", "conflict"]);
 
-export function resultVersionId(result) {
-  return result?.version_id || result?.result_version_id || result?.id || "";
+/**
+ * @param {ResultPolicyInput | null | undefined} result
+ * @param {string} key
+ * @returns {string}
+ */
+function compatibilityString(result, key) {
+  const value = result?.[key];
+  return typeof value === "string" ? value : "";
 }
 
+/** @param {ResultPolicyInput | null | undefined} result @returns {string} */
+export function resultVersionId(result) {
+  return (
+    result?.version_id ||
+    compatibilityString(result, "result_version_id") ||
+    compatibilityString(result, "id")
+  );
+}
+
+/** @param {ResultPolicyInput | null | undefined} result @returns {ResultState} */
 export function resultState(result) {
   const explicit =
     result?.delivery_status ||
-    result?.result_state ||
-    result?.action_state ||
-    result?.workflow_state ||
-    "";
+    compatibilityString(result, "result_state") ||
+    compatibilityString(result, "action_state") ||
+    compatibilityString(result, "workflow_state");
   if (STATE_ALIASES[explicit]) return STATE_ALIASES[explicit];
 
   if (
@@ -38,14 +106,17 @@ export function resultState(result) {
     return "review-derived";
   }
 
-  const quality = result?.quality_status || result?.result_quality_status || "";
+  const quality =
+    result?.quality_status || compatibilityString(result, "result_quality_status");
   return STATE_ALIASES[quality] || "unknown";
 }
 
+/** @param {ResultPolicyInput | null | undefined} result @returns {string} */
 export function resultStateLabel(result) {
   return RESULT_STATE_LABELS[resultState(result)];
 }
 
+/** @param {ResultPolicyInput | null | undefined} result @returns {string} */
 function resultBlockingReason(result) {
   if (Array.isArray(result?.blocking_reasons)) {
     const messages = result.blocking_reasons
@@ -54,10 +125,10 @@ function resultBlockingReason(result) {
     if (messages.length) return messages.join("；");
   }
   const supplied =
-    result?.blocking_reason ||
-    result?.action_blocking_reason ||
-    result?.unusable_reason ||
-    result?.quality_reason;
+    compatibilityString(result, "blocking_reason") ||
+    compatibilityString(result, "action_blocking_reason") ||
+    compatibilityString(result, "unusable_reason") ||
+    compatibilityString(result, "quality_reason");
   if (supplied) return supplied;
 
   const state = resultState(result);
@@ -73,6 +144,7 @@ function resultBlockingReason(result) {
   return "";
 }
 
+/** @param {ResultPolicyInput | null | undefined} result @returns {boolean} */
 export function isDashboardSelectable(result) {
   const eligibleState = ["ready", "needs_review", "review-derived"].includes(
     resultState(result),
@@ -83,6 +155,11 @@ export function isDashboardSelectable(result) {
   return eligibleState;
 }
 
+/**
+ * @param {ResultPolicyInput} result
+ * @param {ResultPolicyOptions} [options]
+ * @returns {ResultPolicy}
+ */
 export function resultActionPolicy(result, options = {}) {
   const state = resultState(result);
   const dashboardSelectable = isDashboardSelectable(result);
@@ -90,9 +167,8 @@ export function resultActionPolicy(result, options = {}) {
   const hasActiveBatch = activeBatch && ACTIVE_REVIEW_STATUSES.has(activeBatch.status);
   const derivedVersionId =
     options.derivedVersionId ||
-    result?.derived_result_version_id ||
-    result?.derived_version_id ||
-    "";
+    compatibilityString(result, "derived_result_version_id") ||
+    compatibilityString(result, "derived_version_id");
 
   if (state === "ready") {
     return {
@@ -150,7 +226,10 @@ export function resultActionPolicy(result, options = {}) {
   }
 
   const sourceTaskId =
-    result?.source_task_id || result?.task_id || options.taskId || "";
+    result?.source_task_id ||
+    compatibilityString(result, "task_id") ||
+    options.taskId ||
+    "";
   return {
     state,
     label: RESULT_STATE_LABELS[state] || RESULT_STATE_LABELS.unknown,
@@ -167,6 +246,7 @@ export function resultActionPolicy(result, options = {}) {
   };
 }
 
+/** @template {ReviewBatch} T @param {T[]} [batches] @returns {T | null} */
 export function activeReviewBatch(batches = []) {
   return batches.find((batch) => ACTIVE_REVIEW_STATUSES.has(batch.status)) || null;
 }

@@ -1,7 +1,20 @@
+/** @typedef {import("./taskCreateContracts").ApiConnection} ApiConnection */
+/** @typedef {import("./taskCreateContracts").DataVersion} DataVersion */
+/** @typedef {import("./taskCreateContracts").PublishedConfig} PublishedConfig */
+/** @typedef {import("./taskCreateContracts").ReturnImportResult} ReturnImportResult */
+/** @typedef {import("./taskCreateContracts").TaskForm} TaskForm */
+/** @typedef {import("./taskCreateContracts").TaskModelPolicy} TaskModelPolicy */
+/** @typedef {import("./taskCreateContracts").TaskPlanViewState} TaskPlanViewState */
+/** @typedef {import("./taskCreateContracts").TaskPreflightState} TaskPreflightState */
+/** @typedef {import("./taskCreateContracts").TaskSystemStatus} TaskSystemStatus */
+/** @typedef {import("../task-planning/taskPlanContracts").TaskExecutionPlan} TaskExecutionPlan */
+/** @typedef {import("../task-planning/taskPlanContracts").TaskPlanCounts} TaskPlanCounts */
+
+/** @param {ApiConnection[]} configs @param {TaskForm} form @returns {TaskModelPolicy} */
 export function resolveTaskModelPolicy(configs, form) {
-  const publishedConfigs = configs
-    .filter((item) => item.active_version)
-    .map((item) => ({ ...item.active_version, connection_name: item.name }));
+  const publishedConfigs = configs.flatMap((item) =>
+    item.active_version ? [{ ...item.active_version, connection_name: item.name }] : [],
+  );
   const selectedConfig =
     publishedConfigs.find((item) => item.id === form.config_version_id) ??
     publishedConfigs[0];
@@ -21,6 +34,7 @@ export function resolveTaskModelPolicy(configs, form) {
   };
 }
 
+/** @param {PublishedConfig[]} publishedConfigs @param {string} configId @returns {TaskModelPolicy | null} */
 export function taskConnectionPolicy(publishedConfigs, configId) {
   const config = publishedConfigs.find((item) => item.id === configId);
   if (!config) return null;
@@ -36,8 +50,9 @@ export function taskConnectionPolicy(publishedConfigs, configId) {
   };
 }
 
+/** @param {DataVersion[]} items @returns {DataVersion[]} */
 export function canonicalManagedReturns(items) {
-  const grouped = new Map();
+  const grouped = new Map(/** @type {[string, DataVersion][]} */ ([]));
   items
     .filter(
       (item) =>
@@ -51,6 +66,7 @@ export function canonicalManagedReturns(items) {
   return [...grouped.values()];
 }
 
+/** @param {DataVersion} item @returns {DataVersion} */
 export function normalizeReturnVersion(item) {
   const stores = item.quality?.stores ?? [];
   return {
@@ -59,12 +75,14 @@ export function normalizeReturnVersion(item) {
   };
 }
 
+/** @param {string[]} stores @param {string} fallback */
 function returnSourceName(stores, fallback) {
   if (!stores.length) return fallback;
   const labels = stores.map((value) => value.replace(/[:_/\\-]+/g, " ").trim());
   return `${labels.join("、")} 退货数据`;
 }
 
+/** @param {ReturnImportResult} result */
 export function importSelectionLabel(result) {
   if (result.duplicate) return "已导入批次 · 直接复用";
   if (result.mode === "append") return "合并后的当前完整数据";
@@ -73,6 +91,7 @@ export function importSelectionLabel(result) {
   return "本次上传数据";
 }
 
+/** @param {ReturnImportResult} result */
 export function importNotification(result) {
   if (result.duplicate) return "文件已导入过，已直接复用现有数据";
   const imported = Number(result.summary?.imported_row_count ?? 0).toLocaleString();
@@ -82,6 +101,7 @@ export function importNotification(result) {
     : "退货明细已导入并自动选中";
 }
 
+/** @param {TaskExecutionPlan | null | undefined} plan */
 export function primaryPlanStore(plan) {
   return (
     plan?.primary_store ||
@@ -91,6 +111,12 @@ export function primaryPlanStore(plan) {
   );
 }
 
+/**
+ * @param {TaskPreflightState & {counts: TaskPlanCounts}} preflight
+ * @param {string} unresolvedPolicy
+ * @param {boolean} scopeConfirmed
+ * @returns {TaskPlanViewState}
+ */
 export function taskPlanViewState(preflight, unresolvedPolicy, scopeConfirmed) {
   const planCounts = preflight.counts;
   const blocked = (preflight.data?.blocked_count ?? 0) > 0;
@@ -124,6 +150,9 @@ export function taskPlanViewState(preflight, unresolvedPolicy, scopeConfirmed) {
   };
 }
 
+/**
+ * @param {TaskPlanViewState & {planCounts: TaskPlanCounts, preflightStatus: TaskPreflightState["status"], scopeConfirmed: boolean, submitError: string, submitting: boolean, system: TaskSystemStatus | null, unresolvedPolicy: string}} state
+ */
 export function taskLaunchCopy({
   blocked,
   categoryCompletionRequired,

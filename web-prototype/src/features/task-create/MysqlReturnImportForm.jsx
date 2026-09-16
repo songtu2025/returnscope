@@ -3,29 +3,127 @@ import { api } from "../../api";
 import { InlineLoading } from "../../components/SharedUi";
 import "../../styles/mysql-return-import.css";
 
+/** @typedef {{ name: string, label: string, required?: boolean }} MysqlField */
+/** @typedef {{ name: string, label?: string, type: string }} MysqlColumn */
+/** @typedef {Record<string, string>} MysqlFieldMapping */
+/**
+ * @typedef {{
+ *   configured: true,
+ *   database: string,
+ *   table: string,
+ *   max_rows: number,
+ *   fields: MysqlField[],
+ *   columns: MysqlColumn[],
+ *   mapping: MysqlFieldMapping,
+ *   stores?: string[]
+ * }} ConfiguredMysqlSchema
+ */
+/** @typedef {ConfiguredMysqlSchema | { configured: false }} MysqlSchema */
+/** @typedef {Record<string, string | number | null | undefined>} MysqlPreviewRow */
+/**
+ * @typedef {{
+ *   row_count: number,
+ *   over_limit: boolean,
+ *   missing_store_rows: number,
+ *   rows: MysqlPreviewRow[]
+ * }} MysqlPreview
+ */
+/**
+ * @typedef {{
+ *   mapping: MysqlFieldMapping,
+ *   default_store: string,
+ *   date_from: string,
+ *   date_to: string,
+ *   store: string,
+ *   sku: string
+ * }} MysqlReturnFormState
+ */
+/**
+ * @typedef {Omit<MysqlReturnFormState, "date_from" | "date_to"> & {
+ *   date_from: string | null,
+ *   date_to: string | null
+ * }} MysqlReturnRequest
+ */
+/** @typedef {{ version_id: string } & Record<string, unknown>} MysqlImportResult */
+/** @typedef {{ ready: boolean, busy: string, rowCount: number }} MysqlFormState */
+/**
+ * @typedef {{
+ *   onDone: (result: MysqlImportResult) => void | Promise<void>,
+ *   draft?: Partial<MysqlReturnFormState>,
+ *   onDraftChange?: (draft: MysqlReturnFormState) => void,
+ *   onStateChange?: (state: MysqlFormState) => void,
+ *   onInvalidate?: () => void,
+ *   prepared?: boolean,
+ *   disabled?: boolean
+ * }} MysqlReturnImportFormProps
+ */
+
+/**
+ * 本组件使用的 MySQL API 边界。共享请求层尚未声明响应类型，因此在消费端集中约束一次。
+ * @type {{
+ *   mysqlReturnSchema: (options?: { refresh?: boolean, signal?: AbortSignal }) => Promise<MysqlSchema>,
+ *   previewMysqlReturns: (payload: MysqlReturnRequest, options?: { signal?: AbortSignal }) => Promise<MysqlPreview>,
+ *   importMysqlReturns: (payload: MysqlReturnRequest) => Promise<MysqlImportResult>
+ * }}
+ */
+const mysqlReturnApi = api;
+
+/** @param {unknown} error */
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** @param {Partial<MysqlReturnFormState> | undefined} draft */
+function initialForm(draft) {
+  const defaultRange = datePresets()[2];
+  return {
+    default_store: "",
+    date_from: defaultRange.date_from,
+    date_to: defaultRange.date_to,
+    store: "",
+    sku: "",
+    ...draft,
+    mapping: draft?.mapping ?? {},
+  };
+}
+
 function datePresets() {
   const today = new Date();
   const year = today.getFullYear();
   const month = today.getMonth();
   const day = today.getDate();
+  /** @param {Date | null} date */
   const format = (date) =>
     date
       ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
       : "";
 
   return [
-    ["不限日期", null, null],
-    ["近7天", new Date(year, month, day - 6), today],
-    ["近30天", new Date(year, month, day - 29), today],
-    ["本月至今", new Date(year, month, 1), today],
-    ["上月", new Date(year, month - 1, 1), new Date(year, month, 0)],
-  ].map(([label, start, end]) => ({
-    label,
-    date_from: format(start),
-    date_to: format(end),
-  }));
+    { label: "不限日期", date_from: "", date_to: "" },
+    {
+      label: "近7天",
+      date_from: format(new Date(year, month, day - 6)),
+      date_to: format(today),
+    },
+    {
+      label: "近30天",
+      date_from: format(new Date(year, month, day - 29)),
+      date_to: format(today),
+    },
+    {
+      label: "本月至今",
+      date_from: format(new Date(year, month, 1)),
+      date_to: format(today),
+    },
+    {
+      label: "上月",
+      date_from: format(new Date(year, month - 1, 1)),
+      date_to: format(new Date(year, month, 0)),
+    },
+  ];
 }
 
+/** @param {MysqlReturnImportFormProps} props */
 export function MysqlReturnImportForm({
   onDone,
   draft,
@@ -35,36 +133,31 @@ export function MysqlReturnImportForm({
   prepared = false,
   disabled = false,
 }) {
-  const [schema, setSchema] = useState(null);
+  const [schema, setSchema] = useState(/** @type {MysqlSchema | null} */ (null));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
-  const [preview, setPreview] = useState(null);
+  const [preview, setPreview] = useState(/** @type {MysqlPreview | null} */ (null));
   const [schemaRevision, setSchemaRevision] = useState(0);
   const [previewRevision, setPreviewRevision] = useState(0);
-  const [form, setForm] = useState({
-    mapping: {},
-    default_store: "",
-    date_from: datePresets()[2].date_from,
-    date_to: datePresets()[2].date_to,
-    store: "",
-    sku: "",
-    ...draft,
-  });
+  const [form, setForm] = useState(() => initialForm(draft));
 
   useEffect(() => {
     const controller = new AbortController();
-    api
+    mysqlReturnApi
       .mysqlReturnSchema({ signal: controller.signal, refresh: schemaRevision > 0 })
       .then((result) => {
         setSchema(result);
         setForm((current) => ({
           ...current,
-          mapping: { ...result.mapping, ...current.mapping },
+          mapping: {
+            ...(result.configured ? result.mapping : {}),
+            ...current.mapping,
+          },
         }));
       })
       .catch((requestError) => {
-        if (!controller.signal.aborted) setError(requestError.message);
+        if (!controller.signal.aborted) setError(errorMessage(requestError));
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -85,6 +178,7 @@ export function MysqlReturnImportForm({
     setSchemaRevision((current) => current + 1);
   };
 
+  /** @param {Partial<MysqlReturnFormState>} changes */
   const update = (changes) => {
     onInvalidate?.();
     setBusy("");
@@ -92,6 +186,7 @@ export function MysqlReturnImportForm({
     setPreview(null);
     setError("");
   };
+  /** @param {import("react").FormEvent<HTMLFormElement>} event */
   const importData = async (event) => {
     event.preventDefault();
     if (!canPrepare || busy || disabled) return;
@@ -99,21 +194,23 @@ export function MysqlReturnImportForm({
     setError("");
     try {
       await onDone(
-        await api.importMysqlReturns({
+        await mysqlReturnApi.importMysqlReturns({
           ...form,
           date_from: form.date_from || null,
           date_to: form.date_to || null,
         }),
       );
     } catch (requestError) {
-      setError(requestError.message);
+      setError(errorMessage(requestError));
     } finally {
       setBusy("");
     }
   };
-  const mappingReady =
-    schema?.fields?.every((field) => !field.required || form.mapping[field.name]) &&
-    (form.mapping["店铺/站点"] || form.default_store.trim());
+  const mappingReady = Boolean(
+    schema?.configured &&
+    schema.fields.every((field) => !field.required || form.mapping[field.name]) &&
+    (form.mapping["店铺/站点"] || form.default_store.trim()),
+  );
   const invalidDateRange = Boolean(
     form.date_from && form.date_to && form.date_from > form.date_to,
   );
@@ -139,7 +236,7 @@ export function MysqlReturnImportForm({
       setBusy("preview");
       setError("");
       try {
-        const result = await api.previewMysqlReturns(
+        const result = await mysqlReturnApi.previewMysqlReturns(
           {
             ...form,
             date_from: form.date_from || null,
@@ -149,7 +246,7 @@ export function MysqlReturnImportForm({
         );
         if (!controller.signal.aborted) setPreview(result);
       } catch (requestError) {
-        if (!controller.signal.aborted) setError(requestError.message);
+        if (!controller.signal.aborted) setError(errorMessage(requestError));
       } finally {
         if (!controller.signal.aborted) setBusy("");
       }
@@ -173,9 +270,9 @@ export function MysqlReturnImportForm({
       id="mysql-prepare-form"
       onSubmit={importData}
       onKeyDown={(event) => {
-        if (event.key === "Escape") {
+        if (event.key === "Escape" && event.target instanceof Element) {
           const details = event.target.closest("details");
-          if (details) {
+          if (details instanceof HTMLDetailsElement) {
             details.open = false;
             details.querySelector("summary")?.focus();
           }
@@ -251,7 +348,8 @@ export function MysqlReturnImportForm({
                       }
                       onClick={(event) => {
                         update({ date_from, date_to });
-                        event.currentTarget.closest("details").open = false;
+                        const details = event.currentTarget.closest("details");
+                        if (details instanceof HTMLDetailsElement) details.open = false;
                       }}
                     >
                       {label}
@@ -287,7 +385,8 @@ export function MysqlReturnImportForm({
                   className="text-button"
                   disabled={invalidDateRange}
                   onClick={(event) => {
-                    event.currentTarget.closest("details").open = false;
+                    const details = event.currentTarget.closest("details");
+                    if (details instanceof HTMLDetailsElement) details.open = false;
                   }}
                 >
                   完成
@@ -441,12 +540,14 @@ export function MysqlReturnImportForm({
   );
 }
 
+/** @param {{ rows: MysqlPreviewRow[], fields: MysqlField[] }} props */
 function MysqlPreviewTable({ rows, fields }) {
   const [page, setPage] = useState(0);
-  const [expanded, setExpanded] = useState(null);
+  const [expanded, setExpanded] = useState(/** @type {number | null} */ (null));
   const pageSize = 5;
   const start = page * pageSize;
   const end = Math.min(start + pageSize, rows.length);
+  /** @param {number} next */
   const changePage = (next) => {
     setPage(next);
     setExpanded(null);

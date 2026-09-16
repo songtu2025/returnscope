@@ -1,5 +1,10 @@
+/** @typedef {import("../../shared/api/systemSettingsContracts").ModelConnection} ModelConnection */
+/** @typedef {import("../../shared/api/systemSettingsContracts").ModelPreference} ModelPreference */
+/** @typedef {import("./analysisDashboardContracts").InsightModel} InsightModel */
+
+/** @param {ModelConnection[]} configs @returns {InsightModel[]} */
 export function insightModels(configs) {
-  const output = [];
+  const output = /** @type {InsightModel[]} */ ([]);
   for (const connection of configs ?? []) {
     for (const model of connection.models ?? []) {
       if (!model.active || model.validation_status !== "validated") continue;
@@ -12,6 +17,7 @@ export function insightModels(configs) {
   return output;
 }
 
+/** @param {ModelConnection[]} configs @param {InsightModel[]} models @param {ModelPreference | null} preference */
 export function preferredInsightModel(configs, models, preference) {
   const preferred = models.find(
     (model) =>
@@ -30,6 +36,7 @@ export function preferredInsightModel(configs, models, preference) {
   return models[0]?.id || "";
 }
 
+/** @param {InsightModel | null | undefined} model */
 export function preferredInsightEffort(model) {
   const efforts = model?.supported_efforts ?? [];
   if (efforts.includes("high")) return "high";

@@ -12,9 +12,22 @@ import Input from "antd/es/input";
 import { api } from "../../api";
 import { InlineLoading, Modal } from "../../components/SharedUi";
 
+/** @typedef {import("../../shared/api/dataManagementContracts").DatasetRecord} DatasetRecord */
+/** @typedef {import("../../shared/api/dataManagementContracts").DatasetRowsPage} DatasetRowsPage */
+/** @typedef {import("../../shared/api/dataManagementContracts").DatasetRow} DatasetRow */
+/** @typedef {Error & {status?: number}} DataRequestError */
+
+/** @param {unknown} error @returns {DataRequestError} */
+function requestError(error) {
+  return error instanceof Error
+    ? /** @type {DataRequestError} */ (error)
+    : new Error("请求失败");
+}
+
+/** @param {{dataset: DatasetRecord, notify: (message: string, tone?: string) => void, onChanged: (dataset: DatasetRecord) => void}} props */
 export function ProductDimensionRows({ dataset, notify, onChanged }) {
-  const [data, setData] = useState(null);
-  const [editing, setEditing] = useState(null);
+  const [data, setData] = useState(/** @type {DatasetRowsPage | null} */ (null));
+  const [editing, setEditing] = useState(/** @type {DatasetRow | null} */ (null));
   const [query, setQuery] = useState("");
   const [draftQuery, setDraftQuery] = useState("");
   const [store, setStore] = useState("");
@@ -42,8 +55,10 @@ export function ProductDimensionRows({ dataset, notify, onChanged }) {
     { length: Math.min(5, totalPages) },
     (_, index) => pageStart + index,
   );
+  /** @param {import("react").FormEvent<HTMLFormElement>} event */
   const save = async (event) => {
     event.preventDefault();
+    if (!editing) return;
     setSaving(true);
     try {
       const updated = await api.updateDatasetRow(dataset.id, {
@@ -65,11 +80,12 @@ export function ProductDimensionRows({ dataset, notify, onChanged }) {
       onChanged(updated);
       notify("产品信息已更新，并创建了新版本");
     } catch (error) {
-      if (error.status === 409) {
+      const nextError = requestError(error);
+      if (nextError.status === 409) {
         setEditing(null);
         onChanged(await api.dataset(dataset.id, { include: "versions" }));
         notify("数据已被其他用户更新，已刷新到最新版本，请重新修改", "error");
-      } else notify(error.message, "error");
+      } else notify(nextError.message, "error");
     } finally {
       setSaving(false);
     }
@@ -229,7 +245,7 @@ export function ProductDimensionRows({ dataset, notify, onChanged }) {
                   {value}
                 </button>
               ))}
-              {visiblePages.at(-1) < totalPages && (
+              {(visiblePages.at(-1) ?? 0) < totalPages && (
                 <>
                   <span>…</span>
                   <button type="button" onClick={() => setPage(totalPages)}>
@@ -334,8 +350,8 @@ export function ProductDimensionRows({ dataset, notify, onChanged }) {
               <textarea
                 value={changeNote}
                 onChange={(event) => setChangeNote(event.target.value)}
-                rows="2"
-                maxLength="500"
+                rows={2}
+                maxLength={500}
                 placeholder="必填：说明为什么修改这条产品信息"
                 required
               />

@@ -9,6 +9,12 @@ import { readTaskDraft, updateTaskDraft } from "../task-create/taskDraftStorage"
 import { ImportRulesPage } from "./ImportRulesPage";
 import { ReturnDataAssetsPage } from "./ReturnDataAssetsPage";
 
+/** @typedef {import("../../app/navigation").Navigate} Navigate */
+/** @typedef {import("../task-create/taskCreateContracts").TaskRepairContext} TaskRepairContext */
+/** @typedef {{query: {view?: string, dataset?: string, return_to?: string, tab?: string, reference_version?: string, reference_page?: string | number}}} DataAssetsRoute */
+/**
+ * @param {{route: DataAssetsRoute, notify: (message: string, tone?: string) => void, onNavigate: Navigate, userId: string}} props
+ */
 export function DataAssetsPage({ route, notify, onNavigate, userId }) {
   const requestedView = route.query.view || "products";
   const view = requestedView === "quality" ? "products" : requestedView;
@@ -19,19 +25,23 @@ export function DataAssetsPage({ route, notify, onNavigate, userId }) {
       navigateHash("data-assets", { view: "products" });
     }
   }, [requestedView]);
-  const focus = useMemo(() => {
-    const repair = taskDraft?.repairContext ?? {};
-    const routeTargetsProduct = route.query.view === "products";
-    if ((!route.query.dataset || !routeTargetsProduct) && !repair.id) return null;
-    return {
-      ...repair,
-      kind: "dataset",
-      id: route.query.dataset || repair.id,
-      datasetKind: "products",
-      returnToTask: route.query.return_to === "task-create",
-    };
-  }, [route.query.dataset, route.query.view, route.query.return_to, taskDraft]);
+  const focus = useMemo(
+    /** @returns {TaskRepairContext | null} */ () => {
+      const repair = taskDraft?.repairContext;
+      const routeTargetsProduct = route.query.view === "products";
+      if ((!route.query.dataset || !routeTargetsProduct) && !repair?.id) return null;
+      return {
+        ...repair,
+        kind: "dataset",
+        id: route.query.dataset || repair?.id,
+        datasetKind: "products",
+        returnToTask: route.query.return_to === "task-create",
+      };
+    },
+    [route.query.dataset, route.query.view, route.query.return_to, taskDraft],
+  );
 
+  /** @param {Record<string, string | number>} changes */
   const updateRoute = (changes) =>
     navigateHash("data-assets", { ...route.query, ...changes });
 
@@ -41,7 +51,6 @@ export function DataAssetsPage({ route, notify, onNavigate, userId }) {
         <ReturnDataAssetsPage
           route={route}
           notify={notify}
-          onNavigate={onNavigate}
           onRouteChange={updateRoute}
         />
       </AntdProvider>

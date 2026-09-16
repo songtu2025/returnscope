@@ -4,15 +4,27 @@ import { X } from "@phosphor-icons/react";
 import { resultLabelText } from "../../lib/taxonomyPresentation";
 import { SemanticResultPanel } from "./SemanticResultPanel";
 
+/**
+ * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultRecordResponseOutput} ClassificationResultRecord
+ */
+
+/**
+ * @param {{
+ *   record: ClassificationResultRecord,
+ *   onClose: () => void,
+ *   returnFocusRef: { current: HTMLElement | null }
+ * }} props
+ */
 export function EvidenceDrawer({ record, onClose, returnFocusRef }) {
   const classification = record.classification ?? {};
-  const drawerRef = useRef(null);
-  const closeButtonRef = useRef(null);
+  const drawerRef = useRef(/** @type {HTMLElement | null} */ (null));
+  const closeButtonRef = useRef(/** @type {HTMLButtonElement | null} */ (null));
 
   useEffect(() => {
     const drawer = drawerRef.current;
     if (!drawer) return undefined;
     const returnFocus = returnFocusRef.current;
+    /** @param {KeyboardEvent} event */
     const handleKey = (event) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -20,10 +32,12 @@ export function EvidenceDrawer({ record, onClose, returnFocusRef }) {
         return;
       }
       if (event.key !== "Tab") return;
-      const focusable = Array.from(
-        drawer.querySelectorAll(
-          'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-        ),
+      const focusable = /** @type {HTMLElement[]} */ (
+        Array.from(
+          drawer.querySelectorAll(
+            'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          ),
+        )
       );
       if (focusable.length === 0) {
         event.preventDefault();
@@ -126,6 +140,9 @@ export function EvidenceDrawer({ record, onClose, returnFocusRef }) {
   );
 }
 
+/**
+ * @param {{ label: string, value: string | number | null | undefined }} props
+ */
 function DrawerField({ label, value }) {
   return (
     <div className="drawer-field">

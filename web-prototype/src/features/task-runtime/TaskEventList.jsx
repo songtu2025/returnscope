@@ -4,7 +4,11 @@ import Button from "antd/es/button";
 import { STATUS_LABELS } from "../../constants";
 import { classNames, formatTime } from "../../lib/presentation";
 
+/** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
+/** @typedef {import("./taskRuntimeContracts").TaskEvent} TaskEvent */
+
 const TASK_STAGES = ["准备数据", "Listing 分类", "发布分类版本", "任务结束"];
+/** @type {Record<string, number>} */
 const TASK_STAGE_INDEX = {
   准备数据: 0,
   语义分析: 1,
@@ -16,6 +20,7 @@ const TASK_STAGE_INDEX = {
   任务结束: 3,
 };
 
+/** @param {string} stage */
 function taskStageLabel(stage) {
   if (/模型服务/.test(stage || "")) return "模型服务异常";
   if (TASK_STAGE_INDEX[stage] != null) return TASK_STAGES[TASK_STAGE_INDEX[stage]];
@@ -25,6 +30,7 @@ function taskStageLabel(stage) {
   return TASK_STAGES[0];
 }
 
+/** @param {AnalysisTask} task @param {TaskEvent} event */
 function eventListing(task, event) {
   const segmentId = event.data?.segment_id;
   if (!segmentId) return "";
@@ -32,6 +38,7 @@ function eventListing(task, event) {
   return segment?.scope?.listing ?? "";
 }
 
+/** @param {{task: AnalysisTask, events: TaskEvent[]}} props */
 export function TaskEventList({ task, events }) {
   const [visibleCount, setVisibleCount] = useState(100);
   const values = events.slice(-visibleCount).reverse();
@@ -58,7 +65,7 @@ export function TaskEventList({ task, events }) {
                 <small>
                   原值：{event.data.before.title}
                   <br />
-                  新值：{event.data.after.title}
+                  新值：{event.data.after?.title}
                   <br />
                   原因：{event.data.note}
                 </small>
@@ -69,7 +76,10 @@ export function TaskEventList({ task, events }) {
                   {STATUS_LABELS[event.data.before.status] ?? event.data.before.status}
                   <br />
                   新状态：
-                  {STATUS_LABELS[event.data.after.status] ?? event.data.after.status}
+                  {event.data.after?.status
+                    ? (STATUS_LABELS[event.data.after.status] ??
+                      event.data.after.status)
+                    : "—"}
                   {event.data.note && (
                     <>
                       <br />

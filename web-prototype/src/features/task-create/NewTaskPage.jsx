@@ -18,6 +18,12 @@ import { useProductMatching } from "./useProductMatching";
 import { useTaskImport } from "./useTaskImport";
 import { useTaskPreflight } from "./useTaskPreflight";
 
+/** @typedef {import("./taskCreateContracts").TaskDraft} TaskDraft */
+/** @typedef {import("./taskCreateContracts").TaskForm} TaskForm */
+/**
+ * @param {{onNavigate: import("../../app/navigation").Navigate, notify: (message: string, type?: "success" | "error") => void, onChanged: () => void | Promise<unknown>, draft?: TaskDraft | null, onDraftChange?: (draft: TaskDraft) => void, onDraftComplete?: () => void}} props
+ */
+
 export function NewTaskPage({
   onNavigate,
   notify,
@@ -28,8 +34,8 @@ export function NewTaskPage({
 }) {
   const [prepared, setPrepared] = useState(Boolean(draft?.resumePreflight));
   const [mysqlState, setMysqlState] = useState({ ready: false, busy: "", rowCount: 0 });
-  const headingRef = useRef(null);
-  const confirmationRef = useRef(null);
+  const headingRef = useRef(/** @type {HTMLHeadingElement | null} */ (null));
+  const confirmationRef = useRef(/** @type {HTMLHeadingElement | null} */ (null));
   const focusAfterPreparation = useRef(false);
 
   useEffect(() => {
@@ -73,9 +79,9 @@ export function NewTaskPage({
     .map(normalizeReturnVersion);
   const returns = canonicalManagedReturns(allReturns);
   const products = versions.filter((item) => item.kind === "products");
-  const publishedConfigs = configs
-    .filter((item) => item.active_version)
-    .map((item) => ({ ...item.active_version, connection_name: item.name }));
+  const publishedConfigs = configs.flatMap((item) =>
+    item.active_version ? [{ ...item.active_version, connection_name: item.name }] : [],
+  );
   const selectedConfig =
     publishedConfigs.find((item) => item.id === form.config_version_id) ??
     publishedConfigs[0];
@@ -124,6 +130,7 @@ export function NewTaskPage({
     });
   }, [dataEntryMode, form, mysqlDraft, onDraftChange, selectedDataLabel, prepared]);
 
+  /** @param {TaskForm} next */
   const updateForm = (next) => {
     if (next.dataset_version_id !== form.dataset_version_id) {
       invalidateTaskPreflight();
@@ -132,10 +139,12 @@ export function NewTaskPage({
     setForm(next);
   };
 
+  /** @param {Record<string, string | number>} changes */
   const updateModelPolicy = (changes) => {
     invalidateTaskPreflight();
     setForm({ ...form, model_policy: { ...modelPolicy, ...changes } });
   };
+  /** @param {string} configId */
   const selectConnection = (configId) => {
     const modelPolicy = taskConnectionPolicy(publishedConfigs, configId);
     if (!modelPolicy) return;
@@ -208,7 +217,13 @@ export function NewTaskPage({
       onChanged();
       onNavigate("tasks");
     } catch (error) {
-      if (error.status === 409) {
+      const status =
+        typeof error === "object" && error !== null && "status" in error
+          ? error.status
+          : undefined;
+      const message =
+        error instanceof Error ? error.message : "暂时无法创建任务，请重试。";
+      if (status === 409) {
         setPrepared(true);
         setPreflight({
           status: "error",
@@ -217,9 +232,9 @@ export function NewTaskPage({
         });
         setUnresolvedPolicy("");
       } else {
-        setSubmitError(error.message || "暂时无法创建任务，请重试。");
+        setSubmitError(message);
       }
-      notify(error.message, "error");
+      notify(message, "error");
     } finally {
       setSubmitting(false);
     }
@@ -259,6 +274,7 @@ export function NewTaskPage({
       submitLabel={submitLabel}
       onSubmit={submit}
       onPrepareExisting={() => {
+        if (!selectedReturns) return;
         focusAfterPreparation.current = true;
         setForm((current) => ({
           ...current,
@@ -304,7 +320,9 @@ export function NewTaskPage({
           selectedReturns,
           dataEntryMode,
           selectedDataLabel,
-          onDataEntryModeChange: (nextMode) => {
+          onDataEntryModeChange: (
+            /** @type {"mysql" | "upload" | "existing"} */ nextMode,
+          ) => {
             if (nextMode === dataEntryMode) return;
             setDataEntryMode(nextMode);
             setSelectedDataLabel("");
@@ -330,7 +348,7 @@ export function NewTaskPage({
           counts: planCounts,
           dataQuality,
           unresolvedPolicy,
-          onPolicyChange: (nextPolicy) => {
+          onPolicyChange: (/** @type {string} */ nextPolicy) => {
             setUnresolvedPolicy(nextPolicy);
             setScopeConfirmed(false);
           },

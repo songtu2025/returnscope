@@ -22,6 +22,15 @@ import {
   signedPercentagePoints,
 } from "./AiInsightReportPresentation";
 
+/** @typedef {import("./analysisDashboardContracts").InsightEvidenceCatalog} InsightEvidenceCatalog */
+/** @typedef {import("./analysisDashboardContracts").ReportBusinessIssue} ReportBusinessIssue */
+/** @typedef {import("./analysisDashboardContracts").ReportFinding} ReportFinding */
+/** @typedef {import("./analysisDashboardContracts").ReportHotspot} ReportHotspot */
+/** @typedef {import("./analysisDashboardContracts").ReportTrendSummary} ReportTrendSummary */
+/** @typedef {import("./AiInsightReportPresentation").SizeTrendRow} SizeTrendRow */
+/** @typedef {{code: string, label: string, rows: ReportHotspot[]}} HotspotGroup */
+
+/** @param {{issue: ReportBusinessIssue}} props */
 function BusinessIssueCard({ issue }) {
   const hotspots = issue.hotspots ?? [];
   const leadHotspot = hotspots[0];
@@ -144,6 +153,7 @@ function BusinessIssueCard({ issue }) {
   );
 }
 
+/** @param {{issues: ReportBusinessIssue[]}} props */
 function BusinessIssueGrid({ issues }) {
   if (!issues.length) return null;
   return (
@@ -155,6 +165,7 @@ function BusinessIssueGrid({ issues }) {
   );
 }
 
+/** @param {{group: HotspotGroup}} props */
 function HotspotBenchmark({ group }) {
   const baseline = number(group.rows[0]?.overall_reason_rate);
   const maxRate = Math.max(
@@ -228,6 +239,7 @@ function HotspotBenchmark({ group }) {
   );
 }
 
+/** @param {{diagnosticFinding?: ReportFinding, hasBusinessIssues: boolean, businessIssues: ReportBusinessIssue[], smallTrend: ReportTrendSummary, largeTrend: ReportTrendSummary, sizeTrend: SizeTrendRow[], hotspotBenchmarks: HotspotGroup[], otherFindings: ReportFinding[], catalog: InsightEvidenceCatalog}} props */
 export function ReportDiagnosticsSection({
   diagnosticFinding,
   hasBusinessIssues,

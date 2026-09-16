@@ -10,11 +10,20 @@ import {
 import { ArrowDown, ArrowUp, Minus } from "@phosphor-icons/react";
 import { formatNumber, formatPercent } from "../lib/presentation";
 
+/** @typedef {import("../shared/api/legacyAnalysisContracts").AnalysisBarRow} AnalysisBarRow */
+/** @typedef {import("../shared/api/legacyAnalysisContracts").AnalysisQualityRow} AnalysisQualityRow */
+/** @typedef {import("../shared/api/legacyAnalysisContracts").AnalysisOverview} AnalysisOverview */
+/** @typedef {import("../shared/api/legacyAnalysisContracts").AnalysisDiagnosis} AnalysisDiagnosis */
+/** @typedef {import("../shared/api/legacyAnalysisContracts").AnalysisProducts} AnalysisProducts */
+/** @typedef {import("../shared/api/legacyAnalysisContracts").AnalysisQuality} AnalysisQuality */
+/** @typedef {import("../shared/api/legacyAnalysisContracts").AnalysisDetails} AnalysisDetails */
+
 const COLORS = {
   green: "#16765d",
   grid: "#e7ece9",
 };
 
+/** @param {{title: import("react").ReactNode, note?: import("react").ReactNode, action?: import("react").ReactNode, className?: string, children: import("react").ReactNode}} props */
 function SectionCard({ title, note, action, className = "", children }) {
   return (
     <section className={`analysis-card ${className}`.trim()}>
@@ -30,10 +39,14 @@ function SectionCard({ title, note, action, className = "", children }) {
   );
 }
 
+/** @param {{children?: import("react").ReactNode}} props */
 function EmptyAnalysis({ children = "当前筛选范围没有可展示的数据" }) {
   return <div className="analysis-empty">{children}</div>;
 }
 
+/**
+ * @param {{rows: AnalysisBarRow[], nameKey?: string, valueKey?: string, shareKey?: string}} props
+ */
 function DataBars({
   rows,
   nameKey = "name",
@@ -55,7 +68,9 @@ function DataBars({
           </div>
           <div className="analysis-bar-track" aria-hidden="true">
             <span
-              style={{ width: `${Math.max((row[valueKey] / maximum) * 100, 2)}%` }}
+              style={{
+                width: `${Math.max((Number(row[valueKey] ?? 0) / maximum) * 100, 2)}%`,
+              }}
             />
           </div>
         </div>
@@ -64,6 +79,7 @@ function DataBars({
   );
 }
 
+/** @param {{rows: AnalysisBarRow[], ariaLabel: string}} props */
 function RankedChart({ rows, ariaLabel }) {
   if (!rows?.length) return <EmptyAnalysis />;
   return (
@@ -90,6 +106,7 @@ function RankedChart({ rows, ariaLabel }) {
   );
 }
 
+/** @param {{value: unknown}} props */
 function ChangeValue({ value }) {
   const numeric = Number(value ?? 0);
   const Icon = numeric > 0 ? ArrowUp : numeric < 0 ? ArrowDown : Minus;
@@ -101,6 +118,7 @@ function ChangeValue({ value }) {
   );
 }
 
+/** @param {{rows: AnalysisQualityRow[]}} props */
 function QualityTable({ rows }) {
   if (!rows?.length) return <EmptyAnalysis />;
   return (
@@ -141,6 +159,7 @@ function QualityTable({ rows }) {
   );
 }
 
+/** @param {{value: unknown, tone?: string}} props */
 function RateCell({ value, tone = "green" }) {
   return (
     <div className={`rate-cell ${tone}`}>
@@ -152,6 +171,7 @@ function RateCell({ value, tone = "green" }) {
   );
 }
 
+/** @param {{overview: AnalysisOverview, qualityGate?: {status?: string} | null}} props */
 export function OverviewSection({ overview, qualityGate }) {
   const hasProblems = Boolean(overview.top_problems?.length);
   return (
@@ -222,6 +242,7 @@ export function OverviewSection({ overview, qualityGate }) {
   );
 }
 
+/** @param {{diagnosis: AnalysisDiagnosis, onFocusProblem: (code: string) => void}} props */
 export function DiagnosisSection({ diagnosis, onFocusProblem }) {
   const focus = diagnosis.priorities?.find(
     (item) => item.code === diagnosis.focus_code,
@@ -358,7 +379,9 @@ export function DiagnosisSection({ diagnosis, onFocusProblem }) {
   );
 }
 
+/** @param {{products: AnalysisProducts, onDimension: (dimension: string) => void}} props */
 export function ProductsSection({ products, onDimension }) {
+  /** @type {Record<string, string>} */
   const dimensionLabels = {
     listing: "Listing",
     category_b: "品类B",
@@ -457,6 +480,7 @@ export function ProductsSection({ products, onDimension }) {
   );
 }
 
+/** @param {{quality: AnalysisQuality}} props */
 export function QualitySection({ quality }) {
   return (
     <div className="analysis-section-stack">
@@ -525,6 +549,7 @@ export function QualitySection({ quality }) {
   );
 }
 
+/** @param {{details: AnalysisDetails, onPage: (page: number) => void, downloadUrl: string}} props */
 export function DetailsSection({ details, onPage, downloadUrl }) {
   return (
     <SectionCard

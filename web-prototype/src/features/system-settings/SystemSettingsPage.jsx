@@ -6,13 +6,15 @@ import { navigateHash } from "../../app/hashRouter";
 import { AuditLogPage } from "./AuditLogPage";
 import { ModelPreferencePage } from "./ModelPreferencePage";
 
+/** @typedef {{query: {tab?: string, connection_id?: string, config_version_id?: string, model_id?: string, action?: string, user_id?: string, actor_id?: string, entity_type?: string, entity_id?: string, date_from?: string, date_to?: string, page?: string | number}}} SettingsRoute */
+/** @param {{route: SettingsRoute, notify: (message: string, tone?: string) => void, currentUser?: {is_admin?: boolean} | null}} props */
 export function SystemSettingsPage({ route, notify, currentUser }) {
   const requestedTab = route.query.tab;
   const isAdmin = currentUser?.is_admin === true;
   const tab =
-    ["api", "models", "service"].includes(requestedTab) && isAdmin
+    ["api", "models", "service"].includes(requestedTab ?? "") && isAdmin
       ? "service"
-      : ["users", "audit"].includes(requestedTab) && isAdmin
+      : ["users", "audit"].includes(requestedTab ?? "") && isAdmin
         ? requestedTab
         : requestedTab === "model-preference"
           ? "model-preference"

@@ -12,6 +12,21 @@ import { classNames } from "../../lib/presentation";
 import { moveSegmentKey } from "../task-runtime/taskSegmentPolicy";
 import { taskPlanCounts } from "./taskPlanPolicy";
 
+/** @typedef {import("./taskPlanContracts").TaskExecutionPlan} TaskExecutionPlan */
+/** @typedef {import("./taskPlanContracts").TaskDataQuality} TaskDataQuality */
+/**
+ * @typedef {Object} ExecutionPlanSummaryProps
+ * @property {TaskExecutionPlan} plan
+ * @property {TaskDataQuality | null} [quality]
+ * @property {string} [policy]
+ * @property {(policy: string) => void} [onPolicyChange]
+ * @property {() => void} [onResolveCategories]
+ * @property {string[]} [segmentOrder]
+ * @property {(segmentOrder: string[]) => void} [onSegmentOrderChange]
+ * @property {boolean} [compact]
+ */
+
+/** @param {ExecutionPlanSummaryProps} props */
 export function ExecutionPlanSummary({
   plan,
   quality,
@@ -53,13 +68,19 @@ export function ExecutionPlanSummary({
       .map((segment) => segment.segment_key)
       .filter((key) => !segmentOrder?.includes(key)),
   ];
-  const orderedSegments = orderedKeys.map((key) => segmentByKey.get(key));
+  const orderedSegments = orderedKeys.map(
+    (key) =>
+      /** @type {import("./taskPlanContracts").TaskPlanSegment} */ (
+        segmentByKey.get(key)
+      ),
+  );
   const executableKeys = orderedSegments
     .filter((segment) => segment.status !== "blocked")
     .map((segment) => segment.segment_key);
   const blockedKeys = orderedSegments
     .filter((segment) => segment.status === "blocked")
     .map((segment) => segment.segment_key);
+  /** @param {string[]} keys */
   const applyExecutableOrder = (keys) => {
     onSegmentOrderChange?.([...keys, ...blockedKeys]);
   };
@@ -324,7 +345,7 @@ export function ExecutionPlanSummary({
           <div>
             <b>存在 {plan.blocked_count.toLocaleString()} 条无法映射到智能体的评论</b>
             <p>
-              未配置分类逻辑 {plan.unknown_category_count.toLocaleString()}{" "}
+              未配置分类逻辑 {(plan.unknown_category_count ?? 0).toLocaleString()}{" "}
               条；范围未识别 {(plan.unresolved_scope_count ?? 0).toLocaleString()} 条。
             </p>
             <div className="unresolved-categories">

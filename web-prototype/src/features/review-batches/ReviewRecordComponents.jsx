@@ -19,6 +19,12 @@ import {
 import { semanticRecordStatus } from "../classification-results/semanticResultPresentation";
 import { REVIEW_ASSESSMENT_FIELDS, reviewAssessmentLabel } from "./reviewAssessment";
 
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewAction} ReviewAction */
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewConflict} ReviewConflict */
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewLabel} ReviewLabel */
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewRecord} ReviewRecord */
+/** @typedef {import("./reviewAssessment").ReviewAssessment} ReviewAssessment */
+
 const WORKFLOW_STATUS_LABELS = {
   pending: "待处理",
   resolved: "已处理",
@@ -45,14 +51,20 @@ function ReviewAssessmentSummary({ value }) {
   );
 }
 
+/** @param {ReviewRecord} item @param {string} key @returns {string[]} */
 function values(item, key) {
-  return Array.isArray(item?.[key]) ? item[key].filter(Boolean) : [];
+  const source = item[key];
+  return Array.isArray(source)
+    ? source.filter((value) => typeof value === "string" && Boolean(value))
+    : [];
 }
 
+/** @param {string[]} items @param {string} [empty] */
 function valueText(items, empty = "未提供") {
   return items.length ? items.join("、") : empty;
 }
 
+/** @param {ReviewLabel[]} labels @param {string} [query] */
 function groupedLabels(labels, query = "") {
   const keyword = query.trim().toLowerCase();
   return labels
@@ -65,9 +77,12 @@ function groupedLabels(labels, query = "") {
       const group = label.group || "其他";
       groups[group] = [...(groups[group] ?? []), label];
       return groups;
-    }, {});
+    }, /** @type {Record<string, ReviewLabel[]>} */ ({}));
 }
 
+/**
+ * @param {{record: ReviewRecord, selectionEnabled: boolean, selectable: boolean, checked: boolean, onCheck: (checked: boolean) => void, onOpen: () => void}} props
+ */
 export function ReviewRecordRow({
   record,
   selectionEnabled,
@@ -130,6 +145,9 @@ export function ReviewRecordRow({
   );
 }
 
+/**
+ * @param {{record: ReviewRecord, readOnly: boolean, labels: ReviewLabel[], mode: ReviewAction, labelCode: string, reason: string, conflict: ReviewConflict | null, saving: boolean, assessment: ReviewAssessment, onMode: (mode: ReviewAction) => void, onAssessment: (assessment: ReviewAssessment) => void, onLabelCode: (code: string) => void, onReason: (reason: string) => void, onSave: () => void | Promise<void>, onSaveAndNext: () => void | Promise<void>, onClose: () => void, onUseServer: () => void, onContinueWithServer: () => void}} props
+ */
 export function ReviewRecordDrawer({
   record,
   readOnly,
@@ -150,8 +168,8 @@ export function ReviewRecordDrawer({
   onUseServer,
   onContinueWithServer,
 }) {
-  const closeRef = useRef(null);
-  const drawerRef = useRef(null);
+  const closeRef = useRef(/** @type {HTMLButtonElement | null} */ (null));
+  const drawerRef = useRef(/** @type {HTMLElement | null} */ (null));
   const onCloseRef = useRef(onClose);
   const [labelQuery, setLabelQuery] = useState("");
   const editable = !readOnly && record.workflow_status === "pending";
@@ -170,8 +188,10 @@ export function ReviewRecordDrawer({
   }, [onClose]);
 
   useEffect(() => {
-    const returnFocus = document.activeElement;
+    const returnFocus =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     closeRef.current?.focus();
+    /** @param {KeyboardEvent} event */
     const handleKey = (event) => {
       if (event.key === "Escape") {
         onCloseRef.current();
@@ -179,25 +199,27 @@ export function ReviewRecordDrawer({
       }
       if (event.key !== "Tab") return;
       const focusable = Array.from(
-        drawerRef.current?.querySelectorAll(
-          'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-        ) ?? [],
+        /** @type {NodeListOf<HTMLElement>} */ (
+          drawerRef.current?.querySelectorAll(
+            'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          ) ?? []
+        ),
       );
       if (!focusable.length) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
       if (event.shiftKey && document.activeElement === first) {
         event.preventDefault();
-        last.focus();
+        last?.focus();
       } else if (!event.shiftKey && document.activeElement === last) {
         event.preventDefault();
-        first.focus();
+        first?.focus();
       }
     };
     document.addEventListener("keydown", handleKey);
     return () => {
       document.removeEventListener("keydown", handleKey);
-      returnFocus?.focus?.();
+      returnFocus?.focus();
     };
   }, []);
 
@@ -399,7 +421,7 @@ export function ReviewRecordDrawer({
               <label>
                 处理原因
                 <Input.TextArea
-                  rows="4"
+                  rows={4}
                   required
                   value={reason}
                   onChange={(event) => onReason(event.target.value)}

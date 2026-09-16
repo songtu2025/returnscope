@@ -4,9 +4,10 @@ import { classificationStandardApi } from "../../shared/api/classificationStanda
 
 /** @typedef {import("../../shared/api/classificationStandardContracts").ValidationComparisonType} ValidationComparisonType */
 /** @typedef {import("../../shared/api/classificationStandardContracts").ValidationSampleSize} ValidationSampleSize */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardValidationRunDetail} ClassificationStandardValidationRunDetail */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardValidationRunSummary} ClassificationStandardValidationRunSummary */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardValidationSource} ClassificationStandardValidationSource */
 /** @typedef {{id: string, revision: number}} ValidationDraft */
-/** @typedef {{result_version_id: string}} ValidationSource */
-/** @typedef {{id: string, status: string}} ValidationRun */
 
 /**
  * @typedef {object} ValidationControllerOptions
@@ -32,13 +33,13 @@ export function useClassificationStandardValidationController({
   setBusy,
 }) {
   const [validationSources, setValidationSources] = useState(
-    /** @type {ValidationSource[]} */ ([]),
+    /** @type {ClassificationStandardValidationSource[]} */ ([]),
   );
   const [validationRuns, setValidationRuns] = useState(
-    /** @type {ValidationRun[]} */ ([]),
+    /** @type {ClassificationStandardValidationRunSummary[]} */ ([]),
   );
   const [selectedValidation, setSelectedValidation] = useState(
-    /** @type {ValidationRun | null} */ (null),
+    /** @type {ClassificationStandardValidationRunDetail | null} */ (null),
   );
   const [validationSourceId, setValidationSourceId] = useState("");
   const [validationSampleSize, setValidationSampleSize] = useState(
@@ -76,7 +77,7 @@ export function useClassificationStandardValidationController({
         ownership.foreground === foregroundGeneration &&
         (!background || ownership.background === backgroundGeneration);
       try {
-        /** @type {[ValidationSource[], ValidationRun[]]} */
+        /** @type {[ClassificationStandardValidationSource[], ClassificationStandardValidationRunSummary[]]} */
         const [sources, runs] = await Promise.all([
           classificationStandardApi.classificationStandardValidationSources(draftId),
           classificationStandardApi.classificationStandardValidationRuns(draftId),

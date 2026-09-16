@@ -12,14 +12,33 @@ import { ClassificationStandardList } from "./ClassificationStandardList";
 import { ClassificationStandardWorkspace } from "./ClassificationStandardWorkspace";
 import { useClassificationStandardDraftController } from "./useClassificationStandardDraftController";
 
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardSummary} ClassificationStandardSummary */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardVersion} ClassificationStandardVersion */
+/** @typedef {{query: Record<string, string | undefined>}} ClassificationStandardsRoute */
+/** @typedef {{route: ClassificationStandardsRoute, notify: (message: string, tone?: string) => void}} ClassificationStandardsPageProps */
+
+/** @param {unknown} error */
+function errorMessage(error) {
+  return error instanceof Error ? error.message : "请求失败";
+}
+
+/** @param {ClassificationStandardsPageProps} props */
 export function ClassificationStandardsPage({ route, notify }) {
-  const [standards, setStandards] = useState([]);
+  const [standards, setStandards] = useState(
+    /** @type {ClassificationStandardSummary[]} */ ([]),
+  );
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState(
+    /** @type {"all" | "active" | "inactive"} */ ("all"),
+  );
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  const [restoreTarget, setRestoreTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(
+    /** @type {ClassificationStandardSummary | null} */ (null),
+  );
+  const [restoreTarget, setRestoreTarget] = useState(
+    /** @type {ClassificationStandardVersion | null} */ (null),
+  );
 
   const selectedId = route.query.standard || "";
   const mode = route.query.view === "new" ? "new" : selectedId ? "edit" : "list";
@@ -32,7 +51,7 @@ export function ClassificationStandardsPage({ route, notify }) {
 
   useEffect(() => {
     loadStandards()
-      .catch((error) => notify(error.message, "error"))
+      .catch((error) => notify(errorMessage(error), "error"))
       .finally(() => setLoading(false));
   }, [loadStandards, notify]);
 
@@ -108,7 +127,7 @@ export function ClassificationStandardsPage({ route, notify }) {
       navigateHash("classification-standards");
       notify(result.mode === "deleted" ? "分类标准已删除" : "分类标准已停用");
     } catch (error) {
-      notify(error.message, "error");
+      notify(errorMessage(error), "error");
     } finally {
       setBusy("");
     }
@@ -130,7 +149,7 @@ export function ClassificationStandardsPage({ route, notify }) {
       });
       notify(`已从 V${restoreTarget.version_no} 创建恢复草稿，请检查后再发布`);
     } catch (error) {
-      notify(error.message, "error");
+      notify(errorMessage(error), "error");
     } finally {
       setBusy("");
     }
@@ -150,7 +169,7 @@ export function ClassificationStandardsPage({ route, notify }) {
             onQueryChange={setQuery}
             onStatusChange={setStatusFilter}
             onCreate={() => navigateHash("classification-standards", { view: "new" })}
-            onView={(standard) =>
+            onView={(/** @type {ClassificationStandardSummary} */ standard) =>
               navigateHash("classification-standards", { standard: standard.id })
             }
             onDelete={setDeleteTarget}

@@ -5,6 +5,19 @@ import { navigateHash } from "../app/hashRouter";
 import { CardHeading, Modal, PageHeading } from "../components/SharedUi";
 import { classNames, formatTime } from "../lib/presentation";
 
+/** @typedef {import("../shared/api/systemSettingsContracts").TeamUser} TeamUser */
+/** @typedef {{email: string, display_name: string, password: string}} AccountForm */
+/** @typedef {{current_password: string, new_password: string}} PasswordForm */
+/** @typedef {Error & {status?: number}} TeamRequestError */
+
+/** @param {unknown} error @returns {TeamRequestError} */
+function requestError(error) {
+  return error instanceof Error
+    ? /** @type {TeamRequestError} */ (error)
+    : new Error("请求失败");
+}
+
+/** @param {AccountForm} form */
 function createAccountHint(form) {
   if (!form.display_name.trim()) return "请填写姓名。";
   if (!/^\S+@\S+\.\S+$/.test(form.email)) return "请填写有效邮箱。";
@@ -12,19 +25,21 @@ function createAccountHint(form) {
   return "";
 }
 
+/** @param {PasswordForm} form */
 function passwordHint(form) {
   if (!form.current_password) return "请填写当前密码。";
   if (form.new_password.length < 10) return "新密码至少 10 位。";
   return "";
 }
 
+/** @param {{notify: (message: string, tone?: string) => void, currentUser?: {id?: string, display_name?: string, email?: string, is_admin?: boolean} | null, focusPassword?: boolean, focusUserId?: string | null}} props */
 export function TeamPage({
   notify,
   currentUser,
   focusPassword = false,
   focusUserId = null,
 }) {
-  const [users, setUsers] = useState([]);
+  const [users, setUsers] = useState(/** @type {TeamUser[]} */ ([]));
   const [form, setForm] = useState({
     email: "",
     display_name: "",
@@ -38,11 +53,13 @@ export function TeamPage({
   });
   const [adding, setAdding] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
-  const [statusTarget, setStatusTarget] = useState(null);
+  const [statusTarget, setStatusTarget] = useState(
+    /** @type {TeamUser | null} */ (null),
+  );
   const [statusNote, setStatusNote] = useState("");
   const [statusUpdating, setStatusUpdating] = useState(false);
-  const passwordInputRef = useRef(null);
-  const focusedUserRef = useRef(null);
+  const passwordInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
+  const focusedUserRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const load = useCallback(() => api.users().then(setUsers), []);
   useEffect(() => {
     load().catch((error) => notify(error.message, "error"));
@@ -68,6 +85,7 @@ export function TeamPage({
   const currentEmail = currentAccount?.email || currentUser?.email || "未提供邮箱";
   const accountHint = createAccountHint(form);
   const passwordFormHint = passwordHint(passwordForm);
+  /** @param {import("react").FormEvent<HTMLFormElement>} event */
   const submit = async (event) => {
     event.preventDefault();
     setAdding(true);
@@ -78,11 +96,12 @@ export function TeamPage({
       await load();
       notify("团队账号已创建");
     } catch (error) {
-      notify(error.message, "error");
+      notify(requestError(error).message, "error");
     } finally {
       setAdding(false);
     }
   };
+  /** @param {import("react").FormEvent<HTMLFormElement>} event */
   const changePassword = async (event) => {
     event.preventDefault();
     setChangingPassword(true);
@@ -91,7 +110,7 @@ export function TeamPage({
       notify("密码已更新，请重新登录");
       window.setTimeout(() => window.location.reload(), 800);
     } catch (error) {
-      notify(error.message, "error");
+      notify(requestError(error).message, "error");
     } finally {
       setChangingPassword(false);
     }
@@ -110,12 +129,13 @@ export function TeamPage({
       setStatusNote("");
       await load();
     } catch (error) {
-      if (error.status === 409) {
+      const nextError = requestError(error);
+      if (nextError.status === 409) {
         await load();
         setStatusTarget(null);
         setStatusNote("");
       }
-      notify(error.message, "error");
+      notify(nextError.message, "error");
     } finally {
       setStatusUpdating(false);
     }
@@ -164,7 +184,7 @@ export function TeamPage({
                     <i>{user.display_name.slice(0, 1)}</i>
                     <b>
                       {user.display_name}
-                      {user.id === currentUser.id && <small>当前账号</small>}
+                      {user.id === currentUser?.id && <small>当前账号</small>}
                     </b>
                   </span>
                   <span>{user.email}</span>
@@ -252,7 +272,7 @@ export function TeamPage({
               初始密码
               <input
                 type="password"
-                minLength="10"
+                minLength={10}
                 value={form.password}
                 onChange={(event) => setForm({ ...form, password: event.target.value })}
                 required
@@ -309,7 +329,7 @@ export function TeamPage({
               新密码
               <input
                 type="password"
-                minLength="10"
+                minLength={10}
                 value={passwordForm.new_password}
                 onChange={(event) =>
                   setPasswordForm({
@@ -365,8 +385,8 @@ export function TeamPage({
               <textarea
                 value={statusNote}
                 onChange={(event) => setStatusNote(event.target.value)}
-                maxLength="500"
-                rows="3"
+                maxLength={500}
+                rows={3}
                 placeholder="必填，说明停用或恢复原因"
                 required
                 autoFocus

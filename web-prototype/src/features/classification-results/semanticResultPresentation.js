@@ -1,6 +1,73 @@
-/** @typedef {Record<string, any>} SemanticData */
+/**
+ * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultRecordResponseOutput} GeneratedRecord
+ * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationSemanticFactResponse} GeneratedFact
+ * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationUnknownSemanticResponse} GeneratedUnknownSemantic
+ * @typedef {Record<string, unknown>} SemanticObject
+ * @typedef {GeneratedRecord | SemanticObject} SemanticRecord
+ * @typedef {GeneratedFact | SemanticObject} RawFact
+ * @typedef {GeneratedUnknownSemantic | SemanticObject | string} RawUnknownSemantic
+ * @typedef {"POSITIVE" | "NEGATIVE" | "MIXED" | "CONFLICT" | "NO_CONFIRMED"} SemanticStatus
+ * @typedef {{
+ *   factId: string,
+ *   labelCode: string,
+ *   labelPath: string[],
+ *   opinion: string,
+ *   subject: string,
+ *   direction: string,
+ *   assertion: string,
+ *   sourceRef: string,
+ *   experiencerRef: string,
+ *   productRef: string,
+ *   variantRef: string,
+ *   eventRef: string,
+ *   referenceBasis: string,
+ *   condition: string,
+ *   operation: string,
+ *   part: string,
+ *   evidence: string,
+ *   evidenceSource: string,
+ *   decisionReason: string,
+ *   mappingReason: string,
+ *   relationType: string,
+ *   relatedFactIds: string[],
+ *   causalAttribution: string,
+ *   position: number
+ * }} NormalizedFactFields
+ * @typedef {SemanticObject & NormalizedFactFields} NormalizedFact
+ * @typedef {NormalizedFact & {
+ *   directionLabel: string,
+ *   assertionLabel: string,
+ *   sourceLabel: string,
+ *   experiencerLabel: string,
+ *   evidenceSourceLabel: string,
+ *   referenceBasisLabel: string,
+ *   subjectLabel: string,
+ *   productLabel: string,
+ *   partLabel: string
+ * }} PresentedFact
+ * @typedef {{ key: string, label: string, path: string[] }} SemanticTopic
+ * @typedef {{
+ *   id: string,
+ *   topic: string,
+ *   topicPath: string[],
+ *   status: SemanticStatus,
+ *   summary: string,
+ *   facts: NormalizedFact[],
+ *   contextFacts: NormalizedFact[],
+ *   legacy: boolean
+ * }} SemanticConclusion
+ * @typedef {{ id: string, type: string, reason: string, factIds: string[] }} SemanticRelation
+ * @typedef {NormalizedFact & {
+ *   id: string,
+ *   disposition: string,
+ *   dispositionLabel: string,
+ *   legacyDisposition: boolean,
+ *   reason: string
+ * }} NormalizedUnknownSemantic
+ * @typedef {{ review: NormalizedUnknownSemantic[], informational: NormalizedUnknownSemantic[] }} UnknownSemanticGroups
+ */
 
-/** @type {Record<string, string>} */
+/** @type {Readonly<Record<string, SemanticStatus>>} */
 const STATUS_ALIASES = {
   POSITIVE: "POSITIVE",
   ONLY_POSITIVE: "POSITIVE",
@@ -137,40 +204,66 @@ const FACT_RELATION_LABELS = {
   QUALIFIES: "受关联事实限定",
 };
 
-/** @param {any} value @returns {any[]} */
+/** @param {unknown} value @returns {value is SemanticObject} */
+function isSemanticObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** @param {unknown} value @returns {SemanticObject} */
+function object(value) {
+  return isSemanticObject(value) ? value : {};
+}
+
+/** @param {unknown} value @returns {unknown[]} */
 function array(value) {
   return Array.isArray(value) ? value : [];
 }
 
-/** @param {SemanticData} record @returns {SemanticData} */
+/** @param {unknown} value @returns {string[]} */
+function stringArray(value) {
+  return array(value)
+    .filter((item) => item !== undefined && item !== null && item !== "")
+    .map(String);
+}
+
+/** @param {unknown} value @returns {string} */
+function stringValue(value) {
+  return value === undefined || value === null ? "" : String(value);
+}
+
+/** @param {SemanticRecord} record @returns {SemanticObject} */
 function classificationOf(record) {
-  return record?.classification ?? record ?? {};
+  const source = object(record);
+  return isSemanticObject(source.classification) ? source.classification : source;
 }
 
-/** @param {any} value @returns {string} */
+/** @param {unknown} value @returns {SemanticStatus} */
 function normalizedStatus(value) {
-  return STATUS_ALIASES[String(value || "").toUpperCase()] || "NO_CONFIRMED";
+  const normalized = STATUS_ALIASES[stringValue(value).toUpperCase()];
+  return normalized || "NO_CONFIRMED";
 }
 
-/** @param {SemanticData} fact @returns {string} */
+/** @param {RawFact | NormalizedFact} fact @returns {string} */
 function directionOf(fact) {
+  const source = object(fact);
   return String(
-    fact?.evaluation_direction ?? fact?.sentiment ?? fact?.direction ?? "NEUTRAL",
+    source.evaluation_direction ?? source.sentiment ?? source.direction ?? "NEUTRAL",
   ).toUpperCase();
 }
 
-/** @param {SemanticData} fact @returns {string} */
+/** @param {RawFact | NormalizedFact} fact @returns {string} */
 function assertionOf(fact) {
+  const source = object(fact);
   return String(
-    fact?.statement_type ??
-      fact?.assertion_status ??
-      fact?.assertion ??
-      fact?.fact_type ??
+    source.statement_type ??
+      source.assertion_status ??
+      source.assertion ??
+      source.fact_type ??
       "AFFIRMED",
   ).toUpperCase();
 }
 
-/** @param {SemanticData} fact @returns {boolean} */
+/** @param {RawFact | NormalizedFact} fact @returns {boolean} */
 function isConfirmed(fact) {
   return ![
     "PREDICTION",
@@ -182,15 +275,16 @@ function isConfirmed(fact) {
   ].includes(assertionOf(fact));
 }
 
-/** @param {SemanticData} fact @returns {string[]} */
+/** @param {RawFact | NormalizedFact} fact @returns {string[]} */
 function pathOf(fact) {
+  const source = object(fact);
   const path =
-    fact?.full_label_path ??
-    fact?.label_path ??
-    fact?.taxonomy_path ??
-    fact?.labelPath ??
+    source.full_label_path ??
+    source.label_path ??
+    source.taxonomy_path ??
+    source.labelPath ??
     [];
-  if (Array.isArray(path)) return path.filter(Boolean);
+  if (Array.isArray(path)) return path.filter(Boolean).map(String);
   if (typeof path === "string") {
     return path
       .split(/\s*(?:→|>|\/|-)\s*/)
@@ -200,7 +294,7 @@ function pathOf(fact) {
   return [];
 }
 
-/** @param {any} value @returns {string} */
+/** @param {unknown} value @returns {string} */
 function conditionText(value) {
   if (!value) return "";
   if (typeof value === "string") return value;
@@ -211,157 +305,206 @@ function conditionText(value) {
   return String(value);
 }
 
-/** @param {...any} values @returns {any} */
+/** @param {...unknown} values @returns {unknown} */
 function firstValue(...values) {
   return values.find(
     (value) => value !== undefined && value !== null && String(value).trim(),
   );
 }
 
+/** @param {...unknown} values @returns {string} */
+function firstText(...values) {
+  return stringValue(firstValue(...values));
+}
+
+/** @param {...unknown} values @returns {string} */
+function coalescedText(...values) {
+  return stringValue(values.find((value) => value !== undefined && value !== null));
+}
+
 /**
- * @param {SemanticData} fact
+ * @param {RawFact | SemanticObject} fact
  * @param {number} index
- * @param {SemanticData} [scope]
- * @returns {SemanticData}
+ * @param {unknown} [scope]
+ * @returns {NormalizedFact}
  */
 function normalizedFact(fact, index, scope = {}) {
-  const evidenceSpans = array(fact?.evidence_spans);
+  const source = object(fact);
+  const factScope = object(source.scope);
+  const scopeSource = object(scope);
+  const evidenceSpans = array(source.evidence_spans).map(object);
   return {
-    ...fact,
-    factId:
-      fact?.fact_id ?? fact?.fact_ids?.[0] ?? fact?.source_fact_id ?? fact?.id ?? "",
-    labelCode: fact?.label_code ?? fact?.verdict_label_code ?? fact?.labelCode ?? "",
-    labelPath: pathOf(fact),
-    opinion: firstValue(
-      fact?.opinion,
-      fact?.fact_text_zh,
-      fact?.fact_summary,
-      fact?.summary,
+    ...source,
+    factId: coalescedText(
+      source.fact_id,
+      array(source.fact_ids)[0],
+      source.source_fact_id,
+      source.id,
     ),
-    subject: firstValue(fact?.subject, fact?.object_type, fact?.scope?.subject),
+    labelCode: coalescedText(
+      source.label_code,
+      source.verdict_label_code,
+      source.labelCode,
+    ),
+    labelPath: pathOf(source),
+    opinion: firstText(
+      source.opinion,
+      source.fact_text_zh,
+      source.fact_summary,
+      source.summary,
+    ),
+    subject: firstText(source.subject, source.object_type, factScope.subject),
     direction: directionOf(fact),
     assertion: assertionOf(fact),
-    sourceRef: firstValue(
-      scope.source_ref,
-      fact?.source_ref,
-      fact?.scope?.source_ref,
-      fact?.sourceRef,
+    sourceRef: firstText(
+      scopeSource.source_ref,
+      source.source_ref,
+      factScope.source_ref,
+      source.sourceRef,
     ),
-    experiencerRef: firstValue(
-      scope.experiencer_ref,
-      scope.actor_ref,
-      fact?.experiencer_ref,
-      fact?.actor_ref,
-      fact?.actor,
-      fact?.scope?.experiencer_ref,
-      fact?.scope?.actor,
-      fact?.experiencerRef,
+    experiencerRef: firstText(
+      scopeSource.experiencer_ref,
+      scopeSource.actor_ref,
+      source.experiencer_ref,
+      source.actor_ref,
+      source.actor,
+      factScope.experiencer_ref,
+      factScope.actor,
+      source.experiencerRef,
     ),
-    productRef: firstValue(
-      scope.product_ref,
-      fact?.product_ref,
-      fact?.scope?.product_ref,
-      fact?.productRef,
+    productRef: firstText(
+      scopeSource.product_ref,
+      source.product_ref,
+      factScope.product_ref,
+      source.productRef,
     ),
-    variantRef: firstValue(
-      scope.variant_ref,
-      fact?.variant_ref,
-      fact?.scope?.variant_ref,
-      fact?.variantRef,
+    variantRef: firstText(
+      scopeSource.variant_ref,
+      source.variant_ref,
+      factScope.variant_ref,
+      source.variantRef,
     ),
-    eventRef: firstValue(
-      scope.event_ref,
-      fact?.event_ref,
-      fact?.event_id,
-      fact?.scope?.event_ref,
-      fact?.eventRef,
+    eventRef: firstText(
+      scopeSource.event_ref,
+      source.event_ref,
+      source.event_id,
+      factScope.event_ref,
+      source.eventRef,
     ),
-    referenceBasis: firstValue(
-      scope.reference_basis,
-      fact?.reference_basis,
-      fact?.scope?.reference_basis,
-      fact?.referenceBasis,
+    referenceBasis: firstText(
+      scopeSource.reference_basis,
+      source.reference_basis,
+      factScope.reference_basis,
+      source.referenceBasis,
     ),
     condition: conditionText(
       firstValue(
-        scope.condition,
-        fact?.condition,
-        fact?.conditions,
-        fact?.scope?.condition,
+        scopeSource.condition,
+        source.condition,
+        source.conditions,
+        factScope.condition,
       ),
     ),
-    operation: firstValue(scope.operation, fact?.operation, fact?.scope?.operation),
-    part: firstValue(scope.part, fact?.part, fact?.scope?.part),
-    evidence:
-      fact?.evidence ??
-      fact?.evidence_text ??
-      fact?.text ??
+    operation: firstText(scopeSource.operation, source.operation, factScope.operation),
+    part: firstText(scopeSource.part, source.part, factScope.part),
+    evidence: coalescedText(
+      source.evidence,
+      source.evidence_text,
+      source.text,
       evidenceSpans
-        .map((span) => span?.text)
+        .map((span) => span.text)
         .filter(Boolean)
         .join(" … "),
-    evidenceSource:
-      fact?.evidence_source ??
-      fact?.source ??
-      fact?.evidenceSource ??
+    ),
+    evidenceSource: coalescedText(
+      source.evidence_source,
+      source.source,
+      source.evidenceSource,
       evidenceSpans
-        .map((span) => span?.source)
+        .map((span) => span.source)
         .filter(Boolean)
-        .join("+") ??
-      "",
-    decisionReason: firstValue(
-      fact?.decision_reason,
-      fact?.verdict_reason,
-      fact?.decisionReason,
+        .join("+"),
     ),
-    mappingReason: firstValue(fact?.mapping_reason, fact?.mappingReason, fact?.reason),
+    decisionReason: firstText(
+      source.decision_reason,
+      source.verdict_reason,
+      source.decisionReason,
+    ),
+    mappingReason: firstText(
+      source.mapping_reason,
+      source.mappingReason,
+      source.reason,
+    ),
     relationType: String(
-      firstValue(fact?.relation_type, fact?.fact_relation_type, fact?.relationType) ||
-        "",
+      firstValue(
+        source.relation_type,
+        source.fact_relation_type,
+        source.relationType,
+      ) || "",
     ).toUpperCase(),
-    relatedFactIds: array(
-      fact?.related_fact_ids ?? fact?.cause_fact_ids ?? fact?.relatedFactIds,
+    relatedFactIds: stringArray(
+      source.related_fact_ids ?? source.cause_fact_ids ?? source.relatedFactIds,
     ),
-    causalAttribution: firstValue(
-      fact?.causal_attribution,
-      fact?.cause_attribution,
-      fact?.cause_actor,
-      fact?.cause_ref,
-      fact?.cause,
-      fact?.causalAttribution,
+    causalAttribution: firstText(
+      source.causal_attribution,
+      source.cause_attribution,
+      source.cause_actor,
+      source.cause_ref,
+      source.cause,
+      source.causalAttribution,
     ),
     position: index,
   };
 }
 
-/** @param {SemanticData} classification @param {SemanticData} record @returns {any[][]} */
+/**
+ * @param {SemanticObject} classification
+ * @param {SemanticObject} record
+ * @returns {unknown[][]}
+ */
 function factSources(classification, record) {
-  return [
-    record?.atomic_facts,
-    record?.semantic_units,
+  const candidates = [
+    record.atomic_facts,
+    record.semantic_units,
     classification.atomic_facts,
     classification.semantic_units,
-    record?.semantic_facts,
+    record.semantic_facts,
     classification.semantic_facts,
-    record?.extracted_facts,
+    record.extracted_facts,
     classification.extracted_facts,
-    record?.facts,
+    record.facts,
     classification.facts,
-    record?.evidence,
-  ].filter(Array.isArray);
+    record.evidence,
+  ];
+  /** @type {unknown[][]} */
+  const sources = [];
+  candidates.forEach((candidate) => {
+    if (Array.isArray(candidate)) sources.push(candidate);
+  });
+  return sources;
 }
 
-/** @param {SemanticData} classification @param {SemanticData} record @returns {SemanticData[]} */
+/**
+ * @param {SemanticObject} classification
+ * @param {SemanticObject} record
+ * @returns {SemanticObject[]}
+ */
 function mappingSources(classification, record) {
-  return array(record?.fact_mappings ?? classification.fact_mappings);
+  return array(record.fact_mappings ?? classification.fact_mappings).filter(
+    isSemanticObject,
+  );
 }
 
-/** @param {any} value @returns {boolean} */
+/** @param {unknown} value @returns {boolean} */
 function meaningful(value) {
   return value !== undefined && value !== null && value !== "";
 }
 
-/** @param {SemanticData} primary @param {SemanticData} secondary @returns {SemanticData} */
+/**
+ * @param {NormalizedFact} primary
+ * @param {SemanticObject} secondary
+ * @returns {NormalizedFact}
+ */
 function mergeFacts(primary, secondary) {
   const merged = { ...primary };
   Object.entries(secondary).forEach(([key, value]) => {
@@ -375,59 +518,76 @@ function mergeFacts(primary, secondary) {
   return merged;
 }
 
-/** @param {SemanticData} classification @param {SemanticData} record @returns {SemanticData[]} */
+/**
+ * @param {SemanticObject} classification
+ * @param {SemanticObject} record
+ * @returns {NormalizedFact[]}
+ */
 function sourceFacts(classification, record) {
+  /** @type {Map<string, NormalizedFact>} */
   const identified = new Map();
-  /** @type {SemanticData[]} */
+  /** @type {NormalizedFact[]} */
   const anonymous = [];
   factSources(classification, record).forEach((facts) => {
     facts.forEach((fact, index) => {
-      const normalized = normalizedFact(fact, index);
+      const normalized = normalizedFact(object(fact), index);
       if (!normalized.factId) {
         anonymous.push(normalized);
         return;
       }
+      const existing = identified.get(normalized.factId);
       identified.set(
         normalized.factId,
-        mergeFacts(identified.get(normalized.factId) ?? {}, normalized),
+        existing ? mergeFacts(existing, normalized) : normalized,
       );
     });
   });
   const mappings = new Map(
-    mappingSources(classification, record).map((mapping) => [mapping.fact_id, mapping]),
+    mappingSources(classification, record).map((mapping) => [
+      stringValue(mapping.fact_id),
+      mapping,
+    ]),
   );
   return [...identified.values(), ...anonymous].map((fact) => {
     const mapping = mappings.get(fact.factId);
     if (!mapping) return fact;
     return mergeFacts(fact, {
-      mappingReason: mapping.reason,
-      relationType: mapping.relation_type,
-      relatedFactIds: array(mapping.related_fact_ids),
+      mappingReason: stringValue(mapping.reason),
+      relationType: stringValue(mapping.relation_type),
+      relatedFactIds: stringArray(mapping.related_fact_ids),
     });
   });
 }
 
-/** @param {SemanticData} classification @param {SemanticData} record @returns {any[]} */
+/**
+ * @param {SemanticObject} classification
+ * @param {SemanticObject} record
+ * @returns {unknown[]}
+ */
 function conclusionSources(classification, record) {
-  return (
-    record?.comment_conclusions ??
-    record?.aspect_summaries ??
-    record?.semantic_summaries ??
-    record?.topic_summaries ??
-    classification.comment_conclusions ??
-    classification.aspect_summaries ??
-    classification.semantic_summaries ??
-    classification.topic_summaries ??
-    []
+  return array(
+    record.comment_conclusions ??
+      record.aspect_summaries ??
+      record.semantic_summaries ??
+      record.topic_summaries ??
+      classification.comment_conclusions ??
+      classification.aspect_summaries ??
+      classification.semantic_summaries ??
+      classification.topic_summaries ??
+      [],
   );
 }
 
-/** @param {SemanticData} classification @param {SemanticData} record @returns {any[]} */
+/**
+ * @param {SemanticObject} classification
+ * @param {SemanticObject} record
+ * @returns {unknown[]}
+ */
 function dimensionDecisionSources(classification, record) {
-  return record?.dimension_decisions ?? classification.dimension_decisions ?? [];
+  return array(record.dimension_decisions ?? classification.dimension_decisions);
 }
 
-/** @param {SemanticData} fact @returns {string} */
+/** @param {NormalizedFact} fact @returns {string} */
 function scopeKey(fact) {
   return [
     fact.sourceRef,
@@ -444,7 +604,7 @@ function scopeKey(fact) {
     .join("|");
 }
 
-/** @param {SemanticData[]} facts @returns {string} */
+/** @param {NormalizedFact[]} facts @returns {SemanticStatus} */
 function derivedConclusionStatus(facts) {
   const confirmed = facts.filter(isConfirmed);
   const positive = confirmed.filter((fact) => fact.direction === "POSITIVE");
@@ -457,19 +617,20 @@ function derivedConclusionStatus(facts) {
   return sameScopeConflict ? "CONFLICT" : "MIXED";
 }
 
-/** @param {SemanticData} fact @returns {SemanticData} */
+/** @param {NormalizedFact} fact @returns {SemanticTopic} */
 function topicForFact(fact) {
-  const explicit =
+  const explicit = coalescedText(
     fact.aspect_label ??
-    fact.aspect_name ??
-    fact.topic_label ??
-    fact.aspect ??
-    fact.topic;
+      fact.aspect_name ??
+      fact.topic_label ??
+      fact.aspect ??
+      fact.topic,
+  );
   if (explicit) {
     return {
-      key: fact.aspect_code ?? fact.topic_code ?? explicit,
+      key: coalescedText(fact.aspect_code, fact.topic_code, explicit),
       label: explicit,
-      path: array(fact.aspect_path),
+      path: stringArray(fact.aspect_path),
     };
   }
   const topicPath = fact.labelPath.length > 1 ? fact.labelPath.slice(0, -1) : [];
@@ -480,8 +641,13 @@ function topicForFact(fact) {
   };
 }
 
-/** @param {SemanticData[]} facts @param {boolean} [legacy] @returns {SemanticData[]} */
+/**
+ * @param {NormalizedFact[]} facts
+ * @param {boolean} [legacy]
+ * @returns {SemanticConclusion[]}
+ */
 function deriveConclusions(facts, legacy = true) {
+  /** @type {Map<string, SemanticTopic & { facts: NormalizedFact[] }>} */
   const groups = new Map();
   facts
     .filter((fact) => fact.labelCode || fact.labelPath.length)
@@ -503,12 +669,18 @@ function deriveConclusions(facts, legacy = true) {
   }));
 }
 
-/** @param {SemanticData} conclusion @param {number} index @param {SemanticData[]} allFacts @returns {SemanticData} */
-function normalizeConclusion(conclusion, index, allFacts) {
-  const factIds = array(conclusion.supporting_fact_ids ?? conclusion.fact_ids);
-  const labelCodes = array(conclusion.label_codes);
+/**
+ * @param {unknown} conclusionValue
+ * @param {number} index
+ * @param {NormalizedFact[]} allFacts
+ * @returns {SemanticConclusion}
+ */
+function normalizeConclusion(conclusionValue, index, allFacts) {
+  const conclusion = object(conclusionValue);
+  const factIds = stringArray(conclusion.supporting_fact_ids ?? conclusion.fact_ids);
+  const labelCodes = stringArray(conclusion.label_codes);
   const embeddedFacts = array(conclusion.facts ?? conclusion.atomic_facts).map(
-    normalizedFact,
+    (fact, factIndex) => normalizedFact(object(fact), factIndex),
   );
   const matchedById = factIds.length
     ? allFacts.filter((fact) => factIds.includes(fact.factId))
@@ -522,8 +694,8 @@ function normalizeConclusion(conclusion, index, allFacts) {
       conclusion.aspect_name,
       conclusion.topic_label,
       conclusion.topic_name,
-      ...array(conclusion.aspect_path),
-      ...array(conclusion.topic_path),
+      ...stringArray(conclusion.aspect_path),
+      ...stringArray(conclusion.topic_path),
     ]
       .filter(Boolean)
       .map(String),
@@ -540,28 +712,32 @@ function normalizeConclusion(conclusion, index, allFacts) {
       ? matchedByLabel
       : matchedByTopic;
   const facts = embeddedFacts.length ? embeddedFacts : matchedFacts;
-  const topicPath = array(conclusion.aspect_path ?? conclusion.topic_path).filter(
-    Boolean,
-  );
+  const topicPath = stringArray(conclusion.aspect_path ?? conclusion.topic_path);
   return {
-    id:
-      conclusion.id ??
-      conclusion.aspect_code ??
-      conclusion.topic_code ??
+    id: coalescedText(
+      conclusion.id,
+      conclusion.aspect_code,
+      conclusion.topic_code,
       `topic-${index}`,
-    topic:
-      conclusion.aspect_label ??
-      conclusion.aspect_name ??
-      conclusion.topic_label ??
-      conclusion.topic_name ??
-      conclusion.label ??
-      topicPath.at(-1) ??
+    ),
+    topic: coalescedText(
+      conclusion.aspect_label,
+      conclusion.aspect_name,
+      conclusion.topic_label,
+      conclusion.topic_name,
+      conclusion.label,
+      topicPath.at(-1),
       "未归类主题",
+    ),
     topicPath,
     status: normalizedStatus(
       conclusion.summary_status ?? conclusion.status ?? conclusion.sentiment_status,
     ),
-    summary: conclusion.summary ?? conclusion.statement ?? conclusion.conclusion ?? "",
+    summary: coalescedText(
+      conclusion.summary,
+      conclusion.statement,
+      conclusion.conclusion,
+    ),
     facts,
     contextFacts: [],
     legacy: facts.some((fact) =>
@@ -577,13 +753,31 @@ function normalizeConclusion(conclusion, index, allFacts) {
   };
 }
 
-/** @param {SemanticData[]} decisions @param {SemanticData[]} allFacts @returns {SemanticData} */
+/**
+ * @param {unknown[]} decisions
+ * @param {NormalizedFact[]} allFacts
+ * @returns {{ conclusions: SemanticConclusion[], consumedFactIds: Set<string> }}
+ */
 function decisionConclusions(decisions, allFacts) {
+  /**
+   * @type {Map<string, {
+   *   id: string,
+   *   topic: string,
+   *   topicPath: string[],
+   *   summary: string,
+   *   facts: NormalizedFact[],
+   *   contextFacts: NormalizedFact[],
+   *   reasons: string[],
+   *   legacy: boolean
+   * }>}
+   */
   const groups = new Map();
+  /** @type {Set<string>} */
   const consumedFactIds = new Set();
-  decisions.forEach((decision, index) => {
-    const supportingIds = array(decision.supporting_fact_ids);
-    const contextIds = array(decision.context_fact_ids);
+  decisions.forEach((decisionValue, index) => {
+    const decision = object(decisionValue);
+    const supportingIds = stringArray(decision.supporting_fact_ids);
+    const contextIds = stringArray(decision.context_fact_ids);
     supportingIds.forEach((factId) => consumedFactIds.add(factId));
     contextIds.forEach((factId) => consumedFactIds.add(factId));
     const supportingFacts = supportingIds.map((factId) => {
@@ -593,8 +787,8 @@ function decisionConclusions(decisions, allFacts) {
       return normalizedFact(
         {
           ...matched,
-          label_code: decision.verdict_label_code,
-          decision_reason: decision.reason,
+          label_code: stringValue(decision.verdict_label_code),
+          decision_reason: stringValue(decision.reason),
         },
         index,
         decision.scope,
@@ -606,11 +800,14 @@ function decisionConclusions(decisions, allFacts) {
       };
       return normalizedFact(matched, index, decision.scope);
     });
+    const verdictLabelCode = stringValue(decision.verdict_label_code);
     const verdictFact =
-      supportingFacts.find((fact) => fact.labelCode === decision.verdict_label_code) ??
-      allFacts.find((fact) => fact.labelCode === decision.verdict_label_code);
-    const topic = topicForFact(verdictFact ?? supportingFacts[0] ?? {});
-    const key = decision.parent_code || topic.key || `decision-${index}`;
+      supportingFacts.find((fact) => fact.labelCode === verdictLabelCode) ??
+      allFacts.find((fact) => fact.labelCode === verdictLabelCode);
+    const topic = topicForFact(
+      verdictFact ?? supportingFacts[0] ?? normalizedFact({}, index),
+    );
+    const key = firstText(decision.parent_code, topic.key, `decision-${index}`);
     const current = groups.get(key) ?? {
       id: key,
       topic: topic.label || key,
@@ -623,7 +820,8 @@ function decisionConclusions(decisions, allFacts) {
     };
     current.facts.push(...supportingFacts);
     current.contextFacts.push(...contextFacts);
-    if (decision.reason) current.reasons.push(decision.reason);
+    const reason = stringValue(decision.reason);
+    if (reason) current.reasons.push(reason);
     groups.set(key, current);
   });
   return {
@@ -636,11 +834,12 @@ function decisionConclusions(decisions, allFacts) {
   };
 }
 
-/** @param {SemanticData} record @returns {SemanticData[]} */
+/** @param {SemanticRecord} record @returns {SemanticConclusion[]} */
 export function semanticConclusions(record) {
+  const source = object(record);
   const classification = classificationOf(record);
-  const facts = sourceFacts(classification, record);
-  const decisions = array(dimensionDecisionSources(classification, record));
+  const facts = sourceFacts(classification, source);
+  const decisions = dimensionDecisionSources(classification, source);
   if (decisions.length) {
     const { conclusions, consumedFactIds } = decisionConclusions(decisions, facts);
     const residual = facts.filter(
@@ -649,21 +848,22 @@ export function semanticConclusions(record) {
     );
     return [...conclusions, ...deriveConclusions(residual, false)];
   }
-  const provided = array(conclusionSources(classification, record));
+  const provided = conclusionSources(classification, source);
   return provided.length
     ? provided.map((conclusion, index) => normalizeConclusion(conclusion, index, facts))
     : deriveConclusions(facts);
 }
 
-/** @param {SemanticData} record @returns {string} */
+/** @param {SemanticRecord} record @returns {SemanticStatus} */
 export function semanticRecordStatus(record) {
+  const source = object(record);
   const classification = classificationOf(record);
   const explicit =
-    record?.comment_summary_status ??
-    record?.comment_summary?.status ??
-    record?.semantic_status ??
+    source.comment_summary_status ??
+    object(source.comment_summary).status ??
+    source.semantic_status ??
     classification.comment_summary_status ??
-    classification.comment_summary?.status ??
+    object(classification.comment_summary).status ??
     classification.semantic_status;
   if (explicit) return normalizedStatus(explicit);
   const statuses = semanticConclusions(record).map((item) => item.status);
@@ -675,29 +875,40 @@ export function semanticRecordStatus(record) {
   return "NO_CONFIRMED";
 }
 
-/** @param {SemanticData} record @returns {SemanticData[]} */
+/** @param {SemanticRecord} record @returns {SemanticRelation[]} */
 export function semanticRelations(record) {
+  const source = object(record);
   const classification = classificationOf(record);
-  const relations = record?.semantic_relations ?? classification.semantic_relations;
-  return array(relations).map((relation, index) => ({
-    id: relation.id ?? `relation-${index}`,
-    type: String(relation.relation_type ?? relation.type ?? "").toUpperCase(),
-    reason: relation.reason ?? "未提供关系说明",
-    factIds: array(relation.fact_ids),
-  }));
+  const relations = source.semantic_relations ?? classification.semantic_relations;
+  return array(relations).map((relationValue, index) => {
+    const relation = object(relationValue);
+    return {
+      id: coalescedText(relation.id, `relation-${index}`),
+      type: coalescedText(relation.relation_type, relation.type, "").toUpperCase(),
+      reason: coalescedText(relation.reason, "未提供关系说明"),
+      factIds: stringArray(relation.fact_ids),
+    };
+  });
 }
 
-/** @param {any} unknown @param {number} index @param {string} [fallbackDisposition] @returns {SemanticData} */
-function normalizeUnknown(unknown, index, fallbackDisposition = "") {
+/**
+ * @param {RawUnknownSemantic | unknown} unknownValue
+ * @param {number} index
+ * @param {string} [fallbackDisposition]
+ * @returns {NormalizedUnknownSemantic}
+ */
+function normalizeUnknown(unknownValue, index, fallbackDisposition = "") {
   const item =
-    typeof unknown === "string" ? { opinion: unknown, evidence: unknown } : unknown;
-  const normalized = normalizedFact(item ?? {}, index);
-  const disposition = String(item?.disposition || fallbackDisposition).toUpperCase();
+    typeof unknownValue === "string"
+      ? { opinion: unknownValue, evidence: unknownValue }
+      : object(unknownValue);
+  const normalized = normalizedFact(item, index);
+  const disposition = firstText(item.disposition, fallbackDisposition).toUpperCase();
   return {
     ...normalized,
     id: normalized.factId || `unknown-${index}`,
-    opinion: item?.opinion ?? item?.text ?? "",
-    reason: item?.reason ?? "",
+    opinion: coalescedText(item.opinion, item.text, ""),
+    reason: coalescedText(item.reason, ""),
     disposition,
     dispositionLabel: disposition
       ? DISPOSITION_LABELS[disposition] || disposition
@@ -706,7 +917,7 @@ function normalizeUnknown(unknown, index, fallbackDisposition = "") {
   };
 }
 
-/** @param {SemanticData} item @returns {string} */
+/** @param {NormalizedUnknownSemantic} item @returns {string} */
 function unknownIdentity(item) {
   if (item.factId) return `fact:${item.factId}`;
   return [
@@ -724,18 +935,21 @@ function unknownIdentity(item) {
     .join("|");
 }
 
-/** @param {SemanticData} record @returns {{review: SemanticData[], informational: SemanticData[]}} */
+/** @param {SemanticRecord} record @returns {UnknownSemanticGroups} */
 export function semanticUnknownGroups(record) {
+  const source = object(record);
   const classification = classificationOf(record);
-  const sources = [
-    ...array(record?.unknown_semantics).map((item) => [item, ""]),
-    ...array(classification.unknown_semantics).map((item) => [item, ""]),
-    ...array(record?.ignored_semantics).map((item) => [item, "EXPECTED_ABSTENTION"]),
-    ...array(classification.ignored_semantics).map((item) => [
-      item,
-      "EXPECTED_ABSTENTION",
-    ]),
-  ];
+  /** @type {Array<[unknown, string]>} */
+  const sources = [];
+  array(source.unknown_semantics).forEach((item) => sources.push([item, ""]));
+  array(classification.unknown_semantics).forEach((item) => sources.push([item, ""]));
+  array(source.ignored_semantics).forEach((item) =>
+    sources.push([item, "EXPECTED_ABSTENTION"]),
+  );
+  array(classification.ignored_semantics).forEach((item) =>
+    sources.push([item, "EXPECTED_ABSTENTION"]),
+  );
+  /** @type {Set<string>} */
   const seen = new Set();
   const unknowns = sources
     .map(([item, fallbackDisposition], index) =>
@@ -747,7 +961,7 @@ export function semanticUnknownGroups(record) {
       seen.add(identity);
       return true;
     });
-  /** @type {{review: SemanticData[], informational: SemanticData[]}} */
+  /** @type {UnknownSemanticGroups} */
   const groups = { review: [], informational: [] };
   unknowns.forEach((item) => {
     if (INFORMATIONAL_DISPOSITIONS.has(item.disposition)) {
@@ -761,17 +975,17 @@ export function semanticUnknownGroups(record) {
   return groups;
 }
 
-/** @param {any} status @returns {string} */
+/** @param {unknown} status @returns {string} */
 export function semanticStatusLabel(status) {
   return SEMANTIC_STATUS_LABELS[normalizedStatus(status)];
 }
 
-/** @param {any} value @returns {string} */
+/** @param {string} value @returns {string} */
 function participantLabel(value) {
   return PARTICIPANT_LABELS[value] || value;
 }
 
-/** @param {SemanticData} fact @returns {SemanticData} */
+/** @param {RawFact | NormalizedFact} fact @returns {PresentedFact} */
 export function factPresentation(fact) {
   const normalized = normalizedFact(fact, 0);
   const relatedFacts = normalized.relatedFactIds.join("、");

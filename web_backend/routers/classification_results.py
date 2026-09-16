@@ -5,8 +5,12 @@ from typing import Any, Callable
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from web_backend.api_schemas import (
+    ClassificationResultDrilldownResponse,
+    ClassificationResultListResponse,
     ClassificationResultRecordsResponse,
     ClassificationResultSummaryResponse,
+    ClassificationResultTaxonomyResponse,
+    ClassificationResultVersionResponse,
 )
 from web_backend.classification_result_service import (
     ClassificationResultNotFound,
@@ -16,6 +20,8 @@ from web_backend.classification_standard_service import (
     ClassificationStandardNotFound,
     ClassificationStandardService,
 )
+
+XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
 def create_classification_result_router(
@@ -31,6 +37,8 @@ def create_classification_result_router(
     @router.get(
         "/api/classification-results",
         dependencies=[Depends(current_user)],
+        response_model=ClassificationResultListResponse,
+        response_model_exclude_unset=True,
     )
     def list_results(
         page: int = Query(default=1, ge=1),
@@ -55,6 +63,8 @@ def create_classification_result_router(
     @router.get(
         "/api/classification-results/{version_id}",
         dependencies=[Depends(current_user)],
+        response_model=ClassificationResultVersionResponse,
+        response_model_exclude_unset=True,
     )
     def get_result(version_id: str) -> dict[str, Any]:
         try:
@@ -65,6 +75,8 @@ def create_classification_result_router(
     @router.get(
         "/api/classification-results/{version_id}/versions",
         dependencies=[Depends(current_user)],
+        response_model=list[ClassificationResultVersionResponse],
+        response_model_exclude_unset=True,
     )
     def get_result_versions(version_id: str) -> list[dict[str, Any]]:
         try:
@@ -75,6 +87,8 @@ def create_classification_result_router(
     @router.get(
         "/api/classification-results/{version_id}/taxonomy",
         dependencies=[Depends(current_user)],
+        response_model=ClassificationResultTaxonomyResponse,
+        response_model_exclude_unset=True,
     )
     def get_result_taxonomy(version_id: str) -> dict[str, Any]:
         try:
@@ -86,6 +100,7 @@ def create_classification_result_router(
         "/api/classification-results/{version_id}/summary",
         dependencies=[Depends(current_user)],
         response_model=ClassificationResultSummaryResponse,
+        response_model_exclude_unset=True,
     )
     def get_summary(version_id: str) -> dict[str, Any]:
         try:
@@ -97,6 +112,7 @@ def create_classification_result_router(
         "/api/classification-results/{version_id}/records",
         dependencies=[Depends(current_user)],
         response_model=ClassificationResultRecordsResponse,
+        response_model_exclude_unset=True,
     )
     def list_records(
         version_id: str,
@@ -135,6 +151,8 @@ def create_classification_result_router(
     @router.get(
         "/api/classification-results/{version_id}/drilldown",
         dependencies=[Depends(current_user)],
+        response_model=ClassificationResultDrilldownResponse,
+        response_model_exclude_unset=True,
     )
     def get_drilldown(
         version_id: str,
@@ -165,6 +183,8 @@ def create_classification_result_router(
     @router.get(
         "/api/classification-results/{version_id}/download",
         dependencies=[Depends(current_user)],
+        response_class=Response,
+        responses={200: {"content": {XLSX_MEDIA_TYPE: {}}}},
     )
     def download_result(version_id: str) -> Response:
         try:
@@ -173,9 +193,7 @@ def create_classification_result_router(
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         return Response(
             content=content,
-            media_type=(
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            ),
+            media_type=XLSX_MEDIA_TYPE,
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
