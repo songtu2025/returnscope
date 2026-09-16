@@ -58,6 +58,10 @@ def _task_lock(task_id: str) -> threading.Lock:
         return _TASK_LOCKS.setdefault(task_id, threading.Lock())
 
 
+def _unique(values: list[str]) -> list[str]:
+    return list(dict.fromkeys(values))
+
+
 class RevisionConflict(ValueError):
     pass
 
@@ -859,6 +863,20 @@ class ReviewService:
             raise ReviewBatchConflict("复核批次已经发布，不能重复提交")
         if batch["base_publish_status"] != "published":
             raise ReviewBatchConflict("基准分类结果版本不可用")
+        latest_version = connection.execute(
+            """
+            SELECT id FROM classification_result_versions
+            WHERE result_id = ? AND publish_status = 'published'
+            ORDER BY version_no DESC LIMIT 1
+            """,
+            (batch["result_id"],),
+        ).fetchone()
+        if latest_version is None or str(latest_version["id"]) != str(
+            batch["base_result_version_id"]
+        ):
+            raise ReviewBatchConflict(
+                "基准分类结果版本已过期，请基于最新版本重新创建复核批次"
+            )
         return batch
 
     @staticmethod
@@ -916,6 +934,16 @@ class ReviewService:
         )
 
     @staticmethod
+    def _validate_reviewed_classification(
+        classification: dict[str, Any],
+    ) -> tuple[ValidatedClassification, dict[str, Any] | None]:
+        core = dict(classification)
+        assessment = core.pop("human_review_assessment", None)
+        if assessment is not None and not isinstance(assessment, dict):
+            raise ValueError("人工复核评估数据格式无效")
+        return ValidatedClassification.model_validate(core), assessment
+
+    @staticmethod
     def _build_derived_result_content(
         connection: Any,
         batch: Any,
@@ -953,7 +981,12 @@ class ReviewService:
                 key,
                 json_value(row["classification_json"], {}),
             )
-            validated = ValidatedClassification.model_validate(classification)
+            validated, assessment = ReviewService._validate_reviewed_classification(
+                classification
+            )
+            serialized = validated.model_dump(mode="json")
+            if assessment is not None:
+                serialized["human_review_assessment"] = assessment
             quality_status = (
                 "excluded"
                 if key in changes.excluded_keys
@@ -967,7 +1000,7 @@ class ReviewService:
                     "classification_key": key,
                     "reason": row["reason"],
                     "comment": row["comment"],
-                    "classification": validated.model_dump(mode="json"),
+                    "classification": serialized,
                     "problem_labels": list(validated.problem_label_codes),
                     "processing_status": validated.status.value,
                     "quality_status": quality_status,
@@ -1289,8 +1322,10 @@ class ReviewService:
                 raise ValueError("选择的语义标签不存在")
             units = [dict(item) for item in updated.get("semantic_units", [])]
             if units:
+                previous_label = str(units[0].get("label_code", ""))
                 units[0]["label_code"] = selected
             else:
+                previous_label = ""
                 units = [
                     {
                         "subject": "PRODUCT",
@@ -1307,15 +1342,55 @@ class ReviewService:
                 ]
             updated["semantic_units"] = units
             updated["unknown_semantics"] = []
-            updated["problem_label_codes"] = [selected]
-            updated["positive_label_codes"] = []
+            problem_codes, positive_codes, negative_codes = self._project_review_labels(
+                units,
+                list(updated.get("problem_label_codes", [])),
+                previous_label,
+                selected,
+            )
+            updated["problem_label_codes"] = problem_codes
+            updated["positive_label_codes"] = positive_codes
             updated["primary_label_codes"] = [selected]
+            summary = dict(updated.get("comment_summary", {}))
+            summary["positive_label_codes"] = positive_codes
+            summary["negative_label_codes"] = negative_codes
+            updated["comment_summary"] = summary
         if not updated.get("semantic_units") and updated.get("unknown_semantics"):
             raise ValueError("未知语义必须选择一个标签后才能完成复核")
         updated["status"] = "MANUAL_RESOLVED"
         updated["review_reasons"] = []
-        ValidatedClassification.model_validate(updated)
+        self._validate_reviewed_classification(updated)
         return updated
+
+    @staticmethod
+    def _project_review_labels(
+        units: list[dict[str, Any]],
+        previous_problem_codes: list[str],
+        previous_label: str,
+        selected: str,
+    ) -> tuple[list[str], list[str], list[str]]:
+        neutral_problem_codes = set(previous_problem_codes)
+        if previous_label in neutral_problem_codes:
+            neutral_problem_codes.remove(previous_label)
+            neutral_problem_codes.add(selected)
+        problem_codes: list[str] = []
+        positive_codes: list[str] = []
+        negative_codes: list[str] = []
+        for unit in units:
+            code = str(unit.get("label_code", ""))
+            sentiment = str(unit.get("sentiment", ""))
+            if sentiment == "POSITIVE":
+                positive_codes.append(code)
+            elif sentiment == "NEGATIVE":
+                problem_codes.append(code)
+                negative_codes.append(code)
+            elif code in neutral_problem_codes:
+                problem_codes.append(code)
+        return (
+            _unique(problem_codes),
+            _unique(positive_codes),
+            _unique(negative_codes),
+        )
 
     def _rebuild_result(self, task_id: str, actor_id: str) -> None:
         with _task_lock(task_id):
@@ -1356,7 +1431,7 @@ class ReviewService:
                     {},
                 )
             results = {
-                key: ValidatedClassification.model_validate(value)
+                key: self._validate_reviewed_classification(value)[0]
                 for key, value in payload.items()
             }
             dataset = load_return_dataset(
