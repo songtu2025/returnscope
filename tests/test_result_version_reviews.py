@@ -152,15 +152,12 @@ def test_review_router_preserves_registration_contract(tmp_path: Path) -> None:
     def current_user() -> dict[str, str]:
         return {"id": "user-1"}
 
-    app = FastAPI()
-    app.include_router(
-        create_review_router(
-            ReviewService(context.database),
-            context.database,
-            current_user,
-        )
+    router = create_review_router(
+        ReviewService(context.database),
+        context.database,
+        current_user,
     )
-    routes = [route for route in app.routes if isinstance(route, APIRoute)]
+    routes = [route for route in router.routes if isinstance(route, APIRoute)]
     expected_routes = [
         "GET|/api/reviews|list_reviews|200|_user,workflow_status,task_id",
         "GET|/api/reviews/{review_id}|get_review|200|review_id,_user",
