@@ -173,7 +173,6 @@ def test_validation_service_preserves_exception_import_contract() -> None:
 
 
 def test_validation_routes_preserve_registration_contract(tmp_path: Path) -> None:
-    from fastapi import FastAPI
     from fastapi.routing import APIRoute
 
     from web_backend.routers.classification_standards import (
@@ -185,17 +184,14 @@ def test_validation_routes_preserve_registration_contract(tmp_path: Path) -> Non
     def current_user() -> dict[str, str]:
         return {"id": "user-1"}
 
-    app = FastAPI()
-    app.include_router(
-        create_classification_standard_router(
-            standards,
-            validations,
-            current_user,
-        )
+    router = create_classification_standard_router(
+        standards,
+        validations,
+        current_user,
     )
     routes = [
         route
-        for route in app.routes
+        for route in router.routes
         if isinstance(route, APIRoute) and "validation" in route.path
     ]
     expected_routes = [
