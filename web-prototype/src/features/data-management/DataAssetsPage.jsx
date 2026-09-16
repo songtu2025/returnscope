@@ -1,6 +1,9 @@
 import { useEffect, useMemo } from "react";
+import "../../styles/operations.css";
+import "../../styles/product-info.css";
 
 import { navigateHash } from "../../app/hashRouter";
+import { AntdProvider } from "../../components/AntdProvider";
 import { DataManagement } from "../../pages/DataManagement";
 import { readTaskDraft, updateTaskDraft } from "../task-create/taskDraftStorage";
 import { ImportRulesPage } from "./ImportRulesPage";
@@ -34,45 +37,51 @@ export function DataAssetsPage({ route, notify, onNavigate, userId }) {
 
   if (view === "returns") {
     return (
-      <ReturnDataAssetsPage
-        route={route}
-        notify={notify}
-        onNavigate={onNavigate}
-        onRouteChange={updateRoute}
-      />
+      <AntdProvider>
+        <ReturnDataAssetsPage
+          route={route}
+          notify={notify}
+          onNavigate={onNavigate}
+          onRouteChange={updateRoute}
+        />
+      </AntdProvider>
     );
   }
   if (view === "rules") return <ImportRulesPage />;
 
   return (
-    <DataManagement
-      notify={notify}
-      onNavigate={onNavigate}
-      focus={focus}
-      taskDraft={taskDraft}
-      routeDetailTab={route.query.tab || ""}
-      routeReferenceVersion={route.query.reference_version || ""}
-      routeReferencePage={route.query.reference_page || 1}
-      onAssetViewChange={(nextView) =>
-        updateRoute({ view: nextView, dataset: "", tab: "" })
-      }
-      onDetailTabChange={(tab) => navigateHash("data-assets", { ...route.query, tab })}
-      onReferenceRouteChange={(changes) =>
-        navigateHash("data-assets", { ...route.query, ...changes })
-      }
-      onReturnToTask={(productVersionId) => {
-        updateTaskDraft(userId, {
-          ...taskDraft,
-          repairContext: null,
-          form: {
-            ...taskDraft?.form,
-            product_version_id: productVersionId,
-          },
-          step: 3,
-          resumePreflight: true,
-        });
-        onNavigate("task-create");
-      }}
-    />
+    <AntdProvider>
+      <DataManagement
+        notify={notify}
+        onNavigate={onNavigate}
+        focus={focus}
+        taskDraft={taskDraft}
+        routeDetailTab={route.query.tab || ""}
+        routeReferenceVersion={route.query.reference_version || ""}
+        routeReferencePage={route.query.reference_page || 1}
+        onAssetViewChange={(nextView) =>
+          updateRoute({ view: nextView, dataset: "", tab: "" })
+        }
+        onDetailTabChange={(tab) =>
+          navigateHash("data-assets", { ...route.query, tab })
+        }
+        onReferenceRouteChange={(changes) =>
+          navigateHash("data-assets", { ...route.query, ...changes })
+        }
+        onReturnToTask={(productVersionId) => {
+          updateTaskDraft(userId, {
+            ...taskDraft,
+            repairContext: null,
+            form: {
+              ...taskDraft?.form,
+              product_version_id: productVersionId,
+            },
+            step: 3,
+            resumePreflight: true,
+          });
+          onNavigate("task-create");
+        }}
+      />
+    </AntdProvider>
   );
 }

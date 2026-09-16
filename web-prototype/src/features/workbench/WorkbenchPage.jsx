@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import "../../styles/workbench.css";
+
 import {
   ArrowRight,
   ChartBar,

@@ -1,4 +1,5 @@
 import { TaskMonitor } from "./TaskMonitor";
+import "../../styles/task-flow.css";
 
 export function TaskRuntimePage({ route, notify, onNavigate, onChanged }) {
   return (

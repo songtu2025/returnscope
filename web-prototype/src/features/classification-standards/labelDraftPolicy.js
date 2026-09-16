@@ -1,47 +1,92 @@
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardEditableLabel} ClassificationStandardEditableLabel */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardValidationRules} ClassificationStandardValidationRules */
+/** @typedef {"新增" | "未修改" | "已修改" | "拟停用"} ClassificationLabelChangeStatus */
+/**
+ * @template T
+ * @typedef {{label: T, index: number, before?: T, status: ClassificationLabelChangeStatus}} ClassificationLabelChange
+ */
+
+/** @type {(keyof ClassificationStandardEditableLabel)[]} */
+const LABEL_FIELDS = [
+  "code",
+  "name",
+  "group",
+  "parent_code",
+  "description",
+  "keywords",
+  "exclusions",
+  "examples",
+  "allowed_sentiments",
+  "allowed_claim_ids",
+];
+
+/**
+ * @param {ClassificationStandardEditableLabel | undefined} left
+ * @param {ClassificationStandardEditableLabel | undefined} right
+ */
 export function sameLabel(left, right) {
   if (!left || !right) return left === right;
-  return [
-    "code",
-    "name",
-    "group",
-    "parent_code",
-    "description",
-    "keywords",
-    "exclusions",
-    "examples",
-    "allowed_sentiments",
-    "allowed_claim_ids",
-  ].every(
+  return LABEL_FIELDS.every(
     (field) => JSON.stringify(left[field] ?? []) === JSON.stringify(right[field] ?? []),
   );
 }
 
+/**
+ * @template T
+ * @param {(T & ClassificationStandardEditableLabel)[]} labels
+ * @param {(T & ClassificationStandardEditableLabel)[]} baseLabels
+ * @returns {ClassificationLabelChange<T & ClassificationStandardEditableLabel>[]}
+ */
 export function labelChanges(labels, baseLabels = []) {
   const original = new Map(baseLabels.map((label) => [label.code, label]));
   const codes = new Set(labels.map((label) => label.code));
   return [
-    ...labels.map((label, index) => ({
-      label,
-      index,
-      before: original.get(label.code),
-      status: !original.has(label.code)
+    ...labels.map((label, index) => {
+      /** @type {ClassificationLabelChangeStatus} */
+      const status = !original.has(label.code)
         ? "新增"
         : sameLabel(label, original.get(label.code))
           ? "未修改"
-          : "已修改",
-    })),
+          : "已修改";
+      return { label, index, before: original.get(label.code), status };
+    }),
     ...baseLabels
       .filter((label) => !codes.has(label.code))
-      .map((label) => ({ label, before: label, index: -1, status: "拟停用" })),
+      .map((label) => {
+        /** @type {ClassificationLabelChange<T & ClassificationStandardEditableLabel>} */
+        const change = { label, before: label, index: -1, status: "拟停用" };
+        return change;
+      }),
   ];
 }
 
+/**
+ * @template T
+ * @param {T[]} values
+ * @returns {T[]}
+ */
+function unique(values) {
+  return [...new Map(values.map((value) => [JSON.stringify(value), value])).values()];
+}
+
+/** @template {{label_code: string}} T @param {T[]} current @param {T[]} base @param {string | undefined} restoredCode @param {Set<string>} codes */
+function reconcileLabelRuleList(current, base, restoredCode, codes) {
+  const restored = restoredCode
+    ? base.filter((rule) => rule.label_code === restoredCode)
+    : [];
+  return unique([...current, ...restored]).filter((rule) => codes.has(rule.label_code));
+}
+
+/**
+ * @param {ClassificationStandardValidationRules} rules
+ * @param {ClassificationStandardEditableLabel[]} labels
+ * @param {ClassificationStandardValidationRules} baseRules
+ * @param {string | undefined} restoredCode
+ * @returns {ClassificationStandardValidationRules}
+ */
 export function reconcileLabelRules(rules = {}, labels, baseRules = {}, restoredCode) {
   const codes = new Set(labels.map((label) => label.code));
   const result = structuredClone(rules);
-  const unique = (values) => [
-    ...new Map(values.map((value) => [JSON.stringify(value), value])).values(),
-  ];
   if (rules.opposite_reason_labels || restoredCode) {
     const entries = { ...rules.opposite_reason_labels };
     if (restoredCode)
@@ -58,29 +103,46 @@ export function reconcileLabelRules(rules = {}, labels, baseRules = {}, restored
       ]),
     );
   }
-  for (const field of [
-    "conflicting_label_sets",
-    "evidence_requirements",
-    "implicit_evidence_rules",
-    "claim_evidence_requirements",
-  ]) {
-    if (!rules[field] && !baseRules[field]) continue;
+  if (rules.conflicting_label_sets || baseRules.conflicting_label_sets) {
     const restored = restoredCode
-      ? (baseRules[field] ?? []).filter((rule) =>
-          Array.isArray(rule)
-            ? rule.includes(restoredCode)
-            : rule.label_code === restoredCode,
+      ? (baseRules.conflicting_label_sets ?? []).filter((group) =>
+          group.includes(restoredCode),
         )
       : [];
-    const values = unique([...(rules[field] ?? []), ...restored]);
-    result[field] =
-      field === "conflicting_label_sets"
-        ? values
-            .map((group) => group.filter((code) => codes.has(code)))
-            .filter((group) => new Set(group).size >= 2)
-        : values.filter((rule) => codes.has(rule.label_code));
+    result.conflicting_label_sets = unique([
+      ...(rules.conflicting_label_sets ?? []),
+      ...restored,
+    ])
+      .map((group) => group.filter((code) => codes.has(code)))
+      .filter((group) => new Set(group).size >= 2);
   }
-  for (const field of ["neutral_reason_labels", "required_review_labels"]) {
+  if (rules.evidence_requirements || baseRules.evidence_requirements) {
+    result.evidence_requirements = reconcileLabelRuleList(
+      rules.evidence_requirements ?? [],
+      baseRules.evidence_requirements ?? [],
+      restoredCode,
+      codes,
+    );
+  }
+  if (rules.implicit_evidence_rules || baseRules.implicit_evidence_rules) {
+    result.implicit_evidence_rules = reconcileLabelRuleList(
+      rules.implicit_evidence_rules ?? [],
+      baseRules.implicit_evidence_rules ?? [],
+      restoredCode,
+      codes,
+    );
+  }
+  if (rules.claim_evidence_requirements || baseRules.claim_evidence_requirements) {
+    result.claim_evidence_requirements = reconcileLabelRuleList(
+      rules.claim_evidence_requirements ?? [],
+      baseRules.claim_evidence_requirements ?? [],
+      restoredCode,
+      codes,
+    );
+  }
+  /** @type {("neutral_reason_labels" | "required_review_labels")[]} */
+  const codeFields = ["neutral_reason_labels", "required_review_labels"];
+  for (const field of codeFields) {
     if (!rules[field] && !baseRules[field]) continue;
     const restored =
       restoredCode && baseRules[field]?.includes(restoredCode) ? [restoredCode] : [];

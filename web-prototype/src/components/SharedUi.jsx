@@ -1,7 +1,10 @@
-import { ArrowClockwise, CheckCircle, WarningCircle, X } from "@phosphor-icons/react";
+import { X } from "@phosphor-icons/react";
+import Empty from "antd/es/empty";
+import Spin from "antd/es/spin";
 import { STATUS_LABELS } from "../constants";
 import { useDialogFocus } from "../hooks/useDialogFocus";
 import { classNames } from "../lib/presentation";
+import { AntdProvider } from "./AntdProvider";
 
 export function PageHeading({ eyebrow, title, description, action, titleRef }) {
   return (
@@ -112,37 +115,27 @@ export function StatusBadge({ value }) {
 
 export function EmptyState({ icon: Icon, title, description, action }) {
   return (
-    <div className="empty-state">
-      <Icon size={29} />
-      <b>{title}</b>
-      <span>{description}</span>
-      {action}
-    </div>
+    <AntdProvider>
+      <Empty
+        className="empty-state"
+        image={<Icon size={29} />}
+        description={
+          <div className="empty-state-copy">
+            <b>{title}</b>
+            <span>{description}</span>
+          </div>
+        }
+      >
+        {action}
+      </Empty>
+    </AntdProvider>
   );
 }
 
 export function InlineLoading({ label }) {
   return (
-    <div className="inline-loading">
-      <ArrowClockwise size={18} />
-      {label}
-    </div>
-  );
-}
-
-export function Toast({ message, tone }) {
-  return (
-    <div
-      className={classNames("toast", tone)}
-      role={tone === "error" ? "alert" : "status"}
-      aria-live={tone === "error" ? "assertive" : "polite"}
-    >
-      {tone === "error" ? (
-        <WarningCircle size={20} />
-      ) : (
-        <CheckCircle size={20} weight="fill" />
-      )}
-      {message}
-    </div>
+    <AntdProvider>
+      <Spin className="inline-loading" size="small" description={label} />
+    </AntdProvider>
   );
 }

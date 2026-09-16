@@ -7,14 +7,18 @@ import {
   useRef,
   useState,
 } from "react";
+import "../../styles/analysis-dashboards.css";
 import {
   CaretRight,
   ChartBar,
   FunnelSimple,
   MagnifyingGlass,
 } from "@phosphor-icons/react";
+import Button from "antd/es/button";
+import Input from "antd/es/input";
 
 import { navigateHash } from "../../app/hashRouter";
+import { AntdProvider } from "../../components/AntdProvider";
 import { Pagination } from "../../components/Pagination";
 import { EmptyState, InlineLoading, PageHeading } from "../../components/SharedUi";
 import { formatTime } from "../../lib/presentation";
@@ -97,14 +101,16 @@ export function AnalysisDashboardPage({ route: appRoute, notify, userId }) {
 
   if (route.dashboardId) {
     return (
-      <Suspense fallback={<InlineLoading label="正在加载分析看板…" />}>
-        <DashboardDetail
-          route={route}
-          updateRoute={updateRoute}
-          notify={notify}
-          userId={userId}
-        />
-      </Suspense>
+      <AntdProvider>
+        <Suspense fallback={<InlineLoading label="正在加载分析看板…" />}>
+          <DashboardDetail
+            route={route}
+            updateRoute={updateRoute}
+            notify={notify}
+            userId={userId}
+          />
+        </Suspense>
+      </AntdProvider>
     );
   }
   if (route.selectionToken) {
@@ -117,7 +123,11 @@ export function AnalysisDashboardPage({ route: appRoute, notify, userId }) {
       />
     );
   }
-  return <DashboardList route={route} updateRoute={updateRoute} userId={userId} />;
+  return (
+    <AntdProvider>
+      <DashboardList route={route} updateRoute={updateRoute} userId={userId} />
+    </AntdProvider>
+  );
 }
 
 function DashboardList({ route, updateRoute, userId }) {
@@ -192,15 +202,14 @@ function DashboardList({ route, updateRoute, userId }) {
       <section className="dashboard-list-filters" aria-label="分析看板筛选">
         <label className="dashboard-filter-field">
           <span>关键词</span>
-          <div className="dashboard-list-search">
-            <MagnifyingGlass size={18} />
-            <input
-              aria-label="搜索分析看板"
-              placeholder="搜索看板名称"
-              value={filters.q}
-              onChange={(event) => setFilters({ ...filters, q: event.target.value })}
-            />
-          </div>
+          <Input
+            className="dashboard-list-search"
+            aria-label="搜索分析看板"
+            prefix={<MagnifyingGlass size={18} />}
+            placeholder="搜索看板名称"
+            value={filters.q}
+            onChange={(event) => setFilters({ ...filters, q: event.target.value })}
+          />
         </label>
         <label className="dashboard-filter-field">
           <span>看板状态</span>
@@ -214,12 +223,13 @@ function DashboardList({ route, updateRoute, userId }) {
             <option value="archived">已归档</option>
           </select>
         </label>
-        <button
-          className="primary-button"
+        <Button
+          type="primary"
+          icon={<FunnelSimple size={17} />}
           onClick={() => updateRoute({ ...filters, page: 1 })}
         >
-          <FunnelSimple size={17} /> 筛选
-        </button>
+          筛选
+        </Button>
       </section>
 
       <section className="dashboard-list-card">

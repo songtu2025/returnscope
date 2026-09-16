@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+import inspect
 import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
+from typing import get_type_hints
 
 import pytest
 from fastapi import FastAPI
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from test_classification_result_pool import _publish, _seed_result_context
 
 from return_semantics.schemas import ProcessingStatus
+from web_backend import review_service as review_service_module
 from web_backend.classification_result_service import ClassificationResultService
 from web_backend.classification_standard_service import ClassificationStandardService
 from web_backend.common import json_text
@@ -56,6 +60,134 @@ def _publish_review_required(tmp_path: Path):
             ("2026-08-12T00:03:00+00:00",),
         )
     return context, version
+
+
+def test_review_service_preserves_public_method_contract() -> None:
+    expected_signatures = {
+        "list": "(self, workflow_status: str | None = None, task_id: str | None = None) -> list[dict[str, typing.Any]]",
+        "get": "(self, review_id: str) -> dict[str, typing.Any] | None",
+        "create_batch": "(self, base_result_version_id: str, actor_id: str, reason: str) -> dict[str, typing.Any]",
+        "list_batches": "(self, *, page: int = 1, page_size: int = 50, status: str | None = None, base_result_version_id: str | None = None, q: str | None = None) -> dict[str, typing.Any]",
+        "get_batch": "(self, batch_id: str) -> dict[str, typing.Any]",
+        "batch_records": "(self, batch_id: str, *, page: int = 1, page_size: int = 50, workflow_status: str | None = None, q: str | None = None, listing: str | None = None, product_name: str | None = None, product_sku: str | None = None, order_id: str | None = None) -> dict[str, typing.Any]",
+        "update_batch_record": "(self, batch_id: str, review_id: str, expected_revision: int, actor_id: str, label_code: str | None, note: str, action: str | None = None, review_assessment: dict[str, str | None] | None = None) -> dict[str, typing.Any]",
+        "update_batch_records": "(self, batch_id: str, records: list[dict[str, typing.Any]], actor_id: str, action: str, label_code: str | None, note: str, review_assessment: dict[str, str | None] | None = None) -> dict[str, typing.Any]",
+        "publish_batch": "(self, batch_id: str, expected_revision: int, actor_id: str, reason: str) -> dict[str, typing.Any]",
+        "resolve": "(self, review_id: str, expected_revision: int, actor_id: str, label_code: str | None, note: str) -> dict[str, typing.Any]",
+    }
+
+    def resolved_signature(name: str) -> str:
+        method = getattr(ReviewService, name)
+        type_hints = get_type_hints(method)
+        signature = inspect.signature(method)
+        return str(
+            signature.replace(
+                parameters=[
+                    parameter.replace(
+                        annotation=type_hints.get(
+                            parameter_name, inspect.Signature.empty
+                        )
+                    )
+                    for parameter_name, parameter in signature.parameters.items()
+                ],
+                return_annotation=type_hints["return"],
+            )
+        )
+
+    assert {
+        name: resolved_signature(name) for name in expected_signatures
+    } == expected_signatures
+    assert all(
+        inspect.isfunction(inspect.getattr_static(ReviewService, name))
+        for name in expected_signatures
+    )
+
+    static_entries = {
+        "_load_completed_review_changes",
+        "_build_derived_result_content",
+        "_top_problem_labels",
+        "_version_quality",
+        "_insert_audit",
+        "_serialize_batch",
+        "_serialize",
+        "_serialize_revision",
+    }
+    assert all(
+        isinstance(inspect.getattr_static(ReviewService, name), staticmethod)
+        for name in static_entries
+    )
+    assert isinstance(
+        inspect.getattr_static(ReviewService, "_serialize_batch_record"), classmethod
+    )
+
+
+def test_review_service_preserves_exception_import_contract() -> None:
+    assert RevisionConflict is review_service_module.RevisionConflict
+    assert ReviewBatchConflict is review_service_module.ReviewBatchConflict
+    assert issubclass(RevisionConflict, ValueError)
+    assert issubclass(ReviewBatchConflict, ValueError)
+    assert RevisionConflict.__module__ == "web_backend.review_service"
+    assert ReviewBatchConflict.__module__ == "web_backend.review_service"
+
+
+def test_review_service_rebuild_result_remains_instance_patchable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = object.__new__(ReviewService)
+    calls: list[tuple[str, str]] = []
+
+    def replacement(task_id: str, actor_id: str) -> None:
+        calls.append((task_id, actor_id))
+
+    monkeypatch.setattr(service, "_rebuild_result", replacement)
+
+    service._rebuild_result("task-1", "user-1")
+
+    assert calls == [("task-1", "user-1")]
+
+
+def test_review_router_preserves_registration_contract(tmp_path: Path) -> None:
+    context = _seed_result_context(tmp_path)
+
+    def current_user() -> dict[str, str]:
+        return {"id": "user-1"}
+
+    router = create_review_router(
+        ReviewService(context.database),
+        context.database,
+        current_user,
+    )
+    routes = [route for route in router.routes if isinstance(route, APIRoute)]
+    expected_routes = [
+        "GET|/api/reviews|list_reviews|200|_user,workflow_status,task_id",
+        "GET|/api/reviews/{review_id}|get_review|200|review_id,_user",
+        "PATCH|/api/reviews/{review_id}|resolve_review|200|review_id,payload,user",
+        "POST|/api/classification-results/{version_id}/review-batches|create_review_batch|201|version_id,payload,user",
+        "GET|/api/review-batches|list_review_batches|200|_user,page,page_size,status,base_result_version_id,q",
+        "GET|/api/review-batches/{batch_id}|get_review_batch|200|batch_id,_user",
+        "GET|/api/review-batches/{batch_id}/records|list_review_batch_records|200|batch_id,_user,page,page_size,workflow_status,q,listing,product_name,product_sku,order_id",
+        "PATCH|/api/review-batches/{batch_id}/records/{review_id}|update_review_batch_record|200|batch_id,review_id,payload,user",
+        "PATCH|/api/review-batches/{batch_id}/records|update_review_batch_records|200|batch_id,payload,user",
+        "POST|/api/review-batches/{batch_id}/publish|publish_review_batch|200|batch_id,payload,user",
+        "GET|/api/taxonomy|taxonomy|200|_user",
+        "GET|/api/audit/{entity_type}/{entity_id}|audit|200|entity_type,entity_id,_user",
+    ]
+
+    actual_routes = [
+        "|".join(
+            (
+                next(iter(route.methods)),
+                route.path,
+                route.name,
+                str(route.status_code or 200),
+                ",".join(inspect.signature(route.endpoint).parameters),
+            )
+        )
+        for route in routes
+    ]
+    assert actual_routes == expected_routes
+    assert all(not inspect.iscoroutinefunction(route.endpoint) for route in routes)
+    assert all(len(route.dependant.dependencies) == 1 for route in routes)
 
 
 def test_system_status_excludes_legacy_review_records(tmp_path: Path) -> None:
@@ -767,6 +899,119 @@ def test_legacy_reviews_stay_legacy_and_new_batches_do_not_rebuild_task(
     assert [item["id"] for item in legacy] == ["legacy-review"]
     assert legacy[0]["legacy"] is True
     assert service.batch_records(batch["id"])["items"][0]["legacy"] is False
+
+
+def test_legacy_resolve_rebuild_failure_restores_committed_review(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context, _base = _publish_review_required(tmp_path)
+    service = ReviewService(context.database)
+    original_classification = json_text(
+        context.results[context.key].model_dump(mode="json")
+    )
+    original_state = {
+        "workflow_status": "pending",
+        "classification_json": original_classification,
+        "revision": 7,
+        "updated_by": "user-2",
+        "updated_at": "2026-08-12T00:04:00+00:00",
+    }
+    with context.database.transaction() as connection:
+        connection.execute(
+            """
+            INSERT INTO review_records(
+                id, task_id, classification_key, comment,
+                workflow_status, classification_json, revision,
+                updated_by, updated_at
+            ) VALUES ('legacy-review-failure', ?, ?, '旧评论', ?, ?, ?, ?, ?)
+            """,
+            (
+                context.task_id,
+                context.key,
+                *original_state.values(),
+            ),
+        )
+
+    transaction_modes: list[bool] = []
+    original_transaction = context.database.transaction
+
+    def tracked_transaction(immediate: bool = False):
+        transaction_modes.append(immediate)
+        return original_transaction(immediate)
+
+    committed_state: dict[str, object] = {}
+
+    def fail_rebuild(_task_id: str, _actor_id: str) -> None:
+        with context.database.connect() as connection:
+            committed_state.update(
+                dict(
+                    connection.execute(
+                        """
+                        SELECT workflow_status, classification_json, revision,
+                               updated_by, updated_at
+                        FROM review_records WHERE id = 'legacy-review-failure'
+                        """
+                    ).fetchone()
+                )
+            )
+            committed_state["revision_count"] = connection.execute(
+                """
+                SELECT COUNT(*) FROM review_revisions
+                WHERE review_record_id = 'legacy-review-failure'
+                """
+            ).fetchone()[0]
+        raise RuntimeError("模拟结果重建失败")
+
+    monkeypatch.setattr(context.database, "transaction", tracked_transaction)
+    monkeypatch.setattr(service, "_rebuild_result", fail_rebuild)
+    selected_label = service.standard_service.combined_taxonomy().labels[0].code
+
+    with pytest.raises(RuntimeError, match="模拟结果重建失败"):
+        service.resolve(
+            "legacy-review-failure",
+            original_state["revision"],
+            "user-1",
+            selected_label,
+            "验证补偿事务",
+        )
+
+    assert committed_state["workflow_status"] == "resolved"
+    assert committed_state["classification_json"] != original_classification
+    assert committed_state["revision"] == 8
+    assert committed_state["updated_by"] == "user-1"
+    assert committed_state["updated_at"] != original_state["updated_at"]
+    assert committed_state["revision_count"] == 1
+    assert transaction_modes == [True, True]
+
+    with context.database.connect() as connection:
+        restored = dict(
+            connection.execute(
+                """
+                SELECT workflow_status, classification_json, revision,
+                       updated_by, updated_at
+                FROM review_records WHERE id = 'legacy-review-failure'
+                """
+            ).fetchone()
+        )
+        revision_count = connection.execute(
+            """
+            SELECT COUNT(*) FROM review_revisions
+            WHERE review_record_id = 'legacy-review-failure'
+            """
+        ).fetchone()[0]
+        success_audit_count = connection.execute(
+            """
+            SELECT COUNT(*) FROM audit_logs
+            WHERE entity_type = 'review'
+              AND entity_id = 'legacy-review-failure'
+              AND action = 'resolve'
+            """
+        ).fetchone()[0]
+
+    assert restored == original_state
+    assert revision_count == 0
+    assert success_audit_count == 0
 
 
 def test_published_completed_with_errors_cannot_use_normal_retry(

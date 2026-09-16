@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -97,9 +98,16 @@ def audit_commands() -> list[tuple[str, list[str], Path]]:
 
 def run(commands: list[tuple[str, list[str], Path]]) -> int:
     failures: list[str] = []
+    environment = os.environ.copy()
+    environment.setdefault("OPENAPI_PYTHON", sys.executable)
     for name, command, working_directory in commands:
         print(f"\n==> {name}", flush=True)
-        completed = subprocess.run(command, cwd=working_directory, check=False)
+        completed = subprocess.run(
+            command,
+            cwd=working_directory,
+            check=False,
+            env=environment,
+        )
         if completed.returncode != 0:
             failures.append(name)
 

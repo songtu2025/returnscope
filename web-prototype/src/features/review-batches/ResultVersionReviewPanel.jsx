@@ -5,6 +5,8 @@ import {
   ListChecks,
   WarningCircle,
 } from "@phosphor-icons/react";
+import Button from "antd/es/button";
+import Input from "antd/es/input";
 
 import { api } from "../../api";
 import { navigateHash } from "../../app/hashRouter";
@@ -13,6 +15,7 @@ import {
   activeReviewBatch,
   resultActionPolicy,
 } from "../classification-results/resultActionPolicy";
+import { AntdProvider } from "../../components/AntdProvider";
 import { formatTime } from "../../lib/presentation";
 
 function versionId(item) {
@@ -173,7 +176,7 @@ export function ResultVersionReviewPanel({
     }
   };
 
-  return (
+  const content = (
     <section className="result-version-review-panel">
       <header>
         <div>
@@ -186,27 +189,33 @@ export function ResultVersionReviewPanel({
         {!state.loading && !state.error && (
           <div className="result-version-actions">
             {!isLatest && latest ? (
-              <button
-                className="primary-button"
+              <Button
+                type="primary"
+                icon={<ArrowRight size={17} />}
+                iconPlacement="end"
                 onClick={() => onSelectVersion(versionId(latest))}
               >
                 查看最新版本 v{latest.version}
-                <ArrowRight size={17} />
-              </button>
+              </Button>
             ) : draft ? (
-              <button className="primary-button" onClick={() => openBatch(draft)}>
-                进入复核批次 <ArrowRight size={17} />
-              </button>
+              <Button
+                type="primary"
+                icon={<ArrowRight size={17} />}
+                iconPlacement="end"
+                onClick={() => openBatch(draft)}
+              >
+                进入复核批次
+              </Button>
             ) : policy.state === "needs_review" ? (
-              <button
-                className="primary-button"
+              <Button
+                type="primary"
                 onClick={() => {
                   setReason("");
                   setCreateOpen(true);
                 }}
               >
                 创建复核批次
-              </button>
+              </Button>
             ) : policy.state === "unusable" ? (
               <span className="result-version-ready">
                 当前版本不可用，不能创建复核批次
@@ -229,9 +238,7 @@ export function ResultVersionReviewPanel({
               <b>版本历史读取失败</b>
               <p>{state.error}</p>
             </div>
-            <button className="secondary-button" onClick={load}>
-              重新加载
-            </button>
+            <Button onClick={load}>重新加载</Button>
           </div>
         )}
         {!state.loading && !state.error && history.length === 0 && (
@@ -295,12 +302,12 @@ export function ResultVersionReviewPanel({
                     </details>
                   </div>
                   {!current && (
-                    <button
-                      className="secondary-button compact-button"
+                    <Button
+                      size="small"
                       onClick={() => onSelectVersion(versionId(version))}
                     >
                       查看版本
-                    </button>
+                    </Button>
                   )}
                 </li>
               );
@@ -324,7 +331,7 @@ export function ResultVersionReviewPanel({
             </div>
             <label>
               创建原因
-              <textarea
+              <Input.TextArea
                 aria-describedby="review-create-reason-hint"
                 rows="4"
                 required
@@ -339,24 +346,22 @@ export function ResultVersionReviewPanel({
                 : "请简要说明触发复核的原因；填写后即可创建批次。"}
             </small>
             <div className="modal-actions">
-              <button
-                className="secondary-button"
-                disabled={creating}
-                onClick={() => setCreateOpen(false)}
-              >
+              <Button disabled={creating} onClick={() => setCreateOpen(false)}>
                 取消
-              </button>
-              <button
-                className="primary-button"
+              </Button>
+              <Button
+                type="primary"
                 disabled={creating || !reason.trim()}
                 onClick={createBatch}
               >
                 {creating ? "正在创建…" : "创建并进入批次"}
-              </button>
+              </Button>
             </div>
           </div>
         </Modal>
       )}
     </section>
   );
+
+  return <AntdProvider>{content}</AntdProvider>;
 }

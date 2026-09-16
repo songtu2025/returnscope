@@ -1,6 +1,7 @@
 import { afterEach, expect, test, vi } from "vitest";
 
 import { api } from "../src/api";
+import { classificationStandardApi } from "../src/shared/api/classificationStandardApi";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -206,4 +207,50 @@ test("运营工作台、数据质量、版本引用、导入规则和审计使�
     "/api/import-rules",
     "/api/audit-logs?actor_id=user-1&entity_type=task&entity_id=task-1&action=update&date_from=2026-08-01&date_to=2026-08-12&page=1&page_size=20",
   ]);
+});
+
+test("分类标准验证 API 保持 JSON 与文件请求契约", async () => {
+  const fetchMock = vi.fn().mockResolvedValue({
+    ok: true,
+    status: 201,
+    headers: new Headers({ "content-type": "application/json" }),
+    json: async () => ({ id: "validation-1", status: "queued" }),
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  await classificationStandardApi.createClassificationStandardValidationRun("draft-1", {
+    expected_revision: 3,
+    source_result_version_id: "result-1",
+    sample_size: 20,
+    comparison_type: "standard_version",
+  });
+  const file = new File(["review"], "review.xlsx");
+  await classificationStandardApi.createReviewStandardValidationRun(
+    "draft-1",
+    file,
+    3,
+    50,
+    "semantic_ab",
+  );
+
+  expect(fetchMock.mock.calls[0]).toEqual([
+    "/api/classification-standard-drafts/draft-1/validation-runs",
+    expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({
+        expected_revision: 3,
+        source_result_version_id: "result-1",
+        sample_size: 20,
+        comparison_type: "standard_version",
+      }),
+    }),
+  ]);
+  const form = fetchMock.mock.calls[1][1].body;
+  expect(fetchMock.mock.calls[1][0]).toBe(
+    "/api/classification-standard-drafts/draft-1/review-validation-runs",
+  );
+  expect(form.get("file")).toBe(file);
+  expect(form.get("expected_revision")).toBe("3");
+  expect(form.get("sample_size")).toBe("50");
+  expect(form.get("comparison_type")).toBe("semantic_ab");
 });

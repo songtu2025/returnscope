@@ -1,15 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Button from "antd/es/button";
+import Input from "antd/es/input";
+import Select from "antd/es/select";
 import {
-  CaretRight,
   ChartBar,
-  DownloadSimple,
   FunnelSimple,
   MagnifyingGlass,
   Package,
 } from "@phosphor-icons/react";
+
 import { api } from "../../api";
 import { navigateHash } from "../../app/hashRouter";
 import { EmptyState, InlineLoading, PageHeading } from "../../components/SharedUi";
+import { dashboardApi } from "../../shared/api/dashboardApi";
 import { InsightGenerationModal } from "../analysis-dashboards/InsightGenerationModal";
 import {
   createDashboardSelection,
@@ -22,25 +25,19 @@ import {
   preferredInsightEffort,
   preferredInsightModel,
 } from "../analysis-dashboards/insightModelOptions";
-import { formatTime } from "../../lib/presentation";
-import { dashboardApi } from "../../shared/api/dashboardApi";
 import { Pagination, ResultError } from "./ClassificationResultCommon";
-import { PUBLISH_LABELS } from "./classificationResultConstants";
+import {
+  DashboardSelectionBar,
+  InsightSelectionBar,
+  ResultPoolRow,
+} from "./ClassificationResultListParts";
 import {
   isDashboardSelectable,
   resultActionPolicy,
   resultVersionId,
 } from "./resultActionPolicy";
 import { ResultWorkspaceNav } from "./ResultWorkspaceNav";
-
-function productNames(result) {
-  const names = Array.isArray(result.product_names)
-    ? result.product_names.filter(Boolean)
-    : result.product_name
-      ? [result.product_name]
-      : [];
-  return names;
-}
+import { useClassificationResultListData } from "./useClassificationResultListData";
 
 function selectedResultTotals(selected) {
   return selected.reduce(
@@ -53,21 +50,12 @@ function selectedResultTotals(selected) {
 }
 
 export function ClassificationResultList({ route, updateRoute, notify, userId }) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [hasNewResults, setHasNewResults] = useState(false);
   const [filters, setFilters] = useState({
     q: route.q,
     storeSite: route.storeSite,
     listing: route.listing,
     qualityStatus: route.qualityStatus,
   });
-  const firstResultRef = useRef("");
-  const listGenerationRef = useRef(0);
-  const listControllerRef = useRef(null);
-  const pollGenerationRef = useRef(0);
-  const pollControllerRef = useRef(null);
   const [selection, setSelection] = useState(() =>
     readDashboardSelection(userId, route.selectionToken),
   );
@@ -280,107 +268,8 @@ export function ClassificationResultList({ route, updateRoute, notify, userId })
     ],
   );
 
-  const load = useCallback(async () => {
-    const generation = listGenerationRef.current + 1;
-    listGenerationRef.current = generation;
-    listControllerRef.current?.abort();
-    const controller = new AbortController();
-    listControllerRef.current = controller;
-    setLoading(true);
-    setError("");
-    try {
-      const value = await api.classificationResults(query, {
-        signal: controller.signal,
-      });
-      if (listGenerationRef.current !== generation) return;
-      setData(value);
-      firstResultRef.current = value.items?.[0]?.version_id ?? "";
-      setHasNewResults(false);
-    } catch (loadError) {
-      if (listGenerationRef.current === generation && loadError.name !== "AbortError") {
-        setError(loadError.message);
-      }
-    } finally {
-      if (listGenerationRef.current === generation) setLoading(false);
-      if (listControllerRef.current === controller) {
-        listControllerRef.current = null;
-      }
-    }
-  }, [query]);
-
-  useEffect(() => {
-    const generation = listGenerationRef.current + 1;
-    listGenerationRef.current = generation;
-    listControllerRef.current?.abort();
-    const controller = new AbortController();
-    listControllerRef.current = controller;
-    setLoading(true);
-    setError("");
-    api
-      .classificationResults(query, { signal: controller.signal })
-      .then((value) => {
-        if (listGenerationRef.current !== generation) return;
-        setData(value);
-        firstResultRef.current = value.items?.[0]?.version_id ?? "";
-        setHasNewResults(false);
-      })
-      .catch((loadError) => {
-        if (
-          listGenerationRef.current === generation &&
-          loadError.name !== "AbortError"
-        ) {
-          setError(loadError.message);
-        }
-      })
-      .finally(() => {
-        if (listGenerationRef.current === generation) setLoading(false);
-        if (listControllerRef.current === controller) {
-          listControllerRef.current = null;
-        }
-      });
-    return () => {
-      if (listGenerationRef.current === generation) {
-        listGenerationRef.current += 1;
-      }
-      listControllerRef.current?.abort();
-      listControllerRef.current = null;
-    };
-  }, [query]);
-
-  useEffect(() => {
-    const generation = pollGenerationRef.current + 1;
-    pollGenerationRef.current = generation;
-    const timer = window.setInterval(() => {
-      pollControllerRef.current?.abort();
-      const controller = new AbortController();
-      pollControllerRef.current = controller;
-      api
-        .classificationResults(query, { signal: controller.signal })
-        .then((value) => {
-          if (pollGenerationRef.current !== generation) return;
-          const firstId = value.items?.[0]?.version_id ?? "";
-          if (firstResultRef.current && firstId && firstId !== firstResultRef.current) {
-            setHasNewResults(true);
-          }
-        })
-        .catch((pollError) => {
-          if (pollError.name !== "AbortError") return;
-        })
-        .finally(() => {
-          if (pollControllerRef.current === controller) {
-            pollControllerRef.current = null;
-          }
-        });
-    }, 15000);
-    return () => {
-      if (pollGenerationRef.current === generation) {
-        pollGenerationRef.current += 1;
-      }
-      window.clearInterval(timer);
-      pollControllerRef.current?.abort();
-      pollControllerRef.current = null;
-    };
-  }, [query]);
+  const { data, loading, error, hasNewResults, load } =
+    useClassificationResultListData(query);
 
   const activeFilters = Boolean(
     route.q || route.storeSite || route.listing || route.qualityStatus,
@@ -430,19 +319,17 @@ export function ClassificationResultList({ route, updateRoute, notify, userId })
       <section className="result-pool-filters" aria-label="分类结果筛选">
         <label className="result-filter-field">
           <span>关键词</span>
-          <div className="result-pool-search">
-            <MagnifyingGlass size={18} />
-            <input
-              aria-label="搜索分类结果"
-              placeholder="搜索 Listing、产品名称或 SKU"
-              value={filters.q}
-              onChange={(event) => setFilters({ ...filters, q: event.target.value })}
-            />
-          </div>
+          <Input
+            aria-label="搜索分类结果"
+            prefix={<MagnifyingGlass size={18} />}
+            placeholder="搜索 Listing、产品名称或 SKU"
+            value={filters.q}
+            onChange={(event) => setFilters({ ...filters, q: event.target.value })}
+          />
         </label>
         <label className="result-filter-field">
           <span>店铺/站点</span>
-          <input
+          <Input
             aria-label="店铺或站点"
             placeholder="店铺/站点"
             value={filters.storeSite}
@@ -453,7 +340,7 @@ export function ClassificationResultList({ route, updateRoute, notify, userId })
         </label>
         <label className="result-filter-field">
           <span>Listing</span>
-          <input
+          <Input
             aria-label="Listing"
             placeholder="Listing"
             value={filters.listing}
@@ -464,26 +351,25 @@ export function ClassificationResultList({ route, updateRoute, notify, userId })
         </label>
         <label className="result-filter-field">
           <span>结果质量</span>
-          <select
+          <Select
             aria-label="结果质量"
             value={filters.qualityStatus}
-            onChange={(event) =>
-              setFilters({ ...filters, qualityStatus: event.target.value })
-            }
-          >
-            <option value="">全部质量状态</option>
-            <option value="ready">可用</option>
-            <option value="review_required">需复核</option>
-            <option value="unusable">不可用</option>
-          </select>
+            onChange={(qualityStatus) => setFilters({ ...filters, qualityStatus })}
+            options={[
+              { value: "", label: "全部质量状态" },
+              { value: "ready", label: "可用" },
+              { value: "review_required", label: "需复核" },
+              { value: "unusable", label: "不可用" },
+            ]}
+          />
         </label>
-        <button
-          className="primary-button"
+        <Button
+          type="primary"
+          icon={<FunnelSimple size={17} />}
           onClick={() => updateRoute({ ...filters, page: 1 })}
         >
-          <FunnelSimple size={17} />
           筛选
-        </button>
+        </Button>
       </section>
 
       <section className="result-pool-card">
@@ -598,118 +484,5 @@ export function ClassificationResultList({ route, updateRoute, notify, userId })
         />
       )}
     </div>
-  );
-}
-
-function ResultPoolRow({ result, onOpen, onPrimary, selectable, selected, onToggle }) {
-  const names = productNames(result);
-  const policy = resultActionPolicy(result);
-  const disabledReason = policy.dashboardSelectable ? "" : policy.blockingReason;
-  return (
-    <article className={`result-pool-row ${selected ? "is-selected" : ""}`} role="row">
-      {selectable && (
-        <label className="result-selection-cell" title={disabledReason}>
-          <input
-            type="checkbox"
-            aria-label={`选择 ${result.listing || "未提供 Listing"} 结果 v${result.version}`}
-            checked={selected}
-            disabled={Boolean(disabledReason)}
-            onChange={onToggle}
-          />
-          {disabledReason && <small>{disabledReason}</small>}
-        </label>
-      )}
-      <div className="result-state-cell">
-        <span className={`result-quality-badge ${policy.state}`}>{policy.label}</span>
-        <small>
-          {policy.state === "needs_review"
-            ? "可先建立已可用数据看板，也可继续复核"
-            : `版本发布：${PUBLISH_LABELS[result.publish_status] ?? result.publish_status ?? "未提供"}`}
-        </small>
-      </div>
-      <div className="result-listing-cell">
-        <button className="text-button result-listing-link" onClick={onOpen}>
-          {result.listing || "未提供 Listing"}
-        </button>
-        <span>{result.store_site || "未提供店铺/站点"}</span>
-        <small>结果 v{result.version}</small>
-      </div>
-      <div className="result-product-cell">
-        <b title={names.join("、")}>{names[0] || "未提供"}</b>
-        {names.length > 1 && <span>另有 {names.length - 1} 个产品名称</span>}
-        <small>产品信息 v{result.product_version}</small>
-      </div>
-      <div className="result-scale-cell">
-        <b>{Number(result.record_count || 0).toLocaleString()} 条记录</b>
-        <span>{Number(result.unit_count || 0).toLocaleString()} 个分类单元</span>
-      </div>
-      <div className="result-time-cell">
-        <b>{formatTime(result.published_at || result.created_at)}</b>
-        <span>
-          {result.standard_name || result.agent_family || "未提供分类标准"}
-          {result.standard_version ? ` · V${result.standard_version}` : ""}
-        </span>
-      </div>
-      <div className="result-row-actions">
-        <button
-          className="secondary-button compact-button"
-          disabled={policy.primary.disabled}
-          title={policy.primary.disabled ? policy.blockingReason : ""}
-          onClick={onPrimary}
-        >
-          {policy.primary.label}
-          <CaretRight size={15} />
-        </button>
-        <a
-          className="secondary-button compact-button"
-          href={api.classificationResultDownloadUrl(result.version_id)}
-        >
-          <DownloadSimple size={15} />
-          下载
-        </a>
-      </div>
-    </article>
-  );
-}
-
-function InsightSelectionBar({ selected, totals, onCancel, onGenerate }) {
-  return (
-    <div className="insight-selection-bar" role="status">
-      <div>
-        <b>已选 {selected.length} 项</b>
-        <span>{totals.records.toLocaleString()} 条记录</span>
-        <span>{totals.units.toLocaleString()} 个分类单元</span>
-      </div>
-      <button className="primary-button" onClick={onGenerate}>
-        生成 AI 洞察
-      </button>
-      <button className="secondary-button" onClick={onCancel}>
-        取消选择
-      </button>
-    </div>
-  );
-}
-
-function DashboardSelectionBar({ selected, onClear, onContinue }) {
-  const listingCount = new Set(
-    selected.map((item) => `${item.store_site}::${item.listing}`),
-  ).size;
-  return (
-    <aside className="dashboard-selection-bar" aria-label="看板数据选择">
-      <div>
-        <b>已选 {selected.length} 个结果版本</b>
-        <span>覆盖 {listingCount} 个 Listing</span>
-      </div>
-      <button className="text-button" disabled={!selected.length} onClick={onClear}>
-        清空
-      </button>
-      <button
-        className="primary-button"
-        disabled={!selected.length}
-        onClick={onContinue}
-      >
-        检查并生成 <CaretRight size={17} />
-      </button>
-    </aside>
   );
 }

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -581,6 +582,153 @@ def test_publication_failure_rolls_back_all_result_data(
     assert segment["status"] == "running"
     assert segment["result_version_id"] is None
     assert segment["result_publish_status"] == "failed"
+
+
+def test_result_publication_failure_and_legacy_export_events_keep_contract(
+    tmp_path: Path,
+) -> None:
+    context = _seed_result_context(tmp_path)
+    service = ClassificationResultService(context.database)
+    error = "发布异常" * 200
+    expected_error = error[:500]
+
+    service.mark_publish_failed(context.task_id, context.segment_id, error)
+    service.record_legacy_export_error(context.task_id, context.segment_id, error)
+
+    with context.database.connect() as connection:
+        segment = connection.execute(
+            """
+            SELECT result_publish_status, result_publish_error
+            FROM task_segments WHERE id = ?
+            """,
+            (context.segment_id,),
+        ).fetchone()
+        events = connection.execute(
+            """
+            SELECT event_type, stage, message, data_json
+            FROM task_events
+            WHERE task_id = ?
+              AND event_type IN ('result_publish_failed', 'legacy_export_failed')
+            ORDER BY id
+            """,
+            (context.task_id,),
+        ).fetchall()
+
+    assert dict(segment) == {
+        "result_publish_status": "failed",
+        "result_publish_error": expected_error,
+    }
+    assert [event["event_type"] for event in events] == [
+        "result_publish_failed",
+        "legacy_export_failed",
+    ]
+    assert [event["stage"] for event in events] == ["生成结果", "生成结果"]
+    assert [event["message"] for event in events] == [
+        "Listing 分类结果发布失败",
+        "兼容 Excel 生成失败，数据库结果仍可查看和下载",
+    ]
+    assert [json_value(event["data_json"], {}) for event in events] == [
+        {"segment_id": context.segment_id, "error": expected_error},
+        {"segment_id": context.segment_id, "error": expected_error},
+    ]
+
+
+def test_attach_legacy_file_only_updates_published_segment(tmp_path: Path) -> None:
+    context = _seed_result_context(tmp_path)
+    service = ClassificationResultService(context.database)
+
+    service.attach_legacy_file(context.segment_id, "ignored.xlsx")
+    with context.database.connect() as connection:
+        before_publish = connection.execute(
+            "SELECT result_file_path FROM task_segments WHERE id = ?",
+            (context.segment_id,),
+        ).fetchone()
+    assert before_publish["result_file_path"] is None
+
+    _publish(context)
+    service.attach_legacy_file(context.segment_id, "published.xlsx")
+    with context.database.connect() as connection:
+        after_publish = connection.execute(
+            "SELECT result_file_path FROM task_segments WHERE id = ?",
+            (context.segment_id,),
+        ).fetchone()
+    assert after_publish["result_file_path"] == "published.xlsx"
+
+
+def test_content_hash_has_stable_golden_value() -> None:
+    assert (
+        ClassificationResultService._content_hash(
+            "dataset-v1",
+            "product-v1",
+            [{"b": 2, "a": "中文"}],
+            [{"source_row": 1, "value": None}],
+        )
+        == "466abc9b8a73158756bd081a47bd18ad543628033626e455c565f65a555c82e1"
+    )
+
+
+def test_download_keeps_filename_sheets_and_empty_data(tmp_path: Path) -> None:
+    context = _seed_result_context(tmp_path)
+    version = _publish(context)
+    version_id = str(version["version_id"])
+    with context.database.transaction() as connection:
+        connection.execute(
+            "DELETE FROM classification_result_records WHERE result_version_id = ?",
+            (version_id,),
+        )
+
+    content, filename = ClassificationResultService(context.database).download(
+        version_id
+    )
+    workbook = pd.ExcelFile(BytesIO(content))
+
+    assert filename == "classification-L1-v1.xlsx"
+    assert workbook.sheet_names == ["分类结果", "语义层级"]
+    assert pd.read_excel(BytesIO(content), sheet_name="分类结果").empty
+    assert pd.read_excel(BytesIO(content), sheet_name="语义层级").empty
+
+
+def test_review_service_result_helper_entry_points_keep_signatures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected = {
+        "_content_hash": [
+            "dataset_version_id",
+            "product_version_id",
+            "units",
+            "records",
+        ],
+        "_insert_units": ["connection", "version_id", "units", "labels"],
+        "_insert_records": [
+            "connection",
+            "version_id",
+            "dataset_version_id",
+            "records",
+        ],
+        "_validate_page": ["page", "page_size"],
+        "_contains_pattern": ["value"],
+    }
+    service = object.__new__(ClassificationResultService)
+
+    for method_name, parameters in expected.items():
+        method = getattr(ClassificationResultService, method_name)
+        assert list(inspect.signature(method).parameters) == parameters
+        assert isinstance(
+            inspect.getattr_static(ClassificationResultService, method_name),
+            staticmethod,
+        )
+        assert getattr(service, method_name) is not None
+
+        def replacement(*args, value=method_name):
+            return value
+
+        monkeypatch.setattr(
+            ClassificationResultService,
+            method_name,
+            staticmethod(replacement),
+        )
+        assert getattr(ClassificationResultService, method_name)() == method_name
+        assert getattr(service, method_name)() == method_name
 
 
 def test_cancel_parent_keeps_published_listing_result(tmp_path: Path) -> None:

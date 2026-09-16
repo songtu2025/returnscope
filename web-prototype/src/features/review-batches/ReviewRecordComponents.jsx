@@ -1,4 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import Button from "antd/es/button";
+import Checkbox from "antd/es/checkbox";
+import Input from "antd/es/input";
+import Select from "antd/es/select";
 import { labelText, resultLabelText } from "../../lib/taxonomyPresentation";
 import {
   CaretRight,
@@ -79,14 +83,13 @@ export function ReviewRecordRow({
     <article className="review-record-row" role="row">
       {selectionEnabled &&
         (selectable ? (
-          <label className="review-record-checkbox">
-            <input
-              type="checkbox"
+          <span className="review-record-checkbox">
+            <Checkbox
               aria-label={`选择 ${valueText(values(record, "order_ids"))}`}
               checked={checked}
               onChange={(event) => onCheck(event.target.checked)}
             />
-          </label>
+          </span>
         ) : (
           <span className="review-record-checkbox" aria-hidden="true" />
         ))}
@@ -114,10 +117,14 @@ export function ReviewRecordRow({
         <span className={`review-record-status ${record.workflow_status}`}>
           {WORKFLOW_STATUS_LABELS[record.workflow_status] ?? record.workflow_status}
         </span>
-        <button className="secondary-button compact-button" onClick={onOpen}>
+        <Button
+          size="small"
+          icon={<CaretRight size={15} />}
+          iconPlacement="end"
+          onClick={onOpen}
+        >
           {record.workflow_status === "pending" ? "处理" : "查看"}
-          <CaretRight size={15} />
-        </button>
+        </Button>
       </div>
     </article>
   );
@@ -210,9 +217,13 @@ export function ReviewRecordDrawer({
               {valueText(values(record, "order_ids"))}
             </h2>
           </div>
-          <button ref={closeRef} aria-label="关闭复核抽屉" onClick={onClose}>
-            <X size={20} />
-          </button>
+          <Button
+            ref={closeRef}
+            type="text"
+            icon={<X size={20} />}
+            aria-label="关闭复核抽屉"
+            onClick={onClose}
+          />
         </header>
         <div className="review-drawer-scroll">
           <section className="review-business-evidence">
@@ -283,20 +294,16 @@ export function ReviewRecordDrawer({
                 </div>
               </div>
               <div>
-                <button
-                  className="secondary-button"
-                  disabled={!conflict.serverRecord}
-                  onClick={onUseServer}
-                >
+                <Button disabled={!conflict.serverRecord} onClick={onUseServer}>
                   采用服务器最新
-                </button>
-                <button
-                  className="primary-button"
+                </Button>
+                <Button
+                  type="primary"
                   disabled={!conflict.serverRecord}
                   onClick={onContinueWithServer}
                 >
                   基于新修订继续编辑
-                </button>
+                </Button>
               </div>
             </section>
           )}
@@ -305,27 +312,27 @@ export function ReviewRecordDrawer({
             <section className="review-record-editor">
               <b>复核结论</b>
               <div className="review-resolution-options">
-                <button
+                <Button
                   className={mode === "confirm" ? "active" : ""}
+                  icon={<CheckCircle size={17} />}
                   onClick={() => onMode("confirm")}
                 >
-                  <CheckCircle size={17} />
                   确认原结果
-                </button>
-                <button
+                </Button>
+                <Button
                   className={mode === "modify" ? "active" : ""}
+                  icon={<PencilSimple size={17} />}
                   onClick={() => onMode("modify")}
                 >
-                  <PencilSimple size={17} />
                   修改分类
-                </button>
-                <button
+                </Button>
+                <Button
                   className={mode === "exclude" ? "active is-exclude" : ""}
+                  icon={<EyeSlash size={17} />}
                   onClick={() => onMode("exclude")}
                 >
-                  <EyeSlash size={17} />
                   排除本条
-                </button>
+                </Button>
               </div>
               <fieldset className="review-assessment-fields">
                 <legend>复核质量判断</legend>
@@ -334,21 +341,20 @@ export function ReviewRecordDrawer({
                   {REVIEW_ASSESSMENT_FIELDS.map((field) => (
                     <label key={field.key}>
                       {field.label}
-                      <select
+                      <Select
+                        aria-label={field.label}
                         value={assessment[field.key]}
-                        onChange={(event) =>
+                        onChange={(value) =>
                           onAssessment({
                             ...assessment,
-                            [field.key]: event.target.value,
+                            [field.key]: value,
                           })
                         }
-                      >
-                        {field.options.map(([value, label]) => (
-                          <option key={value} value={value}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
+                        options={field.options.map(([value, label]) => ({
+                          value,
+                          label,
+                        }))}
+                      />
                     </label>
                   ))}
                 </div>
@@ -357,7 +363,7 @@ export function ReviewRecordDrawer({
                 <div className="review-label-picker">
                   <label>
                     搜索分类标签
-                    <input
+                    <Input
                       aria-label="搜索分类标签"
                       value={labelQuery}
                       onChange={(event) => setLabelQuery(event.target.value)}
@@ -366,22 +372,21 @@ export function ReviewRecordDrawer({
                   </label>
                   <label>
                     修改为
-                    <select
+                    <Select
                       aria-label="修改分类标签"
                       value={labelCode}
-                      onChange={(event) => onLabelCode(event.target.value)}
-                    >
-                      <option value="">请选择分类标签</option>
-                      {Object.entries(labelGroups).map(([group, options]) => (
-                        <optgroup key={group} label={group}>
-                          {options.map((label) => (
-                            <option key={label.code} value={label.code}>
-                              {labelText(label)} · {label.code}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
+                      onChange={onLabelCode}
+                      options={[
+                        { value: "", label: "请选择分类标签" },
+                        ...Object.entries(labelGroups).map(([group, options]) => ({
+                          label: group,
+                          options: options.map((label) => ({
+                            value: label.code,
+                            label: `${labelText(label)} · ${label.code}`,
+                          })),
+                        })),
+                      ]}
+                    />
                   </label>
                 </div>
               )}
@@ -393,7 +398,7 @@ export function ReviewRecordDrawer({
               )}
               <label>
                 处理原因
-                <textarea
+                <Input.TextArea
                   rows="4"
                   required
                   value={reason}
@@ -402,8 +407,7 @@ export function ReviewRecordDrawer({
                 />
               </label>
               <div className="review-record-save-actions">
-                <button
-                  className="secondary-button"
+                <Button
                   disabled={
                     saving ||
                     Boolean(conflict) ||
@@ -413,9 +417,9 @@ export function ReviewRecordDrawer({
                   onClick={onSave}
                 >
                   仅保存
-                </button>
-                <button
-                  className="primary-button"
+                </Button>
+                <Button
+                  type="primary"
                   disabled={
                     saving ||
                     Boolean(conflict) ||
@@ -425,7 +429,7 @@ export function ReviewRecordDrawer({
                   onClick={onSaveAndNext}
                 >
                   {saving ? "正在保存…" : "保存并下一条"}
-                </button>
+                </Button>
               </div>
             </section>
           )}

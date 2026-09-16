@@ -1,8 +1,4 @@
-/* 第四批运营工作台、数据资产与系统治理 */
-.workbench-focus-grid {
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-}
-.workbench-card > header,
+/* 数据资产与系统治理共享样式 */
 .import-rules-card > header,
 .quality-pair-card > header,
 .quality-plan-heading,
@@ -12,7 +8,6 @@
   justify-content: space-between;
   gap: var(--desktop-section-gap);
 }
-.workbench-card > header > div,
 .import-rules-card > header > div,
 .quality-pair-card > header > div,
 .quality-plan-heading > div,
@@ -20,7 +15,6 @@
   display: grid;
   gap: 4px;
 }
-.workbench-card > header span,
 .import-rules-card > header span,
 .quality-pair-card > header span,
 .quality-plan-heading span,
@@ -28,8 +22,6 @@
   color: var(--muted);
   font-size: 12px;
 }
-.workbench-action-list,
-.workbench-output-list,
 .import-rule-list,
 .dataset-reference-list,
 .audit-list {
@@ -37,70 +29,6 @@
   gap: 10px;
   margin-top: 16px;
 }
-.workbench-action-list > button,
-.workbench-output-list > button {
-  width: 100%;
-  min-width: 0;
-  border: 1px solid var(--line-soft);
-  border-radius: 10px;
-  background: #fff;
-  color: inherit;
-  text-align: left;
-}
-.workbench-action-list > button {
-  display: grid;
-  grid-template-columns: 58px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-}
-.workbench-action-copy,
-.workbench-output-list > button > span:first-child {
-  display: grid;
-  min-width: 0;
-  gap: 3px;
-}
-.workbench-action-copy b,
-.workbench-output-list b {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.workbench-action-copy small,
-.workbench-action-copy em,
-.workbench-output-list small {
-  color: var(--muted);
-  font-size: 11px;
-  font-style: normal;
-}
-.workbench-action-type,
-.workbench-output-list em {
-  width: max-content;
-  border-radius: 999px;
-  padding: 4px 7px;
-  background: #fff1db;
-  color: #9b5b0a;
-  font-size: 11px;
-  font-style: normal;
-  font-weight: 700;
-}
-.workbench-action-status,
-.workbench-output-list > button > span:last-child {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--green-dark);
-  font-size: 12px;
-  font-weight: 700;
-}
-.workbench-output-list > button {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px;
-}
-.workbench-local-error,
 .import-rules-error,
 .dataset-reference-error,
 .audit-error {
@@ -461,7 +389,6 @@
 }
 
 @media (max-width: 1180px) {
-  .workbench-focus-grid,
   .import-rule-list {
     grid-template-columns: 1fr;
   }

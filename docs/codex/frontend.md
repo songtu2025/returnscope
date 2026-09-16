@@ -5,8 +5,8 @@
 ## 1. 项目基线
 
 1. 前端位于 `web-prototype`，使用 React 19 函数组件和 Hooks、JavaScript/JSX、Vite。
-2. 项目使用自定义 CSS 组件和绿色桌面驾驶舱主题，主要业务图标统一使用 `@phosphor-icons/react`，图表使用 Recharts。
-3. 当前没有 Ant Design、TypeScript 或其他 UI 组件库。未经确认，不得因公司新项目基线迁移现有实现。
+2. 项目使用自定义 CSS 组件和绿色桌面驾驶舱主题；复核批次模块经确认渐进使用 Ant Design 6 的 Button、Input、Select 和 Checkbox。主要业务图标统一使用 `@phosphor-icons/react`，图表使用 Recharts。
+3. Ant Design 仅用于已确认的渐进迁移范围，不代表全项目迁移；项目仍使用 JavaScript/JSX，未经确认不得继续扩大组件范围或迁移 TypeScript。
 4. 视觉、交互、页面状态、响应式和可访问性要求只在 `docs/web-ui-standard.md` 及其三份专项规范维护。
 
 ## 2. React 与业务边界
@@ -35,10 +35,12 @@
 
 只改变名称、默认属性或样式时，不创建无业务价值的转发组件。新增自定义基础组件不得复制浏览器原生能力或已有公共组件，也不得依赖任意高优先级全局覆盖。
 
+已确认使用 Ant Design 的模块直接导入所需组件，不建立只转发属性的二次封装；Modal、Drawer、Table、Toast、空状态、加载态和分页仍复用项目现有实现，除非后续任务另行确认。
+
 ## 4. 禁止事项
 
 1. 不得使用静默忽略、无约束动态类型或关闭检查规则来掩盖错误；后续引入 TypeScript 时同样不得滥用 `any`、`@ts-ignore` 或非空断言。
 2. 不得把大量请求、状态、表单、弹窗和业务规则堆积在单个组件中。
-3. 未经批准不得引入 Ant Design、新 UI 组件库、第二套图标库、CSS 框架、字体或可视化依赖。
+3. 未经批准不得扩大 Ant Design 的既有使用范围，或引入其他 UI 组件库、第二套图标库、CSS 框架、字体或可视化依赖。
 4. 不得用 Emoji 代替业务图标，不得绕过 Phosphor Icons 建立第二套主要业务图标体系。
 5. 不得为了视觉效果改变业务流程、字段、权限、默认值或操作结果。

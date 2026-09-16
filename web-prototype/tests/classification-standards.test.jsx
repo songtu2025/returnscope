@@ -1,6 +1,14 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -25,12 +33,23 @@ const standardApiMock = vi.hoisted(() => ({
   approveClassificationStandardValidationRun: vi.fn(),
 }));
 
+const validationApiMock = {
+  sources: standardApiMock.classificationStandardValidationSources,
+  runs: standardApiMock.classificationStandardValidationRuns,
+  run: standardApiMock.classificationStandardValidationRun,
+  start: standardApiMock.createClassificationStandardValidationRun,
+};
+
 vi.mock("../src/shared/api/classificationStandardApi", () => ({
   classificationStandardApi: standardApiMock,
 }));
 
 import { ClassificationStructureIssues } from "../src/features/classification-standards/ClassificationStructureIssues";
+import { ClassificationLabelBoundaries } from "../src/features/classification-standards/ClassificationLabelBoundaries";
 import { ClassificationStandardsPage } from "../src/features/classification-standards/ClassificationStandardsPage";
+import { contentFromClassificationStandardSnapshot } from "../src/features/classification-standards/classificationStandardContent";
+import { useClassificationStandardDraftController } from "../src/features/classification-standards/useClassificationStandardDraftController";
+import { useClassificationStandardValidationController } from "../src/features/classification-standards/useClassificationStandardValidationController";
 import {
   reconcileLabelRules,
   sameLabel,
@@ -48,9 +67,13 @@ const content = {
       code: "EYEWEAR_FIT_PRESSURE",
       name: "佩戴压迫",
       group: "尺码与适配",
+      parent_code: null,
       description: "镜框或镜腿造成压迫",
       keywords: ["pressure", "tight"],
+      exclusions: [],
+      examples: [],
       allowed_sentiments: ["NEGATIVE"],
+      allowed_claim_ids: [],
     },
   ],
 };
@@ -192,7 +215,330 @@ beforeEach(() => {
   window.location.hash = "";
 });
 
-afterEach(() => cleanup());
+afterEach(() => {
+  vi.restoreAllMocks();
+  cleanup();
+});
+
+const validationSource = {
+  result_version_id: "raw:returns-v1:products-v1",
+  source_kind: "raw_dataset",
+  return_dataset_name: "真实手套退货评论",
+  product_dataset_name: "商品信息汇总",
+  version_no: 1,
+};
+
+function mockEditableDraft({ sources = [], runs = [] } = {}) {
+  standardApiMock.classificationStandard.mockResolvedValue({
+    ...detail,
+    draft_id: validDraft.id,
+    draft_revision: validDraft.revision,
+  });
+  standardApiMock.classificationStandardDraft.mockResolvedValue(validDraft);
+  validationApiMock.sources.mockResolvedValue(sources);
+  validationApiMock.runs.mockResolvedValue(runs);
+  if (runs[0]) validationApiMock.run.mockResolvedValue(runs[0]);
+}
+
+function renderEditPage(notify = vi.fn()) {
+  render(
+    <ClassificationStandardsPage
+      route={{ query: { standard: standard.id, view: "edit" } }}
+      notify={notify}
+    />,
+  );
+  return notify;
+}
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
+function renderDraftController(initialProps) {
+  const notify = vi.fn();
+  const hook = renderHook(
+    (props) =>
+      useClassificationStandardDraftController({
+        ...props,
+        notify,
+        loadStandards: vi.fn(),
+        setBusy: vi.fn(),
+      }),
+    { initialProps },
+  );
+  return { ...hook, notify };
+}
+
+function renderValidationController() {
+  const notify = vi.fn();
+  const setBusy = vi.fn();
+  return {
+    ...renderHook(() =>
+      useClassificationStandardValidationController({
+        draft: validDraft,
+        notify,
+        persistDraft: vi.fn().mockResolvedValue(validDraft),
+        setBusy,
+      }),
+    ),
+    notify,
+    setBusy,
+  };
+}
+
+async function openPublishReview() {
+  await userEvent.click(
+    await screen.findByRole("button", { name: "发布", exact: true }),
+  );
+}
+
+test("详情加载仅提交最新标准，并在切换新建或列表页时失效", async () => {
+  const staleDetail = deferred();
+  const nextStandard = {
+    ...detail,
+    id: "classification-standard-gloves",
+    name: "手套分类标准",
+  };
+  standardApiMock.classificationStandard.mockImplementation((standardId) =>
+    standardId === standard.id ? staleDetail.promise : Promise.resolve(nextStandard),
+  );
+  standardApiMock.classificationStandardVersions.mockResolvedValue([]);
+  const { result, rerender, unmount } = renderDraftController({
+    mode: "edit",
+    selectedId: standard.id,
+  });
+
+  rerender({ mode: "edit", selectedId: nextStandard.id });
+  await waitFor(() => expect(result.current.detail?.id).toBe(nextStandard.id));
+  await act(async () => {
+    staleDetail.resolve(detail);
+    await staleDetail.promise;
+  });
+
+  expect(result.current.detail?.id).toBe(nextStandard.id);
+  expect(result.current.pageLoading).toBe(false);
+
+  for (const mode of ["new", "list"]) {
+    const staleRouteDetail = deferred();
+    standardApiMock.classificationStandard.mockReturnValueOnce(
+      staleRouteDetail.promise,
+    );
+    rerender({ mode: "edit", selectedId: `${standard.id}-${mode}` });
+    rerender({ mode, selectedId: "" });
+    await act(async () => {
+      staleRouteDetail.resolve({ ...detail, draft_id: validDraft.id });
+      await staleRouteDetail.promise;
+    });
+    expect(result.current.detail).toBeNull();
+  }
+  expect(validationApiMock.sources).not.toHaveBeenCalled();
+
+  const unmountedDetail = deferred();
+  standardApiMock.classificationStandard.mockReturnValueOnce(unmountedDetail.promise);
+  rerender({ mode: "edit", selectedId: `${standard.id}-unmounted` });
+  unmount();
+  await act(async () => {
+    unmountedDetail.resolve({ ...detail, draft_id: validDraft.id });
+    await unmountedDetail.promise;
+  });
+  expect(validationApiMock.sources).not.toHaveBeenCalled();
+  expect(validationApiMock.runs).not.toHaveBeenCalled();
+});
+
+test("keyword_free_v1 草稿可读取但不能写回", async () => {
+  const keywordFreeContent = {
+    ...content,
+    recognition_profile: "keyword_free_v1",
+  };
+  mockEditableDraft();
+  standardApiMock.classificationStandardDraft.mockResolvedValue({
+    ...validDraft,
+    content: keywordFreeContent,
+  });
+  const { result, notify } = renderDraftController({
+    mode: "edit",
+    selectedId: standard.id,
+  });
+  await waitFor(() => expect(result.current.draft).not.toBeNull());
+
+  act(() => {
+    result.current.changeContent(
+      { ...keywordFreeContent, name: "不可写回的标准" },
+      "name",
+    );
+  });
+  await act(async () => result.current.saveDraft());
+
+  expect(notify).toHaveBeenCalledWith("keyword_free_v1 识别模式仅支持读取", "error");
+  expect(standardApiMock.updateClassificationStandardDraft).not.toHaveBeenCalled();
+});
+
+test("验证状态仅提交最新加载且清空会使在途请求失效", async () => {
+  const staleRunDetail = deferred();
+  const oldRun = { ...readyRun, id: "validation-old" };
+  const nextRun = { ...readyRun, id: "validation-next" };
+  validationApiMock.sources.mockImplementation((draftId) =>
+    Promise.resolve([{ ...validationSource, result_version_id: `${draftId}:source` }]),
+  );
+  validationApiMock.runs.mockImplementation((draftId) =>
+    Promise.resolve([draftId === "draft-old" ? oldRun : nextRun]),
+  );
+  validationApiMock.run.mockImplementation((runId) =>
+    runId === oldRun.id ? staleRunDetail.promise : Promise.resolve(nextRun),
+  );
+  const { result } = renderValidationController();
+
+  let staleLoad;
+  await act(async () => {
+    staleLoad = result.current.loadValidation("draft-old");
+    await waitFor(() => expect(validationApiMock.run).toHaveBeenCalledWith(oldRun.id));
+  });
+  await act(async () => result.current.loadValidation("draft-next"));
+  await act(async () => {
+    staleRunDetail.resolve(oldRun);
+    await staleLoad;
+  });
+  expect(result.current.selectedValidation?.id).toBe(nextRun.id);
+  expect(result.current.validationSources[0]?.result_version_id).toBe(
+    "draft-next:source",
+  );
+
+  const pendingSources = deferred();
+  const pendingRuns = deferred();
+  validationApiMock.sources.mockReturnValueOnce(pendingSources.promise);
+  validationApiMock.runs.mockReturnValueOnce(pendingRuns.promise);
+  let pendingLoad;
+  act(() => {
+    pendingLoad = result.current.loadValidation("draft-pending");
+    result.current.clearValidation();
+  });
+  await act(async () => {
+    pendingSources.resolve([validationSource]);
+    pendingRuns.resolve([oldRun]);
+    await pendingLoad;
+  });
+  expect(result.current.validationSources).toEqual([]);
+  expect(result.current.validationRuns).toEqual([]);
+  expect(result.current.selectedValidation).toBeNull();
+});
+
+test("前台指定运行后轮询继续刷新该运行而不回选旧记录", async () => {
+  const oldRun = { ...readyRun, id: "validation-old", status: "running" };
+  const nextRun = { ...readyRun, id: "validation-next", status: "running" };
+  const pendingForeground = deferred();
+  validationApiMock.sources.mockResolvedValue([validationSource]);
+  validationApiMock.runs.mockResolvedValueOnce([oldRun]).mockResolvedValue([nextRun]);
+  validationApiMock.run.mockImplementation((runId) => {
+    if (runId !== nextRun.id) return Promise.resolve(oldRun);
+    return pendingForeground.promise;
+  });
+  const { result } = renderValidationController();
+
+  await act(async () => result.current.loadValidation(validDraft.id));
+  let foregroundLoad;
+  await act(async () => {
+    foregroundLoad = result.current.loadValidation(validDraft.id, nextRun.id);
+    await Promise.resolve();
+  });
+  await waitFor(() => expect(validationApiMock.run).toHaveBeenCalledWith(nextRun.id));
+  const sourceRequests = validationApiMock.sources.mock.calls.length;
+  const runListRequests = validationApiMock.runs.mock.calls.length;
+  let backgroundLoad;
+  await act(async () => {
+    backgroundLoad = result.current.loadValidation(validDraft.id, null, true);
+    await Promise.resolve();
+  });
+  expect(validationApiMock.sources).toHaveBeenCalledTimes(sourceRequests);
+  expect(validationApiMock.runs).toHaveBeenCalledTimes(runListRequests);
+  await act(async () => {
+    pendingForeground.resolve(nextRun);
+    await Promise.all([foregroundLoad, backgroundLoad]);
+  });
+  expect(result.current.validationRuns).toEqual([nextRun]);
+  expect(result.current.selectedValidation?.id).toBe(nextRun.id);
+});
+
+test("显式选择悬挂时轮询仍刷新用户期望的运行记录", async () => {
+  const oldRun = { ...readyRun, id: "validation-old", status: "running" };
+  const nextRun = { ...readyRun, id: "validation-next", status: "running" };
+  const pendingSelection = deferred();
+  validationApiMock.sources.mockResolvedValue([validationSource]);
+  validationApiMock.runs.mockResolvedValueOnce([oldRun]).mockResolvedValue([nextRun]);
+  validationApiMock.run.mockResolvedValue(oldRun);
+  const { result } = renderValidationController();
+  await act(async () => result.current.loadValidation(validDraft.id));
+  validationApiMock.run
+    .mockReturnValueOnce(pendingSelection.promise)
+    .mockResolvedValueOnce(nextRun);
+
+  let selectRequest;
+  act(() => {
+    selectRequest = result.current.selectValidation(nextRun.id);
+  });
+  await act(async () => result.current.loadValidation(validDraft.id, null, true));
+  expect(validationApiMock.sources).toHaveBeenCalledTimes(2);
+  expect(validationApiMock.runs).toHaveBeenCalledTimes(2);
+  expect(result.current.validationRuns).toEqual([nextRun]);
+  await waitFor(() => expect(result.current.selectedValidation?.id).toBe(nextRun.id));
+  expect(validationApiMock.run).toHaveBeenLastCalledWith(nextRun.id);
+  await act(async () => {
+    pendingSelection.resolve(nextRun);
+    await selectRequest;
+  });
+});
+
+test("验证创建、审批和详情选择失败均恢复操作状态并提示", async () => {
+  validationApiMock.sources.mockResolvedValue([validationSource]);
+  validationApiMock.runs.mockResolvedValue([readyRun]);
+  validationApiMock.start.mockRejectedValue(new Error("验证创建失败"));
+  standardApiMock.approveClassificationStandardValidationRun.mockRejectedValue(
+    new Error("验证审批失败"),
+  );
+  validationApiMock.run.mockRejectedValue(new Error("验证详情失败"));
+  const { result, notify, setBusy } = renderValidationController();
+
+  await act(async () => {
+    await result.current.loadValidation(validDraft.id).catch(() => undefined);
+  });
+  expect(result.current.validationRuns).toEqual([readyRun]);
+  await act(async () => result.current.startSampleValidation(null));
+  await act(async () => result.current.approveSampleValidation(readyRun.id, "确认"));
+  await act(async () => result.current.selectValidation(readyRun.id));
+
+  expect(notify).toHaveBeenCalledWith("验证创建失败", "error");
+  expect(notify).toHaveBeenCalledWith("验证审批失败", "error");
+  expect(notify).toHaveBeenCalledWith("验证详情失败", "error");
+  expect(setBusy.mock.calls).toEqual([["validation"], [""], ["approval"], [""]]);
+});
+
+test("轮询失败静默并在卸载时清理两秒定时器", async () => {
+  const runningRun = { ...readyRun, id: "validation-running", status: "running" };
+  const intervalCallbacks = [];
+  vi.spyOn(window, "setInterval").mockImplementation((callback, delay) => {
+    if (delay === 2000) intervalCallbacks.push(callback);
+    return 91;
+  });
+  const clearIntervalSpy = vi.spyOn(window, "clearInterval");
+  validationApiMock.sources.mockResolvedValue([validationSource]);
+  validationApiMock.runs.mockResolvedValue([runningRun]);
+  validationApiMock.run.mockResolvedValue(runningRun);
+  const { result, unmount, notify } = renderValidationController();
+
+  await act(async () => result.current.loadValidation(validDraft.id));
+  await waitFor(() => expect(intervalCallbacks).toHaveLength(1));
+
+  validationApiMock.sources.mockRejectedValueOnce(new Error("轮询失败"));
+  intervalCallbacks.at(-1)();
+  await waitFor(() => expect(validationApiMock.sources).toHaveBeenCalledTimes(2));
+  expect(notify).not.toHaveBeenCalled();
+
+  unmount();
+  expect(clearIntervalSpy).toHaveBeenCalledWith(91);
+});
 
 test("质量门槛分开展示发布阻断项与人工复核警告", async () => {
   const { ClassificationValidationQuality } =
@@ -258,6 +604,65 @@ test("停用和恢复标签同步校验引用，且不修改原配置", () => {
   expect(
     sameLabel(content.labels[0], { ...content.labels[0], allowed_claim_ids: [] }),
   ).toBe(true);
+});
+
+test("历史快照标签在进入编辑态时统一补齐缺省字段", () => {
+  const legacyLabel = {
+    code: "EYEWEAR_FIT_PRESSURE",
+    name: "佩戴压迫",
+    allowed_sentiments: ["NEGATIVE"],
+  };
+  const source = {
+    name: "历史标准",
+    variants: [],
+    taxonomy: {
+      product_context: "眼镜",
+      labels: [legacyLabel],
+    },
+  };
+
+  const editable = contentFromClassificationStandardSnapshot(source);
+
+  expect(editable.labels[0]).toEqual({
+    ...legacyLabel,
+    group: "",
+    parent_code: null,
+    description: "",
+    keywords: [],
+    exclusions: [],
+    examples: [],
+    allowed_claim_ids: [],
+  });
+  expect(source.taxonomy.labels[0]).toBe(legacyLabel);
+});
+
+test("没有评价方向时新增示例仍保留用户选择的适用状态", async () => {
+  const onChange = vi.fn();
+  render(
+    <ClassificationLabelBoundaries
+      label={{
+        ...content.labels[0],
+        allowed_sentiments: [],
+        examples: [],
+      }}
+      editing
+      onChange={onChange}
+      onFieldRef={vi.fn()}
+    />,
+  );
+
+  await userEvent.click(screen.getByRole("button", { name: "增加示例" }));
+
+  expect(onChange).toHaveBeenCalledWith({
+    examples: [
+      {
+        text: "",
+        applies: true,
+        sentiment: undefined,
+        explanation: "",
+      },
+    ],
+  });
 });
 
 test("工作台切换标签保留批量关键词，保存草稿不触发发布", async () => {
@@ -365,6 +770,9 @@ test("替代标签生成新编码并清理旧引用，检查变更后才可保�
     "明确描述鼻托压迫",
   );
   await userEvent.click(screen.getByRole("button", { name: "发布", exact: true }));
+  const changeReason = screen.getByRole("textbox", { name: "变更说明" });
+  await userEvent.clear(changeReason);
+  await userEvent.type(changeReason, "明确鼻托压迫规则");
   const preview = screen
     .getByRole("heading", { name: "发布前检查" })
     .closest("section");
@@ -380,6 +788,7 @@ test("替代标签生成新编码并清理旧引用，检查变更后才可保�
     "FIT_LOOSE",
   ]);
   expect(payload.content.validation_rules.conflicting_label_sets).toEqual([]);
+  expect(payload.change_reason).toBe("明确鼻托压迫规则");
   expect(sourceSnapshot.taxonomy.validation_rules).toEqual(rules);
   expect(standardApiMock.publishClassificationStandardDraft).not.toHaveBeenCalled();
 });
@@ -485,6 +894,25 @@ test("分类标准首页使用全宽列表并支持搜索", async () => {
 
   await userEvent.type(screen.getByRole("textbox", { name: "搜索分类标准" }), "不存在");
   expect(await screen.findByText("没有符合条件的分类标准")).toBeVisible();
+});
+
+test("分类标准搜索框保留原尺寸并只复位 AntD 内部输入框", () => {
+  const styles = readFileSync(
+    resolve(process.cwd(), "src/styles/classification-standards.css"),
+    "utf8",
+  );
+  expect(styles).toMatch(
+    /\.standard-library-toolbar > \.standard-search-box\s*{[^}]*height:\s*40px;/s,
+  );
+  expect(styles).toMatch(
+    /\.label-directory \.standard-search-box\s*{[^}]*height:\s*36px;/s,
+  );
+  expect(styles).toMatch(
+    /\.classification-standard-page[\s\S]*?\.standard-search-box\.ant-input-affix-wrapper[\s\S]*?> input\.ant-input\.ant-input\s*{[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*min-height:\s*0;/s,
+  );
+  expect(styles).toMatch(
+    /\.classification-standard-page[\s\S]*?\.standard-search-box\.ant-input-affix-wrapper[\s\S]*?> input\.ant-input:focus-visible\s*{[^}]*outline:\s*none;/s,
+  );
 });
 
 test("工作台收纳设置和版本记录，不显示重复未修改状态", async () => {
@@ -817,6 +1245,57 @@ test("已发布标签的编码和语义不可直接修改", async () => {
   expect(screen.getByRole("button", { name: /修改说明：创建替代标签/ })).toBeVisible();
 });
 
+test("已发布标签支持停用、恢复和撤销停用", async () => {
+  const secondLabel = {
+    ...content.labels[0],
+    code: "QUALITY_DURABLE",
+    name: "耐用",
+  };
+  const lifecycleContent = {
+    ...content,
+    labels: [...content.labels, secondLabel],
+  };
+  const lifecycleSnapshot = {
+    ...snapshot,
+    taxonomy: { ...snapshot.taxonomy, labels: lifecycleContent.labels },
+  };
+  standardApiMock.classificationStandard.mockResolvedValue({
+    ...detail,
+    draft_id: validDraft.id,
+    draft_revision: validDraft.revision,
+    snapshot: lifecycleSnapshot,
+  });
+  standardApiMock.classificationStandardDraft.mockResolvedValue({
+    ...validDraft,
+    content: lifecycleContent,
+    base_snapshot: lifecycleSnapshot,
+  });
+  const user = userEvent.setup();
+  renderEditPage();
+  await screen.findByRole("complementary", { name: "标签目录" });
+
+  const retire = async () => {
+    const workspace = screen.getByLabelText("当前标签编辑区");
+    await user.click(within(workspace).getByText("更多"));
+    const retireButton = screen.getByRole("button", { name: "停用标签" });
+    await waitFor(() => expect(retireButton).toBeEnabled());
+    await user.click(retireButton);
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("heading", { name: "停用此标签？" })).toBeVisible();
+    await user.click(within(dialog).getByRole("button", { name: "确认移除" }));
+    expect(screen.getByText("此标签拟在下一版本停用")).toBeVisible();
+  };
+
+  await retire();
+  await user.click(screen.getByRole("button", { name: "恢复到草稿" }));
+  expect(screen.queryByText("此标签拟在下一版本停用")).toBeNull();
+
+  await retire();
+  await user.click(screen.getByRole("button", { name: "撤销当前修改" }));
+  expect(screen.queryByText("此标签拟在下一版本停用")).toBeNull();
+  expect(screen.getByText("镜框或镜腿造成压迫")).toBeVisible();
+});
+
 test("编辑页只允许发布当前修订已验证的草稿", async () => {
   const notify = vi.fn();
   standardApiMock.classificationStandard.mockResolvedValue({
@@ -880,15 +1359,172 @@ test("草稿未完成样本验证时禁止发布", async () => {
   expect(standardApiMock.publishClassificationStandardDraft).not.toHaveBeenCalled();
 });
 
+test("草稿保存失败后保留未保存内容并恢复操作状态", async () => {
+  mockEditableDraft();
+  standardApiMock.updateClassificationStandardDraft.mockRejectedValue(
+    new Error("草稿保存冲突"),
+  );
+  const notify = renderEditPage();
+  await userEvent.click(
+    await screen.findByRole("button", { name: "标准设置", exact: true }),
+  );
+  const nameInput = screen.getByRole("textbox", { name: "标准名称" });
+  await userEvent.clear(nameInput);
+  await userEvent.type(nameInput, "保存失败仍保留的标准名称");
+  await userEvent.click(screen.getByRole("button", { name: "保存草稿" }));
+
+  await waitFor(() => expect(notify).toHaveBeenCalledWith("草稿保存冲突", "error"));
+  expect(nameInput).toHaveValue("保存失败仍保留的标准名称");
+  expect(screen.getByRole("button", { name: "保存草稿" })).toBeEnabled();
+  expect(standardApiMock.validateClassificationStandardDraft).not.toHaveBeenCalled();
+});
+
+test("发布失败后保留变更说明并恢复发布操作状态", async () => {
+  mockEditableDraft({ runs: [readyRun] });
+  standardApiMock.publishClassificationStandardDraft.mockRejectedValue(
+    new Error("发布版本冲突"),
+  );
+  const notify = renderEditPage();
+  await openPublishReview();
+  const reasonInput = screen.getByRole("textbox", { name: "变更说明" });
+  await userEvent.clear(reasonInput);
+  await userEvent.type(reasonInput, "发布失败后继续使用的说明");
+  await userEvent.click(screen.getByRole("button", { name: "发布并启用" }));
+
+  await waitFor(() =>
+    expect(standardApiMock.publishClassificationStandardDraft).toHaveBeenCalledWith(
+      validDraft.id,
+      {
+        expected_revision: validDraft.revision,
+        reason: "发布失败后继续使用的说明",
+      },
+    ),
+  );
+  expect(notify).toHaveBeenCalledWith("发布版本冲突", "error");
+  expect(reasonInput).toHaveValue("发布失败后继续使用的说明");
+  expect(screen.getByRole("button", { name: "发布并启用" })).toBeEnabled();
+});
+
+test("编辑页加载验证来源与运行记录并允许选择另一条记录", async () => {
+  const previousRun = {
+    ...readyRun,
+    id: "classification-standard-validation-previous",
+    draft_revision: 1,
+    is_current: false,
+    publication_ready: false,
+  };
+  mockEditableDraft({ sources: [validationSource], runs: [readyRun, previousRun] });
+  validationApiMock.run.mockImplementation(async (runId) =>
+    runId === previousRun.id ? previousRun : readyRun,
+  );
+  renderEditPage();
+  await waitFor(() => {
+    expect(validationApiMock.sources).toHaveBeenCalledWith(validDraft.id);
+    expect(validationApiMock.runs).toHaveBeenCalledWith(validDraft.id);
+    expect(validationApiMock.run).toHaveBeenCalledWith(readyRun.id);
+  });
+  await openPublishReview();
+  expect(screen.getByRole("combobox", { name: "样本来源" })).toHaveValue(
+    validationSource.result_version_id,
+  );
+  await userEvent.click(
+    screen.getByRole("button", {
+      name: /验证完成.*草稿 r1.*20\/20 条.*已失效/,
+    }),
+  );
+
+  await waitFor(() =>
+    expect(validationApiMock.run).toHaveBeenLastCalledWith(previousRun.id),
+  );
+  expect(screen.getByRole("heading", { name: "草稿 r1 验证结果" })).toBeVisible();
+});
+
+test("仅在验证运行中轮询并在运行完成后停止", async () => {
+  const runningRun = {
+    ...readyRun,
+    id: "classification-standard-validation-running",
+    status: "running",
+    processed_count: 5,
+    publication_ready: false,
+    approved_by_name: null,
+    approved_at: null,
+    approval_note: "",
+  };
+  const completedRun = {
+    ...runningRun,
+    status: "completed",
+    processed_count: 20,
+  };
+  const validationPolls = [];
+  const setIntervalSpy = vi
+    .spyOn(window, "setInterval")
+    .mockImplementation((callback, delay) => {
+      if (delay === 2000) validationPolls.push(callback);
+      return 73;
+    });
+  mockEditableDraft();
+  validationApiMock.runs
+    .mockResolvedValueOnce([runningRun])
+    .mockResolvedValueOnce([completedRun]);
+  validationApiMock.run
+    .mockResolvedValueOnce(runningRun)
+    .mockResolvedValueOnce(completedRun);
+
+  try {
+    renderEditPage();
+    await waitFor(() => expect(validationPolls).toHaveLength(1));
+    expect(validationApiMock.runs).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      validationPolls[0]();
+    });
+
+    await waitFor(() => expect(validationApiMock.runs).toHaveBeenCalledTimes(2));
+    expect(validationApiMock.run).toHaveBeenLastCalledWith(runningRun.id);
+    await screen.findByText("草稿 r2 验证结果");
+    expect(validationPolls).toHaveLength(1);
+  } finally {
+    setIntervalSpy.mockRestore();
+  }
+});
+
+test("开始样本验证提交当前草稿修订、来源、规模和验证目的", async () => {
+  const queuedRun = {
+    ...readyRun,
+    id: "classification-standard-validation-queued",
+    status: "queued",
+    processed_count: 0,
+    publication_ready: false,
+    approved_by_name: null,
+    approved_at: null,
+    approval_note: "",
+  };
+  mockEditableDraft({ sources: [validationSource] });
+  validationApiMock.start.mockResolvedValue(queuedRun);
+  validationApiMock.run.mockResolvedValue(queuedRun);
+  const notify = renderEditPage();
+  await openPublishReview();
+  await userEvent.selectOptions(
+    screen.getByRole("combobox", { name: "验证目的" }),
+    "semantic_ab",
+  );
+  await userEvent.click(screen.getByRole("button", { name: "50 条" }));
+  await userEvent.click(screen.getByRole("button", { name: "开始样本验证" }));
+
+  await waitFor(() =>
+    expect(validationApiMock.start).toHaveBeenCalledWith(validDraft.id, {
+      expected_revision: validDraft.revision,
+      source_result_version_id: validationSource.result_version_id,
+      sample_size: 50,
+      comparison_type: "semantic_ab",
+    }),
+  );
+  expect(validationApiMock.run).toHaveBeenLastCalledWith(queuedRun.id);
+  expect(notify).toHaveBeenCalledWith("样本验证已进入队列");
+});
+
 test("原始数据验证完成后必须人工确认才能发布", async () => {
   const notify = vi.fn();
-  const rawSource = {
-    result_version_id: "raw:returns-v1:products-v1",
-    source_kind: "raw_dataset",
-    return_dataset_name: "真实手套退货评论",
-    product_dataset_name: "商品信息汇总",
-    version_no: 1,
-  };
   standardApiMock.classificationStandard.mockResolvedValue({
     ...detail,
     draft_id: validDraft.id,
@@ -896,7 +1532,7 @@ test("原始数据验证完成后必须人工确认才能发布", async () => {
   });
   standardApiMock.classificationStandardDraft.mockResolvedValue(validDraft);
   standardApiMock.classificationStandardValidationSources.mockResolvedValue([
-    rawSource,
+    validationSource,
   ]);
   standardApiMock.classificationStandardValidationRuns.mockResolvedValue([
     awaitingApprovalRun,
@@ -920,9 +1556,11 @@ test("原始数据验证完成后必须人工确认才能发布", async () => {
   await userEvent.click(
     await screen.findByRole("button", { name: "发布", exact: true }),
   );
-  expect(
-    await screen.findByRole("option", { name: /真实手套退货评论/ }),
-  ).toBeInTheDocument();
+  await userEvent.selectOptions(
+    screen.getByRole("combobox", { name: "样本来源" }),
+    validationSource.result_version_id,
+  );
+  expect(screen.getByRole("option", { name: /真实手套退货评论/ })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "等待人工确认" })).toBeDisabled();
   await userEvent.click(screen.getByRole("checkbox", { name: /我已审阅/ }));
   await userEvent.type(
@@ -1193,7 +1831,10 @@ test("样本验证按钮解释当前优先禁用原因", async () => {
 });
 
 test("发布前样本验证在目标宽度使用三段响应式布局", () => {
-  const styles = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
+  const styles = readFileSync(
+    resolve(process.cwd(), "src/styles/classification-standards.css"),
+    "utf8",
+  );
   expect(styles).toMatch(
     /\.standard-validation-configuration\s*{[^}]*grid-template-columns:\s*repeat\(2, minmax\(220px, 1fr\)\) auto;/s,
   );

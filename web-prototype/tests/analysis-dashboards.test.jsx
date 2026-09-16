@@ -187,6 +187,60 @@ test("空态只保留一个选择分类结果入口", async () => {
   expect(screen.getAllByRole("button", { name: "选择分类结果" })).toHaveLength(1);
 });
 
+test("搜索条件只在点击筛选后提交并重置到第一页", async () => {
+  const user = userEvent.setup();
+  window.location.hash = "#analysis-dashboards?q=旧关键词&page=3";
+  render(<DashboardHarness />);
+
+  await waitFor(() =>
+    expect(dashboardApiMock.analysisDashboards).toHaveBeenCalledWith(
+      expect.objectContaining({ q: "旧关键词", page: 3 }),
+      expect.any(Object),
+    ),
+  );
+  const search = screen.getByRole("textbox", { name: "搜索分析看板" });
+  await user.clear(search);
+  await user.type(search, "新关键词");
+
+  expect(window.location.hash).toContain("q=%E6%97%A7%E5%85%B3%E9%94%AE%E8%AF%8D");
+  expect(window.location.hash).toContain("page=3");
+  expect(dashboardApiMock.analysisDashboards).not.toHaveBeenCalledWith(
+    expect.objectContaining({ q: "新关键词" }),
+    expect.any(Object),
+  );
+
+  await user.click(screen.getByRole("button", { name: "筛选", exact: true }));
+  await waitFor(() => {
+    const query = new URLSearchParams(window.location.hash.split("?")[1]);
+    expect(query.get("q")).toBe("新关键词");
+    expect(query.has("page")).toBe(false);
+  });
+  await waitFor(() =>
+    expect(dashboardApiMock.analysisDashboards).toHaveBeenCalledWith(
+      expect.objectContaining({ q: "新关键词", page: 1 }),
+      expect.any(Object),
+    ),
+  );
+});
+
+test("数据说明展开状态与内容显隐保持同步", async () => {
+  const user = userEvent.setup();
+  window.location.hash = "#analysis-dashboards?dashboard=dashboard-default";
+  render(<DashboardHarness />);
+
+  const toggle = await screen.findByRole("button", { name: "数据说明" });
+  expect(toggle).toHaveAttribute("aria-expanded", "false");
+  expect(screen.queryByText("当前看板基于已发布分类结果生成")).not.toBeInTheDocument();
+
+  await user.click(toggle);
+  expect(toggle).toHaveAttribute("aria-expanded", "true");
+  expect(screen.getByText("当前看板基于已发布分类结果生成")).toBeVisible();
+
+  await user.click(toggle);
+  expect(toggle).toHaveAttribute("aria-expanded", "false");
+  expect(screen.queryByText("当前看板基于已发布分类结果生成")).not.toBeInTheDocument();
+});
+
 test("分类结果选择跨分页恢复且需复核版本也可纳入", async () => {
   const user = userEvent.setup();
   const token = createDashboardSelection("user-1");
