@@ -38,7 +38,9 @@ import { ModelServiceInspector } from "./ModelServiceInspector";
  *   onBeginEdit: (panel: ActivePanel) => void,
  *   form: ModelServiceForm,
  *   onFormChange: (form: ModelServiceForm) => void,
+ *   nameError: string,
  *   baseUrlError: string,
+ *   apiKeyError: string,
  *   catalogModels: CatalogModel[],
  *   focusModelId: string | null,
  *   focusedModelRef: import("react").Ref<HTMLDivElement>,
@@ -77,7 +79,9 @@ export function ModelServiceEditor({
   onBeginEdit,
   form,
   onFormChange,
+  nameError,
   baseUrlError,
+  apiKeyError,
   catalogModels,
   focusModelId,
   focusedModelRef,
@@ -182,11 +186,24 @@ export function ModelServiceEditor({
                 接入名称
                 <Input
                   disabled={!editing}
+                  aria-label="接入名称"
                   value={form.name}
                   onChange={(event) =>
                     onFormChange({ ...form, name: event.target.value })
                   }
+                  required
+                  aria-invalid={Boolean(nameError)}
+                  aria-describedby={nameError ? "model-service-name-error" : undefined}
                 />
+                {nameError && (
+                  <small
+                    id="model-service-name-error"
+                    className="config-field-error"
+                    role="alert"
+                  >
+                    {nameError}
+                  </small>
+                )}
               </label>
               <label>
                 协议
@@ -230,12 +247,26 @@ export function ModelServiceEditor({
                 <input
                   type="password"
                   disabled={!editing}
+                  aria-label="API 密钥"
                   value={form.api_key}
                   onChange={(event) =>
                     onFormChange({ ...form, api_key: event.target.value })
                   }
                   placeholder={selectedConnection ? "留空则沿用原密钥" : "sk-…"}
+                  aria-invalid={Boolean(apiKeyError)}
+                  aria-describedby={
+                    apiKeyError ? "model-service-api-key-error" : undefined
+                  }
                 />
+                {apiKeyError && (
+                  <small
+                    id="model-service-api-key-error"
+                    className="config-field-error"
+                    role="alert"
+                  >
+                    {apiKeyError}
+                  </small>
+                )}
               </label>
             </div>
           </div>

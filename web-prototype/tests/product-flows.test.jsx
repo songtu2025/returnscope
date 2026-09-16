@@ -3010,6 +3010,8 @@ describe("关键用户流程", () => {
     const saveButton = screen.getByRole("button", { name: "保存草稿" });
     const baseUrlInput = screen.getByLabelText("Base URL");
     expect(saveButton).toBeDisabled();
+    expect(screen.getAllByText("请填写接入名称。").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("请填写 API 密钥。").length).toBeGreaterThan(0);
     expect(screen.queryByText("请选择验证模型。")).not.toBeInTheDocument();
     expect(screen.getAllByText("请填写配置变更原因。").length).toBeGreaterThan(0);
     expect(baseUrlInput).toHaveAttribute("aria-invalid", "true");
@@ -3027,6 +3029,10 @@ describe("关键用户流程", () => {
     expect(baseUrlInput).toHaveAttribute("aria-invalid", "false");
 
     await user.type(screen.getByLabelText("配置变更原因"), "新增生产接入");
+    expect(screen.getByRole("status")).toHaveTextContent("请填写接入名称。");
+    await user.type(screen.getByLabelText("接入名称"), "生产模型服务");
+    expect(screen.getByRole("status")).toHaveTextContent("请填写 API 密钥。");
+    await user.type(screen.getByLabelText("API 密钥"), "test-api-key");
     expect(saveButton).toBeEnabled();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });

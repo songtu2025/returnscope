@@ -150,10 +150,15 @@ export function ApiManagement({
     (model) => model.active && model.validation_status === "validated",
   ).length;
   const modelOptions = createModelOptions(catalogModels, form);
+  const nameError = editing && !form.name?.trim() ? "请填写接入名称。" : "";
   const baseUrlError = editing ? getBaseUrlError(form.base_url) : "";
+  const apiKeyError =
+    editing && !selectedConnection && !form.api_key?.trim() ? "请填写 API 密钥。" : "";
   const configFormErrors = editing
     ? [
+        nameError,
         baseUrlError,
+        apiKeyError,
         !form.primary_model ? "请选择验证模型。" : "",
         !form.change_note?.trim() ? "请填写配置变更原因。" : "",
       ].filter(Boolean)
@@ -685,7 +690,9 @@ export function ApiManagement({
             onBeginEdit={beginConfigEdit}
             form={form}
             onFormChange={setForm}
+            nameError={nameError}
             baseUrlError={baseUrlError}
+            apiKeyError={apiKeyError}
             catalogModels={catalogModels}
             focusModelId={focusModelId}
             focusedModelRef={focusedModelRef}
