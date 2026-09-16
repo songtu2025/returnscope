@@ -100,7 +100,7 @@ export function editableProductMatchItems(items) {
  * @param {ProductMatchItem} item
  * @returns {ProductMatchDraft}
  */
-export function initialProductMatch(item) {
+function initialProductMatch(item) {
   const candidate = item.match_candidate ?? {};
   return {
     store: firstNonEmpty(item.store, candidate.store),
