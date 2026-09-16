@@ -34,15 +34,21 @@ RAW_COMMENT_COLUMN = "raw_customer_comments"
 MARKET_STORE_COLUMN = "market_store"
 MARKET_STORES_SQL = """
 SELECT records.jijia_account_id, shops.market_id, MAX(shops.market_name) AS store
-FROM raw_api_data AS records
+FROM (
+    SELECT DISTINCT jijia_account_id
+    FROM {return_table}
+    WHERE jijia_account_id IS NOT NULL
+) AS accounts
+JOIN raw_api_data AS records
+  ON records.jijia_account_id = accounts.jijia_account_id
+ AND records.api_code = 'amazon_shop_page'
 JOIN JSON_TABLE(
     records.raw_json, '$.marketListVos[*]' COLUMNS(
         market_id INT PATH '$.marketId',
         market_name VARCHAR(100) PATH '$.marketName'
     )
 ) AS shops
-WHERE records.api_code = 'amazon_shop_page'
-  AND shops.market_id IS NOT NULL
+WHERE shops.market_id IS NOT NULL
   AND TRIM(COALESCE(shops.market_name, '')) <> ''
 GROUP BY records.jijia_account_id, shops.market_id
 HAVING COUNT(DISTINCT shops.market_name) = 1
@@ -73,7 +79,11 @@ class MySQLReturnService:
                 rows = self._columns(connection)
             else:
                 with connection.cursor() as cursor:
-                    cursor.execute(MARKET_STORES_SQL)
+                    cursor.execute(
+                        MARKET_STORES_SQL.format(
+                            return_table=_quote_identifier(self.settings.mysql_table)
+                        )
+                    )
                     rows = list(cursor.fetchall())
             self._metadata[key] = (time.monotonic(), rows)
             return rows
