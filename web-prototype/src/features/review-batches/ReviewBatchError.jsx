@@ -1,6 +1,9 @@
 import { WarningCircle } from "@phosphor-icons/react";
 import Button from "antd/es/button";
 
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewRequestError} ReviewRequestError */
+
+/** @param {{error: ReviewRequestError, onRetry: () => void | Promise<unknown>}} props */
 export function ReviewBatchError({ error, onRetry }) {
   const serviceUnavailable = error?.status === 404;
   return (

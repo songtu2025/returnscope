@@ -1,12 +1,44 @@
 import { CaretDown } from "@phosphor-icons/react";
 import { EFFORT_LABELS } from "../../constants";
 
+/** @typedef {import("./taskCreateContracts").AvailableModel} AvailableModel */
+/** @typedef {import("./taskCreateContracts").PublishedConfig} PublishedConfig */
+/** @typedef {import("./taskCreateContracts").TaskForm} TaskForm */
+/** @typedef {import("./taskCreateContracts").TaskModelPolicy} TaskModelPolicy */
+/** @typedef {"cheap_model" | "primary_model" | "secondary_model"} ModelKey */
+/** @typedef {"cheap_effort" | "primary_effort" | "secondary_effort"} EffortKey */
+/** @typedef {readonly [string, ModelKey, EffortKey, boolean]} ModelStage */
+/**
+ * @typedef {{
+ *   headingRef: import("react").RefObject<HTMLHeadingElement | null>,
+ *   form: TaskForm,
+ *   onFormChange: (form: TaskForm) => void,
+ *   publishedConfigs: PublishedConfig[],
+ *   selectedConfig?: PublishedConfig,
+ *   availableModels: AvailableModel[],
+ *   modelPolicy: TaskModelPolicy,
+ *   onConnectionChange: (configId: string) => void,
+ *   onModelPolicyChange: (changes: Record<string, string | number>) => void,
+ *   children?: import("react").ReactNode
+ * }} TaskConfigurationStepProps
+ */
+
+/** @type {readonly ModelStage[]} */
 const MODEL_STAGES = [
   ["低成本初筛", "cheap_model", "cheap_effort", false],
   ["主分析", "primary_model", "primary_effort", true],
   ["风险复核", "secondary_model", "secondary_effort", false],
 ];
 
+/** @param {string} effort */
+function effortLabel(effort) {
+  if (effort === "low" || effort === "medium" || effort === "high") {
+    return EFFORT_LABELS[effort];
+  }
+  return effort;
+}
+
+/** @param {TaskConfigurationStepProps} props */
 export function TaskConfigurationStep({
   headingRef,
   form,
@@ -35,7 +67,7 @@ export function TaskConfigurationStep({
           任务名称
           <input
             value={form.title}
-            maxLength="120"
+            maxLength={120}
             placeholder="为本次分析起个名字"
             onChange={(event) => onFormChange({ ...form, title: event.target.value })}
           />
@@ -53,8 +85,7 @@ export function TaskConfigurationStep({
               </strong>
               <small>
                 {selectedConfig?.connection_name} · 推理强度
-                {EFFORT_LABELS[modelPolicy.primary_effort] ??
-                  modelPolicy.primary_effort}
+                {effortLabel(modelPolicy.primary_effort)}
               </small>
               {MODEL_STAGES.filter(
                 ([, modelKey, , required]) => !required && modelPolicy[modelKey],
@@ -65,7 +96,7 @@ export function TaskConfigurationStep({
                     (model) => model.model_key === modelPolicy[modelKey],
                   )?.display_name || modelPolicy[modelKey]}
                   {" · 推理强度"}
-                  {EFFORT_LABELS[modelPolicy[effortKey]] ?? modelPolicy[effortKey]}
+                  {effortLabel(modelPolicy[effortKey])}
                 </small>
               ))}
             </div>
@@ -129,7 +160,7 @@ export function TaskConfigurationStep({
                       >
                         {(selectedModel?.supported_efforts ?? []).map((effort) => (
                           <option key={effort} value={effort}>
-                            推理强度{EFFORT_LABELS[effort] ?? effort}
+                            推理强度{effortLabel(effort)}
                           </option>
                         ))}
                       </select>

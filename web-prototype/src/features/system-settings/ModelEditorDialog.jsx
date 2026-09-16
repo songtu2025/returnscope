@@ -3,6 +3,10 @@ import Input from "antd/es/input";
 import { Modal } from "../../components/SharedUi";
 import { EFFORT_LABELS } from "../../constants";
 
+/** @typedef {import("../../shared/api/systemSettingsContracts").ModelEditorMode} ModelEditorMode */
+/** @typedef {import("../../shared/api/systemSettingsContracts").ModelDraft} ModelDraft */
+
+/** @param {{busy: string, editorMode: ModelEditorMode | null, modelDraft: ModelDraft | null, onChange: (draft: ModelDraft) => void, onClose: () => void, onSave: () => void}} props */
 export function ModelEditorDialog({
   busy,
   editorMode,
@@ -30,7 +34,7 @@ export function ModelEditorDialog({
           <input
             value={modelDraft.model_key}
             disabled={editorMode === "edit"}
-            maxLength="120"
+            maxLength={120}
             placeholder="例如 deepseek-reasoner"
             onChange={(event) =>
               onChange({
@@ -81,7 +85,7 @@ export function ModelEditorDialog({
                     })
                   }
                 >
-                  {EFFORT_LABELS[effort]}
+                  {/** @type {Record<string, string>} */ (EFFORT_LABELS)[effort]}
                 </button>
               );
             })}

@@ -1,16 +1,39 @@
 import { useState } from "react";
 import { api } from "../../api";
 
+/** @typedef {import("../../shared/api/dataManagementContracts").DatasetRecord} DatasetRecord */
+/** @typedef {import("../task-create/taskCreateContracts").TaskRepairContext} TaskRepairContext */
+/** @typedef {import("../task-create/taskCreateContracts").CategoryOption} CategoryOption */
+/** @typedef {import("../task-create/taskCreateContracts").UnresolvedProduct} UnresolvedProduct */
+/** @typedef {UnresolvedProduct & {listing: string, category_a: string, category_b: string, selected: boolean}} CompletionItem */
+/** @typedef {Error & {status?: number}} DataRequestError */
+
+/** @param {unknown} error @returns {DataRequestError} */
+function requestError(error) {
+  return error instanceof Error
+    ? /** @type {DataRequestError} */ (error)
+    : new Error("保存商品品类失败");
+}
+
+/**
+ * @param {{
+ *   dataset: DatasetRecord,
+ *   focus: TaskRepairContext,
+ *   notify: (message: string, tone?: string) => void,
+ *   onReturnToTask?: (productVersionId: string) => void,
+ * }} props
+ */
 export function TaskCategoryCompletion({ dataset, focus, notify, onReturnToTask }) {
-  const categoryOptions = focus.categoryOptions ?? [];
-  const [items, setItems] = useState(() =>
-    (focus.unresolvedProducts ?? []).map((item) => ({
-      ...item,
-      listing: item.suggested_listing ?? "",
-      category_a: "",
-      category_b: "",
-      selected: false,
-    })),
+  const categoryOptions = /** @type {CategoryOption[]} */ (focus.categoryOptions ?? []);
+  const [items, setItems] = useState(
+    /** @returns {CompletionItem[]} */ () =>
+      (focus.unresolvedProducts ?? []).map((item) => ({
+        ...item,
+        listing: item.suggested_listing ?? "",
+        category_a: "",
+        category_b: "",
+        selected: false,
+      })),
   );
   const [listingFilter, setListingFilter] = useState("all");
   const [bulkCategory, setBulkCategory] = useState("");
@@ -33,6 +56,7 @@ export function TaskCategoryCompletion({ dataset, focus, notify, onReturnToTask 
     0,
   );
 
+  /** @param {string} productKey @param {Partial<CompletionItem>} changes */
   const updateItem = (productKey, changes) => {
     setItems((current) =>
       current.map((item) =>
@@ -94,10 +118,11 @@ export function TaskCategoryCompletion({ dataset, focus, notify, onReturnToTask 
       );
       if (versionId) onReturnToTask?.(versionId);
     } catch (error) {
+      const nextError = requestError(error);
       notify(
-        error.status === 409
+        nextError.status === 409
           ? "产品信息已被其他用户修改，请刷新后重新提交"
-          : error.message,
+          : nextError.message,
         "error",
       );
     } finally {

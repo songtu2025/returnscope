@@ -3,8 +3,16 @@ import { ClassificationLabelWorkbench } from "./ClassificationLabelWorkbench";
 import { ClassificationHierarchyEditor } from "./ClassificationHierarchyEditor";
 import { Plus, Trash } from "@phosphor-icons/react";
 
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardEditableContent} ClassificationStandardEditableContent */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardValidationIssue} ClassificationStandardValidationIssue */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardVariant} ClassificationStandardVariant */
+/** @typedef {import("./classificationStandardContent").ClassificationStandardFieldErrors} ClassificationStandardFieldErrors */
+/** @typedef {{content: ClassificationStandardEditableContent, baseContent: ClassificationStandardEditableContent | null, onChange: (content: ClassificationStandardEditableContent, field?: string) => void, focusLabelCode?: string, fixRequest: ClassificationStandardValidationIssue | null, section: string, savedContent: ClassificationStandardEditableContent | null, busy: boolean, editable: boolean, initiallyEditing: boolean, notify: (message: string, tone?: string) => void, fieldErrors?: Partial<ClassificationStandardFieldErrors>, validationAttempt?: number}} ClassificationStandardEditorProps */
+
+/** @returns {ClassificationStandardVariant} */
 const emptyVariant = () => ({ category_a: "", category_b: "", attributes: {} });
 
+/** @param {ClassificationStandardEditorProps} props */
 export function ClassificationStandardEditor({
   content,
   baseContent,
@@ -23,12 +31,14 @@ export function ClassificationStandardEditor({
   const [partCode, setPartCode] = useState("");
   const [partError, setPartError] = useState("");
   const errorId = useId();
-  const editorRef = useRef(null);
-  const nameRef = useRef(null);
-  const productContextRef = useRef(null);
-  const addVariantRef = useRef(null);
-  const partCodeRef = useRef(null);
-  const variantRefs = useRef(new Map());
+  const editorRef = useRef(/** @type {HTMLFieldSetElement | null} */ (null));
+  const nameRef = useRef(/** @type {HTMLInputElement | null} */ (null));
+  const productContextRef = useRef(/** @type {HTMLTextAreaElement | null} */ (null));
+  const addVariantRef = useRef(/** @type {HTMLButtonElement | null} */ (null));
+  const partCodeRef = useRef(/** @type {HTMLInputElement | null} */ (null));
+  const variantRefs = useRef(
+    /** @type {Map<string, HTMLInputElement | null>} */ (new Map()),
+  );
   const focusedAttemptRef = useRef(0);
 
   useEffect(() => {
@@ -36,7 +46,7 @@ export function ClassificationStandardEditor({
     if (fixRequest.kind === "invalid_structure") {
       const hierarchy = editorRef.current?.querySelector(".hierarchy-category-editor");
       if (hierarchy) {
-        hierarchy.open = true;
+        if (hierarchy instanceof HTMLDetailsElement) hierarchy.open = true;
         hierarchy.querySelector("summary")?.focus();
       }
     } else if (fixRequest.kind === "missing_field") {
@@ -46,6 +56,10 @@ export function ClassificationStandardEditor({
     }
   }, [fixRequest, section]);
 
+  /**
+   * @param {number} index
+   * @param {Partial<ClassificationStandardVariant>} updates
+   */
   const updateVariant = (index, updates) => {
     const field = Object.keys(updates)[0];
     onChange(
@@ -83,6 +97,7 @@ export function ClassificationStandardEditor({
     ) {
       return;
     }
+    /** @type {HTMLElement | null} */
     let target = null;
     if (fieldErrors.name) target = nameRef.current;
     else if (fieldErrors.product_context) target = productContextRef.current;
@@ -91,11 +106,11 @@ export function ClassificationStandardEditor({
       const index = fieldErrors.variants?.findIndex(
         (item) => item.category_a || item.category_b,
       );
-      if (index >= 0) {
-        const key = fieldErrors.variants[index].category_a
+      if (index != null && index >= 0 && fieldErrors.variants) {
+        const key = fieldErrors.variants[index]?.category_a
           ? "category_a"
           : "category_b";
-        target = variantRefs.current.get(`${index}.${key}`);
+        target = variantRefs.current.get(`${index}.${key}`) ?? null;
       }
     }
     if (target) {
@@ -108,7 +123,7 @@ export function ClassificationStandardEditor({
     <fieldset
       ref={editorRef}
       className="standard-editor-stack"
-      disabled={busy}
+      disabled={Boolean(busy)}
       aria-label="标准草稿编辑"
     >
       <section className="standard-editor-section" hidden={section !== "settings"}>

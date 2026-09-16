@@ -4,15 +4,18 @@ import { X } from "@phosphor-icons/react";
 import { resultLabelText } from "../../lib/taxonomyPresentation";
 import { SemanticResultPanel } from "../classification-results/SemanticResultPanel";
 
+/** @typedef {import("./analysisDashboardContracts").DashboardRecord} DashboardRecord */
+/** @param {{record: DashboardRecord, onClose: () => void, returnFocusRef: import("react").RefObject<HTMLElement | null>}} props */
 export function DashboardDetailEvidenceDrawer({ record, onClose, returnFocusRef }) {
   const classification = record.classification ?? {};
-  const drawerRef = useRef(null);
-  const closeButtonRef = useRef(null);
+  const drawerRef = useRef(/** @type {HTMLElement | null} */ (null));
+  const closeButtonRef = useRef(/** @type {HTMLButtonElement | null} */ (null));
 
   useEffect(() => {
     const drawer = drawerRef.current;
     if (!drawer) return undefined;
     const returnFocus = returnFocusRef.current;
+    /** @param {KeyboardEvent} event */
     const handleKey = (event) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -31,6 +34,7 @@ export function DashboardDetailEvidenceDrawer({ record, onClose, returnFocusRef 
       }
       const first = focusable[0];
       const last = focusable.at(-1);
+      if (!(first instanceof HTMLElement) || !(last instanceof HTMLElement)) return;
       if (event.shiftKey && document.activeElement === first) {
         event.preventDefault();
         last.focus();
@@ -111,11 +115,12 @@ export function DashboardDetailEvidenceDrawer({ record, onClose, returnFocusRef 
   );
 }
 
+/** @param {{label: string, value?: unknown}} props */
 function DrawerField({ label, value }) {
   return (
     <div className="drawer-field">
       <span>{label}</span>
-      <b>{value || "未提供"}</b>
+      <b>{value ? String(value) : "未提供"}</b>
     </div>
   );
 }

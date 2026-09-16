@@ -73,18 +73,40 @@ const SystemSettingsPage = lazy(() =>
   })),
 );
 
+/** @typedef {import("./app/navigation").NavigationFocus} NavigationFocus */
+/** @typedef {import("./app/navigation").NavigationItem} NavigationItem */
+/** @typedef {{id: string, email: string, display_name: string, is_admin?: boolean}} CurrentUser */
+/** @typedef {{warnings?: string[], worker_status?: string, worker_concurrency?: number, pending_review_batches?: number, pending_review_batch_count?: number, review_batch_pending_count?: number, my_running_segments?: number, my_running_tasks?: number}} SystemStatus */
+/** @typedef {{message: string, tone: string}} ToastState */
+/** @typedef {(message: string, tone?: string) => void} Notify */
+/** @typedef {(destination: string, focus?: NavigationFocus | null) => void} Navigate */
+/** @typedef {{id: string, title: string, owner_name: string, status: keyof typeof STATUS_LABELS, store: string, listing?: string}} SearchTask */
+/** @typedef {{id: string, kind: string, name: string, current_version: number, row_count: number, description?: string}} SearchDataset */
+/** @typedef {{id: string, workflow_status: string, comment: string, task_title: string, owner_name: string}} SearchReview */
+/** @typedef {{tasks: SearchTask[], datasets: SearchDataset[], reviews: SearchReview[]}} SearchResources */
+/** @typedef {{id: string, type: string, icon: import("react").ElementType, title: string, meta: string, keywords: string, page: string, focus: NavigationFocus}} GlobalSearchItem */
+
+/** @param {unknown} error */
+function errorMessage(error) {
+  return error instanceof Error ? error.message : "请求失败";
+}
+
 function App() {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(/** @type {CurrentUser | null} */ (null));
   const [booting, setBooting] = useState(true);
-  const [system, setSystem] = useState(null);
-  const [toast, setToast] = useState(null);
+  const [system, setSystem] = useState(/** @type {SystemStatus | null} */ (null));
+  const [toast, setToast] = useState(/** @type {ToastState | null} */ (null));
   const [searchOpen, setSearchOpen] = useState(false);
   const { route, navigate } = useHashRoute();
 
-  const notify = useCallback((message, tone = "success") => {
-    setToast({ message, tone });
-    window.setTimeout(() => setToast(null), 3200);
-  }, []);
+  const notify = useCallback(
+    /** @type {Notify} */
+    (message, tone = "success") => {
+      setToast({ message, tone });
+      window.setTimeout(() => setToast(null), 3200);
+    },
+    [],
+  );
 
   useEffect(() => {
     const handleSessionExpired = () => {
@@ -118,7 +140,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const handleShortcut = (event) => {
+    const handleShortcut = (/** @type {KeyboardEvent} */ event) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         if (user) setSearchOpen(true);
@@ -158,7 +180,7 @@ function App() {
         />
       }
       warning={
-        system?.warnings?.length > 0 ? (
+        system?.warnings && system.warnings.length > 0 ? (
           <div className="system-warning">
             <WarningCircle size={17} />
             <span>
@@ -194,9 +216,7 @@ function App() {
       }
     >
       <Suspense fallback={<div className="empty-state">正在加载页面…</div>}>
-        {page === "workbench" && (
-          <WorkbenchPage system={system} onNavigate={navigate} />
-        )}
+        {page === "workbench" && <WorkbenchPage onNavigate={navigate} />}
         {page === "task-create" && (
           <TaskCreatePage
             route={route}
@@ -297,12 +317,7 @@ function App() {
           </Suspense>
         )}
         {page === "analysis-dashboards" && (
-          <AnalysisDashboardPage
-            route={route}
-            onNavigate={navigate}
-            notify={notify}
-            userId={user.id}
-          />
+          <AnalysisDashboardPage route={route} notify={notify} userId={user.id} />
         )}
         {page === "settings" && (
           <SystemSettingsPage route={route} notify={notify} currentUser={user} />
@@ -324,20 +339,21 @@ function LoadingScreen() {
   );
 }
 
+/** @param {{onLogin: (user: CurrentUser) => void}} props */
 function LoginPage({ onLogin }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const submit = async (event) => {
+  const submit = async (/** @type {import("react").FormEvent} */ event) => {
     event.preventDefault();
     setSubmitting(true);
     setError("");
     try {
       onLogin(await api.login(email, password));
     } catch (requestError) {
-      setError(requestError.message);
+      setError(errorMessage(requestError));
     } finally {
       setSubmitting(false);
     }
@@ -418,6 +434,7 @@ function LoginPage({ onLogin }) {
   );
 }
 
+/** @param {{page: string, system: SystemStatus | null, onNavigate: Navigate}} props */
 export function Sidebar({ page, system, onNavigate }) {
   const activePage =
     page === "legacy-results"
@@ -483,6 +500,7 @@ export function Sidebar({ page, system, onNavigate }) {
   );
 }
 
+/** @param {{item: NavigationItem, active: boolean, badge?: number | null, onNavigate: Navigate}} props */
 function SidebarNavItem({
   item: { id, label, icon: Icon },
   active,
@@ -502,11 +520,12 @@ function SidebarNavItem({
         aria-hidden="true"
       />
       <span>{label}</span>
-      {badge > 0 && <em>{badge > 99 ? "99+" : badge}</em>}
+      {badge != null && badge > 0 && <em>{badge > 99 ? "99+" : badge}</em>}
     </button>
   );
 }
 
+/** @param {{user: CurrentUser, system: SystemStatus | null, onRefresh: () => Promise<void>, onNavigate: Navigate, onSearch: () => void, onLogout: () => void | Promise<void>}} props */
 export function Topbar({ user, system, onRefresh, onNavigate, onSearch, onLogout }) {
   return (
     <header className="topbar">
@@ -549,13 +568,16 @@ export function Topbar({ user, system, onRefresh, onNavigate, onSearch, onLogout
   );
 }
 
+/** @param {{onClose: () => void, onSelect: Navigate, notify: Notify}} props */
 function GlobalSearch({ onClose, onSelect, notify }) {
   const [query, setQuery] = useState("");
-  const [resources, setResources] = useState({
-    tasks: [],
-    datasets: [],
-    reviews: [],
-  });
+  const [resources, setResources] = useState(
+    /** @type {SearchResources} */ ({
+      tasks: [],
+      datasets: [],
+      reviews: [],
+    }),
+  );
   const [loading, setLoading] = useState(false);
   const { dialogRef, constrainFocus } = useDialogFocus({ open: true, onClose });
 
@@ -563,46 +585,53 @@ function GlobalSearch({ onClose, onSelect, notify }) {
     setLoading(true);
     Promise.all([api.tasks(), api.datasets(), api.reviews()])
       .then(([tasks, datasets, reviews]) => setResources({ tasks, datasets, reviews }))
-      .catch((error) => notify(error.message, "error"))
+      .catch((error) => notify(errorMessage(error), "error"))
       .finally(() => setLoading(false));
   }, [notify]);
 
+  /** @type {GlobalSearchItem[]} */
   const items = [
-    ...resources.tasks.map((task) => ({
-      id: task.id,
-      type: "任务",
-      icon: PlayCircle,
-      title: task.title,
-      meta: `${task.owner_name} · ${STATUS_LABELS[task.status] ?? task.status}`,
-      keywords: `${task.title} ${task.store} ${task.listing ?? ""} ${task.owner_name}`,
-      page: task.status === "completed" ? "legacy-results" : "analysis-tasks",
-      focus: {
-        kind: task.status === "completed" ? "result" : "task",
+    ...resources.tasks.map(
+      /** @returns {GlobalSearchItem} */ (task) => ({
         id: task.id,
-      },
-    })),
+        type: "任务",
+        icon: PlayCircle,
+        title: task.title,
+        meta: `${task.owner_name} · ${STATUS_LABELS[task.status] ?? task.status}`,
+        keywords: `${task.title} ${task.store} ${task.listing ?? ""} ${task.owner_name}`,
+        page: task.status === "completed" ? "legacy-results" : "analysis-tasks",
+        focus: {
+          kind: task.status === "completed" ? "result" : "task",
+          id: task.id,
+        },
+      }),
+    ),
     ...resources.datasets
       .filter((dataset) => dataset.kind === "products")
-      .map((dataset) => ({
-        id: dataset.id,
-        type: "产品信息",
-        icon: Database,
-        title: dataset.name,
-        meta: `v${dataset.current_version} · ${dataset.row_count.toLocaleString()} 行`,
-        keywords: `${dataset.name} ${dataset.description ?? ""} ${dataset.kind}`,
-        page: "data-assets",
-        focus: { kind: "dataset", id: dataset.id, datasetKind: dataset.kind },
-      })),
-    ...resources.reviews.map((review) => ({
-      id: review.id,
-      type: review.workflow_status === "pending" ? "待复核" : "已复核",
-      icon: ListChecks,
-      title: review.comment,
-      meta: `${review.task_title} · ${review.owner_name}`,
-      keywords: `${review.comment} ${review.task_title} ${review.owner_name}`,
-      page: "review",
-      focus: { kind: "review", id: review.id, status: review.workflow_status },
-    })),
+      .map(
+        /** @returns {GlobalSearchItem} */ (dataset) => ({
+          id: dataset.id,
+          type: "产品信息",
+          icon: Database,
+          title: dataset.name,
+          meta: `v${dataset.current_version} · ${dataset.row_count.toLocaleString()} 行`,
+          keywords: `${dataset.name} ${dataset.description ?? ""} ${dataset.kind}`,
+          page: "data-assets",
+          focus: { kind: "dataset", id: dataset.id, datasetKind: dataset.kind },
+        }),
+      ),
+    ...resources.reviews.map(
+      /** @returns {GlobalSearchItem} */ (review) => ({
+        id: review.id,
+        type: review.workflow_status === "pending" ? "待复核" : "已复核",
+        icon: ListChecks,
+        title: review.comment,
+        meta: `${review.task_title} · ${review.owner_name}`,
+        keywords: `${review.comment} ${review.task_title} ${review.owner_name}`,
+        page: "review",
+        focus: { kind: "review", id: review.id, status: review.workflow_status },
+      }),
+    ),
   ];
   const normalized = query.trim().toLowerCase();
   const matches = items

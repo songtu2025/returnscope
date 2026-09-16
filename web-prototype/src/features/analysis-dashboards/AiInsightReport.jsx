@@ -24,10 +24,19 @@ import {
   reasonSamples,
 } from "./AiInsightReportPresentation";
 
+/** @typedef {import("./analysisDashboardContracts").InsightReport} InsightReport */
+/** @typedef {import("./analysisDashboardContracts").Dashboard} Dashboard */
+/** @typedef {import("./analysisDashboardContracts").DashboardDecisionState} DashboardDecisionState */
+/** @typedef {import("./analysisDashboardContracts").DashboardVersion} DashboardVersion */
+/** @typedef {import("./analysisDashboardContracts").InsightReportEvidence} InsightReportEvidence */
+/** @typedef {import("./analysisDashboardContracts").LegacyInsightReportContent} LegacyInsightReportContent */
+/** @typedef {{report: InsightReport | null, reports: InsightReport[], attempts?: InsightReport[], latestReport: InsightReport | null, dashboard: Dashboard, version: DashboardVersion | null, onGenerate: () => void | Promise<void>, onRetry: () => void | Promise<void>, onSelect: (reportId: string) => void, selectedIssueId: string, decisionState: DashboardDecisionState, onDecision: (issueId: string, status: string) => void | Promise<void>, onSelectIssue: (issueId: string) => void}} AiInsightReportProps */
+
+/** @param {AiInsightReportProps} props */
 export function AiInsightReport({
   report,
   reports,
-  attempts = [],
+  attempts = /** @type {InsightReport[]} */ ([]),
   latestReport,
   dashboard,
   version,
@@ -77,8 +86,8 @@ export function AiInsightReport({
     );
   }
 
-  const content = report.content ?? {};
-  const evidence = report.evidence ?? {};
+  const content = /** @type {LegacyInsightReportContent} */ (report.content ?? {});
+  const evidence = /** @type {InsightReportEvidence} */ (report.evidence ?? {});
   const analysis = evidence.analysis ?? {};
   const source = evidence.source ?? {};
   const catalog = evidence.catalog ?? {};
@@ -121,13 +130,13 @@ export function AiInsightReport({
   const decisionReadiness = report.quality_gate?.decision_readiness;
   const inputTokens = number(report.usage?.input_tokens);
   const outputTokens = number(report.usage?.output_tokens);
-  const actionOrder = {
+  const actionOrder = /** @type {Record<string, number>} */ ({
     "action.mapping": 0,
     "action.diagnostic": 1,
     "action.text_quality": 2,
     "action.information": 3,
     "action.scope": 4,
-  };
+  });
   const actions = [...(content.actions ?? [])].sort((left, right) => {
     const priorityDifference =
       { P0: 0, P1: 1, P2: 2 }[left.priority] - { P0: 0, P1: 1, P2: 2 }[right.priority];
@@ -137,6 +146,7 @@ export function AiInsightReport({
   });
   const [primaryAction, ...followupActions] = actions;
 
+  /** @param {string} id */
   const scrollTo = (id) => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
   };

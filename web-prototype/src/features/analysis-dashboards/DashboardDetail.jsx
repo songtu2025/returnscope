@@ -28,39 +28,98 @@ import {
   preferredInsightModel,
 } from "./insightModelOptions";
 
+/** @typedef {import("./analysisDashboardContracts").Dashboard} Dashboard */
+/** @typedef {import("./analysisDashboardContracts").DashboardVersion} DashboardVersion */
+/** @typedef {import("./analysisDashboardContracts").ReportDecision} ReportDecision */
+/** @typedef {import("./analysisDashboardContracts").InsightReport} InsightReport */
+/** @typedef {import("./analysisDashboardContracts").InsightModel} InsightModel */
+/** @typedef {import("./analysisDashboardContracts").DashboardContentData} DashboardContentData */
+/** @typedef {import("./analysisDashboardContracts").DashboardContentState} DashboardContentState */
+/** @typedef {import("./analysisDashboardContracts").DashboardRecord} DashboardRecord */
+/** @typedef {import("./analysisDashboardContracts").DashboardRoute} DashboardDetailRoute */
+
+/**
+ * @typedef {Object} DashboardDetailProps
+ * @property {DashboardDetailRoute} route
+ * @property {import("./analysisDashboardContracts").UpdateDashboardRoute} updateRoute
+ * @property {import("./analysisDashboardContracts").DashboardNotify} notify
+ * @property {string} userId
+ */
+
+/** @param {unknown} error */
+function errorName(error) {
+  return error instanceof Error ? error.name : "";
+}
+
+/** @param {unknown} error */
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** @param {InsightReport} report */
+function decisionIssues(report) {
+  const content = report.content;
+  return content && "issues" in content && Array.isArray(content.issues)
+    ? content.issues
+    : [];
+}
+
+/** @param {DashboardDetailProps} props */
 export function DashboardDetail({ route, updateRoute, notify, userId }) {
-  const [main, setMain] = useState({
-    loading: true,
-    error: "",
-    dashboard: null,
-    versions: [],
-  });
-  const [content, setContent] = useState({ loading: true, error: "", data: null });
-  const [reports, setReports] = useState({ loading: false, error: "", items: [] });
+  const [main, setMain] = useState(
+    /** @returns {{loading: boolean, error: string, dashboard: Dashboard | null, versions: DashboardVersion[]}} */ () => ({
+      loading: true,
+      error: "",
+      dashboard: null,
+      versions: [],
+    }),
+  );
+  const [content, setContent] = useState(
+    /** @returns {DashboardContentState} */ () => ({
+      loading: true,
+      error: "",
+      data: null,
+    }),
+  );
+  const [reports, setReports] = useState(
+    /** @returns {{loading: boolean, error: string, items: InsightReport[]}} */ () => ({
+      loading: false,
+      error: "",
+      items: [],
+    }),
+  );
   const [decisionState, setDecisionState] = useState({
     issueId: "",
     loading: false,
     error: "",
   });
   const [generationOpen, setGenerationOpen] = useState(false);
-  const [generationState, setGenerationState] = useState({
-    loading: false,
-    submitting: false,
-    error: "",
-    models: [],
-  });
+  const [generationState, setGenerationState] = useState(
+    /** @returns {{loading: boolean, submitting: boolean, error: string, models: InsightModel[]}} */ () => ({
+      loading: false,
+      submitting: false,
+      error: "",
+      models: [],
+    }),
+  );
   const [generationForm, setGenerationForm] = useState({
     modelId: "",
     effort: "high",
   });
-  const [selectedRecord, setSelectedRecord] = useState(null);
+  const [selectedRecord, setSelectedRecord] = useState(
+    /** @returns {DashboardRecord | null} */ () => null,
+  );
   const [showDataInfo, setShowDataInfo] = useState(false);
+  /** @type {import("react").RefObject<HTMLElement | null>} */
   const evidenceTriggerRef = useRef(null);
   const mainGenerationRef = useRef(0);
+  /** @type {import("react").RefObject<AbortController | null>} */
   const mainControllerRef = useRef(null);
   const contentGenerationRef = useRef(0);
+  /** @type {import("react").RefObject<AbortController | null>} */
   const contentControllerRef = useRef(null);
   const reportGenerationRef = useRef(0);
+  /** @type {import("react").RefObject<AbortController | null>} */
   const reportControllerRef = useRef(null);
 
   const loadMain = useCallback(async () => {
@@ -71,6 +130,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
     mainControllerRef.current = controller;
     setMain((current) => ({ ...current, loading: true, error: "" }));
     try {
+      /** @type {[Dashboard, DashboardVersion[] | {items?: DashboardVersion[]}]} */
       const [dashboard, versionsResponse] = await Promise.all([
         dashboardApi.analysisDashboard(route.dashboardId, route.versionId, {
           signal: controller.signal,
@@ -80,6 +140,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
         }),
       ]);
       if (mainGenerationRef.current !== generation) return;
+      /** @type {DashboardVersion[]} */
       const versions = asItems(versionsResponse);
       setMain({ loading: false, error: "", dashboard, versions });
       const selectedVersionId =
@@ -90,8 +151,15 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
         updateRoute({ versionId: selectedVersionId }, { replace: true });
       }
     } catch (error) {
-      if (mainGenerationRef.current === generation && error.name !== "AbortError") {
-        setMain((current) => ({ ...current, loading: false, error: error.message }));
+      if (
+        mainGenerationRef.current === generation &&
+        errorName(error) !== "AbortError"
+      ) {
+        setMain((current) => ({
+          ...current,
+          loading: false,
+          error: errorMessage(error),
+        }));
       }
     }
   }, [route.dashboardId, route.versionId, updateRoute]);
@@ -145,27 +213,39 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
     contentControllerRef.current = controller;
     setContent((current) => ({ ...current, loading: true, error: "" }));
     try {
+      /** @type {DashboardContentData} */
       let data;
       if (route.tab === "source") {
-        data = await dashboardApi.analysisDashboardSources(
-          route.dashboardId,
-          route.versionId,
-          { signal: controller.signal },
+        data = /** @type {DashboardContentData} */ (
+          await dashboardApi.analysisDashboardSources(
+            route.dashboardId,
+            route.versionId,
+            { signal: controller.signal },
+          )
         );
       } else {
-        data = await dashboardApi.analysisDashboardInsights(
-          route.dashboardId,
-          route.versionId,
-          filters,
-          { signal: controller.signal },
+        data = /** @type {DashboardContentData} */ (
+          await dashboardApi.analysisDashboardInsights(
+            route.dashboardId,
+            route.versionId,
+            filters,
+            { signal: controller.signal },
+          )
         );
       }
       if (contentGenerationRef.current === generation) {
         setContent({ loading: false, error: "", data });
       }
     } catch (error) {
-      if (contentGenerationRef.current === generation && error.name !== "AbortError") {
-        setContent((current) => ({ ...current, loading: false, error: error.message }));
+      if (
+        contentGenerationRef.current === generation &&
+        errorName(error) !== "AbortError"
+      ) {
+        setContent((current) => ({
+          ...current,
+          loading: false,
+          error: errorMessage(error),
+        }));
       }
     }
   }, [filters, route.dashboardId, route.tab, route.versionId]);
@@ -197,11 +277,19 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
         { signal: controller.signal },
       );
       if (reportGenerationRef.current !== generation) return;
+      /** @type {InsightReport[]} */
       const reportItems = asItems(items);
       setReports({ loading: false, error: "", items: reportItems });
     } catch (error) {
-      if (reportGenerationRef.current === generation && error.name !== "AbortError") {
-        setReports((current) => ({ ...current, loading: false, error: error.message }));
+      if (
+        reportGenerationRef.current === generation &&
+        errorName(error) !== "AbortError"
+      ) {
+        setReports((current) => ({
+          ...current,
+          loading: false,
+          error: errorMessage(error),
+        }));
       }
     }
   }, [route.dashboardId, route.tab, route.versionId]);
@@ -232,7 +320,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
     const issues =
       selectedReport.prompt_version === "ai-return-insight-v6" &&
       selectedReport.status === "completed"
-        ? (selectedReport.content?.issues ?? [])
+        ? decisionIssues(selectedReport)
         : [];
     const issueId =
       issues.find((issue) => issue.id === route.issueId)?.id || issues[0]?.id || "";
@@ -273,9 +361,6 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
     return () => window.clearInterval(timer);
   }, [activeReportId, notify]);
 
-  if (main.loading && !main.dashboard) {
-    return <DashboardDetailLoading />;
-  }
   if (main.error) {
     return (
       <DashboardDetailError
@@ -284,6 +369,9 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
         onReload={loadMain}
       />
     );
+  }
+  if (!main.dashboard) {
+    return <DashboardDetailLoading />;
   }
 
   const dashboard = main.dashboard;
@@ -311,6 +399,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
     const configs = configResult.status === "fulfilled" ? configResult.value : [];
     const preference =
       preferenceResult.status === "fulfilled" ? preferenceResult.value : null;
+    /** @type {InsightModel[]} */
     const models = insightModels(configs);
     const modelId = preferredInsightModel(configs, models, preference);
     const model = models.find((item) => item.id === modelId);
@@ -320,15 +409,17 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
       submitting: false,
       error:
         configResult.status === "rejected"
-          ? configResult.reason?.message || "无法读取可用模型"
+          ? errorMessage(configResult.reason) || "无法读取可用模型"
           : "",
       models,
     });
   };
+  /** @param {import("react").FormEvent<HTMLFormElement>} event */
   const submitReportGeneration = async (event) => {
     event.preventDefault();
     setGenerationState((current) => ({ ...current, submitting: true, error: "" }));
     try {
+      /** @type {InsightReport} */
       const report = await dashboardApi.createAnalysisDashboardInsightReport(
         route.dashboardId,
         route.versionId,
@@ -349,13 +440,14 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
       setGenerationState((current) => ({
         ...current,
         submitting: false,
-        error: error.message,
+        error: errorMessage(error),
       }));
     }
   };
   const retryReport = async () => {
     if (!selectedReport) return;
     try {
+      /** @type {InsightReport} */
       const report = await dashboardApi.retryInsightReport(selectedReport.id);
       setReports((current) => ({
         ...current,
@@ -364,13 +456,18 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
       updateRoute({ reportId: report.id, issueId: "" }, { replace: true });
       notify?.("新的生成尝试已加入队列，原失败记录已保留");
     } catch (error) {
-      setReports((current) => ({ ...current, error: error.message }));
+      setReports((current) => ({ ...current, error: errorMessage(error) }));
     }
   };
+  /**
+   * @param {string} issueId
+   * @param {string} status
+   */
   const setIssueDecision = async (issueId, status) => {
     if (!selectedReport) return;
     setDecisionState({ issueId, loading: true, error: "" });
     try {
+      /** @type {ReportDecision} */
       const decision = await dashboardApi.setInsightReportIssueDecision(
         selectedReport.id,
         issueId,
@@ -389,7 +486,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
       setDecisionState({ issueId: "", loading: false, error: "" });
       notify?.("问题状态已更新");
     } catch (error) {
-      setDecisionState({ issueId, loading: false, error: error.message });
+      setDecisionState({ issueId, loading: false, error: errorMessage(error) });
     }
   };
   const reportSummary =
@@ -420,22 +517,23 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
           })
         }
         onToggleDataInfo={() => setShowDataInfo((visible) => !visible)}
-        onSelectVersion={(versionId) =>
-          updateRoute({
-            versionId,
-            reportId: "",
-            issueId: "",
-            tab: "overview",
-            recordPage: 1,
-            problem: "",
-            labelGroup: "",
-            listing: "",
-            productName: "",
-            productSku: "",
-            orderId: "",
-            dateFrom: "",
-            dateTo: "",
-          })
+        onSelectVersion={
+          /** @param {string} versionId */ (versionId) =>
+            updateRoute({
+              versionId,
+              reportId: "",
+              issueId: "",
+              tab: "overview",
+              recordPage: 1,
+              problem: "",
+              labelGroup: "",
+              listing: "",
+              productName: "",
+              productSku: "",
+              orderId: "",
+              dateFrom: "",
+              dateTo: "",
+            })
         }
         onShowSources={() => updateRoute({ tab: "source" })}
         onShowHistory={() => updateRoute({ tab: "history" })}
@@ -459,7 +557,10 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
         currentVersionId={currentVersionId}
         decisionState={decisionState}
         onReloadContent={loadContent}
-        onEvidence={(record, trigger) => {
+        onEvidence={(
+          /** @type {DashboardRecord} */ record,
+          /** @type {HTMLElement | null} */ trigger,
+        ) => {
           evidenceTriggerRef.current = trigger;
           setSelectedRecord(record);
         }}
@@ -467,11 +568,18 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
         onOpenReportGeneration={openReportGeneration}
         onRetryReport={retryReport}
         onIssueDecision={setIssueDecision}
-        onSelectIssue={(issueId) => updateRoute({ issueId }, { replace: true })}
-        onSelectReport={(reportId) =>
-          updateRoute({ reportId, issueId: "" }, { replace: true })
+        onSelectIssue={
+          /** @param {string} issueId */ (issueId) =>
+            updateRoute({ issueId }, { replace: true })
         }
-        onSelectVersion={(versionId) => updateRoute({ versionId, tab: "history" })}
+        onSelectReport={
+          /** @param {string} reportId */ (reportId) =>
+            updateRoute({ reportId, issueId: "" }, { replace: true })
+        }
+        onSelectVersion={
+          /** @param {string} versionId */ (versionId) =>
+            updateRoute({ versionId, tab: "history" })
+        }
       />
 
       {selectedRecord && (

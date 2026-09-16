@@ -1,3 +1,6 @@
+/** @typedef {import("./taskPlanContracts").TaskExecutionPlan} TaskExecutionPlan */
+
+/** @param {TaskExecutionPlan | null | undefined} plan */
 export function taskPlanCounts(plan) {
   const unique = Number(plan?.unique_comment_count || 0);
   const executable = Number(plan?.executable_count || 0);

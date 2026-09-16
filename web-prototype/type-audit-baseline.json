@@ -1,0 +1,8 @@
+{
+  "expectedErrors": 0,
+  "protectedPaths": [
+    "src/shared/api/generated/classification-results",
+    "src/shared/api/resultApi.ts",
+    "src/features/classification-results"
+  ]
+}

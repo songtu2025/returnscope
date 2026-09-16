@@ -5,6 +5,13 @@ import {
 } from "../task-planning/ExecutionPlanSummary";
 import { classNames } from "../../lib/presentation";
 
+/** @typedef {import("./taskCreateContracts").TaskPreflightState} TaskPreflightState */
+/** @typedef {import("../task-planning/taskPlanContracts").TaskDataQuality} TaskDataQuality */
+/** @typedef {import("../task-planning/taskPlanContracts").TaskPlanCounts} TaskPlanCounts */
+/**
+ * @param {{preflight: TaskPreflightState, onRetryPreflight: () => void | Promise<unknown>, categoryCompletionRequired: boolean, blocked: boolean, countMismatch: boolean, noExecutable: boolean, partialPlan: boolean, planCounts: TaskPlanCounts, dataQuality: TaskDataQuality | null, unresolvedPolicy: string, onPolicyChange: (policy: string) => void, onResolveCategories: () => void, segmentOrder: string[], onSegmentOrderChange: (order: string[]) => void, requiresScopeConfirmation: boolean, scopeConfirmed: boolean, onScopeConfirmationChange: (confirmed: boolean) => void}} props
+ */
+
 export function TaskPlanReviewStep({
   preflight,
   onRetryPreflight,

@@ -13,6 +13,20 @@ import { ClassificationStandardVersionHistory } from "./ClassificationStandardVe
 import { contentFromClassificationStandardSnapshot } from "./classificationStandardContent";
 import { labelChanges } from "./labelDraftPolicy";
 
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardDetail} ClassificationStandardDetail */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardDraft} ClassificationStandardDraft */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardEditableContent} ClassificationStandardEditableContent */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardValidationIssue} ClassificationStandardValidationIssue */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardValidationRunDetail} ClassificationStandardValidationRunDetail */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardValidationRunSummary} ClassificationStandardValidationRunSummary */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardValidationSource} ClassificationStandardValidationSource */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardVersion} ClassificationStandardVersion */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ReadableRecognitionProfile} ReadableRecognitionProfile */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ValidationSampleSize} ValidationSampleSize */
+/** @typedef {import("./classificationStandardContent").ClassificationStandardFieldErrors} ClassificationStandardFieldErrors */
+/** @typedef {{initiallyEditing: boolean, versions: ClassificationStandardVersion[], notify: (message: string, tone?: string) => void, onDelete: () => void, onRestore: (version: ClassificationStandardVersion) => void, savedContent: ClassificationStandardEditableContent | null, focusLabelCode?: string, isNew: boolean, detail: ClassificationStandardDetail | null, draft: ClassificationStandardDraft | null, content: ClassificationStandardEditableContent, changeReason: string, busy: string, dirty: boolean, validationSources: ClassificationStandardValidationSource[], validationRuns: ClassificationStandardValidationRunSummary[], selectedValidation: ClassificationStandardValidationRunDetail | null, validationSourceId: string, validationSampleSize: ValidationSampleSize, fieldErrors: Partial<ClassificationStandardFieldErrors>, validationAttempt: number, onContentChange: (content: ClassificationStandardEditableContent, field?: string) => void, onReasonChange: (reason: string) => void, onSave: () => void | Promise<void>, onPublish: () => void | Promise<void>, onBack: () => void, onValidationSourceChange: (sourceId: string) => void, onValidationSampleSizeChange: (size: ValidationSampleSize) => void, onValidationRun: (file: File | null, comparisonType?: string) => void | Promise<void>, onValidationApprove: (runId: string, note: string) => void | Promise<void>, onImport: (event: import("react").ChangeEvent<HTMLInputElement>) => void | Promise<void>, onPrepareExcel: () => Promise<ClassificationStandardDraft>, onApplyExcel: (content: ClassificationStandardEditableContent, filename: string) => void, onValidationSelect: (runId: string) => void | Promise<void>}} ClassificationStandardWorkspaceProps */
+
+/** @param {ClassificationStandardWorkspaceProps} props */
 export function ClassificationStandardWorkspace({
   initiallyEditing,
   versions,
@@ -51,7 +65,10 @@ export function ClassificationStandardWorkspace({
 }) {
   const [section, setSection] = useState(isNew ? "settings" : "labels");
   const [confirmBack, setConfirmBack] = useState(false);
-  const [fixRequest, setFixRequest] = useState(null);
+  const [fixRequest, setFixRequest] = useState(
+    /** @type {ClassificationStandardValidationIssue | null} */ (null),
+  );
+  /** @param {ClassificationStandardValidationIssue} issue */
   const fixIssue = (issue) => {
     setSection(
       issue.kind === "invalid_rule" ||
@@ -73,7 +90,10 @@ export function ClassificationStandardWorkspace({
   const changes = labelChanges(content.labels, baseContent?.labels).filter(
     (entry) => entry.status !== "未修改",
   );
-  const settingsChanges = Object.keys(content).filter(
+  const contentKeys = /** @type {(keyof ClassificationStandardEditableContent)[]} */ (
+    Object.keys(content)
+  );
+  const settingsChanges = contentKeys.filter(
     (key) =>
       key !== "labels" &&
       JSON.stringify(content[key]) !== JSON.stringify(baseContent?.[key]),
@@ -205,7 +225,12 @@ export function ClassificationStandardWorkspace({
               disabled={!editable}
               value={content.recognition_profile ?? "legacy_v3"}
               onChange={(event) =>
-                onContentChange({ ...content, recognition_profile: event.target.value })
+                onContentChange({
+                  ...content,
+                  recognition_profile: /** @type {ReadableRecognitionProfile} */ (
+                    event.target.value
+                  ),
+                })
               }
             >
               <option value="legacy_v3">现有策略 · 定义与关键词</option>
@@ -283,39 +308,41 @@ export function ClassificationStandardWorkspace({
                 <p>{label.description || "依据标签名称和完整路径理解"}</p>
                 {status === "已修改" && (
                   <div>
-                    <span>原搜索别名：{before.keywords?.join("、") || "无"}</span>
+                    <span>原搜索别名：{before?.keywords?.join("、") || "无"}</span>
                     <span>新搜索别名：{label.keywords?.join("、") || "无"}</span>
                   </div>
                 )}
-                {[
-                  ["原", before],
-                  ["新", status === "拟停用" ? null : label],
-                ].map(
-                  ([title, value]) =>
-                    value &&
-                    Boolean(
-                      before?.exclusions?.length ||
-                      before?.examples?.length ||
-                      label.exclusions?.length ||
-                      label.examples?.length,
-                    ) && (
-                      <div key={title}>
-                        <span>
-                          {title}排除说明：{value.exclusions?.join("；") || "无"}
-                        </span>
-                        <span>
-                          {title}判定示例：{value.examples?.length ? "" : "无"}
-                        </span>
-                        {value.examples?.map((example, index) => (
-                          <p key={index}>
-                            {example.applies ? "适用" : "不适用"}
-                            {example.sentiment ? ` · ${example.sentiment}` : ""}：
-                            {example.text} — {example.explanation}
-                          </p>
-                        ))}
-                      </div>
-                    ),
-                )}
+                {
+                  /** @type {[string, import("../../shared/api/classificationStandardContracts").ClassificationStandardEditableLabel | null | undefined][]} */ ([
+                    ["原", before],
+                    ["新", status === "拟停用" ? null : label],
+                  ]).map(
+                    ([title, value]) =>
+                      value &&
+                      Boolean(
+                        before?.exclusions?.length ||
+                        before?.examples?.length ||
+                        label.exclusions?.length ||
+                        label.examples?.length,
+                      ) && (
+                        <div key={title}>
+                          <span>
+                            {title}排除说明：{value.exclusions?.join("；") || "无"}
+                          </span>
+                          <span>
+                            {title}判定示例：{value.examples?.length ? "" : "无"}
+                          </span>
+                          {value.examples?.map((example, index) => (
+                            <p key={index}>
+                              {example.applies ? "适用" : "不适用"}
+                              {example.sentiment ? ` · ${example.sentiment}` : ""}：
+                              {example.text} — {example.explanation}
+                            </p>
+                          ))}
+                        </div>
+                      ),
+                  )
+                }
               </article>
             ))
           ) : (
@@ -327,7 +354,7 @@ export function ClassificationStandardWorkspace({
               标签校验规则有变化，请检查相关语义边界、分类指令与 Listing 承诺配置。
             </p>
           )}
-          {!dirty && draft?.validation.blocking?.length > 0 && (
+          {!dirty && draft && draft.validation.blocking.length > 0 && (
             <ClassificationStructureIssues
               validation={draft.validation}
               content={content}

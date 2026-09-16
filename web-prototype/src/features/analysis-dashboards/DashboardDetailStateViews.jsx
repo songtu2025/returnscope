@@ -10,6 +10,7 @@ export function DashboardDetailLoading() {
   );
 }
 
+/** @param {{error: string, onBack: () => void, onReload: () => void | Promise<void>}} props */
 export function DashboardDetailError({ error, onBack, onReload }) {
   return (
     <div className="standard-page analysis-dashboard-page">

@@ -13,11 +13,15 @@
     "check:dead-code": "knip --no-progress --include files,dependencies,unlisted,unresolved",
     "check:duplicates": "jscpd src ../web_backend ../return_semantics ../return_analysis --min-lines 20 --min-tokens 100 --threshold 0.5 --reporters console",
     "check:cycles": "knip --no-progress --include cycles",
+    "generate:api-types": "node scripts/generate-api-types.mjs",
+    "check:api-types": "node scripts/generate-api-types.mjs --check",
     "audit:types": "tsc -p jsconfig.quality.json --pretty false",
+    "report:types": "node scripts/type-audit.mjs report",
+    "check:type-budget": "node scripts/type-audit.mjs check",
     "audit:exports": "knip --no-progress --include exports",
     "test": "vitest run",
     "test:sites": "node --test tests/sites-worker.test.mjs",
-    "quality": "npm run lint && npm run format:check && npm run check:dead-code && npm run check:duplicates && npm run check:cycles && npm test && npm run build && npm run test:sites"
+    "quality": "npm run check:api-types && npm run check:type-budget && npm run lint && npm run format:check && npm run check:dead-code && npm run check:duplicates && npm run check:cycles && npm test && npm run build && npm run test:sites"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
@@ -30,12 +34,14 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
+    "@hey-api/openapi-ts": "0.99.0",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.3",
     "@types/node": "^26.5.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
+    "@typescript/native": "npm:typescript@7.0.2",
     "eslint": "^9.39.5",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
@@ -45,7 +51,10 @@
     "jsdom": "^29.1.1",
     "knip": "^6.35.1",
     "prettier": "^3.9.6",
-    "typescript": "^7.0.2",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
     "vitest": "^4.1.10"
+  },
+  "overrides": {
+    "js-yaml": "4.3.2"
   }
 }

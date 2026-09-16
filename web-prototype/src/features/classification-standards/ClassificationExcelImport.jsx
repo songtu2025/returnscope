@@ -3,11 +3,33 @@ import { Modal } from "../../components/SharedUi";
 import { classificationStandardApi } from "../../shared/api/classificationStandardApi";
 import { taxonomyPath } from "../../lib/taxonomyPresentation";
 
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardDraft} ClassificationStandardDraft */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardDraftContent} ClassificationStandardDraftContent */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardExcelColumns} ClassificationStandardExcelColumns */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardExcelPreview} ClassificationStandardExcelPreview */
+/** @typedef {{file: File, draftId: string, data: ClassificationStandardExcelPreview, sheet: string, columns: Required<ClassificationStandardExcelColumns>}} ClassificationExcelImportState */
+/** @typedef {{prepareDraft: () => Promise<ClassificationStandardDraft>, onApply: (content: ClassificationStandardDraftContent, filename: string) => void, disabled: boolean}} ClassificationExcelImportProps */
+
+/** @type {["source_label_column" | "sentiment_column", string][]} */
+const OPTIONAL_COLUMN_FIELDS = [
+  ["source_label_column", "原始说法列"],
+  ["sentiment_column", "评价方向列"],
+];
+
+/** @param {unknown} cause */
+function errorMessage(cause) {
+  return cause instanceof Error ? cause.message : "读取 Excel 失败";
+}
+
+/** @param {ClassificationExcelImportProps} props */
 export function ClassificationExcelImport({ prepareDraft, onApply, disabled }) {
-  const [state, setState] = useState(null);
+  const [state, setState] = useState(
+    /** @type {ClassificationExcelImportState | null} */ (null),
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const generation = useRef(0);
+  /** @param {import("react").ChangeEvent<HTMLInputElement>} event */
   const load = async (event) => {
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -34,12 +56,14 @@ export function ClassificationExcelImport({ prepareDraft, onApply, disabled }) {
           },
         });
     } catch (cause) {
-      setError(cause.message);
+      setError(errorMessage(cause));
     } finally {
       setBusy(false);
     }
   };
+  /** @param {string} sheet */
   const changeSheet = async (sheet) => {
+    if (!state) return;
     setBusy(true);
     setError("");
     try {
@@ -68,12 +92,13 @@ export function ClassificationExcelImport({ prepareDraft, onApply, disabled }) {
         },
       });
     } catch (cause) {
-      setError(cause.message);
+      setError(errorMessage(cause));
     } finally {
       setBusy(false);
     }
   };
   const preview = async () => {
+    if (!state) return;
     setBusy(true);
     setError("");
     try {
@@ -85,13 +110,16 @@ export function ClassificationExcelImport({ prepareDraft, onApply, disabled }) {
       );
       setState({ ...state, data });
     } catch (cause) {
-      setError(cause.message);
+      setError(errorMessage(cause));
     } finally {
       setBusy(false);
     }
   };
-  const updateColumns = (columns) =>
+  /** @param {Required<ClassificationStandardExcelColumns>} columns */
+  const updateColumns = (columns) => {
+    if (!state) return;
     setState({ ...state, columns, data: { ...state.data, content: null } });
+  };
   const content = state?.data.content;
   const blocked = state?.data.issues?.some((item) => item.severity === "blocking");
   return (
@@ -133,11 +161,8 @@ export function ClassificationExcelImport({ prepareDraft, onApply, disabled }) {
                 >
                   <option value="">请选择工作表</option>
                   {state.data.sheets.map((sheet) => (
-                    <option
-                      key={typeof sheet === "string" ? sheet : sheet.name}
-                      value={typeof sheet === "string" ? sheet : sheet.name}
-                    >
-                      {typeof sheet === "string" ? sheet : sheet.name}
+                    <option key={sheet} value={sheet}>
+                      {sheet}
                     </option>
                   ))}
                 </select>
@@ -193,10 +218,7 @@ export function ClassificationExcelImport({ prepareDraft, onApply, disabled }) {
                   >
                     增加层级列
                   </button>
-                  {[
-                    ["source_label_column", "原始说法列"],
-                    ["sentiment_column", "评价方向列"],
-                  ].map(([field, label]) => (
+                  {OPTIONAL_COLUMN_FIELDS.map(([field, label]) => (
                     <label key={field}>
                       {label}
                       <select
@@ -251,7 +273,7 @@ export function ClassificationExcelImport({ prepareDraft, onApply, disabled }) {
                       {content.import_sources.map((source, index) => (
                         <p key={index}>
                           第 {source.row} 行：{source.source_label || "未指定原始说法"}{" "}
-                          → {source.path.join(" → ")}；原方向：
+                          → {source.path?.join(" → ") || "未识别路径"}；原方向：
                           {source.source_sentiment || "空白"}
                         </p>
                       ))}
@@ -271,10 +293,10 @@ export function ClassificationExcelImport({ prepareDraft, onApply, disabled }) {
                 ))}
               </div>
             )}
-            {state.data.validation?.blocking?.length > 0 && (
+            {Boolean(state.data.validation?.blocking?.length) && (
               <div className="taxonomy-import-issues">
                 <b>采用后仍需完成以下发布检查</b>
-                {state.data.validation.blocking.map((message, index) => (
+                {state.data.validation?.blocking?.map((message, index) => (
                   <p key={index}>{message}</p>
                 ))}
               </div>
@@ -293,6 +315,7 @@ export function ClassificationExcelImport({ prepareDraft, onApply, disabled }) {
                 className="primary-button"
                 disabled={busy || !content || blocked}
                 onClick={() => {
+                  if (!content) return;
                   onApply(content, state.file.name);
                   setState(null);
                 }}

@@ -17,6 +17,19 @@ import {
 } from "./AiInsightReportPresentation";
 import { dashboardVersionNumber } from "./dashboardFields";
 
+/** @typedef {import("./analysisDashboardContracts").Dashboard} Dashboard */
+/** @typedef {import("./analysisDashboardContracts").DashboardVersion} DashboardVersion */
+/** @typedef {import("./analysisDashboardContracts").InsightEvidenceCatalog} InsightEvidenceCatalog */
+/** @typedef {import("./analysisDashboardContracts").InsightReport} InsightReport */
+/** @typedef {import("./analysisDashboardContracts").InsightReportSource} InsightReportSource */
+/** @typedef {import("./analysisDashboardContracts").InsightReason} InsightReason */
+/** @typedef {import("./analysisDashboardContracts").InsightSummary} InsightSummary */
+/** @typedef {import("./analysisDashboardContracts").LegacyInsightReportContent} LegacyInsightReportContent */
+/** @typedef {import("./analysisDashboardContracts").ReportDataQuality} ReportDataQuality */
+/** @typedef {import("./analysisDashboardContracts").ReportFinding} ReportFinding */
+/** @typedef {import("./analysisDashboardContracts").ReportReadiness} ReportReadiness */
+
+/** @param {{report: InsightReport, reports: InsightReport[], dashboard: Dashboard, version: DashboardVersion | null, content: LegacyInsightReportContent, source: InsightReportSource, qualityStatus?: string, decisionReadiness?: ReportReadiness, onSelect: (reportId: string) => void}} props */
 export function ReportCover({
   report,
   reports,
@@ -76,6 +89,7 @@ export function ReportCover({
   );
 }
 
+/** @param {{scrollTo: (id: string) => void}} props */
 export function ReportChapterNavigation({ scrollTo }) {
   return (
     <nav className="ai-report-chapters" aria-label="报告目录">
@@ -87,6 +101,7 @@ export function ReportChapterNavigation({ scrollTo }) {
   );
 }
 
+/** @param {{content: LegacyInsightReportContent, summary: InsightSummary, source: InsightReportSource, productMapping: ReportDataQuality, textQuality: ReportDataQuality}} props */
 export function ReportExecutiveSummary({
   content,
   summary,
@@ -143,6 +158,7 @@ export function ReportExecutiveSummary({
   );
 }
 
+/** @param {{structureFinding?: ReportFinding, groups: InsightReason[], primaryGroup?: InsightReason, maxGroupCount: number, catalog: InsightEvidenceCatalog}} props */
 export function ReportStructureSection({
   structureFinding,
   groups,

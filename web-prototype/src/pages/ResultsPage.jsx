@@ -43,10 +43,33 @@ const EMPTY_FILTERS = {
   claim_relation: "",
 };
 
+/** @typedef {import("../app/navigation").Navigate} Navigate */
+/** @typedef {import("../features/task-runtime/taskRuntimeContracts").AnalysisTask & {result_version?: number, completed_at?: string}} AnalysisResultTask */
+/** @typedef {import("../shared/api/legacyAnalysisContracts").LegacyAnalysis} LegacyAnalysis */
+/** @typedef {import("../shared/api/legacyAnalysisContracts").AnalysisMetrics} AnalysisMetrics */
+/** @typedef {import("../shared/api/legacyAnalysisContracts").AnalysisProblemLabel} AnalysisProblemLabel */
+/** @typedef {{kind: "result", id: string, listing?: string}} ResultsFocus */
+/** @typedef {{notify: (message: string, tone?: string) => void, onNavigate: Navigate, focus?: ResultsFocus | null}} ResultsPageProps */
+
+const resultsApi = {
+  tasks: () => /** @type {Promise<AnalysisResultTask[]>} */ (api.tasks()),
+  /** @param {string} id */
+  task: (id) => /** @type {Promise<AnalysisResultTask>} */ (api.task(id)),
+  /** @param {string} id @param {Record<string, string | number>} query @param {RequestInit} options */
+  analysis: (id, query, options) =>
+    /** @type {Promise<LegacyAnalysis>} */ (api.analysis(id, query, options)),
+};
+
+/** @param {unknown} error */
+function errorMessage(error) {
+  return error instanceof Error ? error.message : "请求失败";
+}
+
+/** @param {ResultsPageProps} props */
 export function ResultsPage({ notify, onNavigate, focus = null }) {
-  const [tasks, setTasks] = useState([]);
-  const [selectedId, setSelectedId] = useState(null);
-  const [analysis, setAnalysis] = useState(null);
+  const [tasks, setTasks] = useState(/** @type {AnalysisResultTask[]} */ ([]));
+  const [selectedId, setSelectedId] = useState(/** @type {string | null} */ (null));
+  const [analysis, setAnalysis] = useState(/** @type {LegacyAnalysis | null} */ (null));
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [dimension, setDimension] = useState("listing");
   const [focusProblem, setFocusProblem] = useState("");
@@ -59,14 +82,14 @@ export function ResultsPage({ notify, onNavigate, focus = null }) {
     let active = true;
     const loadTasks = async () => {
       try {
-        const values = await api.tasks();
+        const values = await resultsApi.tasks();
         const completed = values.filter(
           (task) =>
             task.status === "completed" ||
             (task.status === "cancelled" && task.result_file_path),
         );
         if (focus?.id && !completed.some((task) => task.id === focus.id)) {
-          const focusedTask = await api.task(focus.id);
+          const focusedTask = await resultsApi.task(focus.id);
           const listingReady = focusedTask.segments?.some(
             (segment) =>
               ["completed", "completed_with_errors"].includes(segment.status) &&
@@ -89,7 +112,7 @@ export function ResultsPage({ notify, onNavigate, focus = null }) {
           setFiltersOpen(true);
         }
       } catch (error) {
-        if (active) notify(error.message, "error");
+        if (active) notify(errorMessage(error), "error");
       }
     };
     loadTasks();
@@ -116,13 +139,13 @@ export function ResultsPage({ notify, onNavigate, focus = null }) {
     const controller = new AbortController();
     setLoading(true);
     const timer = window.setTimeout(() => {
-      api
+      resultsApi
         .analysis(selectedId, query, { signal: controller.signal })
         .then((value) => {
           if (active) setAnalysis(value);
         })
         .catch((error) => {
-          if (active) notify(error.message, "error");
+          if (active) notify(errorMessage(error), "error");
         })
         .finally(() => {
           if (active) setLoading(false);
@@ -146,6 +169,7 @@ export function ResultsPage({ notify, onNavigate, focus = null }) {
     ? { page: "data", label: "补充商品信息" }
     : { page: "api", label: "检查模型配置" };
 
+  /** @param {string} taskId */
   const changeTask = (taskId) => {
     setSelectedId(taskId);
     setFilters(EMPTY_FILTERS);
@@ -155,6 +179,7 @@ export function ResultsPage({ notify, onNavigate, focus = null }) {
     setActiveTab("overview");
   };
 
+  /** @param {keyof typeof EMPTY_FILTERS} name @param {string} value */
   const changeFilter = (name, value) => {
     setFilters((current) => ({ ...current, [name]: value }));
     setFocusProblem("");
@@ -462,6 +487,7 @@ export function ResultsPage({ notify, onNavigate, focus = null }) {
   );
 }
 
+/** @param {{label: string, value: string, onChange: (value: string) => void} & Omit<import("react").InputHTMLAttributes<HTMLInputElement>, "value" | "onChange">} props */
 function FilterInput({ label, value, onChange, ...props }) {
   return (
     <label className="analysis-filter-field">
@@ -475,6 +501,7 @@ function FilterInput({ label, value, onChange, ...props }) {
   );
 }
 
+/** @param {{label: string, value: string, options?: Array<string | AnalysisProblemLabel>, optionValue?: "code" | null, optionLabel?: "name" | null, onChange: (value: string) => void}} props */
 function FilterSelect({
   label,
   value,
@@ -489,8 +516,18 @@ function FilterSelect({
       <select value={value} onChange={(event) => onChange(event.target.value)}>
         <option value="">全部</option>
         {options.map((option) => {
-          const optionId = optionValue ? option[optionValue] : option;
-          const optionName = optionLabel ? option[optionLabel] : option;
+          const optionId =
+            typeof option === "string"
+              ? option
+              : optionValue
+                ? option[optionValue]
+                : option.code;
+          const optionName =
+            typeof option === "string"
+              ? option
+              : optionLabel
+                ? option[optionLabel]
+                : option.name;
           return (
             <option key={optionId} value={optionId}>
               {optionName}
@@ -502,6 +539,7 @@ function FilterSelect({
   );
 }
 
+/** @param {{metrics: AnalysisMetrics}} props */
 function MetricCards({ metrics }) {
   const cards = [
     ["退货记录", formatNumber(metrics.total_records), "当前筛选范围"],

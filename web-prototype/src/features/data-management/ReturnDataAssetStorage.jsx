@@ -5,12 +5,20 @@ import { InlineLoading, Modal } from "../../components/SharedUi";
 import { dataApi } from "../../shared/api/dataApi";
 import { formatBytes } from "./returnDataAssetPresentation";
 
+/** @typedef {import("../../shared/api/dataManagementContracts").DatasetSource} DatasetSource */
+/** @typedef {import("../../shared/api/dataManagementContracts").DatasetStorageSummary} DatasetStorageSummary */
+/** @typedef {(message: string, tone?: string) => void} Notify */
+
+/** @param {{source: DatasetSource, notify?: Notify, onStorageChanged?: () => void | Promise<void>}} props */
 export function SnapshotStorageOverview({ source, notify, onStorageChanged }) {
-  const [summary, setSummary] = useState(null);
+  const [summary, setSummary] = useState(
+    /** @type {DatasetStorageSummary | null} */ (null),
+  );
   const [error, setError] = useState("");
   const [managementOpen, setManagementOpen] = useState(false);
 
   const loadSummary = useCallback(
+    /** @param {RequestInit} [options] */
     async (options = {}) => {
       setError("");
       try {
@@ -21,7 +29,9 @@ export function SnapshotStorageOverview({ source, notify, onStorageChanged }) {
         );
         setSummary(result);
       } catch (requestError) {
-        if (requestError.name !== "AbortError") setError(requestError.message);
+        const errorValue =
+          requestError instanceof Error ? requestError : new Error("存储占用读取失败");
+        if (errorValue.name !== "AbortError") setError(errorValue.message);
       }
     },
     [source.member_ids],
@@ -92,6 +102,16 @@ export function SnapshotStorageOverview({ source, notify, onStorageChanged }) {
   );
 }
 
+/**
+ * @param {{
+ *   source: DatasetSource,
+ *   summary: DatasetStorageSummary,
+ *   notify?: Notify,
+ *   onSummaryChange: (summary: DatasetStorageSummary) => void,
+ *   onStorageChanged?: () => void | Promise<void>,
+ *   onClose: () => void,
+ * }} props
+ */
 function SnapshotStorageDialog({
   source,
   summary,
@@ -116,7 +136,7 @@ function SnapshotStorageDialog({
       onClose();
       await onStorageChanged?.();
     } catch (error) {
-      notify?.(error.message, "error");
+      notify?.(error instanceof Error ? error.message : "存储清理失败", "error");
     } finally {
       setSaving(false);
     }

@@ -1,5 +1,6 @@
 import { taxonomyPath } from "../../lib/taxonomyPresentation";
 
+/** @type {Record<string, string>} */
 const ISSUE_TITLES = {
   missing_boundary: "标签判定边界不完整",
   missing_sentiment: "评价方向待确认",
@@ -8,11 +9,27 @@ const ISSUE_TITLES = {
   invalid_structure: "标签结构需调整",
 };
 
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardEditableContent} ClassificationStandardEditableContent */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardValidation} ClassificationStandardValidation */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardValidationIssue} ClassificationStandardValidationIssue */
+/** @typedef {{validation: ClassificationStandardValidation, content: ClassificationStandardEditableContent, onFix: (issue: ClassificationStandardValidationIssue) => void, busy: boolean}} ClassificationStructureIssuesProps */
+
+/** @param {ClassificationStructureIssuesProps} props */
 export function ClassificationStructureIssues({ validation, content, onFix, busy }) {
   const issues = validation.issues?.length
     ? validation.issues
-    : validation.blocking.map((message) => ({ kind: "invalid_structure", message }));
-  const groups = Map.groupBy(issues, (issue) => issue.kind);
+    : validation.blocking.map((message) => ({
+        kind: "invalid_structure",
+        message,
+        field: null,
+      }));
+  /** @type {Map<string, ClassificationStandardValidationIssue[]>} */
+  const groups = new Map();
+  for (const issue of issues) {
+    const rows = groups.get(issue.kind) ?? [];
+    rows.push(issue);
+    groups.set(issue.kind, rows);
+  }
   return (
     <section className="standard-structure-issues" aria-label="结构检查">
       <h3>结构检查 · {issues.length} 项待处理</h3>
@@ -26,7 +43,9 @@ export function ClassificationStructureIssues({ validation, content, onFix, busy
             {rows.map((issue, index) => {
               const label = issue.label_code
                 ? content.labels.find((item) => item.code === issue.label_code)
-                : content.labels[issue.label_index];
+                : issue.label_index != null
+                  ? content.labels[issue.label_index]
+                  : undefined;
               const path = label ? taxonomyPath(content, label).join(" → ") : "";
               const canFix = Boolean(
                 label || issue.field || issue.kind === "invalid_rule",

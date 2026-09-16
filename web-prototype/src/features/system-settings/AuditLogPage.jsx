@@ -13,6 +13,11 @@ import { auditApi } from "../../shared/api/auditApi";
 
 const PAGE_SIZE = 20;
 const SENSITIVE_FIELD = /(password|secret|token|api[_-]?key|encryption[_-]?key)/i;
+/** @typedef {import("../../shared/api/systemSettingsContracts").AuditLogPage} AuditPageData */
+/** @typedef {{query: Partial<AuditFilters> & {page?: string | number}}} AuditRoute */
+/** @typedef {{actor_id: string, entity_type: string, entity_id: string, action: string, date_from: string, date_to: string}} AuditFilters */
+
+/** @type {Record<string, string>} */
 const ACTION_LABELS = {
   task_create: "创建任务",
   task_pause: "暂停任务",
@@ -29,6 +34,7 @@ const ACTION_LABELS = {
   config_publish: "发布模型配置",
   user_update: "更新用户",
 };
+/** @type {Record<string, string>} */
 const ENTITY_LABELS = {
   task: "分析任务",
   task_segment: "Listing 片段",
@@ -43,6 +49,7 @@ const ENTITY_LABELS = {
   classification_result: "分类结果",
   analysis_dashboard: "分析看板",
 };
+/** @type {Record<string, string>} */
 const FIELD_LABELS = {
   status: "状态",
   revision: "修订版本",
@@ -57,11 +64,13 @@ const FIELD_LABELS = {
   execution_order: "执行顺序",
 };
 
+/** @param {unknown} value @param {number} [fallback] */
 function numberParam(value, fallback = 1) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+/** @param {AuditRoute} route @param {Record<string, string | number>} changes */
 function writeAuditRoute(route, changes) {
   navigateHash("settings", {
     tab: "audit",
@@ -76,16 +85,24 @@ function writeAuditRoute(route, changes) {
   });
 }
 
+/** @param {{route: AuditRoute}} props */
 export function AuditLogPage({ route }) {
   const page = numberParam(route.query.page);
   const [draft, setDraft] = useState(() => filtersFromRoute(route));
-  const [state, setState] = useState({ loading: true, error: "", data: null });
-  const dateToRef = useRef(null);
+  const [state, setState] = useState(
+    /** @type {{loading: boolean, error: string, data: AuditPageData | null}} */ ({
+      loading: true,
+      error: "",
+      data: null,
+    }),
+  );
+  const dateToRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const dateRangeError = getDateRangeError(draft);
 
   useEffect(() => setDraft(filtersFromRoute(route)), [route]);
 
   const load = useCallback(
+    /** @param {AbortSignal} [signal] */
     async (signal) => {
       if (
         getDateRangeError({
@@ -113,8 +130,10 @@ export function AuditLogPage({ route }) {
         );
         setState({ loading: false, error: "", data });
       } catch (error) {
-        if (error.name !== "AbortError") {
-          setState({ loading: false, error: error.message, data: null });
+        const requestError =
+          error instanceof Error ? error : new Error("审计记录读取失败");
+        if (requestError.name !== "AbortError") {
+          setState({ loading: false, error: requestError.message, data: null });
         }
       }
     },
@@ -311,6 +330,7 @@ export function AuditLogPage({ route }) {
   );
 }
 
+/** @param {{before?: unknown, after?: unknown}} props */
 function AuditDiff({ before, after }) {
   const beforeFields = flattenObject(before);
   const afterFields = flattenObject(after);
@@ -342,6 +362,7 @@ function AuditDiff({ before, after }) {
   );
 }
 
+/** @param {{value?: string, labels: Record<string, string>, fallback: string}} props */
 function AuditTerm({ value, labels, fallback }) {
   if (!value) return <span>{fallback}</span>;
   const label = labels[value];
@@ -353,6 +374,7 @@ function AuditTerm({ value, labels, fallback }) {
   );
 }
 
+/** @param {AuditRoute} route @returns {AuditFilters} */
 function filtersFromRoute(route) {
   return {
     actor_id: route.query.actor_id || "",
@@ -364,6 +386,7 @@ function filtersFromRoute(route) {
   };
 }
 
+/** @param {Pick<AuditFilters, "date_from" | "date_to">} filters */
 function getDateRangeError(filters) {
   if (filters.date_from && filters.date_to && filters.date_from > filters.date_to) {
     return "结束日期不能早于开始日期。";
@@ -371,6 +394,7 @@ function getDateRangeError(filters) {
   return "";
 }
 
+/** @param {unknown} value @param {string} [prefix] @param {Record<string, unknown>} [result] */
 function flattenObject(value, prefix = "", result = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     if (prefix) result[prefix] = value;
@@ -387,6 +411,7 @@ function flattenObject(value, prefix = "", result = {}) {
   return result;
 }
 
+/** @param {string} field @param {unknown} value */
 function displayAuditValue(field, value) {
   if (SENSITIVE_FIELD.test(field)) return "••••••";
   if (value === null || value === undefined || value === "") return "未提供";

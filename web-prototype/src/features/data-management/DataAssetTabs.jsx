@@ -6,6 +6,7 @@ const TABS = [
   { id: "rules", label: "导入规则", icon: ListBullets },
 ];
 
+/** @param {{current: string, onChange: (view: string) => void}} props */
 export function DataAssetTabs({ current, onChange }) {
   return (
     <div className="data-tabs" aria-label="数据资产分类">

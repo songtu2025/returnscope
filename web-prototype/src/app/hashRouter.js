@@ -2,10 +2,19 @@ import { useCallback, useEffect, useState } from "react";
 
 import { LEGACY_ROUTES, PAGE_IDS, routeForDestination } from "./navigation";
 
+/** @typedef {import("./navigation").AppRoute} AppRoute */
+/** @typedef {import("./navigation").NavigationFocus} NavigationFocus */
+/** @typedef {import("./navigation").RouteQuery} RouteQuery */
+
+/** @param {URLSearchParams} params */
 function queryObject(params) {
   return Object.fromEntries(params.entries());
 }
 
+/**
+ * @param {string} page
+ * @param {Record<string, string | number | boolean | null | undefined>} [query]
+ */
 export function buildHash(page, query = {}) {
   const params = new URLSearchParams();
   Object.entries(query).forEach(([key, value]) => {
@@ -17,6 +26,10 @@ export function buildHash(page, query = {}) {
   return `#${page}${suffix ? `?${suffix}` : ""}`;
 }
 
+/**
+ * @param {string} [hash]
+ * @returns {AppRoute & {isLegacy: boolean, canonicalHash: string}}
+ */
 export function parseHash(hash = window.location.hash) {
   const source = hash.replace(/^#/, "");
   const [rawPage = "", rawQuery = ""] = source.split("?");
@@ -34,6 +47,7 @@ export function parseHash(hash = window.location.hash) {
   };
 }
 
+/** @param {string} hash */
 function replaceHash(hash) {
   window.history.replaceState(
     null,
@@ -42,6 +56,11 @@ function replaceHash(hash) {
   );
 }
 
+/**
+ * @param {string} page
+ * @param {Record<string, string | number | boolean | null | undefined>} [query]
+ * @param {{replace?: boolean}} [options]
+ */
 export function navigateHash(page, query = {}, { replace = false } = {}) {
   const hash = buildHash(page, query);
   if (replace) {
@@ -68,11 +87,18 @@ export function useHashRoute() {
     return () => window.removeEventListener("hashchange", sync);
   }, []);
 
-  const navigate = useCallback((destination, focus = null) => {
-    const target = routeForDestination(destination, focus);
-    navigateHash(target.page, target.query);
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-  }, []);
+  const navigate = useCallback(
+    /**
+     * @param {string} destination
+     * @param {NavigationFocus | null} [focus]
+     */
+    (destination, focus = null) => {
+      const target = routeForDestination(destination, focus);
+      navigateHash(target.page, target.query);
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    },
+    [],
+  );
 
   return { route, navigate };
 }

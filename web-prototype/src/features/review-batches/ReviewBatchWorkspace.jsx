@@ -23,10 +23,27 @@ import { ReviewRecordDrawer, ReviewRecordRow } from "./ReviewRecordComponents";
 import { defaultReviewAssessment, reviewAssessment } from "./reviewAssessment";
 import { useReviewBatchData } from "./useReviewBatchData";
 
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewAction} ReviewAction */
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewBatchRoute} ReviewBatchRoute */
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewConflict} ReviewConflict */
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewRecord} ReviewRecord */
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewRequestError} ReviewRequestError */
+
+/** @param {ReviewRecord} item */
 function itemId(item) {
   return item.id;
 }
 
+/** @param {unknown} error @returns {ReviewRequestError} */
+function requestError(error) {
+  return error instanceof Error
+    ? /** @type {ReviewRequestError} */ (error)
+    : /** @type {ReviewRequestError} */ (new Error("复核操作失败"));
+}
+
+/**
+ * @param {{route: ReviewBatchRoute, updateRoute: (changes: Partial<ReviewBatchRoute>) => void, notify: (message: string, type?: "success" | "error") => void, userId: string}} props
+ */
 export function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
   const {
     batchState,
@@ -46,21 +63,21 @@ export function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
     productSku: route.productSku,
     orderId: route.orderId,
   });
-  const [selected, setSelected] = useState(null);
-  const [mode, setMode] = useState("confirm");
+  const [selected, setSelected] = useState(/** @type {ReviewRecord | null} */ (null));
+  const [mode, setMode] = useState(/** @type {ReviewAction} */ ("confirm"));
   const [labelCode, setLabelCode] = useState("");
   const [reason, setReason] = useState("");
   const [assessment, setAssessment] = useState(() =>
     defaultReviewAssessment("confirm"),
   );
   const [saving, setSaving] = useState(false);
-  const [checkedIds, setCheckedIds] = useState([]);
-  const [bulkAction, setBulkAction] = useState("");
+  const [checkedIds, setCheckedIds] = useState(/** @type {string[]} */ ([]));
+  const [bulkAction, setBulkAction] = useState(/** @type {ReviewAction | ""} */ (""));
   const [bulkLabelCode, setBulkLabelCode] = useState("");
   const [bulkReason, setBulkReason] = useState("");
   const [bulkSaving, setBulkSaving] = useState(false);
   const [bulkError, setBulkError] = useState("");
-  const [conflict, setConflict] = useState(null);
+  const [conflict, setConflict] = useState(/** @type {ReviewConflict | null} */ (null));
   const [publishOpen, setPublishOpen] = useState(false);
   const [publishReason, setPublishReason] = useState("");
   const [publishError, setPublishError] = useState("");
@@ -96,10 +113,12 @@ export function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
 
   const batch = batchState.data;
   const records = recordsState.data;
+  const recordItems = records?.items ?? [];
   const pending = pendingCount(batch);
   const readOnly = batch?.status === "published";
 
   const openDerivedVersion = () => {
+    if (!batch?.derived_result_version_id) return;
     navigateHash(
       "classification-results",
       resultRouteQuery(route, batch.derived_result_version_id),
@@ -107,6 +126,7 @@ export function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
   };
 
   const createDashboardFromDerived = () => {
+    if (!batch?.derived_result_version_id) return;
     const token = createDashboardSelection(userId, {
       selected: [
         selectionItem({
@@ -129,6 +149,7 @@ export function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
     1,
   );
 
+  /** @param {ReviewRecord} record */
   const openRecord = (record) => {
     const currentCode =
       record.classification?.primary_label_codes?.[0] ||
@@ -148,22 +169,23 @@ export function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
     setAssessment(defaultReviewAssessment(nextMode));
   };
 
+  /** @param {ReviewRequestError} error */
   const refreshConflict = async (error) => {
+    if (!selected) return;
+    const selectedId = itemId(selected);
     const [latestBatch, latestPage] = await Promise.all([
       reviewBatchApi.reviewBatch(route.batchId),
       reviewBatchApi.reviewBatchRecords(route.batchId, recordQuery),
     ]);
     setBatchState({ loading: false, error: null, data: latestBatch });
     setRecordsState({ loading: false, error: null, data: latestPage });
-    const serverRecord = latestPage.items?.find(
-      (item) => itemId(item) === itemId(selected),
-    );
+    const serverRecord = latestPage.items?.find((item) => itemId(item) === selectedId);
     setConflict({ message: error.message, serverRecord });
   };
 
   const saveRecord = async (advance = false) => {
     if (!selected || !reason.trim()) return;
-    const currentItems = records?.items ?? [];
+    const currentItems = recordItems;
     const currentIndex = currentItems.findIndex(
       (item) => itemId(item) === itemId(selected),
     );
@@ -206,20 +228,22 @@ export function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
       };
       notify(messages[mode]);
     } catch (error) {
-      if (error.status === 409) {
+      const failure = requestError(error);
+      if (failure.status === 409) {
         try {
-          await refreshConflict(error);
+          await refreshConflict(failure);
         } catch (refreshError) {
-          notify(refreshError.message, "error");
+          notify(requestError(refreshError).message, "error");
         }
       } else {
-        notify(error.message, "error");
+        notify(failure.message, "error");
       }
     } finally {
       setSaving(false);
     }
   };
 
+  /** @param {ReviewAction} action */
   const openBulk = (action) => {
     setBulkAction(action);
     setBulkLabelCode("");
@@ -228,10 +252,10 @@ export function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
   };
 
   const saveBulk = async () => {
-    const selectedRecords = (records?.items ?? []).filter((record) =>
+    const selectedRecords = recordItems.filter((record) =>
       checkedIds.includes(itemId(record)),
     );
-    if (!selectedRecords.length || !bulkReason.trim()) return;
+    if (!selectedRecords.length || !bulkReason.trim() || !bulkAction) return;
     setBulkSaving(true);
     setBulkError("");
     try {
@@ -249,8 +273,9 @@ export function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
       await Promise.all([loadBatch(), loadRecords()]);
       notify(`已批量处理 ${selectedRecords.length} 条复核记录`);
     } catch (error) {
-      setBulkError(error.message);
-      if (error.status === 409) {
+      const failure = requestError(error);
+      setBulkError(failure.message);
+      if (failure.status === 409) {
         await Promise.all([loadBatch(), loadRecords()]);
       }
     } finally {
@@ -274,15 +299,16 @@ export function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
         resultRouteQuery(route, derived.version_id, "history"),
       );
     } catch (error) {
-      if (error.status === 409) {
-        setPublishError(`${error.message}。已刷新批次，请重新确认后发布。`);
+      const failure = requestError(error);
+      if (failure.status === 409) {
+        setPublishError(`${failure.message}。已刷新批次，请重新确认后发布。`);
         try {
           await loadBatch();
         } catch {
           // 批次读取错误已由页面状态展示。
         }
       } else {
-        setPublishError(error.message);
+        setPublishError(failure.message);
       }
     } finally {
       setPublishing(false);
@@ -304,6 +330,8 @@ export function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
       </div>
     );
   }
+
+  if (!batch) return null;
 
   return (
     <div className="standard-page review-batch-page">
@@ -359,16 +387,14 @@ export function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
         {recordsState.error && (
           <ReviewBatchError error={recordsState.error} onRetry={loadRecords} />
         )}
-        {!recordsState.loading &&
-          !recordsState.error &&
-          records?.items?.length === 0 && (
-            <EmptyState
-              icon={ListChecks}
-              title="当前条件没有复核记录"
-              description="调整处理状态或业务字段后重新查询。"
-            />
-          )}
-        {records?.items?.length > 0 && !recordsState.error && (
+        {!recordsState.loading && !recordsState.error && recordItems.length === 0 && (
+          <EmptyState
+            icon={ListChecks}
+            title="当前条件没有复核记录"
+            description="调整处理状态或业务字段后重新查询。"
+          />
+        )}
+        {recordItems.length > 0 && !recordsState.error && (
           <>
             <div
               className={`review-record-table ${!readOnly ? "is-selectable" : ""} ${recordsState.loading ? "is-loading" : ""}`}
@@ -379,15 +405,15 @@ export function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
                     <Checkbox
                       aria-label="选择本页待处理记录"
                       checked={
-                        records.items.some(
+                        recordItems.some(
                           (record) => record.workflow_status === "pending",
                         ) &&
-                        records.items
+                        recordItems
                           .filter((record) => record.workflow_status === "pending")
                           .every((record) => checkedIds.includes(itemId(record)))
                       }
                       onChange={(event) => {
-                        const pageIds = records.items
+                        const pageIds = recordItems
                           .filter((record) => record.workflow_status === "pending")
                           .map(itemId);
                         setCheckedIds(event.target.checked ? pageIds : []);
@@ -401,14 +427,14 @@ export function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
                 <span>分类结果</span>
                 <span>状态 / 操作</span>
               </div>
-              {records.items.map((record) => (
+              {recordItems.map((record) => (
                 <ReviewRecordRow
                   key={itemId(record)}
                   record={record}
                   selectionEnabled={!readOnly}
                   selectable={!readOnly && record.workflow_status === "pending"}
                   checked={checkedIds.includes(itemId(record))}
-                  onCheck={(checked) =>
+                  onCheck={(/** @type {boolean} */ checked) =>
                     setCheckedIds((current) =>
                       checked
                         ? [...current, itemId(record)]
@@ -422,10 +448,12 @@ export function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
             <Pagination
               page={route.page}
               pageSize={route.pageSize}
-              total={records.total}
+              total={records?.total ?? 0}
               totalPages={totalPages}
-              onPage={(page) => updateRoute({ page })}
-              onPageSize={(pageSize) => updateRoute({ page: 1, pageSize })}
+              onPage={(/** @type {number} */ page) => updateRoute({ page })}
+              onPageSize={(/** @type {number} */ pageSize) =>
+                updateRoute({ page: 1, pageSize })
+              }
             />
           </>
         )}

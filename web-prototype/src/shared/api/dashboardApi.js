@@ -1,5 +1,15 @@
 import { queryString, request } from "./request";
 
+/** @typedef {object} DashboardPayload */
+/** @typedef {Record<string, unknown>} DashboardQuery */
+/** @typedef {ReturnType<typeof request>} DashboardRequest */
+
+/**
+ * @param {string} path
+ * @param {string} method
+ * @param {DashboardPayload} payload
+ * @param {RequestInit} [options]
+ */
 function jsonRequest(path, method, payload, options = {}) {
   return request(path, {
     ...options,
@@ -8,6 +18,27 @@ function jsonRequest(path, method, payload, options = {}) {
   });
 }
 
+/**
+ * @type {{
+ *   dashboardPreflight: (payload: DashboardPayload, options?: RequestInit) => DashboardRequest,
+ *   createAnalysisDashboard: (payload: DashboardPayload, options?: RequestInit) => DashboardRequest,
+ *   createAnalysisDashboardVersion: (dashboardId: string, payload: DashboardPayload, options?: RequestInit) => DashboardRequest,
+ *   analysisDashboards: (filters?: DashboardQuery, options?: RequestInit) => DashboardRequest,
+ *   analysisDashboard: (dashboardId: string, versionId?: string, options?: RequestInit) => DashboardRequest,
+ *   analysisDashboardVersions: (dashboardId: string, options?: RequestInit) => DashboardRequest,
+ *   analysisDashboardSummary: (dashboardId: string, versionId: string, options?: RequestInit) => DashboardRequest,
+ *   analysisDashboardSources: (dashboardId: string, versionId: string, options?: RequestInit) => DashboardRequest,
+ *   analysisDashboardInsights: (dashboardId: string, versionId: string, filters?: DashboardQuery, options?: RequestInit) => DashboardRequest,
+ *   analysisDashboardDrilldown: (dashboardId: string, versionId: string, groupBy: string, filters?: DashboardQuery, options?: RequestInit) => DashboardRequest,
+ *   analysisDashboardRecords: (dashboardId: string, versionId: string, filters?: DashboardQuery, options?: RequestInit) => DashboardRequest,
+ *   createInsightReportFromResults: (payload: DashboardPayload, options?: RequestInit) => DashboardRequest,
+ *   createAnalysisDashboardInsightReport: (dashboardId: string, versionId: string, payload: DashboardPayload, options?: RequestInit) => DashboardRequest,
+ *   analysisDashboardInsightReports: (dashboardId: string, versionId: string, options?: RequestInit) => DashboardRequest,
+ *   insightReport: (reportId: string, options?: RequestInit) => DashboardRequest,
+ *   retryInsightReport: (reportId: string, options?: RequestInit) => DashboardRequest,
+ *   setInsightReportIssueDecision: (reportId: string, issueId: string, status: string, options?: RequestInit) => DashboardRequest
+ * }}
+ */
 export const dashboardApi = {
   dashboardPreflight: (payload, options = {}) =>
     jsonRequest("/api/dashboard-plans/preflight", "POST", payload, options),

@@ -1,6 +1,14 @@
 import { CaretRight, Check, WarningCircle } from "@phosphor-icons/react";
 import Button from "antd/es/button";
 
+/** @typedef {import("./taskCreateContracts").DataVersion} DataVersion */
+/** @typedef {import("./taskCreateContracts").MysqlFormState} MysqlFormState */
+/** @typedef {readonly [boolean, string, string, () => void]} SetupRow */
+
+/**
+ * @param {{prepared: boolean, dataEntryMode: "mysql" | "upload" | "existing", mysqlState: MysqlFormState, selectedReturns?: DataVersion, submitting: boolean, canContinue: boolean, launchStatus: string, submitError: string, submitLabel: string, onSubmit: () => void | Promise<void>, onPrepareExisting: () => void}} props
+ */
+
 export function TaskLaunchActions({
   prepared,
   dataEntryMode,
@@ -63,6 +71,9 @@ export function TaskLaunchActions({
   );
 }
 
+/**
+ * @param {{onNavigate: import("../../app/navigation").Navigate, onUploadReturns: () => void, hasReturns: boolean, hasProducts: boolean, hasConfig: boolean}} props
+ */
 export function SetupBlock({
   onNavigate,
   onUploadReturns,
@@ -70,6 +81,7 @@ export function SetupBlock({
   hasProducts,
   hasConfig,
 }) {
+  /** @type {SetupRow[]} */
   const rows = [
     [hasReturns, "导入退货明细", "在当前分析任务中导入待分析数据", onUploadReturns],
     [

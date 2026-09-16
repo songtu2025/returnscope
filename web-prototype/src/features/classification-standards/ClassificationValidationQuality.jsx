@@ -1,3 +1,10 @@
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardValidationItem} ClassificationStandardValidationItem */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardValidationRunDetail} ClassificationStandardValidationRunDetail */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationValidationSemanticResult} ClassificationValidationSemanticResult */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationValidationUnknownSemantic} ClassificationValidationUnknownSemantic */
+/** @typedef {{title: string, note: string, items: ClassificationStandardValidationItem[], informational?: boolean}} QualityGroup */
+
+/** @type {Record<string, string>} */
 const ISSUE_LABELS = {
   duplicate_units: "重复实例",
   extra_labels: "多标实例",
@@ -16,30 +23,40 @@ const ISSUE_LABELS = {
   primary_errors: "主因错误",
 };
 
+/** @param {ClassificationStandardValidationItem} item */
 function hasBusinessErrors(item) {
   return (
     item.draft.status === "MODEL_ERROR" ||
-    Object.keys(ISSUE_LABELS).some((key) => item.reference_comparison?.draft?.[key] > 0)
+    Object.keys(ISSUE_LABELS).some(
+      (key) => (item.reference_comparison?.draft?.[key] ?? 0) > 0,
+    )
   );
 }
 
+/** @param {ClassificationStandardValidationItem} item */
 function hasVerifiedComparison(item) {
   const comparison = item.reference_comparison?.draft;
-  return (
+  return Boolean(
     !item.reference?.ambiguous &&
     comparison &&
-    Object.keys(ISSUE_LABELS).every((key) => comparison[key] === 0)
+    Object.keys(ISSUE_LABELS).every((key) => comparison[key] === 0),
   );
 }
 
-function isExpectedUnmapped(item, unknown) {
+/**
+ * @param {ClassificationStandardValidationItem} item
+ * @param {ClassificationValidationUnknownSemantic} unknownUnit
+ */
+function isExpectedUnmapped(item, unknownUnit) {
   if (!hasVerifiedComparison(item)) return false;
+  if (typeof unknownUnit === "string") return false;
   return item.draft.extracted_facts?.some((fact) => {
+    const evidenceSpans = fact.evidence_spans ?? [];
     const mapping = item.draft.fact_mappings?.find(
       (entry) => entry.fact_id === fact.fact_id,
     );
     return (
-      fact.opinion === unknown.opinion &&
+      fact.opinion === unknownUnit.opinion &&
       mapping?.label_codes?.length === 0 &&
       (([
         "PREDICTION",
@@ -49,21 +66,22 @@ function isExpectedUnmapped(item, unknown) {
         "ADVICE",
         "INTENT",
       ].includes(fact.statement_type) &&
-        fact.evidence_spans?.length > 0 &&
-        fact.evidence_spans.every(
-          (span) => span.text && item.comment.includes(span.text),
-        )) ||
-        item.reference?.facts?.some(
-          (expected) =>
+        evidenceSpans.length > 0 &&
+        evidenceSpans.every((span) => span.text && item.comment.includes(span.text))) ||
+        item.reference?.facts?.some((expected) => {
+          const expectedEvidence = expected.evidence;
+          return (
             expected.label_codes?.length === 0 &&
             expected.expected_statement_type === fact.statement_type &&
-            expected.evidence &&
-            fact.evidence_spans?.some((span) => span.text.includes(expected.evidence)),
-        ))
+            typeof expectedEvidence === "string" &&
+            evidenceSpans.some((span) => span.text.includes(expectedEvidence))
+          );
+        }))
     );
   });
 }
 
+/** @param {{run: ClassificationStandardValidationRunDetail}} props */
 export function ClassificationValidationQuality({ run }) {
   const items = run.items || [];
   const gaps = items.filter((item) =>
@@ -73,9 +91,10 @@ export function ClassificationValidationQuality({ run }) {
     (item) =>
       hasVerifiedComparison(item) &&
       !gaps.includes(item) &&
-      (item.draft.unknown_semantics?.length > 0 ||
+      ((item.draft.unknown_semantics?.length ?? 0) > 0 ||
         item.draft.review_reasons?.length > 0),
   );
+  /** @type {QualityGroup[]} */
   const groups = [
     {
       title: "语义智能体问题",
@@ -201,20 +220,22 @@ export function ClassificationValidationQuality({ run }) {
                 <p>{item.comment}</p>
                 <ul>
                   {Object.entries(ISSUE_LABELS)
-                    .filter(([key]) => item.reference_comparison?.draft?.[key] > 0)
+                    .filter(
+                      ([key]) => (item.reference_comparison?.draft?.[key] ?? 0) > 0,
+                    )
                     .map(([key, label]) => (
                       <li key={key}>
-                        {label}：{item.reference_comparison.draft[key]}
+                        {label}：{item.reference_comparison?.draft?.[key] ?? 0}
                       </li>
                     ))}
                   {item.draft.review_reasons?.map((reason, index) => (
                     <li key={`review-${index}`}>{reason}</li>
                   ))}
                 </ul>
-                {item.draft.unknown_semantics?.length > 0 && (
+                {(item.draft.unknown_semantics?.length ?? 0) > 0 && (
                   <p>
                     {group.informational ? "留空事实：" : "未覆盖语义："}
-                    {item.draft.unknown_semantics
+                    {(item.draft.unknown_semantics ?? [])
                       .map((unit) =>
                         typeof unit === "string"
                           ? unit
@@ -236,6 +257,7 @@ export function ClassificationValidationQuality({ run }) {
   );
 }
 
+/** @param {{result: ClassificationValidationSemanticResult}} props */
 export function ValidationFactTrace({ result }) {
   if (!result.extracted_facts?.length) return null;
   const mappings = new Map(
@@ -244,28 +266,29 @@ export function ValidationFactTrace({ result }) {
   return (
     <details className="standard-fact-trace">
       <summary>事实状态、对象与条件</summary>
-      {result.extracted_facts.map((fact) => (
-        <p key={fact.fact_id}>
-          <b>{fact.statement_type}</b> · 使用者 {fact.actor_ref} · 商品{" "}
-          {fact.product_ref} · 事件 {fact.event_ref || "未记录"} · 条件{" "}
-          {fact.condition || "未限定"} · 责任主体 {fact.subject || "未记录"} ·{" "}
-          {fact.is_primary_reason === true ? (
-            <strong>主因</strong>
-          ) : (
-            <span>{fact.is_primary_reason === false ? "非主因" : "主因未记录"}</span>
-          )}
-          <br />
-          {fact.opinion}
-          <br />
-          {fact.evidence_spans?.map((span) => span.text).join("；")}
-          <br />
-          映射记录：
-          {mappings.get(fact.fact_id)?.label_codes?.join("、") || "未映射标签"}
-          {mappings.get(fact.fact_id)?.reason && (
-            <> · {mappings.get(fact.fact_id).reason}</>
-          )}
-        </p>
-      ))}
+      {result.extracted_facts.map((fact) => {
+        const mapping = mappings.get(fact.fact_id);
+        return (
+          <p key={fact.fact_id}>
+            <b>{fact.statement_type}</b> · 使用者 {fact.actor_ref} · 商品{" "}
+            {fact.product_ref} · 事件 {fact.event_ref || "未记录"} · 条件{" "}
+            {fact.condition || "未限定"} · 责任主体 {fact.subject || "未记录"} ·{" "}
+            {fact.is_primary_reason === true ? (
+              <strong>主因</strong>
+            ) : (
+              <span>{fact.is_primary_reason === false ? "非主因" : "主因未记录"}</span>
+            )}
+            <br />
+            {fact.opinion}
+            <br />
+            {fact.evidence_spans?.map((span) => span.text).join("；")}
+            <br />
+            映射记录：
+            {mapping?.label_codes?.join("、") || "未映射标签"}
+            {mapping?.reason && <> · {mapping.reason}</>}
+          </p>
+        );
+      })}
       <small>映射记录用于追溯；是否计入确认结果，以最终语义观点为准。</small>
     </details>
   );

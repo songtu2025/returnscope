@@ -18,14 +18,38 @@ import {
 import { AntdProvider } from "../../components/AntdProvider";
 import { formatTime } from "../../lib/presentation";
 
+/** @typedef {import("../../shared/api/reviewBatchContracts").ResultVersion} ResultVersion */
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewBatch} ReviewBatch */
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewRequestError} ReviewRequestError */
+/** @typedef {{taskId?: string, segmentId?: string, listing?: string}} ResultReviewRouteContext */
+
+/** @param {ResultVersion} item */
 function versionId(item) {
-  return item.version_id || item.id;
+  return item.version_id;
 }
 
+/** @param {ReviewBatch} item */
 function batchId(item) {
   return item.id;
 }
 
+/** @param {unknown} error @returns {ReviewRequestError} */
+function requestError(error) {
+  return error instanceof Error
+    ? /** @type {ReviewRequestError} */ (error)
+    : new Error("请求失败");
+}
+
+/**
+ * @param {{
+ *   result: ResultVersion,
+ *   onSelectVersion: (versionId: string) => void,
+ *   notify: (message: string, type?: string) => void,
+ *   requestedAction?: string,
+ *   routeContext?: ResultReviewRouteContext,
+ *   onActionHandled?: () => void,
+ * }} props
+ */
 export function ResultVersionReviewPanel({
   result,
   onSelectVersion,
@@ -34,17 +58,19 @@ export function ResultVersionReviewPanel({
   routeContext = {},
   onActionHandled,
 }) {
-  const [state, setState] = useState({
-    loading: true,
-    error: "",
-    history: [],
-    batches: [],
-  });
+  const [state, setState] = useState(
+    /** @type {{loading: boolean, error: string, history: ResultVersion[], batches: ReviewBatch[]}} */ ({
+      loading: true,
+      error: "",
+      history: [],
+      batches: [],
+    }),
+  );
   const [createOpen, setCreateOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [creating, setCreating] = useState(false);
   const generationRef = useRef(0);
-  const controllerRef = useRef(null);
+  const controllerRef = useRef(/** @type {AbortController | null} */ (null));
 
   const load = useCallback(async () => {
     const generation = generationRef.current + 1;
@@ -71,13 +97,18 @@ export function ResultVersionReviewPanel({
         setState({
           loading: false,
           error: "",
-          history: Array.isArray(history) ? history : (history.items ?? []),
+          history,
           batches: batches.items ?? [],
         });
       }
     } catch (error) {
-      if (generationRef.current === generation && error.name !== "AbortError") {
-        setState((current) => ({ ...current, loading: false, error: error.message }));
+      const nextError = requestError(error);
+      if (generationRef.current === generation && nextError.name !== "AbortError") {
+        setState((current) => ({
+          ...current,
+          loading: false,
+          error: nextError.message,
+        }));
       }
     }
   }, [result.version_id]);
@@ -100,6 +131,7 @@ export function ResultVersionReviewPanel({
   const policy = resultActionPolicy(result, { activeBatch: draft });
 
   const openBatch = useCallback(
+    /** @param {ReviewBatch} batch */
     (batch) => {
       navigateHash("classification-results", {
         view: "reviews",
@@ -151,7 +183,8 @@ export function ResultVersionReviewPanel({
       setCreateOpen(false);
       openBatch(batch);
     } catch (error) {
-      if (error.status === 409) {
+      const nextError = requestError(error);
+      if (nextError.status === 409) {
         try {
           const batches = await api.reviewBatches({
             page: 1,
@@ -166,11 +199,11 @@ export function ResultVersionReviewPanel({
             return;
           }
         } catch (refreshError) {
-          notify(refreshError.message, "error");
+          notify(requestError(refreshError).message, "error");
           return;
         }
       }
-      notify(error.message, "error");
+      notify(nextError.message, "error");
     } finally {
       setCreating(false);
     }
@@ -333,7 +366,7 @@ export function ResultVersionReviewPanel({
               创建原因
               <Input.TextArea
                 aria-describedby="review-create-reason-hint"
-                rows="4"
+                rows={4}
                 required
                 value={reason}
                 onChange={(event) => setReason(event.target.value)}

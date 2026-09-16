@@ -1,5 +1,13 @@
 import { EFFORT_LABELS } from "../../constants";
 
+/** @typedef {import("../../shared/api/systemSettingsContracts").CatalogModel} CatalogModel */
+/** @typedef {import("../../shared/api/systemSettingsContracts").ModelOption} ModelOption */
+/** @typedef {import("../../shared/api/systemSettingsContracts").ModelServiceForm} ModelServiceForm */
+/** @typedef {import("../../shared/api/systemSettingsContracts").ConfigDiffKey} ConfigDiffKey */
+
+const EFFORT_LABEL_MAP = /** @type {Record<string, string>} */ (EFFORT_LABELS);
+
+/** @type {Array<[ConfigDiffKey, string]>} */
 export const CONFIG_DIFF_FIELDS = [
   ["base_url", "Base URL"],
   ["requests_per_minute", "每分钟请求"],
@@ -7,6 +15,7 @@ export const CONFIG_DIFF_FIELDS = [
   ["timeout_seconds", "请求超时"],
 ];
 
+/** @type {ModelServiceForm} */
 export const EMPTY_MODEL_SERVICE_FORM = {
   name: "",
   provider: "responses-compatible",
@@ -25,16 +34,17 @@ export const EMPTY_MODEL_SERVICE_FORM = {
   change_note: "",
 };
 
+/** @returns {CatalogModel[]} */
 export function createDefaultModelCatalog() {
   return [];
 }
 
+/** @param {CatalogModel[]} catalogModels @param {ModelServiceForm} form @returns {ModelOption[]} */
 export function createModelOptions(catalogModels, form) {
-  const historicalModelKeys = [
-    form.cheap_model,
-    form.primary_model,
-    form.secondary_model,
-  ].filter(Boolean);
+  const historicalModelKeys = [];
+  if (form.cheap_model) historicalModelKeys.push(form.cheap_model);
+  if (form.primary_model) historicalModelKeys.push(form.primary_model);
+  if (form.secondary_model) historicalModelKeys.push(form.secondary_model);
   return [
     ...catalogModels,
     ...historicalModelKeys
@@ -52,6 +62,7 @@ export function createModelOptions(catalogModels, form) {
   ];
 }
 
+/** @param {string} value */
 export function getBaseUrlError(value) {
   const baseUrl = value.trim();
   if (!baseUrl) return "请填写 Base URL。";
@@ -72,8 +83,12 @@ export function getBaseUrlError(value) {
   return "";
 }
 
+/** @param {string} key @param {unknown} value */
 export function configValue(key, value) {
-  if (key.endsWith("_effort")) return EFFORT_LABELS[value] ?? value ?? "未设置";
+  if (key.endsWith("_effort")) {
+    const effort = value == null ? "" : String(value);
+    return (EFFORT_LABEL_MAP[effort] ?? effort) || "未设置";
+  }
   return value === null || value === undefined || value === ""
     ? "未设置"
     : String(value);

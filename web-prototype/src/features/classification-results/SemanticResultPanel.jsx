@@ -8,7 +8,14 @@ import {
   semanticUnknownGroups,
 } from "./semanticResultPresentation";
 
-/** @typedef {Record<string, any>} SemanticData */
+/**
+ * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultRecordResponseOutput} GeneratedRecord
+ * @typedef {GeneratedRecord | Record<string, unknown>} SemanticRecord
+ * @typedef {ReturnType<typeof factPresentation>} PresentedFact
+ * @typedef {ReturnType<typeof semanticConclusions>[number]["facts"][number]} NormalizedFact
+ * @typedef {ReturnType<typeof semanticUnknownGroups>["review"][number]} NormalizedUnknownSemantic
+ * @typedef {ReturnType<typeof semanticUnknownGroups>} UnknownSemanticGroups
+ */
 
 /** @type {Record<string, string>} */
 const RELATION_LABELS = {
@@ -18,32 +25,39 @@ const RELATION_LABELS = {
   MULTI_PRODUCT: "多个商品",
 };
 
-/** @param {any} value @param {boolean} [legacy] @returns {any} */
+/**
+ * @param {string | number | null | undefined} value
+ * @param {boolean} [legacy]
+ * @returns {string | number}
+ */
 function display(value, legacy = false) {
   return value || (legacy ? "旧结果未提供" : "未提供");
 }
 
-/** @param {any} value @param {boolean} [legacy] @returns {string} */
+/**
+ * @param {string | null | undefined} value
+ * @param {boolean} [legacy]
+ * @returns {string}
+ */
 function evidenceDisplay(value, legacy = false) {
   return value || (legacy ? "旧结果未提供文本证据" : "无文本证据");
 }
 
-/** @param {any[]} values @param {boolean} legacy */
+/** @param {Array<string | null | undefined>} values @param {boolean} legacy */
 function joinedDisplay(values, legacy) {
   const text = values.filter((value) => value && value !== "UNSPECIFIED").join(" / ");
   return display(text, legacy);
 }
 
-/** @param {SemanticData} item */
+/** @param {PresentedFact} item */
 function isOtherLabel(item) {
   return (
-    item.labelPath.some(
-      (/** @type {any} */ value) => String(value).trim() === "其他",
-    ) || /(?:^|_)OTHER(?:_|$)/i.test(item.labelCode || "")
+    item.labelPath.some((value) => String(value).trim() === "其他") ||
+    /(?:^|_)OTHER(?:_|$)/i.test(item.labelCode || "")
   );
 }
 
-/** @param {{item: SemanticData, legacy: boolean}} props */
+/** @param {{item: PresentedFact, legacy: boolean}} props */
 function ScopeDetails({ item, legacy }) {
   return (
     <dl className="semantic-review-fields">
@@ -82,7 +96,7 @@ function ScopeDetails({ item, legacy }) {
   );
 }
 
-/** @param {{fact: SemanticData, legacy: boolean, context?: boolean}} props */
+/** @param {{fact: NormalizedFact, legacy: boolean, context?: boolean}} props */
 function FactDetail({ fact, legacy, context = false }) {
   const item = factPresentation(fact);
   const path = item.labelPath.join(" → ");
@@ -130,7 +144,7 @@ function FactDetail({ fact, legacy, context = false }) {
   );
 }
 
-/** @param {{item: SemanticData}} props */
+/** @param {{item: NormalizedUnknownSemantic}} props */
 function UnknownDetail({ item }) {
   const presented = factPresentation(item);
   return (
@@ -157,7 +171,7 @@ function UnknownDetail({ item }) {
   );
 }
 
-/** @param {{groups: {review: SemanticData[], informational: SemanticData[]}}} props */
+/** @param {{groups: UnknownSemanticGroups}} props */
 function UnknownSemantics({ groups }) {
   return (
     <>
@@ -208,7 +222,7 @@ export function SemanticStatusBadge({ status }) {
   );
 }
 
-/** @param {{record: SemanticData, title?: string}} props */
+/** @param {{record: SemanticRecord, title?: string}} props */
 export function SemanticResultPanel({ record, title = "评论级结论" }) {
   const conclusions = semanticConclusions(record);
   const overallStatus = semanticRecordStatus(record);
@@ -261,30 +275,24 @@ export function SemanticResultPanel({ record, title = "评论级结论" }) {
               )}
               <div className="semantic-fact-list">
                 {conclusion.facts.length ? (
-                  /** @type {SemanticData[]} */ (conclusion.facts).map(
-                    (fact, index) => (
-                      <FactDetail
-                        key={fact.factId || `${conclusion.id}-${index}`}
-                        fact={fact}
-                        legacy={conclusion.legacy}
-                      />
-                    ),
-                  )
+                  conclusion.facts.map((fact, index) => (
+                    <FactDetail
+                      key={fact.factId || `${conclusion.id}-${index}`}
+                      fact={fact}
+                      legacy={conclusion.legacy}
+                    />
+                  ))
                 ) : (
                   <p className="drawer-empty">当前结论没有返回原子事实。</p>
                 )}
-                {
-                  /** @type {SemanticData[]} */ (conclusion.contextFacts ?? []).map(
-                    (fact, index) => (
-                      <FactDetail
-                        key={`context-${fact.factId || `${conclusion.id}-${index}`}`}
-                        fact={fact}
-                        legacy={conclusion.legacy}
-                        context
-                      />
-                    ),
-                  )
-                }
+                {(conclusion.contextFacts ?? []).map((fact, index) => (
+                  <FactDetail
+                    key={`context-${fact.factId || `${conclusion.id}-${index}`}`}
+                    fact={fact}
+                    legacy={conclusion.legacy}
+                    context
+                  />
+                ))}
               </div>
             </details>
           ))}
