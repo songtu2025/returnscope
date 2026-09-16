@@ -998,6 +998,30 @@ def test_real_web_task_flow(tmp_path: Path) -> None:
                 ).status_code
                 == 200
             )
+            assert client.get("/api/users").status_code == 403
+            assert (
+                client.post(
+                    "/api/users",
+                    json={
+                        "email": "unauthorized@example.com",
+                        "display_name": "越权创建",
+                        "password": "unauthorized-password-123",
+                    },
+                ).status_code
+                == 403
+            )
+            assert (
+                client.patch(
+                    f"/api/users/{admin_id}",
+                    json={
+                        "active": False,
+                        "expected_active": True,
+                        "note": "普通成员不应停用管理员",
+                    },
+                ).status_code
+                == 403
+            )
+            assert client.get("/api/audit-logs").status_code == 403
             before_rename = client.get(f"/api/tasks/{task_id}").json()
             renamed = client.patch(
                 f"/api/tasks/{task_id}",

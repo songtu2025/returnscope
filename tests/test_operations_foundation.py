@@ -707,7 +707,7 @@ def test_new_read_apis_require_login_and_keep_pagination_contract(
             workbench,
             quality,
             audit,
-            lambda: {"id": "user-1"},
+            lambda: {"id": "user-1", "is_admin": True},
         )
     )
     app.include_router(
@@ -734,6 +734,19 @@ def test_new_read_apis_require_login_and_keep_pagination_contract(
     assert client.get("/api/audit-logs?page=1&page_size=1").status_code == 200
     invalid_date = client.get("/api/audit-logs?date_to=2026-02-30")
     assert invalid_date.status_code == 400
+
+    member_app = FastAPI()
+    member_app.include_router(
+        create_operations_router(
+            workbench,
+            quality,
+            audit,
+            lambda: {"id": "user-2", "is_admin": False},
+        )
+    )
+    member_client = TestClient(member_app)
+    assert member_client.get("/api/workbench/summary").status_code == 200
+    assert member_client.get("/api/audit-logs").status_code == 403
 
     def reject_user():
         raise HTTPException(status_code=401, detail="请先登录")
