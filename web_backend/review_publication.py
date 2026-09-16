@@ -109,6 +109,20 @@ class ReviewPublicationMixin:
             raise ReviewBatchConflict("复核批次已经发布，不能重复提交")
         if batch["base_publish_status"] != "published":
             raise ReviewBatchConflict("基准分类结果版本不可用")
+        latest_version = connection.execute(
+            """
+            SELECT id FROM classification_result_versions
+            WHERE result_id = ? AND publish_status = 'published'
+            ORDER BY version_no DESC LIMIT 1
+            """,
+            (batch["result_id"],),
+        ).fetchone()
+        if latest_version is None or str(latest_version["id"]) != str(
+            batch["base_result_version_id"]
+        ):
+            raise ReviewBatchConflict(
+                "基准分类结果版本已过期，请基于最新版本重新创建复核批次"
+            )
         return batch
 
     @staticmethod
@@ -166,6 +180,16 @@ class ReviewPublicationMixin:
         )
 
     @staticmethod
+    def _validate_reviewed_classification(
+        classification: dict[str, Any],
+    ) -> tuple[ValidatedClassification, dict[str, Any] | None]:
+        core = dict(classification)
+        assessment = core.pop("human_review_assessment", None)
+        if assessment is not None and not isinstance(assessment, dict):
+            raise ValueError("人工复核评估数据格式无效")
+        return ValidatedClassification.model_validate(core), assessment
+
+    @staticmethod
     def _build_derived_result_content(
         connection: Any,
         batch: Any,
@@ -203,7 +227,12 @@ class ReviewPublicationMixin:
                 key,
                 json_value(row["classification_json"], {}),
             )
-            validated = ValidatedClassification.model_validate(classification)
+            validated, assessment = (
+                ReviewPublicationMixin._validate_reviewed_classification(classification)
+            )
+            serialized = validated.model_dump(mode="json")
+            if assessment is not None:
+                serialized["human_review_assessment"] = assessment
             quality_status = (
                 "excluded"
                 if key in changes.excluded_keys
@@ -217,7 +246,7 @@ class ReviewPublicationMixin:
                     "classification_key": key,
                     "reason": row["reason"],
                     "comment": row["comment"],
-                    "classification": validated.model_dump(mode="json"),
+                    "classification": serialized,
                     "problem_labels": list(validated.problem_label_codes),
                     "processing_status": validated.status.value,
                     "quality_status": quality_status,

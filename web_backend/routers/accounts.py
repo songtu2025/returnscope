@@ -71,6 +71,10 @@ def create_account_router(
     router = APIRouter()
     User = Annotated[dict[str, Any], Depends(current_user)]
 
+    def require_admin(user: dict[str, Any]) -> None:
+        if not user.get("is_admin"):
+            raise HTTPException(status_code=403, detail="仅系统管理员可管理团队账号")
+
     @router.get("/api/health")
     def health() -> dict[str, Any]:
         with database.connect() as connection:
@@ -216,7 +220,8 @@ def create_account_router(
         return response
 
     @router.get("/api/users")
-    def users(_user: User) -> list[dict[str, Any]]:
+    def users(user: User) -> list[dict[str, Any]]:
+        require_admin(user)
         with database.connect() as connection:
             rows = connection.execute(
                 """
@@ -233,6 +238,7 @@ def create_account_router(
 
     @router.post("/api/users", status_code=201)
     def create_user(payload: UserCreateRequest, actor: User) -> dict[str, Any]:
+        require_admin(actor)
         try:
             email = _email(payload.email)
             password_hash = hash_password(payload.password)
@@ -291,6 +297,7 @@ def create_account_router(
         payload: UserStatusRequest,
         actor: User,
     ) -> dict[str, Any]:
+        require_admin(actor)
         if user_id == actor["id"] and not payload.active:
             raise HTTPException(status_code=400, detail="不能停用自己的账号")
         clean_note = payload.note.strip()

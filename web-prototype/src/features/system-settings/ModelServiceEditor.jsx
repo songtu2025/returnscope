@@ -109,6 +109,7 @@ export function ModelServiceEditor({
         "model-service-editor",
         `panel-${activePanel}`,
         connections.length > 1 && "has-connections",
+        !selectedConnection && "is-new-connection",
       )}
     >
       {connections.length > 1 && (
