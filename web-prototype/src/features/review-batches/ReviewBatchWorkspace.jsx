@@ -24,14 +24,39 @@ import { defaultReviewAssessment, reviewAssessment } from "./reviewAssessment";
 import { useReviewBatchData } from "./useReviewBatchData";
 
 /** @typedef {import("../../shared/api/reviewBatchContracts").ReviewAction} ReviewAction */
+/** @typedef {import("../../shared/api/reviewBatchContracts").AddedSemanticItem} AddedSemanticItem */
+/** @typedef {import("../../shared/api/reviewBatchContracts").ClassificationData} ClassificationData */
+/** @typedef {import("../../shared/api/reviewBatchContracts").CoverageStatus} CoverageStatus */
 /** @typedef {import("../../shared/api/reviewBatchContracts").ReviewBatchRoute} ReviewBatchRoute */
 /** @typedef {import("../../shared/api/reviewBatchContracts").ReviewConflict} ReviewConflict */
 /** @typedef {import("../../shared/api/reviewBatchContracts").ReviewRecord} ReviewRecord */
 /** @typedef {import("../../shared/api/reviewBatchContracts").ReviewRequestError} ReviewRequestError */
+/** @typedef {import("../../shared/api/reviewBatchContracts").SemanticItemReview} SemanticItemReview */
 
 /** @param {ReviewRecord} item */
 function itemId(item) {
   return item.id;
+}
+
+/** @param {ClassificationData | undefined} classification @returns {SemanticItemReview[]} */
+function semanticItemReviewDrafts(classification) {
+  return (classification?.human_semantic_reviews ?? []).map((item) => ({
+    semantic_item_id: item.semantic_item_id,
+    action: item.action,
+    label_code: item.label_code ?? null,
+    note: item.note ?? null,
+  }));
+}
+
+/** @param {ClassificationData | undefined} classification @returns {AddedSemanticItem[]} */
+function addedSemanticItemDrafts(classification) {
+  return (classification?.human_added_semantic_items ?? []).map((item) => ({
+    item_id: item.item_id,
+    evidence_text: item.evidence_text,
+    opinion: item.opinion,
+    label_code: item.label_code,
+    note: item.note ?? null,
+  }));
 }
 
 /** @param {unknown} error @returns {ReviewRequestError} */
@@ -69,6 +94,15 @@ export function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
   const [reason, setReason] = useState("");
   const [assessment, setAssessment] = useState(() =>
     defaultReviewAssessment("confirm"),
+  );
+  const [semanticItemReviews, setSemanticItemReviews] = useState(
+    /** @type {SemanticItemReview[]} */ ([]),
+  );
+  const [addedSemanticItems, setAddedSemanticItems] = useState(
+    /** @type {AddedSemanticItem[]} */ ([]),
+  );
+  const [coverageStatus, setCoverageStatus] = useState(
+    /** @type {CoverageStatus} */ ("complete"),
   );
   const [saving, setSaving] = useState(false);
   const [checkedIds, setCheckedIds] = useState(/** @type {string[]} */ ([]));
@@ -152,14 +186,17 @@ export function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
   /** @param {ReviewRecord} record */
   const openRecord = (record) => {
     const currentCode =
-      record.classification?.primary_label_codes?.[0] ||
       record.classification?.problem_label_codes?.[0] ||
+      record.classification?.positive_label_codes?.[0] ||
       "";
     setSelected(record);
     setMode("confirm");
     setLabelCode(currentCode);
     setReason("");
     setAssessment(reviewAssessment(record));
+    setSemanticItemReviews(semanticItemReviewDrafts(record.classification));
+    setAddedSemanticItems(addedSemanticItemDrafts(record.classification));
+    setCoverageStatus(record.classification?.coverage_review?.status || "complete");
     setConflict(null);
   };
 
@@ -206,6 +243,9 @@ export function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
           label_correctness: assessment.labelCorrectness,
           evidence_completeness: assessment.evidenceCompleteness,
           review_routing: assessment.reviewRouting,
+          semantic_item_reviews: semanticItemReviews,
+          added_semantic_items: addedSemanticItems,
+          coverage_status: coverageStatus,
         },
       );
       setReason("");
@@ -470,8 +510,14 @@ export function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
           conflict={conflict}
           saving={saving}
           assessment={assessment}
+          semanticItemReviews={semanticItemReviews}
+          addedSemanticItems={addedSemanticItems}
+          coverageStatus={coverageStatus}
           onMode={changeMode}
           onAssessment={setAssessment}
+          onSemanticItemReviews={setSemanticItemReviews}
+          onAddedSemanticItems={setAddedSemanticItems}
+          onCoverageStatus={setCoverageStatus}
           onLabelCode={setLabelCode}
           onReason={setReason}
           onSave={() => saveRecord(false)}

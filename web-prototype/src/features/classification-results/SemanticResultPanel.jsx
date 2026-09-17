@@ -9,7 +9,7 @@ import {
 } from "./semanticResultPresentation";
 
 /**
- * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultRecordResponse} GeneratedRecord
+ * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultRecordResponseOutput} GeneratedRecord
  * @typedef {GeneratedRecord | Record<string, unknown>} SemanticRecord
  * @typedef {ReturnType<typeof factPresentation>} PresentedFact
  * @typedef {ReturnType<typeof semanticConclusions>[number]["facts"][number]} NormalizedFact

@@ -7,7 +7,7 @@ import { resultLabelText } from "../../lib/taxonomyPresentation";
 
 /**
  * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultDrilldownItemResponse} ClassificationResultDrilldownItem
- * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultRecordResponse} ClassificationResultRecord
+ * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultRecordResponseOutput} ClassificationResultRecord
  */
 
 /**

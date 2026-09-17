@@ -18,11 +18,15 @@ import {
 } from "../classification-results/SemanticResultPanel";
 import { semanticRecordStatus } from "../classification-results/semanticResultPresentation";
 import { REVIEW_ASSESSMENT_FIELDS, reviewAssessmentLabel } from "./reviewAssessment";
+import { SemanticReviewLedger } from "./SemanticReviewLedger";
 
 /** @typedef {import("../../shared/api/reviewBatchContracts").ReviewAction} ReviewAction */
+/** @typedef {import("../../shared/api/reviewBatchContracts").AddedSemanticItem} AddedSemanticItem */
+/** @typedef {import("../../shared/api/reviewBatchContracts").CoverageStatus} CoverageStatus */
 /** @typedef {import("../../shared/api/reviewBatchContracts").ReviewConflict} ReviewConflict */
 /** @typedef {import("../../shared/api/reviewBatchContracts").ReviewLabel} ReviewLabel */
 /** @typedef {import("../../shared/api/reviewBatchContracts").ReviewRecord} ReviewRecord */
+/** @typedef {import("../../shared/api/reviewBatchContracts").SemanticItemReview} SemanticItemReview */
 /** @typedef {import("./reviewAssessment").ReviewAssessment} ReviewAssessment */
 
 const WORKFLOW_STATUS_LABELS = {
@@ -92,8 +96,15 @@ export function ReviewRecordRow({
   onOpen,
 }) {
   const classification = record.classification ?? {};
-  const labelCodes =
-    classification.primary_label_codes ?? classification.problem_label_codes ?? [];
+  const semanticCodes = [
+    ...(classification.problem_label_codes ?? []),
+    ...(classification.positive_label_codes ?? []),
+  ];
+  const labelCodes = [
+    ...new Set(
+      semanticCodes.length ? semanticCodes : (classification.primary_label_codes ?? []),
+    ),
+  ];
   return (
     <article className="review-record-row" role="row">
       {selectionEnabled &&
@@ -146,7 +157,7 @@ export function ReviewRecordRow({
 }
 
 /**
- * @param {{record: ReviewRecord, readOnly: boolean, labels: ReviewLabel[], mode: ReviewAction, labelCode: string, reason: string, conflict: ReviewConflict | null, saving: boolean, assessment: ReviewAssessment, onMode: (mode: ReviewAction) => void, onAssessment: (assessment: ReviewAssessment) => void, onLabelCode: (code: string) => void, onReason: (reason: string) => void, onSave: () => void | Promise<void>, onSaveAndNext: () => void | Promise<void>, onClose: () => void, onUseServer: () => void, onContinueWithServer: () => void}} props
+ * @param {{record: ReviewRecord, readOnly: boolean, labels: ReviewLabel[], mode: ReviewAction, labelCode: string, reason: string, conflict: ReviewConflict | null, saving: boolean, assessment: ReviewAssessment, semanticItemReviews: SemanticItemReview[], addedSemanticItems: AddedSemanticItem[], coverageStatus: CoverageStatus, onMode: (mode: ReviewAction) => void, onAssessment: (assessment: ReviewAssessment) => void, onSemanticItemReviews: (value: SemanticItemReview[]) => void, onAddedSemanticItems: (value: AddedSemanticItem[]) => void, onCoverageStatus: (value: CoverageStatus) => void, onLabelCode: (code: string) => void, onReason: (reason: string) => void, onSave: () => void | Promise<void>, onSaveAndNext: () => void | Promise<void>, onClose: () => void, onUseServer: () => void, onContinueWithServer: () => void}} props
  */
 export function ReviewRecordDrawer({
   record,
@@ -158,8 +169,14 @@ export function ReviewRecordDrawer({
   conflict,
   saving,
   assessment,
+  semanticItemReviews,
+  addedSemanticItems,
+  coverageStatus,
   onMode,
   onAssessment,
+  onSemanticItemReviews,
+  onAddedSemanticItems,
+  onCoverageStatus,
   onLabelCode,
   onReason,
   onSave,
@@ -275,17 +292,37 @@ export function ReviewRecordDrawer({
                 <dd>{Number(record.record_count || 0).toLocaleString()}</dd>
               </div>
             </dl>
-            <blockquote>“{record.comment || "没有评论证据"}”</blockquote>
           </section>
 
-          <section className="review-current-result">
-            <b>当前业务标签</b>
-            <p>
-              {resultLabelText(record, classification.primary_label_codes) ||
-                "未形成主标签"}
-            </p>
+          <SemanticReviewLedger
+            key={record.id}
+            record={record}
+            labels={labels}
+            editable={editable}
+            itemReviews={semanticItemReviews}
+            addedItems={addedSemanticItems}
+            coverageStatus={coverageStatus}
+            onItemReviews={onSemanticItemReviews}
+            onAddedItems={onAddedSemanticItems}
+            onCoverageStatus={onCoverageStatus}
+          />
+
+          <details className="review-source-context">
+            <summary>展开完整原文上下文</summary>
+            <blockquote>“{record.comment || "没有评论证据"}”</blockquote>
+          </details>
+
+          <details className="review-primary-context">
+            <summary>查看完整语义详情</summary>
+            <div>
+              <span>主因（辅助信息）</span>
+              <p>
+                {resultLabelText(record, classification.primary_label_codes) ||
+                  "未形成主因标签"}
+              </p>
+            </div>
             <SemanticResultPanel record={record} />
-          </section>
+          </details>
 
           {!editable && (
             <ReviewAssessmentSummary value={classification.human_review_assessment} />

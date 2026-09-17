@@ -142,7 +142,7 @@
  * @property {string | null} [published_at]
  * @property {string} [created_at]
  *
- * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultRecordResponse} DashboardRecord
+ * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultRecordResponseOutput} DashboardRecord
  * @typedef {DashboardInsights | DashboardSource[]} DashboardContentData
  * @typedef {{loading: boolean, error: string, data: DashboardContentData | null}} DashboardContentState
  * @typedef {{loading: boolean, error: string, items: InsightReport[]}} DashboardReportState

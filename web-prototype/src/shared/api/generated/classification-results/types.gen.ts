@@ -47,7 +47,7 @@ export type ClaimEvidenceRequirement = {
 /**
  * ClassificationPayloadResponse
  */
-export type ClassificationPayloadResponse = {
+export type ClassificationPayloadResponseInput = {
   /**
    * Classification Key
    */
@@ -110,6 +110,93 @@ export type ClassificationPayloadResponse = {
   semantic_relations?: Array<{
     [key: string]: unknown;
   }>;
+  semantic_review?: SemanticReviewResponse | null;
+  /**
+   * Semantic Units
+   */
+  semantic_units?: Array<ClassificationSemanticFactResponse>;
+  /**
+   * Status
+   */
+  status?: string | null;
+  /**
+   * Taxonomy Version
+   */
+  taxonomy_version?: string | null;
+  /**
+   * Unknown Semantics
+   */
+  unknown_semantics?: Array<ClassificationUnknownSemanticResponse>;
+  [key: string]: unknown;
+};
+
+/**
+ * ClassificationPayloadResponse
+ */
+export type ClassificationPayloadResponseOutput = {
+  /**
+   * Classification Key
+   */
+  classification_key?: string | null;
+  /**
+   * Comment Summary
+   */
+  comment_summary?: {
+    [key: string]: unknown;
+  } | null;
+  /**
+   * Dimension Decisions
+   */
+  dimension_decisions?: Array<{
+    [key: string]: unknown;
+  }>;
+  /**
+   * Extracted Facts
+   */
+  extracted_facts?: Array<{
+    [key: string]: unknown;
+  }>;
+  /**
+   * Fact Mappings
+   */
+  fact_mappings?: Array<{
+    [key: string]: unknown;
+  }>;
+  /**
+   * Model Name
+   */
+  model_name?: string | null;
+  /**
+   * Needs Review
+   */
+  needs_review?: boolean | null;
+  /**
+   * Positive Label Codes
+   */
+  positive_label_codes?: Array<string>;
+  /**
+   * Primary Label Codes
+   */
+  primary_label_codes?: Array<string>;
+  /**
+   * Problem Label Codes
+   */
+  problem_label_codes?: Array<string>;
+  /**
+   * Prompt Version
+   */
+  prompt_version?: string | null;
+  /**
+   * Review Reasons
+   */
+  review_reasons?: Array<string>;
+  /**
+   * Semantic Relations
+   */
+  semantic_relations?: Array<{
+    [key: string]: unknown;
+  }>;
+  semantic_review?: SemanticReviewResponse | null;
   /**
    * Semantic Units
    */
@@ -378,7 +465,7 @@ export type ClassificationResultQualityCountResponse = {
 /**
  * ClassificationResultRecordResponse
  */
-export type ClassificationResultRecordResponse = {
+export type ClassificationResultRecordResponseInput = {
   /**
    * Asin
    */
@@ -395,7 +482,139 @@ export type ClassificationResultRecordResponse = {
    * Category B
    */
   category_b?: string | null;
-  classification: ClassificationPayloadResponse;
+  classification: ClassificationPayloadResponseInput;
+  /**
+   * Classification Key
+   */
+  classification_key: string;
+  /**
+   * Comment
+   */
+  comment?: string | null;
+  /**
+   * Comment Conclusions
+   */
+  comment_conclusions?: Array<ClassificationTopicSummaryResponse>;
+  /**
+   * Comment Summary Status
+   */
+  comment_summary_status: string;
+  /**
+   * Event Count
+   */
+  event_count: number;
+  /**
+   * Fact Count
+   */
+  fact_count: number;
+  /**
+   * Fnsku
+   */
+  fnsku?: string | null;
+  /**
+   * Id
+   */
+  id: string;
+  /**
+   * Ignored Semantics
+   */
+  ignored_semantics?: Array<ClassificationUnknownSemanticResponse>;
+  /**
+   * Listing
+   */
+  listing?: string | null;
+  /**
+   * Matched Msku
+   */
+  matched_msku?: string | null;
+  /**
+   * Order Id
+   */
+  order_id?: string | null;
+  /**
+   * Problem Labels
+   */
+  problem_labels?: Array<string>;
+  /**
+   * Processing Status
+   */
+  processing_status: string;
+  /**
+   * Product Match Status
+   */
+  product_match_status: string;
+  /**
+   * Product Name
+   */
+  product_name?: string | null;
+  /**
+   * Product Sku
+   */
+  product_sku?: string | null;
+  /**
+   * Quality Status
+   */
+  quality_status: string;
+  /**
+   * Reason
+   */
+  reason?: string | null;
+  /**
+   * Result Version Id
+   */
+  result_version_id: string;
+  /**
+   * Return Date
+   */
+  return_date?: string | null;
+  /**
+   * Semantic Disposition
+   */
+  semantic_disposition: string;
+  /**
+   * Source Record Id
+   */
+  source_record_id: string;
+  /**
+   * Source Row
+   */
+  source_row: number;
+  /**
+   * Source Sku
+   */
+  source_sku?: string | null;
+  /**
+   * Store Site
+   */
+  store_site?: string | null;
+  /**
+   * Unknown Semantics
+   */
+  unknown_semantics?: Array<ClassificationUnknownSemanticResponse>;
+  [key: string]: unknown;
+};
+
+/**
+ * ClassificationResultRecordResponse
+ */
+export type ClassificationResultRecordResponseOutput = {
+  /**
+   * Asin
+   */
+  asin?: string | null;
+  /**
+   * Atomic Facts
+   */
+  atomic_facts?: Array<ClassificationSemanticFactResponse>;
+  /**
+   * Category A
+   */
+  category_a?: string | null;
+  /**
+   * Category B
+   */
+  category_b?: string | null;
+  classification: ClassificationPayloadResponseOutput;
   /**
    * Classification Key
    */
@@ -514,7 +733,7 @@ export type ClassificationResultRecordsResponse = {
   /**
    * Items
    */
-  items: Array<ClassificationResultRecordResponse>;
+  items: Array<ClassificationResultRecordResponseOutput>;
   /**
    * Page
    */
@@ -523,7 +742,7 @@ export type ClassificationResultRecordsResponse = {
    * Page Size
    */
   page_size: number;
-  taxonomy?: TaxonomyConfig | null;
+  taxonomy?: TaxonomyConfigOutput | null;
   /**
    * Total
    */
@@ -1160,7 +1379,53 @@ export type ImplicitEvidenceRule = {
 /**
  * LabelDefinition
  */
-export type LabelDefinition = {
+export type LabelDefinitionInput = {
+  /**
+   * Allowed Claim Ids
+   */
+  allowed_claim_ids?: Array<string>;
+  /**
+   * Allowed Sentiments
+   */
+  allowed_sentiments: Array<SentimentCode>;
+  /**
+   * Code
+   */
+  code: string;
+  /**
+   * Description
+   */
+  description?: string;
+  /**
+   * Examples
+   */
+  examples?: Array<LabelExample>;
+  /**
+   * Exclusions
+   */
+  exclusions?: Array<string>;
+  /**
+   * Group
+   */
+  group?: string;
+  /**
+   * Keywords
+   */
+  keywords?: Array<string>;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Parent Code
+   */
+  parent_code?: string | null;
+};
+
+/**
+ * LabelDefinition
+ */
+export type LabelDefinitionOutput = {
   /**
    * Allowed Claim Ids
    */
@@ -1223,6 +1488,140 @@ export type LabelExample = {
 };
 
 /**
+ * SemanticReviewCoverageResponse
+ */
+export type SemanticReviewCoverageResponse = {
+  /**
+   * Analysis Failure
+   */
+  analysis_failure?: number;
+  /**
+   * Complete
+   */
+  complete?: boolean;
+  /**
+   * Mapped
+   */
+  mapped?: number;
+  /**
+   * No Tag Needed
+   */
+  no_tag_needed?: number;
+  /**
+   * Taxonomy Gap
+   */
+  taxonomy_gap?: number;
+  /**
+   * Total
+   */
+  total?: number;
+  /**
+   * True Ambiguity
+   */
+  true_ambiguity?: number;
+  /**
+   * Unexplained Fragment Count
+   */
+  unexplained_fragment_count?: number;
+  [key: string]: unknown;
+};
+
+/**
+ * SemanticReviewItemResponse
+ */
+export type SemanticReviewItemResponse = {
+  /**
+   * Action
+   */
+  action?: string | null;
+  /**
+   * Business Review Required
+   */
+  business_review_required?: boolean | null;
+  /**
+   * Detail
+   */
+  detail?: string | null;
+  /**
+   * Detail Status
+   */
+  detail_status?: string | null;
+  /**
+   * Diagnostic Code
+   */
+  diagnostic_code?: string | null;
+  /**
+   * Diagnostic Domain
+   */
+  diagnostic_domain?: string | null;
+  /**
+   * Diagnostic Title
+   */
+  diagnostic_title?: string | null;
+  /**
+   * Disposition
+   */
+  disposition: string;
+  /**
+   * Evidence Source
+   */
+  evidence_source?: string;
+  /**
+   * Evidence Text
+   */
+  evidence_text?: string;
+  /**
+   * Fact Id
+   */
+  fact_id?: string;
+  /**
+   * Item Id
+   */
+  item_id: string;
+  /**
+   * Label Code
+   */
+  label_code?: string;
+  /**
+   * Label Path
+   */
+  label_path?: Array<string>;
+  /**
+   * Opinion
+   */
+  opinion?: string;
+  /**
+   * Primary Result
+   */
+  primary_result?: string | null;
+  /**
+   * Reason
+   */
+  reason?: string;
+  /**
+   * Secondary Result
+   */
+  secondary_result?: string | null;
+  [key: string]: unknown;
+};
+
+/**
+ * SemanticReviewResponse
+ */
+export type SemanticReviewResponse = {
+  coverage_summary: SemanticReviewCoverageResponse;
+  /**
+   * Semantic Items
+   */
+  semantic_items?: Array<SemanticReviewItemResponse>;
+  /**
+   * Unexplained Fragments
+   */
+  unexplained_fragments?: Array<string>;
+  [key: string]: unknown;
+};
+
+/**
  * SentimentCode
  */
 export type SentimentCode = "NEGATIVE" | "POSITIVE" | "NEUTRAL";
@@ -1230,7 +1629,7 @@ export type SentimentCode = "NEGATIVE" | "POSITIVE" | "NEUTRAL";
 /**
  * TaxonomyConfig
  */
-export type TaxonomyConfig = {
+export type TaxonomyConfigInput = {
   /**
    * Agent Family
    */
@@ -1250,7 +1649,50 @@ export type TaxonomyConfig = {
   /**
    * Labels
    */
-  labels: Array<LabelDefinition>;
+  labels: Array<LabelDefinitionInput>;
+  /**
+   * Product Context
+   */
+  product_context: string;
+  /**
+   * Recognition Profile
+   */
+  recognition_profile?: "legacy_v3" | "keyword_free_v1" | "semantic_v1" | "fact_v2";
+  /**
+   * Structure Version
+   */
+  structure_version?: 1 | 2;
+  validation_rules?: TaxonomyValidationRules;
+  /**
+   * Version
+   */
+  version: string;
+};
+
+/**
+ * TaxonomyConfig
+ */
+export type TaxonomyConfigOutput = {
+  /**
+   * Agent Family
+   */
+  agent_family: string;
+  /**
+   * Allowed Parts
+   */
+  allowed_parts?: Array<string>;
+  /**
+   * Categories
+   */
+  categories?: Array<CategoryDefinition>;
+  /**
+   * Instructions
+   */
+  instructions?: Array<string>;
+  /**
+   * Labels
+   */
+  labels: Array<LabelDefinitionOutput>;
   /**
    * Product Context
    */
@@ -1330,16 +1772,6 @@ export type TaxonomyValidationRules = {
  * ValidationError
  */
 export type ValidationError = {
-  /**
-   * Context
-   */
-  ctx?: {
-    [key: string]: unknown;
-  };
-  /**
-   * Input
-   */
-  input?: unknown;
   /**
    * Location
    */

@@ -5,7 +5,7 @@ import { resultLabelText } from "../../lib/taxonomyPresentation";
 import { SemanticResultPanel } from "./SemanticResultPanel";
 
 /**
- * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultRecordResponse} ClassificationResultRecord
+ * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultRecordResponseOutput} ClassificationResultRecord
  */
 
 /**

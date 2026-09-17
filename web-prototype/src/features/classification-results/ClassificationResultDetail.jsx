@@ -30,7 +30,7 @@ import { EvidenceDrawer } from "./EvidenceDrawer";
 import { resultActionPolicy } from "./resultActionPolicy";
 import { useClassificationResultDetailData } from "./useClassificationResultDetailData";
 
-/** @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultRecordResponse} ClassificationResultRecord */
+/** @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultRecordResponseOutput} ClassificationResultRecord */
 /** @typedef {import("./classificationResultRoute").ClassificationResultRoute} ClassificationResultRoute */
 /**
  * @typedef {object} ClassificationResultDetailProps

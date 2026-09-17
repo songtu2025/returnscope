@@ -236,6 +236,46 @@ test("待处理批次展示真实业务字段并阻止提前发布", async () =>
   expect(within(drawer).getAllByText("SOURCE-MSKU-1")).toHaveLength(2);
 });
 
+test("复核记录摘要展示完整问题和正向标签而非主因标签", async () => {
+  const semanticRecord = {
+    ...baseRecord,
+    problem_label_paths: {
+      FIT_TOO_SMALL: ["尺寸", "偏小"],
+      FIT_TOO_LARGE: ["尺寸", "偏大"],
+      WARM: ["体验", "保暖良好"],
+    },
+    classification: {
+      ...baseRecord.classification,
+      primary_label_codes: ["FIT_TOO_SMALL"],
+      problem_label_codes: ["FIT_TOO_LARGE"],
+      positive_label_codes: ["WARM"],
+    },
+  };
+
+  render(page(baseBatch, [semanticRecord]));
+
+  expect(await screen.findByText("尺寸 → 偏大、体验 → 保暖良好")).toBeVisible();
+  expect(screen.queryByText("尺寸 → 偏小")).not.toBeInTheDocument();
+});
+
+test("修改分类时不使用主因作为预选标签", async () => {
+  const semanticRecord = {
+    ...baseRecord,
+    classification: {
+      ...baseRecord.classification,
+      primary_label_codes: ["FIT_TOO_SMALL"],
+      problem_label_codes: ["FIT_TOO_LARGE"],
+      positive_label_codes: [],
+    },
+  };
+
+  render(page(baseBatch, [semanticRecord]));
+
+  await userEvent.click(await screen.findByRole("button", { name: "处理" }));
+  await userEvent.click(screen.getByRole("button", { name: /修改分类/ }));
+  expectSelectedOption("修改分类标签", "偏大 · FIT_TOO_LARGE");
+});
+
 test("待处理记录回填已存在的复核质量判断", async () => {
   const assessedRecord = {
     ...baseRecord,
@@ -254,6 +294,94 @@ test("待处理记录回填已存在的复核质量判断", async () => {
   expectSelectedOption("标签正确性", "错误");
   expectSelectedOption("证据完整性", "部分完整");
   expectSelectedOption("路由合理性", "本应自动通过");
+});
+
+test("再次保存已有逐项修订时不会回传服务端审计元数据", async () => {
+  const reviewedRecord = {
+    ...baseRecord,
+    classification: {
+      ...baseRecord.classification,
+      semantic_review: {
+        semantic_items: [
+          {
+            item_id: "semantic-item-0",
+            evidence_text: "Too small",
+            opinion: "偏小",
+            label_code: "FIT_TOO_SMALL",
+            disposition: "MAPPED",
+          },
+        ],
+        coverage_summary: { mapped: 1 },
+        unexplained_fragments: [],
+      },
+      human_semantic_reviews: [
+        {
+          semantic_item_id: "semantic-item-0",
+          action: "no_tag_needed",
+          label_code: null,
+          note: "仅描述个人偏好",
+          assessed_by: "user-1",
+          assessed_at: "2026-08-12T10:00:00Z",
+        },
+      ],
+      human_added_semantic_items: [
+        {
+          item_id: "manual-1",
+          evidence_text: "for me",
+          opinion: "个人尺寸体验",
+          label_code: "FIT_TOO_LARGE",
+          note: "人工补充的遗漏观点",
+          assessed_by: "user-1",
+          assessed_at: "2026-08-12T10:00:00Z",
+        },
+      ],
+      coverage_review: {
+        status: "has_omission",
+        assessed_by: "user-1",
+        assessed_at: "2026-08-12T10:00:00Z",
+      },
+    },
+  };
+  reviewBatchApiMock.updateReviewBatchRecord.mockResolvedValue({
+    ...reviewedRecord,
+    workflow_status: "resolved",
+    revision: 2,
+  });
+  render(page(baseBatch, [reviewedRecord]));
+
+  await userEvent.click(await screen.findByRole("button", { name: "处理" }));
+  await userEvent.type(
+    screen.getByPlaceholderText("必填：说明确认、修改或排除的判断依据"),
+    "复查后保持已有逐项修订",
+  );
+  await userEvent.click(screen.getByRole("button", { name: "仅保存" }));
+
+  await waitFor(() =>
+    expect(reviewBatchApiMock.updateReviewBatchRecord).toHaveBeenCalledWith(
+      "review-batch-1",
+      "review-record-1",
+      expect.objectContaining({
+        semantic_item_reviews: [
+          {
+            semantic_item_id: "semantic-item-0",
+            action: "no_tag_needed",
+            label_code: null,
+            note: "仅描述个人偏好",
+          },
+        ],
+        added_semantic_items: [
+          {
+            item_id: "manual-1",
+            evidence_text: "for me",
+            opinion: "个人尺寸体验",
+            label_code: "FIT_TOO_LARGE",
+            note: "人工补充的遗漏观点",
+          },
+        ],
+        coverage_status: "has_omission",
+      }),
+    ),
+  );
 });
 
 test("复核抽屉限制键盘焦点并在关闭后恢复触发按钮", async () => {
@@ -332,6 +460,9 @@ test("确认原结果同时提交标签、证据和路由质量判断", async ()
         label_correctness: "partial",
         evidence_completeness: "missing",
         review_routing: "should_auto_approve",
+        semantic_item_reviews: [],
+        added_semantic_items: [],
+        coverage_status: "complete",
       },
     ),
   );
@@ -341,6 +472,164 @@ test("确认原结果同时提交标签、证据和路由质量判断", async ()
   expect(within(drawer).getByText("产品表名称")).toBeVisible();
   expect(within(drawer).getByText("PRODUCT-SKU-1")).toBeVisible();
   expect(within(drawer).getByText("2")).toBeVisible();
+});
+
+test("语义核验清单逐项展示并将系统异常置顶且锁定编辑", async () => {
+  const semanticRecord = {
+    ...baseRecord,
+    comment: "Warm, but the fingers are too long.",
+    classification: {
+      ...baseRecord.classification,
+      semantic_review: {
+        semantic_items: [
+          {
+            item_id: "mapped-1",
+            evidence_text: "Warm",
+            opinion: "保暖效果好",
+            label_code: "FIT_TOO_SMALL",
+            disposition: "MAPPED",
+          },
+          {
+            item_id: "ignored-1",
+            evidence_text: "for winter",
+            opinion: "使用季节信息",
+            disposition: "NO_TAG_NEEDED",
+          },
+          {
+            item_id: "failed-1",
+            evidence_text: "fingers are too long",
+            opinion: "系统未完成分析",
+            disposition: "ANALYSIS_FAILURE",
+            reason: "模型响应失败",
+            diagnostic_domain: "TECHNICAL_RUNTIME",
+            diagnostic_code: "SECONDARY_MODEL_TIMEOUT",
+            diagnostic_title: "风险复核调用超时",
+            detail_status: "AVAILABLE",
+            primary_result: "首次分析：手指过长",
+            secondary_result: "风险复核：未返回",
+            detail: "风险复核模型在时限内未返回结果",
+            action: "请系统重试风险复核。",
+          },
+          {
+            item_id: "unknown-1",
+            evidence_text: "too long",
+            opinion: "指长问题待判断",
+            disposition: "TRUE_AMBIGUITY",
+          },
+        ],
+        coverage_summary: {
+          mapped: 1,
+          no_tag_needed: 1,
+          true_ambiguity: 1,
+          taxonomy_gap: 0,
+          analysis_failure: 1,
+          unexplained_fragment_count: 1,
+        },
+        unexplained_fragments: ["but"],
+      },
+    },
+  };
+  render(page(baseBatch, [semanticRecord]));
+
+  await userEvent.click(await screen.findByRole("button", { name: "处理" }));
+  const ledger = screen.getByRole("region", { name: "语义核验清单" });
+  expect(within(ledger).getByText("无需归类 1")).toBeVisible();
+  expect(within(ledger).getByText("待判断 2")).toBeVisible();
+  expect(within(ledger).getByText("系统异常 1")).toBeVisible();
+  const items = within(ledger).getAllByRole("article");
+  expect(within(items[0]).getByText("系统处理失败")).toBeVisible();
+  expect(within(items[0]).getByText("风险复核调用超时")).toBeVisible();
+  expect(
+    within(items[0]).getByText(/运行异常 · SECONDARY_MODEL_TIMEOUT/),
+  ).toBeVisible();
+  expect(within(items[0]).getByText("首次分析：手指过长")).toBeVisible();
+  expect(within(items[0]).getByText("风险复核：未返回")).toBeVisible();
+  expect(within(items[0]).getByText("风险复核模型在时限内未返回结果")).toBeVisible();
+  expect(within(items[0]).getByText("请系统重试风险复核。")).toBeVisible();
+  expect(within(items[0]).queryByRole("button", { name: "调整" })).toBeNull();
+  expect(within(items[1]).getByText("原文含义不明确")).toBeVisible();
+  expect(within(items[2]).getByText("未解释原文片段")).toBeVisible();
+  expect(within(items[2]).getByText(/but/)).toBeVisible();
+  expect(within(items[3]).getByText("保暖效果好")).toBeVisible();
+  expect(screen.getByText("展开完整原文上下文")).toBeVisible();
+  expect(screen.getByText("查看完整语义详情")).toBeVisible();
+});
+
+test("逐项调整和补充遗漏观点随整条确认提交", async () => {
+  const record = {
+    ...baseRecord,
+    classification: {
+      ...baseRecord.classification,
+      semantic_review: {
+        semantic_items: [
+          {
+            item_id: "semantic-item-0",
+            evidence_text: "Too small",
+            opinion: "偏小",
+            label_code: "FIT_TOO_SMALL",
+            disposition: "MAPPED",
+          },
+        ],
+        coverage_summary: { mapped: 1 },
+        unexplained_fragments: [],
+      },
+    },
+  };
+  reviewBatchApiMock.updateReviewBatchRecord.mockResolvedValue({
+    ...record,
+    workflow_status: "resolved",
+    revision: 2,
+  });
+  render(page(baseBatch, [record]));
+
+  await userEvent.click(await screen.findByRole("button", { name: "处理" }));
+  await userEvent.click(screen.getByRole("button", { name: "调整" }));
+  await selectOption("调整方式：偏小", "标记为无需归类");
+  await userEvent.click(screen.getByRole("button", { name: "保存本项调整" }));
+  await selectOption("观点覆盖判断", "存在遗漏观点");
+  await userEvent.click(screen.getByRole("button", { name: "补充遗漏观点" }));
+  await userEvent.type(
+    screen.getByPlaceholderText("粘贴能够支持该观点的原文片段"),
+    "for me",
+  );
+  await userEvent.type(
+    screen.getByPlaceholderText("用一句话概括用户表达的观点"),
+    "个人尺寸体验",
+  );
+  await selectOption("补充观点的归类标签", "偏大 · FIT_TOO_LARGE");
+  await userEvent.click(screen.getByRole("button", { name: "添加观点" }));
+  await userEvent.type(
+    screen.getByPlaceholderText("必填：说明确认、修改或排除的判断依据"),
+    "按原文补充和调整",
+  );
+  await userEvent.click(screen.getByRole("button", { name: "仅保存" }));
+
+  await waitFor(() =>
+    expect(reviewBatchApiMock.updateReviewBatchRecord).toHaveBeenCalledWith(
+      "review-batch-1",
+      "review-record-1",
+      expect.objectContaining({
+        semantic_item_reviews: [
+          {
+            semantic_item_id: "semantic-item-0",
+            action: "no_tag_needed",
+            label_code: null,
+            note: null,
+          },
+        ],
+        added_semantic_items: [
+          {
+            item_id: "manual-1",
+            evidence_text: "for me",
+            opinion: "个人尺寸体验",
+            label_code: "FIT_TOO_LARGE",
+            note: "人工补充的遗漏观点",
+          },
+        ],
+        coverage_status: "has_omission",
+      }),
+    ),
+  );
 });
 
 test("可选择本页待处理记录并批量排除", async () => {
