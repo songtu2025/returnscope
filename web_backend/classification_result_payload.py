@@ -10,6 +10,7 @@ from return_semantics.schemas import (
     TaxonomyConfig,
     ValidatedClassification,
 )
+from return_semantics.semantic_review import build_semantic_review_view
 from return_semantics.taxonomy_hierarchy import label_path, label_path_codes
 
 QUALITY_STATUSES = {"ready", "review_required", "unusable", "excluded"}
@@ -347,6 +348,7 @@ def _prepare_classification_payload(
     processing_status: str,
     *,
     include_api_fields: bool = True,
+    source_text: str = "",
 ) -> dict[str, Any]:
     normalized = dict(payload)
     unknown_semantics = []
@@ -411,6 +413,12 @@ def _prepare_classification_payload(
         normalized["atomic_facts"] = facts
         normalized["comment_conclusions"] = summaries
         normalized["comment_summary_status"] = comment_status
+        normalized["semantic_review"] = build_semantic_review_view(
+            normalized,
+            source_text,
+            taxonomy,
+            processing_status=processing_status,
+        )
     return normalized
 
 

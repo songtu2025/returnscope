@@ -513,7 +513,7 @@ def test_real_web_task_flow(tmp_path: Path) -> None:
                             "model_key": "test-model",
                             "display_name": "测试主模型",
                             "supported_efforts": ["medium"],
-                        }
+                        },
                     ],
                 },
             )
@@ -861,6 +861,30 @@ def test_real_web_task_flow(tmp_path: Path) -> None:
             ).json()
             assert reviews == []
             base_version_id = current["segments"][0]["result_version_id"]
+            with app.state.database.transaction() as connection:
+                unit = connection.execute(
+                    """
+                    SELECT classification_json FROM classification_units
+                    WHERE result_version_id = ?
+                    """,
+                    (base_version_id,),
+                ).fetchone()
+                classification = json.loads(unit["classification_json"])
+                classification["status"] = "MANUAL_REVIEW"
+                classification["review_reasons"] = ["测试人工复核"]
+                classification["review_diagnostics"] = []
+                connection.execute(
+                    """
+                    UPDATE classification_units
+                    SET classification_json = ?, processing_status = 'MANUAL_REVIEW',
+                        quality_status = 'review_required'
+                    WHERE result_version_id = ?
+                    """,
+                    (
+                        json.dumps(classification, ensure_ascii=False),
+                        base_version_id,
+                    ),
+                )
             batch_response = client.post(
                 f"/api/classification-results/{base_version_id}/review-batches",
                 json={"reason": "创建复核批次"},

@@ -12,7 +12,7 @@ from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from test_classification_result_pool import _publish, _seed_result_context
 
-from return_semantics.schemas import ProcessingStatus
+from return_semantics.schemas import ProcessingStatus, ReviewDiagnostic
 from web_backend import review_service as review_service_module
 from web_backend.classification_result_service import ClassificationResultService
 from web_backend.classification_standard_service import ClassificationStandardService
@@ -70,7 +70,7 @@ def test_review_service_preserves_public_method_contract() -> None:
         "list_batches": "(self, *, page: int = 1, page_size: int = 50, status: str | None = None, base_result_version_id: str | None = None, q: str | None = None) -> dict[str, typing.Any]",
         "get_batch": "(self, batch_id: str) -> dict[str, typing.Any]",
         "batch_records": "(self, batch_id: str, *, page: int = 1, page_size: int = 50, workflow_status: str | None = None, q: str | None = None, listing: str | None = None, product_name: str | None = None, product_sku: str | None = None, order_id: str | None = None) -> dict[str, typing.Any]",
-        "update_batch_record": "(self, batch_id: str, review_id: str, expected_revision: int, actor_id: str, label_code: str | None, note: str, action: str | None = None, review_assessment: dict[str, str | None] | None = None) -> dict[str, typing.Any]",
+        "update_batch_record": "(self, batch_id: str, review_id: str, expected_revision: int, actor_id: str, label_code: str | None, note: str, action: str | None = None, review_assessment: dict[str, str | None] | None = None, semantic_item_reviews: list[dict[str, typing.Any]] | None = None, added_semantic_items: list[dict[str, typing.Any]] | None = None, coverage_status: str | None = None) -> dict[str, typing.Any]",
         "update_batch_records": "(self, batch_id: str, records: list[dict[str, typing.Any]], actor_id: str, action: str, label_code: str | None, note: str, review_assessment: dict[str, str | None] | None = None) -> dict[str, typing.Any]",
         "publish_batch": "(self, batch_id: str, expected_revision: int, actor_id: str, reason: str) -> dict[str, typing.Any]",
         "resolve": "(self, review_id: str, expected_revision: int, actor_id: str, label_code: str | None, note: str) -> dict[str, typing.Any]",
@@ -129,6 +129,34 @@ def test_review_service_preserves_exception_import_contract() -> None:
     assert issubclass(ReviewBatchConflict, ValueError)
     assert RevisionConflict.__module__ == "web_backend.review_service"
     assert ReviewBatchConflict.__module__ == "web_backend.review_service"
+
+
+def test_system_failure_is_not_added_to_business_review_batch(tmp_path: Path) -> None:
+    context = _seed_result_context(tmp_path)
+    source = context.results[context.key]
+    context.results = {
+        context.key: source.model_copy(
+            update={
+                "status": ProcessingStatus.MODEL_ERROR,
+                "review_reasons": ["请求超时"],
+                "review_diagnostics": [
+                    ReviewDiagnostic(
+                        code="MODEL_RUN_TIMEOUT",
+                        detail="请求超时",
+                        action="SYSTEM_RERUN",
+                    )
+                ],
+            }
+        )
+    }
+    version = _publish(context)
+
+    with pytest.raises(ValueError, match="没有需要业务判断的分类单元"):
+        ReviewService(context.database).create_batch(
+            str(version["version_id"]),
+            "user-1",
+            "不应交给业务处理系统故障",
+        )
 
 
 def test_review_service_rebuild_result_remains_instance_patchable(
@@ -286,6 +314,125 @@ def test_review_record_keeps_independent_quality_assessment(tmp_path: Path) -> N
         page_size=200,
     )["items"][0]["classification"]
     assert published["human_review_assessment"] == assessment
+
+
+def test_review_record_persists_semantic_details_and_publishes_derived_version(
+    tmp_path: Path,
+) -> None:
+    context, base = _publish_review_required(tmp_path)
+    result_service = ClassificationResultService(context.database)
+    service = ReviewService(context.database, result_service)
+    batch = service.create_batch(str(base["version_id"]), "user-1", "验证逐项复核")
+    review = service.batch_records(batch["id"])["items"][0]
+    semantic_item = review["classification"]["semantic_review"]["semantic_items"][0]
+    label_code = semantic_item["label_code"]
+
+    updated = service.update_batch_record(
+        batch_id=batch["id"],
+        review_id=review["id"],
+        expected_revision=review["revision"],
+        actor_id="user-1",
+        label_code=None,
+        note="保存逐项核验和补录事实",
+        action="confirm",
+        semantic_item_reviews=[
+            {
+                "semantic_item_id": semantic_item["item_id"],
+                "action": "change_label",
+                "label_code": label_code,
+            }
+        ],
+        added_semantic_items=[
+            {
+                "evidence_text": review["comment"],
+                "opinion": "人工补录事实",
+                "label_code": label_code,
+            }
+        ],
+        coverage_status="has_omission",
+    )
+
+    classification = updated["classification"]
+    assert classification["human_semantic_reviews"][0]["assessed_by"] == "user-1"
+    assert classification["human_added_semantic_items"][0]["assessed_by"] == "user-1"
+    assert classification["coverage_review"]["status"] == "has_omission"
+    assert "semantic_review" in classification
+    assert "semantic_review" not in updated["revisions"][0]["after"]
+
+    published = service.publish_batch(
+        batch["id"],
+        service.get_batch(batch["id"])["revision"],
+        "user-1",
+        "发布逐项核验结果",
+    )
+    derived = result_service.records(published["version_id"], page_size=200)["items"][0]
+    original = result_service.records(str(base["version_id"]), page_size=200)["items"][
+        0
+    ]
+    assert derived["classification"]["human_semantic_reviews"]
+    assert derived["classification"]["human_added_semantic_items"]
+    assert derived["classification"]["semantic_review"]
+    assert "human_semantic_reviews" not in original["classification"]
+
+
+def test_semantic_review_rejects_foreign_item_label_and_evidence(
+    tmp_path: Path,
+) -> None:
+    context, base = _publish_review_required(tmp_path)
+    service = ReviewService(context.database)
+    batch = service.create_batch(str(base["version_id"]), "user-1", "验证复核约束")
+    review = service.batch_records(batch["id"])["items"][0]
+
+    with pytest.raises(ValueError, match="语义核验项不存在"):
+        service.update_batch_record(
+            batch["id"],
+            review["id"],
+            review["revision"],
+            "user-1",
+            None,
+            "拒绝其他结果的语义项",
+            action="confirm",
+            semantic_item_reviews=[
+                {"semantic_item_id": "fact:foreign", "action": "remove"}
+            ],
+        )
+    with pytest.raises(ValueError, match="语义标签不存在"):
+        service.update_batch_record(
+            batch["id"],
+            review["id"],
+            review["revision"],
+            "user-1",
+            None,
+            "拒绝不存在的标签",
+            action="confirm",
+            added_semantic_items=[
+                {
+                    "evidence_text": review["comment"],
+                    "opinion": "人工补录事实",
+                    "label_code": "MISSING_LABEL",
+                }
+            ],
+        )
+    valid_label = review["classification"]["semantic_review"]["semantic_items"][0][
+        "label_code"
+    ]
+    with pytest.raises(ValueError, match="证据必须来自当前用户反馈"):
+        service.update_batch_record(
+            batch["id"],
+            review["id"],
+            review["revision"],
+            "user-1",
+            None,
+            "拒绝脱离原文的证据",
+            action="confirm",
+            added_semantic_items=[
+                {
+                    "evidence_text": "not present in comment",
+                    "opinion": "人工补录事实",
+                    "label_code": valid_label,
+                }
+            ],
+        )
 
 
 def test_review_modify_preserves_other_semantic_units_and_indexes(
@@ -781,15 +928,53 @@ def test_review_batch_api_and_version_history_contract(tmp_path: Path) -> None:
     listed = client.get(f"/api/review-batches/{batch['id']}/records")
     assert listed.status_code == 200
     record = listed.json()["items"][0]
+    semantic_review = record["classification"]["semantic_review"]
+    semantic_item = semantic_review["semantic_items"][0]
+    assert set(semantic_review) == {
+        "semantic_items",
+        "coverage_summary",
+        "unexplained_fragments",
+    }
+    invalid = client.patch(
+        f"/api/review-batches/{batch['id']}/records/{record['id']}",
+        json={
+            "expected_revision": 1,
+            "reason": "缺少目标标签",
+            "semantic_item_reviews": [
+                {
+                    "semantic_item_id": semantic_item["item_id"],
+                    "action": "change_label",
+                }
+            ],
+        },
+    )
+    assert invalid.status_code == 422
     changed = client.patch(
         f"/api/review-batches/{batch['id']}/records/{record['id']}",
         json={
             "expected_revision": 1,
             "label_code": "FIT_TOO_SMALL_U1",
             "reason": "API 修改",
+            "semantic_item_reviews": [
+                {
+                    "semantic_item_id": semantic_item["item_id"],
+                    "action": "change_label",
+                    "label_code": semantic_item["label_code"],
+                }
+            ],
+            "added_semantic_items": [
+                {
+                    "evidence_text": record["comment"],
+                    "opinion": "人工补录事实",
+                    "label_code": semantic_item["label_code"],
+                }
+            ],
+            "coverage_status": "has_omission",
         },
     )
     assert changed.status_code == 200
+    assert changed.json()["classification"]["human_semantic_reviews"]
+    assert changed.json()["classification"]["human_added_semantic_items"]
     current = client.get(f"/api/review-batches/{batch['id']}").json()
     published = client.post(
         f"/api/review-batches/{batch['id']}/publish",

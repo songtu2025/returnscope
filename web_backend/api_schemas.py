@@ -8,6 +8,7 @@ from pydantic import (
     Field,
     PlainSerializer,
     SerializeAsAny,
+    model_validator,
 )
 
 from return_semantics.schemas import (
@@ -61,6 +62,44 @@ class ClassificationUnknownSemanticResponse(CompatibleResponse):
     disposition: str
 
 
+class SemanticReviewItemResponse(CompatibleResponse):
+    item_id: str
+    fact_id: str = ""
+    evidence_text: str = ""
+    evidence_source: str = "COMMENT"
+    opinion: str = ""
+    label_code: str = ""
+    label_path: list[str] = Field(default_factory=list)
+    disposition: str
+    reason: str = ""
+    diagnostic_domain: str | None = None
+    diagnostic_code: str | None = None
+    diagnostic_title: str | None = None
+    detail_status: str | None = None
+    primary_result: str | None = None
+    secondary_result: str | None = None
+    detail: str | None = None
+    action: str | None = None
+    business_review_required: bool | None = None
+
+
+class SemanticReviewCoverageResponse(CompatibleResponse):
+    total: int = 0
+    mapped: int = 0
+    no_tag_needed: int = 0
+    taxonomy_gap: int = 0
+    true_ambiguity: int = 0
+    analysis_failure: int = 0
+    unexplained_fragment_count: int = 0
+    complete: bool = False
+
+
+class SemanticReviewResponse(CompatibleResponse):
+    semantic_items: list[SemanticReviewItemResponse] = Field(default_factory=list)
+    coverage_summary: SemanticReviewCoverageResponse
+    unexplained_fragments: list[str] = Field(default_factory=list)
+
+
 class ClassificationTopicSummaryResponse(CompatibleResponse):
     topic_code: str
     topic_name: str
@@ -95,6 +134,7 @@ class ClassificationPayloadResponse(CompatibleResponse):
     dimension_decisions: list[dict[str, object]] = Field(default_factory=list)
     semantic_relations: list[dict[str, object]] = Field(default_factory=list)
     comment_summary: dict[str, object] | None = None
+    semantic_review: SemanticReviewResponse | None = None
 
 
 class ClassificationResultRecordResponse(CompatibleResponse):
@@ -513,6 +553,31 @@ class ReviewBatchCreateRequest(BaseModel):
     reason: str = Field(min_length=1, max_length=500)
 
 
+class SemanticItemReviewRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    semantic_item_id: str = Field(min_length=1, max_length=200)
+    action: Literal["change_label", "remove", "no_tag_needed"]
+    label_code: str | None = Field(default=None, max_length=100)
+    note: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def require_changed_label(self) -> "SemanticItemReviewRequest":
+        if self.action == "change_label" and not self.label_code:
+            raise ValueError("修改语义项标签时必须选择目标标签")
+        return self
+
+
+class AddedSemanticItemRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    item_id: str | None = Field(default=None, max_length=200)
+    evidence_text: str = Field(min_length=1, max_length=4000)
+    opinion: str = Field(min_length=1, max_length=2000)
+    label_code: str = Field(min_length=1, max_length=100)
+    note: str | None = Field(default=None, max_length=500)
+
+
 class ReviewBatchRecordUpdateRequest(BaseModel):
     expected_revision: int = Field(ge=1)
     action: Literal["confirm", "modify", "exclude"] = "confirm"
@@ -525,6 +590,15 @@ class ReviewBatchRecordUpdateRequest(BaseModel):
     review_routing: (
         Literal["correct", "should_auto_approve", "should_manual_review"] | None
     ) = None
+    semantic_item_reviews: list[SemanticItemReviewRequest] | None = Field(
+        default=None,
+        max_length=200,
+    )
+    added_semantic_items: list[AddedSemanticItemRequest] | None = Field(
+        default=None,
+        max_length=100,
+    )
+    coverage_status: Literal["complete", "has_omission"] | None = None
 
 
 class ReviewBatchRecordRevision(BaseModel):

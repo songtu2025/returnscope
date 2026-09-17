@@ -342,6 +342,7 @@ class _ClassificationResultRecords:
             value.get("classification", {}),
             taxonomy,
             str(value.get("processing_status") or ""),
+            source_text=str(value.get("comment") or ""),
         )
         value["semantic_disposition"] = classification.pop("semantic_disposition")
         value["comment_summary_status"] = classification.pop("comment_summary_status")

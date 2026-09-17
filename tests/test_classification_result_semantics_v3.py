@@ -165,6 +165,10 @@ def test_v3_facts_and_comment_topic_summary_are_persisted_and_returned(
     assert item["atomic_facts"][0]["label_path"]
     assert item["atomic_facts"][0]["label_code_path"]
     assert item["comment_summary_status"] == "MIXED"
+    semantic_review = item["classification"]["semantic_review"]
+    assert len(semantic_review["semantic_items"]) == 2
+    assert semantic_review["coverage_summary"]["mapped"] == 2
+    assert semantic_review["unexplained_fragments"] == []
     topic = item["comment_conclusions"][0]
     assert topic["status"] == "MIXED"
     assert topic["supporting_fact_ids"] == ["F1", "F2"]
@@ -178,6 +182,7 @@ def test_v3_facts_and_comment_topic_summary_are_persisted_and_returned(
     assert stored_payload["comment_summary"]["status"] == "MIXED"
     assert "atomic_facts" not in stored_payload
     assert "comment_conclusions" not in stored_payload
+    assert "semantic_review" not in stored_payload
 
     summary = _client(service).get(f"/api/classification-results/{version_id}/summary")
     assert summary.status_code == 200

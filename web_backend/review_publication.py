@@ -18,6 +18,13 @@ from web_backend.review_contracts import (
 )
 from web_backend.security import utc_now
 
+HUMAN_REVIEW_CLASSIFICATION_FIELDS = (
+    "human_review_assessment",
+    "human_semantic_reviews",
+    "human_added_semantic_items",
+    "coverage_review",
+)
+
 
 class ReviewPublicationMixin:
     database: Database
@@ -182,12 +189,23 @@ class ReviewPublicationMixin:
     @staticmethod
     def _validate_reviewed_classification(
         classification: dict[str, Any],
-    ) -> tuple[ValidatedClassification, dict[str, Any] | None]:
+    ) -> tuple[ValidatedClassification, dict[str, Any]]:
         core = dict(classification)
-        assessment = core.pop("human_review_assessment", None)
-        if assessment is not None and not isinstance(assessment, dict):
-            raise ValueError("人工复核评估数据格式无效")
-        return ValidatedClassification.model_validate(core), assessment
+        core.pop("semantic_review", None)
+        human_fields = {
+            field: core.pop(field)
+            for field in HUMAN_REVIEW_CLASSIFICATION_FIELDS
+            if field in core
+        }
+        for field in ("human_review_assessment", "coverage_review"):
+            value = human_fields.get(field)
+            if value is not None and not isinstance(value, dict):
+                raise ValueError("人工复核评估数据格式无效")
+        for field in ("human_semantic_reviews", "human_added_semantic_items"):
+            value = human_fields.get(field)
+            if value is not None and not isinstance(value, list):
+                raise ValueError("人工语义核验数据格式无效")
+        return ValidatedClassification.model_validate(core), human_fields
 
     @staticmethod
     def _build_derived_result_content(
@@ -227,12 +245,11 @@ class ReviewPublicationMixin:
                 key,
                 json_value(row["classification_json"], {}),
             )
-            validated, assessment = (
+            validated, human_fields = (
                 ReviewPublicationMixin._validate_reviewed_classification(classification)
             )
             serialized = validated.model_dump(mode="json")
-            if assessment is not None:
-                serialized["human_review_assessment"] = assessment
+            serialized.update(human_fields)
             quality_status = (
                 "excluded"
                 if key in changes.excluded_keys

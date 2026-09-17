@@ -154,6 +154,23 @@ def create_review_router(
                     "evidence_completeness": payload.evidence_completeness,
                     "review_routing": payload.review_routing,
                 },
+                semantic_item_reviews=(
+                    [
+                        item.model_dump(exclude_none=True)
+                        for item in payload.semantic_item_reviews
+                    ]
+                    if payload.semantic_item_reviews is not None
+                    else None
+                ),
+                added_semantic_items=(
+                    [
+                        item.model_dump(exclude_none=True)
+                        for item in payload.added_semantic_items
+                    ]
+                    if payload.added_semantic_items is not None
+                    else None
+                ),
+                coverage_status=payload.coverage_status,
             )
         except (ReviewBatchConflict, RevisionConflict) as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc

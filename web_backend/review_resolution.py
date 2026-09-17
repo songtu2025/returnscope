@@ -35,7 +35,7 @@ class ReviewResolutionMixin:
         def _validate_reviewed_classification(
             self,
             classification: dict[str, Any],
-        ) -> tuple[ValidatedClassification, dict[str, Any] | None]: ...
+        ) -> tuple[ValidatedClassification, dict[str, Any]]: ...
 
     def resolve(
         self,

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from return_semantics.schemas import TaxonomyConfig
+from return_semantics.semantic_review import build_semantic_review_view
 from web_backend.classification_result_service import ClassificationResultService
 from web_backend.common import json_value
 from web_backend.database import Database
@@ -308,7 +310,10 @@ class ReviewQueriesMixin:
         return {
             "taxonomy": taxonomy.model_dump(mode="json") if taxonomy else None,
             "items": [
-                enrich_record(self._serialize_batch_record(dict(row)), taxonomy)
+                enrich_record(
+                    self._serialize_batch_record(dict(row), taxonomy),
+                    taxonomy,
+                )
                 for row in rows
             ],
             "total": total,
@@ -331,8 +336,12 @@ class ReviewQueriesMixin:
         return item
 
     @classmethod
-    def _serialize_batch_record(cls, item: dict[str, Any]) -> dict[str, Any]:
-        item = cls._serialize(item)
+    def _serialize_batch_record(
+        cls,
+        item: dict[str, Any],
+        taxonomy: TaxonomyConfig | None,
+    ) -> dict[str, Any]:
+        item = cls._serialize(item, taxonomy)
         for field in (
             "order_ids",
             "product_names",
@@ -353,12 +362,21 @@ class ReviewQueriesMixin:
         return item
 
     @staticmethod
-    def _serialize(item: dict[str, Any]) -> dict[str, Any]:
+    def _serialize(
+        item: dict[str, Any],
+        taxonomy: TaxonomyConfig | None = None,
+    ) -> dict[str, Any]:
         item["legacy"] = item.get("batch_id") is None
-        item["classification"] = json_value(
+        classification = json_value(
             item.pop("classification_json", None),
             {},
         )
+        classification["semantic_review"] = build_semantic_review_view(
+            classification,
+            str(item.get("comment") or ""),
+            taxonomy,
+        )
+        item["classification"] = classification
         return item
 
     @staticmethod

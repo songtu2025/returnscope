@@ -99,6 +99,7 @@ def test_exporter_creates_expected_sheets(tmp_path: Path, taxonomy) -> None:
         "语义单元",
         "人工复核",
         "未知语义",
+        "语义核验",
         "维度裁决",
         "标签统计",
     ]
