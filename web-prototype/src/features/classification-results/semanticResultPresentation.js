@@ -1,5 +1,5 @@
 /**
- * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultRecordResponseOutput} GeneratedRecord
+ * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultRecordResponse} GeneratedRecord
  * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationSemanticFactResponse} GeneratedFact
  * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationUnknownSemanticResponse} GeneratedUnknownSemantic
  * @typedef {Record<string, unknown>} SemanticObject
