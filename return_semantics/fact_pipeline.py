@@ -70,6 +70,7 @@ from return_semantics.schemas import (
     FactExtractionSource,
     ListingClaimsConfig,
     ModelClassification,
+    ReviewDiagnostic,
     TaxonomyConfig,
 )
 
@@ -142,7 +143,7 @@ def _audit_fact_coverage(
     taxonomy: TaxonomyConfig,
     call: Callable,
     metrics: dict[str, int],
-) -> list[ExtractedFact]:
+) -> CoverageMergeResult:
     metrics["coverage_audit_added_facts"] = 0
     metrics["coverage_audit_rejected_facts"] = 0
     metrics["coverage_audit_failures"] = 0
@@ -156,12 +157,25 @@ def _audit_fact_coverage(
         )
     except FactPipelineCancelled:
         raise
-    except Exception:
+    except Exception as exc:
         metrics["coverage_audit_failures"] += 1
-        return facts
+        return CoverageMergeResult(
+            facts=facts,
+            added=0,
+            rejected=0,
+            diagnostics=[
+                ReviewDiagnostic(
+                    code="COVERAGE_AUDIT_FAILED",
+                    detail=f"覆盖审计未完成：{exc}",
+                    action="SYSTEM_RERUN",
+                )
+            ],
+        )
     metrics["coverage_audit_added_facts"] = merged.added
     metrics["coverage_audit_rejected_facts"] = merged.rejected
-    return merged.facts
+    if merged.rejected:
+        metrics["coverage_audit_failures"] += 1
+    return merged
 
 
 def _adjudicate_classification(
@@ -254,13 +268,14 @@ def classify_facts(
             comment=comment,
         ),
     )
-    facts = _audit_fact_coverage(
+    coverage_merge = _audit_fact_coverage(
         facts,
         comment=comment,
         taxonomy=taxonomy,
         call=call,
         metrics=metrics,
     )
+    facts = coverage_merge.facts
     classification = ModelClassification()
     if facts:
         payload = _mapping_payload(facts, taxonomy)
@@ -333,6 +348,10 @@ def classify_facts(
         classification.review_reasons.append(
             "fact_v2尚未完成Listing承诺关系核验，需人工确认；未推断承诺关系"
         )
+    if coverage_merge.diagnostics:
+        classification.needs_review = True
+        classification.review_reasons.append("覆盖审计失败，分析结果尚未完成")
+        classification.review_diagnostics.extend(coverage_merge.diagnostics)
     metrics["fact_model_calls"] = caller.calls
     return ModelCallResult(classification, model_name, caller.usage, metrics)
 

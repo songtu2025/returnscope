@@ -135,7 +135,14 @@ def test_sub2api_client_uses_responses_payload(monkeypatch) -> None:
 
     def fake_post(payload):
         captured.update(payload)
-        content = "```json\n" + json.dumps(_payload([])) + "\n```"
+        model_payload = _payload([])
+        model_payload["review_diagnostics"] = [
+            {
+                "code": "MODEL_RESULT_MISMATCH",
+                "detail": "模型不得生成系统诊断",
+            }
+        ]
+        content = "```json\n" + json.dumps(model_payload) + "\n```"
         return {
             "model": "gpt-5.6-20260801",
             "output": [
@@ -176,6 +183,7 @@ def test_sub2api_client_uses_responses_payload(monkeypatch) -> None:
         "output_tokens": 8,
         "input_tokens_details.cached_tokens": 5,
     }
+    assert result.classification.review_diagnostics == []
 
     client.classify(
         messages,

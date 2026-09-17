@@ -26,6 +26,7 @@ from return_semantics.prompt import (
     recognition_fingerprint,
 )
 from return_semantics.review import (
+    build_model_difference_diagnostics,
     classifications_match,
     reconcile_secondary,
     should_run_secondary,
@@ -34,6 +35,7 @@ from return_semantics.schemas import (
     ClaimRelation,
     ListingClaimsConfig,
     ProcessingStatus,
+    ReviewDiagnostic,
     TaxonomyConfig,
     ValidatedClassification,
 )
@@ -84,9 +86,6 @@ def can_accept_cheap_result(result: ValidatedClassification) -> bool:
         return False
     if len(result.problem_label_codes) != 1:
         return False
-    if len(result.primary_label_codes) != 1:
-        return False
-
     unit = result.semantic_units[0]
     return (
         not unit.implicit
@@ -134,6 +133,18 @@ def _is_model_service_error(exc: Exception) -> bool:
     while current is not None:
         if isinstance(current, ModelHTTPError):
             return current.status_code >= 500
+        current = current.__cause__
+    return False
+
+
+def _is_timeout_error(exc: Exception) -> bool:
+    current: BaseException | None = exc
+    while current is not None:
+        message = str(current).casefold()
+        if isinstance(current, TimeoutError) or any(
+            marker in message for marker in ("timeout", "timed out", "超时")
+        ):
+            return True
         current = current.__cause__
     return False
 
@@ -581,6 +592,11 @@ class _CommentClassifier:
                 "status": ProcessingStatus.SECONDARY_REVIEW,
                 "review_reasons": primary_validated.review_reasons
                 + ["低成本模型与主模型结果不一致"],
+                "review_diagnostics": primary_validated.review_diagnostics
+                + build_model_difference_diagnostics(
+                    primary_validated,
+                    cheap_validated,
+                ),
                 "model_name": combined_model_name,
             }
         )
@@ -606,11 +622,24 @@ class _CommentClassifier:
         except (PipelineCancelled, ModelServiceUnavailable):
             raise
         except Exception as exc:
+            error_text = str(exc)
             return validated.model_copy(
                 update={
                     "status": ProcessingStatus.MANUAL_REVIEW,
                     "review_reasons": validated.review_reasons
                     + [f"二次模型调用失败: {exc}"],
+                    "review_diagnostics": validated.review_diagnostics
+                    + [
+                        ReviewDiagnostic(
+                            code=(
+                                "SECONDARY_MODEL_TIMEOUT"
+                                if _is_timeout_error(exc)
+                                else "SECONDARY_MODEL_CALL_FAILED"
+                            ),
+                            detail=error_text or "二次模型调用失败",
+                            action="SYSTEM_RERUN",
+                        )
+                    ],
                 }
             )
 
@@ -625,6 +654,14 @@ class _CommentClassifier:
                 "status": ProcessingStatus.MANUAL_REVIEW,
                 "review_reasons": validated.review_reasons
                 + ["风险复核模型缺失，已使用主模型复核"],
+                "review_diagnostics": validated.review_diagnostics
+                + [
+                    ReviewDiagnostic(
+                        code="SECONDARY_MODEL_MISSING",
+                        detail="风险复核模型缺失，已使用主模型复核",
+                        action="SYSTEM_RERUN",
+                    )
+                ],
             }
         )
 
@@ -642,6 +679,17 @@ class _CommentClassifier:
             primary_label_codes=[],
             status=ProcessingStatus.MODEL_ERROR,
             review_reasons=[str(exc)],
+            review_diagnostics=[
+                ReviewDiagnostic(
+                    code=(
+                        "MODEL_RUN_TIMEOUT"
+                        if _is_timeout_error(exc)
+                        else "MODEL_RUN_FAILED"
+                    ),
+                    detail=str(exc),
+                    action="SYSTEM_RERUN",
+                )
+            ],
             model_name=self.context.client.settings.model,
             prompt_version=prompt_version(self.context.taxonomy),
             taxonomy_version=self.context.taxonomy.version,

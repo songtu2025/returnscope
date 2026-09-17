@@ -7,10 +7,11 @@ from return_semantics.model_client import JsonlCache, ModelCallResult, ModelHTTP
 from return_semantics.pipeline import (
     ModelServiceUnavailable,
     PipelineCancelled,
+    can_accept_cheap_result,
     classify_comments,
     has_input_semantic_risk,
 )
-from return_semantics.schemas import ModelClassification
+from return_semantics.schemas import ModelClassification, ValidatedClassification
 
 
 def _classification(
@@ -154,6 +155,26 @@ def test_low_risk_comment_uses_cheap_model(
     assert run.request_metrics["attempts"] == 1
 
 
+def test_cheap_result_acceptance_does_not_depend_on_primary_label() -> None:
+    model_result = _classification().model_dump(mode="json")
+    model_result.pop("needs_review")
+    result = ValidatedClassification.model_validate(
+        {
+            **model_result,
+            "classification_key": "key",
+            "problem_label_codes": ["FIT_TOO_SMALL"],
+            "positive_label_codes": [],
+            "primary_label_codes": [],
+            "status": "AUTO_APPROVED",
+            "model_name": "cheap-model",
+            "prompt_version": "test-prompt",
+            "taxonomy_version": "test-taxonomy",
+        }
+    )
+
+    assert can_accept_cheap_result(result) is True
+
+
 def test_input_semantic_risk_uses_primary_model(
     tmp_path,
     taxonomy,
@@ -294,17 +315,27 @@ def test_audit_disagreement_uses_secondary_model(
     assert result.status.value == "AUTO_APPROVED"
     assert run.routing["cheap_audited"] == 1
     assert run.routing["cheap_disagreement"] == 1
+    assert result.review_diagnostics == []
 
 
+@pytest.mark.parametrize(
+    "secondary_error,expected_code",
+    [
+        (RuntimeError("复核模型临时失败"), "SECONDARY_MODEL_CALL_FAILED"),
+        (TimeoutError("The read operation timed out"), "SECONDARY_MODEL_TIMEOUT"),
+    ],
+)
 def test_secondary_error_becomes_manual_review(
     tmp_path,
     taxonomy,
     claims,
+    secondary_error,
+    expected_code,
 ) -> None:
     client = FakeClient(
         {
             "gpt-5.5": _classification(needs_review=True),
-            "gpt-5.6-sol": RuntimeError("复核模型临时失败"),
+            "gpt-5.6-sol": secondary_error,
         }
     )
 
@@ -321,7 +352,62 @@ def test_secondary_error_becomes_manual_review(
     assert client.calls == ["gpt-5.5", "gpt-5.6-sol"]
     assert run.model_failures == 1
     assert result.status.value == "MANUAL_REVIEW"
-    assert result.review_reasons[-1] == "二次模型调用失败: 复核模型临时失败"
+    assert result.review_reasons[-1].startswith("二次模型调用失败:")
+    assert result.review_diagnostics[-1].code == expected_code
+    assert result.review_diagnostics[-1].action == "SYSTEM_RERUN"
+
+
+def test_secondary_fallback_is_marked_as_system_diagnostic(
+    tmp_path,
+    taxonomy,
+    claims,
+) -> None:
+    client = FakeClient({"gpt-5.5": _classification(needs_review=True)})
+
+    run = classify_comments(
+        unique_comments=_comments("Too small but uncomfortable"),
+        taxonomy=taxonomy,
+        claims=claims,
+        client=client,
+        cache=JsonlCache(tmp_path / "cache.jsonl"),
+        secondary_model="gpt-5.5",
+        secondary_is_fallback=True,
+    )
+
+    result = next(iter(run.classifications.values()))
+    assert result.status.value == "MANUAL_REVIEW"
+    assert result.review_diagnostics[-1].code == "SECONDARY_MODEL_MISSING"
+    assert result.review_diagnostics[-1].action == "SYSTEM_RERUN"
+
+
+@pytest.mark.parametrize(
+    "model_error,expected_code",
+    [
+        (RuntimeError("模型调用失败"), "MODEL_RUN_FAILED"),
+        (TimeoutError("请求超时"), "MODEL_RUN_TIMEOUT"),
+    ],
+)
+def test_initial_model_error_is_system_diagnostic(
+    tmp_path,
+    taxonomy,
+    claims,
+    model_error,
+    expected_code,
+) -> None:
+    client = FakeClient({"gpt-5.5": model_error})
+
+    run = classify_comments(
+        unique_comments=_comments("Too small but uncomfortable"),
+        taxonomy=taxonomy,
+        claims=claims,
+        client=client,
+        cache=JsonlCache(tmp_path / "cache.jsonl"),
+    )
+
+    result = next(iter(run.classifications.values()))
+    assert result.status.value == "MODEL_ERROR"
+    assert result.review_diagnostics[0].code == expected_code
+    assert result.review_diagnostics[0].action == "SYSTEM_RERUN"
 
 
 def test_secondary_accepts_same_terminal_result_with_evidence_span_variation(

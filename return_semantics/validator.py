@@ -371,8 +371,6 @@ def _validate_primary_codes(
         and not primary_codes
     ):
         primary_codes = problem_codes.copy()
-    if len(problem_codes) > 1 and not primary_codes:
-        state.soft_reasons.append("多个问题但主因不明确")
     return primary_codes
 
 
@@ -537,6 +535,7 @@ def _validate_classification(
         dimension_decisions=model_result.dimension_decisions,
         semantic_relations=state.semantic_relations,
         comment_summary=state.comment_summary,
+        review_diagnostics=model_result.review_diagnostics,
         classification_key=request.classification_key,
         semantic_units=state.valid_units,
         unknown_semantics=state.unknown_semantics,

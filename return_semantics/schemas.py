@@ -376,6 +376,17 @@ class CommentSummary(StrictModel):
     negative_label_codes: list[str] = Field(default_factory=list)
 
 
+class ReviewDiagnostic(StrictModel):
+    """记录系统复核异常的可追溯证据和处理动作。"""
+
+    code: str = Field(min_length=1)
+    evidence_text: str = ""
+    primary_result: str = ""
+    secondary_result: str = ""
+    detail: str = ""
+    action: str = Field(default="SYSTEM_RERUN", min_length=1)
+
+
 class ClassificationTrace(StrictModel):
     extracted_facts: list[ExtractedFact] = Field(default_factory=list)
     fact_mappings: list[FactMapping] = Field(default_factory=list)
@@ -390,6 +401,7 @@ class ModelClassification(ClassificationTrace):
     primary_label_codes: list[str] = Field(default_factory=list)
     needs_review: bool = False
     review_reasons: list[str] = Field(default_factory=list)
+    review_diagnostics: list[ReviewDiagnostic] = Field(default_factory=list)
 
 
 class LabelExample(StrictModel):
@@ -599,6 +611,7 @@ class ValidatedClassification(ClassificationTrace):
     primary_label_codes: list[str]
     status: ProcessingStatus
     review_reasons: list[str]
+    review_diagnostics: list[ReviewDiagnostic] = Field(default_factory=list)
     model_name: str
     prompt_version: str
     taxonomy_version: str

@@ -227,9 +227,14 @@ def test_invalid_coverage_addition_safely_keeps_original_facts(
     )
 
     assert result.classification.extracted_facts == [existing]
-    assert result.metrics["coverage_audit_failures"] == 0
+    assert result.metrics["coverage_audit_failures"] == 1
     assert result.metrics["coverage_audit_added_facts"] == 0
     assert result.metrics["coverage_audit_rejected_facts"] == 1
+    assert result.classification.needs_review
+    diagnostic = result.classification.review_diagnostics[0]
+    assert diagnostic.code == "COVERAGE_AUDIT_FAILED"
+    assert diagnostic.action == "SYSTEM_RERUN"
+    assert diagnostic.detail.startswith("覆盖审计候选事实未通过校验：")
     assert [unit.label_code for unit in result.classification.semantic_units] == [
         "WARM"
     ]
@@ -272,6 +277,38 @@ def test_coverage_audit_isolates_invalid_item_and_keeps_valid_item(fact_taxonomy
     ]
     assert result.metrics["coverage_audit_added_facts"] == 1
     assert result.metrics["coverage_audit_rejected_facts"] == 1
+    assert result.metrics["coverage_audit_failures"] == 1
+    assert result.classification.needs_review
+    diagnostic = result.classification.review_diagnostics[0]
+    assert diagnostic.code == "COVERAGE_AUDIT_FAILED"
+    assert diagnostic.evidence_text == "missing"
+    assert diagnostic.action == "SYSTEM_RERUN"
+
+
+def test_coverage_audit_failure_is_system_diagnostic(fact_taxonomy):
+    existing = make_fact()
+    client = CoverageJsonClient(
+        [
+            {"facts": [existing.model_dump(mode="json")]},
+            {"mappings": [{"fact_id": "a", "label_codes": ["WARM"]}]},
+        ],
+        {"invalid": []},
+    )
+
+    result = classify_facts(
+        comment="warm",
+        taxonomy=fact_taxonomy,
+        client=client,
+        model_name="test",
+        reasoning_effort="low",
+    )
+
+    assert result.metrics["coverage_audit_failures"] == 1
+    assert result.classification.needs_review
+    assert "覆盖审计失败" in result.classification.review_reasons[-1]
+    diagnostic = result.classification.review_diagnostics[0]
+    assert diagnostic.code == "COVERAGE_AUDIT_FAILED"
+    assert diagnostic.action == "SYSTEM_RERUN"
 
 
 def test_coverage_duplicate_identity_keeps_distinct_conditions(fact_taxonomy):

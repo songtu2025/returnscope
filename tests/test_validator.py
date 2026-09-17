@@ -66,6 +66,30 @@ def test_clear_problem_is_auto_approved(taxonomy, claims) -> None:
     assert result.primary_label_codes == ["FIT_TOO_SMALL"]
 
 
+def test_multiple_problems_without_primary_are_auto_approved(taxonomy, claims) -> None:
+    comment = "Too small. The heel seam opened."
+    result = _validate(
+        _payload(
+            [
+                _unit(evidence="Too small"),
+                _unit(
+                    "QUALITY_SEAM_FAILURE",
+                    "The heel seam opened",
+                ),
+            ]
+        ),
+        comment,
+        "APPAREL_TOO_SMALL",
+        taxonomy,
+        claims,
+    )
+
+    assert result.status.value == "AUTO_APPROVED", result.review_reasons
+    assert result.problem_label_codes == ["FIT_TOO_SMALL", "QUALITY_SEAM_FAILURE"]
+    assert result.primary_label_codes == []
+    assert "多个问题但主因不明确" not in result.review_reasons
+
+
 def test_final_validator_suppresses_fallback_covered_by_specific_unit(
     taxonomy, claims
 ) -> None:

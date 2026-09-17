@@ -12,6 +12,7 @@ from return_semantics.schemas import (
     ExtractedFact,
     FactExtraction,
     FactExtractionSource,
+    ReviewDiagnostic,
     TaxonomyConfig,
 )
 from return_semantics.taxonomy_hierarchy import label_path, label_path_codes
@@ -22,6 +23,7 @@ class CoverageMergeResult:
     facts: list[ExtractedFact]
     added: int
     rejected: int
+    diagnostics: list[ReviewDiagnostic]
 
 
 class FactPipelineCancelled(RuntimeError):
@@ -223,6 +225,27 @@ def _coverage_fact_identity(fact: ExtractedFact) -> tuple:
     )
 
 
+def _coverage_failure_diagnostic(
+    raw_fact: object,
+    exc: TypeError | ValueError,
+) -> ReviewDiagnostic:
+    evidence = ""
+    if isinstance(raw_fact, dict):
+        spans = raw_fact.get("evidence_spans")
+        if isinstance(spans, list):
+            evidence = " | ".join(
+                str(span.get("text") or "").strip()
+                for span in spans
+                if isinstance(span, dict) and str(span.get("text") or "").strip()
+            )
+    return ReviewDiagnostic(
+        code="COVERAGE_AUDIT_FAILED",
+        evidence_text=evidence,
+        detail=f"覆盖审计候选事实未通过校验：{exc}",
+        action="SYSTEM_RERUN",
+    )
+
+
 def merge_coverage_facts(
     existing_facts: list[ExtractedFact],
     additions: FactExtraction | dict,
@@ -244,6 +267,7 @@ def merge_coverage_facts(
     known_ids = {fact.fact_id for fact in accepted}
     known_identities = {_coverage_fact_identity(fact) for fact in accepted}
     rejected = 0
+    diagnostics: list[ReviewDiagnostic] = []
     for raw_fact in raw_facts:
         try:
             if isinstance(raw_fact, ExtractedFact):
@@ -268,8 +292,9 @@ def merge_coverage_facts(
             candidate = [*accepted, fact]
             _validate_facts(candidate, comment, taxonomy)
             _allowed_labels_by_fact(candidate, taxonomy)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as exc:
             rejected += 1
+            diagnostics.append(_coverage_failure_diagnostic(raw_fact, exc))
             continue
         accepted.append(fact)
         known_ids.add(fact.fact_id)
@@ -278,6 +303,7 @@ def merge_coverage_facts(
         facts=accepted,
         added=len(accepted) - len(existing_facts),
         rejected=rejected,
+        diagnostics=diagnostics,
     )
 
 

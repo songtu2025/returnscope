@@ -132,7 +132,6 @@ def result_with_dimension(
         {"product_ref": "CURRENT:1"},
         {"statement_type": "PREDICTION"},
         {"condition": "仅首次"},
-        {"is_primary_reason": True},
     ],
 )
 def test_same_labels_do_not_hide_fact_disagreement(change):
@@ -140,6 +139,27 @@ def test_same_labels_do_not_hide_fact_disagreement(change):
     second = result_with_fact(**change)
     assert not classifications_match(first, second)
     assert reconcile_secondary(first, second).status == "MANUAL_REVIEW"
+
+
+def test_primary_marker_difference_does_not_trigger_review():
+    first = result_with_fact()
+    second = result_with_fact(is_primary_reason=True)
+
+    assert classifications_match(first, second)
+    assert reconcile_secondary(first, second).status == "AUTO_APPROVED"
+
+
+def test_manual_rule_preserves_model_difference_diagnostic():
+    first = result_with_fact()
+    first.review_reasons = ["语义边界需人工确认"]
+    second = result_with_fact(condition="仅首次")
+
+    result = reconcile_secondary(first, second)
+
+    assert result.status == "MANUAL_REVIEW"
+    assert "两次模型的语义结果不一致" in result.review_reasons
+    assert result.review_diagnostics[0].code == "MODEL_RESULT_MISMATCH"
+    assert "条件=仅首次" in result.review_diagnostics[0].secondary_result
 
 
 def test_model_generated_identifiers_do_not_create_false_disagreement():
