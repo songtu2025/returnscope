@@ -85,7 +85,7 @@ def test_glove_framework_topics_extend_taxonomy_compatibly():
     taxonomy = load_taxonomy(ROOT / "config/taxonomy_gloves.json")
     labels = {label.code: label for label in taxonomy.labels}
 
-    assert taxonomy.version == "gloves-unified-2026-09-08-v1-semantic1"
+    assert taxonomy.version == "gloves-unified-2026-09-12-v1-semantic3"
     assert len(labels) == 63
     assert {
         "GLOVE_SIZE_SMALL_U1",

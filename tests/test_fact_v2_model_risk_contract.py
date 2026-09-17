@@ -175,7 +175,11 @@ def test_multi_fact_cases_preserve_two_independent_dimensions(case: dict) -> Non
     assert len(labeled_facts) >= 2
     label_codes = _label_codes(case)
     assert "GLOVE_WARMTH_U1" in label_codes
-    assert label_codes & {"GLOVE_BULK_WEIGHT_U1", "GLOVE_PORTABILITY_U1"}
+    assert label_codes & {
+        "GLOVE_BULK_WEIGHT_U1",
+        "GLOVE_THICKNESS_U1",
+        "GLOVE_PORTABILITY_U1",
+    }
 
 
 @pytest.mark.parametrize(

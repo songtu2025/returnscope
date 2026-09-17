@@ -2,7 +2,7 @@
   "schema_version": 1,
   "data_origin": "synthetic",
   "target_profile": "fact_v2",
-  "taxonomy_version": "gloves-unified-2026-09-08-v1-semantic1",
+  "taxonomy_version": "gloves-unified-2026-09-12-v1-semantic3",
   "cases": [
     {
       "case_id": "multi_fact_warm_and_lightweight_01",
@@ -116,13 +116,13 @@
           "product_ref": "CURRENT",
           "condition": "snow clearing",
           "reference_basis": "NONE",
-          "required_label_code": "GLOVE_BULK_WEIGHT_U1",
+          "required_label_code": "GLOVE_THICKNESS_U1",
           "expected_disposition": null
         }
       ],
       "required_labels": [
         "GLOVE_WARMTH_U1",
-        "GLOVE_BULK_WEIGHT_U1"
+        "GLOVE_THICKNESS_U1"
       ],
       "forbidden_labels": [
         "GLOVE_HAND_DEXTERITY_U1"
@@ -200,13 +200,13 @@
           "product_ref": "CURRENT",
           "condition": "under jacket cuffs",
           "reference_basis": "NONE",
-          "required_label_code": "GLOVE_BULK_WEIGHT_U1",
+          "required_label_code": "GLOVE_THICKNESS_U1",
           "expected_disposition": null
         }
       ],
       "required_labels": [
         "GLOVE_WARMTH_U1",
-        "GLOVE_BULK_WEIGHT_U1"
+        "GLOVE_THICKNESS_U1"
       ],
       "forbidden_labels": [
         "GLOVE_HAND_DEXTERITY_U1"

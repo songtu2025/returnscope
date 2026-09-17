@@ -21,7 +21,7 @@
     "标签只表示可独立统计的业务问题；正负方向用 sentiment，位置用 part，具体说法用 opinion 和 evidence。",
     "一个原子语义只选最具体标签，不同时输出具体标签和笼统标签。",
     "整体大小、宽紧、整体长度和指长必须分开；need bigger 表示当前偏小，need smaller 表示当前偏大。",
-    "保暖、防水、防雪、防风、透气、出汗、干燥、抓握、触屏、手部灵活性和穿脱是不同功能，不得互相推断。",
+    "保暖、防水、防雪、防风、透气、出汗、干燥、抓握、触屏、手部灵活性和穿脱是不同功能，不得互相推断；轻便和轻薄也是不同体验，分别有明确证据时可以并存，但不得相互推断。",
     "破损、开线、附着件脱落、掉毛起球和耐用性按损坏机制分类；手指、指缝、虎口等位置只写入 part。",
     "只有无法判断具体原因时才使用适配性、整体质量或整体舒适性的笼统标签。",
     "发错商品、同侧手套和数量不符使用 ORDER，配送时效、丢件和发错地址使用 DELIVERY，客服或售后问题使用 SERVICE，买家主动改变使用 CUSTOMER。",
@@ -211,7 +211,7 @@
       "code": "GLOVE_WARMTH_U1",
       "name": "保暖表现",
       "group": "功能表现",
-      "description": "手套保暖或防寒能力",
+      "description": "手套保暖或防寒能力；已发生的发冷体验即使带有温度、部位或使用时长条件也保留条件，未实际测试的未来预测不打标签",
       "keywords": [
         "warm",
         "thermal",
@@ -224,7 +224,24 @@
         "NEGATIVE",
         "POSITIVE"
       ],
-      "allowed_claim_ids": []
+      "allowed_claim_ids": [],
+      "exclusions": [
+        "尚未在严寒环境中测试、仅推测可能不够暖时不适用；不得把防风、防水或厚度自动推断为保暖表现。"
+      ],
+      "examples": [
+        {
+          "text": "After an hour outside, my fingertips started to feel cold.",
+          "applies": true,
+          "sentiment": "NEGATIVE",
+          "explanation": "明确报告已发生的指尖发冷体验，并保留使用时长和部位条件。"
+        },
+        {
+          "text": "I have not tested them in deep winter, so they may not be warm enough.",
+          "applies": false,
+          "sentiment": null,
+          "explanation": "明确尚未测试，只是对未来保暖表现的预测。"
+        }
+      ]
     },
     {
       "code": "GLOVE_WATER_RESISTANCE_U1",
@@ -363,18 +380,38 @@
       "code": "GLOVE_TOUCHSCREEN_U1",
       "name": "触屏表现",
       "group": "功能表现",
-      "description": "在手机、触摸屏或智能设备上的触控灵敏度和可用性",
+      "description": "在手机、触摸屏或智能设备上的实际触控可用性、灵敏度和准确性",
       "keywords": [
         "touchscreen",
         "touch screen",
         "phone",
-        "smart touch"
+        "smart touch",
+        "touchscreen works",
+        "use my phone",
+        "responsive"
       ],
       "allowed_sentiments": [
         "NEGATIVE",
         "POSITIVE"
       ],
-      "allowed_claim_ids": []
+      "allowed_claim_ids": [],
+      "exclusions": [
+        "仅描述指尖有导电面料、触屏垫或特殊设计，未评价实际触控结果时不适用。"
+      ],
+      "examples": [
+        {
+          "text": "The touchscreen function worked, although it felt awkward.",
+          "applies": true,
+          "sentiment": "POSITIVE",
+          "explanation": "明确确认触屏功能实际可用；操作不便可作为同一事实的限制条件保留。"
+        },
+        {
+          "text": "The index finger has a touchscreen pad.",
+          "applies": false,
+          "sentiment": null,
+          "explanation": "只描述结构，没有评价实际触控表现。"
+        }
+      ]
     },
     {
       "code": "GLOVE_HAND_DEXTERITY_U1",
@@ -391,24 +428,57 @@
         "NEGATIVE",
         "POSITIVE"
       ],
-      "allowed_claim_ids": []
+      "allowed_claim_ids": [],
+      "examples": [
+        {
+          "text": "The gloves stay flexible without sacrificing hand mobility.",
+          "applies": true,
+          "sentiment": "POSITIVE",
+          "explanation": "明确评价实际手部活动仍然灵活。"
+        },
+        {
+          "text": "The touchscreen works on my phone.",
+          "applies": false,
+          "sentiment": null,
+          "explanation": "只评价触屏功能，没有评价手部活动或精细操作能力。"
+        }
+      ]
     },
     {
       "code": "GLOVE_ON_OFF_EASE_U1",
       "name": "穿脱便利性",
       "group": "功能表现",
-      "description": "手套是否容易戴上、取下或从手上滑脱",
+      "description": "买家主动戴上、脱下或再次戴回手套时的便利性；意外从手上滑落属于适配问题",
       "keywords": [
         "put on",
         "take off",
         "take it off",
-        "hard to put on"
+        "hard to put on",
+        "easy to slip off",
+        "pull back on"
       ],
       "allowed_sentiments": [
         "NEGATIVE",
         "POSITIVE"
       ],
-      "allowed_claim_ids": []
+      "allowed_claim_ids": [],
+      "exclusions": [
+        "手套非主动地从手上滑落、容易掉落或戴不稳时不适用，应判断偏松或偏宽。"
+      ],
+      "examples": [
+        {
+          "text": "They are easy to slip off and pull back on during my commute.",
+          "applies": true,
+          "sentiment": "POSITIVE",
+          "explanation": "明确评价主动脱下并再次戴回的便利性。"
+        },
+        {
+          "text": "The gloves keep slipping off my hands.",
+          "applies": false,
+          "sentiment": null,
+          "explanation": "描述意外滑落和适配偏松，不是主动穿脱。"
+        }
+      ]
     },
     {
       "code": "GLOVE_MATERIAL_DAMAGE_U1",
@@ -572,6 +642,7 @@
       "keywords": [
         "workmanship",
         "well made",
+        "nicely built",
         "poorly made",
         "construction quality"
       ],
@@ -579,7 +650,21 @@
         "NEGATIVE",
         "POSITIVE"
       ],
-      "allowed_claim_ids": []
+      "allowed_claim_ids": [],
+      "examples": [
+        {
+          "text": "This is a nicely built pair of gloves.",
+          "applies": true,
+          "sentiment": "POSITIVE",
+          "explanation": "明确评价手套制作工艺良好。"
+        },
+        {
+          "text": "The fabric feels soft.",
+          "applies": false,
+          "sentiment": null,
+          "explanation": "只评价材料触感，没有评价制作工艺。"
+        }
+      ]
     },
     {
       "code": "GLOVE_COMFORT_GENERAL_U1",
@@ -665,20 +750,35 @@
     },
     {
       "code": "GLOVE_BULK_WEIGHT_U1",
-      "name": "臃肿或重量体感",
+      "name": "轻重与负担体感",
       "group": "使用感受",
-      "description": "手套臃肿、笨重、轻便或整体体积与重量感受",
+      "description": "手套重量或佩戴、携带负担的轻重评价，不表示厚度、轮廓或是否臃肿",
       "keywords": [
-        "bulky",
         "heavy",
-        "lightweight",
-        "not bulky"
+        "lightweight"
       ],
       "allowed_sentiments": [
         "NEGATIVE",
         "POSITIVE"
       ],
-      "allowed_claim_ids": []
+      "allowed_claim_ids": [],
+      "exclusions": [
+        "thin、thick、slim、bulky、not bulky只描述厚度或轮廓时不适用；轻便不推断手套偏薄。"
+      ],
+      "examples": [
+        {
+          "text": "These gloves feel lightweight.",
+          "applies": true,
+          "sentiment": "POSITIVE",
+          "explanation": "明确评价手套重量轻。"
+        },
+        {
+          "text": "These gloves are thin and not bulky.",
+          "applies": false,
+          "sentiment": null,
+          "explanation": "只评价厚度和轮廓，没有评价重量或负担。"
+        }
+      ]
     },
     {
       "code": "GLOVE_MATERIAL_FEEL_U1",
@@ -699,19 +799,39 @@
     },
     {
       "code": "GLOVE_THICKNESS_U1",
-      "name": "厚薄体感",
+      "name": "厚薄与轮廓体感",
       "group": "使用感受",
-      "description": "手套整体或明确部位的偏薄、偏厚或厚度评价，不直接推断保暖性",
+      "description": "手套整体或明确部位的厚度、纤薄或臃肿程度评价，不表示重量，也不直接推断轻便、保暖性、保护性或质量",
       "keywords": [
         "thin",
         "thick",
-        "thickness"
+        "thickness",
+        "slim",
+        "bulky",
+        "not bulky"
       ],
       "allowed_sentiments": [
         "NEGATIVE",
         "POSITIVE"
       ],
-      "allowed_claim_ids": []
+      "allowed_claim_ids": [],
+      "exclusions": [
+        "heavy、lightweight只表达重量或负担时不适用；厚薄或轮廓不推断轻便、保暖、保护或质量。"
+      ],
+      "examples": [
+        {
+          "text": "These gloves are slim and not bulky.",
+          "applies": true,
+          "sentiment": "POSITIVE",
+          "explanation": "明确评价手套轮廓纤薄、不臃肿。"
+        },
+        {
+          "text": "These gloves feel lightweight.",
+          "applies": false,
+          "sentiment": null,
+          "explanation": "只评价重量轻，没有评价厚度或轮廓。"
+        }
+      ]
     },
     {
       "code": "GLOVE_ODOR_U1",
@@ -849,18 +969,38 @@
       "code": "GLOVE_USE_SCENARIO_U1",
       "name": "使用场景适配",
       "group": "其他反馈",
-      "description": "明确评价手套是否适用于某种运动、工作、寒冷环境或其他使用场景",
+      "description": "明确评价手套是否适用于某种运动、工作、寒冷环境或其他使用场景；购买目的或尚未使用的计划本身不代表适用性",
       "keywords": [
         "suitable",
         "not suitable",
         "used for",
-        "use"
+        "use",
+        "ideal for",
+        "well suited",
+        "everyday use"
       ],
       "allowed_sentiments": [
         "NEGATIVE",
         "POSITIVE"
       ],
-      "allowed_claim_ids": []
+      "allowed_claim_ids": [],
+      "exclusions": [
+        "仅说明购买用途、打算未来使用或尚未在该场景测试时不适用。"
+      ],
+      "examples": [
+        {
+          "text": "They work well for short outdoor chores in winter.",
+          "applies": true,
+          "sentiment": "POSITIVE",
+          "explanation": "明确评价手套适合已描述的短时冬季任务。"
+        },
+        {
+          "text": "I bought them for a ski trip next month.",
+          "applies": false,
+          "sentiment": null,
+          "explanation": "只说明未来购买用途，没有实际适用性评价。"
+        }
+      ]
     },
     {
       "code": "GLOVE_EXPECTATION_MISMATCH_U1",
@@ -1068,13 +1208,32 @@
         "expensive",
         "overpriced",
         "reasonably priced",
-        "affordable"
+        "affordable",
+        "inexpensive",
+        "cheapie"
       ],
       "allowed_sentiments": [
         "NEGATIVE",
         "POSITIVE"
       ],
-      "allowed_claim_ids": []
+      "allowed_claim_ids": [],
+      "exclusions": [
+        "cheap明确修饰材料、做工或品质时不适用；评价功能、设计或质量与价格是否匹配时使用性价比。"
+      ],
+      "examples": [
+        {
+          "text": "This is a decent cheapie pair for quick errands.",
+          "applies": true,
+          "sentiment": "POSITIVE",
+          "explanation": "明确评价商品价格低且语气正向。"
+        },
+        {
+          "text": "The material looks cheap.",
+          "applies": false,
+          "sentiment": null,
+          "explanation": "cheap修饰材料品质，不是价格评价。"
+        }
+      ]
     },
     {
       "code": "GLOVE_VALUE_U1",
@@ -1085,13 +1244,31 @@
         "value",
         "worth the money",
         "good value",
-        "poor value"
+        "poor value",
+        "for the price"
       ],
       "allowed_sentiments": [
         "NEGATIVE",
         "POSITIVE"
       ],
-      "allowed_claim_ids": []
+      "allowed_claim_ids": [],
+      "exclusions": [
+        "只评价价格高低、便宜或合理，未把价格与材料、质量、功能或整体价值比较时不适用。"
+      ],
+      "examples": [
+        {
+          "text": "They are well designed for the price.",
+          "applies": true,
+          "sentiment": "POSITIVE",
+          "explanation": "明确把设计表现与价格相比较，属于性价比评价。"
+        },
+        {
+          "text": "The price is reasonable.",
+          "applies": false,
+          "sentiment": null,
+          "explanation": "只评价价格合理，没有评价价格与商品表现是否匹配。"
+        }
+      ]
     },
     {
       "code": "GLOVE_PURCHASE_INTENT_U1",
@@ -1128,7 +1305,7 @@
     }
   ],
   "product_context": "冬季、滑雪、骑行、抓绒或健身手套",
-  "version": "gloves-unified-2026-09-08-v1-semantic1",
+  "version": "gloves-unified-2026-09-12-v1-semantic3",
   "validation_rules": {
     "allowed_groups": [
       "尺码与适配",
@@ -1155,6 +1332,10 @@
     "fallback_label_codes": [
       "GLOVE_SIZE_ISSUE_UNSPECIFIED_U1",
       "GLOVE_REASON_UNSPECIFIED_U1"
+    ],
+    "boundary_required_labels": [
+      "GLOVE_BULK_WEIGHT_U1",
+      "GLOVE_THICKNESS_U1"
     ],
     "conflict_scope": "evidence"
   },
