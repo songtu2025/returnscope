@@ -4,6 +4,7 @@ import html
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from zipfile import BadZipFile
 
 import pandas as pd
 
@@ -61,19 +62,37 @@ def _looks_like_gb18030(frame: pd.DataFrame) -> bool:
     )
 
 
+def _return_column_score(frame: pd.DataFrame) -> int:
+    columns = {str(column) for column in frame.columns}
+    return sum(column in columns for column in [*RETURN_COLUMNS, RETURN_STORE_COLUMN])
+
+
+def _select_columns(
+    frame: pd.DataFrame,
+    usecols: list[str] | None,
+) -> pd.DataFrame:
+    if usecols is None:
+        return frame
+    missing = [column for column in usecols if column not in frame.columns]
+    if missing:
+        raise ValueError(f"退货数据缺少字段: {', '.join(missing)}")
+    selected = set(usecols)
+    return frame.loc[:, [column for column in frame.columns if column in selected]]
+
+
 def read_return_csv(
     path: Path,
     usecols: list[str] | None = None,
     nrows: int | None = None,
 ) -> pd.DataFrame:
     try:
-        return pd.read_csv(
+        frame = pd.read_csv(
             path,
             encoding="utf-8-sig",
             dtype=str,
-            usecols=usecols,
             nrows=nrows,
         )
+        return _select_columns(frame, usecols)
     except UnicodeDecodeError:
         pass
 
@@ -85,19 +104,69 @@ def read_return_csv(
                 path,
                 encoding=encoding,
                 dtype=str,
-                usecols=usecols,
                 nrows=nrows,
             )
         except UnicodeDecodeError as exc:
             last_error = exc
-    if "gb18030" in decoded and (
-        "cp1252" not in decoded or _looks_like_gb18030(decoded["gb18030"])
-    ):
-        return decoded["gb18030"]
+    if "gb18030" in decoded:
+        gb18030_frame = decoded["gb18030"]
+        cp1252_frame = decoded.get("cp1252")
+        gb18030_score = _return_column_score(gb18030_frame)
+        cp1252_score = (
+            _return_column_score(cp1252_frame) if cp1252_frame is not None else -1
+        )
+        if (
+            cp1252_frame is None
+            or gb18030_score > cp1252_score
+            or (gb18030_score == cp1252_score and _looks_like_gb18030(gb18030_frame))
+        ):
+            return _select_columns(gb18030_frame, usecols)
     if "cp1252" in decoded:
-        return decoded["cp1252"]
+        return _select_columns(decoded["cp1252"], usecols)
     assert last_error is not None
     raise last_error
+
+
+def read_return_xlsx(
+    path: Path,
+    usecols: list[str] | None = None,
+    nrows: int | None = None,
+) -> pd.DataFrame:
+    try:
+        workbook = pd.ExcelFile(path)
+    except (BadZipFile, ValueError) as exc:
+        raise ValueError("无法读取退货 XLSX 文件，请确认文件未损坏") from exc
+
+    with workbook:
+        for sheet_name in workbook.sheet_names:
+            header = pd.read_excel(workbook, sheet_name=sheet_name, nrows=0)
+            columns = {str(column) for column in header.columns}
+            if not set(RETURN_COLUMNS).issubset(columns):
+                continue
+            frame = pd.read_excel(
+                workbook,
+                sheet_name=sheet_name,
+                dtype=str,
+                usecols=usecols,
+                nrows=nrows,
+            )
+            frame.attrs["worksheet_name"] = str(sheet_name)
+            return frame
+
+    raise ValueError("退货 XLSX 中未找到包含全部必需字段的工作表")
+
+
+def read_return_file(
+    path: Path,
+    usecols: list[str] | None = None,
+    nrows: int | None = None,
+) -> pd.DataFrame:
+    suffix = path.suffix.lower()
+    if suffix == ".csv":
+        return read_return_csv(path, usecols=usecols, nrows=nrows)
+    if suffix == ".xlsx":
+        return read_return_xlsx(path, usecols=usecols, nrows=nrows)
+    raise ValueError("退货数据仅支持 .csv、.xlsx 文件")
 
 
 def load_mskus(
@@ -214,7 +283,7 @@ def resolve_sku_aliases(
 
 
 def _prepare_return_records(return_path: Path) -> pd.DataFrame:
-    records = read_return_csv(return_path)
+    records = read_return_file(return_path)
     missing = [column for column in RETURN_COLUMNS if column not in records.columns]
     if missing:
         raise ValueError(f"退货数据缺少字段: {', '.join(missing)}")

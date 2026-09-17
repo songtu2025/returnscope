@@ -1,13 +1,17 @@
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from return_semantics.capabilities import load_capability_registry
 from return_semantics.data import (
+    RETURN_COLUMNS,
+    RETURN_STORE_COLUMN,
     load_return_dataset,
     load_return_dataset_auto,
     normalize_comment,
     read_return_csv,
+    read_return_file,
 )
 from return_semantics.task_plan import build_category_execution_plan
 
@@ -25,10 +29,56 @@ def test_return_csv_supports_utf8_cp1252_and_gb18030(tmp_path: Path) -> None:
     cp1252_path.write_bytes("comment\nDidn’t fit\n".encode("cp1252"))
     gb18030_path = tmp_path / "gb18030.csv"
     gb18030_path.write_bytes("comment\n鞋子太大\n".encode("gb18030"))
+    gb18030_header_path = tmp_path / "gb18030-header.csv"
+    gb18030_header_path.write_bytes(
+        "店铺/站点,customer-comments\nSENWAYZON:US,Too small\n".encode("gb18030")
+    )
 
     assert read_return_csv(utf8_path).iloc[0]["comment"] == "鞋子太大"
     assert read_return_csv(cp1252_path).iloc[0]["comment"] == "Didn’t fit"
     assert read_return_csv(gb18030_path).iloc[0]["comment"] == "鞋子太大"
+    assert read_return_csv(gb18030_header_path).columns.tolist() == [
+        RETURN_STORE_COLUMN,
+        "customer-comments",
+    ]
+
+
+def test_return_file_selects_first_valid_xlsx_sheet(tmp_path: Path) -> None:
+    path = tmp_path / "returns.xlsx"
+    row = {column: "" for column in RETURN_COLUMNS}
+    row.update(
+        {
+            "order-id": "ORDER-1",
+            "sku": "SKU-1",
+            "customer-comments": "Too small",
+            RETURN_STORE_COLUMN: "SENWAYZON:US",
+        }
+    )
+    with pd.ExcelWriter(path, engine="openpyxl") as writer:
+        pd.DataFrame([{"说明": "导入说明"}]).to_excel(
+            writer,
+            sheet_name="说明",
+            index=False,
+        )
+        pd.DataFrame([row]).to_excel(
+            writer,
+            sheet_name="退货明细",
+            index=False,
+        )
+
+    frame = read_return_file(path)
+
+    assert frame.attrs["worksheet_name"] == "退货明细"
+    assert frame.iloc[0]["order-id"] == "ORDER-1"
+    assert frame.iloc[0][RETURN_STORE_COLUMN] == "SENWAYZON:US"
+
+
+def test_return_file_rejects_xlsx_without_required_columns(tmp_path: Path) -> None:
+    path = tmp_path / "invalid-returns.xlsx"
+    pd.DataFrame([{"说明": "缺少退货字段"}]).to_excel(path, index=False)
+
+    with pytest.raises(ValueError, match="未找到包含全部必需字段的工作表"):
+        read_return_file(path)
 
 
 def test_real_sk001_data_matches_business_baseline(

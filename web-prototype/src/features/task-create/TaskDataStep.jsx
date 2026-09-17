@@ -86,7 +86,7 @@ export function TaskDataStep({
                     <small>
                       {selectedReturns
                         ? `${selectedDataLabel || "本次上传数据"} · ${selectedReturns.row_count.toLocaleString()} 条记录`
-                        : "上传 CSV，系统会识别字段并检查数据。"}
+                        : "上传 CSV 或 XLSX，系统会识别字段并检查数据。"}
                     </small>
                   </div>
                   <button

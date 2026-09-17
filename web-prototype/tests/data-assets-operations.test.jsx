@@ -44,6 +44,7 @@ vi.mock("../src/api", () => ({
 import { ImportRulesPage } from "../src/features/data-management/ImportRulesPage";
 import { ReturnDataAssetsPage } from "../src/features/data-management/ReturnDataAssetsPage";
 import { ReturnImportDialog } from "../src/features/task-create/ReturnImportDialog";
+import { DatasetUploadDialog } from "../src/components/DatasetUploadDialog";
 import { DatasetReferences } from "../src/pages/DataManagement";
 
 beforeEach(() => {
@@ -326,16 +327,16 @@ test("退货数据源页集中展示当前状态并从详情按需查看历史",
   expect(screen.queryByText("仅分析本批")).not.toBeInTheDocument();
 });
 
-test("退货文件检查失败后可重新选择同名修正文件", async () => {
+test("退货文件检查失败后可重新选择 XLSX 修正文件", async () => {
   const user = userEvent.setup();
-  const correctedFile = new File(["store,sku\nUS,SKU-1"], "returns.csv", {
-    type: "text/csv",
+  const correctedFile = new File(["xlsx"], "returns.xlsx", {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
   inspectReturnImport
     .mockRejectedValueOnce(new Error("Failed to fetch"))
     .mockResolvedValueOnce({
       inspection_id: "inspection-2",
-      original_name: "returns.csv",
+      original_name: "returns.xlsx",
       suggested_name: "修正后的退货数据",
       row_count: 1,
       stores: ["BRAND:US"],
@@ -351,14 +352,14 @@ test("退货文件检查失败后可重新选择同名修正文件", async () =>
   await user.click(screen.getByRole("button", { name: "检查文件" }));
   expect(
     await screen.findByText(
-      "无法连接服务，请确认 CSV 格式正确，修正后重新选择文件并检查。",
+      "无法连接服务，请确认 CSV 或 XLSX 格式正确，修正后重新选择文件并检查。",
     ),
   ).toBeVisible();
   expect(screen.queryByText(/Failed to fetch/)).not.toBeInTheDocument();
 
   await user.upload(fileInput, correctedFile);
   expect(
-    screen.queryByText(/请确认 CSV 格式正确，修正后重新选择文件并检查。/),
+    screen.queryByText(/请确认 CSV 或 XLSX 格式正确，修正后重新选择文件并检查。/),
   ).not.toBeInTheDocument();
   expect(inspectReturnImport).toHaveBeenCalledTimes(1);
   await user.click(screen.getByRole("button", { name: "检查文件" }));
@@ -367,8 +368,32 @@ test("退货文件检查失败后可重新选择同名修正文件", async () =>
   expect(inspectReturnImport.mock.calls[1][0].get("file")).toBe(correctedFile);
 
   await user.click(screen.getByRole("button", { name: "更换文件" }));
-  expect(screen.getByText("选择 CSV 文件")).toBeVisible();
+  expect(screen.getByText("选择 CSV 或 XLSX 文件")).toBeVisible();
   expect(screen.getByRole("button", { name: "检查文件" })).toBeDisabled();
+});
+
+test("两个退货上传入口都声明支持 CSV 和 XLSX", () => {
+  const { unmount } = render(
+    <ReturnImportDialog purpose="asset" onClose={vi.fn()} onDone={vi.fn()} />,
+  );
+  expect(document.querySelector('input[type="file"]')).toHaveAttribute(
+    "accept",
+    ".csv,.xlsx",
+  );
+  unmount();
+
+  render(
+    <DatasetUploadDialog
+      dialog={{ mode: "create", kind: "returns" }}
+      onClose={vi.fn()}
+      onDone={vi.fn()}
+    />,
+  );
+  expect(document.querySelector('input[type="file"]')).toHaveAttribute(
+    "accept",
+    ".csv,.xlsx",
+  );
+  expect(screen.getByText("选择 CSV 或 XLSX 文件")).toBeVisible();
 });
 
 test("数据版本引用显示历史任务固化快照并精确跳转", async () => {

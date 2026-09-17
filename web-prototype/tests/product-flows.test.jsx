@@ -911,6 +911,7 @@ describe("关键用户流程", () => {
     );
 
     await user.click(await screen.findByRole("button", { name: "上传文件" }));
+    expect(screen.getByText(/上传 CSV 或 XLSX/)).toBeVisible();
     await user.click(screen.getByRole("button", { name: "选择文件" }));
     expect(
       screen.queryByLabelText(/文件缺少店铺\/站点时补充为/),

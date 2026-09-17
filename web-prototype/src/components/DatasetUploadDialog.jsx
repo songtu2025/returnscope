@@ -83,11 +83,13 @@ export function DatasetUploadDialog({ dialog, onClose, onDone, storeOptions = []
         <label className="file-drop">
           <input
             type="file"
-            accept={kind === "returns" ? ".csv" : ".xlsx"}
+            accept={kind === "returns" ? ".csv,.xlsx" : ".xlsx"}
             onChange={(event) => setFile(event.target.files?.[0] ?? null)}
           />
           <UploadSimple size={25} />
-          <b>{file?.name ?? `选择 ${kind === "returns" ? "CSV" : "XLSX"} 文件`}</b>
+          <b>
+            {file?.name ?? `选择 ${kind === "returns" ? "CSV 或 XLSX" : "XLSX"} 文件`}
+          </b>
           <span>最大 200 MB，上传后自动检查必需字段</span>
         </label>
         {kind === "returns" && (
