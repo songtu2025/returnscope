@@ -7,6 +7,40 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+test("分类结果 API 迁移后保持既有路径和查询参数", async () => {
+  const fetchMock = vi.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    headers: new Headers({ "content-type": "application/json" }),
+    json: async () => ({}),
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  await api.classificationResults({ page: 2, page_size: 50, q: "鞋" });
+  await api.classificationResult("version/1");
+  await api.classificationResultVersions("version/1");
+  await api.classificationResultSummary("version/1");
+  await api.classificationResultRecords("version/1", {
+    page: 3,
+    product_name: "产品 A",
+  });
+  await api.classificationResultDrilldown("version/1", "problem", {
+    product_sku: "SKU-1",
+  });
+
+  expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+    "/api/classification-results?page=2&page_size=50&q=%E9%9E%8B",
+    "/api/classification-results/version/1",
+    "/api/classification-results/version/1/versions",
+    "/api/classification-results/version/1/summary",
+    "/api/classification-results/version/1/records?page=3&product_name=%E4%BA%A7%E5%93%81+A",
+    "/api/classification-results/version/1/drilldown?group_by=problem&product_sku=SKU-1",
+  ]);
+  expect(api.classificationResultDownloadUrl("version/1")).toBe(
+    "/api/classification-results/version/1/download",
+  );
+});
+
 test("结果发布重试使用约定的 POST 路径和并发控制参数", async () => {
   const fetchMock = vi.fn().mockResolvedValue({
     ok: true,

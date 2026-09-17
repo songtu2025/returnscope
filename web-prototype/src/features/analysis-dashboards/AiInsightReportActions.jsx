@@ -18,6 +18,17 @@ import {
   STATUS_LABELS,
 } from "./AiInsightReportPresentation";
 
+/** @typedef {import("./analysisDashboardContracts").InsightEvidenceCatalog} InsightEvidenceCatalog */
+/** @typedef {import("./analysisDashboardContracts").InsightOpinion} InsightOpinion */
+/** @typedef {import("./analysisDashboardContracts").InsightReport} InsightReport */
+/** @typedef {import("./analysisDashboardContracts").LegacyInsightReportContent} LegacyInsightReportContent */
+/** @typedef {import("./analysisDashboardContracts").ReportAction} ReportAction */
+/** @typedef {import("./analysisDashboardContracts").ReportDiagnostic} ReportDiagnostic */
+/** @typedef {import("./analysisDashboardContracts").ReportFinding} ReportFinding */
+/** @typedef {import("./analysisDashboardContracts").ReportReason} ReportReason */
+/** @typedef {import("./analysisDashboardContracts").ReportSample} ReportSample */
+
+/** @param {{opinions: InsightOpinion[]}} props */
 function OpinionRanking({ opinions }) {
   const rows = [...opinions]
     .sort((left, right) => number(right.record_count) - number(left.record_count))
@@ -69,6 +80,7 @@ function OpinionRanking({ opinions }) {
   );
 }
 
+/** @param {{informationFinding?: ReportFinding, informationDiagnostic?: ReportDiagnostic, informationReason?: ReportReason, informationOpinions: InsightOpinion[], informationSamples: ReportSample[], catalog: InsightEvidenceCatalog}} props */
 export function ReportInformationSection({
   informationFinding,
   informationDiagnostic,
@@ -141,6 +153,7 @@ export function ReportInformationSection({
   );
 }
 
+/** @param {{primaryAction?: ReportAction, followupActions: ReportAction[], informationFinding?: ReportFinding, informationDiagnostic?: ReportDiagnostic, informationReason?: ReportReason}} props */
 export function ReportActionsSection({
   primaryAction,
   followupActions,
@@ -201,7 +214,9 @@ export function ReportActionsSection({
   );
 }
 
+/** @param {{content: LegacyInsightReportContent}} props */
 export function ReportBoundarySection({ content }) {
+  const caveats = content.caveats ?? [];
   return (
     <section className="ai-report-section ai-report-boundary" id="report-boundary">
       <div className="ai-report-open-questions">
@@ -213,16 +228,16 @@ export function ReportBoundarySection({ content }) {
           ))}
         </ul>
       </div>
-      {(content.caveats ?? []).length > 0 && (
+      {caveats.length > 0 && (
         <>
           <p className="ai-report-primary-caveat">
-            <WarningCircle size={16} /> {content.caveats[0]}
+            <WarningCircle size={16} /> {caveats[0]}
           </p>
-          {(content.caveats ?? []).length > 1 && (
+          {caveats.length > 1 && (
             <details className="ai-report-limitations">
               <summary>查看其余报告口径与限制</summary>
               <ul>
-                {content.caveats.slice(1).map((item) => (
+                {caveats.slice(1).map((item) => (
                   <li key={item}>{item}</li>
                 ))}
               </ul>
@@ -234,6 +249,7 @@ export function ReportBoundarySection({ content }) {
   );
 }
 
+/** @param {{attempts: InsightReport[], report: InsightReport, inputTokens: number, outputTokens: number, onSelect: (reportId: string) => void}} props */
 export function ReportAppendix({
   attempts,
   report,

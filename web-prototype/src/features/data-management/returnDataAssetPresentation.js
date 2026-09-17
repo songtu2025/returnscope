@@ -1,3 +1,7 @@
+/** @typedef {import("../../shared/api/dataManagementContracts").DatasetRecord} DatasetRecord */
+/** @typedef {import("../../shared/api/dataManagementContracts").DatasetSource} DatasetSource */
+
+/** @param {unknown} value */
 export function formatBytes(value) {
   let size = Number(value || 0);
   const units = ["B", "KiB", "MiB", "GiB", "TiB"];
@@ -10,7 +14,9 @@ export function formatBytes(value) {
   return `${size.toFixed(digits)} ${units[unitIndex]}`;
 }
 
+/** @param {DatasetRecord[]} items @returns {DatasetSource[]} */
 export function canonicalSources(items) {
+  /** @type {Map<string, DatasetSource>} */
   const sources = new Map();
   items.forEach((item) => {
     const key = item.source_key || item.id;
@@ -24,11 +30,14 @@ export function canonicalSources(items) {
   return [...sources.values()];
 }
 
+/** @param {DatasetSource} source @param {DatasetRecord[]} items @returns {DatasetSource} */
 export function mergeSourceDetails(source, items) {
-  const current = items.find((item) => item.id === source.id) || items[0];
+  const current = items.find((item) => item.id === source.id) || items[0] || source;
   const versions = items
     .flatMap((item) => item.versions ?? [])
-    .sort((left, right) => String(right.created_at).localeCompare(left.created_at));
+    .sort((left, right) =>
+      String(right.created_at).localeCompare(String(left.created_at)),
+    );
   const notesByVersion = new Map(
     versions.map((item) => [item.id, item.change_note || ""]),
   );
@@ -46,12 +55,19 @@ export function mergeSourceDetails(source, items) {
       .map((item) => ({
         ...item,
         change_note:
-          item.change_note || notesByVersion.get(item.resulting_version_id) || "",
+          item.change_note ||
+          (item.resulting_version_id
+            ? notesByVersion.get(item.resulting_version_id)
+            : undefined) ||
+          "",
       }))
-      .sort((left, right) => String(right.created_at).localeCompare(left.created_at)),
+      .sort((left, right) =>
+        String(right.created_at).localeCompare(String(left.created_at)),
+      ),
   };
 }
 
+/** @param {DatasetRecord} item */
 export function sourceDisplayName(item) {
   if (item.name) return item.name;
   if (item.source_name) return item.source_name;
@@ -65,12 +81,14 @@ export function sourceDisplayName(item) {
   return "未命名退货数据";
 }
 
+/** @param {DatasetRecord} item */
 export function sourceScopeLabel(item) {
   const stores = item.quality?.stores ?? [];
   if (!stores.length) return "未识别";
   return [...new Set(stores.map((value) => String(value)))].join(" · ");
 }
 
+/** @param {DatasetRecord} item */
 export function dataStatus(item) {
   const quality = item.quality ?? {};
   const missingStoreRows = Number(quality.missing_store_rows || 0);
@@ -96,13 +114,14 @@ export function dataStatus(item) {
   };
 }
 
+/** @param {string} mode */
 export function importModeLabel(mode) {
   return (
-    {
+    /** @type {Record<string, string>} */ ({
       analyze_only: "仅分析本批",
       create: "首次建立数据源",
       append: "追加数据",
       replace: "替换当前数据",
-    }[mode] ?? mode
+    })[mode] ?? mode
   );
 }

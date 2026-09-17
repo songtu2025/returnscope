@@ -27,22 +27,39 @@ import { dashboardApi } from "../../shared/api/dashboardApi";
 import { DashboardCreateFlow } from "./DashboardCreateFlow";
 import { createDashboardSelection } from "./dashboardSelectionStorage";
 
+/** @typedef {import("../../app/navigation").AppRoute} AppRoute */
+/** @typedef {import("./analysisDashboardContracts").DashboardListItem} DashboardListItem */
+/** @typedef {import("./analysisDashboardContracts").DashboardListPage} DashboardListPage */
+/** @typedef {import("./analysisDashboardContracts").DashboardNotify} DashboardNotify */
+/** @typedef {import("./analysisDashboardContracts").DashboardRoute} DashboardRoute */
+/** @typedef {import("./analysisDashboardContracts").DashboardTab} DashboardTab */
+/** @typedef {import("./analysisDashboardContracts").UpdateDashboardRoute} UpdateDashboardRoute */
+
 const DashboardDetail = lazy(() =>
   import("./DashboardDetail").then((module) => ({ default: module.DashboardDetail })),
 );
 
-const TABS = new Set(["overview", "report", "source", "history"]);
+const TABS = /** @type {Set<DashboardTab>} */ (
+  new Set(["overview", "report", "source", "history"])
+);
 
+/** @param {Record<string, string | undefined>} query @returns {DashboardRoute} */
 function routeState(query) {
+  /** @param {string} key */
   const number = (key) => Number(query[key]);
+  const tab = /** @type {DashboardTab} */ (
+    TABS.has(/** @type {DashboardTab} */ (query.tab)) ? query.tab : "overview"
+  );
+  const step =
+    query.step === "conflicts" || query.step === "confirm" ? query.step : "check";
   return {
     dashboardId: query.dashboard || "",
     versionId: query.version || "",
     reportId: query.report || "",
     issueId: query.issue || "",
-    tab: TABS.has(query.tab) ? query.tab : "overview",
+    tab,
     selectionToken: query.selection_token || "",
-    step: ["check", "conflicts", "confirm"].includes(query.step) ? query.step : "check",
+    step,
     status: query.status || "",
     q: query.q || "",
     page: Math.max(number("page") || 1, 1),
@@ -59,6 +76,7 @@ function routeState(query) {
   };
 }
 
+/** @param {DashboardRoute} route @param {{replace?: boolean}} [options] */
 function writeRoute(route, options) {
   navigateHash(
     "analysis-dashboards",
@@ -88,6 +106,7 @@ function writeRoute(route, options) {
   );
 }
 
+/** @param {{route?: AppRoute | null, notify: DashboardNotify, userId: string}} props */
 export function AnalysisDashboardPage({ route: appRoute, notify, userId }) {
   const route = routeState(appRoute?.query ?? {});
   const routeRef = useRef(route);
@@ -95,6 +114,7 @@ export function AnalysisDashboardPage({ route: appRoute, notify, userId }) {
     routeRef.current = route;
   }, [route]);
   const updateRoute = useCallback(
+    /** @type {UpdateDashboardRoute} */
     (changes, options) => writeRoute({ ...routeRef.current, ...changes }, options),
     [],
   );
@@ -130,11 +150,18 @@ export function AnalysisDashboardPage({ route: appRoute, notify, userId }) {
   );
 }
 
+/** @param {{route: DashboardRoute, updateRoute: UpdateDashboardRoute, userId: string}} props */
 function DashboardList({ route, updateRoute, userId }) {
-  const [state, setState] = useState({ loading: true, error: "", data: null });
+  const [state, setState] = useState(
+    /** @type {{loading: boolean, error: string, data: DashboardListPage | null}} */ ({
+      loading: true,
+      error: "",
+      data: null,
+    }),
+  );
   const [filters, setFilters] = useState({ q: route.q, status: route.status });
   const generationRef = useRef(0);
-  const controllerRef = useRef(null);
+  const controllerRef = useRef(/** @type {AbortController | null} */ (null));
 
   useEffect(
     () => setFilters({ q: route.q, status: route.status }),
@@ -159,15 +186,24 @@ function DashboardList({ route, updateRoute, userId }) {
     controllerRef.current = controller;
     setState((current) => ({ ...current, loading: true, error: "" }));
     try {
-      const data = await dashboardApi.analysisDashboards(query, {
-        signal: controller.signal,
-      });
+      const data = /** @type {DashboardListPage} */ (
+        await dashboardApi.analysisDashboards(query, {
+          signal: controller.signal,
+        })
+      );
       if (generationRef.current === generation) {
         setState({ loading: false, error: "", data });
       }
     } catch (error) {
-      if (generationRef.current === generation && error.name !== "AbortError") {
-        setState((current) => ({ ...current, loading: false, error: error.message }));
+      if (
+        generationRef.current === generation &&
+        (!(error instanceof Error) || error.name !== "AbortError")
+      ) {
+        setState((current) => ({
+          ...current,
+          loading: false,
+          error: error instanceof Error ? error.message : "分析看板读取失败",
+        }));
       }
     }
   }, [query]);
@@ -185,6 +221,7 @@ function DashboardList({ route, updateRoute, userId }) {
     navigateHash("classification-results", { selection_token: token });
   };
   const totalPages = Math.max(Math.ceil((state.data?.total ?? 0) / route.pageSize), 1);
+  const data = state.data;
 
   return (
     <div className="standard-page analysis-dashboard-page">
@@ -243,7 +280,7 @@ function DashboardList({ route, updateRoute, userId }) {
             </button>
           </div>
         )}
-        {!state.loading && !state.error && state.data?.items?.length === 0 && (
+        {!state.loading && !state.error && data?.items.length === 0 && (
           <EmptyState
             icon={ChartBar}
             title={route.q || route.status ? "没有符合条件的看板" : "还没有分析看板"}
@@ -254,7 +291,7 @@ function DashboardList({ route, updateRoute, userId }) {
             }
           />
         )}
-        {state.data?.items?.length > 0 && !state.error && (
+        {data && data.items.length > 0 && !state.error && (
           <>
             <div
               className={`dashboard-list-table ${state.loading ? "is-loading" : ""}`}
@@ -269,7 +306,7 @@ function DashboardList({ route, updateRoute, userId }) {
                 <span>创建人</span>
                 <span>操作</span>
               </div>
-              {state.data.items.map((dashboard) => (
+              {data.items.map((dashboard) => (
                 <DashboardRow
                   key={dashboard.id || dashboard.dashboard_id}
                   dashboard={dashboard}
@@ -287,7 +324,7 @@ function DashboardList({ route, updateRoute, userId }) {
             <Pagination
               page={route.page}
               pageSize={route.pageSize}
-              total={state.data.total}
+              total={data.total}
               totalPages={totalPages}
               onPage={(page) => updateRoute({ page })}
               onPageSize={(pageSize) => updateRoute({ page: 1, pageSize })}
@@ -299,13 +336,18 @@ function DashboardList({ route, updateRoute, userId }) {
   );
 }
 
+/** @param {{dashboard: DashboardListItem, onOpen: () => void}} props */
 function DashboardRow({ dashboard, onOpen }) {
-  const statusLabels = { active: "可用", archived: "已归档" };
+  const statusLabels = /** @type {Record<string, string>} */ ({
+    active: "可用",
+    archived: "已归档",
+  });
   const summary = dashboard.summary ?? {};
+  const status = dashboard.status || "active";
   return (
     <article className="dashboard-list-row" role="row">
-      <span className={`dashboard-status ${dashboard.status || "active"}`}>
-        {statusLabels[dashboard.status] || dashboard.status || "可用"}
+      <span className={`dashboard-status ${status}`}>
+        {statusLabels[status] || status}
       </span>
       <div>
         <b>{dashboard.name || "未命名看板"}</b>

@@ -4,6 +4,18 @@ import { CardHeading } from "../../components/SharedUi";
 import { EFFORT_LABELS, MODEL_STATUS_LABELS } from "../../constants";
 import { classNames, formatTime } from "../../lib/presentation";
 
+/** @typedef {import("../../shared/api/systemSettingsContracts").CatalogModel} CatalogModel */
+/** @typedef {import("../../shared/api/systemSettingsContracts").ConfigVersion} ConfigVersion */
+/** @typedef {import("../../shared/api/systemSettingsContracts").ModelConnection} ModelConnection */
+/** @typedef {import("../../shared/api/systemSettingsContracts").ValidationRun} ValidationRun */
+/** @typedef {import("../../shared/api/systemSettingsContracts").ValidationEvent} ValidationEvent */
+
+const EFFORT_LABEL_MAP = /** @type {Record<string, string>} */ (EFFORT_LABELS);
+const MODEL_STATUS_LABEL_MAP = /** @type {Record<string, string>} */ (
+  MODEL_STATUS_LABELS
+);
+
+/** @type {Record<string, string>} */
 const VALIDATION_STATUS_LABELS = {
   queued: "等待开始",
   running: "验证中",
@@ -13,6 +25,7 @@ const VALIDATION_STATUS_LABELS = {
   pending: "等待验证",
 };
 
+/** @param {{status: string}} props */
 function ValidationStatusIcon({ status }) {
   if (status === "passed") return <CheckCircle size={18} />;
   if (status === "failed") return <WarningCircle size={18} />;
@@ -20,6 +33,19 @@ function ValidationStatusIcon({ status }) {
   return <Clock size={18} />;
 }
 
+/**
+ * @param {{
+ *   busy: string,
+ *   onClose: () => void,
+ *   onPublish: () => void,
+ *   selectedVersion: ConfigVersion | null,
+ *   selectedVersionIsActive: boolean,
+ *   validationActive: boolean,
+ *   validationElapsed: number,
+ *   validationEvents: ValidationEvent[],
+ *   validationRun: ValidationRun | null,
+ * }} props
+ */
 function ValidationProcess({
   busy,
   onClose,
@@ -109,7 +135,7 @@ function ValidationProcess({
       </div>
       <div className="validation-item-list">
         {(validationRun.items ?? []).map((item, index) => {
-          const itemStarted = new Date(item.started_at).getTime();
+          const itemStarted = new Date(item.started_at ?? "").getTime();
           const runStarted = new Date(
             validationRun.started_at ?? validationRun.created_at,
           ).getTime();
@@ -133,7 +159,10 @@ function ValidationProcess({
                 {item.suggestion && <small>处理建议：{item.suggestion}</small>}
               </div>
               <div className="validation-item-meta">
-                <span>推理强度：{EFFORT_LABELS[item.effort]}</span>
+                <span>
+                  推理强度：
+                  {/** @type {Record<string, string>} */ (EFFORT_LABELS)[item.effort]}
+                </span>
                 {item.status === "running" && <b>{itemElapsed.toFixed(1)} 秒</b>}
                 {item.duration_ms !== null && (
                   <b>{(item.duration_ms / 1000).toFixed(2)} 秒</b>
@@ -166,6 +195,26 @@ function ValidationProcess({
   );
 }
 
+/**
+ * @param {{
+ *   busy: string,
+ *   catalogModels: CatalogModel[],
+ *   focusModelId: string | null,
+ *   focusedModelRef: import("react").Ref<HTMLDivElement>,
+ *   onCloseValidation: () => void,
+ *   onOpenModelEditor: (model?: CatalogModel) => void,
+ *   onPublish: () => void,
+ *   onToggleModel: (model: CatalogModel) => void,
+ *   onValidateModel: (model: CatalogModel) => void,
+ *   selectedConnection: ModelConnection | null | undefined,
+ *   selectedVersion: ConfigVersion | null,
+ *   selectedVersionIsActive: boolean,
+ *   validationActive: boolean,
+ *   validationElapsed: number,
+ *   validationEvents: ValidationEvent[],
+ *   validationRun: ValidationRun | null,
+ * }} props
+ */
 export function ModelCatalogSection({
   busy,
   catalogModels,
@@ -225,7 +274,7 @@ export function ModelCatalogSection({
             </div>
             <div className="model-effort-tags">
               {model.supported_efforts.map((effort) => (
-                <span key={effort}>{EFFORT_LABELS[effort]}</span>
+                <span key={effort}>{EFFORT_LABEL_MAP[effort]}</span>
               ))}
             </div>
             <span
@@ -233,7 +282,7 @@ export function ModelCatalogSection({
               title={model.validation_message || ""}
             >
               {model.active
-                ? (MODEL_STATUS_LABELS[model.validation_status] ?? "待验证")
+                ? (MODEL_STATUS_LABEL_MAP[model.validation_status] ?? "待验证")
                 : "已停用"}
             </span>
             <div className="model-catalog-actions">

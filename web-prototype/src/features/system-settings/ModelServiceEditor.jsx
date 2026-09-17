@@ -12,6 +12,60 @@ import { classNames, formatTime } from "../../lib/presentation";
 import { ModelCatalogSection } from "./ModelCatalogSection";
 import { ModelServiceInspector } from "./ModelServiceInspector";
 
+/** @typedef {import("../../shared/api/systemSettingsContracts").ActivePanel} ActivePanel */
+/** @typedef {import("../../shared/api/systemSettingsContracts").CatalogModel} CatalogModel */
+/** @typedef {import("../../shared/api/systemSettingsContracts").ConfigVersion} ConfigVersion */
+/** @typedef {import("../../shared/api/systemSettingsContracts").ModelConnection} ModelConnection */
+/** @typedef {import("../../shared/api/systemSettingsContracts").ModelOption} ModelOption */
+/** @typedef {import("../../shared/api/systemSettingsContracts").ModelServiceForm} ModelServiceForm */
+/** @typedef {import("../../shared/api/systemSettingsContracts").PipelineModelKey} PipelineModelKey */
+/** @typedef {import("../../shared/api/systemSettingsContracts").PipelineEffortKey} PipelineEffortKey */
+/** @typedef {import("../../shared/api/systemSettingsContracts").ValidationRun} ValidationRun */
+/** @typedef {import("../../shared/api/systemSettingsContracts").ValidationEvent} ValidationEvent */
+/** @typedef {import("../../shared/api/systemSettingsContracts").VersionChanges} VersionChanges */
+
+/**
+ * @param {{
+ *   activePanel: ActivePanel,
+ *   connections: ModelConnection[],
+ *   selectedConnectionId: string | null,
+ *   onSelectConnection: (id: string) => void,
+ *   selectedVersion: ConfigVersion | null,
+ *   selectedConnection: ModelConnection | null | undefined,
+ *   editing: boolean,
+ *   validationActive: boolean,
+ *   busy: string,
+ *   onBeginEdit: (panel: ActivePanel) => void,
+ *   form: ModelServiceForm,
+ *   onFormChange: (form: ModelServiceForm) => void,
+ *   nameError: string,
+ *   baseUrlError: string,
+ *   apiKeyError: string,
+ *   catalogModels: CatalogModel[],
+ *   focusModelId: string | null,
+ *   focusedModelRef: import("react").Ref<HTMLDivElement>,
+ *   onCloseValidation: () => void,
+ *   onOpenModelEditor: (model?: CatalogModel) => void,
+ *   onPublish: () => void,
+ *   onToggleModel: (model: CatalogModel) => void,
+ *   onValidateModel: (model: CatalogModel) => void,
+ *   selectedVersionIsActive: boolean,
+ *   validationElapsed: number,
+ *   validationEvents: ValidationEvent[],
+ *   validationRun: ValidationRun | null,
+ *   modelOptions: ModelOption[],
+ *   onSelectPipelineModel: (modelKey: PipelineModelKey, effortKey: PipelineEffortKey, value: string) => void,
+ *   configFormErrors: string[],
+ *   onCancelEdit: () => void,
+ *   onSave: () => void,
+ *   saveDisabled: boolean,
+ *   onValidate: () => void,
+ *   previousVersion: ConfigVersion | null | undefined,
+ *   versionChanges: VersionChanges,
+ *   onShowVersion: (version: ConfigVersion) => void,
+ *   onCreateDraft: (version: ConfigVersion) => void,
+ * }} props
+ */
 export function ModelServiceEditor({
   activePanel,
   connections,
@@ -25,7 +79,9 @@ export function ModelServiceEditor({
   onBeginEdit,
   form,
   onFormChange,
+  nameError,
   baseUrlError,
+  apiKeyError,
   catalogModels,
   focusModelId,
   focusedModelRef,
@@ -57,6 +113,7 @@ export function ModelServiceEditor({
         "model-service-editor",
         `panel-${activePanel}`,
         connections.length > 1 && "has-connections",
+        !selectedConnection && "is-new-connection",
       )}
     >
       {connections.length > 1 && (
@@ -129,11 +186,24 @@ export function ModelServiceEditor({
                 接入名称
                 <Input
                   disabled={!editing}
+                  aria-label="接入名称"
                   value={form.name}
                   onChange={(event) =>
                     onFormChange({ ...form, name: event.target.value })
                   }
+                  required
+                  aria-invalid={Boolean(nameError)}
+                  aria-describedby={nameError ? "model-service-name-error" : undefined}
                 />
+                {nameError && (
+                  <small
+                    id="model-service-name-error"
+                    className="config-field-error"
+                    role="alert"
+                  >
+                    {nameError}
+                  </small>
+                )}
               </label>
               <label>
                 协议
@@ -177,12 +247,26 @@ export function ModelServiceEditor({
                 <input
                   type="password"
                   disabled={!editing}
+                  aria-label="API 密钥"
                   value={form.api_key}
                   onChange={(event) =>
                     onFormChange({ ...form, api_key: event.target.value })
                   }
                   placeholder={selectedConnection ? "留空则沿用原密钥" : "sk-…"}
+                  aria-invalid={Boolean(apiKeyError)}
+                  aria-describedby={
+                    apiKeyError ? "model-service-api-key-error" : undefined
+                  }
                 />
+                {apiKeyError && (
+                  <small
+                    id="model-service-api-key-error"
+                    className="config-field-error"
+                    role="alert"
+                  >
+                    {apiKeyError}
+                  </small>
+                )}
               </label>
             </div>
           </div>
@@ -273,7 +357,7 @@ export function ModelServiceEditor({
                       key={effort}
                       onClick={() => onFormChange({ ...form, primary_effort: effort })}
                     >
-                      {EFFORT_LABELS[effort]}
+                      {/** @type {Record<string, string>} */ (EFFORT_LABELS)[effort]}
                     </button>
                   ))}
                 </div>
@@ -335,8 +419,8 @@ export function ModelServiceEditor({
               onChange={(event) =>
                 onFormChange({ ...form, change_note: event.target.value })
               }
-              rows="3"
-              maxLength="500"
+              rows={3}
+              maxLength={500}
               placeholder="必填：说明本次新增或调整配置的原因"
               required
             />

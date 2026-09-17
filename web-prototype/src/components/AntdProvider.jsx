@@ -17,6 +17,7 @@ const antdTheme = {
   },
 };
 
+/** @param {{children: import("react").ReactNode}} props */
 export function AntdProvider({ children }) {
   return (
     <ConfigProvider button={{ autoInsertSpace: false }} locale={zhCN} theme={antdTheme}>

@@ -1,7 +1,12 @@
 import { navigateHash, parseHash } from "../../app/hashRouter";
 import { PAGE_SIZES } from "../../shared/pagination";
 
+/** @typedef {import("../../app/navigation").RouteQuery} RouteQuery */
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewBatchRoute} ReviewBatchRoute */
+
+/** @param {RouteQuery} query @returns {ReviewBatchRoute} */
 export function reviewBatchRouteState(query) {
+  /** @param {keyof RouteQuery} key */
   const number = (key) => Number(query[key]);
   return {
     batchId: query.review_batch_id || "",
@@ -20,6 +25,7 @@ export function reviewBatchRouteState(query) {
   };
 }
 
+/** @param {ReviewBatchRoute} route */
 export function writeReviewBatchRoute(route) {
   navigateHash("classification-results", {
     view: "reviews",
@@ -39,6 +45,7 @@ export function writeReviewBatchRoute(route) {
   });
 }
 
+/** @param {ReviewBatchRoute} route @param {string} versionId @param {string} [tab] */
 export function resultRouteQuery(route, versionId, tab = "") {
   const restored = route.returnTo ? parseHash(`#${route.returnTo}`).query : {};
   return {

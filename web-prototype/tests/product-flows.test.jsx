@@ -2993,10 +2993,26 @@ describe("关键用户流程", () => {
 
     await user.click(await screen.findByRole("button", { name: "新增模型服务" }));
 
+    const availableModelsHeading = screen.getByRole("heading", { name: "可用模型" });
+    expect(availableModelsHeading).toBeVisible();
+    expect(availableModelsHeading.closest(".model-service-editor")).toHaveClass(
+      "is-new-connection",
+    );
+    await user.click(screen.getByRole("button", { name: "添加模型" }));
+    await user.type(
+      screen.getByPlaceholderText("例如 deepseek-reasoner"),
+      "provider-model",
+    );
+    await user.click(screen.getByRole("button", { name: "保存模型" }));
+    expect(screen.getAllByText("provider-model")[0]).toBeVisible();
+    await user.selectOptions(screen.getByLabelText("模型"), "provider-model");
+
     const saveButton = screen.getByRole("button", { name: "保存草稿" });
     const baseUrlInput = screen.getByLabelText("Base URL");
     expect(saveButton).toBeDisabled();
-    expect(screen.getAllByText("请选择验证模型。").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("请填写接入名称。").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("请填写 API 密钥。").length).toBeGreaterThan(0);
+    expect(screen.queryByText("请选择验证模型。")).not.toBeInTheDocument();
     expect(screen.getAllByText("请填写配置变更原因。").length).toBeGreaterThan(0);
     expect(baseUrlInput).toHaveAttribute("aria-invalid", "true");
     expect(baseUrlInput).toHaveAttribute(
@@ -3013,8 +3029,12 @@ describe("关键用户流程", () => {
     expect(baseUrlInput).toHaveAttribute("aria-invalid", "false");
 
     await user.type(screen.getByLabelText("配置变更原因"), "新增生产接入");
-    expect(screen.getByRole("status")).toHaveTextContent("请选择验证模型。");
-    expect(screen.getByRole("status")).not.toHaveTextContent("配置变更原因");
+    expect(screen.getByRole("status")).toHaveTextContent("请填写接入名称。");
+    await user.type(screen.getByLabelText("接入名称"), "生产模型服务");
+    expect(screen.getByRole("status")).toHaveTextContent("请填写 API 密钥。");
+    await user.type(screen.getByLabelText("API 密钥"), "test-api-key");
+    expect(saveButton).toBeEnabled();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
   test("模型服务通用控件保留可访问名称和受控输入", async () => {

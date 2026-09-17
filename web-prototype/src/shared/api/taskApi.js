@@ -1,5 +1,38 @@
 import { API_BASE, queryString, request } from "./request";
 
+/**
+ * @typedef {Record<string, string | number | boolean | null | undefined>} TaskQuery
+ * @typedef {Record<string, unknown>} TaskPayload
+ * @typedef {"pause" | "resume" | "cancel"} TaskControlAction
+ * @typedef {ReturnType<typeof request>} TaskRequest
+ */
+
+/**
+ * @type {{
+ *   tasks: (filters?: TaskQuery, options?: RequestInit) => TaskRequest,
+ *   task: (id: string, options?: RequestInit) => TaskRequest,
+ *   preflightTask: (payload: TaskPayload) => TaskRequest,
+ *   preflightTaskReplan: (id: string, payload: TaskPayload) => TaskRequest,
+ *   replanTask: (id: string, payload: TaskPayload) => TaskRequest,
+ *   retryTaskSegment: (id: string, segmentKey: string, payload: TaskPayload) => TaskRequest,
+ *   retrySegmentResultPublish: (id: string, segmentId: string, payload: TaskPayload) => TaskRequest,
+ *   reorderTaskSegments: (id: string, payload: TaskPayload) => TaskRequest,
+ *   setTaskParallelism: (id: string, payload: TaskPayload) => TaskRequest,
+ *   controlTaskSegment: (id: string, segmentKey: string, action: TaskControlAction, payload: TaskPayload) => TaskRequest,
+ *   analysis: (id: string, filters?: TaskQuery, options?: RequestInit) => TaskRequest,
+ *   analysisDownloadUrl: (id: string, filters?: TaskQuery) => string,
+ *   renameTask: (id: string, payload: TaskPayload) => TaskRequest,
+ *   createTask: (payload: TaskPayload) => TaskRequest,
+ *   cancelTask: (id: string, payload: TaskPayload) => TaskRequest,
+ *   pauseTask: (id: string, payload: TaskPayload) => TaskRequest,
+ *   resumeTask: (id: string, payload: TaskPayload) => TaskRequest,
+ *   retryTask: (id: string) => TaskRequest,
+ *   archiveTasks: (taskIds: string[], archived: boolean) => TaskRequest,
+ *   eventUrl: (taskId: string, after?: number) => string,
+ *   downloadUrl: (taskId: string) => string,
+ *   segmentDownloadUrl: (taskId: string, segmentKey: string) => string
+ * }}
+ */
 export const taskApi = {
   tasks: (filters = {}, options = {}) =>
     request(`/api/tasks${queryString(filters)}`, options),

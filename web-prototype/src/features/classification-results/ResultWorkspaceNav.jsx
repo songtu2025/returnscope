@@ -10,6 +10,7 @@ const ITEMS = [
   { id: "reviews", label: "复核记录", query: { view: "reviews" } },
 ];
 
+/** @param {{ active: "results" | "pending" | "reviews" }} props */
 export function ResultWorkspaceNav({ active }) {
   return (
     <nav className="data-tabs result-workspace-tabs" aria-label="分类结果工作区">

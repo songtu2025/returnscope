@@ -2,14 +2,34 @@ import { useEffect, useMemo, useState } from "react";
 
 import { api } from "../../api";
 
+/** @typedef {import("./classificationResultRoute").ClassificationResultRoute} ClassificationResultRoute */
+
+/**
+ * @param {{ route: ClassificationResultRoute, notify: (message: string, type: "error") => void }} options
+ */
 export function useClassificationResultDetailData({ route, notify }) {
-  const [result, setResult] = useState(null);
-  const [summary, setSummary] = useState(null);
-  const [records, setRecords] = useState(null);
+  const [result, setResult] = useState(
+    /** @type {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultVersionResponse | null} */ (
+      null
+    ),
+  );
+  const [summary, setSummary] = useState(
+    /** @type {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultSummaryResponse | null} */ (
+      null
+    ),
+  );
+  const [records, setRecords] = useState(
+    /** @type {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultRecordsResponse | null} */ (
+      null
+    ),
+  );
   const [drilldowns, setDrilldowns] = useState({
-    problem: [],
-    product_name: [],
-    product_sku: [],
+    problem:
+      /** @type {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultDrilldownItemResponse[]} */ ([]),
+    product_name:
+      /** @type {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultDrilldownItemResponse[]} */ ([]),
+    product_sku:
+      /** @type {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultDrilldownItemResponse[]} */ ([]),
   });
   const [loading, setLoading] = useState(true);
   const [recordsLoading, setRecordsLoading] = useState(true);
@@ -30,7 +50,12 @@ export function useClassificationResultDetailData({ route, notify }) {
         setSummary(versionSummary);
       })
       .catch((loadError) => {
-        if (active && loadError.name !== "AbortError") setError(loadError.message);
+        if (
+          active &&
+          (!(loadError instanceof Error) || loadError.name !== "AbortError")
+        ) {
+          setError(loadError instanceof Error ? loadError.message : "请求失败");
+        }
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -106,8 +131,11 @@ export function useClassificationResultDetailData({ route, notify }) {
         });
       })
       .catch((loadError) => {
-        if (active && loadError.name !== "AbortError") {
-          notify(loadError.message, "error");
+        if (
+          active &&
+          (!(loadError instanceof Error) || loadError.name !== "AbortError")
+        ) {
+          notify(loadError instanceof Error ? loadError.message : "请求失败", "error");
         }
       })
       .finally(() => {

@@ -11,6 +11,44 @@ import { AiInsightReport } from "./AiInsightReport";
 import { ReturnReasonInsights } from "./ReturnReasonInsights";
 import { asItems, dashboardVersionId } from "./DashboardDetailHelpers";
 
+/** @typedef {import("./analysisDashboardContracts").Dashboard} Dashboard */
+/** @typedef {import("./analysisDashboardContracts").DashboardContentState} DashboardContentState */
+/** @typedef {import("./analysisDashboardContracts").DashboardDecisionState} DashboardDecisionState */
+/** @typedef {import("./analysisDashboardContracts").DashboardRecord} DashboardRecord */
+/** @typedef {import("./analysisDashboardContracts").DashboardReportState} DashboardReportState */
+/** @typedef {import("./analysisDashboardContracts").DashboardRoute} DashboardRoute */
+/** @typedef {import("./analysisDashboardContracts").DashboardSource} DashboardSource */
+/** @typedef {import("./analysisDashboardContracts").DashboardVersion} DashboardVersion */
+/** @typedef {import("./analysisDashboardContracts").InsightReport} InsightReport */
+/** @typedef {import("./analysisDashboardContracts").UpdateDashboardRoute} UpdateDashboardRoute */
+/** @typedef {DashboardSource[] | {sources?: DashboardSource[], items?: DashboardSource[]}} DashboardSourceData */
+/**
+ * @typedef {Object} DashboardDetailContentProps
+ * @property {DashboardRoute} route
+ * @property {UpdateDashboardRoute} updateRoute
+ * @property {DashboardContentState} content
+ * @property {DashboardReportState} reports
+ * @property {InsightReport | null} selectedReport
+ * @property {InsightReport[]} publishedReports
+ * @property {InsightReport[]} generationAttempts
+ * @property {InsightReport | null} latestPublishedReport
+ * @property {Dashboard} dashboard
+ * @property {DashboardVersion | null} selectedVersion
+ * @property {DashboardVersion[]} versions
+ * @property {string} currentVersionId
+ * @property {DashboardDecisionState} decisionState
+ * @property {() => void | Promise<void>} onReloadContent
+ * @property {(record: DashboardRecord, trigger: HTMLElement | null) => void} onEvidence
+ * @property {() => void | Promise<void>} onReloadReports
+ * @property {() => void | Promise<void>} onOpenReportGeneration
+ * @property {() => void | Promise<void>} onRetryReport
+ * @property {(issueId: string, status: string) => void | Promise<void>} onIssueDecision
+ * @property {(issueId: string) => void} onSelectIssue
+ * @property {(reportId: string) => void} onSelectReport
+ * @property {(versionId: string) => void} onSelectVersion
+ */
+
+/** @param {DashboardDetailContentProps} props */
 export function DashboardDetailContent({
   route,
   updateRoute,
@@ -51,7 +89,11 @@ export function DashboardDetailContent({
         <ReturnReasonInsights
           route={route}
           updateRoute={updateRoute}
-          data={content.data}
+          data={
+            /** @type {import("./analysisDashboardContracts").DashboardInsights} */ (
+              content.data
+            )
+          }
           loading={content.loading}
           onEvidence={onEvidence}
         />
@@ -86,7 +128,10 @@ export function DashboardDetailContent({
         />
       )}
       {!content.error && route.tab === "source" && content.data && (
-        <DashboardDetailSources data={content.data} version={selectedVersion} />
+        <DashboardDetailSources
+          data={/** @type {DashboardSourceData} */ (content.data)}
+          version={selectedVersion}
+        />
       )}
       {route.tab === "history" && (
         <DashboardDetailHistory
@@ -99,8 +144,9 @@ export function DashboardDetailContent({
   );
 }
 
+/** @param {{data: DashboardSourceData, version: DashboardVersion | null}} props */
 function DashboardDetailSources({ data, version }) {
-  const sources = asItems(data.sources ?? data);
+  const sources = asItems(Array.isArray(data) ? data : (data.sources ?? data));
   return (
     <section className="dashboard-lineage-card">
       <header>
@@ -146,6 +192,7 @@ function DashboardDetailSources({ data, version }) {
   );
 }
 
+/** @param {{versions: DashboardVersion[], currentVersionId: string, onSelect: (versionId: string) => void}} props */
 function DashboardDetailHistory({ versions, currentVersionId, onSelect }) {
   return (
     <section className="dashboard-history-card">

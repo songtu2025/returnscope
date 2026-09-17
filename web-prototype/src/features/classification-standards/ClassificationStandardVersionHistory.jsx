@@ -2,6 +2,16 @@ import { ClockCounterClockwise, DownloadSimple } from "@phosphor-icons/react";
 import { formatDate } from "../../lib/presentation";
 import { classificationStandardApi } from "../../shared/api/classificationStandardApi";
 
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardDetail} ClassificationStandardDetail */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardVersion} ClassificationStandardVersion */
+
+/**
+ * @param {{
+ *   standard: Pick<ClassificationStandardDetail, "standard_version_id"> & {draft_id?: string | null},
+ *   versions: ClassificationStandardVersion[],
+ *   onRestore: (version: ClassificationStandardVersion) => void,
+ * }} props
+ */
 export function ClassificationStandardVersionHistory({
   standard,
   versions,

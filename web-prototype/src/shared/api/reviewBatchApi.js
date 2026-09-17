@@ -1,5 +1,26 @@
 import { queryString, request } from "./request";
 
+/** @typedef {object} ReviewBatchPayload */
+/** @typedef {Record<string, unknown>} ReviewBatchQuery */
+/** @typedef {import("./reviewBatchContracts").ReviewBatch} ReviewBatch */
+/** @typedef {import("./reviewBatchContracts").ReviewBatchPage} ReviewBatchPage */
+/** @typedef {import("./reviewBatchContracts").ReviewRecord} ReviewRecord */
+/** @typedef {import("./reviewBatchContracts").ReviewRecordPage} ReviewRecordPage */
+/** @typedef {import("./reviewBatchContracts").PublishedReviewVersion} PublishedReviewVersion */
+/** @typedef {import("./reviewBatchContracts").ReviewTaxonomy} ReviewTaxonomy */
+
+/**
+ * @type {{
+ *   createReviewBatch: (versionId: string, payload: ReviewBatchPayload) => Promise<ReviewBatch>,
+ *   reviewBatches: (filters?: ReviewBatchQuery, options?: RequestInit) => Promise<ReviewBatchPage>,
+ *   reviewBatch: (batchId: string, options?: RequestInit) => Promise<ReviewBatch>,
+ *   reviewBatchRecords: (batchId: string, filters?: ReviewBatchQuery, options?: RequestInit) => Promise<ReviewRecordPage>,
+ *   updateReviewBatchRecord: (batchId: string, reviewId: string, payload: ReviewBatchPayload) => Promise<ReviewRecord>,
+ *   updateReviewBatchRecords: (batchId: string, payload: ReviewBatchPayload) => Promise<unknown>,
+ *   publishReviewBatch: (batchId: string, payload: ReviewBatchPayload) => Promise<PublishedReviewVersion>,
+ *   reviewTaxonomy: (resultVersionId: string, options?: RequestInit) => Promise<ReviewTaxonomy>
+ * }}
+ */
 export const reviewBatchApi = {
   createReviewBatch: (versionId, payload) =>
     request(`/api/classification-results/${versionId}/review-batches`, {

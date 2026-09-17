@@ -3,6 +3,11 @@ import { ReturnReasonInsightExplorer } from "./ReturnReasonInsightExplorer";
 import { ReturnReasonInsightSummary } from "./ReturnReasonInsightSummary";
 import { commentStatusCounts, orderGroups } from "./returnReasonInsightPresentation";
 
+/** @typedef {import("./analysisDashboardContracts").DashboardInsights} DashboardInsights */
+/** @typedef {import("./analysisDashboardContracts").DashboardRecord} DashboardRecord */
+/** @typedef {import("./analysisDashboardContracts").DashboardRoute} DashboardRoute */
+/** @typedef {import("./analysisDashboardContracts").UpdateDashboardRoute} UpdateDashboardRoute */
+/** @param {{route: DashboardRoute, updateRoute: UpdateDashboardRoute, data: DashboardInsights, loading: boolean, onEvidence: (record: DashboardRecord, trigger: HTMLElement | null) => void}} props */
 export function ReturnReasonInsights({
   route,
   updateRoute: replaceRoute,
@@ -35,8 +40,10 @@ export function ReturnReasonInsights({
     summary.pending_review_comment_count ?? summary.pending_review_record_count ?? 0,
   );
   const statusCounts = commentStatusCounts(data, summary);
+  /** @param {Partial<DashboardRoute>} changes */
   const updateRoute = (changes) => replaceRoute(changes, { replace: true });
 
+  /** @param {Partial<DashboardRoute>} changes */
   const updateFilters = (changes) =>
     updateRoute({
       ...changes,

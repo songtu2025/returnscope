@@ -21,21 +21,24 @@ const LABEL_FIELDS = [
 ];
 
 /**
- * @param {ClassificationStandardEditableLabel | undefined} left
- * @param {ClassificationStandardEditableLabel | undefined} right
+ * @template {{code: string}} T
+ * @param {T | undefined} left
+ * @param {T | undefined} right
  */
 export function sameLabel(left, right) {
   if (!left || !right) return left === right;
   return LABEL_FIELDS.every(
-    (field) => JSON.stringify(left[field] ?? []) === JSON.stringify(right[field] ?? []),
+    (field) =>
+      JSON.stringify(/** @type {Record<string, unknown>} */ (left)[field] ?? []) ===
+      JSON.stringify(/** @type {Record<string, unknown>} */ (right)[field] ?? []),
   );
 }
 
 /**
- * @template T
- * @param {(T & ClassificationStandardEditableLabel)[]} labels
- * @param {(T & ClassificationStandardEditableLabel)[]} baseLabels
- * @returns {ClassificationLabelChange<T & ClassificationStandardEditableLabel>[]}
+ * @template {{code: string}} T
+ * @param {T[]} labels
+ * @param {T[]} baseLabels
+ * @returns {ClassificationLabelChange<T>[]}
  */
 export function labelChanges(labels, baseLabels = []) {
   const original = new Map(baseLabels.map((label) => [label.code, label]));
@@ -53,7 +56,7 @@ export function labelChanges(labels, baseLabels = []) {
     ...baseLabels
       .filter((label) => !codes.has(label.code))
       .map((label) => {
-        /** @type {ClassificationLabelChange<T & ClassificationStandardEditableLabel>} */
+        /** @type {ClassificationLabelChange<T>} */
         const change = { label, before: label, index: -1, status: "拟停用" };
         return change;
       }),

@@ -3,6 +3,15 @@ import { useState } from "react";
 import { api } from "../../api";
 import { importNotification, importSelectionLabel } from "./newTaskPolicy";
 
+/** @typedef {import("./taskCreateContracts").DataVersion} DataVersion */
+/** @typedef {import("./taskCreateContracts").ReturnImportResult} ReturnImportResult */
+/** @typedef {import("./taskCreateContracts").TaskDraft} TaskDraft */
+/** @typedef {import("./taskCreateContracts").TaskForm} TaskForm */
+/** @typedef {import("./MysqlReturnImportForm").MysqlReturnFormState} MysqlReturnFormState */
+/**
+ * @param {{draft?: TaskDraft | null, focusAfterPreparationRef: import("react").MutableRefObject<boolean>, invalidatePreflight: () => void, notify: (message: string, type?: "success" | "error") => void, onChanged: () => void | Promise<unknown>, setForm: import("react").Dispatch<import("react").SetStateAction<TaskForm>>, setPrepared: import("react").Dispatch<import("react").SetStateAction<boolean>>, setVersions: import("react").Dispatch<import("react").SetStateAction<DataVersion[]>>}} options
+ */
+
 export function useTaskImport({
   draft,
   focusAfterPreparationRef,
@@ -14,7 +23,9 @@ export function useTaskImport({
   setVersions,
 }) {
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [mysqlDraft, setMysqlDraft] = useState(draft?.mysqlDraft);
+  const [mysqlDraft, setMysqlDraft] = useState(
+    /** @type {Partial<MysqlReturnFormState> | undefined} */ (draft?.mysqlDraft),
+  );
   const [dataEntryMode, setDataEntryMode] = useState(
     draft?.dataEntryMode ?? (draft?.form?.dataset_version_id ? "existing" : "mysql"),
   );
@@ -22,6 +33,10 @@ export function useTaskImport({
     draft?.selectedDataLabel ?? "",
   );
 
+  /**
+   * @param {ReturnImportResult} result
+   * @param {"mysql" | "upload"} source
+   */
   const finishImport = async (result, source) => {
     setVersions(await api.dataVersions());
     invalidatePreflight();

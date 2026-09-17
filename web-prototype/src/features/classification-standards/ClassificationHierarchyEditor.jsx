@@ -2,6 +2,16 @@ import { useState } from "react";
 import { taxonomyPath } from "../../lib/taxonomyPresentation";
 import { labelChanges } from "./labelDraftPolicy";
 
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardCategory} ClassificationStandardCategory */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardEditableContent} ClassificationStandardEditableContent */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardEditableLabel} ClassificationStandardEditableLabel */
+/** @typedef {"新增" | "未修改" | "已修改" | "拟停用"} ClassificationLabelChangeStatus */
+/** @typedef {{label: ClassificationStandardEditableLabel, index: number, before?: ClassificationStandardEditableLabel, status: ClassificationLabelChangeStatus}} ClassificationLabelChange */
+/** @typedef {{content: ClassificationStandardEditableContent, baseContent: ClassificationStandardEditableContent | null}} ClassificationHierarchyChangesProps */
+/** @typedef {{content: ClassificationStandardEditableContent, onChange: (content: ClassificationStandardEditableContent) => void, disabled: boolean}} ClassificationHierarchyEditorProps */
+/** @typedef {{content: ClassificationStandardEditableContent, entries: ClassificationLabelChange[], renderLabel: (entry: ClassificationLabelChange) => import("react").ReactNode}} ClassificationHierarchyDirectoryProps */
+
+/** @param {ClassificationHierarchyChangesProps} props */
 export function ClassificationHierarchyChanges({ content, baseContent }) {
   const changes = labelChanges(
     content.categories ?? [],
@@ -24,10 +34,12 @@ export function ClassificationHierarchyChanges({ content, baseContent }) {
   );
 }
 
+/** @param {ClassificationHierarchyEditorProps} props */
 export function ClassificationHierarchyEditor({ content, onChange, disabled }) {
   const [selected, setSelected] = useState("");
   const categories = content.categories ?? [];
   const current = categories.find((item) => item.code === selected);
+  /** @param {ClassificationStandardCategory[]} items */
   const update = (items) => {
     const next = { ...content, categories: items };
     onChange({
@@ -41,7 +53,9 @@ export function ClassificationHierarchyEditor({ content, onChange, disabled }) {
   const descendants = new Set(current ? [current.code] : []);
   for (let index = 0; index < categories.length; index += 1)
     for (const item of categories)
-      if (descendants.has(item.parent_code)) descendants.add(item.code);
+      if (item.parent_code && descendants.has(item.parent_code)) {
+        descendants.add(item.code);
+      }
   const hasChildren =
     current &&
     [...categories, ...content.labels].some(
@@ -139,8 +153,10 @@ export function ClassificationHierarchyEditor({ content, onChange, disabled }) {
   );
 }
 
+/** @param {ClassificationHierarchyDirectoryProps} props */
 export function ClassificationHierarchyDirectory({ content, entries, renderLabel }) {
   const categories = content.categories ?? [];
+  /** @param {ClassificationStandardCategory} category */
   const renderBranch = (category) => {
     const children = categories.filter((item) => item.parent_code === category.code);
     const labels = entries.filter((item) => item.label.parent_code === category.code);
@@ -157,7 +173,10 @@ export function ClassificationHierarchyDirectory({ content, entries, renderLabel
     <>
       {categories.filter((item) => !item.parent_code).map(renderBranch)}
       {entries
-        .filter((item) => !categoryCodes.has(item.label.parent_code))
+        .filter(
+          (item) =>
+            !item.label.parent_code || !categoryCodes.has(item.label.parent_code),
+        )
         .map(renderLabel)}
     </>
   );

@@ -3,9 +3,18 @@ import { X } from "@phosphor-icons/react";
 
 import { Modal } from "../../components/SharedUi";
 
+/** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
+/** @typedef {import("./taskRuntimeContracts").TaskPayload} TaskPayload */
+/** @typedef {import("./taskRuntimeContracts").TaskSegment} TaskSegment */
+
+/**
+ * @param {{task: AnalysisTask, segment: TaskSegment, error: string, onClose: () => void, onSave: (payload: TaskPayload) => Promise<unknown>}} props
+ */
+
 export function SegmentRetryDialog({ task, segment, error, onClose, onSave }) {
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
+  /** @param {import("react").FormEvent<HTMLFormElement>} event */
   const submit = async (event) => {
     event.preventDefault();
     setSaving(true);
@@ -35,8 +44,8 @@ export function SegmentRetryDialog({ task, segment, error, onClose, onSave }) {
           <textarea
             value={reason}
             onChange={(event) => setReason(event.target.value)}
-            maxLength="500"
-            rows="3"
+            maxLength={500}
+            rows={3}
             placeholder="必填，说明异常原因与重试依据"
             required
             autoFocus
@@ -55,9 +64,13 @@ export function SegmentRetryDialog({ task, segment, error, onClose, onSave }) {
   );
 }
 
+/**
+ * @param {{segment: TaskSegment, onClose: () => void, onSave: (note: string) => Promise<unknown>}} props
+ */
 export function SegmentCancelDialog({ segment, onClose, onSave }) {
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+  /** @param {import("react").FormEvent<HTMLFormElement>} event */
   const submit = async (event) => {
     event.preventDefault();
     setSaving(true);
@@ -83,8 +96,8 @@ export function SegmentCancelDialog({ segment, onClose, onSave }) {
           <textarea
             value={note}
             onChange={(event) => setNote(event.target.value)}
-            maxLength="500"
-            rows="3"
+            maxLength={500}
+            rows={3}
             placeholder="必填，说明为什么取消这个 Listing"
             required
             autoFocus
@@ -103,11 +116,15 @@ export function SegmentCancelDialog({ segment, onClose, onSave }) {
   );
 }
 
+/**
+ * @param {{task: AnalysisTask, onClose: () => void, onSave: (payload: TaskPayload) => Promise<unknown>}} props
+ */
 export function TaskRenameDialog({ task, onClose, onSave }) {
   const [title, setTitle] = useState(task.title);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
 
+  /** @param {import("react").FormEvent<HTMLFormElement>} event */
   const submit = async (event) => {
     event.preventDefault();
     setSaving(true);
@@ -144,7 +161,7 @@ export function TaskRenameDialog({ task, onClose, onSave }) {
             <input
               value={title}
               onChange={(event) => setTitle(event.target.value)}
-              maxLength="120"
+              maxLength={120}
               required
               autoFocus
             />
@@ -154,8 +171,8 @@ export function TaskRenameDialog({ task, onClose, onSave }) {
             <textarea
               value={note}
               onChange={(event) => setNote(event.target.value)}
-              maxLength="500"
-              rows="3"
+              maxLength={500}
+              rows={3}
               placeholder="说明为什么需要修改，供团队追溯"
               required
             />
@@ -177,10 +194,14 @@ export function TaskRenameDialog({ task, onClose, onSave }) {
   );
 }
 
+/**
+ * @param {{task: AnalysisTask, onClose: () => void, onSave: (payload: TaskPayload) => Promise<unknown>}} props
+ */
 export function TaskCancelDialog({ task, onClose, onSave }) {
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
 
+  /** @param {import("react").FormEvent<HTMLFormElement>} event */
   const submit = async (event) => {
     event.preventDefault();
     setSaving(true);
@@ -203,8 +224,8 @@ export function TaskCancelDialog({ task, onClose, onSave }) {
           <textarea
             value={note}
             onChange={(event) => setNote(event.target.value)}
-            maxLength="500"
-            rows="3"
+            maxLength={500}
+            rows={3}
             placeholder="必填，说明为什么取消任务"
             required
             autoFocus
@@ -223,11 +244,15 @@ export function TaskCancelDialog({ task, onClose, onSave }) {
   );
 }
 
+/**
+ * @param {{task: AnalysisTask, onClose: () => void, onSave: (payload: TaskPayload) => Promise<unknown>}} props
+ */
 export function TaskResumeDialog({ task, onClose, onSave }) {
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const restarting = task.status === "cancelled";
 
+  /** @param {import("react").FormEvent<HTMLFormElement>} event */
   const submit = async (event) => {
     event.preventDefault();
     setSaving(true);
@@ -253,8 +278,8 @@ export function TaskResumeDialog({ task, onClose, onSave }) {
           <textarea
             value={note}
             onChange={(event) => setNote(event.target.value)}
-            maxLength="500"
-            rows="3"
+            maxLength={500}
+            rows={3}
             placeholder={`必填，说明为什么${restarting ? "重新排队" : "继续执行"}`}
             required
             autoFocus

@@ -30,13 +30,27 @@ import { EvidenceDrawer } from "./EvidenceDrawer";
 import { resultActionPolicy } from "./resultActionPolicy";
 import { useClassificationResultDetailData } from "./useClassificationResultDetailData";
 
+/** @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultRecordResponse} ClassificationResultRecord */
+/** @typedef {import("./classificationResultRoute").ClassificationResultRoute} ClassificationResultRoute */
+/**
+ * @typedef {object} ClassificationResultDetailProps
+ * @property {ClassificationResultRoute} route
+ * @property {(changes: Partial<ClassificationResultRoute>) => void} updateRoute
+ * @property {(message: string, tone?: string) => void} notify
+ * @property {string} userId
+ */
+
+/** @param {ClassificationResultDetailProps} props */
 export function ClassificationResultDetail({ route, updateRoute, notify, userId }) {
-  const [selectedRecord, setSelectedRecord] = useState(null);
+  const [selectedRecord, setSelectedRecord] = useState(
+    /** @type {ClassificationResultRecord | null} */ (null),
+  );
   const [orderInput, setOrderInput] = useState(route.orderId);
-  const evidenceTriggerRef = useRef(null);
+  const evidenceTriggerRef = useRef(/** @type {HTMLButtonElement | null} */ (null));
   const closeEvidence = useCallback(() => setSelectedRecord(null), []);
 
   const createDashboardFromResult = () => {
+    if (!result) return;
     const token = createDashboardSelection(userId, {
       selected: [selectionItem(result)],
     });
@@ -82,6 +96,8 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
     );
   }
 
+  if (!result) return null;
+
   const totalPages = Math.max(Math.ceil((records?.total ?? 0) / route.pageSize), 1);
   const readyRecords = summary?.quality?.find(
     (item) => item.quality_status === "ready",
@@ -104,10 +120,16 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
     Number(excludedRecords || 0) +
     Number(unusableRecords || 0);
   const totalRecords = Number(result.record_count || 0);
+  const reviewBatchId =
+    typeof result.review_batch_id === "string" ? result.review_batch_id : "";
+  const reviewBatchStatus =
+    typeof result.review_batch_status === "string"
+      ? result.review_batch_status
+      : "draft";
   const policy = resultActionPolicy(result, {
     taskId: route.taskId,
-    activeBatch: result.review_batch_id
-      ? { id: result.review_batch_id, status: result.review_batch_status || "draft" }
+    activeBatch: reviewBatchId
+      ? { id: reviewBatchId, status: reviewBatchStatus }
       : null,
   });
   const allNeedReviewWithoutProblems =
@@ -145,6 +167,43 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
     }
     openOrderRecords();
   };
+
+  /** @param {string} version */
+  const selectVersion = (version) =>
+    updateRoute({
+      version,
+      tab: "history",
+      recordPage: 1,
+      problem: "",
+      productName: "",
+      productSku: "",
+      orderId: "",
+    });
+  /** @param {string} problem */
+  const selectProblem = (problem) =>
+    updateRoute({
+      problem,
+      productName: "",
+      productSku: "",
+      recordPage: 1,
+    });
+  /** @param {string} productName */
+  const selectProductName = (productName) =>
+    updateRoute({ productName, productSku: "", recordPage: 1 });
+  /** @param {string} productSku */
+  const selectProductSku = (productSku) => updateRoute({ productSku, recordPage: 1 });
+  /**
+   * @param {ClassificationResultRecord} record
+   * @returns {(trigger: HTMLButtonElement) => void}
+   */
+  const openEvidence = (record) => (trigger) => {
+    evidenceTriggerRef.current = trigger;
+    setSelectedRecord(record);
+  };
+  /** @param {number} recordPage */
+  const changeRecordPage = (recordPage) => updateRoute({ recordPage });
+  /** @param {number} pageSize */
+  const changePageSize = (pageSize) => updateRoute({ recordPage: 1, pageSize });
 
   return (
     <div className="standard-page classification-results-page result-detail-page">
@@ -206,9 +265,6 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
               {policy.secondary.label}
             </Button>
           )}
-          {policy.secondary?.kind === "view-records" && (
-            <Button onClick={openOrderRecords}>{policy.secondary.label}</Button>
-          )}
           <a
             className="secondary-button"
             href={api.classificationResultDownloadUrl(result.version_id)}
@@ -262,17 +318,7 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
             segmentId: route.segmentId || result.source_segment_id,
           }}
           onActionHandled={() => updateRoute({ action: "" })}
-          onSelectVersion={(version) =>
-            updateRoute({
-              version,
-              tab: "history",
-              recordPage: 1,
-              problem: "",
-              productName: "",
-              productSku: "",
-              orderId: "",
-            })
-          }
+          onSelectVersion={selectVersion}
         />
       ) : (
         <>
@@ -350,30 +396,21 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
                       ).toLocaleString()} 条记录需复核，完成复核并发布派生版本后，可按问题继续下钻。`
                     : ""
                 }
-                onSelect={(problem) =>
-                  updateRoute({
-                    problem,
-                    productName: "",
-                    productSku: "",
-                    recordPage: 1,
-                  })
-                }
+                onSelect={selectProblem}
               />
               <DrilldownColumn
                 title="产品名称"
                 items={drilldowns.product_name}
                 selected={route.productName}
                 emptyLabel="未提供"
-                onSelect={(productName) =>
-                  updateRoute({ productName, productSku: "", recordPage: 1 })
-                }
+                onSelect={selectProductName}
               />
               <DrilldownColumn
                 title="产品SKU"
                 items={drilldowns.product_sku}
                 selected={route.productSku}
                 emptyLabel="未提供"
-                onSelect={(productSku) => updateRoute({ productSku, recordPage: 1 })}
+                onSelect={selectProductSku}
               />
             </div>
           </section>
@@ -412,7 +449,7 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
                 description="调整问题、产品名称、产品SKU或order-id后重试。"
               />
             )}
-            {records?.items?.length > 0 && (
+            {records && records.items.length > 0 && (
               <>
                 <div
                   className={`result-record-table ${recordsLoading ? "is-loading" : ""}`}
@@ -429,10 +466,7 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
                     <ResultRecordRow
                       key={record.source_record_id}
                       record={record}
-                      onOpen={(trigger) => {
-                        evidenceTriggerRef.current = trigger;
-                        setSelectedRecord(record);
-                      }}
+                      onOpen={openEvidence(record)}
                     />
                   ))}
                 </div>
@@ -441,8 +475,8 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
                   pageSize={route.pageSize}
                   total={records.total}
                   totalPages={totalPages}
-                  onPage={(recordPage) => updateRoute({ recordPage })}
-                  onPageSize={(pageSize) => updateRoute({ recordPage: 1, pageSize })}
+                  onPage={changeRecordPage}
+                  onPageSize={changePageSize}
                 />
               </>
             )}

@@ -21,10 +21,82 @@ import {
   updateDashboardSelection,
 } from "./dashboardSelectionStorage";
 
-function itemVersionId(item) {
-  return item.result_version_id || item.version_id || item.id;
+/** @typedef {import("./analysisDashboardContracts").DashboardSelectionItem} DashboardSelectionItem */
+/** @typedef {import("./analysisDashboardContracts").DashboardSelection} DashboardSelection */
+
+/**
+ * @typedef {Object} DashboardConflict
+ * @property {string} [conflict_id]
+ * @property {string} [key]
+ * @property {string} [store_site]
+ * @property {string} [listing]
+ * @property {string[]} [result_version_ids]
+ */
+
+/** @typedef {{type?: string, message?: string}} DashboardNotice */
+
+/**
+ * @typedef {Object} DashboardPlan
+ * @property {string} plan_hash
+ * @property {boolean} ready
+ * @property {DashboardConflict[]} [conflicts]
+ * @property {DashboardNotice[]} [blockers]
+ * @property {DashboardNotice[]} [warnings]
+ * @property {DashboardSelectionItem[]} [sources]
+ * @property {Record<string, number | null>} [summary]
+ */
+
+/**
+ * @typedef {Object} DashboardCreateResponse
+ * @property {string} [id]
+ * @property {string} [dashboard_id]
+ * @property {string} [current_version_id]
+ * @property {string} [version_id]
+ * @property {DashboardCreateResponse} [dashboard]
+ * @property {DashboardCreateResponse} [version]
+ * @property {DashboardCreateResponse} [current_version]
+ */
+
+/**
+ * @typedef {Object} DashboardCreateRoute
+ * @property {string} selectionToken
+ * @property {"check" | "conflicts" | "confirm"} step
+ */
+
+/**
+ * @typedef {Object} DashboardCreateProps
+ * @property {DashboardCreateRoute} route
+ * @property {(changes: Record<string, string | number>, options?: {replace?: boolean}) => void} updateRoute
+ * @property {(message: string) => void} notify
+ * @property {string} userId
+ */
+
+/** @param {unknown} error */
+function errorName(error) {
+  return error instanceof Error ? error.name : "";
 }
 
+/** @param {unknown} error */
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** @param {unknown} error */
+function errorStatus(error) {
+  return typeof error === "object" && error !== null && "status" in error
+    ? error.status
+    : undefined;
+}
+
+/** @param {DashboardSelectionItem} item */
+function itemVersionId(item) {
+  return item.result_version_id || item.version_id || item.id || "";
+}
+
+/**
+ * @param {DashboardConflict} conflict
+ * @param {number} index
+ */
 function conflictId(conflict, index) {
   return (
     conflict.conflict_id ||
@@ -33,6 +105,11 @@ function conflictId(conflict, index) {
   );
 }
 
+/**
+ * @param {DashboardConflict} conflict
+ * @param {DashboardSelection | null} selection
+ * @param {DashboardSelectionItem[]} [sources]
+ */
 function conflictCandidates(conflict, selection, sources = []) {
   const ids = new Set(conflict.result_version_ids ?? []);
   const planned = sources.filter((item) => ids.has(item.result_version_id));
@@ -41,6 +118,10 @@ function conflictCandidates(conflict, selection, sources = []) {
     : (selection?.selected ?? []).filter((item) => ids.has(item.result_version_id));
 }
 
+/**
+ * @param {DashboardSelection | null} selection
+ * @param {string[]} ids
+ */
 function selectedForIds(selection, ids) {
   const allowed = new Set(ids);
   return (selection?.selected ?? []).filter((item) =>
@@ -48,16 +129,27 @@ function selectedForIds(selection, ids) {
   );
 }
 
+/** @param {DashboardCreateProps} props */
 export function DashboardCreateFlow({ route, updateRoute, notify, userId }) {
-  const [selection, setSelection] = useState(() =>
-    readDashboardSelection(userId, route.selectionToken),
+  const [selection, setSelection] = useState(
+    /** @returns {DashboardSelection | null} */ () =>
+      readDashboardSelection(userId, route.selectionToken),
   );
-  const [state, setState] = useState({ loading: true, error: "", plan: null });
-  const [choices, setChoices] = useState({});
+  const [state, setState] = useState(
+    /** @returns {{loading: boolean, error: string, plan: DashboardPlan | null}} */ () => ({
+      loading: true,
+      error: "",
+      plan: null,
+    }),
+  );
+  const [choices, setChoices] = useState(
+    /** @returns {Record<string, string>} */ () => ({}),
+  );
   const [form, setForm] = useState({ name: "", description: "", reason: "" });
   const [submitting, setSubmitting] = useState(false);
   const [confirmationMessage, setConfirmationMessage] = useState("");
   const generationRef = useRef(0);
+  /** @type {import("react").RefObject<AbortController | null>} */
   const controllerRef = useRef(null);
 
   useEffect(() => {
@@ -71,6 +163,10 @@ export function DashboardCreateFlow({ route, updateRoute, notify, userId }) {
   }, [selection]);
 
   const runPreflight = useCallback(
+    /**
+     * @param {string[]} ids
+     * @param {boolean} [nextStep]
+     */
     async (ids, nextStep = true) => {
       const generation = generationRef.current + 1;
       generationRef.current = generation;
@@ -79,6 +175,7 @@ export function DashboardCreateFlow({ route, updateRoute, notify, userId }) {
       controllerRef.current = controller;
       setState((current) => ({ ...current, loading: true, error: "" }));
       try {
+        /** @type {DashboardPlan} */
         const plan = await dashboardApi.dashboardPreflight(
           { result_version_ids: ids, filters: selection?.filters ?? {} },
           { signal: controller.signal },
@@ -94,8 +191,12 @@ export function DashboardCreateFlow({ route, updateRoute, notify, userId }) {
         }
         return plan;
       } catch (error) {
-        if (generationRef.current === generation && error.name !== "AbortError") {
-          setState((current) => ({ ...current, loading: false, error: error.message }));
+        if (generationRef.current === generation && errorName(error) !== "AbortError") {
+          setState((current) => ({
+            ...current,
+            loading: false,
+            error: errorMessage(error),
+          }));
         }
         return null;
       }
@@ -136,11 +237,15 @@ export function DashboardCreateFlow({ route, updateRoute, notify, userId }) {
       ...resultVersionIds.filter((id) => !candidateIds.has(id)),
       ...Object.values(choices),
     ];
-    const next = updateDashboardSelection(userId, route.selectionToken, (current) => ({
-      ...current,
-      resolved_result_version_ids: [...new Set(resolvedIds)],
-    }));
-    const plan = await runPreflight(next.resolved_result_version_ids, false);
+    const next = updateDashboardSelection(
+      userId,
+      route.selectionToken,
+      /** @param {DashboardSelection} current */ (current) => ({
+        ...current,
+        resolved_result_version_ids: [...new Set(resolvedIds)],
+      }),
+    );
+    const plan = await runPreflight(next.resolved_result_version_ids ?? [], false);
     setSelection(next);
     if (plan && (plan.conflicts ?? []).length === 0) {
       updateRoute({ step: "confirm" });
@@ -150,7 +255,9 @@ export function DashboardCreateFlow({ route, updateRoute, notify, userId }) {
   };
 
   const submit = async () => {
+    if (!selection) return;
     if ((!isVersionCreation && !form.name.trim()) || !form.reason.trim()) return;
+    const targetDashboardId = selection.target_dashboard_id;
     setSubmitting(true);
     setConfirmationMessage("");
     const common = {
@@ -160,19 +267,23 @@ export function DashboardCreateFlow({ route, updateRoute, notify, userId }) {
       reason: form.reason.trim(),
     };
     try {
-      const created = isVersionCreation
-        ? await dashboardApi.createAnalysisDashboardVersion(
-            selection.target_dashboard_id,
-            {
-              expected_revision: selection.expected_revision,
-              ...common,
-            },
-          )
-        : await dashboardApi.createAnalysisDashboard({
-            name: form.name.trim(),
-            description: form.description.trim(),
-            ...common,
-          });
+      /** @type {DashboardCreateResponse} */
+      let created;
+      if (isVersionCreation) {
+        if (!targetDashboardId) {
+          throw new Error("缺少目标看板，无法创建新版本");
+        }
+        created = await dashboardApi.createAnalysisDashboardVersion(targetDashboardId, {
+          expected_revision: selection.expected_revision,
+          ...common,
+        });
+      } else {
+        created = await dashboardApi.createAnalysisDashboard({
+          name: form.name.trim(),
+          description: form.description.trim(),
+          ...common,
+        });
+      }
       const dashboard = created.dashboard ?? created;
       const version = created.version ?? created.current_version ?? created;
       const dashboardId =
@@ -190,20 +301,21 @@ export function DashboardCreateFlow({ route, updateRoute, notify, userId }) {
         tab: "overview",
       });
     } catch (error) {
-      if (error.status === 409) {
+      if (errorStatus(error) === 409) {
         const [plan, latest] = await Promise.all([
           runPreflight(resultVersionIds, false),
-          isVersionCreation
-            ? dashboardApi
-                .analysisDashboard(selection.target_dashboard_id)
-                .catch(() => null)
+          isVersionCreation && targetDashboardId
+            ? dashboardApi.analysisDashboard(targetDashboardId).catch(() => null)
             : Promise.resolve(null),
         ]);
         if (latest?.revision != null) {
           const next = updateDashboardSelection(
             userId,
             route.selectionToken,
-            (current) => ({ ...current, expected_revision: latest.revision }),
+            /** @param {DashboardSelection} current */ (current) => ({
+              ...current,
+              expected_revision: latest.revision,
+            }),
           );
           setSelection(next);
         }
@@ -213,7 +325,7 @@ export function DashboardCreateFlow({ route, updateRoute, notify, userId }) {
             : "数据计划已变化，已保留你的输入。请重新检查计划后再提交。",
         );
       } else {
-        setConfirmationMessage(error.message);
+        setConfirmationMessage(errorMessage(error));
       }
     } finally {
       setSubmitting(false);
@@ -440,7 +552,7 @@ export function DashboardCreateFlow({ route, updateRoute, notify, userId }) {
                 <label>
                   看板说明
                   <textarea
-                    rows="3"
+                    rows={3}
                     value={form.description}
                     onChange={(event) =>
                       setForm({ ...form, description: event.target.value })
@@ -453,7 +565,7 @@ export function DashboardCreateFlow({ route, updateRoute, notify, userId }) {
             <label>
               {isVersionCreation ? "版本原因" : "生成原因"}
               <textarea
-                rows="3"
+                rows={3}
                 required
                 value={form.reason}
                 onChange={(event) => setForm({ ...form, reason: event.target.value })}
@@ -498,6 +610,7 @@ export function DashboardCreateFlow({ route, updateRoute, notify, userId }) {
   );
 }
 
+/** @param {{step: DashboardCreateRoute["step"]}} props */
 function DashboardCreateSteps({ step }) {
   const active = step === "conflicts" ? 2 : step === "confirm" ? 3 : 1;
   return (

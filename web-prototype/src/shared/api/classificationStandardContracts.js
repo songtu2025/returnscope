@@ -124,6 +124,12 @@
  * @property {number} processed_count
  * @property {number} sample_size
  * @property {boolean} is_current
+ * @property {string} stage
+ * @property {string | null} error
+ * @property {ClassificationStandardValidationRunSource} source
+ * @property {number} error_count
+ * @property {boolean} publication_ready
+ * @property {string | null} approved_at
  */
 /**
  * @typedef {object} ClassificationStandardValidationRunSource
@@ -134,18 +140,28 @@
  * @property {{baseline: {profile: ReadableRecognitionProfile}, candidate: {profile: ReadableRecognitionProfile}}} [recognition_contract]
  * @property {number} [skipped_category_count]
  */
-/** @typedef {{passed: boolean, blocking: string[], warnings: string[]}} ClassificationStandardQualityGate */
+/** @typedef {{version: string, min_reference_samples: number, min_reference_coverage: number, min_instance_match_rate: number, max_duplicate_rate: number, thresholds?: Record<string, number>}} ClassificationStandardQualityPolicy */
+/** @typedef {{passed: boolean, blocking: string[], warnings: string[], status?: string, note?: string, policy?: ClassificationStandardQualityPolicy}} ClassificationStandardQualityGate */
+/** @typedef {{text: string}} ClassificationValidationEvidenceSpan */
+/** @typedef {{fact_id: string, opinion: string, statement_type: string, actor_ref?: string, product_ref?: string, event_ref?: string, condition?: string, subject?: string, is_primary_reason?: boolean | null, evidence_spans?: ClassificationValidationEvidenceSpan[]}} ClassificationValidationFact */
+/** @typedef {{fact_id: string, label_codes?: string[], reason?: string}} ClassificationValidationFactMapping */
+/** @typedef {{label_code: string, sentiment: ClassificationStandardSentiment, opinion?: string, evidence: string}} ClassificationValidationSemanticUnit */
+/** @typedef {string | {opinion?: string, evidence?: string, reason?: string}} ClassificationValidationUnknownSemantic */
+/** @typedef {{status: string, reason?: string, primary_label_codes?: string[], semantic_units: ClassificationValidationSemanticUnit[], review_reasons: string[], unknown_semantics?: ClassificationValidationUnknownSemantic[], extracted_facts?: ClassificationValidationFact[], fact_mappings?: ClassificationValidationFactMapping[]}} ClassificationValidationSemanticResult */
+/** @typedef {{ambiguous?: boolean, facts?: {label_codes?: string[], expected_statement_type?: string, evidence?: string}[]}} ClassificationValidationReference */
+/** @typedef {{draft?: Record<string, number>}} ClassificationValidationReferenceComparison */
+/** @typedef {{classification_key: string, source_row?: number, comment: string, category_a?: string, category_b?: string, changed: boolean, baseline: ClassificationValidationSemanticResult, draft: ClassificationValidationSemanticResult, reference?: ClassificationValidationReference, reference_comparison?: ClassificationValidationReferenceComparison}} ClassificationStandardValidationItem */
+/** @typedef {Record<string, number> & {duplicate_units?: number, extra_labels: number, missing_labels: number, direction_errors: number, part_errors: number, evidence_errors?: number, exact_label_samples: number}} ClassificationValidationReferenceSide */
+/** @typedef {{sample_count: number, ambiguous_count: number, sides: Record<string, ClassificationValidationReferenceSide>, scope_sample_counts?: Record<string, number>}} ClassificationValidationReferenceEvaluation */
+/** @typedef {Record<string, unknown> & {sample_size: number, changed_count: number, changed_rate: number, coverage_count: number, coverage_rate: number, review_count: number, review_rate: number, unknown_count: number, unknown_rate: number, error_count: number, error_rate: number, reference_evaluation?: ClassificationValidationReferenceEvaluation}} ClassificationStandardValidationSummary */
 /**
  * @typedef {ClassificationStandardValidationRunSummary & {
- *   stage: string,
- *   error: string | null,
- *   summary: Record<string, unknown>,
- *   source: ClassificationStandardValidationRunSource,
+ *   summary: ClassificationStandardValidationSummary,
  *   model_names: string[],
- *   error_count: number,
  *   quality_gate: ClassificationStandardQualityGate,
- *   publication_ready: boolean,
- *   items: Record<string, unknown>[],
+ *   approved_by_name: string | null,
+ *   approval_note: string,
+ *   items: ClassificationStandardValidationItem[],
  * }} ClassificationStandardValidationRunDetail
  */
 /** @typedef {{expected_revision: number, source_result_version_id: string, sample_size: ValidationSampleSize, comparison_type?: ValidationComparisonType}} ClassificationStandardValidationRunPayload */

@@ -6,6 +6,20 @@ import { CardHeading, EmptyState, InlineLoading } from "../../components/SharedU
 import { STATUS_LABELS } from "../../constants";
 import { formatTime } from "../../lib/presentation";
 
+/** @typedef {import("../../app/navigation").Navigate} Navigate */
+/** @typedef {import("../../shared/api/dataManagementContracts").DatasetVersion} DatasetVersion */
+/** @typedef {import("../../shared/api/dataManagementContracts").DatasetReferencePage} DatasetReferencePage */
+
+/**
+ * @param {{
+ *   versions: DatasetVersion[],
+ *   currentVersionId?: string,
+ *   routeVersionId?: string,
+ *   page: number,
+ *   onRouteChange?: (changes: Record<string, string | number>) => void,
+ *   onNavigate?: Navigate,
+ * }} props
+ */
 export function DatasetReferences({
   versions,
   currentVersionId,
@@ -20,9 +34,16 @@ export function DatasetReferences({
   const selectedVersionId = availableVersionIds.includes(String(routeVersionId))
     ? String(routeVersionId)
     : String(currentVersionId ?? availableVersionIds[0] ?? "");
-  const [state, setState] = useState({ loading: true, error: "", data: null });
+  const [state, setState] = useState(
+    /** @type {{loading: boolean, error: string, data: DatasetReferencePage | null}} */ ({
+      loading: true,
+      error: "",
+      data: null,
+    }),
+  );
 
   const load = useCallback(
+    /** @param {AbortSignal} [signal] */
     async (signal) => {
       if (!selectedVersionId) {
         setState({ loading: false, error: "", data: null });
@@ -37,8 +58,10 @@ export function DatasetReferences({
         );
         setState({ loading: false, error: "", data });
       } catch (error) {
-        if (error.name !== "AbortError") {
-          setState({ loading: false, error: error.message, data: null });
+        const requestError =
+          error instanceof Error ? error : new Error("任务引用读取失败");
+        if (requestError.name !== "AbortError") {
+          setState({ loading: false, error: requestError.message, data: null });
         }
       }
     },
@@ -116,8 +139,15 @@ export function DatasetReferences({
                 <div>
                   <b>{item.title || `任务 #${item.task_id}`}</b>
                   <p>
-                    {STATUS_LABELS[item.status] ?? item.status ?? "未提供状态"} ·{" "}
-                    {item.owner?.name || "未提供所有者"} · {formatTime(item.created_at)}
+                    {(item.status
+                      ? /** @type {Record<string, string>} */ (STATUS_LABELS)[
+                          item.status
+                        ]
+                      : undefined) ??
+                      item.status ??
+                      "未提供状态"}{" "}
+                    · {item.owner?.name || "未提供所有者"} ·{" "}
+                    {formatTime(item.created_at)}
                   </p>
                   <details>
                     <summary>固化版本快照</summary>
@@ -161,6 +191,7 @@ export function DatasetReferences({
   );
 }
 
+/** @param {{value?: Record<string, unknown>}} props */
 function SnapshotFields({ value }) {
   const entries = Object.entries(value ?? {});
   if (!entries.length) return <p>未提供快照明细</p>;

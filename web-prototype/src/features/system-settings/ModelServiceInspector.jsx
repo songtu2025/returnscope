@@ -3,6 +3,22 @@ import { CardHeading, InfoRow } from "../../components/SharedUi";
 import { classNames, formatTime } from "../../lib/presentation";
 import { configValue } from "./modelServiceConfig";
 
+/** @typedef {import("../../shared/api/systemSettingsContracts").ConfigVersion} ConfigVersion */
+/** @typedef {import("../../shared/api/systemSettingsContracts").ModelConnection} ModelConnection */
+/** @typedef {import("../../shared/api/systemSettingsContracts").VersionChanges} VersionChanges */
+
+/**
+ * @param {{
+ *   selectedConnection: ModelConnection | null | undefined,
+ *   selectedVersion: ConfigVersion | null | undefined,
+ *   previousVersion: ConfigVersion | null | undefined,
+ *   versionChanges: VersionChanges,
+ *   busy: string,
+ *   validationActive: boolean,
+ *   onShowVersion: (version: ConfigVersion) => void,
+ *   onCreateDraft: (version: ConfigVersion) => void,
+ * }} props
+ */
 export function ModelServiceInspector({
   selectedConnection,
   selectedVersion,
@@ -99,7 +115,7 @@ export function ModelServiceInspector({
           {versionChanges.map(([key, label]) => (
             <div className="config-diff-row" key={key}>
               <b>{label}</b>
-              <span>{configValue(key, previousVersion[key])}</span>
+              <span>{configValue(key, previousVersion?.[key])}</span>
               <ArrowRight size={12} />
               <span>{configValue(key, selectedVersion[key])}</span>
             </div>

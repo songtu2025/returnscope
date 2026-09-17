@@ -7,6 +7,7 @@ export function resetSessionExpiration() {
   sessionExpiredNotified = false;
 }
 
+/** @param {Record<string, unknown>} [values] */
 export function queryString(values = {}) {
   const params = new URLSearchParams();
   Object.entries(values).forEach(([key, value]) => {
@@ -19,12 +20,20 @@ export function queryString(values = {}) {
 }
 
 export class ApiError extends Error {
+  /**
+   * @param {string} message
+   * @param {number} status
+   */
   constructor(message, status) {
     super(message);
     this.status = status;
   }
 }
 
+/**
+ * @param {string} path
+ * @param {RequestInit} [options]
+ */
 export async function request(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
     credentials: "include",
@@ -50,10 +59,26 @@ export async function request(path, options = {}) {
       sessionExpiredNotified = true;
       window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
     }
-    const detail = typeof payload === "object" ? payload.detail : payload;
+    const errorPayload = /** @type {unknown} */ (payload);
+    const detail =
+      typeof errorPayload === "object" && errorPayload !== null
+        ? "detail" in errorPayload
+          ? errorPayload.detail
+          : undefined
+        : errorPayload;
     const message = Array.isArray(detail)
-      ? detail.map((item) => item.msg).join("；")
-      : detail || "请求失败";
+      ? detail
+          .map((item) =>
+            typeof item === "object" && item !== null && "msg" in item
+              ? item.msg == null
+                ? ""
+                : String(item.msg)
+              : "",
+          )
+          .join("；")
+      : detail
+        ? String(detail)
+        : "请求失败";
     throw new ApiError(message, response.status);
   }
   if (path === "/api/auth/login" || path === "/api/auth/me") {

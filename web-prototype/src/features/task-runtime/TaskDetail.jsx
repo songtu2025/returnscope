@@ -30,11 +30,41 @@ import { TaskReplanDialog } from "./TaskReplanDialog";
 
 import { FINAL_TASK_STATUSES, taskSummary } from "./taskRegistryPolicy";
 
+/** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
+/** @typedef {import("./taskRuntimeContracts").TaskEvent} TaskEvent */
+/** @typedef {import("./taskRuntimeContracts").TaskPayload} TaskPayload */
+/** @typedef {import("./taskRuntimeContracts").TaskSegment} TaskSegment */
+/** @typedef {import("./taskRuntimeContracts").SegmentAction} SegmentAction */
+/** @typedef {import("../task-planning/taskPlanContracts").TaskExecutionPlan} TaskExecutionPlan */
+/**
+ * @typedef {Object} TaskDetailProps
+ * @property {AnalysisTask} task
+ * @property {string | null} [focusSegmentId]
+ * @property {TaskEvent[]} events
+ * @property {(segment: TaskSegment & {result_version_id: string}) => void} onViewClassification
+ * @property {string} actionError
+ * @property {() => void} onClearActionError
+ * @property {(payload: TaskPayload) => Promise<boolean>} onRename
+ * @property {() => void | Promise<unknown>} onArchive
+ * @property {(payload: TaskPayload) => Promise<boolean>} onCancel
+ * @property {() => void | Promise<unknown>} onPause
+ * @property {(payload: TaskPayload) => Promise<boolean>} onResume
+ * @property {() => void | Promise<unknown>} onRetry
+ * @property {(segmentKey: string, payload: TaskPayload) => Promise<boolean>} onRetrySegment
+ * @property {(segmentId: string) => Promise<boolean>} onRetryResultPublish
+ * @property {(segmentKey: string, action: SegmentAction, note?: string) => Promise<boolean>} onSegmentAction
+ * @property {(maxParallelSegments: number) => Promise<boolean>} onParallelism
+ * @property {(segmentKeys: string[]) => Promise<boolean>} onReorderSegments
+ * @property {(payload: TaskPayload) => Promise<TaskExecutionPlan>} onPreflightReplan
+ * @property {(payload: TaskPayload) => Promise<boolean>} onReplan
+ */
+
 const DETAIL_TABS = [
   ["execution", "Listing"],
   ["events", "运行日志"],
   ["config", "任务配置"],
 ];
+/** @param {TaskDetailProps} props */
 export function TaskDetail({
   task,
   focusSegmentId,
@@ -59,8 +89,12 @@ export function TaskDetail({
   const [renameOpen, setRenameOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [resumeOpen, setResumeOpen] = useState(false);
-  const [retrySegment, setRetrySegment] = useState(null);
-  const [cancelSegment, setCancelSegment] = useState(null);
+  const [retrySegment, setRetrySegment] = useState(
+    /** @type {TaskSegment | null} */ (null),
+  );
+  const [cancelSegment, setCancelSegment] = useState(
+    /** @type {TaskSegment | null} */ (null),
+  );
   const [replanOpen, setReplanOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("execution");
   const [listingFilter, setListingFilter] = useState("all");
@@ -72,6 +106,7 @@ export function TaskDetail({
       setListingFilter("all");
     }
   }, [focusSegmentId]);
+  /** @param {string} filter */
   const showListings = (filter) => {
     setListingFilter(filter);
     setActiveTab("execution");
@@ -369,7 +404,9 @@ export function TaskDetail({
                 />
                 <InfoRow
                   label="主模型"
-                  value={`${task.primary_model || "—"} · ${EFFORT_LABELS[task.primary_effort] ?? task.primary_effort ?? "—"}`}
+                  value={`${task.primary_model || "—"} · ${
+                    (task.primary_effort && EFFORT_LABELS[task.primary_effort]) || "—"
+                  }`}
                 />
               </div>
             </section>
@@ -420,7 +457,6 @@ export function TaskDetail({
         )}
         {cancelSegment && (
           <SegmentCancelDialog
-            task={task}
             segment={cancelSegment}
             onClose={() => setCancelSegment(null)}
             onSave={async (note) => {

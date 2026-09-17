@@ -18,6 +18,16 @@ import {
   shortDate,
 } from "./returnReasonInsightPresentation";
 
+/** @typedef {import("./analysisDashboardContracts").DashboardInsights} DashboardInsights */
+/** @typedef {import("./analysisDashboardContracts").DashboardRecord} DashboardRecord */
+/** @typedef {import("./analysisDashboardContracts").DashboardRoute} DashboardRoute */
+/** @typedef {import("./analysisDashboardContracts").InsightEvidence} InsightEvidence */
+/** @typedef {import("./analysisDashboardContracts").InsightProduct} InsightProduct */
+/** @typedef {import("./analysisDashboardContracts").InsightReason} InsightReason */
+/** @typedef {import("./analysisDashboardContracts").InsightSemanticProfile} InsightSemanticProfile */
+/** @typedef {{data: DashboardInsights, selected?: InsightReason, products: InsightProduct[], coReasons: InsightReason[], semanticProfile: InsightSemanticProfile, evidence: InsightEvidence, onUpdateRoute: (changes: Partial<DashboardRoute>) => void, onEvidence: (record: DashboardRecord, trigger: HTMLElement | null) => void}} ReturnReasonInsightDiagnosticProps */
+
+/** @param {ReturnReasonInsightDiagnosticProps} props */
 export function ReturnReasonInsightDiagnostic({
   data,
   selected,
@@ -259,7 +269,7 @@ export function ReturnReasonInsightDiagnostic({
                   const unit = selectedSemanticUnit(record, selected.value);
                   return (
                     <article key={record.id || record.source_record_id}>
-                      <p title={record.comment || record.reason}>
+                      <p title={record.comment || record.reason || undefined}>
                         {record.comment || record.reason || "没有退货评论"}
                       </p>
                       <div>
@@ -297,6 +307,7 @@ export function ReturnReasonInsightDiagnostic({
   );
 }
 
+/** @param {{label: string, value: string}} props */
 function InsightStat({ label, value }) {
   return (
     <div className="return-insight-stat">
@@ -306,6 +317,7 @@ function InsightStat({ label, value }) {
   );
 }
 
+/** @param {{label: string, items: Array<{key: string, text: string, onClick?: () => void}>}} props */
 function SemanticGroup({ label, items }) {
   return (
     <div className="return-semantic-group">

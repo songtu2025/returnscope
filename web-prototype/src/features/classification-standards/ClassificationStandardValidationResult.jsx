@@ -7,6 +7,19 @@ import {
 } from "./ClassificationValidationQuality";
 import { ClassificationStandardValidationApproval } from "./ClassificationStandardValidationApproval";
 
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardSentiment} ClassificationStandardSentiment */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardValidationRunDetail} ClassificationStandardValidationRunDetail */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationValidationSemanticResult} ClassificationValidationSemanticResult */
+/** @typedef {{run: ClassificationStandardValidationRunDetail, isNew: boolean, approvalBusy: boolean, statusLabels: Record<string, string>, onApprove: (runId: string, note: string) => void}} ClassificationStandardValidationResultProps */
+
+/** @type {Record<ClassificationStandardSentiment, string>} */
+const SENTIMENT_LABELS = {
+  POSITIVE: "正向",
+  NEGATIVE: "负向",
+  NEUTRAL: "中性",
+};
+
+/** @param {ClassificationStandardValidationResultProps} props */
 export function ClassificationStandardValidationResult({
   run,
   isNew,
@@ -14,7 +27,9 @@ export function ClassificationStandardValidationResult({
   statusLabels,
   onApprove,
 }) {
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState(
+    /** @type {"all" | "changed" | "errors" | "unknown"} */ ("all"),
+  );
   if (["queued", "running"].includes(run.status)) {
     const percent = run.sample_size
       ? Math.round((run.processed_count / run.sample_size) * 100)
@@ -51,6 +66,7 @@ export function ClassificationStandardValidationResult({
     );
   }
   const summary = run.summary;
+  const referenceEvaluation = summary.reference_evaluation;
   return (
     <section className="standard-validation-result">
       <header>
@@ -88,15 +104,15 @@ export function ClassificationStandardValidationResult({
       <p>
         以下为模型输出的覆盖与复核情况，不代表人工标注准确率。正负观点均计入标签覆盖。
       </p>
-      {run.source.skipped_category_count > 0 && (
+      {(run.source.skipped_category_count ?? 0) > 0 && (
         <p>已排除 {run.source.skipped_category_count} 条不属于当前品类的评论。</p>
       )}
       <ClassificationValidationQuality run={run} />
-      {summary.reference_evaluation?.sample_count > 0 && (
+      {referenceEvaluation && referenceEvaluation.sample_count > 0 && (
         <section>
-          <h3>人工参考答案对比 · {summary.reference_evaluation.sample_count} 条</h3>
+          <h3>人工参考答案对比 · {referenceEvaluation.sample_count} 条</h3>
           <p>
-            排除歧义样本 {summary.reference_evaluation.ambiguous_count}{" "}
+            排除歧义样本 {referenceEvaluation.ambiguous_count}{" "}
             条；发布验证仅对草稿评分，避免新旧编码不同造成误判。证据是否充分仍需人工审阅。
           </p>
           <table>
@@ -113,20 +129,18 @@ export function ClassificationStandardValidationResult({
               </tr>
             </thead>
             <tbody>
-              {Object.entries(summary.reference_evaluation.sides).map(
-                ([side, values]) => (
-                  <tr key={side}>
-                    <td>{side === "baseline" ? "对照" : "候选"}</td>
-                    <td>{values.duplicate_units ?? 0}</td>
-                    <td>{values.extra_labels}</td>
-                    <td>{values.missing_labels}</td>
-                    <td>{values.direction_errors}</td>
-                    <td>{values.part_errors}</td>
-                    <td>{values.evidence_errors ?? 0}</td>
-                    <td>{values.exact_label_samples}</td>
-                  </tr>
-                ),
-              )}
+              {Object.entries(referenceEvaluation.sides).map(([side, values]) => (
+                <tr key={side}>
+                  <td>{side === "baseline" ? "对照" : "候选"}</td>
+                  <td>{values.duplicate_units ?? 0}</td>
+                  <td>{values.extra_labels}</td>
+                  <td>{values.missing_labels}</td>
+                  <td>{values.direction_errors}</td>
+                  <td>{values.part_errors}</td>
+                  <td>{values.evidence_errors ?? 0}</td>
+                  <td>{values.exact_label_samples}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </section>
@@ -163,7 +177,13 @@ export function ClassificationStandardValidationResult({
         <select
           aria-label="验证结果筛选"
           value={filter}
-          onChange={(event) => setFilter(event.target.value)}
+          onChange={(event) =>
+            setFilter(
+              /** @type {"all" | "changed" | "errors" | "unknown"} */ (
+                event.target.value
+              ),
+            )
+          }
         >
           <option value="all">全部结果</option>
           <option value="changed">结果不同</option>
@@ -185,7 +205,7 @@ export function ClassificationStandardValidationResult({
               (filter === "changed" && item.changed) ||
               (filter === "errors" &&
                 [item.baseline.status, item.draft.status].includes("MODEL_ERROR")) ||
-              (filter === "unknown" && item.draft.unknown_semantics?.length > 0),
+              (filter === "unknown" && (item.draft.unknown_semantics?.length ?? 0) > 0),
           )
           .map((item) => (
             <div
@@ -250,6 +270,7 @@ export function ClassificationStandardValidationResult({
   );
 }
 
+/** @param {{label: string, value: string | number, note: string}} props */
 function Metric({ label, value, note }) {
   return (
     <div>
@@ -260,10 +281,12 @@ function Metric({ label, value, note }) {
   );
 }
 
+/** @param {string[] | undefined} values */
 function labels(values) {
   return values?.length ? values.join("、") : "无标签";
 }
 
+/** @param {ClassificationValidationSemanticResult} result */
 function semanticLabels(result) {
   if (!result.semantic_units?.length) return labels(result.primary_label_codes);
   return result.semantic_units.map((unit, index) => (
@@ -271,7 +294,7 @@ function semanticLabels(result) {
       key={`${unit.label_code}-${index}`}
       style={{ display: "block", overflowWrap: "anywhere" }}
     >
-      {{ POSITIVE: "正向", NEGATIVE: "负向", NEUTRAL: "中性" }[unit.sentiment] || ""}
+      {SENTIMENT_LABELS[unit.sentiment] || ""}
       {" · "}
       {unit.label_code}
       {unit.opinion && <small>{unit.opinion}</small>}

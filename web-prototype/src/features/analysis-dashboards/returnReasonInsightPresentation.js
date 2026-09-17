@@ -73,33 +73,47 @@ export const COMMENT_STATUS_ORDER = [
   "NO_CONFIRMED",
 ];
 
+/** @param {unknown} value */
 export function formatPercent(value) {
   return `${Number(value || 0).toFixed(1)}%`;
 }
 
+/** @param {unknown} value */
 export function formatDate(value) {
   if (!value) return "未提供";
   return String(value).slice(0, 10);
 }
 
+/** @param {unknown} value */
 export function shortDate(value) {
   const text = formatDate(value);
   return text === "未提供" ? text : text.slice(5).replace("-", "/");
 }
 
+/** @template T @param {T[] | null | undefined} values @returns {T[]} */
 export function filterOptions(values) {
   return Array.isArray(values) ? values : [];
 }
 
+/** @param {unknown} value */
 export function partLabel(value) {
-  return PART_LABELS[value] || String(value || "未明确部位").replaceAll("_", " ");
+  const key = String(value || "");
+  return (
+    /** @type {Record<string, string>} */ (PART_LABELS)[key] ||
+    String(value || "未明确部位").replaceAll("_", " ")
+  );
 }
 
+/** @typedef {{label_code?: string, opinion?: string, part?: string} & Record<string, unknown>} ReturnSemanticUnit */
+/** @param {{classification?: {semantic_units?: ReturnSemanticUnit[]}}} record @param {string} labelCode @returns {ReturnSemanticUnit} */
 export function selectedSemanticUnit(record, labelCode) {
   const units = record.classification?.semantic_units ?? [];
   return units.find((unit) => unit.label_code === labelCode) ?? units[0] ?? {};
 }
 
+/** @typedef {{status?: string, summary_status?: string, comment_count?: number, record_count?: number, count?: number}} CommentStatusRow */
+/** @typedef {{comment_statuses?: CommentStatusRow[] | Record<string, number>, semantic_statuses?: CommentStatusRow[] | Record<string, number>}} CommentStatusSource */
+/** @param {CommentStatusSource} data @param {CommentStatusSource} summary @returns {Record<string, number> | null} */
 export function commentStatusCounts(data, summary) {
   const raw =
     summary.comment_statuses ??
@@ -116,6 +130,7 @@ export function commentStatusCounts(data, summary) {
   );
 }
 
+/** @param {string[]} categoryGroups */
 export function orderGroups(categoryGroups) {
   return [
     ...GROUP_ORDER.filter((item) => categoryGroups.includes(item)),

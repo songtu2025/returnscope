@@ -3,6 +3,16 @@ import Button from "antd/es/button";
 import Checkbox from "antd/es/checkbox";
 import { CheckCircle, SpinnerGap } from "@phosphor-icons/react";
 
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardValidationRunDetail} ClassificationStandardValidationRunDetail */
+
+/**
+ * @param {{
+ *   run: ClassificationStandardValidationRunDetail,
+ *   isNew: boolean,
+ *   busy: boolean,
+ *   onApprove: (runId: string, note: string) => void,
+ * }} props
+ */
 export function ClassificationStandardValidationApproval({
   run,
   isNew,

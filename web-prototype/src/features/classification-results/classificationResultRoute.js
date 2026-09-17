@@ -1,7 +1,39 @@
 import { navigateHash } from "../../app/hashRouter";
 import { RESULT_PAGE_SIZES } from "./classificationResultConstants";
 
+/**
+ * @typedef {Record<string, string | undefined> & { action?: "" | "review" }} ClassificationResultQuery
+ */
+
+/**
+ * @typedef {object} ClassificationResultRoute
+ * @property {string} version
+ * @property {number} page
+ * @property {number} recordPage
+ * @property {number} pageSize
+ * @property {string} q
+ * @property {string} storeSite
+ * @property {string} listing
+ * @property {string} qualityStatus
+ * @property {string} problem
+ * @property {string} productName
+ * @property {string} productSku
+ * @property {string} orderId
+ * @property {"results" | "reviews"} view
+ * @property {"records" | "history"} tab
+ * @property {string} selectionToken
+ * @property {string} taskId
+ * @property {string} segmentId
+ * @property {string} reviewBatchId
+ * @property {"" | "review"} action
+ */
+
+/**
+ * @param {ClassificationResultQuery} query
+ * @returns {ClassificationResultRoute}
+ */
 export function classificationResultRouteState(query) {
+  /** @param {string} key */
   const number = (key) => Number(query[key]);
   return {
     version: query.result_version_id || query.version || "",
@@ -28,6 +60,7 @@ export function classificationResultRouteState(query) {
   };
 }
 
+/** @param {ClassificationResultRoute} route */
 export function writeClassificationResultRoute(route) {
   navigateHash("classification-results", {
     result_version_id: route.version,

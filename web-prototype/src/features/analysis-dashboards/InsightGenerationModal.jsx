@@ -3,6 +3,27 @@ import { WarningCircle } from "@phosphor-icons/react";
 import { InlineLoading, Modal } from "../../components/SharedUi";
 import { preferredInsightEffort } from "./insightModelOptions";
 
+/** @typedef {import("./analysisDashboardContracts").InsightGenerationForm} InsightGenerationForm */
+/** @typedef {import("./analysisDashboardContracts").InsightModel} InsightModel */
+/**
+ * @typedef {Object} InsightGenerationModalProps
+ * @property {InsightGenerationForm} form
+ * @property {(form: InsightGenerationForm) => void} onChange
+ * @property {() => void} onClose
+ * @property {(event: import("react").FormEvent<HTMLFormElement>) => void | Promise<void>} onSubmit
+ * @property {InsightModel[]} models
+ * @property {boolean} loading
+ * @property {boolean} submitting
+ * @property {string} error
+ * @property {boolean} ready
+ * @property {string} scopeLabel
+ * @property {number} includedRecords
+ * @property {number} unitCount
+ * @property {number} pendingRecords
+ * @property {number} excludedRecords
+ */
+
+/** @param {InsightGenerationModalProps} props */
 export function InsightGenerationModal({
   form,
   onChange,
@@ -29,6 +50,7 @@ export function InsightGenerationModal({
     includedRecords > 0 &&
     Boolean(form.modelId);
 
+  /** @param {string} modelId */
   const changeModel = (modelId) => {
     const model = models.find((item) => item.id === modelId);
     onChange({

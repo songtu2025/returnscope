@@ -10,6 +10,43 @@ import Button from "antd/es/button";
 import { EFFORT_LABELS, MODEL_STATUS_LABELS } from "../../constants";
 import { classNames } from "../../lib/presentation";
 
+/** @typedef {import("../../shared/api/systemSettingsContracts").CatalogModel} CatalogModel */
+/** @typedef {import("../../shared/api/systemSettingsContracts").ConfigVersion} ConfigVersion */
+/** @typedef {import("../../shared/api/systemSettingsContracts").ModelConnection} ModelConnection */
+
+const EFFORT_LABEL_MAP = /** @type {Record<string, string>} */ (EFFORT_LABELS);
+const MODEL_STATUS_LABEL_MAP = /** @type {Record<string, string>} */ (
+  MODEL_STATUS_LABELS
+);
+
+/**
+ * @param {{
+ *   connections: ModelConnection[],
+ *   selectedConnectionId: string | null,
+ *   selectedConnection: ModelConnection | null | undefined,
+ *   activeVersion: ConfigVersion | null,
+ *   availableModelCount: number,
+ *   busy: string,
+ *   validationActive: boolean,
+ *   draftVersion: ConfigVersion | null | undefined,
+ *   discardConfirmation: boolean,
+ *   visibleCatalogModels: CatalogModel[],
+ *   onSelectConnection: (id: string) => void,
+ *   onStartValidation: (version: ConfigVersion) => void,
+ *   onOpenNewConnection: () => void,
+ *   onEditConnection: () => void,
+ *   onEditLimits: () => void,
+ *   onOpenVersions: () => void,
+ *   onCancelDiscard: () => void,
+ *   onDiscardDraft: () => void,
+ *   onPublishDraft: () => void,
+ *   onContinueDraft: () => void,
+ *   onConfirmDiscard: () => void,
+ *   onDiscoverModels: () => void,
+ *   onOpenModelCatalog: () => void,
+ *   onValidateCatalogModel: (model: CatalogModel) => void,
+ * }} props
+ */
 export function ModelServiceSummary({
   connections,
   selectedConnectionId,
@@ -251,7 +288,7 @@ export function ModelServiceSummary({
                 <strong>{model.model_key}</strong>
                 <span>
                   {model.supported_efforts
-                    .map((effort) => EFFORT_LABELS[effort])
+                    .map((effort) => EFFORT_LABEL_MAP[effort] ?? effort)
                     .join(" · ")}
                 </span>
                 <span
@@ -261,7 +298,7 @@ export function ModelServiceSummary({
                   )}
                 >
                   {model.active
-                    ? (MODEL_STATUS_LABELS[model.validation_status] ?? "待验证")
+                    ? (MODEL_STATUS_LABEL_MAP[model.validation_status] ?? "待验证")
                     : "已停用"}
                 </span>
                 {model.active && model.validation_status !== "validated" ? (

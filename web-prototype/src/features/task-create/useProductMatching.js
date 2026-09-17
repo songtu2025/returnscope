@@ -3,6 +3,16 @@ import { useState } from "react";
 import { api } from "../../api";
 import { primaryPlanStore } from "./newTaskPolicy";
 
+/** @typedef {import("./taskCreateContracts").DataVersion} DataVersion */
+/** @typedef {import("./taskCreateContracts").TaskDraft} TaskDraft */
+/** @typedef {import("./taskCreateContracts").TaskForm} TaskForm */
+/** @typedef {import("./taskCreateContracts").TaskPreflightState} TaskPreflightState */
+/** @typedef {import("./MysqlReturnImportForm").MysqlReturnFormState} MysqlReturnFormState */
+/** @typedef {import("./productMatchPolicy").ProductMatchDraft} ProductMatchDraft */
+/**
+ * @param {{dataEntryMode: "existing" | "upload" | "mysql", form: TaskForm, invalidatePreflight: () => void, mysqlDraft?: Partial<MysqlReturnFormState>, notify: (message: string, type?: "success" | "error") => void, onDraftChange?: (draft: TaskDraft) => void, onNavigate: import("../../app/navigation").Navigate, preflight: TaskPreflightState, products: DataVersion[], selectedDataLabel: string, selectedProducts?: DataVersion, selectedReturns?: DataVersion, setForm: import("react").Dispatch<import("react").SetStateAction<TaskForm>>, setSubmitting: import("react").Dispatch<import("react").SetStateAction<boolean>>, setVersions: import("react").Dispatch<import("react").SetStateAction<DataVersion[]>>}} options
+ */
+
 export function useProductMatching({
   dataEntryMode,
   form,
@@ -58,18 +68,22 @@ export function useProductMatching({
     });
   };
 
+  /** @param {ProductMatchDraft[]} items */
   const saveProductMatches = async (items) => {
     if (!selectedProducts?.dataset_id) return;
     setSubmitting(true);
     try {
-      const updated = await api.completeProductCategories(selectedProducts.dataset_id, {
-        expected_version: selectedProducts.version,
-        store: primaryPlanStore(preflight.data),
-        items,
-        change_note: `确认任务“${
-          form.title || selectedReturns?.dataset_name || "退货明细"
-        }”的商品关联`,
-      });
+      const updated =
+        /** @type {{versions?: {id: string, version: number}[], current_version: number}} */ (
+          await api.completeProductCategories(selectedProducts.dataset_id, {
+            expected_version: selectedProducts.version,
+            store: primaryPlanStore(preflight.data),
+            items,
+            change_note: `确认任务“${
+              form.title || selectedReturns?.dataset_name || "退货明细"
+            }”的商品关联`,
+          })
+        );
       const latestVersion = updated.versions?.find(
         (version) => version.version === updated.current_version,
       );
@@ -82,7 +96,7 @@ export function useProductMatching({
       setForm((current) => ({ ...current, product_version_id: latestVersion.id }));
       notify(`已保存 ${items.length.toLocaleString()} 个商品关联，正在重新生成计划`);
     } catch (error) {
-      notify(error.message, "error");
+      notify(error instanceof Error ? error.message : "保存商品关联失败", "error");
     } finally {
       setSubmitting(false);
     }

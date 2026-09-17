@@ -6,6 +6,15 @@ import { useDialogFocus } from "../hooks/useDialogFocus";
 import { classNames } from "../lib/presentation";
 import { AntdProvider } from "./AntdProvider";
 
+/**
+ * @param {{
+ *   eyebrow?: import("react").ReactNode,
+ *   title: import("react").ReactNode,
+ *   description: import("react").ReactNode,
+ *   action?: import("react").ReactNode,
+ *   titleRef?: import("react").Ref<HTMLHeadingElement>,
+ * }} props
+ */
 export function PageHeading({ eyebrow, title, description, action, titleRef }) {
   return (
     <header className="page-heading">
@@ -21,6 +30,7 @@ export function PageHeading({ eyebrow, title, description, action, titleRef }) {
   );
 }
 
+/** @param {{title: import("react").ReactNode, note?: import("react").ReactNode, action?: import("react").ReactNode}} props */
 export function CardHeading({ title, note, action }) {
   return (
     <div className="card-heading">
@@ -33,6 +43,7 @@ export function CardHeading({ title, note, action }) {
   );
 }
 
+/** @param {{label: import("react").ReactNode, value?: import("react").ReactNode}} props */
 export function InfoRow({ label, value }) {
   return (
     <div className="info-row">
@@ -42,6 +53,16 @@ export function InfoRow({ label, value }) {
   );
 }
 
+/**
+ * @param {{
+ *   eyebrow?: import("react").ReactNode,
+ *   title: string,
+ *   description?: import("react").ReactNode,
+ *   className?: string,
+ *   onClose: () => void,
+ *   children: import("react").ReactNode,
+ * }} props
+ */
 export function Modal({
   eyebrow = "数据版本",
   title,
@@ -87,16 +108,19 @@ export function Modal({
   );
 }
 
+/** @param {{status: string, label?: import("react").ReactNode}} props */
 export function StatusPill({ status, label }) {
   return (
     <span className={classNames("status-pill", status)}>
       <i />
-      {label ?? STATUS_LABELS[status] ?? status}
+      {label ?? /** @type {Record<string, string>} */ (STATUS_LABELS)[status] ?? status}
     </span>
   );
 }
 
+/** @param {{value: string}} props */
 export function StatusBadge({ value }) {
+  /** @type {Record<string, string>} */
   const labels = {
     AUTO_APPROVED: "自动通过",
     MANUAL_RESOLVED: "人工已复核",
@@ -113,6 +137,14 @@ export function StatusBadge({ value }) {
   );
 }
 
+/**
+ * @param {{
+ *   icon: import("@phosphor-icons/react").Icon,
+ *   title: import("react").ReactNode,
+ *   description: import("react").ReactNode,
+ *   action?: import("react").ReactNode,
+ * }} props
+ */
 export function EmptyState({ icon: Icon, title, description, action }) {
   return (
     <AntdProvider>
@@ -132,6 +164,7 @@ export function EmptyState({ icon: Icon, title, description, action }) {
   );
 }
 
+/** @param {{label: import("react").ReactNode}} props */
 export function InlineLoading({ label }) {
   return (
     <AntdProvider>

@@ -3,22 +3,40 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { taxonomyPath } from "../../lib/taxonomyPresentation";
 import { reviewBatchApi } from "../../shared/api/reviewBatchApi";
 
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewBatch} ReviewBatch */
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewBatchRoute} ReviewBatchRoute */
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewLabel} ReviewLabel */
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewRecordPage} ReviewRecordPage */
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewRequestError} ReviewRequestError */
+
+/** @param {unknown} error @returns {ReviewRequestError} */
+function requestError(error) {
+  return error instanceof Error
+    ? /** @type {ReviewRequestError} */ (error)
+    : /** @type {ReviewRequestError} */ (new Error("复核请求失败"));
+}
+
+/** @param {{route: ReviewBatchRoute, notify: (message: string, type?: "success" | "error") => void}} options */
 export function useReviewBatchData({ route, notify }) {
-  const [batchState, setBatchState] = useState({
-    loading: true,
-    error: null,
-    data: null,
-  });
-  const [recordsState, setRecordsState] = useState({
-    loading: true,
-    error: null,
-    data: null,
-  });
-  const [labels, setLabels] = useState([]);
+  const [batchState, setBatchState] = useState(
+    /** @type {{loading: boolean, error: ReviewRequestError | null, data: ReviewBatch | null}} */ ({
+      loading: true,
+      error: null,
+      data: null,
+    }),
+  );
+  const [recordsState, setRecordsState] = useState(
+    /** @type {{loading: boolean, error: ReviewRequestError | null, data: ReviewRecordPage | null}} */ ({
+      loading: true,
+      error: null,
+      data: null,
+    }),
+  );
+  const [labels, setLabels] = useState(/** @type {ReviewLabel[]} */ ([]));
   const batchGeneration = useRef(0);
   const recordGeneration = useRef(0);
-  const batchController = useRef(null);
-  const recordsController = useRef(null);
+  const batchController = useRef(/** @type {AbortController | null} */ (null));
+  const recordsController = useRef(/** @type {AbortController | null} */ (null));
 
   const recordQuery = useMemo(
     () => ({
@@ -59,10 +77,11 @@ export function useReviewBatchData({ route, notify }) {
       }
       return data;
     } catch (error) {
-      if (batchGeneration.current === generation && error.name !== "AbortError") {
-        setBatchState({ loading: false, error, data: null });
+      const failure = requestError(error);
+      if (batchGeneration.current === generation && failure.name !== "AbortError") {
+        setBatchState({ loading: false, error: failure, data: null });
       }
-      throw error;
+      throw failure;
     }
   }, [route.batchId]);
 
@@ -82,10 +101,11 @@ export function useReviewBatchData({ route, notify }) {
       }
       return data;
     } catch (error) {
-      if (recordGeneration.current === generation && error.name !== "AbortError") {
-        setRecordsState({ loading: false, error, data: null });
+      const failure = requestError(error);
+      if (recordGeneration.current === generation && failure.name !== "AbortError") {
+        setRecordsState({ loading: false, error: failure, data: null });
       }
-      throw error;
+      throw failure;
     }
   }, [recordQuery, route.batchId]);
 
@@ -120,7 +140,8 @@ export function useReviewBatchData({ route, notify }) {
         ),
       )
       .catch((error) => {
-        if (error.name !== "AbortError") notify(error.message, "error");
+        const failure = requestError(error);
+        if (failure.name !== "AbortError") notify(failure.message, "error");
       });
     return () => controller.abort();
   }, [batchState.data?.base_result_version_id, notify]);

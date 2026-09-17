@@ -1,6 +1,7 @@
 /** @typedef {"confirm" | "modify" | "exclude"} ReviewAction */
 /** @typedef {{labelCorrectness: string, evidenceCompleteness: string, reviewRouting: string}} ReviewAssessment */
-/** @typedef {{key: string, storedKey: string, label: string, options: Array<[string, string]>}} AssessmentField */
+/** @typedef {"labelCorrectness" | "evidenceCompleteness" | "reviewRouting"} AssessmentKey */
+/** @typedef {{key: AssessmentKey, storedKey: string, label: string, options: Array<[string, string]>}} AssessmentField */
 
 /** @type {AssessmentField[]} */
 export const REVIEW_ASSESSMENT_FIELDS = [

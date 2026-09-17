@@ -5,6 +5,14 @@ import { SemanticStatusBadge } from "./SemanticResultPanel";
 import { semanticRecordStatus } from "./semanticResultPresentation";
 import { resultLabelText } from "../../lib/taxonomyPresentation";
 
+/**
+ * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultDrilldownItemResponse} ClassificationResultDrilldownItem
+ * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultRecordResponse} ClassificationResultRecord
+ */
+
+/**
+ * @param {{ label: string, value: number, note?: string, tone?: string }} props
+ */
 export function SummaryMetric({ label, value, note = "", tone = "" }) {
   return (
     <div className={tone ? `is-${tone}` : ""}>
@@ -15,6 +23,18 @@ export function SummaryMetric({ label, value, note = "", tone = "" }) {
   );
 }
 
+/**
+ * @param {{
+ *   title: string,
+ *   items: ClassificationResultDrilldownItem[],
+ *   selected: string,
+ *   onSelect: (value: string) => void,
+ *   emptyLabel?: string,
+ *   emptyTitle?: string,
+ *   emptyDescription?: string,
+ *   limit?: number
+ * }} props
+ */
 export function DrilldownColumn({
   title,
   items,
@@ -60,6 +80,12 @@ export function DrilldownColumn({
   );
 }
 
+/**
+ * @param {{
+ *   record: ClassificationResultRecord,
+ *   onOpen: (trigger: HTMLButtonElement) => void
+ * }} props
+ */
 export function ResultRecordRow({ record, onOpen }) {
   const problems = record.problem_labels ?? [];
   return (

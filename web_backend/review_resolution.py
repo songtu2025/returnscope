@@ -32,6 +32,11 @@ class ReviewResolutionMixin:
             result_version_id: str | None = None,
         ) -> dict[str, Any]: ...
 
+        def _validate_reviewed_classification(
+            self,
+            classification: dict[str, Any],
+        ) -> tuple[ValidatedClassification, dict[str, Any] | None]: ...
+
     def resolve(
         self,
         review_id: str,
@@ -177,7 +182,7 @@ class ReviewResolutionMixin:
                     {},
                 )
             results = {
-                key: ValidatedClassification.model_validate(value)
+                key: self._validate_reviewed_classification(value)[0]
                 for key, value in payload.items()
             }
             dataset = load_return_dataset(

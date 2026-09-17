@@ -10,6 +10,36 @@ import Button from "antd/es/button";
 import { dashboardVersionNumber } from "./dashboardFields";
 import { dashboardVersionId } from "./DashboardDetailHelpers";
 
+/** @typedef {import("./analysisDashboardContracts").Dashboard} Dashboard */
+/** @typedef {import("./analysisDashboardContracts").DashboardTab} DashboardTab */
+/** @typedef {import("./analysisDashboardContracts").DashboardVersion} DashboardVersion */
+/** @typedef {import("./analysisDashboardContracts").InsightReport} InsightReport */
+/**
+ * @typedef {Object} DashboardDetailHeaderProps
+ * @property {Dashboard} dashboard
+ * @property {DashboardVersion | null} selectedVersion
+ * @property {boolean} showReport
+ * @property {InsightReport | null} selectedReport
+ * @property {boolean} showDataInfo
+ * @property {DashboardVersion[]} versions
+ * @property {string} versionId
+ * @property {DashboardTab} activeTab
+ * @property {string} currentVersionId
+ * @property {boolean} isCurrentVersion
+ * @property {() => void} onBack
+ * @property {() => void | Promise<void>} onOpenReportGeneration
+ * @property {() => void} onExport
+ * @property {() => void} onOpenReport
+ * @property {() => void} onToggleDataInfo
+ * @property {(versionId: string) => void} onSelectVersion
+ * @property {() => void} onShowSources
+ * @property {() => void} onShowHistory
+ * @property {() => void} onCreateVersion
+ * @property {() => void} onShowOverview
+ * @property {() => void} onShowReport
+ */
+
+/** @param {DashboardDetailHeaderProps} props */
 export function DashboardDetailHeader({
   dashboard,
   selectedVersion,

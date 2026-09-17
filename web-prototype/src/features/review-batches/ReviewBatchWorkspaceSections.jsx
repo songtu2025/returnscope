@@ -14,6 +14,23 @@ import Select from "antd/es/select";
 import { formatTime } from "../../lib/presentation";
 import { BATCH_STATUS_LABELS } from "./reviewBatchPresentation";
 
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewAction} ReviewAction */
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewBatch} ReviewBatch */
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewRecordFilters} ReviewRecordFilters */
+/** @typedef {"listing" | "productName" | "productSku" | "orderId"} ReviewBusinessFilter */
+/** @typedef {readonly [string, string, string, ReviewBusinessFilter]} ReviewFilterField */
+
+/** @type {readonly ReviewFilterField[]} */
+const REVIEW_FILTER_FIELDS = [
+  ["Listing", "筛选 Listing", "Listing", "listing"],
+  ["产品名称", "筛选产品名称", "产品名称", "productName"],
+  ["产品 SKU", "筛选产品SKU", "产品SKU", "productSku"],
+  ["order-id", "筛选 order-id", "order-id", "orderId"],
+];
+
+/**
+ * @param {{batch: ReviewBatch, pending: number, readOnly: boolean, onBack: () => void, onOpenSource: () => void, onOpenDerived: () => void, onCreateDashboard: () => void, onOpenPublish: () => void}} props
+ */
 export function ReviewBatchSummary({
   batch,
   pending,
@@ -118,6 +135,7 @@ export function ReviewBatchSummary({
   );
 }
 
+/** @param {{filters: ReviewRecordFilters, onFilters: (filters: ReviewRecordFilters) => void, onApply: () => void}} props */
 export function ReviewRecordFilters({ filters, onFilters, onApply }) {
   return (
     <section className="review-record-filters" aria-label="复核记录筛选">
@@ -145,12 +163,7 @@ export function ReviewRecordFilters({ filters, onFilters, onApply }) {
           ]}
         />
       </label>
-      {[
-        ["Listing", "筛选 Listing", "Listing", "listing"],
-        ["产品名称", "筛选产品名称", "产品名称", "productName"],
-        ["产品 SKU", "筛选产品SKU", "产品SKU", "productSku"],
-        ["order-id", "筛选 order-id", "order-id", "orderId"],
-      ].map(([title, ariaLabel, placeholder, field]) => (
+      {REVIEW_FILTER_FIELDS.map(([title, ariaLabel, placeholder, field]) => (
         <label className="review-filter-field" key={field}>
           <span>{title}</span>
           <Input
@@ -168,6 +181,7 @@ export function ReviewRecordFilters({ filters, onFilters, onApply }) {
   );
 }
 
+/** @param {{checkedCount: number, onBulk: (action: ReviewAction) => void, onClear: () => void}} props */
 export function ReviewBulkToolbar({ checkedCount, onBulk, onClear }) {
   if (!checkedCount) return null;
 

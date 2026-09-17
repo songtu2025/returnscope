@@ -4,6 +4,16 @@ import AntPagination from "antd/es/pagination";
 import { PAGE_SIZES } from "../shared/pagination";
 import { AntdProvider } from "./AntdProvider";
 
+/**
+ * @param {{
+ *   page: number,
+ *   pageSize: number,
+ *   total: number,
+ *   totalPages: number,
+ *   onPage: (page: number) => void,
+ *   onPageSize: (pageSize: number) => void,
+ * }} props
+ */
 export function Pagination({ page, pageSize, total, totalPages, onPage, onPageSize }) {
   return (
     <AntdProvider>

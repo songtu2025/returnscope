@@ -6,6 +6,9 @@ import {
   resultPublishStatus,
 } from "./taskSegmentPolicy";
 
+/** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
+/** @typedef {import("./taskRuntimeContracts").TaskSegment} TaskSegment */
+
 const ACTIVE_TASK_STATUSES = ["queued", "running", "paused"];
 export const FINAL_TASK_STATUSES = [
   "completed",
@@ -15,16 +18,19 @@ export const FINAL_TASK_STATUSES = [
   "partial",
 ];
 
+/** @param {AnalysisTask | null | undefined} task */
 function isActiveTask(task) {
-  return ACTIVE_TASK_STATUSES.includes(task?.status);
+  return Boolean(task && ACTIVE_TASK_STATUSES.includes(task.status));
 }
 
+/** @param {AnalysisTask} task */
 export function taskFilterGroup(task) {
   if (task?.archived_at) return "archived";
   if (isActiveTask(task)) return "active";
   return "finished";
 }
 
+/** @param {TaskSegment} segment */
 export function segmentNeedsAttention(segment) {
   return (
     ["failed", "blocked", "completed_with_errors"].includes(segment.status) ||
@@ -35,6 +41,7 @@ export function segmentNeedsAttention(segment) {
   );
 }
 
+/** @param {AnalysisTask} task */
 export function taskSummary(task) {
   const segments = task.segments ?? [];
   const executable = segments.filter((segment) => segment.agent_key !== "unknown");
@@ -73,7 +80,7 @@ export function taskSummary(task) {
   const partialQueue =
     task.status === "queued" &&
     task.snapshot?.execution_plan?.unresolved_policy === "run_ready" &&
-    task.snapshot?.execution_plan?.summary?.blocked_count > 0;
+    Number(task.snapshot?.execution_plan?.summary?.blocked_count || 0) > 0;
   return {
     total,
     generated,

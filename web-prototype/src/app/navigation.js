@@ -8,6 +8,16 @@ import {
   TreeStructure,
 } from "@phosphor-icons/react";
 
+/** @typedef {Record<string, string | undefined>} RouteQuery */
+/** @typedef {{page: string, query: RouteQuery}} AppRoute */
+/** @typedef {import("../features/task-create/taskCreateContracts").UnresolvedProduct} UnresolvedProduct */
+/** @typedef {import("../features/task-create/taskCreateContracts").CategoryOption} CategoryOption */
+/** @typedef {{kind: "task" | "task-template" | "return-version", id: string} | {kind: "result", id: string, listing?: string} | {kind: "classification-result", id: string, taskId?: string, segmentId?: string, listing?: string, reviewBatchId?: string} | {kind: "data-view", view: string} | {kind: "review", id: string, status?: string} | {kind: "review-batch", id: string, resultVersionId?: string} | {kind: "dataset", id?: string, datasetKind: string, returnToTask?: boolean, taskTitle?: string, store?: string, unresolvedProducts?: UnresolvedProduct[], categoryOptions?: CategoryOption[], blockedCommentCount?: number}} NavigationFocus */
+/** @typedef {{route?: string, task_id?: string, segment_id?: string, result_version_id?: string, action?: string, dashboard_id?: string, version_id?: string, report_id?: string, batch_id?: string, review_id?: string, workflow_status?: string, dataset_id?: string, view?: string, tab?: string, connection_id?: string, config_version_id?: string, model_id?: string, entity_id?: string, user_id?: string}} NavigationTarget */
+/** @typedef {{id: string, label: string, icon: import("react").ElementType}} NavigationItem */
+/** @typedef {(destination: string, focus?: NavigationFocus | null) => void} Navigate */
+
+/** @type {NavigationItem[]} */
 export const PRIMARY_NAV_ITEMS = [
   { id: "workbench", label: "首页", icon: SquaresFour },
   { id: "data-assets", label: "数据资产", icon: Database },
@@ -17,6 +27,7 @@ export const PRIMARY_NAV_ITEMS = [
   { id: "analysis-dashboards", label: "分析看板", icon: ChartLineUp },
 ];
 
+/** @type {NavigationItem} */
 export const SETTINGS_NAV_ITEM = {
   id: "settings",
   label: "系统设置",
@@ -31,6 +42,7 @@ export const PAGE_IDS = new Set([
   "review",
 ]);
 
+/** @type {Record<string, {page: string, query?: RouteQuery}>} */
 export const LEGACY_ROUTES = {
   new: { page: "task-create" },
   tasks: { page: "analysis-tasks" },
@@ -44,6 +56,11 @@ export const LEGACY_ROUTES = {
   team: { page: "settings", query: { tab: "users" } },
 };
 
+/**
+ * @param {string} destination
+ * @param {NavigationFocus | null} [focus]
+ * @returns {AppRoute}
+ */
 export function routeForDestination(destination, focus = null) {
   const legacy = LEGACY_ROUTES[destination];
   const page = legacy?.page ?? destination;
@@ -84,6 +101,10 @@ export function routeForDestination(destination, focus = null) {
   return { page, query };
 }
 
+/**
+ * @param {NavigationTarget | null | undefined} target
+ * @returns {AppRoute | null}
+ */
 export function routeForTarget(target) {
   if (!target?.route) return null;
   const page = LEGACY_ROUTES[target.route]?.page ?? target.route;

@@ -30,15 +30,29 @@ import {
 
 const PAGE_SIZE = 20;
 
+/** @typedef {import("../../shared/api/dataManagementContracts").DatasetSource} DatasetSource */
+/** @typedef {import("../task-create/taskCreateContracts").ReturnImportResult} ReturnImportResult */
+/** @typedef {{query: {dataset?: string, tab?: string}}} DataAssetsRoute */
+/**
+ * @param {{
+ *   route: DataAssetsRoute,
+ *   notify: (message: string, tone?: string) => void,
+ *   onRouteChange: (changes: Record<string, string | number>) => void,
+ * }} props
+ */
 export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
-  const [sources, setSources] = useState([]);
+  const [sources, setSources] = useState(/** @type {DatasetSource[]} */ ([]));
   const [loading, setLoading] = useState(true);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [page, setPage] = useState(1);
-  const [detailsBySource, setDetailsBySource] = useState({});
-  const [expandedOverride, setExpandedOverride] = useState(null);
+  const [detailsBySource, setDetailsBySource] = useState(
+    /** @type {Record<string, DatasetSource>} */ ({}),
+  );
+  const [expandedOverride, setExpandedOverride] = useState(
+    /** @type {string | null} */ (null),
+  );
 
   const loadSources = useCallback(async () => {
     setLoading(true);
@@ -47,7 +61,7 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
       setSources(items);
       setDetailsBySource({});
     } catch (error) {
-      notify(error.message, "error");
+      notify(error instanceof Error ? error.message : "退货数据源读取失败", "error");
     } finally {
       setLoading(false);
     }
@@ -81,7 +95,7 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
     page * PAGE_SIZE,
   );
   const requestedSource = sources.find((source) =>
-    source.member_ids.includes(route.query.dataset),
+    source.member_ids.includes(route.query.dataset ?? ""),
   );
   const defaultExpandedId =
     visibleSources.find((source) => source.id === requestedSource?.id)?.id ||
@@ -114,7 +128,9 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
         }
       })
       .catch((error) => {
-        if (error.name !== "AbortError") notify(error.message, "error");
+        const requestError =
+          error instanceof Error ? error : new Error("数据源详情读取失败");
+        if (requestError.name !== "AbortError") notify(requestError.message, "error");
       });
     return () => controller.abort();
   }, [detailsBySource, expandedId, notify, sources]);
@@ -124,11 +140,12 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
   const latestUpdate = sources.reduce(
     (latest, source) =>
       String(source.updated_at || "") > String(latest || "")
-        ? source.updated_at
+        ? (source.updated_at ?? "")
         : latest,
     "",
   );
 
+  /** @param {DatasetSource} source */
   const selectSource = (source) => {
     if (source.id === expandedId) {
       setExpandedOverride("");
@@ -138,6 +155,7 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
     onRouteChange({ view: "returns", dataset: source.id, tab: "" });
   };
 
+  /** @param {ReturnImportResult} result */
   const finishImport = async (result) => {
     setUploadOpen(false);
     await loadSources();
@@ -284,7 +302,7 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
                           notify={notify}
                           onStorageChanged={loadSources}
                           initiallyShowTrace={["imports", "snapshots"].includes(
-                            route.query.tab,
+                            route.query.tab ?? "",
                           )}
                         />
                       ) : (

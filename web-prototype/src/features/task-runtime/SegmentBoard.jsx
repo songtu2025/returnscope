@@ -10,9 +10,28 @@ import Button from "antd/es/button";
 import { SegmentBoardRow } from "./SegmentBoardRow";
 import { isLegacyResult, isPublishedResult } from "./taskSegmentPolicy";
 import { segmentNeedsAttention } from "./taskRegistryPolicy";
+
+/** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
+/** @typedef {import("./taskRuntimeContracts").TaskSegment} TaskSegment */
+/** @typedef {import("./taskRuntimeContracts").SegmentAction} SegmentAction */
+/**
+ * @typedef {Object} SegmentBoardProps
+ * @property {AnalysisTask} task
+ * @property {string | null} [focusSegmentId]
+ * @property {string} [initialFilter]
+ * @property {(segment: TaskSegment) => void} onRetry
+ * @property {(segmentId: string) => Promise<unknown>} onRetryPublish
+ * @property {(segment: TaskSegment) => void} onCancel
+ * @property {(segmentKey: string, action: SegmentAction, note?: string) => Promise<unknown>} onAction
+ * @property {(maxParallelSegments: number) => Promise<unknown>} onParallelism
+ * @property {(segmentKeys: string[]) => Promise<unknown>} onReorder
+ * @property {(segment: TaskSegment & {result_version_id: string}) => void} onViewClassification
+ * @property {() => void} onResumeUnfinished
+ */
 const ORDERABLE_SEGMENT_STATUSES = ["queued", "retry_pending", "paused"];
 const PAGE_SIZE = 20;
 
+/** @param {TaskSegment} segment @param {string} filter */
 function matchesStatusFilter(segment, filter) {
   if (filter === "all") return true;
   if (filter === "active") {
@@ -34,6 +53,7 @@ function matchesStatusFilter(segment, filter) {
   return segment.status === filter;
 }
 
+/** @param {SegmentBoardProps} props */
 export function SegmentBoard({
   task,
   focusSegmentId,
@@ -49,14 +69,18 @@ export function SegmentBoard({
 }) {
   const [reordering, setReordering] = useState(false);
   const [changingParallelism, setChangingParallelism] = useState(false);
-  const [retryingPublishId, setRetryingPublishId] = useState(null);
+  const [retryingPublishId, setRetryingPublishId] = useState(
+    /** @type {string | null} */ (null),
+  );
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState(initialFilter);
   const [page, setPage] = useState(1);
-  const [expandedSegmentKey, setExpandedSegmentKey] = useState(null);
+  const [expandedSegmentKey, setExpandedSegmentKey] = useState(
+    /** @type {string | null} */ (null),
+  );
   const deferredQuery = useDeferredValue(query.trim().toLocaleLowerCase());
-  const focusedSegmentRef = useRef(null);
-  const handledFocus = useRef(null);
+  const focusedSegmentRef = useRef(/** @type {HTMLElement | null} */ (null));
+  const handledFocus = useRef(/** @type {string | null} */ (null));
 
   useEffect(() => {
     if (!focusSegmentId || !focusedSegmentRef.current) return;
@@ -136,6 +160,7 @@ export function SegmentBoard({
 
   if (!task.segments?.length) return null;
 
+  /** @param {string[]} segmentKeys */
   const applyOrder = async (segmentKeys) => {
     if (reordering || !onReorder || segmentKeys.join("|") === orderableKeys.join("|")) {
       return;

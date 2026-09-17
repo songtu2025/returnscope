@@ -25,6 +25,19 @@ import {
 } from "./taskSegmentPolicy";
 import { segmentNeedsAttention } from "./taskRegistryPolicy";
 
+/** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
+/** @typedef {import("./taskRuntimeContracts").TaskSegment} TaskSegment */
+/** @typedef {import("./taskRuntimeContracts").SegmentAction} SegmentAction */
+/**
+ * @typedef {Object} SegmentBoardRowProps
+ * @property {AnalysisTask} task
+ * @property {TaskSegment} segment
+ * @property {{segmentIndex: number, page: number, pageSize: number, focusSegmentId?: string | null, focusedSegmentRef: import("react").RefObject<HTMLElement | null>}} position
+ * @property {{canManageQueue: boolean, orderableKeys: string[], reordering: boolean, applyOrder: (segmentKeys: string[]) => Promise<void>}} queue
+ * @property {{expandedSegmentKey: string | null, setExpandedSegmentKey: import("react").Dispatch<import("react").SetStateAction<string | null>>, retryingPublishId: string | null, setRetryingPublishId: import("react").Dispatch<import("react").SetStateAction<string | null>>}} rowState
+ * @property {{onResumeUnfinished: () => void, onAction: (segmentKey: string, action: SegmentAction, note?: string) => Promise<unknown>, onRetry: (segment: TaskSegment) => void, onViewClassification: (segment: TaskSegment & {result_version_id: string}) => void, onRetryPublish: (segmentId: string) => Promise<unknown>, onCancel: (segment: TaskSegment) => void}} actions
+ */
+
 const RETRYABLE_SEGMENT_STATUSES = ["failed", "completed_with_errors", "not_started"];
 const SEGMENT_STATUS_LABELS = {
   ready: "可执行",
@@ -42,6 +55,7 @@ const SEGMENT_STATUS_LABELS = {
   retry_pending: "等待重试",
 };
 
+/** @param {unknown} value */
 function shortPublishError(value) {
   const message = String(value || "未返回具体原因")
     .replace(/\s+/g, " ")
@@ -49,6 +63,7 @@ function shortPublishError(value) {
   return message.length > 80 ? `${message.slice(0, 80)}…` : message;
 }
 
+/** @param {AnalysisTask} task @param {TaskSegment} segment */
 function canRetrySegment(task, segment) {
   if (["queued", "running"].includes(task.status)) return false;
   if (segment.agent_key === "unknown" || segment.status === "blocked") return false;
@@ -59,6 +74,7 @@ function canRetrySegment(task, segment) {
   return !(segment.status === "not_started" && policy === "block_all" && blockedExists);
 }
 
+/** @param {SegmentBoardRowProps} props */
 export function SegmentBoardRow({ task, segment, position, queue, rowState, actions }) {
   const { segmentIndex, page, pageSize, focusSegmentId, focusedSegmentRef } = position;
   const { canManageQueue, orderableKeys, reordering, applyOrder } = queue;

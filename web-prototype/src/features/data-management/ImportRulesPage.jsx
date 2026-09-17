@@ -6,25 +6,38 @@ import { EmptyState, InlineLoading, PageHeading } from "../../components/SharedU
 import { dataApi } from "../../shared/api/dataApi";
 import { DataAssetTabs } from "./DataAssetTabs";
 
+/** @type {Record<string, string>} */
 const KIND_LABELS = {
   returns: "退货数据",
   products: "产品信息",
 };
 
 export function ImportRulesPage() {
-  const [state, setState] = useState({ loading: true, error: "", items: [] });
+  /** @typedef {import("../../shared/api/dataManagementContracts").ImportRule} ImportRule */
+  const [state, setState] = useState(
+    /** @type {{loading: boolean, error: string, items: ImportRule[]}} */ ({
+      loading: true,
+      error: "",
+      items: [],
+    }),
+  );
 
-  const load = useCallback(async (signal) => {
-    setState((current) => ({ ...current, loading: true, error: "" }));
-    try {
-      const value = await dataApi.importRules({ signal });
-      setState({ loading: false, error: "", items: value.items ?? [] });
-    } catch (error) {
-      if (error.name !== "AbortError") {
-        setState({ loading: false, error: error.message, items: [] });
+  const load = useCallback(
+    /** @param {AbortSignal} [signal] */ async (signal) => {
+      setState((current) => ({ ...current, loading: true, error: "" }));
+      try {
+        const value = await dataApi.importRules({ signal });
+        setState({ loading: false, error: "", items: value.items ?? [] });
+      } catch (error) {
+        const requestError =
+          error instanceof Error ? error : new Error("导入规则读取失败");
+        if (requestError.name !== "AbortError") {
+          setState({ loading: false, error: requestError.message, items: [] });
+        }
       }
-    }
-  }, []);
+    },
+    [],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -83,8 +96,10 @@ export function ImportRulesPage() {
                     </span>
                     <h3>{rule.name}</h3>
                     <p>
-                      {KIND_LABELS[rule.kind] ?? rule.kind ?? "未提供适用资产"} · v
-                      {rule.version ?? "-"}
+                      {(rule.kind ? KIND_LABELS[rule.kind] : undefined) ??
+                        rule.kind ??
+                        "未提供适用资产"}{" "}
+                      · v{rule.version ?? "-"}
                     </p>
                   </div>
                   <code>{rule.id}</code>
@@ -120,6 +135,7 @@ export function ImportRulesPage() {
   );
 }
 
+/** @param {{label: string, value: string}} props */
 function RuleField({ label, value }) {
   return (
     <div>
@@ -129,7 +145,8 @@ function RuleField({ label, value }) {
   );
 }
 
+/** @param {unknown} value */
 function formatValues(value) {
   if (Array.isArray(value)) return value.length ? value.join("、") : "无";
-  return value || "未提供";
+  return value ? String(value) : "未提供";
 }

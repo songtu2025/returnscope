@@ -2,6 +2,7 @@
 .env.*
 !.env.example
 !.env.mysql.example
+.venv/
 __pycache__/
 .pytest_cache/
 .ruff_cache/

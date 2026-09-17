@@ -3,6 +3,14 @@ import { ArrowCounterClockwise } from "@phosphor-icons/react";
 import { taxonomyPath } from "../../lib/taxonomyPresentation";
 import { formatPercent } from "./returnReasonInsightPresentation";
 
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewLabel} ReviewLabel */
+/** @typedef {import("./analysisDashboardContracts").DashboardInsights} DashboardInsights */
+/** @typedef {import("./analysisDashboardContracts").DashboardRoute} DashboardRoute */
+/** @typedef {import("./analysisDashboardContracts").InsightHierarchyNode} InsightHierarchyNode */
+/** @typedef {import("./analysisDashboardContracts").InsightReason} InsightReason */
+/** @typedef {{route: DashboardRoute, data: DashboardInsights, reasons: InsightReason[], hierarchy: InsightHierarchyNode[], taxonomyLabels: Map<string, ReviewLabel>, selected?: InsightReason, subjects: InsightReason[], groups: string[], onUpdateRoute: (changes: Partial<DashboardRoute>) => void}} ReturnReasonInsightExplorerProps */
+
+/** @param {ReturnReasonInsightExplorerProps} props */
 export function ReturnReasonInsightExplorer({
   route,
   data,
@@ -23,6 +31,7 @@ export function ReturnReasonInsightExplorer({
     1,
   );
 
+  /** @param {string} subject */
   const chooseSubject = (subject) => {
     setSelectedSubject(subject);
     const firstReason = subject
@@ -120,7 +129,9 @@ export function ReturnReasonInsightExplorer({
                       {taxonomyLabels.has(reason.value)
                         ? taxonomyPath(
                             data.taxonomy,
-                            taxonomyLabels.get(reason.value),
+                            /** @type {ReviewLabel} */ (
+                              taxonomyLabels.get(reason.value)
+                            ),
                           ).join(" → ")
                         : reason.label}
                     </b>

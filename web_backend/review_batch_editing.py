@@ -30,6 +30,11 @@ class ReviewBatchEditingMixin:
             message: str,
         ) -> None: ...
 
+        def _validate_reviewed_classification(
+            self,
+            classification: dict[str, Any],
+        ) -> tuple[ValidatedClassification, dict[str, Any] | None]: ...
+
         _insert_audit: Callable[
             [Any, str, str, str, dict[str, Any], dict[str, Any], str],
             None,
@@ -459,8 +464,10 @@ class ReviewBatchEditingMixin:
                 raise ValueError("选择的语义标签不存在")
             units = [dict(item) for item in updated.get("semantic_units", [])]
             if units:
+                previous_label = str(units[0].get("label_code", ""))
                 units[0]["label_code"] = selected
             else:
+                previous_label = ""
                 units = [
                     {
                         "subject": "PRODUCT",
@@ -477,12 +484,52 @@ class ReviewBatchEditingMixin:
                 ]
             updated["semantic_units"] = units
             updated["unknown_semantics"] = []
-            updated["problem_label_codes"] = [selected]
-            updated["positive_label_codes"] = []
+            problem_codes, positive_codes, negative_codes = self._project_review_labels(
+                units,
+                list(updated.get("problem_label_codes", [])),
+                previous_label,
+                selected,
+            )
+            updated["problem_label_codes"] = problem_codes
+            updated["positive_label_codes"] = positive_codes
             updated["primary_label_codes"] = [selected]
+            summary = dict(updated.get("comment_summary", {}))
+            summary["positive_label_codes"] = positive_codes
+            summary["negative_label_codes"] = negative_codes
+            updated["comment_summary"] = summary
         if not updated.get("semantic_units") and updated.get("unknown_semantics"):
             raise ValueError("未知语义必须选择一个标签后才能完成复核")
         updated["status"] = "MANUAL_RESOLVED"
         updated["review_reasons"] = []
-        ValidatedClassification.model_validate(updated)
+        self._validate_reviewed_classification(updated)
         return updated
+
+    @staticmethod
+    def _project_review_labels(
+        units: list[dict[str, Any]],
+        previous_problem_codes: list[str],
+        previous_label: str,
+        selected: str,
+    ) -> tuple[list[str], list[str], list[str]]:
+        neutral_problem_codes = set(previous_problem_codes)
+        if previous_label in neutral_problem_codes:
+            neutral_problem_codes.remove(previous_label)
+            neutral_problem_codes.add(selected)
+        problem_codes: list[str] = []
+        positive_codes: list[str] = []
+        negative_codes: list[str] = []
+        for unit in units:
+            code = str(unit.get("label_code", ""))
+            sentiment = str(unit.get("sentiment", ""))
+            if sentiment == "POSITIVE":
+                positive_codes.append(code)
+            elif sentiment == "NEGATIVE":
+                problem_codes.append(code)
+                negative_codes.append(code)
+            elif code in neutral_problem_codes:
+                problem_codes.append(code)
+        return (
+            list(dict.fromkeys(problem_codes)),
+            list(dict.fromkeys(positive_codes)),
+            list(dict.fromkeys(negative_codes)),
+        )

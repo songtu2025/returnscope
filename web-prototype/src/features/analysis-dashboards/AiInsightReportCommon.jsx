@@ -11,6 +11,10 @@ import {
   STAGE_LABELS,
 } from "./AiInsightReportPresentation";
 
+/** @typedef {import("./analysisDashboardContracts").InsightEvidenceCatalog} InsightEvidenceCatalog */
+/** @typedef {import("./analysisDashboardContracts").InsightReport} InsightReport */
+
+/** @param {{ids?: string[], catalog: InsightEvidenceCatalog}} props */
 export function EvidenceLine({ ids, catalog }) {
   const items = evidenceItems(ids, catalog);
   if (!items.length) return null;
@@ -29,6 +33,7 @@ export function EvidenceLine({ ids, catalog }) {
   );
 }
 
+/** @param {{number: string, title?: import("react").ReactNode, description?: import("react").ReactNode}} props */
 export function SectionHeading({ number: sectionNumber, title, description }) {
   return (
     <header className="ai-report-section-heading">
@@ -41,6 +46,7 @@ export function SectionHeading({ number: sectionNumber, title, description }) {
   );
 }
 
+/** @param {{report: InsightReport, latestReport: InsightReport | null, onRetry: () => void | Promise<void>, onSelect: (reportId: string) => void}} props */
 export function ReportStatus({ report, latestReport, onRetry, onSelect }) {
   const running = report.status === "queued" || report.status === "running";
   const historicalFailure =
@@ -62,7 +68,7 @@ export function ReportStatus({ report, latestReport, onRetry, onSelect }) {
         </h2>
         <p>
           {running
-            ? `${STAGE_LABELS[report.stage] || "系统正在生成报告"}。可以离开当前页面，进度也会显示在首页。`
+            ? `${STAGE_LABELS[report.stage || ""] || "系统正在生成报告"}。可以离开当前页面，进度也会显示在首页。`
             : historicalFailure
               ? `这次生成没有发布，也不会影响当前的报告 V${latestReport.version_no}。`
               : report.error || "模型没有返回可用的结构化报告。"}

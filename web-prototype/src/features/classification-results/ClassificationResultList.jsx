@@ -39,6 +39,49 @@ import {
 import { ResultWorkspaceNav } from "./ResultWorkspaceNav";
 import { useClassificationResultListData } from "./useClassificationResultListData";
 
+/** @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultVersionResponse} ClassificationResultVersion */
+/** @typedef {import("./classificationResultRoute").ClassificationResultRoute} ClassificationResultRoute */
+/** @typedef {import("../analysis-dashboards/analysisDashboardContracts").DashboardSelectionItem} DashboardSelectionItem */
+/** @typedef {import("../analysis-dashboards/analysisDashboardContracts").DashboardSelection} DashboardSelection */
+/**
+ * @typedef {object} InsightModel
+ * @property {string} id
+ * @property {string} [model_key]
+ * @property {string} [display_name]
+ * @property {string} [connection_id]
+ * @property {string} [connection_name]
+ * @property {string[]} [supported_efforts]
+ */
+/**
+ * @typedef {object} InsightPlan
+ * @property {boolean} ready
+ * @property {string} plan_hash
+ * @property {Record<string, string | string[] | null>} [filters]
+ * @property {{ message: string }[]} [blockers]
+ * @property {unknown[]} [conflicts]
+ * @property {{ record_count?: number, pending_review_record_count?: number, excluded_record_count?: number }} [summary]
+ */
+/**
+ * @typedef {object} InsightState
+ * @property {boolean} loading
+ * @property {boolean} submitting
+ * @property {string} error
+ * @property {InsightPlan | null} plan
+ * @property {InsightModel[]} models
+ */
+/** @typedef {{ modelId: string, effort: string }} InsightForm */
+/**
+ * @typedef {object} ClassificationResultListProps
+ * @property {ClassificationResultRoute} route
+ * @property {(changes: Partial<ClassificationResultRoute>) => void} updateRoute
+ * @property {(message: string, tone?: string) => void} notify
+ * @property {string} userId
+ */
+
+/**
+ * @param {DashboardSelectionItem[]} selected
+ * @returns {{ records: number, units: number }}
+ */
 function selectedResultTotals(selected) {
   return selected.reduce(
     (total, item) => ({
@@ -49,6 +92,7 @@ function selectedResultTotals(selected) {
   );
 }
 
+/** @param {ClassificationResultListProps} props */
 export function ClassificationResultList({ route, updateRoute, notify, userId }) {
   const [filters, setFilters] = useState({
     q: route.q,
@@ -56,21 +100,26 @@ export function ClassificationResultList({ route, updateRoute, notify, userId })
     listing: route.listing,
     qualityStatus: route.qualityStatus,
   });
-  const [selection, setSelection] = useState(() =>
-    readDashboardSelection(userId, route.selectionToken),
+  const [selection, setSelection] = useState(
+    /** @returns {DashboardSelection | null} */ () =>
+      readDashboardSelection(userId, route.selectionToken),
   );
   const [insightOpen, setInsightOpen] = useState(false);
-  const [insightState, setInsightState] = useState({
-    loading: false,
-    submitting: false,
-    error: "",
-    plan: null,
-    models: [],
-  });
-  const [insightForm, setInsightForm] = useState({
-    modelId: "",
-    effort: "high",
-  });
+  const [insightState, setInsightState] = useState(
+    /** @type {InsightState} */ ({
+      loading: false,
+      submitting: false,
+      error: "",
+      plan: null,
+      models: [],
+    }),
+  );
+  const [insightForm, setInsightForm] = useState(
+    /** @type {InsightForm} */ ({
+      modelId: "",
+      effort: "high",
+    }),
+  );
 
   useEffect(() => {
     setSelection(readDashboardSelection(userId, route.selectionToken));
@@ -92,6 +141,7 @@ export function ClassificationResultList({ route, updateRoute, notify, userId })
     [selectedResults],
   );
 
+  /** @param {ClassificationResultVersion} result */
   const toggleSelection = (result) => {
     if (!isDashboardSelectable(result)) return;
     if (!route.selectionToken) {
@@ -104,21 +154,33 @@ export function ClassificationResultList({ route, updateRoute, notify, userId })
       return;
     }
     const id = resultVersionId(result);
-    const next = updateDashboardSelection(userId, route.selectionToken, (current) => {
+    /** @param {DashboardSelection} current */
+    const updateSelection = (current) => {
       const selected = current.selected.some((item) => item.result_version_id === id)
         ? current.selected.filter((item) => item.result_version_id !== id)
         : [...current.selected, selectionItem(result)];
       return { ...current, selected, resolved_result_version_ids: [] };
-    });
+    };
+    const next = updateDashboardSelection(
+      userId,
+      route.selectionToken,
+      updateSelection,
+    );
     setSelection(next);
   };
 
   const clearSelection = (exit = false) => {
-    const next = updateDashboardSelection(userId, route.selectionToken, (current) => ({
+    /** @param {DashboardSelection} current */
+    const updateSelection = (current) => ({
       ...current,
       selected: [],
       resolved_result_version_ids: [],
-    }));
+    });
+    const next = updateDashboardSelection(
+      userId,
+      route.selectionToken,
+      updateSelection,
+    );
     setSelection(next);
     if (exit) updateRoute({ selectionToken: "" });
   };
@@ -178,6 +240,7 @@ export function ClassificationResultList({ route, updateRoute, notify, userId })
     });
   };
 
+  /** @param {import("react").FormEvent<HTMLFormElement>} event */
   const submitInsight = async (event) => {
     event.preventDefault();
     if (!insightForm.modelId || insightState.plan?.ready !== true) return;
@@ -203,11 +266,12 @@ export function ClassificationResultList({ route, updateRoute, notify, userId })
       setInsightState((current) => ({
         ...current,
         submitting: false,
-        error: error.message,
+        error: error instanceof Error ? error.message : "请求失败",
       }));
     }
   };
 
+  /** @param {ClassificationResultVersion} result */
   const createDashboardFromResult = (result) => {
     const token = createDashboardSelection(userId, {
       selected: [selectionItem(result)],
@@ -215,6 +279,7 @@ export function ClassificationResultList({ route, updateRoute, notify, userId })
     navigateHash("analysis-dashboards", { selection_token: token, step: "check" });
   };
 
+  /** @param {ClassificationResultVersion} result */
   const runPrimaryAction = (result) => {
     const policy = resultActionPolicy(result, { taskId: route.taskId });
     if (policy.primary.kind === "create-dashboard") {
@@ -275,6 +340,11 @@ export function ClassificationResultList({ route, updateRoute, notify, userId })
     route.q || route.storeSite || route.listing || route.qualityStatus,
   );
   const totalPages = Math.max(Math.ceil((data?.total ?? 0) / route.pageSize), 1);
+
+  /** @param {number} page */
+  const changePage = (page) => updateRoute({ page });
+  /** @param {number} pageSize */
+  const changePageSize = (pageSize) => updateRoute({ page: 1, pageSize });
 
   return (
     <div className="standard-page classification-results-page">
@@ -386,7 +456,7 @@ export function ClassificationResultList({ route, updateRoute, notify, userId })
             }
           />
         )}
-        {data?.items?.length > 0 && !error && (
+        {data && data.items.length > 0 && !error && (
           <>
             {selectionIntent === "insight" && selectedResults.length > 0 && (
               <InsightSelectionBar
@@ -434,8 +504,8 @@ export function ClassificationResultList({ route, updateRoute, notify, userId })
               pageSize={route.pageSize}
               total={data.total}
               totalPages={totalPages}
-              onPage={(page) => updateRoute({ page })}
-              onPageSize={(pageSize) => updateRoute({ page: 1, pageSize })}
+              onPage={changePage}
+              onPageSize={changePageSize}
             />
           </>
         )}

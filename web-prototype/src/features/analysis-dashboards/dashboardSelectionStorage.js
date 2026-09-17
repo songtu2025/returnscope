@@ -1,5 +1,10 @@
 const STORAGE_PREFIX = "seekway:dashboard-selection";
 
+/** @typedef {import("./analysisDashboardContracts").DashboardSelection} DashboardSelection */
+/** @typedef {import("./analysisDashboardContracts").DashboardSelectionItem} DashboardSelectionItem */
+/** @typedef {import("./analysisDashboardContracts").DashboardSelectionSource} DashboardSelectionSource */
+
+/** @param {string} userId @param {string} token */
 function storageKey(userId, token) {
   return `${STORAGE_PREFIX}:${userId || "anonymous"}:${token}`;
 }
@@ -9,6 +14,7 @@ function randomToken() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
+/** @param {string} userId @param {Partial<DashboardSelection>} [initial] */
 export function createDashboardSelection(userId, initial = {}) {
   const token = randomToken();
   writeDashboardSelection(userId, token, {
@@ -19,6 +25,7 @@ export function createDashboardSelection(userId, initial = {}) {
   return token;
 }
 
+/** @param {string} userId @param {string} token @returns {DashboardSelection | null} */
 export function readDashboardSelection(userId, token) {
   if (!token) return null;
   try {
@@ -26,12 +33,13 @@ export function readDashboardSelection(userId, token) {
       sessionStorage.getItem(storageKey(userId, token)) || "null",
     );
     if (!value || !Array.isArray(value.selected)) return null;
-    return value;
+    return /** @type {DashboardSelection} */ (value);
   } catch {
     return null;
   }
 }
 
+/** @param {string} userId @param {string} token @param {DashboardSelection} value */
 function writeDashboardSelection(userId, token, value) {
   if (!token) return;
   sessionStorage.setItem(
@@ -40,25 +48,32 @@ function writeDashboardSelection(userId, token, value) {
   );
 }
 
+/** @param {string} userId @param {string} token @param {(selection: DashboardSelection) => DashboardSelection} updater */
 export function updateDashboardSelection(userId, token, updater) {
-  const current = readDashboardSelection(userId, token) ?? { selected: [] };
+  const current = readDashboardSelection(userId, token) ?? {
+    selected: [],
+    resolved_result_version_ids: [],
+  };
   const next = updater(current);
   writeDashboardSelection(userId, token, next);
   return next;
 }
 
+/** @param {string} userId @param {string} token */
 export function clearDashboardSelection(userId, token) {
   if (token) sessionStorage.removeItem(storageKey(userId, token));
 }
 
+/** @param {DashboardSelectionSource} result */
 function resultVersionId(result) {
-  return result.version_id || result.result_version_id || result.id;
+  return result.version_id || result.result_version_id || result.id || "";
 }
 
+/** @param {DashboardSelectionSource} result @returns {DashboardSelectionItem} */
 export function selectionItem(result) {
   return {
     result_version_id: resultVersionId(result),
-    result_version_no: result.version,
+    result_version_no: Number(result.version || 0),
     store_site: result.store_site || "",
     listing: result.listing || "",
     quality_status: result.quality_status || "",

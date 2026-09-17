@@ -9,19 +9,25 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react";
 
-const DECISION_LABELS = {
+const DECISION_LABELS = /** @type {Record<string, string>} */ ({
   pending: "待决策",
   ignored: "暂不处理",
   watching: "继续观察",
   verify: "待验证",
-};
+});
 
-const READINESS_LABELS = {
+const READINESS_LABELS = /** @type {Record<string, string>} */ ({
   unusable: "不可使用",
   diagnostic_only: "仅供诊断",
   verification_ready: "可进入验证",
-};
+});
 
+/** @typedef {import("./analysisDashboardContracts").DashboardDecisionState} DashboardDecisionState */
+/** @typedef {import("./analysisDashboardContracts").InsightDecisionReportContent} InsightDecisionReportContent */
+/** @typedef {import("./analysisDashboardContracts").InsightReport} InsightReport */
+/** @typedef {import("./analysisDashboardContracts").ReportIssueScope} ReportIssueScope */
+
+/** @param {{report: InsightReport, reports: InsightReport[], onSelect: (reportId: string) => void, optionLabel: (report: InsightReport) => string}} props */
 export function InsightReportVersionSelect({ report, reports, onSelect, optionLabel }) {
   if (reports.length <= 1) return null;
 
@@ -39,26 +45,31 @@ export function InsightReportVersionSelect({ report, reports, onSelect, optionLa
   );
 }
 
+/** @param {unknown} value */
 function number(value) {
   return Number.isFinite(Number(value)) ? Number(value) : 0;
 }
 
+/** @param {unknown} value @param {boolean} [signed] */
 function percentage(value, signed = false) {
   if (value === null || value === undefined) return "—";
   const parsed = number(value);
   return `${signed && parsed > 0 ? "+" : ""}${parsed.toFixed(1)}%`;
 }
 
+/** @param {unknown} value */
 function percentagePoints(value) {
   if (value === null || value === undefined) return "—";
   const parsed = number(value);
   return `${parsed > 0 ? "+" : ""}${parsed.toFixed(1)}pp`;
 }
 
+/** @param {unknown} value */
 function date(value) {
   return value ? String(value).slice(0, 10).replaceAll("-", "/") : "未提供";
 }
 
+/** @param {InsightReport} report @param {string} issueId */
 function issueDecision(report, issueId) {
   return (
     (report.decisions ?? []).find((item) => item.issue_id === issueId)?.status ||
@@ -66,6 +77,7 @@ function issueDecision(report, issueId) {
   );
 }
 
+/** @param {ReportIssueScope | undefined} scope */
 function scopeText(scope) {
   return (
     [scope?.listing, scope?.product, scope?.sku].filter(Boolean).join(" / ") ||
@@ -73,6 +85,7 @@ function scopeText(scope) {
   );
 }
 
+/** @param {{label: string, value: string, note: string, tone?: string}} props */
 function MetricCard({ label, value, note, tone = "neutral" }) {
   return (
     <div className={`ai-decision-metric ${tone}`}>
@@ -83,6 +96,7 @@ function MetricCard({ label, value, note, tone = "neutral" }) {
   );
 }
 
+/** @param {{report: InsightReport, reports: InsightReport[], selectedIssueId: string, decisionState: DashboardDecisionState, onDecision: (issueId: string, status: string) => void | Promise<void>, onSelect: (reportId: string) => void, onSelectIssue: (issueId: string) => void}} props */
 export function AiInsightDecisionReport({
   report,
   reports,
@@ -92,7 +106,7 @@ export function AiInsightDecisionReport({
   onSelect,
   onSelectIssue,
 }) {
-  const content = report.content ?? {};
+  const content = /** @type {InsightDecisionReportContent} */ (report.content ?? {});
   const source = report.evidence?.source ?? {};
   const catalog = report.evidence?.catalog ?? {};
   const issues = content.issues ?? [];
@@ -109,7 +123,12 @@ export function AiInsightDecisionReport({
       counts[status] = (counts[status] || 0) + 1;
       return counts;
     },
-    { pending: 0, watching: 0, verify: 0, ignored: 0 },
+    /** @type {Record<string, number>} */ ({
+      pending: 0,
+      watching: 0,
+      verify: 0,
+      ignored: 0,
+    }),
   );
 
   if (!selectedIssue) {

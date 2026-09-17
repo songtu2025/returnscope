@@ -11,6 +11,13 @@ import {
   formatPercent,
 } from "./returnReasonInsightPresentation";
 
+/** @typedef {import("./analysisDashboardContracts").DashboardInsights} DashboardInsights */
+/** @typedef {import("./analysisDashboardContracts").DashboardRoute} DashboardRoute */
+/** @typedef {import("./analysisDashboardContracts").InsightDateRange} InsightDateRange */
+/** @typedef {import("./analysisDashboardContracts").InsightFilterOptions} InsightFilterOptions */
+/** @typedef {{route: DashboardRoute, data: DashboardInsights, dateRange: InsightDateRange, options: InsightFilterOptions, includedCount: number, totalCount: number, pendingCount: number, statusCounts: Record<string, number> | null, onUpdateFilters: (changes: Partial<DashboardRoute>) => void}} ReturnReasonInsightSummaryProps */
+
+/** @param {ReturnReasonInsightSummaryProps} props */
 export function ReturnReasonInsightSummary({
   route,
   data,
@@ -133,6 +140,7 @@ export function ReturnReasonInsightSummary({
   );
 }
 
+/** @param {{label: string, value: string, values?: string[], allLabel: string, onChange: (value: string) => void}} props */
 function InsightSelect({ label, value, values, allLabel, onChange }) {
   return (
     <label className="return-insight-select">

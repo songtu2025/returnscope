@@ -1,5 +1,41 @@
 import { API_BASE, queryString, request } from "./request";
 
+/** @typedef {object} DataPayload */
+/** @typedef {Record<string, unknown>} DataQuery */
+/** @typedef {ReturnType<typeof request>} DataRequest */
+/** @typedef {import("./dataManagementContracts").DatasetRecord} DatasetRecord */
+/** @typedef {import("./dataManagementContracts").DatasetReferencePage} DatasetReferencePage */
+/** @typedef {import("./dataManagementContracts").ImportRulePage} ImportRulePage */
+/** @typedef {import("./dataManagementContracts").DatasetRowsPage} DatasetRowsPage */
+/** @typedef {import("./dataManagementContracts").DatasetStorageSummary} DatasetStorageSummary */
+/** @typedef {import("./dataManagementContracts").DatasetStorageCleanup} DatasetStorageCleanup */
+
+/**
+ * @type {{
+ *   mysqlReturnSchema: (options?: RequestInit & {refresh?: boolean}) => DataRequest,
+ *   previewMysqlReturns: (payload: DataPayload, options?: RequestInit) => DataRequest,
+ *   importMysqlReturns: (payload: DataPayload) => DataRequest,
+ *   importRules: (options?: RequestInit) => Promise<ImportRulePage>,
+ *   datasets: (kind?: string, options?: RequestInit) => Promise<DatasetRecord[]>,
+ *   managedDatasets: (kind?: string, options?: RequestInit) => Promise<DatasetRecord[]>,
+ *   dataVersions: (kind?: string, options?: RequestInit) => DataRequest,
+ *   dataVersionReferences: (versionId: string, filters?: DataQuery, options?: RequestInit) => Promise<DatasetReferencePage>,
+ *   qualityPreflight: (returnsVersionId: string, productsVersionId: string, options?: RequestInit) => DataRequest,
+ *   qualityIssues: (filters?: DataQuery, options?: RequestInit) => DataRequest,
+ *   productScopes: (versionId: string) => DataRequest,
+ *   dataset: (id: string, options?: RequestInit & {include?: string}) => Promise<DatasetRecord>,
+ *   datasetStorageSummary: (datasetIds: string[], filters?: DataQuery, options?: RequestInit) => Promise<DatasetStorageSummary>,
+ *   cleanupDatasetStorage: (payload: DataPayload) => Promise<DatasetStorageCleanup>,
+ *   datasetDownloadUrl: (id: string, version?: string | number) => string,
+ *   datasetRows: (id: string, query?: string, offset?: number, limit?: number, filters?: DataQuery, options?: RequestInit) => Promise<DatasetRowsPage>,
+ *   updateDatasetRow: (id: string, payload: DataPayload) => Promise<DatasetRecord>,
+ *   completeProductCategories: (id: string, payload: DataPayload) => Promise<DatasetRecord>,
+ *   createDataset: (formData: FormData) => DataRequest,
+ *   addDatasetVersion: (id: string, formData: FormData) => DataRequest,
+ *   inspectReturnImport: (formData: FormData) => DataRequest,
+ *   importReturns: (payload: DataPayload) => DataRequest
+ * }}
+ */
 export const dataApi = {
   mysqlReturnSchema: ({ refresh = false, ...options } = {}) =>
     request(
