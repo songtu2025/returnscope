@@ -16,7 +16,12 @@ from fastapi.testclient import TestClient
 from test_classification_result_pool import _seed_result_context
 
 import web_backend.dataset_service as dataset_service_module
-from return_semantics.data import PRODUCT_COLUMNS, RETURN_COLUMNS, RETURN_STORE_COLUMN
+from return_semantics.data import (
+    PRODUCT_COLUMNS,
+    RETURN_COLUMNS,
+    RETURN_STORE_COLUMN,
+    read_return_file,
+)
 from web_backend.dataset_service import DatasetService
 from web_backend.routers.datasets import create_dataset_router
 
@@ -40,6 +45,20 @@ def _return_row(order_id: str, comment: str) -> dict[str, str]:
 
 def _write_returns(path: Path, rows: list[dict[str, str]]) -> None:
     pd.DataFrame(rows).to_csv(path, index=False, encoding="utf-8-sig")
+
+
+def _write_returns_xlsx(path: Path, rows: list[dict[str, str]]) -> None:
+    with pd.ExcelWriter(path, engine="openpyxl") as writer:
+        pd.DataFrame([{"说明": "退货导入文件"}]).to_excel(
+            writer,
+            sheet_name="说明",
+            index=False,
+        )
+        pd.DataFrame(rows).to_excel(
+            writer,
+            sheet_name="退货明细",
+            index=False,
+        )
 
 
 def _create_managed_returns(
@@ -318,6 +337,93 @@ def test_return_import_recognizes_identity_and_separates_task_input(
     assert repeated["duplicate"]["version_id"] == one_off["version_id"]
 
 
+def test_return_xlsx_import_uses_matching_sheet(tmp_path: Path) -> None:
+    context = _seed_result_context(tmp_path)
+    service = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
+    source = tmp_path / "senwayzon-us.xlsx"
+    _write_returns_xlsx(source, [_return_row("O-1", "偏小")])
+
+    inspection = service.inspect_return_import(source, source.name)
+    result = service.import_returns(
+        source_path=source,
+        original_name=source.name,
+        content_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        mode="analyze_only",
+        actor_id="user-1",
+        _inspection=inspection,
+    )
+    preview = service.preview_rows(str(result["dataset"]["id"]))
+
+    assert inspection["row_count"] == 1
+    assert inspection["stores"] == ["SENWAYZON:US"]
+    assert preview["records"][0]["order-id"] == "O-1"
+    assert service.version_file(str(result["dataset"]["id"]))["original_name"] == (
+        source.name
+    )
+
+
+def test_return_xlsx_append_creates_csv_snapshot(tmp_path: Path) -> None:
+    context = _seed_result_context(tmp_path)
+    service = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
+    initial = tmp_path / "initial.csv"
+    incoming = tmp_path / "incoming.xlsx"
+    _write_returns(initial, [_return_row("O-1", "偏小")])
+    _write_returns_xlsx(incoming, [_return_row("O-2", "不够保暖")])
+    dataset_id = str(_create_managed_returns(service, initial)["id"])
+
+    result = service.import_returns(
+        source_path=incoming,
+        original_name=incoming.name,
+        content_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        mode="append",
+        dataset_id=dataset_id,
+        actor_id="user-1",
+    )
+    version = service.version_file(dataset_id)
+    preview = service.preview_rows(dataset_id)
+
+    assert result["summary"] == {"imported_row_count": 1, "skipped_row_count": 0}
+    assert version["original_name"] == "incoming.csv"
+    assert version["content_type"] == "text/csv"
+    assert Path(str(version["file_path"])).suffix == ".csv"
+    assert [record["order-id"] for record in preview["records"]] == ["O-1", "O-2"]
+
+
+def test_return_xlsx_default_store_preserves_workbook(tmp_path: Path) -> None:
+    context = _seed_result_context(tmp_path)
+    service = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
+    source = tmp_path / "missing-store.xlsx"
+    row = _return_row("O-1", "偏小")
+    row.pop(RETURN_STORE_COLUMN)
+    _write_returns_xlsx(source, [row])
+
+    created = service.create(
+        name="测试退货数据",
+        kind="returns",
+        description="",
+        source_path=source,
+        original_name=source.name,
+        content_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        change_note="首次导入",
+        actor_id="user-1",
+        default_store="SENWAYZON:US",
+    )
+    version = service.version_file(str(created["id"]))
+    frame = read_return_file(Path(str(version["file_path"])))
+
+    assert frame.iloc[0][RETURN_STORE_COLUMN] == "SENWAYZON:US"
+    assert pd.ExcelFile(Path(str(version["file_path"]))).sheet_names == [
+        "说明",
+        "退货明细",
+    ]
+
+
 def test_return_import_does_not_fill_missing_store(tmp_path: Path) -> None:
     context = _seed_result_context(tmp_path)
     service = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
@@ -345,14 +451,14 @@ def test_return_preview_reads_only_requested_prefix(
         [_return_row(f"O-{index}", "偏小") for index in range(20)],
     )
     created = _create_managed_returns(service, source)
-    original = dataset_service_module.read_return_csv
+    original = dataset_service_module.read_return_file
     observed: list[int | None] = []
 
     def tracking_read(path, usecols=None, nrows=None):
         observed.append(nrows)
         return original(path, usecols=usecols, nrows=nrows)
 
-    monkeypatch.setattr(dataset_service_module, "read_return_csv", tracking_read)
+    monkeypatch.setattr(dataset_service_module, "read_return_file", tracking_read)
     preview = service.preview_rows(str(created["id"]), offset=5, limit=2)
 
     assert observed == [7]

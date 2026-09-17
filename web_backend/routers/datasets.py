@@ -17,6 +17,16 @@ from web_backend.mysql_return_service import MySQLReturnService, MySQLSourceErro
 from web_backend.settings import Settings
 
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024
+XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def _upload_content_type(upload: UploadFile, suffix: str) -> str:
+    if upload.content_type:
+        return upload.content_type
+    return {".csv": "text/csv", ".xlsx": XLSX_CONTENT_TYPE}.get(
+        suffix,
+        "application/octet-stream",
+    )
 
 
 async def _save_upload(upload: UploadFile, destination: Path) -> None:
@@ -165,7 +175,7 @@ def create_dataset_router(
                 temp_path,
                 file.filename or temp_path.name,
                 actor_id=str(user["id"]),
-                content_type=file.content_type or "text/csv",
+                content_type=_upload_content_type(file, suffix),
             )
         except ValueError as exc:
             temp_path.unlink(missing_ok=True)
@@ -245,7 +255,7 @@ def create_dataset_router(
                 description=description,
                 source_path=temp_path,
                 original_name=file.filename or temp_path.name,
-                content_type=file.content_type or "application/octet-stream",
+                content_type=_upload_content_type(file, suffix),
                 change_note=change_note,
                 actor_id=str(user["id"]),
                 default_store=default_store,
@@ -271,7 +281,7 @@ def create_dataset_router(
                 dataset_id=dataset_id,
                 source_path=temp_path,
                 original_name=file.filename or temp_path.name,
-                content_type=file.content_type or "application/octet-stream",
+                content_type=_upload_content_type(file, suffix),
                 change_note=change_note,
                 actor_id=str(user["id"]),
                 default_store=default_store,

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   CheckCircle,
-  FileCsv,
+  FileArrowUp,
   Info,
   UploadSimple,
   WarningCircle,
@@ -54,7 +54,7 @@ export function ReturnImportDialog({ onClose, onDone, purpose = "task" }) {
   const inspect = async (event) => {
     event.preventDefault();
     if (!file) {
-      setError("请选择 CSV 文件");
+      setError("请选择 CSV 或 XLSX 文件");
       return;
     }
     setChecking(true);
@@ -76,7 +76,7 @@ export function ReturnImportDialog({ onClose, onDone, purpose = "task" }) {
       setError(
         importErrorMessage(
           requestError,
-          "请确认 CSV 格式正确，修正后重新选择文件并检查。",
+          "请确认 CSV 或 XLSX 格式正确，修正后重新选择文件并检查。",
         ),
       );
     } finally {
@@ -151,7 +151,7 @@ export function ReturnImportDialog({ onClose, onDone, purpose = "task" }) {
           <label className="file-drop return-import-file">
             <input
               type="file"
-              accept=".csv"
+              accept=".csv,.xlsx"
               onChange={(event) => {
                 const selectedFile = event.target.files?.[0] ?? null;
                 event.target.value = "";
@@ -160,8 +160,8 @@ export function ReturnImportDialog({ onClose, onDone, purpose = "task" }) {
                 setError("");
               }}
             />
-            <FileCsv size={27} />
-            <b>{file?.name ?? "选择 CSV 文件"}</b>
+            <FileArrowUp size={27} />
+            <b>{file?.name ?? "选择 CSV 或 XLSX 文件"}</b>
             <span>最大 200 MB；此时不会创建数据或修改当前版本</span>
           </label>
           {error && <ImportError message={error} />}
@@ -232,8 +232,8 @@ export function ReturnImportDialog({ onClose, onDone, purpose = "task" }) {
             <div className="return-import-notice warning" role="alert">
               <WarningCircle size={18} weight="fill" />
               <span>
-                有 {missingStoreRows.toLocaleString()} 行缺少店铺/站点。请修正 CSV
-                文件后重新检查。
+                有 {missingStoreRows.toLocaleString()}{" "}
+                行缺少店铺/站点。请修正文件后重新检查。
               </span>
             </div>
           )}

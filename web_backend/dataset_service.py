@@ -6,7 +6,7 @@ from typing import Any
 
 import pandas as pd
 
-from return_semantics.data import PRODUCT_COLUMNS, read_return_csv
+from return_semantics.data import PRODUCT_COLUMNS, read_return_file
 from web_backend.common import add_audit, json_text, json_value, list_audit, new_id
 from web_backend.database import Database
 from web_backend.dataset_files import (
@@ -573,7 +573,7 @@ class DatasetService(
             frame = pd.read_csv(preview_path, dtype=str).fillna("")
         else:
             if not query.strip() and not store.strip() and not category.strip():
-                frame = read_return_csv(
+                frame = read_return_file(
                     Path(str(row["file_path"])),
                     nrows=offset + limit,
                 ).fillna("")
@@ -595,7 +595,7 @@ class DatasetService(
                         "categories": [],
                     },
                 }
-            frame = read_return_csv(Path(str(row["file_path"]))).fillna("")
+            frame = read_return_file(Path(str(row["file_path"]))).fillna("")
         source_total = len(frame)
         stores = (
             sorted(

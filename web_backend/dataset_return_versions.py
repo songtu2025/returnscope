@@ -6,7 +6,7 @@ from typing import Any
 
 import pandas as pd
 
-from return_semantics.data import read_return_csv
+from return_semantics.data import read_return_file
 from web_backend.common import insert_audit, json_text, new_id
 from web_backend.database import Database
 from web_backend.dataset_files import (
@@ -108,7 +108,7 @@ class DatasetReturnVersionMixin:
                 "SELECT file_path FROM dataset_versions WHERE id = ?",
                 (current_version["id"],),
             ).fetchone()
-        current_frame = read_return_csv(Path(str(current_row["file_path"])))
+        current_frame = read_return_file(Path(str(current_row["file_path"])))
         columns = list(dict.fromkeys([*current_frame.columns, *incoming_frame.columns]))
         current_frame = current_frame.reindex(columns=columns)
         current_incoming = incoming_frame.reindex(columns=columns)
@@ -125,7 +125,7 @@ class DatasetReturnVersionMixin:
             merged.to_csv(merge_path, index=False, encoding="utf-8-sig")
             prepared = self._prepare_return_version(
                 source_path=merge_path,
-                original_name=original_name,
+                original_name=f"{Path(original_name).stem}.csv",
                 content_type="text/csv",
                 change_note=change_note or "追加一批退货数据",
             )
@@ -353,7 +353,7 @@ class DatasetReturnVersionMixin:
         import_record: dict[str, Any],
         actor_id: str,
     ) -> tuple[dict[str, Any], int, int, dict[str, Any]]:
-        incoming_frame = read_return_csv(source_path)
+        incoming_frame = read_return_file(source_path)
         current_target = target
         for attempt in range(RETURN_APPEND_MAX_ATTEMPTS):
             (
