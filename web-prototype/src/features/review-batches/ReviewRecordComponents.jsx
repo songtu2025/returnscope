@@ -8,12 +8,39 @@ import {
   WarningCircle,
   X,
 } from "@phosphor-icons/react";
+import {
+  SemanticResultPanel,
+  SemanticStatusBadge,
+} from "../classification-results/SemanticResultPanel";
+import { semanticRecordStatus } from "../classification-results/semanticResultPresentation";
+import { REVIEW_ASSESSMENT_FIELDS, reviewAssessmentLabel } from "./reviewAssessment";
+import { SemanticReviewLedger } from "./SemanticReviewLedger";
 
 const WORKFLOW_STATUS_LABELS = {
   pending: "待处理",
   resolved: "已处理",
   excluded: "已排除",
 };
+
+/** @param {{value?: Record<string, any>}} props */
+function ReviewAssessmentSummary({ value }) {
+  return (
+    <section className="review-assessment-summary" aria-label="已保存的复核质量判断">
+      <header>
+        <b>复核质量判断</b>
+        <span>三个维度分别记录</span>
+      </header>
+      <dl>
+        {REVIEW_ASSESSMENT_FIELDS.map((field) => (
+          <div key={field.key}>
+            <dt>{field.label}</dt>
+            <dd>{reviewAssessmentLabel(field, value?.[field.storedKey])}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
 
 function values(item, key) {
   return Array.isArray(item?.[key]) ? item[key].filter(Boolean) : [];
@@ -47,8 +74,15 @@ export function ReviewRecordRow({
   onOpen,
 }) {
   const classification = record.classification ?? {};
-  const labelCodes =
-    classification.primary_label_codes ?? classification.problem_label_codes ?? [];
+  const classifiedLabelCodes = [
+    ...new Set([
+      ...values(classification, "problem_label_codes"),
+      ...values(classification, "positive_label_codes"),
+    ]),
+  ];
+  const labelCodes = classifiedLabelCodes.length
+    ? classifiedLabelCodes
+    : values(classification, "primary_label_codes");
   return (
     <article className="review-record-row" role="row">
       {selectionEnabled &&
@@ -80,6 +114,7 @@ export function ReviewRecordRow({
         <span>匹配MSKU：{valueText(values(record, "matched_mskus"), "未匹配")}</span>
       </div>
       <div>
+        <SemanticStatusBadge status={semanticRecordStatus(record)} />
         <b>{resultLabelText(record, labelCodes) || "未形成标签"}</b>
         <span>{record.comment || "没有评论证据"}</span>
       </div>
@@ -105,7 +140,15 @@ export function ReviewRecordDrawer({
   reason,
   conflict,
   saving,
+  assessment,
+  semanticItemReviews,
+  addedSemanticItems,
+  coverageStatus,
   onMode,
+  onAssessment,
+  onSemanticItemReviews,
+  onAddedSemanticItems,
+  onCoverageStatus,
   onLabelCode,
   onReason,
   onSave,
@@ -120,7 +163,6 @@ export function ReviewRecordDrawer({
   const [labelQuery, setLabelQuery] = useState("");
   const editable = !readOnly && record.workflow_status === "pending";
   const classification = record.classification ?? {};
-  const semanticUnits = classification.semantic_units ?? [];
   const labelGroups = useMemo(
     () => groupedLabels(labels, labelQuery),
     [labelQuery, labels],
@@ -214,28 +256,41 @@ export function ReviewRecordDrawer({
                 <dd>{Number(record.record_count || 0).toLocaleString()}</dd>
               </div>
             </dl>
-            <blockquote>“{record.comment || "没有评论证据"}”</blockquote>
           </section>
 
-          <section className="review-current-result">
-            <b>当前分类结果与证据</b>
-            <p>
-              {resultLabelText(record, classification.primary_label_codes) ||
-                "未形成主标签"}
-            </p>
-            {semanticUnits.length ? (
-              semanticUnits.map((unit, index) => (
-                <div key={`${unit.label_code || "evidence"}-${index}`}>
-                  <span>
-                    {unit.label_path?.join(" → ") || unit.label_code || "未提供标签"}
-                  </span>
-                  <p>{unit.evidence || "未提供证据"}</p>
-                </div>
-              ))
-            ) : (
-              <small>模型未提取到结构化证据。</small>
-            )}
-          </section>
+          <SemanticReviewLedger
+            key={record.id}
+            record={record}
+            labels={labels}
+            editable={editable}
+            itemReviews={semanticItemReviews}
+            addedItems={addedSemanticItems}
+            coverageStatus={coverageStatus}
+            onItemReviews={onSemanticItemReviews}
+            onAddedItems={onAddedSemanticItems}
+            onCoverageStatus={onCoverageStatus}
+          />
+
+          <details className="review-source-context">
+            <summary>展开完整原文上下文</summary>
+            <blockquote>“{record.comment || "没有评论证据"}”</blockquote>
+          </details>
+
+          <details className="review-primary-context">
+            <summary>查看完整语义详情</summary>
+            <div>
+              <span>主因（辅助信息）</span>
+              <p>
+                {resultLabelText(record, classification.primary_label_codes) ||
+                  "未形成主因标签"}
+              </p>
+            </div>
+            <SemanticResultPanel record={record} />
+          </details>
+
+          {!editable && (
+            <ReviewAssessmentSummary value={classification.human_review_assessment} />
+          )}
 
           {conflict && (
             <section className="review-conflict-panel" role="alert">
@@ -306,6 +361,32 @@ export function ReviewRecordDrawer({
                   排除本条
                 </button>
               </div>
+              <fieldset className="review-assessment-fields">
+                <legend>复核质量判断</legend>
+                <p>分别评价标签、证据和是否应进入人工复核。</p>
+                <div>
+                  {REVIEW_ASSESSMENT_FIELDS.map((field) => (
+                    <label key={field.key}>
+                      {field.label}
+                      <select
+                        value={assessment[field.key]}
+                        onChange={(event) =>
+                          onAssessment({
+                            ...assessment,
+                            [field.key]: event.target.value,
+                          })
+                        }
+                      >
+                        {field.options.map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
               {mode === "modify" && (
                 <div className="review-label-picker">
                   <label>

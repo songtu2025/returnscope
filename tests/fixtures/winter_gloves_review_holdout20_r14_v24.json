@@ -1,0 +1,285 @@
+{
+  "fixture_version": 1,
+  "source_file": "winter_gloves_review_draft_r14_v24_holdout20_corrected.xlsx",
+  "source_sheet": "逐条复核",
+  "blind_input_contract": {
+    "source_file": "冬季手套-Review评论-原文.xlsx",
+    "source_sheet": "Review-01",
+    "exclusion_key": "review_id",
+    "source_review_count": 344,
+    "verified_holdout_overlap_count": 20,
+    "expected_blind_review_count": 324
+  },
+  "blind_sample_contract": {
+    "source_file": "winter_gloves_input_blind50_v1.json",
+    "count": 50,
+    "sha256": "35547BDFFD14A2D9AF9C41D087C1234B9067374241ED49C271BCA4C39894802F",
+    "review_ids": [
+      "R1XL1E75OS7ICB",
+      "R62C9341R4UGD",
+      "R1RG8JKKF6FDT7",
+      "R3OQO08518RSZK",
+      "RHBQ9FMKHQUWV",
+      "R3MTFIA07PD9EK",
+      "R2KA0WNJR0UWIC",
+      "R2NFJ7HISAWYO1",
+      "R1WUKK583RVGCX",
+      "R3I21JEWX1X38J",
+      "R8JISP9UG8AU1",
+      "R174CUDWOMM53P",
+      "RHIC8J9AYJTCW",
+      "R3HD8HIAEV8INP",
+      "R1B9DI8P9Y19CJ",
+      "R3P5TPN08T4PUF",
+      "R25A84NGP6669Z",
+      "R1QFL2UCVANAU9",
+      "R33FKJEQAVY9TC",
+      "R87D48KN1QK8Q",
+      "RNYWKI7MU0MA1",
+      "R1NU6HET7H3PW6",
+      "R35QPG3X7HABJM",
+      "R1GLSX92AYTRUC",
+      "R1A4GKDBJ7YTC9",
+      "RJ8QP6BQ7Z2DR",
+      "R14NW6D69JJLAT",
+      "R3D2DP1VMCZMK1",
+      "R3TBC0CP1VEY6Z",
+      "R1U88JI02KENT3",
+      "R6AVNW2AGSTHR",
+      "R18YQXET52ILD5",
+      "R1ETBRSRQOF57",
+      "R36FO1VCV5FZ57",
+      "R2K4H2X0C3YFKE",
+      "R29YGQO9BORZVF",
+      "R2FJ9YG59H90Z9",
+      "R2CC3CDJ153OSJ",
+      "R3K17HSMBD24PA",
+      "R3JC5U8KR4P8P5",
+      "RHUBEXR4FTB00",
+      "RA26KO9U55T60",
+      "R21HHAULNCS7RO",
+      "RKEDO30217ZF2",
+      "R1OYRGEB52IACJ",
+      "R3SBB68361HDI7",
+      "R39ZTSH041B118",
+      "RK2D0J4LT0Z61",
+      "R10CIZMR4JH61I",
+      "R1CATIB1IQECL5"
+    ]
+  },
+  "expected_verdict_counts": {
+    "正确": 12,
+    "部分正确": 7,
+    "错误": 1
+  },
+  "cases": [
+    {
+      "sequence": 1,
+      "review_id": "RE0GZELRACDFY",
+      "source_row": 3,
+      "model_status": "AUTO_APPROVED",
+      "human_verdict": "正确",
+      "label_resolution": "保持",
+      "review_note": "标签与证据一致，体验者和使用条件明确。",
+      "diagnostics": []
+    },
+    {
+      "sequence": 2,
+      "review_id": "RBGG1QBQGF93U",
+      "source_row": 4,
+      "model_status": "AUTO_APPROVED",
+      "human_verdict": "正确",
+      "label_resolution": "保持",
+      "review_note": "保暖、柔软、穿脱方便和愿意回购均有直接证据。",
+      "diagnostics": []
+    },
+    {
+      "sequence": 3,
+      "review_id": "R1JZ8L7PZ1CSRJ",
+      "source_row": 5,
+      "model_status": "AUTO_APPROVED",
+      "human_verdict": "正确",
+      "label_resolution": "补充：轻薄；核对性价比",
+      "review_note": "slim 支持轻薄；well-designed for the price 仍需评估性价比标签。",
+      "diagnostics": [
+        "missing_secondary_label"
+      ]
+    },
+    {
+      "sequence": 4,
+      "review_id": "R1T5779UBKDZWQ",
+      "source_row": 6,
+      "model_status": "AUTO_APPROVED",
+      "human_verdict": "正确",
+      "label_resolution": "补充：轻便",
+      "review_note": "lightweight 是轻便的直接证据，当前终态未保留。",
+      "diagnostics": [
+        "missing_secondary_label"
+      ]
+    },
+    {
+      "sequence": 5,
+      "review_id": "RUOIC3W4ZBF3A",
+      "source_row": 7,
+      "model_status": "AUTO_APPROVED",
+      "human_verdict": "正确",
+      "label_resolution": "保持",
+      "review_note": "包装、保暖和柔软均有证据，未把赠品场景误作商品用途。",
+      "diagnostics": []
+    },
+    {
+      "sequence": 6,
+      "review_id": "R3DILFXP7H6VDR",
+      "source_row": 9,
+      "model_status": "UNKNOWN_SEMANTIC",
+      "human_verdict": "部分正确",
+      "label_resolution": "补充：触屏可用、灵活；复核袖口保暖",
+      "review_note": "可使用手机和手部活动自如是直接体验；未经历寒冷天气时不宜确认袖口保暖。",
+      "diagnostics": []
+    },
+    {
+      "sequence": 7,
+      "review_id": "R2UOI7RWO3JGQR",
+      "source_row": 10,
+      "model_status": "AUTO_APPROVED",
+      "human_verdict": "部分正确",
+      "label_resolution": "补充：触屏可用；轻薄改轻便",
+      "review_note": "function worked 支持触屏可用；lightweight 更符合轻便而非轻薄。",
+      "diagnostics": []
+    },
+    {
+      "sequence": 8,
+      "review_id": "R2GGT7PZ2VG0ZV",
+      "source_row": 11,
+      "model_status": "AUTO_APPROVED",
+      "human_verdict": "正确",
+      "label_resolution": "补充：穿脱方便",
+      "review_note": "easy to slip off and pull back on 是穿脱方便的直接证据。",
+      "diagnostics": [
+        "missing_secondary_label"
+      ]
+    },
+    {
+      "sequence": 9,
+      "review_id": "R3152BNJ1WYJT4",
+      "source_row": 12,
+      "model_status": "AUTO_APPROVED",
+      "human_verdict": "正确",
+      "label_resolution": "保持",
+      "review_note": "当前终态与原文事实相符，未见实质矛盾。",
+      "diagnostics": []
+    },
+    {
+      "sequence": 10,
+      "review_id": "R3LGH5VQ90WR01",
+      "source_row": 13,
+      "model_status": "MODEL_ERROR",
+      "human_verdict": "错误",
+      "label_resolution": "补充：价格合理、适合短时冬季任务、保暖",
+      "review_note": "MODEL_ERROR：FactMappings 校验失败，未生成任何终态标签，必须重跑或人工标注。",
+      "diagnostics": []
+    },
+    {
+      "sequence": 11,
+      "review_id": "R310YGXD81WSUD",
+      "source_row": 14,
+      "model_status": "AUTO_APPROVED",
+      "human_verdict": "部分正确",
+      "label_resolution": "补充：做工好",
+      "review_note": "Nicely built gloves 是做工好的直接证据，当前终态漏标。",
+      "diagnostics": []
+    },
+    {
+      "sequence": 12,
+      "review_id": "R1SAJ8FSNUQGTC",
+      "source_row": 15,
+      "model_status": "AUTO_APPROVED",
+      "human_verdict": "部分正确",
+      "label_resolution": "补充：穿脱方便",
+      "review_note": "easy to slip off and pull back on 是穿脱方便的直接证据。",
+      "diagnostics": []
+    },
+    {
+      "sequence": 13,
+      "review_id": "RLLZA55IXA8CH",
+      "source_row": 16,
+      "model_status": "AUTO_APPROVED",
+      "human_verdict": "正确",
+      "label_resolution": "保持",
+      "review_note": "标签、证据、主体和规格作用域一致。",
+      "diagnostics": []
+    },
+    {
+      "sequence": 14,
+      "review_id": "R347A8QYXW3VTM",
+      "source_row": 17,
+      "model_status": "AUTO_APPROVED",
+      "human_verdict": "正确",
+      "label_resolution": "保持",
+      "review_note": "终态标签覆盖明确体验，未发现互斥或越界标签。",
+      "diagnostics": []
+    },
+    {
+      "sequence": 15,
+      "review_id": "R395T02AXIAVKI",
+      "source_row": 19,
+      "model_status": "AUTO_APPROVED",
+      "human_verdict": "部分正确",
+      "label_resolution": "轻便改轻薄；补充日常冬季使用",
+      "review_note": "not puffy or bulky 更支持轻薄；原文也明确适合日常冬季活动。",
+      "diagnostics": []
+    },
+    {
+      "sequence": 16,
+      "review_id": "R2YY78FE2Y5BZN",
+      "source_row": 20,
+      "model_status": "AUTO_APPROVED",
+      "human_verdict": "正确",
+      "label_resolution": "保持",
+      "review_note": "柔软等终态均有直接证据，冰袋用途未被误判为保暖。",
+      "diagnostics": []
+    },
+    {
+      "sequence": 17,
+      "review_id": "R2NJHY9HMPODY",
+      "source_row": 21,
+      "model_status": "AUTO_APPROVED",
+      "human_verdict": "部分正确",
+      "label_resolution": "补充：长时间使用时指尖不保暖",
+      "review_note": "原文明确长时间使用后指尖发冷，当前终态漏掉条件性负向保暖事实。",
+      "diagnostics": []
+    },
+    {
+      "sequence": 18,
+      "review_id": "R25LWGQM7EN2W4",
+      "source_row": 23,
+      "model_status": "UNKNOWN_SEMANTIC",
+      "human_verdict": "正确",
+      "label_resolution": "",
+      "review_note": "",
+      "diagnostics": []
+    },
+    {
+      "sequence": 19,
+      "review_id": "R12HJEQ9L0RYCK",
+      "source_row": 24,
+      "model_status": "UNKNOWN_SEMANTIC",
+      "human_verdict": "部分正确",
+      "label_resolution": "将通用尺码建议设为正常忽略",
+      "review_note": "fits the average women 是通用建议，不应归为当前评论者的 UNKNOWN 或触发人工复核。",
+      "diagnostics": [
+        "primary_reason_difference"
+      ]
+    },
+    {
+      "sequence": 20,
+      "review_id": "R3ODJFF9GOGQS3",
+      "source_row": 25,
+      "model_status": "UNKNOWN_SEMANTIC",
+      "human_verdict": "正确",
+      "label_resolution": "",
+      "review_note": "",
+      "diagnostics": []
+    }
+  ]
+}

@@ -72,7 +72,9 @@ def test_combined_taxonomy_reuses_shared_label_code() -> None:
         group="订单原因",
         description="收到的商品与下单商品不一致",
         keywords=["wrong item"],
+        exclusions=["late"],
         allowed_sentiments=["NEGATIVE"],
+        allowed_claim_ids=["C1"],
     )
     registry = CapabilityRegistry(
         version="shared-label-test",
@@ -81,7 +83,13 @@ def test_combined_taxonomy_reuses_shared_label_code() -> None:
             _capability_with_label(
                 "eyewear",
                 "眼镜",
-                shared.model_copy(update={"keywords": ["incorrect item"]}),
+                shared.model_copy(
+                    update={
+                        "keywords": ["incorrect item", "wrong item"],
+                        "exclusions": ["damaged", "late"],
+                        "allowed_claim_ids": ["C2", "C1"],
+                    }
+                ),
             ),
         ),
     )
@@ -90,6 +98,8 @@ def test_combined_taxonomy_reuses_shared_label_code() -> None:
 
     assert [label.code for label in combined.labels] == ["ORDER_WRONG_ITEM"]
     assert combined.labels[0].keywords == ["wrong item", "incorrect item"]
+    assert combined.labels[0].exclusions == ["late", "damaged"]
+    assert combined.labels[0].allowed_claim_ids == ["C1", "C2"]
 
 
 def test_combined_taxonomy_rejects_shared_code_with_different_semantics() -> None:
@@ -258,10 +268,16 @@ def test_mixed_task_loads_each_family_taxonomy_and_excludes_unknown(
         "headwear-unified-2026-09-06-v1-semantic1",
         "eyewear-unified-2026-09-06-v1-semantic1",
         "footwear-unified-2026-09-06-v1-semantic1",
-        "gloves-unified-2026-09-08-v1-semantic1",
+        "gloves-unified-2026-09-12-v1-semantic3",
     ]
     assert result.pipeline.model_calls == 4
     assert result.pipeline.cache_hits == 4
+    assert result.pipeline.usage == {"input_tokens": 4}
+    assert result.pipeline.usage_by_model == {"fake-model": {"input_tokens": 4}}
+    assert result.pipeline.cache_hits_by_model == {"fake-model": 4}
+    assert result.pipeline.model_calls_by_model == {"fake-model": 4}
+    assert result.pipeline.request_metrics == {"requests": 4}
+    assert result.pipeline.routing == {"primary": 4}
     assert "unknown" not in result.pipeline.classifications
     assert len(result.segments) == 4
     assert {segment["agent_family"] for segment in result.segments} == {
@@ -275,6 +291,73 @@ def test_mixed_task_loads_each_family_taxonomy_and_excludes_unknown(
         assert "model_calls" in segment
         assert "cache_hits" in segment
         assert "status" in segment
+
+
+def test_failed_segment_does_not_discard_later_segment_or_success_counts(
+    monkeypatch,
+    registry,
+) -> None:
+    dataset = _dataset(
+        [
+            {
+                "classification_key": "hat",
+                "reason": "reason",
+                "comment_normalized": "hat comment",
+                "category_a": "遮阳帽",
+                "category_b": "儿童渔夫帽",
+            },
+            {
+                "classification_key": "eye",
+                "reason": "reason",
+                "comment_normalized": "eye comment",
+                "category_a": "眼镜",
+                "category_b": "儿童眼镜",
+            },
+        ]
+    )
+    progress_updates = []
+
+    def fake_classify_comments(**kwargs) -> PipelineRun:
+        taxonomy = kwargs["taxonomy"]
+        if taxonomy.agent_family == "帽类智能体":
+            raise RuntimeError("segment failed")
+        kwargs["progress"](1, 1)
+        return PipelineRun(
+            classifications={"eye": _validated("eye", taxonomy.version)},
+            usage={"input_tokens": 3},
+            usage_by_model={"fake-model": {"input_tokens": 3}},
+            cache_hits=0,
+            cache_hits_by_model={},
+            model_calls=1,
+            model_calls_by_model={"fake-model": 1},
+            request_metrics={"requests": 1},
+            routing={"primary": 1},
+        )
+
+    monkeypatch.setattr(
+        "return_semantics.category_pipeline.classify_comments",
+        fake_classify_comments,
+    )
+
+    result = classify_category_segments(
+        dataset=dataset,
+        registry=registry,
+        client=object(),
+        cache=object(),
+        progress=lambda current, total: progress_updates.append((current, total)),
+    )
+
+    assert [segment["status"] for segment in result.segments] == [
+        "failed",
+        "completed",
+    ]
+    assert result.segments[0]["error"] == "segment failed"
+    assert result.pipeline.classifications == {
+        "eye": _validated("eye", "eyewear-unified-2026-09-06-v1-semantic1")
+    }
+    assert result.pipeline.usage == {"input_tokens": 3}
+    assert result.pipeline.model_calls == 1
+    assert progress_updates == [(2, 2)]
 
 
 def test_unknown_category_never_calls_model(monkeypatch, registry) -> None:

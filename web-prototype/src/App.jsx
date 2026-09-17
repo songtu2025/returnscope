@@ -351,14 +351,14 @@ function LoginPage({ onLogin }) {
           <span>Seekway Intelligence</span>
         </div>
         <div>
-          <p className="eyebrow light">退货语义分析智能体</p>
+          <p className="eyebrow light">用户反馈语义分析智能体</p>
           <h1>
             让每一条退货评论
             <br />
             都进入可追踪的决策流程
           </h1>
           <p className="login-lead">
-            数据版本、模型运行、人工复核与结果交付集中在一个工作台，所有修改都有留痕。
+            当前支持 Amazon 退货反馈的语义分类、人工复核与业务洞察，所有修改都有留痕。
           </p>
         </div>
         <div className="login-proof">
@@ -438,8 +438,8 @@ export function Sidebar({ page, system, onNavigate }) {
       <div className="brand">
         <img src="/assets/brand-mark.png" alt="" />
         <div>
-          <strong>退货语义分析</strong>
-          <span>智能体工作台</span>
+          <strong>用户反馈语义分析</strong>
+          <span>智能体 · Amazon 退货反馈</span>
         </div>
       </div>
       <nav className="primary-nav" aria-label="主导航">
@@ -688,4 +688,3 @@ function GlobalSearch({ onClose, onSelect, notify }) {
 }
 
 export { App };
-export default App;

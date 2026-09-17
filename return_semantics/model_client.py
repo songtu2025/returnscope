@@ -371,9 +371,9 @@ class Sub2APIClient:
             model=model_name,
             reasoning_effort=reasoning_effort,
         )
-        classification = ModelClassification.model_validate(
-            normalize_model_payload(result.payload)
-        )
+        payload = normalize_model_payload(result.payload)
+        payload["review_diagnostics"] = []
+        classification = ModelClassification.model_validate(payload)
         return ModelCallResult(
             classification=classification,
             model_name=result.model_name,

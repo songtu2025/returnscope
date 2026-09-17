@@ -217,6 +217,11 @@
       "EXPERIENCE_COMFORT_U1",
       "OTHER_EXPECTATION_UNSPECIFIED_U1"
     ],
+    "fallback_label_codes": [
+      "FIT_UNSPECIFIED_U1",
+      "QUALITY_UNSPECIFIED_U1",
+      "OTHER_EXPECTATION_UNSPECIFIED_U1"
+    ],
     "conflict_scope": "evidence"
   },
   "labels": [

@@ -24,6 +24,7 @@ import { createDashboardSelection } from "./dashboardSelectionStorage";
 import { AiInsightReport } from "./AiInsightReport";
 import { InsightGenerationModal } from "./InsightGenerationModal";
 import { ReturnReasonInsights } from "./ReturnReasonInsights";
+import { SemanticResultPanel } from "../classification-results/SemanticResultPanel";
 import {
   insightModels,
   preferredInsightEffort,
@@ -762,12 +763,6 @@ function DashboardHistory({ versions, currentVersionId, onSelect }) {
 
 function DashboardEvidenceDrawer({ record, onClose, returnFocusRef }) {
   const classification = record.classification ?? {};
-  const semanticUnits = classification.semantic_units ?? [];
-  const units = semanticUnits.length
-    ? semanticUnits
-    : (record.evidence ?? []).map((evidence) =>
-        typeof evidence === "string" ? { evidence } : evidence,
-      );
   const drawerRef = useRef(null);
   const closeButtonRef = useRef(null);
 
@@ -848,7 +843,7 @@ function DashboardEvidenceDrawer({ record, onClose, returnFocusRef }) {
           <blockquote>{record.comment || "未提供退货评论"}</blockquote>
         </section>
         <section className="drawer-section">
-          <b>分类结论</b>
+          <b>业务标签</b>
           <DrawerField
             label="主要问题"
             value={resultLabelText(record, classification.primary_label_codes)}
@@ -859,17 +854,7 @@ function DashboardEvidenceDrawer({ record, onClose, returnFocusRef }) {
           />
         </section>
         <section className="drawer-section">
-          <b>原文证据</b>
-          {units.length === 0 && <p className="drawer-empty">没有提取到有效证据。</p>}
-          {units.map((unit, index) => (
-            <div className="evidence-unit" key={`${unit.label_code}-${index}`}>
-              <span>{unit.label_path?.join(" → ") || unit.label_code || "未标注"}</span>
-              <blockquote>“{unit.evidence || "未提供证据"}”</blockquote>
-              <small>
-                部位：{unit.part || "未提供"} · 观点：{unit.opinion || "未提供"}
-              </small>
-            </div>
-          ))}
+          <SemanticResultPanel record={record} />
         </section>
         <section className="drawer-section drawer-lineage">
           <b>运行来源</b>

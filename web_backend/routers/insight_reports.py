@@ -89,9 +89,7 @@ def create_insight_report_router(
         except InsightReportConflict as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    @router.put(
-        "/api/ai-insight-reports/{report_id}/issues/{issue_id}/decision"
-    )
+    @router.put("/api/ai-insight-reports/{report_id}/issues/{issue_id}/decision")
     def set_issue_decision(
         report_id: str,
         issue_id: str,

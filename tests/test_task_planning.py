@@ -672,9 +672,7 @@ def test_finished_tasks_can_be_archived_and_restored(tmp_path: Path) -> None:
     assert archived["archived_at"]
     assert archived["archived_by"] == "user-1"
     assert all(item["id"] != task_id for item in service.list())
-    assert any(
-        item["id"] == task_id for item in service.list(include_archived=True)
-    )
+    assert any(item["id"] == task_id for item in service.list(include_archived=True))
     assert service.events(task_id)[-1]["event_type"] == "task_archived"
     assert list_audit(database, "task", task_id)[0]["action"] == "archive"
 
@@ -708,7 +706,8 @@ def test_task_list_includes_result_and_execution_states(tmp_path: Path) -> None:
     detail = service.get(task["id"])
     assert len(listed["segments"]) == len(detail["segments"])
     listed_segment = next(
-        value for value in listed["segments"]
+        value
+        for value in listed["segments"]
         if value["agent_key"] == segment["agent_key"]
     )
     assert listed_segment["status"] == "completed"
@@ -1187,6 +1186,33 @@ def test_run_segment_resumes_from_saved_checkpoint(
     assert resumed_calls == []
 
 
+def test_run_segment_ignores_segment_that_is_not_running(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    database, _returns_path, _products_path = _database_with_inputs(tmp_path)
+    task = _create_task(database, "run_ready")
+    segment = task["segments"][0]
+
+    def forbidden_model_call(**_kwargs) -> None:
+        raise AssertionError("非运行中片段不得调用模型")
+
+    monkeypatch.setattr(
+        "web_backend.agent_runner.classify_comments",
+        forbidden_model_call,
+    )
+    settings = _settings(tmp_path)
+    settings.ensure_directories()
+    runner = AgentRunner(database, settings, _FakeConfigService())
+
+    runner.run_segment(str(task["id"]), str(segment["id"]))
+
+    unchanged = TaskService(database).get(str(task["id"]))
+    assert unchanged["revision"] == task["revision"]
+    assert unchanged["status"] == "queued"
+    assert unchanged["segments"][0]["status"] == "queued"
+
+
 def test_run_segment_pauses_batch_when_model_service_degrades(
     tmp_path: Path,
     monkeypatch,
@@ -1382,6 +1408,82 @@ def test_replan_rejects_stale_revision_and_hash(tmp_path: Path) -> None:
             unresolved_policy="run_ready",
             reason="使用了过期计划",
         )
+
+
+def test_replan_rolls_back_when_completed_segment_scope_changes(
+    tmp_path: Path,
+) -> None:
+    database, _returns_path, products_path = _database_with_inputs(tmp_path)
+    all_footwear_version = _add_product_version(
+        database,
+        products_path,
+        version=2,
+        category_a="水鞋",
+        category_b="薄底水鞋",
+    )
+    service = TaskService(database)
+    initial_plan = service.preflight(
+        "version-returns",
+        all_footwear_version,
+        "SEEKWAY:US",
+        "L1",
+        "config-1",
+    )
+    task = service.create(
+        actor_id="user-1",
+        title="已完成片段范围变更",
+        dataset_version_id="version-returns",
+        product_version_id=all_footwear_version,
+        store="SEEKWAY:US",
+        listing="L1",
+        config_version_id="config-1",
+        plan_hash=str(initial_plan["plan_hash"]),
+        unresolved_policy="run_ready",
+    )
+    segment = task["segments"][0]
+    with database.transaction(immediate=True) as connection:
+        connection.execute(
+            "UPDATE task_segments SET status = 'completed' WHERE id = ?",
+            (segment["id"],),
+        )
+        connection.execute(
+            "UPDATE tasks SET status = 'partial' WHERE id = ?",
+            (task["id"],),
+        )
+
+    split_version = _add_product_version(
+        database,
+        products_path,
+        version=3,
+        category_a="眼镜",
+        category_b="儿童眼镜",
+    )
+    preflight = service.replan_preflight(str(task["id"]), split_version)
+
+    with pytest.raises(TaskPlanConflict, match="数据范围发生变化"):
+        service.replan(
+            task_id=str(task["id"]),
+            actor_id="user-1",
+            product_version_id=split_version,
+            expected_revision=int(task["revision"]),
+            plan_hash=str(preflight["plan_hash"]),
+            unresolved_policy="run_ready",
+            reason="将已完成片段中的 SKU-2 调整为眼镜",
+        )
+
+    unchanged = service.get(str(task["id"]))
+    assert unchanged["product_version_id"] == all_footwear_version
+    assert unchanged["revision"] == task["revision"]
+    assert [(item["id"], item["status"]) for item in unchanged["segments"]] == [
+        (segment["id"], "completed")
+    ]
+    assert all(
+        event["event_type"] != "replanned" for event in service.events(str(task["id"]))
+    )
+    assert all(
+        audit["action"] != "replan"
+        for audit in list_audit(database, "task", str(task["id"]))
+    )
 
 
 def test_replan_runs_only_failed_segment_and_keeps_completed_result(
@@ -2132,6 +2234,47 @@ def test_running_listing_pause_recovers_as_paused(tmp_path: Path) -> None:
     )
     assert recovered_segment["status"] == "paused"
     worker.stop()
+
+
+def test_running_listing_cancel_records_request_without_ending_segment(
+    tmp_path: Path,
+) -> None:
+    database, _returns_path, _products_path = _database_with_inputs(tmp_path)
+    service = TaskService(database)
+    task = _create_task(database, "run_ready")
+    segment = next(value for value in task["segments"] if value["status"] == "queued")
+    with database.transaction(immediate=True) as connection:
+        connection.execute(
+            "UPDATE tasks SET status = 'running' WHERE id = ?",
+            (task["id"],),
+        )
+        connection.execute(
+            "UPDATE task_segments SET status = 'running' WHERE id = ?",
+            (segment["id"],),
+        )
+    running = service.get(str(task["id"]))
+
+    requested = service.segment_action(
+        task_id=str(task["id"]),
+        segment_key=str(segment["segment_key"]),
+        action="cancel",
+        actor_id="user-1",
+        expected_revision=int(running["revision"]),
+        note="不再需要该 Listing",
+    )
+
+    requested_segment = requested["segments"][0]
+    assert requested["status"] == "running"
+    assert requested["completed_at"] is None
+    assert requested_segment["status"] == "running"
+    assert requested_segment["requested_action"] == "cancel"
+    assert requested_segment["display_status"] == "cancel_pending"
+    event = service.events(str(task["id"]))[-1]
+    assert event["event_type"] == "segment_cancel"
+    assert event["data"]["after_status"] == "cancel_requested"
+    audit = list_audit(database, "task", str(task["id"]))[0]
+    assert audit["action"] == "segment_cancel"
+    assert audit["after"]["status"] == "cancel_requested"
 
 
 def test_restart_finishes_pending_batch_cancel(tmp_path: Path) -> None:

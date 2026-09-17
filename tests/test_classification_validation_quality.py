@@ -3,7 +3,10 @@ from copy import deepcopy
 import pytest
 
 from web_backend.classification_validation_quality import (
+    ERROR_METRICS,
     FACT_QUALITY_POLICY,
+    METRIC_LABELS,
+    SCOPE_FIELDS,
     _fact_pairs,
     append_reference_fact,
     compare_reference,
@@ -289,32 +292,68 @@ def test_fact_policy_passes_twenty_fully_annotated_samples():
     assert gate["instance_match_rate"] == gate["reference_coverage"] == 100
 
 
-def test_fact_policy_requires_minimum_complete_state_reference_coverage():
+def test_fact_policy_warns_for_incomplete_reference_dimensions():
     item = _with_state(_item())
     assert not quality_gate(
         {"reference_evaluation": evaluate_references([item])}, FACT_QUALITY_POLICY
     )["passed"]
     items = [deepcopy(item) for _ in range(20)]
     items[0]["reference"].pop("fact_state_complete")
-    assert not quality_gate(
+    gate = quality_gate(
         {"reference_evaluation": evaluate_references(items)}, FACT_QUALITY_POLICY
-    )["passed"]
+    )
+    assert gate["passed"]
+    assert any("事实状态参考答案不完整" in warning for warning in gate["warnings"])
     items[0]["reference"]["ambiguous"] = True
     gate = quality_gate(
         {"reference_evaluation": evaluate_references(items)}, FACT_QUALITY_POLICY
     )
     assert gate["reference_coverage"] == 95
-    assert gate["passed"] is False
+    assert gate["passed"] is True
+    assert any("非歧义参考覆盖率 95.00%" in warning for warning in gate["warnings"])
 
 
-def test_one_duplicate_in_twenty_fails_one_percent_sample_gate():
+def test_one_duplicate_in_twenty_warns_but_does_not_block():
     items = [_with_state(_item()) for _ in range(20)]
     items[0]["draft"]["semantic_units"].append(_unit())
     gate = quality_gate(
         {"reference_evaluation": evaluate_references(items)}, FACT_QUALITY_POLICY
     )
     assert gate["duplicate_rate"] == 5
+    assert gate["passed"]
+    assert any("重复" in warning for warning in gate["warnings"])
+
+
+def test_fact_policy_applies_engineering_rate_boundaries():
+    items = [_with_state(_item()) for _ in range(20)]
+    for item in items[:4]:
+        item["reference"]["ambiguous"] = True
+    evaluation = evaluate_references(items)
+    evaluation["sides"]["draft"].update(
+        expected_instances=20,
+        actual_instances=20,
+        matched_instances=16,
+        duplicate_samples=1,
+    )
+    gate = quality_gate({"reference_evaluation": evaluation}, FACT_QUALITY_POLICY)
+    assert gate["passed"]
+    assert gate["reference_coverage"] == 80
+    assert gate["instance_match_rate"] == 80
+    assert gate["duplicate_rate"] == pytest.approx(6.25)
+
+    items[4]["reference"]["ambiguous"] = True
+    evaluation = evaluate_references(items)
+    evaluation["sides"]["draft"].update(
+        expected_instances=20,
+        actual_instances=20,
+        matched_instances=15,
+        duplicate_samples=2,
+    )
+    gate = quality_gate({"reference_evaluation": evaluation}, FACT_QUALITY_POLICY)
     assert not gate["passed"]
+    assert gate["reference_coverage"] == 75
+    assert gate["instance_match_rate"] == 75
+    assert gate["duplicate_rate"] == pytest.approx(13.33, abs=0.01)
 
 
 def test_fact_profile_cannot_bypass_gate_by_omitting_frozen_policy():
@@ -477,12 +516,86 @@ def test_different_fact_scope_is_not_a_duplicate(field, value):
 
 
 @pytest.mark.parametrize(
-    "metric", ["extra_labels", "missing_labels", "duplicate_units"]
+    "metric",
+    ["extra_labels", "missing_labels", "duplicate_units", "primary_errors"],
 )
-def test_single_business_instance_error_blocks_gate(metric):
+def test_single_non_blocking_structured_difference_warns(metric):
+    item = _with_state(_item())
+    evaluation = evaluate_references([item] * 20)
+    evaluation["sides"]["draft"][metric] = 1
+    gate = quality_gate({"reference_evaluation": evaluation}, FACT_QUALITY_POLICY)
+    assert gate["passed"]
+    assert any(METRIC_LABELS[metric] in warning for warning in gate["warnings"])
+
+
+@pytest.mark.parametrize(
+    "metric",
+    [
+        "model_errors",
+        "evidence_errors",
+        "plan_confirmation_errors",
+        "product_errors",
+        "direction_errors",
+        "subject_errors",
+    ],
+)
+def test_single_high_damage_error_blocks_gate(metric):
     item = _with_state(_item())
     evaluation = evaluate_references([item] * 20)
     evaluation["sides"]["draft"][metric] = 1
     gate = quality_gate({"reference_evaluation": evaluation}, FACT_QUALITY_POLICY)
     assert not gate["passed"]
     assert FACT_QUALITY_POLICY["thresholds"][metric] == 0
+
+
+def test_embedded_legacy_policy_keeps_zero_tolerance_behavior():
+    legacy_policy = {
+        "version": "fact-reference-v3",
+        "thresholds": dict.fromkeys(ERROR_METRICS, 0),
+        "min_reference_samples": 20,
+        "min_reference_coverage": 100,
+        "min_instance_match_rate": 100,
+        "max_duplicate_rate": 0,
+        "require_fact_states": True,
+        "require_scope_dimensions": list(SCOPE_FIELDS),
+    }
+    items = [_with_state(_item()) for _ in range(20)]
+    evaluation = evaluate_references(items)
+    evaluation["sides"]["draft"]["missing_labels"] = 1
+    gate = publication_quality_gate(
+        {"taxonomy": {"recognition_profile": "fact_v2"}},
+        {"quality_policy": legacy_policy},
+        [],
+        {"reference_evaluation": evaluation},
+    )
+    assert not gate["passed"]
+    assert gate["warnings"] == []
+
+
+def test_embedded_v4_policy_keeps_primary_error_zero_tolerance():
+    legacy_policy = deepcopy(FACT_QUALITY_POLICY)
+    legacy_policy.update(
+        version="fact-reference-v4",
+        thresholds={
+            **legacy_policy["thresholds"],
+            "primary_errors": 0,
+        },
+        warning_metrics=[
+            metric
+            for metric in legacy_policy["warning_metrics"]
+            if metric != "primary_errors"
+        ],
+    )
+    items = [_with_state(_item()) for _ in range(20)]
+    evaluation = evaluate_references(items)
+    evaluation["sides"]["draft"]["primary_errors"] = 1
+
+    gate = publication_quality_gate(
+        {"taxonomy": {"recognition_profile": "fact_v2"}},
+        {"quality_policy": legacy_policy},
+        [],
+        {"reference_evaluation": evaluation},
+    )
+
+    assert not gate["passed"]
+    assert any("主因差异=1" in reason for reason in gate["blocking"])

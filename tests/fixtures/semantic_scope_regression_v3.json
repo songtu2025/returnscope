@@ -1,0 +1,251 @@
+[
+  {
+    "sample_id": "R1B9DI8P9Y19CJ",
+    "stratum": "触屏阈值",
+    "facts": [
+      {
+        "fact_id": "F10",
+        "statement_type": "EXPERIENCE",
+        "sentiment": "POSITIVE",
+        "operation": "swipe and tap",
+        "condition": "basic interaction",
+        "evidence": "The touchscreen fabric on the fingertips works for basic swipes and taps.",
+        "expected_role": "CONTEXT"
+      },
+      {
+        "fact_id": "F11",
+        "statement_type": "EXPERIENCE",
+        "sentiment": "NEGATIVE",
+        "operation": "typing",
+        "condition": "compared with bare fingers",
+        "evidence": "Typing is trickier and less accurate than using bare fingers.",
+        "expected_role": "DECISIVE"
+      }
+    ],
+    "expected": {
+      "terminal_labels": ["TOUCH_NEGATIVE"],
+      "excluded_labels": ["TOUCH_POSITIVE"],
+      "comment_status": "NEGATIVE"
+    }
+  },
+  {
+    "sample_id": "R3U23YRWVG78N7",
+    "stratum": "让步最终立场",
+    "facts": [
+      {
+        "fact_id": "F5",
+        "statement_type": "EXPERIENCE",
+        "sentiment": "POSITIVE",
+        "operation": "touchscreen",
+        "condition": "worked",
+        "evidence": "The captive touch worked.",
+        "expected_role": "CONTEXT"
+      },
+      {
+        "fact_id": "F6",
+        "statement_type": "EXPERIENCE",
+        "sentiment": "NEGATIVE",
+        "operation": "touchscreen",
+        "condition": "required more force",
+        "evidence": "You do have to use a little more force though.",
+        "expected_role": "DECISIVE"
+      },
+      {
+        "fact_id": "F7",
+        "statement_type": "EVALUATION",
+        "sentiment": "POSITIVE",
+        "operation": "touchscreen",
+        "condition": "compared with removing gloves",
+        "evidence": "Still, a lot better than taking them off in the snow.",
+        "expected_role": "CONTEXT"
+      }
+    ],
+    "expected": {
+      "terminal_labels": ["TOUCH_NEGATIVE"],
+      "excluded_labels": ["TOUCH_POSITIVE"],
+      "comment_status": "NEGATIVE"
+    }
+  },
+  {
+    "sample_id": "R1KF6WL1GJVV4C",
+    "stratum": "尺码穿戴者规格尺码表",
+    "facts": [
+      {
+        "fact_id": "F3",
+        "statement_type": "EXPERIENCE",
+        "sentiment": "POSITIVE",
+        "actor_ref": "REVIEWER",
+        "variant_ref": "SIZE_M",
+        "reference_basis": "ACTUAL_FIT",
+        "evidence": "Size M fits me comfortably.",
+        "expected_role": "DECISIVE"
+      },
+      {
+        "fact_id": "F4",
+        "statement_type": "EVALUATION",
+        "sentiment": "NEGATIVE",
+        "actor_ref": "REVIEWER",
+        "variant_ref": "SIZE_M",
+        "reference_basis": "SIZE_CHART",
+        "evidence": "These fit at least one size smaller than the sizing chart would advise.",
+        "expected_role": "DECISIVE"
+      },
+      {
+        "fact_id": "F5",
+        "statement_type": "EVALUATION",
+        "sentiment": "NEUTRAL",
+        "actor_ref": "REVIEWER",
+        "variant_ref": "SIZE_M",
+        "reference_basis": "APPEARANCE_ONLY",
+        "evidence": "They look a hair too big, but I would not want them any smaller.",
+        "expected_role": "CONTEXT"
+      },
+      {
+        "fact_id": "F13",
+        "statement_type": "INTENT",
+        "sentiment": "NEUTRAL",
+        "actor_ref": "OTHER:1",
+        "variant_ref": "FUTURE_SELECTION",
+        "reference_basis": "PURCHASE_INTENT",
+        "evidence": "I might get them a size or two larger for my significant other.",
+        "expected_role": "ABSTAIN"
+      }
+    ],
+    "expected": {
+      "terminal_labels": ["SIZE_FIT", "SIZE_SMALL"],
+      "excluded_labels": ["SIZE_LARGE"],
+      "comment_status": "MIXED",
+      "expected_abstention_fact_ids": ["F13"]
+    }
+  },
+  {
+    "sample_id": "R2O0SBDV84OWF6",
+    "stratum": "建议意图污染",
+    "facts": [
+      {
+        "fact_id": "F17",
+        "statement_type": "EXPERIENCE",
+        "sentiment": "NEGATIVE",
+        "actor_ref": "OTHER:1",
+        "variant_ref": "SIZE_XL",
+        "reference_basis": "ACTUAL_FIT",
+        "evidence": "The XL gloves are slightly big on my son.",
+        "expected_role": "DECISIVE"
+      },
+      {
+        "fact_id": "F19",
+        "statement_type": "RECOMMENDATION",
+        "sentiment": "POSITIVE",
+        "actor_ref": "OTHER:2",
+        "variant_ref": "HYPOTHETICAL",
+        "reference_basis": "PURCHASE_ADVICE",
+        "evidence": "If you are a man with extra large hands, I think you will be fine with these.",
+        "expected_role": "ABSTAIN"
+      }
+    ],
+    "expected": {
+      "terminal_labels": ["SIZE_LARGE"],
+      "excluded_labels": ["SIZE_FIT"],
+      "comment_status": "NEGATIVE",
+      "expected_abstention_fact_ids": ["F19"]
+    }
+  },
+  {
+    "sample_id": "RV4RDGT5QHZFG",
+    "stratum": "合法防水条件MIXED",
+    "facts": [
+      {
+        "fact_id": "F4",
+        "statement_type": "EXPERIENCE",
+        "sentiment": "POSITIVE",
+        "condition": "light snow and drizzle",
+        "evidence": "Light snow and drizzle do not soak through.",
+        "expected_role": "DECISIVE"
+      },
+      {
+        "fact_id": "F14",
+        "statement_type": "EVALUATION",
+        "sentiment": "NEGATIVE",
+        "condition": "heavy rain",
+        "evidence": "The gloves are not meant for heavy rain.",
+        "expected_role": "DECISIVE"
+      }
+    ],
+    "expected": {
+      "terminal_labels": ["WATER_POSITIVE", "WATER_NEGATIVE"],
+      "excluded_labels": [],
+      "comment_status": "MIXED",
+      "relation_types": ["MIXED"]
+    }
+  },
+  {
+    "sample_id": "R1SFQQ5T5U9SXE",
+    "stratum": "合法保暖条件MIXED",
+    "facts": [
+      {
+        "fact_id": "F7",
+        "statement_type": "EVALUATION",
+        "sentiment": "NEGATIVE",
+        "condition": "extremely cold temperatures",
+        "evidence": "These are not the warmest winter gloves for extremely cold temperatures.",
+        "expected_role": "DECISIVE"
+      },
+      {
+        "fact_id": "F9",
+        "statement_type": "EVALUATION",
+        "sentiment": "POSITIVE",
+        "condition": "everyday winter activities",
+        "evidence": "They are warm enough for everyday activities.",
+        "expected_role": "DECISIVE"
+      }
+    ],
+    "expected": {
+      "terminal_labels": ["WARM_NEGATIVE", "WARM_POSITIVE"],
+      "excluded_labels": [],
+      "comment_status": "MIXED",
+      "relation_types": ["MIXED"]
+    }
+  },
+  {
+    "sample_id": "R1JJGWQ05Q0ZYY",
+    "stratum": "不同使用者",
+    "facts": [
+      {
+        "fact_id": "F3",
+        "statement_type": "EXPERIENCE",
+        "sentiment": "NEGATIVE",
+        "actor_ref": "REVIEWER",
+        "variant_ref": "CURRENT_SIZE",
+        "reference_basis": "ACTUAL_FIT",
+        "evidence": "The gloves are a little tight on my hands.",
+        "expected_role": "DECISIVE"
+      },
+      {
+        "fact_id": "F4",
+        "statement_type": "EXPERIENCE",
+        "sentiment": "NEGATIVE",
+        "actor_ref": "OTHER:1",
+        "variant_ref": "CURRENT_SIZE",
+        "reference_basis": "ACTUAL_FIT",
+        "evidence": "The gloves are a little loose on my wife's hands.",
+        "expected_role": "DECISIVE"
+      },
+      {
+        "fact_id": "F5",
+        "statement_type": "PREDICTION",
+        "sentiment": "POSITIVE",
+        "actor_ref": "REVIEWER",
+        "variant_ref": "CURRENT_SIZE",
+        "reference_basis": "FUTURE_USE",
+        "evidence": "They will fit either of us in a pinch.",
+        "expected_role": "ABSTAIN"
+      }
+    ],
+    "expected": {
+      "terminal_labels": ["SIZE_TIGHT", "SIZE_LOOSE"],
+      "excluded_labels": ["SIZE_FIT"],
+      "comment_status": "NEGATIVE",
+      "expected_abstention_fact_ids": ["F5"]
+    }
+  }
+]

@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "退货语义分析智能体｜数据流",
+    "locale": "zh-CN",
+    "output": "docs/architecture/data-flow.html",
+    "animation": "none",
+    "quality_profile": "showcase",
+    "viewBox": [1068, 560]
+  },
+  "stages": [
+    { "label": "数据来源" },
+    { "label": "接入与配置" },
+    { "label": "语义处理" },
+    { "label": "数据存储" },
+    { "label": "业务消费" }
+  ],
+  "nodes": [
+    { "id": "uploaded_files", "type": "external", "label": "CSV / Excel 文件", "sublabel": "退货记录与产品关系", "stage": 0, "row": 0 },
+    { "id": "mysql_returns", "type": "external", "label": "MySQL 退货表", "sublabel": "按店铺、站点、时间筛选", "stage": 0, "row": 2 },
+    { "id": "dataset_versions", "type": "backend", "label": "数据接入与版本化", "sublabel": "校验、去重、字段映射", "stage": 1, "row": 1, "tag": "可追溯输入" },
+    { "id": "analysis_config", "type": "security", "label": "受控分析配置", "sublabel": "标签、承诺与模型策略", "stage": 1, "row": 2 },
+    { "id": "semantic_decision", "type": "backend", "label": "受控语义决策引擎", "sublabel": "模型抽取、校验与分流", "stage": 2, "row": 1, "tag": "Sub2API" },
+    { "id": "sqlite_state", "type": "database", "label": "SQLite 业务状态", "sublabel": "任务、结果、复核与审计", "stage": 3, "row": 1 },
+    { "id": "runtime_files", "type": "database", "label": "运行时文件", "sublabel": "版本、缓存与导出", "stage": 3, "row": 2 },
+    { "id": "review_center", "type": "frontend", "label": "复核中心", "sublabel": "待复核记录与人工修正", "stage": 4, "row": 0 },
+    { "id": "analytics_outputs", "type": "frontend", "label": "分析与交付", "sublabel": "看板、AI 洞察、Excel", "stage": 4, "row": 2 }
+  ],
+  "flows": [
+    { "id": "files_to_dataset", "from": "uploaded_files", "to": "dataset_versions", "label": "原始文件", "classification": "CSV / XLSX", "variant": "emphasis" },
+    { "id": "mysql_to_dataset", "from": "mysql_returns", "to": "dataset_versions", "label": "筛选后的退货行", "classification": "只读导入", "variant": "security" },
+    { "id": "dataset_to_decision", "from": "dataset_versions", "to": "semantic_decision", "label": "标准化与去重评论", "classification": "任务输入", "variant": "emphasis", "route": "straight", "labelDy": -35 },
+    { "id": "config_to_decision", "from": "analysis_config", "to": "semantic_decision", "label": "标签、承诺与模型策略", "classification": "版本化配置", "variant": "security" },
+    { "id": "decision_to_sqlite", "from": "semantic_decision", "to": "sqlite_state", "label": "分类与审核版本", "classification": "事务写入", "variant": "emphasis", "route": "straight", "labelDy": -35 },
+    { "id": "decision_to_files", "from": "semantic_decision", "to": "runtime_files", "label": "数据、缓存、检查点与导出", "classification": "JSONL / XLSX", "variant": "dashed" },
+    { "id": "sqlite_to_review", "from": "sqlite_state", "to": "review_center", "label": "待复核记录", "classification": "受控读取", "variant": "security" },
+    { "id": "sqlite_to_outputs", "from": "sqlite_state", "to": "analytics_outputs", "label": "已发布结果与指标", "classification": "版本化消费", "variant": "emphasis" }
+  ]
+}

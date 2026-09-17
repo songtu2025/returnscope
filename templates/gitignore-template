@@ -1,0 +1,47 @@
+# Editor and system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+
+# Logs and temporary files
+*.log
+*.tmp
+tmp/
+temp/
+
+# Frontend
+node_modules/
+dist/
+build/
+coverage/
+.vite/
+.turbo/
+
+# Backend
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+
+# Local data
+*.sqlite
+*.sqlite3
+*.db
+uploads/
+exports/
+
+# OS and tool caches
+.cache/

@@ -20,6 +20,10 @@ from web_backend.classification_standard_service import (
     ClassificationStandardConflict,
     ClassificationStandardService,
 )
+from web_backend.classification_standard_validation_leakage import (
+    find_taxonomy_sample_leaks,
+    format_taxonomy_sample_leaks,
+)
 from web_backend.classification_validation_quality import (
     FACT_QUALITY_POLICY,
     append_reference_fact,
@@ -133,74 +137,27 @@ class ClassificationStandardValidationService:
         if draft["validation"]["blocking"]:
             detail = "；".join(draft["validation"]["blocking"][:3])
             raise ValueError(f"草稿必须先通过结构检查：{detail}")
-        raw_source_ids = {item["id"] for item in self._raw_source_options()}
-        if review_file is not None:
-            source, samples = self._review_source_context(
-                review_file[0], review_file[1], draft, sample_size
-            )
-            source_result_version_id = source["result"]["result_version_id"]
-        elif source_result_version_id in raw_source_ids:
-            source, samples = self._raw_source_context(
-                source_result_version_id,
-                draft,
-                sample_size,
-            )
-        else:
-            source = self._source_context(
-                source_result_version_id,
-                str(draft["base_version_id"]),
-            )
-            samples = self._sample(source_result_version_id, sample_size)
+        source, samples, source_result_version_id = self._validation_source_context(
+            draft,
+            source_result_version_id,
+            sample_size,
+            review_file,
+        )
         if not samples:
             raise ValueError("所选数据中没有当前品类可用于验证的评论")
-        candidate = TaxonomyConfig.model_validate(draft["snapshot"]["taxonomy"])
-        baseline = self.standard_service.taxonomy_for_version(
-            str(draft["base_version_id"])
+        leakage_issues = find_taxonomy_sample_leaks(
+            draft["snapshot"]["taxonomy"],
+            samples,
         )
-        if comparison_type != "standard_version":
-            candidate = candidate.model_copy(
-                update={
-                    "version": f"draft-{draft_id}-r{expected_revision}",
-                }
-            )
-            baseline = candidate.model_copy(
-                update={
-                    "recognition_profile": "legacy_v3"
-                    if comparison_type == "keyword_ab"
-                    else "keyword_free_v1",
-                }
-            )
-            candidate = candidate.model_copy(
-                update={
-                    "recognition_profile": "keyword_free_v1"
-                    if comparison_type == "keyword_ab"
-                    else "semantic_v1",
-                }
-            )
-        source["comparison_type"] = comparison_type
-        source["recognition_contract"] = {
-            side: {
-                "profile": config.recognition_profile,
-                "prompt_version": prompt_version(config),
-                "fingerprint": recognition_fingerprint(config),
-            }
-            for side, config in (("baseline", baseline), ("candidate", candidate))
-        }
-        source["recognition_taxonomies"] = {
-            "baseline": baseline.model_dump(mode="json"),
-            "candidate": candidate.model_dump(mode="json"),
-        }
-        source["result"].update(
-            {
-                "comparison_type": comparison_type,
-                "recognition_contract": source["recognition_contract"],
-            }
+        if leakage_issues:
+            raise ValueError(format_taxonomy_sample_leaks(leakage_issues))
+        self._apply_recognition_context(
+            source,
+            draft,
+            draft_id,
+            expected_revision,
+            comparison_type,
         )
-        if comparison_type != "standard_version":
-            source["result"]["comparison_mode"] = "baseline_and_draft"
-        if candidate.recognition_profile == "fact_v2":
-            source["quality_policy"] = deepcopy(FACT_QUALITY_POLICY)
-            source["result"]["quality_policy"] = source["quality_policy"]
         run_id = new_id("classification_standard_validation")
         now = utc_now()
         with self.database.transaction(immediate=True) as connection:
@@ -257,6 +214,93 @@ class ClassificationStandardValidationService:
             },
         )
         return self.get(run_id)
+
+    def _validation_source_context(
+        self,
+        draft: dict[str, Any],
+        source_result_version_id: str,
+        sample_size: int,
+        review_file: tuple[str, bytes] | None,
+    ) -> tuple[dict[str, Any], list[dict[str, Any]], str]:
+        raw_source_ids = {item["id"] for item in self._raw_source_options()}
+        if review_file is not None:
+            source, samples = self._review_source_context(
+                review_file[0], review_file[1], draft, sample_size
+            )
+            return source, samples, source["result"]["result_version_id"]
+        if source_result_version_id in raw_source_ids:
+            source, samples = self._raw_source_context(
+                source_result_version_id,
+                draft,
+                sample_size,
+            )
+            return source, samples, source_result_version_id
+        source = self._source_context(
+            source_result_version_id,
+            str(draft["base_version_id"]),
+        )
+        return (
+            source,
+            self._sample(source_result_version_id, sample_size),
+            source_result_version_id,
+        )
+
+    def _apply_recognition_context(
+        self,
+        source: dict[str, Any],
+        draft: dict[str, Any],
+        draft_id: str,
+        expected_revision: int,
+        comparison_type: str,
+    ) -> None:
+        candidate = TaxonomyConfig.model_validate(draft["snapshot"]["taxonomy"])
+        baseline = self.standard_service.taxonomy_for_version(
+            str(draft["base_version_id"])
+        )
+        if comparison_type != "standard_version":
+            candidate = candidate.model_copy(
+                update={
+                    "version": f"draft-{draft_id}-r{expected_revision}",
+                }
+            )
+            baseline = candidate.model_copy(
+                update={
+                    "recognition_profile": "legacy_v3"
+                    if comparison_type == "keyword_ab"
+                    else "keyword_free_v1",
+                }
+            )
+            candidate = candidate.model_copy(
+                update={
+                    "recognition_profile": "keyword_free_v1"
+                    if comparison_type == "keyword_ab"
+                    else "semantic_v1",
+                }
+            )
+        source["comparison_type"] = comparison_type
+        source["recognition_contract"] = {
+            side: {
+                "profile": config.recognition_profile,
+                "prompt_version": prompt_version(config),
+                "fingerprint": recognition_fingerprint(config),
+            }
+            for side, config in (("baseline", baseline), ("candidate", candidate))
+        }
+        source["recognition_taxonomies"] = {
+            "baseline": baseline.model_dump(mode="json"),
+            "candidate": candidate.model_dump(mode="json"),
+        }
+        source["result"].update(
+            {
+                "comparison_type": comparison_type,
+                "recognition_contract": source["recognition_contract"],
+            }
+        )
+        if comparison_type != "standard_version":
+            source["result"]["comparison_mode"] = "baseline_and_draft"
+        if candidate.recognition_profile == "fact_v2":
+            source["quality_policy"] = deepcopy(FACT_QUALITY_POLICY)
+            source["result"]["quality_policy"] = source["quality_policy"]
 
     def approve(
         self,
@@ -431,6 +475,33 @@ class ClassificationStandardValidationService:
             summary["reference_evaluation"] = self._evaluate_references(items)
             if source.get("comparison_type", "standard_version") == "standard_version":
                 summary["reference_evaluation"]["sides"].pop("baseline", None)
+            usage = {
+                "baseline": (
+                    baseline_pipeline.usage if baseline_pipeline is not None else {}
+                ),
+                "draft": pipeline.usage,
+            }
+            metrics = {
+                "baseline": (
+                    baseline_pipeline.request_metrics
+                    if baseline_pipeline is not None
+                    else {}
+                ),
+                "draft": pipeline.request_metrics,
+            }
+            summary["efficiency"] = self._efficiency_summary(
+                items,
+                usage,
+                metrics,
+                {
+                    "baseline": (
+                        baseline_pipeline.model_calls
+                        if baseline_pipeline is not None
+                        else None
+                    ),
+                    "draft": pipeline.model_calls,
+                },
+            )
             model_names = sorted(
                 {
                     str(item["draft"]["model_name"])
@@ -466,26 +537,8 @@ class ClassificationStandardValidationService:
                         summary["error_count"],
                         json_text(items),
                         json_text(summary),
-                        json_text(
-                            {
-                                "baseline": (
-                                    baseline_pipeline.usage
-                                    if baseline_pipeline is not None
-                                    else {}
-                                ),
-                                "draft": pipeline.usage,
-                            }
-                        ),
-                        json_text(
-                            {
-                                "baseline": (
-                                    baseline_pipeline.request_metrics
-                                    if baseline_pipeline is not None
-                                    else {}
-                                ),
-                                "draft": pipeline.request_metrics,
-                            }
-                        ),
+                        json_text(usage),
+                        json_text(metrics),
                         json_text(model_names),
                         utc_now(),
                         run_id,
@@ -660,94 +713,19 @@ class ClassificationStandardValidationService:
         except Exception as exc:
             raise ValueError("无法读取 Review 表格，请检查文件格式") from exc
         candidates = []
-        seen = set()
         skipped = 0
-        variants = draft["snapshot"]["variants"]
-        headers = None
         try:
             references = self._read_references(workbook, draft["snapshot"]["taxonomy"])
-            for sheet in workbook:
-                if sheet.title == "人工参考答案":
-                    continue
-                for number, values in enumerate(
-                    sheet.iter_rows(max_row=50, values_only=True), start=1
-                ):
-                    if number <= 50 and "评论内容" in values:
-                        headers = [str(value or "").strip() for value in values]
-                        break
-                if headers is None:
-                    continue
-                header_row = number
-                for number, values in enumerate(
-                    sheet.iter_rows(min_row=header_row + 1, values_only=True),
-                    start=header_row + 1,
-                ):
-                    row = dict(zip(headers, values, strict=False))
-                    comment = "\n".join(
-                        str(row.get(key) or "").strip()
-                        for key in ("评论标题", "评论内容")
-                    ).strip()
-                    if not comment:
-                        continue
-                    category = str(row.get("一级品类") or row.get("品类") or "").strip()
-                    matched = next(
-                        (
-                            variant
-                            for variant in sorted(
-                                variants, key=lambda item: -len(item["category_b"])
-                            )
-                            if variant["category_b"] in category
-                            or variant["category_a"] == category
-                        ),
-                        None,
-                    )
-                    if category and matched is None:
-                        skipped += 1
-                        continue
-                    identity = str(row.get("评论编号") or number)
-                    store = str(row.get("下单店铺") or row.get("上架店铺") or "")
-                    listing = str(row.get("ASIN") or row.get("Listing") or "")
-                    key = hashlib.sha256(
-                        f"{identity}\x1f{store}\x1f{listing}\x1f{comment}".encode()
-                    ).hexdigest()
-                    if key in seen:
-                        continue
-                    seen.add(key)
-                    candidates.append(
-                        {
-                            "classification_key": key,
-                            "comment": comment,
-                            "reason": "",
-                            "store": store,
-                            "listing": listing,
-                            "category_a": matched["category_a"] if matched else "",
-                            "category_b": matched["category_b"] if matched else "",
-                            "source_row": number,
-                            "source_category": category,
-                            "review_id": identity,
-                            "reference": references.get(identity),
-                            "record_count": 1,
-                            "baseline": {},
-                        }
-                    )
-                break
+            sheet_context = self._review_sheet_context(workbook)
+            if sheet_context is not None:
+                candidates, skipped = self._review_candidates(
+                    *sheet_context,
+                    draft["snapshot"]["variants"],
+                    references,
+                )
         finally:
             workbook.close()
-        for identity in references:
-            matched_samples = [
-                item for item in candidates if item["review_id"] == identity
-            ]
-            if len(matched_samples) != 1:
-                raise ValueError(f"参考答案评论编号 {identity} 未唯一匹配当前品类评论")
-            for unit in (
-                *references[identity]["units"],
-                *references[identity].get("facts", []),
-            ):
-                if (
-                    unit.get("evidence")
-                    and unit["evidence"] not in matched_samples[0]["comment"]
-                ):
-                    raise ValueError(f"参考答案 {identity} 的证据不在原评论中")
+        self._validate_review_references(candidates, references)
         if not candidates:
             raise ValueError(
                 "未找到当前品类的评论；表格需包含评论内容列，品类需与当前标准匹配"
@@ -779,6 +757,102 @@ class ClassificationStandardValidationService:
                 candidates, sample_size, bucket_fields=("store", "listing")
             ),
         )
+
+    @staticmethod
+    def _review_sheet_context(workbook: Any) -> tuple[Any, list[str], int] | None:
+        for sheet in workbook:
+            if sheet.title == "人工参考答案":
+                continue
+            for number, values in enumerate(
+                sheet.iter_rows(max_row=50, values_only=True), start=1
+            ):
+                if number <= 50 and "评论内容" in values:
+                    headers = [str(value or "").strip() for value in values]
+                    return sheet, headers, number
+        return None
+
+    @staticmethod
+    def _review_candidates(
+        sheet: Any,
+        headers: list[str],
+        header_row: int,
+        variants: list[dict[str, Any]],
+        references: dict[str, Any],
+    ) -> tuple[list[dict[str, Any]], int]:
+        candidates = []
+        seen = set()
+        skipped = 0
+        sorted_variants = sorted(variants, key=lambda item: -len(item["category_b"]))
+        for number, values in enumerate(
+            sheet.iter_rows(min_row=header_row + 1, values_only=True),
+            start=header_row + 1,
+        ):
+            row = dict(zip(headers, values, strict=False))
+            comment = "\n".join(
+                str(row.get(key) or "").strip() for key in ("评论标题", "评论内容")
+            ).strip()
+            if not comment:
+                continue
+            category = str(row.get("一级品类") or row.get("品类") or "").strip()
+            matched = next(
+                (
+                    variant
+                    for variant in sorted_variants
+                    if variant["category_b"] in category
+                    or variant["category_a"] == category
+                ),
+                None,
+            )
+            if category and matched is None:
+                skipped += 1
+                continue
+            identity = str(row.get("评论编号") or number)
+            store = str(row.get("下单店铺") or row.get("上架店铺") or "")
+            listing = str(row.get("ASIN") or row.get("Listing") or "")
+            key = hashlib.sha256(
+                f"{identity}\x1f{store}\x1f{listing}\x1f{comment}".encode()
+            ).hexdigest()
+            if key in seen:
+                continue
+            seen.add(key)
+            candidates.append(
+                {
+                    "classification_key": key,
+                    "comment": comment,
+                    "reason": "",
+                    "store": store,
+                    "listing": listing,
+                    "category_a": matched["category_a"] if matched else "",
+                    "category_b": matched["category_b"] if matched else "",
+                    "source_row": number,
+                    "source_category": category,
+                    "review_id": identity,
+                    "reference": references.get(identity),
+                    "record_count": 1,
+                    "baseline": {},
+                }
+            )
+        return candidates, skipped
+
+    @staticmethod
+    def _validate_review_references(
+        candidates: list[dict[str, Any]], references: dict[str, Any]
+    ) -> None:
+        for identity in references:
+            matched_samples = [
+                item for item in candidates if item["review_id"] == identity
+            ]
+            if len(matched_samples) != 1:
+                raise ValueError(f"参考答案评论编号 {identity} 未唯一匹配当前品类评论")
+            for unit in (
+                *references[identity]["units"],
+                *references[identity].get("facts", []),
+            ):
+                if (
+                    unit.get("evidence")
+                    and unit["evidence"] not in matched_samples[0]["comment"]
+                ):
+                    raise ValueError(f"参考答案 {identity} 的证据不在原评论中")
 
     @staticmethod
     def _read_references(workbook, taxonomy: dict) -> dict:
@@ -1043,6 +1117,91 @@ class ClassificationStandardValidationService:
             "error_rate": rate(error_count),
         }
 
+    @classmethod
+    def _efficiency_summary(
+        cls,
+        items: list[dict[str, Any]],
+        usage: dict[str, Any],
+        metrics: dict[str, Any],
+        model_calls: dict[str, int | None] | None = None,
+    ) -> dict[str, Any]:
+        sample_size = len(items)
+        sides: dict[str, dict[str, int | float]] = {}
+        known_model_calls = model_calls or {}
+        for side in ("baseline", "draft"):
+            side_usage = usage.get(side)
+            side_usage = side_usage if isinstance(side_usage, dict) else {}
+            side_metrics = metrics.get(side)
+            side_metrics = side_metrics if isinstance(side_metrics, dict) else {}
+            values = cls._efficiency_side(
+                items,
+                side,
+                sample_size,
+                side_usage,
+                side_metrics,
+                known_model_calls.get(side),
+            )
+            if values:
+                sides[side] = values
+        return {"sample_size": sample_size, "sides": sides}
+
+    @staticmethod
+    def _efficiency_side(
+        items: list[dict[str, Any]],
+        side: str,
+        sample_size: int,
+        usage: dict[str, Any],
+        metrics: dict[str, Any],
+        model_calls: int | None,
+    ) -> dict[str, int | float]:
+        values: dict[str, int | float] = {}
+        call_count = (
+            model_calls if model_calls is not None else metrics.get("fact_model_calls")
+        )
+        if isinstance(call_count, int) and not isinstance(call_count, bool):
+            values["model_calls"] = call_count
+            values["average_model_calls"] = (
+                round(call_count / sample_size, 2) if sample_size else 0.0
+            )
+        total_tokens = ClassificationStandardValidationService._total_tokens(usage)
+        if total_tokens is not None:
+            values["total_tokens"] = total_tokens
+            values["average_tokens"] = (
+                round(total_tokens / sample_size, 1) if sample_size else 0.0
+            )
+        coverage_audit_count = metrics.get("coverage_audit_calls")
+        if isinstance(coverage_audit_count, int) and not isinstance(
+            coverage_audit_count, bool
+        ):
+            values["coverage_audit_count"] = coverage_audit_count
+            values["coverage_audit_rate"] = (
+                round(coverage_audit_count / sample_size * 100, 1)
+                if sample_size
+                else 0.0
+            )
+        statuses = [
+            item.get(side, {}).get("status")
+            for item in items
+            if item.get(side, {}).get("status")
+        ]
+        if statuses:
+            review_count = sum(str(status) in REVIEW_STATUSES for status in statuses)
+            values["review_count"] = review_count
+            values["review_rate"] = round(review_count / len(statuses) * 100, 1)
+        return values
+
+    @staticmethod
+    def _total_tokens(usage: dict[str, Any]) -> int | None:
+        total_tokens = usage.get("total_tokens")
+        if isinstance(total_tokens, int) and not isinstance(total_tokens, bool):
+            return total_tokens
+        token_values = [
+            value
+            for value in (usage.get("input_tokens"), usage.get("output_tokens"))
+            if isinstance(value, int) and not isinstance(value, bool)
+        ]
+        return sum(token_values) if token_values else None
+
     def _serialize(
         self,
         value: dict[str, Any],
@@ -1055,6 +1214,14 @@ class ClassificationStandardValidationService:
         value["summary"] = json_value(value.pop("summary_json"), {})
         value["usage"] = json_value(value.pop("usage_json"), {})
         value["metrics"] = json_value(value.pop("metrics_json"), {})
+        if "efficiency" not in value["summary"]:
+            efficiency = self._efficiency_summary(
+                items,
+                value["usage"],
+                value["metrics"],
+            )
+            if efficiency["sides"]:
+                value["summary"]["efficiency"] = efficiency
         value["model_names"] = json_value(value.pop("model_names_json"), [])
         value["source"] = source.get("result", {})
         if include_items:

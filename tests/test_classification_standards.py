@@ -4,6 +4,7 @@ import hashlib
 import json
 from copy import deepcopy
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi import FastAPI
@@ -23,6 +24,8 @@ from web_backend.routers.classification_standards import (
     create_classification_standard_router,
 )
 
+_CandidateContext = tuple[ClassificationStandardService, str, dict[str, Any]]
+
 
 def _service(tmp_path: Path) -> ClassificationStandardService:
     database = Database(tmp_path / "app.db")
@@ -36,6 +39,18 @@ def _service(tmp_path: Path) -> ClassificationStandardService:
             """
         )
     return ClassificationStandardService(database)
+
+
+@pytest.fixture
+def eyewear_candidate_context(
+    tmp_path: Path,
+) -> _CandidateContext:
+    service = _service(tmp_path)
+    standard = next(
+        item for item in service.list() if item["standard_key"] == "eyewear"
+    )
+    standard_id = str(standard["id"])
+    return service, standard_id, deepcopy(service.get(standard_id)["snapshot"])
 
 
 def _mark_sample_validation_ready(
@@ -63,9 +78,20 @@ def _mark_sample_validation_ready(
                 draft["id"],
                 draft["revision"],
                 draft["base_version_id"],
-                json.dumps({"comparison_type": "standard_version", "recognition_contract": {
-                    "candidate": {"fingerprint": recognition_fingerprint(TaxonomyConfig.model_validate(draft["snapshot"]["taxonomy"]))}
-                }}),
+                json.dumps(
+                    {
+                        "comparison_type": "standard_version",
+                        "recognition_contract": {
+                            "candidate": {
+                                "fingerprint": recognition_fingerprint(
+                                    TaxonomyConfig.model_validate(
+                                        draft["snapshot"]["taxonomy"]
+                                    )
+                                )
+                            }
+                        },
+                    }
+                ),
             ),
         )
     return run_id
@@ -89,7 +115,11 @@ def test_draft_roundtrip_preserves_new_label_claim_bindings(tmp_path: Path) -> N
     draft = service.create_draft(standard["id"], "user-1")
     content = service._editable_content(draft["snapshot"])
     label = deepcopy(
-        next(item for item in content["labels"] if item["code"] == "FUNCTION_QUICK_DRY_U1")
+        next(
+            item
+            for item in content["labels"]
+            if item["code"] == "FUNCTION_QUICK_DRY_U1"
+        )
     )
     label["code"] = "TEST_DRYING_VARIANT"
     content["labels"].append(label)
@@ -339,6 +369,107 @@ def test_published_label_semantics_require_a_new_code(tmp_path: Path) -> None:
     assert any(
         "已发布标签不能同码改义" in item for item in updated["validation"]["blocking"]
     )
+
+
+def test_candidate_validation_preserves_multi_issue_order(
+    eyewear_candidate_context: _CandidateContext,
+) -> None:
+    service, standard_id, base = eyewear_candidate_context
+    candidate = deepcopy(base)
+    candidate["name"] = "   "
+    candidate["variants"] = []
+    taxonomy = candidate["taxonomy"]
+    taxonomy["product_context"] = "   "
+    taxonomy["instructions"] = []
+    taxonomy["allowed_parts"] = []
+    taxonomy["labels"][0]["description"] = "改变已发布标签的语义"
+    changed_code = taxonomy["labels"][0]["code"]
+    expected_blocking = [
+        "标准名称不能为空",
+        "适用商品说明不能为空",
+        "至少需要一条分类规则",
+        "至少需要一个适用品类",
+        "证据部位必须保留“未指定部位”",
+        f"已发布标签不能同码改义：{changed_code}；请停用旧标签并创建新编码",
+    ]
+
+    validation = service._validate_candidate(standard_id, candidate, base)
+
+    assert validation == {
+        "blocking": expected_blocking,
+        "warnings": ["将移除 3 个适用品类，新任务不再匹配这些品类"],
+        "issues": [
+            {"kind": "invalid_structure", "message": message, "field": None}
+            for message in expected_blocking
+        ],
+    }
+
+
+def test_candidate_validation_keeps_v1_and_v2_policy_boundaries(
+    eyewear_candidate_context: _CandidateContext,
+) -> None:
+    service, standard_id, base = eyewear_candidate_context
+    legacy_candidate = deepcopy(base)
+    legacy_candidate["name"] = f"{legacy_candidate['name']} V2"
+    legacy_candidate["taxonomy"]["validation_rules"]["allowed_groups"] = ["自定义分组"]
+
+    legacy_validation = service._validate_candidate(
+        standard_id,
+        legacy_candidate,
+        base,
+    )
+
+    assert legacy_validation["blocking"][0] == "统一标准必须使用规定的七个业务分组"
+
+    hierarchical_candidate = deepcopy(base)
+    hierarchical_candidate["name"] = f"{hierarchical_candidate['name']} V2"
+    hierarchical_candidate["taxonomy"] = {
+        "version": "test-hierarchy-v2",
+        "structure_version": 2,
+        "recognition_profile": "semantic_v1",
+        "agent_family": hierarchical_candidate["agent_family"],
+        "product_context": "测试层级分类",
+        "instructions": ["按层级判断"],
+        "allowed_parts": ["UNSPECIFIED"],
+        "categories": [
+            {"code": "TEST_FUNCTION", "name": "体验"},
+            {"code": "TEST_QUALITY", "name": "体验"},
+        ],
+        "labels": [
+            {
+                "code": "TEST_HIERARCHY_COLD",
+                "name": "不保暖",
+                "group": "体验",
+                "parent_code": "TEST_FUNCTION",
+                "description": "保暖不足",
+                "allowed_sentiments": ["NEGATIVE"],
+            },
+            {
+                "code": "TEST_HIERARCHY_FAULT",
+                "name": "损坏",
+                "group": "体验",
+                "parent_code": "TEST_QUALITY",
+                "description": "产品损坏",
+                "allowed_sentiments": ["NEGATIVE"],
+            },
+        ],
+        "validation_rules": {"allowed_groups": ["自定义分组"]},
+    }
+
+    hierarchical_validation = service._validate_candidate(
+        standard_id,
+        hierarchical_candidate,
+        base,
+    )
+
+    assert hierarchical_validation["blocking"] == ["同一父节点下的分类和标签不能重名"]
+    assert hierarchical_validation["issues"] == [
+        {
+            "kind": "invalid_structure",
+            "message": "同一父节点下的分类和标签不能重名",
+            "field": None,
+        }
+    ]
 
 
 def test_publish_requires_current_sample_validation(tmp_path: Path) -> None:
@@ -853,10 +984,64 @@ def test_draft_validation_reports_blank_business_fields(tmp_path: Path) -> None:
 
     assert "标准名称不能为空" in updated["validation"]["blocking"]
     assert not any(
-        issue.get("field") == "description"
-        for issue in updated["validation"]["issues"]
+        issue.get("field") == "description" for issue in updated["validation"]["issues"]
     )
     assert any(
-        "已发布标签不能同码改义" in item
-        for item in updated["validation"]["blocking"]
+        "已发布标签不能同码改义" in item for item in updated["validation"]["blocking"]
     )
+
+
+def test_publish_rechecks_approved_sample_for_taxonomy_leakage(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    standard = next(
+        item for item in service.list() if item["standard_key"] == "eyewear"
+    )
+    draft = service.create_draft(standard["id"], "user-1")
+    content = deepcopy(draft["content"])
+    comment = (
+        "The frame stays comfortable through a full school day and does not "
+        "press against the nose or the sides of the head."
+    )
+    content["labels"][0]["examples"] = [
+        {
+            "text": comment,
+            "applies": True,
+            "sentiment": "NEGATIVE",
+            "explanation": "验证边界",
+        }
+    ]
+    updated = service.update_draft(
+        draft["id"],
+        draft["revision"],
+        content,
+        "补充边界示例",
+        "user-1",
+    )
+    run_id = _mark_sample_validation_ready(service, updated)
+    with service.database.transaction() as connection:
+        connection.execute(
+            "UPDATE classification_standard_validation_runs SET sample_json = ? "
+            "WHERE id = ?",
+            (
+                json.dumps(
+                    [
+                        {
+                            "review_id": "review-1234-abcd",
+                            "comment": comment,
+                        }
+                    ]
+                ),
+                run_id,
+            ),
+        )
+
+    with pytest.raises(ClassificationStandardValidationError) as exc_info:
+        service.publish_draft(
+            updated["id"],
+            updated["revision"],
+            "发布前复查",
+            "user-1",
+        )
+
+    assert "数据泄漏" in exc_info.value.validation["blocking"][0]
+    assert "review-1234-abcd" in exc_info.value.validation["blocking"][0]

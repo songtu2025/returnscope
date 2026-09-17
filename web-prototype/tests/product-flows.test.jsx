@@ -263,6 +263,10 @@ describe("关键用户流程", () => {
     expect(
       await screen.findByRole("heading", { name: "登录并继续分析" }),
     ).toBeVisible();
+    expect(screen.getByText("用户反馈语义分析智能体")).toBeVisible();
+    expect(
+      screen.getByText(/当前支持 Amazon 退货反馈的语义分类、人工复核与业务洞察/),
+    ).toBeVisible();
     await user.type(screen.getByLabelText("邮箱"), "admin@example.com");
     await user.type(screen.getByLabelText("密码"), "secure-password");
     await user.click(screen.getByRole("button", { name: /进入工作台/ }));
@@ -274,6 +278,8 @@ describe("关键用户流程", () => {
       ),
     );
     expect(await screen.findByRole("navigation", { name: "主导航" })).toBeVisible();
+    expect(screen.getByText("用户反馈语义分析")).toBeVisible();
+    expect(screen.getByText("智能体 · Amazon 退货反馈")).toBeVisible();
   });
 
   test("任意子页面会话失效后退出已登录应用壳", async () => {

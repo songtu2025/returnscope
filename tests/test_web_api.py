@@ -204,7 +204,7 @@ def test_category_completion_updates_multiple_stores_in_one_version(
                 "items": [
                     {
                         "store": "SEEKWAY:US",
-                        "msku": "SKU-US",
+                        "msku": "SKU-1",
                         "listing": "US-LISTING",
                         "category_a": "眼镜",
                         "category_b": "儿童眼镜",
@@ -224,12 +224,105 @@ def test_category_completion_updates_multiple_stores_in_one_version(
         assert response.status_code == 200, response.text
         updated = response.json()
         assert updated["current_version"] == 2
+        assert updated["row_count"] == 2
         rows = client.get(f"/api/datasets/{products['id']}/rows", params={"limit": 10})
         by_key = {
             (item["店铺/站点"], item["MSKU"]): item for item in rows.json()["records"]
         }
-        assert by_key[("SEEKWAY:US", "SKU-US")]["Listing"] == "US-LISTING"
+        assert by_key[("SEEKWAY:US", "SKU-1")]["Listing"] == "US-LISTING"
+        assert by_key[("SEEKWAY:US", "SKU-1")]["产品名称"] == "旧名称"
         assert by_key[("SEEKWAY:CA", "SKU-CA")]["品类B"] == "儿童渔夫帽"
+
+
+def test_product_edit_rejections_do_not_create_partial_versions(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(
+        data_dir=tmp_path / "runtime",
+        database_path=tmp_path / "runtime" / "app.db",
+        session_days=14,
+        task_workers=1,
+        bootstrap_email="admin@example.com",
+        bootstrap_name="管理员",
+        bootstrap_password="test-password-123",
+        encryption_key=Fernet.generate_key().decode("ascii"),
+        secure_cookies=False,
+    )
+    app = create_app(start_worker=False, settings_override=settings)
+    _returns_path, products_path = _write_input_files(tmp_path)
+
+    with TestClient(app) as client:
+        assert (
+            client.post(
+                "/api/auth/login",
+                json={
+                    "email": "admin@example.com",
+                    "password": "test-password-123",
+                },
+            ).status_code
+            == 200
+        )
+        products = _upload_dataset(client, products_path, "商品维度", "products")
+        invalid_updates = [
+            ({"row_index": 9, "changes": {"Listing": "NEW"}}, "要修改的数据行不存在"),
+            ({"row_index": 0, "changes": {"未知字段": "NEW"}}, "没有可修改的字段"),
+        ]
+        for update, expected_detail in invalid_updates:
+            response = client.patch(
+                f"/api/datasets/{products['id']}/rows",
+                json={
+                    **update,
+                    "expected_version": 1,
+                    "change_note": "无效修改",
+                },
+            )
+            assert response.status_code == 400
+            assert response.json()["detail"] == expected_detail
+
+        conflict = client.patch(
+            f"/api/datasets/{products['id']}/rows",
+            json={
+                "row_index": 0,
+                "expected_version": 2,
+                "changes": {"Listing": "STALE"},
+                "change_note": "冲突修改",
+            },
+        )
+        assert conflict.status_code == 409
+        assert conflict.json()["detail"] == "商品维度已被其他用户修改，请刷新后重试"
+
+        duplicate_batch = client.post(
+            f"/api/datasets/{products['id']}/category-completion",
+            json={
+                "expected_version": 1,
+                "store": "SEEKWAY:US",
+                "items": [
+                    {
+                        "msku": "SKU-2",
+                        "listing": "SK002",
+                        "category_a": "水鞋",
+                        "category_b": "儿童水鞋",
+                    },
+                    {
+                        "msku": "SKU-2",
+                        "listing": "SK002-REPEAT",
+                        "category_a": "水鞋",
+                        "category_b": "儿童水鞋",
+                    },
+                ],
+                "change_note": "重复批次",
+            },
+        )
+        assert duplicate_batch.status_code == 400
+        assert duplicate_batch.json()["detail"] == "商品重复提交：SEEKWAY:US + SKU-2"
+
+        unchanged = client.get(f"/api/datasets/{products['id']}").json()
+        assert unchanged["current_version"] == 1
+        rows = client.get(
+            f"/api/datasets/{products['id']}/rows",
+            params={"q": "SKU-2"},
+        ).json()
+        assert rows["total"] == 0
 
 
 def test_return_version_fills_only_missing_store_values(tmp_path: Path) -> None:
@@ -772,45 +865,8 @@ def test_real_web_task_flow(tmp_path: Path) -> None:
                 f"/api/classification-results/{base_version_id}/review-batches",
                 json={"reason": "创建复核批次"},
             )
-            assert batch_response.status_code == 201, batch_response.text
-            batch = batch_response.json()
-            batch_records = client.get(
-                f"/api/review-batches/{batch['id']}/records"
-            ).json()
-            assert batch_records["total"] == 1
-            review = batch_records["items"][0]
-            resolved = client.patch(
-                f"/api/review-batches/{batch['id']}/records/{review['id']}",
-                json={
-                    "expected_revision": review["revision"],
-                    "label_code": "FIT_TOO_SMALL_U1",
-                    "reason": "人工确认标签",
-                },
-            )
-            assert resolved.status_code == 200, resolved.text
-            assert resolved.json()["classification"]["status"] == "MANUAL_RESOLVED"
-            stale = client.patch(
-                f"/api/review-batches/{batch['id']}/records/{review['id']}",
-                json={
-                    "expected_revision": review["revision"],
-                    "label_code": "FIT_TOO_LARGE_U1",
-                    "reason": "重复提交",
-                },
-            )
-            assert stale.status_code == 409
-            current_batch = client.get(f"/api/review-batches/{batch['id']}").json()
-            published = client.post(
-                f"/api/review-batches/{batch['id']}/publish",
-                json={
-                    "expected_revision": current_batch["revision"],
-                    "reason": "发布复核结果",
-                },
-            )
-            assert published.status_code == 200, published.text
-            history = client.get(
-                f"/api/classification-results/{base_version_id}/versions"
-            ).json()
-            assert [item["version"] for item in history] == [2, 1]
+            assert batch_response.status_code == 400
+            assert "没有需要业务判断的分类单元" in batch_response.json()["detail"]
             collaborator = client.post(
                 "/api/users",
                 json={

@@ -159,7 +159,8 @@ def create_app(
         validation_executor.shutdown(wait=False, cancel_futures=True)
 
     app = FastAPI(
-        title="退货语义分析智能体",
+        title="用户反馈语义分析智能体",
+        description="当前支持 Amazon 退货反馈的语义分类、人工复核与业务洞察。",
         version="1.0.0",
         lifespan=lifespan,
         docs_url=None,

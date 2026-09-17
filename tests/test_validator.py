@@ -66,6 +66,57 @@ def test_clear_problem_is_auto_approved(taxonomy, claims) -> None:
     assert result.primary_label_codes == ["FIT_TOO_SMALL"]
 
 
+def test_multiple_problems_without_primary_are_auto_approved(taxonomy, claims) -> None:
+    comment = "Too small. The heel seam opened."
+    result = _validate(
+        _payload(
+            [
+                _unit(evidence="Too small"),
+                _unit(
+                    "QUALITY_SEAM_FAILURE",
+                    "The heel seam opened",
+                ),
+            ]
+        ),
+        comment,
+        "APPAREL_TOO_SMALL",
+        taxonomy,
+        claims,
+    )
+
+    assert result.status.value == "AUTO_APPROVED", result.review_reasons
+    assert result.problem_label_codes == ["FIT_TOO_SMALL", "QUALITY_SEAM_FAILURE"]
+    assert result.primary_label_codes == []
+    assert "多个问题但主因不明确" not in result.review_reasons
+
+
+def test_final_validator_suppresses_fallback_covered_by_specific_unit(
+    taxonomy, claims
+) -> None:
+    comment = "The item performed well in the same test."
+    candidate = taxonomy.model_copy(
+        update={
+            "validation_rules": taxonomy.validation_rules.model_copy(
+                update={"fallback_label_codes": ["EXPERIENCE_WEIGHT"]}
+            )
+        }
+    )
+    fallback = _unit("EXPERIENCE_WEIGHT", comment, sentiment="POSITIVE")
+    specific = _unit("FUNCTION_SAND_RESISTANCE", comment, sentiment="POSITIVE")
+
+    result = _validate(
+        _payload([fallback, specific]),
+        comment,
+        "UNWANTED_ITEM",
+        candidate,
+        claims,
+    )
+
+    assert [unit.label_code for unit in result.semantic_units] == [
+        "FUNCTION_SAND_RESISTANCE"
+    ]
+
+
 def test_water_shoe_seam_fault_preserves_part_and_usage_evidence(taxonomy, claims):
     comment = "The heel seam opened after two uses"
     unit = _unit("QUALITY_SEAM_FAILURE", comment)
@@ -206,6 +257,97 @@ def test_unknown_semantic_is_not_forced_into_taxonomy(taxonomy, claims) -> None:
 
     assert result.status.value == "UNKNOWN_SEMANTIC"
     assert result.problem_label_codes == []
+
+
+def test_expected_abstention_does_not_trigger_unknown_status(taxonomy, claims) -> None:
+    result = _validate(
+        _payload(
+            [],
+            unknown=[
+                {
+                    "opinion": "尚未测试防水",
+                    "evidence": "not tested in rain",
+                    "reason": "未发生测试",
+                    "disposition": "EXPECTED_ABSTENTION",
+                    "statement_type": "NOT_TESTED",
+                }
+            ],
+        ),
+        "not tested in rain",
+        "",
+        taxonomy,
+        claims,
+    )
+
+    assert result.status.value == "AUTO_APPROVED"
+    assert result.comment_summary.status.value == "NO_CONFIRMED"
+
+
+@pytest.mark.parametrize(
+    (
+        "right_condition",
+        "right_actor",
+        "right_event",
+        "right_operation",
+        "summary_status",
+        "relation_type",
+    ),
+    [
+        ("outdoors", "REVIEWER", "E1", "SWIPE", "MIXED", "MIXED"),
+        ("indoors", "REVIEWER", "E2", "SWIPE", "MIXED", "MIXED"),
+        ("indoors", "REVIEWER", "E1", "TYPE", "MIXED", "MIXED"),
+        ("indoors", "REVIEWER", "E1", "SWIPE", "CONFLICT", "CONFLICT"),
+        ("indoors", "OTHER:1", "E1", "SWIPE", "MIXED", "MULTI_ACTOR"),
+    ],
+)
+def test_comment_summary_preserves_semantic_scope(
+    taxonomy,
+    claims,
+    right_condition,
+    right_actor,
+    right_event,
+    right_operation,
+    summary_status,
+    relation_type,
+) -> None:
+    code = "FIT_TOO_SMALL"
+    labels = [
+        label.model_copy(update={"allowed_sentiments": ["POSITIVE", "NEGATIVE"]})
+        if label.code == code
+        else label
+        for label in taxonomy.labels
+    ]
+    scoped_taxonomy = taxonomy.model_copy(update={"labels": labels})
+    positive = _unit(code, "Works indoors", sentiment="POSITIVE")
+    positive.update(
+        fact_id="F1",
+        condition="indoors",
+        actor_ref="REVIEWER",
+        event_ref="E1",
+        operation="SWIPE",
+        statement_type="EXPERIENCE",
+    )
+    negative = _unit(code, "Fails elsewhere")
+    negative.update(
+        fact_id="F2",
+        condition=right_condition,
+        actor_ref=right_actor,
+        event_ref=right_event,
+        operation=right_operation,
+        statement_type="EXPERIENCE",
+    )
+
+    result = _validate(
+        _payload([positive, negative]),
+        "Works indoors. Fails elsewhere",
+        "",
+        scoped_taxonomy,
+        claims,
+    )
+
+    assert result.comment_summary.status.value == summary_status
+    assert result.semantic_relations[0].relation_type.value == relation_type
+    assert result.semantic_relations[0].fact_ids == ["F1", "F2"]
 
 
 def test_invalid_claim_mapping_requires_manual_review(taxonomy, claims) -> None:

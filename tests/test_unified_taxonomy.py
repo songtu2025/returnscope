@@ -65,11 +65,27 @@ def test_four_categories_share_groups_and_keep_neutral_reasons_explicit():
     assert len(combined.validation_rules.neutral_reason_labels) == 11
 
 
+def test_combined_taxonomy_preserves_configured_fallback_codes():
+    registry = load_capability_registry(ROOT / "config/category_capabilities.json")
+
+    combined = registry.combined_taxonomy()
+
+    assert set(combined.validation_rules.fallback_label_codes) == {
+        "GLOVE_SIZE_ISSUE_UNSPECIFIED_U1",
+        "GLOVE_REASON_UNSPECIFIED_U1",
+        "EYEWEAR_FIT_UNSPECIFIED_U1",
+        "EYEWEAR_REASON_UNSPECIFIED_U1",
+        "FIT_UNSPECIFIED_U1",
+        "QUALITY_UNSPECIFIED_U1",
+        "OTHER_EXPECTATION_UNSPECIFIED_U1",
+    }
+
+
 def test_glove_framework_topics_extend_taxonomy_compatibly():
     taxonomy = load_taxonomy(ROOT / "config/taxonomy_gloves.json")
     labels = {label.code: label for label in taxonomy.labels}
 
-    assert taxonomy.version == "gloves-unified-2026-09-08-v1-semantic1"
+    assert taxonomy.version == "gloves-unified-2026-09-12-v1-semantic3"
     assert len(labels) == 63
     assert {
         "GLOVE_SIZE_SMALL_U1",

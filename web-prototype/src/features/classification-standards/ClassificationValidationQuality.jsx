@@ -2,21 +2,21 @@ const ISSUE_LABELS = {
   duplicate_units: "重复实例",
   extra_labels: "多标实例",
   missing_labels: "漏标实例",
-  direction_errors: "方向错误",
-  part_errors: "明确部位漏错",
-  evidence_errors: "证据检查失败",
+  direction_errors: "方向差异",
+  part_errors: "明确部位差异",
+  evidence_errors: "证据检查差异",
   model_errors: "模型调用错误",
-  statement_type_errors: "事实状态错误",
-  actor_errors: "使用者错配",
-  product_errors: "商品对象错配",
-  plan_confirmation_errors: "计划或假设误确认为事实",
-  event_errors: "事件关系错误",
-  condition_errors: "条件遗漏",
-  subject_errors: "责任主体错误",
-  primary_errors: "主因错误",
+  statement_type_errors: "事实状态差异",
+  actor_errors: "使用者差异",
+  product_errors: "商品对象差异",
+  plan_confirmation_errors: "计划或假设事实状态差异",
+  event_errors: "事件关系差异",
+  condition_errors: "条件差异",
+  subject_errors: "责任主体差异",
+  primary_errors: "主因字段差异",
 };
 
-function hasBusinessErrors(item) {
+function hasAutomaticCheckDifferences(item) {
   return (
     item.draft.status === "MODEL_ERROR" ||
     Object.keys(ISSUE_LABELS).some((key) => item.reference_comparison?.draft?.[key] > 0)
@@ -64,6 +64,67 @@ function isExpectedUnmapped(item, unknown) {
   });
 }
 
+const INTEGER_FORMAT = new Intl.NumberFormat("zh-CN", {
+  maximumFractionDigits: 0,
+});
+
+const DECIMAL_FORMAT = new Intl.NumberFormat("zh-CN", {
+  maximumFractionDigits: 2,
+});
+
+function formatNumber(value, format = INTEGER_FORMAT) {
+  return Number.isFinite(value) ? format.format(value) : "--";
+}
+
+function EfficiencyComparison({ efficiency }) {
+  const sides = efficiency?.sides || {};
+  const rows = ["baseline", "draft"].filter((side) => sides[side]);
+  if (rows.length === 0) return null;
+  return (
+    <section aria-label="执行效率对比">
+      <h4>执行效率</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>结果</th>
+            <th>模型调用</th>
+            <th>Token</th>
+            <th>覆盖审计</th>
+            <th>人工复核</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((side) => {
+            const values = sides[side];
+            return (
+              <tr key={side}>
+                <td>{side === "baseline" ? "对照" : "候选"}</td>
+                <td>
+                  {formatNumber(values.model_calls)} 次 · 平均{" "}
+                  {formatNumber(values.average_model_calls, DECIMAL_FORMAT)} 次/条
+                </td>
+                <td>
+                  {formatNumber(values.total_tokens)} · 平均{" "}
+                  {formatNumber(values.average_tokens, DECIMAL_FORMAT)} Token/条
+                </td>
+                <td>
+                  {formatNumber(values.coverage_audit_rate, DECIMAL_FORMAT)}% ·{" "}
+                  {formatNumber(values.coverage_audit_count)} 次
+                </td>
+                <td>
+                  {formatNumber(values.review_rate, DECIMAL_FORMAT)}% ·{" "}
+                  {formatNumber(values.review_count)} 条
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <small>指标来自本次实际执行记录；历史运行未记录的项目显示 --。</small>
+    </section>
+  );
+}
+
 export function ClassificationValidationQuality({ run }) {
   const items = run.items || [];
   const gaps = items.filter((item) =>
@@ -78,12 +139,12 @@ export function ClassificationValidationQuality({ run }) {
   );
   const groups = [
     {
-      title: "语义智能体问题",
-      note: "参考答案不一致或调用失败。具体归因仍需结合原文检查。",
-      items: items.filter(hasBusinessErrors),
+      title: "自动检查差异",
+      note: "系统仅展示与参考答案的字段差异或调用失败，不直接替代业务员结论。",
+      items: items.filter(hasAutomaticCheckDifferences),
     },
     {
-      title: "标签体系问题",
+      title: "标签覆盖待核对",
       note: "以下是待核对的覆盖缺口，不自动认定为标签缺陷；请检查已有标签定义后决定。",
       items: gaps,
     },
@@ -98,16 +159,18 @@ export function ClassificationValidationQuality({ run }) {
     },
     {
       title: "预期留空或人工关注（非阻断）",
-      note: "参考已确认留空或尚未确认的预测、否认、建议等事实不直接视为标签覆盖缺口。业务比对未发现错误，相关说明保留供人工阅读；非阻断不代表已完成语义审阅。",
+      note: "参考已确认留空或尚未确认的预测、否认、建议等事实不直接视为标签覆盖缺口。自动检查未发现差异，相关说明保留供业务员阅读；非阻断不代表已完成语义审阅。",
       items: attention,
       informational: true,
     },
   ];
   const gate = run.quality_gate;
+  const blocking = /** @type {string[]} */ (gate?.blocking || []);
+  const warnings = /** @type {string[]} */ (gate?.warnings || []);
   const referenceEvaluation = run.summary?.reference_evaluation;
   return (
-    <section className="standard-quality-summary" aria-label="质量门槛与问题分组">
-      <h3>质量门槛与问题分组</h3>
+    <section className="standard-quality-summary" aria-label="质量门槛与自动检查分组">
+      <h3>质量门槛与自动检查分组</h3>
       <div
         className={`standard-validation-notice ${gate?.passed === false ? "blocking" : "warning"}`}
         role={gate?.passed === false ? "alert" : "status"}
@@ -123,12 +186,25 @@ export function ClassificationValidationQuality({ run }) {
           {gate?.note ||
             "自动检查只覆盖人工参考答案；观点与证据是否充分、覆盖缺口及业务歧义仍需人工判断。"}
         </p>
-        {gate?.blocking?.length > 0 && (
-          <ul>
-            {gate.blocking.map((reason) => (
-              <li key={reason}>{reason}</li>
-            ))}
-          </ul>
+        {blocking.length > 0 && (
+          <div>
+            <strong>发布阻断项</strong>
+            <ul>
+              {blocking.map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {warnings.length > 0 && (
+          <div>
+            <strong>人工复核警告</strong>
+            <ul>
+              {warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          </div>
         )}
         {gate?.policy && (
           <small>
@@ -139,7 +215,7 @@ export function ClassificationValidationQuality({ run }) {
             {gate.policy.max_duplicate_rate}%。
             {gate.policy.thresholds && (
               <>
-                零错误项：
+                发布阻断零容忍项：
                 {Object.entries(gate.policy.thresholds)
                   .filter(([, limit]) => limit === 0)
                   .map(([key]) => ISSUE_LABELS[key] || key)
@@ -150,6 +226,10 @@ export function ClassificationValidationQuality({ run }) {
           </small>
         )}
       </div>
+      <EfficiencyComparison efficiency={run.summary?.efficiency} />
+      <p>
+        自动检查展示标签抽取及相关字段与参考答案的差异，不根据主因或次要标签自动判定正确、部分正确或错误；重要性和最终结论由业务员结合原文判断。
+      </p>
       {referenceEvaluation && (
         <p>
           参考维度覆盖：
@@ -233,12 +313,12 @@ export function ValidationFactTrace({ result }) {
         <p key={fact.fact_id}>
           <b>{fact.statement_type}</b> · 使用者 {fact.actor_ref} · 商品{" "}
           {fact.product_ref} · 事件 {fact.event_ref || "未记录"} · 条件{" "}
-          {fact.condition || "未限定"} · 责任主体 {fact.subject || "未记录"} ·{" "}
-          {fact.is_primary_reason === true ? (
-            <strong>主因</strong>
-          ) : (
-            <span>{fact.is_primary_reason === false ? "非主因" : "主因未记录"}</span>
-          )}
+          {fact.condition || "未限定"} · 责任主体 {fact.subject || "未记录"} · 主因字段
+          {fact.is_primary_reason === true
+            ? " 是"
+            : fact.is_primary_reason === false
+              ? " 否"
+              : " 未记录"}
           <br />
           {fact.opinion}
           <br />

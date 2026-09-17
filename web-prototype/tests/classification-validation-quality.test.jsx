@@ -9,7 +9,7 @@ import { ClassificationStandardValidation } from "../src/features/classification
 
 afterEach(cleanup);
 
-test("v2策略说明包含后端配置的事件、条件、责任主体与主因零错误项", () => {
+test("v2策略说明中将自动检查项展示为中性差异", () => {
   render(
     <ClassificationValidationQuality
       run={{
@@ -34,12 +34,12 @@ test("v2策略说明包含后端配置的事件、条件、责任主体与主因
   );
   expect(
     screen.getByText(
-      /零错误项：事件关系错误、条件遗漏、责任主体错误、主因错误，均须为 0/,
+      /发布阻断零容忍项：事件关系差异、条件差异、责任主体差异、主因字段差异，均须为 0/,
     ),
   ).toBeVisible();
 });
 
-test("事实追踪区分主因、非主因与旧记录缺失，不混淆使用者和责任主体", async () => {
+test("事实追踪以普通字段展示主因记录，不混淆使用者和责任主体", async () => {
   const user = userEvent.setup();
   render(
     <ValidationFactTrace
@@ -69,9 +69,10 @@ test("事实追踪区分主因、非主因与旧记录缺失，不混淆使用�
     />,
   );
   await user.click(screen.getByText("事实状态、对象与条件"));
-  expect(screen.getByText("主因", { selector: "strong" })).toBeVisible();
-  expect(screen.getByText("非主因")).toBeVisible();
-  expect(screen.getByText("主因未记录")).toBeVisible();
+  expect(screen.queryByText("主因", { selector: "strong" })).not.toBeInTheDocument();
+  expect(screen.getByText(/主因字段 是/)).toBeVisible();
+  expect(screen.getByText(/主因字段 否/)).toBeVisible();
+  expect(screen.getByText(/主因字段 未记录/)).toBeVisible();
   expect(screen.getByText(/责任主体 PRODUCT/)).toBeVisible();
   expect(screen.getByText(/责任主体 SERVICE/)).toHaveTextContent("使用者 REVIEWER");
   expect(screen.getByText(/责任主体 未记录/)).toBeVisible();
@@ -167,12 +168,15 @@ const run = {
 test("质量问题按根因展开并显示事实状态和对象", async () => {
   const user = userEvent.setup();
   render(<ClassificationValidationQuality run={run} />);
-  expect(screen.getByText("语义智能体问题 · 1 条待检查")).toBeVisible();
-  expect(screen.getByText("标签体系问题 · 1 条待检查")).toBeVisible();
+  expect(screen.getByText("自动检查差异 · 1 条待检查")).toBeVisible();
+  expect(
+    screen.getByText(/不根据主因或次要标签自动判定正确、部分正确或错误/),
+  ).toBeVisible();
+  expect(screen.getByText("标签覆盖待核对 · 1 条待检查")).toBeVisible();
   expect(screen.getByText("人工歧义 · 1 条待检查")).toBeVisible();
-  await user.click(screen.getByText("语义智能体问题 · 1 条待检查"));
+  await user.click(screen.getByText("自动检查差异 · 1 条待检查"));
   await user.click(screen.getAllByText(/来源第 2 行/)[0]);
-  expect(screen.getAllByText("事实状态错误：1")[0]).toBeVisible();
+  expect(screen.getAllByText("事实状态差异：1")[0]).toBeVisible();
   await user.click(screen.getAllByText("事实状态、对象与条件")[0]);
   expect(screen.getAllByText("INTENT")[0]).toBeVisible();
   expect(screen.getAllByText(/使用者 child/)[0]).toBeVisible();
@@ -200,7 +204,43 @@ test("旧运行无自动评分时不显示虚假通过", () => {
   expect(screen.getByText("未配置自动质量门槛，保留人工确认流程")).toBeVisible();
 });
 
-test("参考确认留空移至非阻断记录，真实漏标和未覆盖语义仍保留", () => {
+test("显示对照与候选的实际执行效率，未记录指标不伪造为零", () => {
+  render(
+    <ClassificationValidationQuality
+      run={{
+        items: [],
+        summary: {
+          efficiency: {
+            sides: {
+              baseline: { review_count: 2, review_rate: 10 },
+              draft: {
+                model_calls: 112,
+                average_model_calls: 5.6,
+                total_tokens: 2856338,
+                average_tokens: 142816.9,
+                coverage_audit_count: 20,
+                coverage_audit_rate: 100,
+                review_count: 4,
+                review_rate: 20,
+              },
+            },
+          },
+        },
+      }}
+    />,
+  );
+  const baselineRow = screen.getByText("对照").closest("tr");
+  const draftRow = screen.getByText("候选").closest("tr");
+  expect(baselineRow).toHaveTextContent("-- 次 · 平均 -- 次/条");
+  expect(baselineRow).toHaveTextContent("10% · 2 条");
+  expect(draftRow).toHaveTextContent("112 次 · 平均 5.6 次/条");
+  expect(draftRow).toHaveTextContent("2,856,338 · 平均 142,816.9 Token/条");
+  expect(draftRow).toHaveTextContent("100% · 20 次");
+  expect(draftRow).toHaveTextContent("20% · 4 条");
+});
+
+test("参考确认留空移至非阻断记录，真实漏标和未覆盖语义仍保留", async () => {
+  const user = userEvent.setup();
   const comparison = Object.fromEntries(
     [
       "duplicate_units",
@@ -274,7 +314,10 @@ test("参考确认留空移至非阻断记录，真实漏标和未覆盖语义�
       }}
     />,
   );
-  expect(screen.getByText("语义智能体问题 · 1 条待检查")).toBeVisible();
-  expect(screen.getByText("标签体系问题 · 2 条待检查")).toBeVisible();
+  expect(screen.getByText("自动检查差异 · 1 条待检查")).toBeVisible();
+  expect(screen.getByText("标签覆盖待核对 · 2 条待检查")).toBeVisible();
   expect(screen.getByText("预期留空或人工关注（非阻断） · 1 条记录")).toBeVisible();
+  await user.click(screen.getByText("自动检查差异 · 1 条待检查"));
+  await user.click(screen.getAllByText(/来源第 .*Waterproofing is untested/)[0]);
+  expect(screen.getAllByText("漏标实例：1")[0]).toBeVisible();
 });

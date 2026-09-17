@@ -7,6 +7,14 @@ extend-exclude = ["tmp", "runtime", "output", "web-prototype"]
 select = ["E", "F", "I", "B"]
 ignore = ["E501"]
 
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+max-branches = 12
+max-args = 5
+max-statements = 50
+
 [tool.ruff.lint.per-file-ignores]
 "tests/*.py" = ["B017"]
 "scripts/generate_sk001_gold_sample.py" = ["E402"]
@@ -14,3 +22,10 @@ ignore = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["web_backend", "return_semantics", "return_analysis"]
+check_untyped_defs = true
+show_error_codes = true
+warn_unused_configs = true

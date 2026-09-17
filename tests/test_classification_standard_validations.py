@@ -301,6 +301,12 @@ def test_sample_validation_completes_and_becomes_stale_after_edit(
     assert completed["status"] == "completed"
     assert completed["summary"]["changed_count"] == 1
     assert completed["summary"]["error_count"] == 0
+    efficiency = completed["summary"]["efficiency"]["sides"]["draft"]
+    assert efficiency["model_calls"] == 2
+    assert efficiency["average_model_calls"] == 1
+    assert efficiency["total_tokens"] == 20
+    assert efficiency["average_tokens"] == 10
+    assert efficiency["review_rate"] == 0
     assert completed["publication_ready"] is False
     assert len(completed["items"]) == 2
 
@@ -579,7 +585,7 @@ def test_review_upload_keeps_source_context_and_isolated_validation(tmp_path):
         source = json.loads(row["source_json"])
         samples = json.loads(row["sample_json"])
         assert source["analysis_context"] == "review"
-        assert {sample["review_id"] for sample in samples} == {"r1", "r2"}
+        assert [sample["review_id"] for sample in samples] == ["r1", "r2"]
         assert connection.execute("SELECT COUNT(*) FROM datasets").fetchone()[0] == 2
     assert validations.claim_next() == run["id"]
     validations.run(run["id"])
@@ -634,17 +640,70 @@ def test_review_coverage_and_changes_include_positive_semantics():
     assert items[0]["draft"]["semantic_units"][0]["sentiment"] == "POSITIVE"
 
 
+def test_efficiency_summary_uses_only_recorded_usage_and_metrics():
+    items = [
+        {
+            "baseline": {"status": "AUTO_APPROVED"},
+            "draft": {"status": "AUTO_APPROVED"},
+        },
+        {
+            "baseline": {"status": "MANUAL_REVIEW"},
+            "draft": {"status": "MANUAL_REVIEW"},
+        },
+    ]
+    summary = ClassificationStandardValidationService._efficiency_summary(
+        items,
+        {
+            "baseline": {"input_tokens": 60, "output_tokens": 40},
+            "draft": {"total_tokens": 80},
+        },
+        {
+            "baseline": {"fact_model_calls": 6, "coverage_audit_calls": 2},
+            "draft": {"fact_model_calls": 4, "coverage_audit_calls": 1},
+        },
+    )
+
+    assert summary == {
+        "sample_size": 2,
+        "sides": {
+            "baseline": {
+                "model_calls": 6,
+                "average_model_calls": 3,
+                "total_tokens": 100,
+                "average_tokens": 50,
+                "coverage_audit_count": 2,
+                "coverage_audit_rate": 100,
+                "review_count": 1,
+                "review_rate": 50,
+            },
+            "draft": {
+                "model_calls": 4,
+                "average_model_calls": 2,
+                "total_tokens": 80,
+                "average_tokens": 40,
+                "coverage_audit_count": 1,
+                "coverage_audit_rate": 50,
+                "review_count": 1,
+                "review_rate": 50,
+            },
+        },
+    }
+
 
 def test_keyword_comparison_uses_same_taxonomy_and_cannot_approve(tmp_path):
     import pytest
 
     standards, validations = _services(tmp_path)
-    standard = next(item for item in standards.list() if item["standard_key"] == "eyewear")
+    standard = next(
+        item for item in standards.list() if item["standard_key"] == "eyewear"
+    )
     source_id = _seed_result(standards, standard)
     draft = standards.create_draft(standard["id"], "user-1")
     content = deepcopy(draft["content"])
     content["labels"][0]["keywords"].append("comparison")
-    draft = standards.update_draft(draft["id"], draft["revision"], content, "对照测试", "user-1")
+    draft = standards.update_draft(
+        draft["id"], draft["revision"], content, "对照测试", "user-1"
+    )
     captured = []
     runner = validations.runner.classify_taxonomy_sample
 
@@ -653,13 +712,26 @@ def test_keyword_comparison_uses_same_taxonomy_and_cannot_approve(tmp_path):
         return runner(**kwargs)
 
     validations.runner.classify_taxonomy_sample = capture
-    run = validations.create_run(draft["id"], draft["revision"], source_id, 20, "user-1", comparison_type="keyword_ab")
+    run = validations.create_run(
+        draft["id"],
+        draft["revision"],
+        source_id,
+        20,
+        "user-1",
+        comparison_type="keyword_ab",
+    )
     assert validations.claim_next() == run["id"]
     validations.run(run["id"])
     completed = validations.get(run["id"])
     assert completed["status"] == "completed", completed["error"]
-    assert [taxonomy.recognition_profile for taxonomy in captured] == ["legacy_v3", "keyword_free_v1"]
+    assert [taxonomy.recognition_profile for taxonomy in captured] == [
+        "legacy_v3",
+        "keyword_free_v1",
+    ]
     assert captured[0].labels == captured[1].labels
+    contract = completed["source"]["recognition_contract"]
+    assert contract["baseline"]["profile"] == "legacy_v3"
+    assert contract["candidate"]["profile"] == "keyword_free_v1"
     assert completed["publication_ready"] is False
     with pytest.raises(ValueError, match="仅用于诊断"):
         validations.approve(run["id"], draft["revision"], "不得代替发布", "user-1")

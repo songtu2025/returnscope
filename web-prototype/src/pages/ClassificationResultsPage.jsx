@@ -31,6 +31,11 @@ import {
   PUBLISH_LABELS,
   RESULT_PAGE_SIZES,
 } from "../features/classification-results/classificationResultConstants";
+import {
+  SemanticResultPanel,
+  SemanticStatusBadge,
+} from "../features/classification-results/SemanticResultPanel";
+import { semanticRecordStatus } from "../features/classification-results/semanticResultPresentation";
 import { ReviewBatchPage } from "../features/review-batches/ReviewBatchPage";
 import { formatTime } from "../lib/presentation";
 import { resultLabelText } from "../lib/taxonomyPresentation";
@@ -760,6 +765,7 @@ function ResultRecordRow({ record, onOpen }) {
         <span className={`result-quality-badge ${resultState(record)}`}>
           {resultStateLabel(record)}
         </span>
+        <SemanticStatusBadge status={semanticRecordStatus(record)} />
         <b>{resultLabelText(record, problems) || "未形成问题标签"}</b>
       </div>
       <div className="result-row-actions">
@@ -777,8 +783,6 @@ function ResultRecordRow({ record, onOpen }) {
 
 function EvidenceDrawer({ record, onClose, returnFocusRef }) {
   const classification = record.classification ?? {};
-  const units = classification.semantic_units ?? [];
-  const unknowns = classification.unknown_semantics ?? [];
   const drawerRef = useRef(null);
   const closeButtonRef = useRef(null);
 
@@ -866,7 +870,7 @@ function EvidenceDrawer({ record, onClose, returnFocusRef }) {
         </section>
 
         <section className="drawer-section">
-          <b>分类结论</b>
+          <b>业务标签</b>
           <DrawerField
             label="主要问题"
             value={resultLabelText(record, classification.primary_label_codes)}
@@ -883,23 +887,7 @@ function EvidenceDrawer({ record, onClose, returnFocusRef }) {
         </section>
 
         <section className="drawer-section">
-          <b>原文证据</b>
-          {units.length === 0 && <p className="drawer-empty">没有提取到有效证据。</p>}
-          {units.map((unit, index) => (
-            <div className="evidence-unit" key={`${unit.label_code}-${index}`}>
-              <span>{unit.label_path?.join(" → ") || unit.label_code || "未标注"}</span>
-              <blockquote>“{unit.evidence || "未提供证据"}”</blockquote>
-              <small>
-                部位：{unit.part || "未提供"} · 观点：{unit.opinion || "未提供"}
-              </small>
-            </div>
-          ))}
-          {unknowns.map((unknown, index) => (
-            <div className="evidence-unit is-unknown" key={`unknown-${index}`}>
-              <span>未知语义</span>
-              <blockquote>“{unknown.evidence || unknown.text || "未提供"}”</blockquote>
-            </div>
-          ))}
+          <SemanticResultPanel record={record} />
         </section>
 
         <section className="drawer-section drawer-lineage">
