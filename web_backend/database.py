@@ -751,6 +751,38 @@ ON audit_logs(entity_type, entity_id, created_at DESC);
 """
 
 
+def repair_missing_empty_checkpoint_references(
+    connection: sqlite3.Connection,
+) -> int:
+    """清理从未产生结果且检查点文件不存在的历史路径。"""
+    rows = connection.execute(
+        """
+        SELECT id, result_json_path
+        FROM task_segments
+        WHERE result_json_path IS NOT NULL
+          AND TRIM(result_json_path) <> ''
+          AND result_version = 0
+          AND progress_current = 0
+          AND model_calls = 0
+          AND cache_hits = 0
+          AND model_failures = 0
+          AND result_publish_status IS NULL
+          AND status IN ('cancelled', 'paused', 'failed', 'retry_pending')
+        """
+    ).fetchall()
+    stale_ids = [
+        str(row["id"])
+        for row in rows
+        if not Path(str(row["result_json_path"])).is_file()
+    ]
+    if stale_ids:
+        connection.executemany(
+            "UPDATE task_segments SET result_json_path = NULL WHERE id = ?",
+            ((segment_id,) for segment_id in stale_ids),
+        )
+    return len(stale_ids)
+
+
 class ClosingConnection(sqlite3.Connection):
     def __exit__(self, exc_type, exc_value, traceback):
         try:
@@ -783,6 +815,7 @@ class Database:
             self._migrate_dataset_columns(connection)
             self._migrate_api_config_version_columns(connection)
             self._migrate_task_segment_columns(connection)
+            repair_missing_empty_checkpoint_references(connection)
             self._migrate_result_version_columns(connection)
             self._migrate_classification_result_columns(connection)
             self._migrate_validation_run_columns(connection)

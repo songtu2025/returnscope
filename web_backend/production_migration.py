@@ -11,6 +11,7 @@ from pathlib import Path, PurePosixPath
 from typing import Sequence
 
 from web_backend.backup import _validate_archive, create_backup
+from web_backend.database import repair_missing_empty_checkpoint_references
 from web_backend.settings import RUNTIME_DIRECTORIES, Settings
 
 OPTIONAL_SOURCE_DIRECTORIES = {"imports"}
@@ -176,8 +177,10 @@ def _rebase_database_paths(
     stored_source_root: str | None,
 ) -> int:
     connection = sqlite3.connect(database_path)
+    connection.row_factory = sqlite3.Row
     try:
         connection.execute("BEGIN IMMEDIATE")
+        repair_missing_empty_checkpoint_references(connection)
         effective_root = stored_source_root or _detect_stored_source_root(connection)
         if effective_root is None:
             effective_root = str(target_root)

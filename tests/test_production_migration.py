@@ -253,6 +253,72 @@ def test_migrates_legacy_source_without_imports_directory(tmp_path: Path) -> Non
     assert not list((target / "imports").iterdir())
 
 
+def test_migration_clears_missing_checkpoint_for_zero_progress_segment(
+    tmp_path: Path,
+) -> None:
+    source, _ = _seed_source(tmp_path)
+    missing_checkpoint = f"{OLD_RUNTIME_ROOT}/results/missing-checkpoint.json"
+    with sqlite3.connect(source / "app.db") as connection:
+        connection.execute(
+            """
+            UPDATE task_segments
+            SET status = 'cancelled', progress_current = 0,
+                model_calls = 0, cache_hits = 0, model_failures = 0,
+                result_version = 0, result_publish_status = NULL,
+                result_json_path = ?
+            WHERE id = 'segment-1'
+            """,
+            (missing_checkpoint,),
+        )
+        connection.commit()
+
+    target = tmp_path / "production"
+    result = migrate_production_data(
+        source_root=source,
+        target_root=target,
+        backup_dir=tmp_path / "backups",
+        app_stopped=True,
+    )
+
+    assert result.rebased_path_count == 6
+    with sqlite3.connect(target / "app.db") as connection:
+        checkpoint_path = connection.execute(
+            "SELECT result_json_path FROM task_segments WHERE id = 'segment-1'"
+        ).fetchone()[0]
+    assert checkpoint_path is None
+
+
+def test_migration_refuses_missing_checkpoint_with_partial_progress(
+    tmp_path: Path,
+) -> None:
+    source, _ = _seed_source(tmp_path)
+    missing_checkpoint = f"{OLD_RUNTIME_ROOT}/results/missing-checkpoint.json"
+    with sqlite3.connect(source / "app.db") as connection:
+        connection.execute(
+            """
+            UPDATE task_segments
+            SET status = 'paused', progress_current = 1,
+                result_version = 0, result_publish_status = NULL,
+                result_json_path = ?
+            WHERE id = 'segment-1'
+            """,
+            (missing_checkpoint,),
+        )
+        connection.commit()
+
+    target = tmp_path / "production"
+    with pytest.raises(ProductionMigrationError, match="备份缺少数据库引用文件"):
+        migrate_production_data(
+            source_root=source,
+            target_root=target,
+            backup_dir=tmp_path / "backups",
+            app_stopped=True,
+        )
+
+    assert target.is_dir()
+    assert not any(target.iterdir())
+
+
 def test_key_rotation_runs_on_imported_target_before_start(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

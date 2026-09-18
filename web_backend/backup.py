@@ -156,7 +156,7 @@ def _move_current_state(context: _RestoreContext) -> None:
 def _install_staged_state(context: _RestoreContext) -> None:
     shutil.copy2(context.staging / "app.db", context.database_path)
     for name, target in context.directory_targets.items():
-        (context.staging / name).replace(target)
+        shutil.copytree(context.staging / name, target)
         context.installed.append(target)
     connection = sqlite3.connect(context.database_path)
     try:
@@ -196,6 +196,7 @@ def _replace_runtime_state(context: _RestoreContext) -> None:
         _install_staged_state(context)
     except Exception:
         _rollback_restore(context)
+        _cleanup_restored_state(context)
         raise
     else:
         _cleanup_restored_state(context)

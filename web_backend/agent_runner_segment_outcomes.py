@@ -54,14 +54,15 @@ class SegmentOutcomesMixin:
         checkpoint_path: Path,
         existing_results: dict[str, ValidatedClassification],
         latest_run: PipelineRun | None,
-    ) -> dict[str, ValidatedClassification]:
+    ) -> tuple[dict[str, ValidatedClassification], str | None]:
         partial_results = {
             **existing_results,
             **(latest_run.classifications if latest_run else {}),
         }
         if partial_results:
             self._write_checkpoint(checkpoint_path, partial_results)
-        return partial_results
+            return partial_results, str(checkpoint_path)
+        return partial_results, None
 
     def _finish_interrupted_segment(
         self,
@@ -74,7 +75,7 @@ class SegmentOutcomesMixin:
         cache_hits: int,
         model_failures: int,
     ) -> None:
-        partial_results = self._save_partial_checkpoint(
+        partial_results, checkpoint_reference = self._save_partial_checkpoint(
             checkpoint_path,
             existing_results,
             latest_run,
@@ -118,7 +119,7 @@ class SegmentOutcomesMixin:
                     model_calls,
                     cache_hits,
                     model_failures,
-                    str(checkpoint_path),
+                    checkpoint_reference,
                     status,
                     status,
                     now,
@@ -155,7 +156,7 @@ class SegmentOutcomesMixin:
         cache_hits: int,
         model_failures: int,
     ) -> None:
-        partial_results = self._save_partial_checkpoint(
+        partial_results, checkpoint_reference = self._save_partial_checkpoint(
             checkpoint_path,
             existing_results,
             latest_run,
@@ -178,7 +179,7 @@ class SegmentOutcomesMixin:
                     cache_hits,
                     model_failures,
                     message,
-                    str(checkpoint_path),
+                    checkpoint_reference,
                     now,
                     segment_id,
                     task_id,
@@ -245,7 +246,7 @@ class SegmentOutcomesMixin:
         cache_hits: int,
         model_failures: int,
     ) -> None:
-        partial_results = self._save_partial_checkpoint(
+        partial_results, checkpoint_reference = self._save_partial_checkpoint(
             checkpoint_path,
             existing_results,
             latest_run,
@@ -267,7 +268,7 @@ class SegmentOutcomesMixin:
                     cache_hits,
                     model_failures,
                     error[:2000],
-                    str(checkpoint_path),
+                    checkpoint_reference,
                     now,
                     now,
                     segment_id,
@@ -301,7 +302,7 @@ class SegmentOutcomesMixin:
         cache_hits: int,
         model_failures: int,
     ) -> None:
-        results = self._save_partial_checkpoint(
+        results, checkpoint_reference = self._save_partial_checkpoint(
             checkpoint_path,
             existing_results,
             latest_run,
@@ -329,7 +330,7 @@ class SegmentOutcomesMixin:
                     model_calls,
                     cache_hits,
                     model_failures,
-                    str(checkpoint_path),
+                    checkpoint_reference,
                     error[:500],
                     now,
                     now,

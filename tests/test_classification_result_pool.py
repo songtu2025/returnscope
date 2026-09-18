@@ -309,7 +309,8 @@ def test_model_service_failures_pause_task_with_live_metrics(tmp_path: Path) -> 
         ).fetchone()
         segment = connection.execute(
             """
-            SELECT status, model_calls, cache_hits, model_failures, error
+            SELECT status, model_calls, cache_hits, model_failures, error,
+                   result_json_path
             FROM task_segments WHERE id = ?
             """,
             (context.segment_id,),
@@ -324,6 +325,8 @@ def test_model_service_failures_pause_task_with_live_metrics(tmp_path: Path) -> 
     assert segment["cache_hits"] == 0
     assert segment["model_failures"] == 5
     assert "自动暂停" in segment["error"]
+    assert segment["result_json_path"] is None
+    assert not (tmp_path / "checkpoint.json").exists()
 
 
 def _clone_publishable_segment(

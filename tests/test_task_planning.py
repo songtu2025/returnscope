@@ -1255,6 +1255,7 @@ def test_run_segment_pauses_batch_when_model_service_degrades(
     assert paused["pause_requested"] is True
     assert paused_segment["status"] == "paused"
     assert paused_segment["model_failures"] == 5
+    assert paused_segment["result_json_path"] is None
     assert any(
         event["event_type"] == "model_service_paused"
         for event in TaskService(database).events(str(task["id"]))

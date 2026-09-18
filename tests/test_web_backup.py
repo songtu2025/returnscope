@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import sqlite3
 import zipfile
 from pathlib import Path
@@ -174,20 +175,21 @@ def test_restore_install_failure_rolls_back_runtime(
         connection.execute(
             "UPDATE users SET display_name = '当前状态' WHERE id = 'user-1'"
         )
-    original_replace = Path.replace
+    original_copytree = shutil.copytree
 
-    def fail_staged_imports(source: Path, target: Path) -> Path:
+    def fail_staged_imports(source: Path, target: Path, *args, **kwargs):
         if source.name == "imports" and source.parent.name.startswith("restore-"):
             raise OSError("模拟恢复安装失败")
-        return original_replace(source, target)
+        return original_copytree(source, target, *args, **kwargs)
 
-    monkeypatch.setattr(Path, "replace", fail_staged_imports)
+    monkeypatch.setattr(shutil, "copytree", fail_staged_imports)
     monkeypatch.setenv("WEBAPP_BACKUP_DIR", str(tmp_path / "safety-backups"))
 
     with pytest.raises(OSError, match="模拟恢复安装失败"):
         restore_backup(settings, source_backup)
 
     assert current_upload.read_text(encoding="utf-8") == "current\n"
+    assert not list(settings.data_dir.glob(".restore-old-*"))
     with database.connect() as connection:
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
         assert (
