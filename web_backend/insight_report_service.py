@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 import hashlib
 import json
 from dataclasses import replace
@@ -443,23 +444,25 @@ class InsightReportService:
                     (report_id,),
                 )
             if prompt_version == PROMPT_VERSION:
-                content = self._assemble_content_v6(evidence, result.payload)
+                decision_content = self._assemble_content_v6(evidence, result.payload)
                 self._validate_issue_evidence_refs(
-                    content,
+                    decision_content,
                     set(evidence["catalog"]),
                 )
                 consistency = self._decision_report_consistency(
-                    content.model_dump(),
+                    decision_content.model_dump(),
                     evidence,
                 )
+                content_json = decision_content.model_dump_json()
             else:
-                content = self._assemble_content(evidence, result.payload)
-                self._validate_evidence_refs(content, set(evidence["catalog"]))
+                report_content = self._assemble_content(evidence, result.payload)
+                self._validate_evidence_refs(report_content, set(evidence["catalog"]))
                 consistency = self._report_consistency(
-                    content.model_dump(),
+                    report_content.model_dump(),
                     evidence,
                     require_information_diagnostics=True,
                 )
+                content_json = report_content.model_dump_json()
             if consistency["status"] == "blocked":
                 detail = "；".join(consistency["issues"][:3])
                 raise ValueError(f"报告数据一致性校验未通过：{detail}")
@@ -486,7 +489,7 @@ class InsightReportService:
                     """,
                     (
                         result.model_name,
-                        content.model_dump_json(),
+                        content_json,
                         json_text(result.usage),
                         json_text(result.metrics),
                         completed_at,
@@ -709,8 +712,8 @@ class InsightReportService:
     @staticmethod
     def _decision_map(
         connection: Any,
-        report_ids: list[str],
-    ) -> dict[str, list[dict[str, Any]]]:
+        report_ids: builtins.list[str],
+    ) -> dict[str, builtins.list[dict[str, Any]]]:
         if not report_ids:
             return {}
         placeholders = ",".join("?" for _ in report_ids)
@@ -737,7 +740,7 @@ class InsightReportService:
         value: dict[str, Any],
         *,
         text_quality: dict[str, Any] | None = None,
-        decisions: list[dict[str, Any]] | None = None,
+        decisions: builtins.list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         value["attempt_no"] = int(value.pop("version_no"))
         published_version = value.pop("published_version_no", None)

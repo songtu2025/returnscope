@@ -3,7 +3,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from return_semantics.schemas import CategoryDefinition, TaxonomyConfig
+    from return_semantics.schemas import (
+        CategoryDefinition,
+        LabelDefinition,
+        TaxonomyConfig,
+    )
 
 
 def _category_chain(
@@ -22,7 +26,10 @@ def _category_chain(
 
 def validate_hierarchy(taxonomy: TaxonomyConfig) -> None:
     """校验树关系，并由根节点统一派生旧查询使用的分组。"""
-    nodes = [*taxonomy.categories, *taxonomy.labels]
+    nodes: list[CategoryDefinition | LabelDefinition] = [
+        *taxonomy.categories,
+        *taxonomy.labels,
+    ]
     codes = [node.code for node in nodes]
     if any(not code.strip() for code in codes) or len(set(codes)) != len(codes):
         raise ValueError("分类和标签编码必须非空且全树唯一")
@@ -54,9 +61,11 @@ def label_path_codes(taxonomy: TaxonomyConfig, code: str) -> list[str]:
 def label_path(taxonomy: TaxonomyConfig, code: str) -> list[str]:
     """依据当前版本还原名称路径，旧版本只保留原有分组信息。"""
     if taxonomy.structure_version == 2:
-        names = {
-            node.code: node.name for node in [*taxonomy.categories, *taxonomy.labels]
-        }
+        nodes: list[CategoryDefinition | LabelDefinition] = [
+            *taxonomy.categories,
+            *taxonomy.labels,
+        ]
+        names = {node.code: node.name for node in nodes}
         return [names[node_code] for node_code in label_path_codes(taxonomy, code)]
     label = next((label for label in taxonomy.labels if label.code == code), None)
     if label is None:

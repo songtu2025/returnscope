@@ -4,7 +4,7 @@ import json
 import sqlite3
 from typing import Any
 
-from return_semantics.schemas import TaxonomyConfig
+from return_semantics.schemas import CategoryDefinition, LabelDefinition, TaxonomyConfig
 from return_semantics.taxonomy_hierarchy import label_path, label_path_codes
 
 
@@ -52,7 +52,10 @@ def hierarchy_counts(
     params: list[Any],
 ) -> list[dict[str, Any]]:
     """父级统计合并原始记录集合，不累加兄弟标签或整组权重。"""
-    nodes = {node.code: node for node in [*taxonomy.categories, *taxonomy.labels]}
+    nodes: dict[str, CategoryDefinition | LabelDefinition] = {
+        node.code: node for node in taxonomy.categories
+    }
+    nodes.update({node.code: node for node in taxonomy.labels})
     records: dict[str, set[str]] = {}
     units: dict[str, set[str]] = {}
     rows = connection.execute(

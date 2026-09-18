@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 from dataclasses import dataclass, replace
 from typing import Any
 from urllib.parse import urlparse
@@ -221,7 +222,7 @@ class ConfigService:
         actor_id: str,
         model_key: str,
         display_name: str,
-        supported_efforts: list[str],
+        supported_efforts: builtins.list[str],
         active: bool = True,
     ) -> dict[str, Any]:
         return self.model_catalog.add(
@@ -238,7 +239,7 @@ class ConfigService:
         model_id: str,
         actor_id: str,
         display_name: str,
-        supported_efforts: list[str],
+        supported_efforts: builtins.list[str],
         active: bool,
     ) -> dict[str, Any]:
         return self.model_catalog.update(
@@ -393,7 +394,7 @@ class ConfigService:
         self,
         run_id: str,
         after_id: int = 0,
-    ) -> list[dict[str, Any]]:
+    ) -> builtins.list[dict[str, Any]]:
         return self.validation_runs.validation_events(run_id, after_id)
 
     def recover_validation_runs(self) -> None:
@@ -421,7 +422,7 @@ class ConfigService:
         timeout_seconds: int,
         change_note: str,
         connection_id: str | None = None,
-        models: list[dict[str, Any]] | None = None,
+        models: builtins.list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         context = _prepare_create_version(
             _CreateVersionInput(

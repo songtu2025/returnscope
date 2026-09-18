@@ -31,7 +31,8 @@ class ModelPreferenceService:
         primary_model = str(payload["primary_model"]).strip()
         cheap_model = (payload.get("cheap_model") or "").strip() or None
         secondary_model = (payload.get("secondary_model") or "").strip() or None
-        policy = {
+        cheap_audit_percent = int(payload["cheap_audit_percent"])
+        policy: dict[str, Any] = {
             "connection_id": connection_id,
             "cheap_model": cheap_model,
             "cheap_effort": validate_effort(
@@ -45,11 +46,11 @@ class ModelPreferenceService:
             "secondary_effort": validate_effort(
                 str(payload["secondary_effort"]), "风险复核推理强度"
             ),
-            "cheap_audit_percent": int(payload["cheap_audit_percent"]),
+            "cheap_audit_percent": cheap_audit_percent,
         }
         if not primary_model:
             raise ValueError("主分析模型不能为空")
-        if not 0 <= policy["cheap_audit_percent"] <= 100:
+        if not 0 <= cheap_audit_percent <= 100:
             raise ValueError("初筛抽检比例必须在 0 到 100 之间")
         self._validate_policy(policy)
         before = self.get(user_id)

@@ -2,6 +2,7 @@
 
 import re
 from itertools import combinations
+from typing import Any
 
 from return_semantics.schemas import SubjectCode
 
@@ -22,7 +23,7 @@ SCOPE_FIELDS = {
 def append_reference_scope(
     reference: dict, row: dict, identity: str, code: str
 ) -> dict:
-    fields = {}
+    fields: dict[str, Any] = {}
     complete = reference.setdefault("scope_complete", {})
     for dimension, (column, field) in SCOPE_FIELDS.items():
         value = str(row.get(column) or row.get(field) or "").strip()

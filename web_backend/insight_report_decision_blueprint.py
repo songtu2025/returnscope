@@ -15,7 +15,7 @@ def _build_decision_blueprint(evidence: dict[str, Any]) -> dict[str, Any]:
     listing = str(listings[0]) if len(listings) == 1 else None
     category = profile.category_name if profile.key != "generic" else None
     source_limited = bool(source.get("quality_issue_codes"))
-    candidates = []
+    candidates: list[dict[str, Any]] = []
 
     for business_issue in analysis.get("business_issues", []):
         code = str(business_issue.get("reason_code") or "")
@@ -57,13 +57,14 @@ def _build_decision_blueprint(evidence: dict[str, Any]) -> dict[str, Any]:
                 or source.get("included_record_count")
                 or 0
             )
-            share = float(
+            share_value = (
                 row.get("product_reason_rate")
                 if row.get("product_reason_rate") is not None
                 else row.get("issue_rate")
                 if row.get("issue_rate") is not None
                 else business_issue.get("percentage") or 0
             )
+            share = float(share_value or 0)
             baseline_value = (
                 row.get("overall_reason_rate")
                 if row.get("overall_reason_rate") is not None
@@ -261,7 +262,7 @@ def _build_decision_blueprint(evidence: dict[str, Any]) -> dict[str, Any]:
             }
         )
 
-    issues = []
+    issues: list[dict[str, Any]] = []
     for rank, candidate in enumerate(
         sorted(candidates, key=lambda item: item["rank_key"])[:8],
         1,

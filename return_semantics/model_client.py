@@ -241,17 +241,31 @@ class Sub2APISettings:
 
 
 class ModelClientSettings(Protocol):
-    model: str
-    secondary_model: str | None
-    cheap_model: str | None
-    cheap_model_audit_percent: int
-    max_workers: int
-    provider: str
-    cache_namespace: str
+    @property
+    def model(self) -> str: ...
+
+    @property
+    def secondary_model(self) -> str | None: ...
+
+    @property
+    def cheap_model(self) -> str | None: ...
+
+    @property
+    def cheap_model_audit_percent(self) -> int: ...
+
+    @property
+    def max_workers(self) -> int: ...
+
+    @property
+    def provider(self) -> str: ...
+
+    @property
+    def cache_namespace(self) -> str: ...
 
 
 class ModelClient(Protocol):
-    settings: ModelClientSettings
+    @property
+    def settings(self) -> ModelClientSettings: ...
 
     def classify(
         self,

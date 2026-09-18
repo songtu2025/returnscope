@@ -62,6 +62,8 @@ class ModelProbe:
         try:
             payload = json.loads(raw_body)
             items = payload.get("data") if isinstance(payload, dict) else payload
+            if not isinstance(items, list):
+                raise TypeError("模型目录缺少 data 列表")
             model_ids = sorted(
                 {
                     str(item.get("id", "")).strip()

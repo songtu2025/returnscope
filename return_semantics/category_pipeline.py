@@ -39,7 +39,7 @@ class CategorySegmentRuntime:
     client: ModelClient
     claims: ListingClaimsConfig
     secondary_model: str | None
-    model_policy: dict[str, object]
+    model_policy: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -47,7 +47,7 @@ class _ResolvedSegmentRuntime:
     client: ModelClient
     claims: ListingClaimsConfig
     secondary_model: str | None
-    model_policy: dict[str, object] | None
+    model_policy: dict[str, Any] | None
 
 
 @dataclass(frozen=True)

@@ -220,7 +220,7 @@ class DatasetProductWorkbookMixin:
                     if "产品名称" in frame.columns and item["product_name"]:
                         frame.at[index, "产品名称"] = item["product_name"]
                 continue
-            new_row = {column: "" for column in frame.columns}
+            new_row: dict[str, Any] = {column: "" for column in frame.columns}
             new_row.update(
                 {
                     "MSKU": item["msku"],
@@ -232,7 +232,7 @@ class DatasetProductWorkbookMixin:
             )
             if "产品名称" in frame.columns:
                 new_row["产品名称"] = item["product_name"]
-            frame.loc[len(frame)] = new_row
+            frame.loc[len(frame), list(new_row)] = list(new_row.values())
             before_items.append(
                 {"store": item["store"], "msku": item["msku"], "rows": []}
             )

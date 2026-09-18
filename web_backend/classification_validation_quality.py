@@ -150,7 +150,7 @@ def _duplicate_count(item: dict, side: str, expected: list[dict]) -> int:
             max(0, count - max(1, expected_signatures[signature]))
             for signature, count in signatures.items()
         )
-    signatures = []
+    fact_signatures: list[tuple[Any, ...]] = []
     used = set()
     for unit in actual:
         matches = [
@@ -169,7 +169,7 @@ def _duplicate_count(item: dict, side: str, expected: list[dict]) -> int:
                 matches, key=lambda fact: (fact["fact_id"], unit["label_code"]) in used
             )
             used.add((fact["fact_id"], unit["label_code"]))
-            signatures.append(
+            fact_signatures.append(
                 tuple(
                     fact.get(key, "")
                     for key in (
@@ -185,8 +185,8 @@ def _duplicate_count(item: dict, side: str, expected: list[dict]) -> int:
                 + (unit["label_code"], unit["sentiment"])
             )
         else:
-            signatures.append(_signature(unit))
-    return sum(count - 1 for count in Counter(signatures).values())
+            fact_signatures.append(_signature(unit))
+    return sum(count - 1 for count in Counter(fact_signatures).values())
 
 
 def _evidence_contains(outer: str, inner: str) -> bool:
@@ -387,7 +387,7 @@ def evaluate_references(items: list[dict]) -> dict[str, Any]:
         for item in items
         if item.get("reference") and not item["reference"]["ambiguous"]
     ]
-    output = {
+    output: dict[str, Any] = {
         "sample_count": len(judged),
         "total_sample_count": len(items),
         "fact_state_sample_count": sum(

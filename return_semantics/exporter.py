@@ -6,6 +6,7 @@ from typing import cast
 
 import pandas as pd
 from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
 
 from return_semantics.data import ReturnDataset
 from return_semantics.schemas import (
@@ -416,10 +417,10 @@ def _style_workbook(writer: pd.ExcelWriter) -> None:
             cell.fill = header_fill
             cell.alignment = Alignment(horizontal="center", vertical="center")
 
-        for column_cells in sheet.columns:
+        for column_index, column_cells in enumerate(sheet.columns, 1):
             values = [str(cell.value or "") for cell in column_cells[:200]]
             width = min(max(max(map(len, values), default=10) + 2, 12), 50)
-            sheet.column_dimensions[column_cells[0].column_letter].width = width
+            sheet.column_dimensions[get_column_letter(column_index)].width = width
 
 
 def export_results(

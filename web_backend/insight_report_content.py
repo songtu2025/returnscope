@@ -274,15 +274,19 @@ def _validate_evidence_refs(
     content: InsightReportContent,
     known_ids: set[str],
 ) -> None:
-    references = [
-        evidence_id
-        for item in [
-            *content.executive_summary,
-            *content.findings,
-            *content.actions,
+    references = (
+        [
+            evidence_id
+            for item in content.executive_summary
+            for evidence_id in item.evidence_ids
         ]
-        for evidence_id in item.evidence_ids
-    ]
+        + [
+            evidence_id
+            for item in content.findings
+            for evidence_id in item.evidence_ids
+        ]
+        + [evidence_id for item in content.actions for evidence_id in item.evidence_ids]
+    )
     unknown = sorted(set(references) - known_ids)
     if unknown:
         raise ValueError(f"报告引用了不存在的证据: {', '.join(unknown)}")

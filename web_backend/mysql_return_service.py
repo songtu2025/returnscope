@@ -245,6 +245,7 @@ class MySQLReturnService:
         )
         if automatic_store and market_rows is None:
             market_rows = self._metadata_rows(connection, "markets")
+        safe_market_rows = market_rows or []
         used_sources: set[str] = set()
 
         def column_sql(source: str) -> str:
@@ -255,7 +256,7 @@ class MySQLReturnService:
                     return "%s"
                 if count_only:
                     by_account: dict[int, list[int]] = {}
-                    for row in market_rows:
+                    for row in safe_market_rows:
                         by_account.setdefault(row["jijia_account_id"], []).append(
                             row["market_id"]
                         )
@@ -278,9 +279,9 @@ class MySQLReturnService:
             return f"source.{_quote_identifier(source)}"
 
         for key in [RETURN_STORE_COLUMN] if count_only else FIELD_LABELS:
-            source = payload.mapping.get(key)
-            if source:
-                expression = column_sql(source)
+            mapped_source = payload.mapping.get(key)
+            if mapped_source:
+                expression = column_sql(mapped_source)
             else:
                 expression = "%s"
                 values.append(
@@ -292,7 +293,7 @@ class MySQLReturnService:
         values.clear()
         conditions = []
         if automatic_store and selected_store:
-            pairs = [row for row in market_rows if row["store"] == selected_store]
+            pairs = [row for row in safe_market_rows if row["store"] == selected_store]
             conditions.append(
                 "("
                 + " OR ".join(
@@ -319,9 +320,9 @@ class MySQLReturnService:
                 continue
             if key == RETURN_STORE_COLUMN and automatic_store:
                 continue
-            source = payload.mapping.get(key)
-            if source:
-                conditions.append(f"{column_sql(source)} {operator} %s")
+            mapped_source = payload.mapping.get(key)
+            if mapped_source:
+                conditions.append(f"{column_sql(mapped_source)} {operator} %s")
             else:
                 conditions.append(f"%s {operator} %s")
                 values.append(payload.default_store.strip())

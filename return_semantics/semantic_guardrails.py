@@ -109,34 +109,43 @@ def normalize_semantic_unit(
     evidence = unit.evidence.lower()
     rules = taxonomy.validation_rules
 
-    for rule in rules.evidence_requirements:
-        if taxonomy.recognition_profile == "semantic_v1" and rule.semantic_requirement:
+    for evidence_rule in rules.evidence_requirements:
+        if (
+            taxonomy.recognition_profile == "semantic_v1"
+            and evidence_rule.semantic_requirement
+        ):
             continue
-        if unit.label_code == rule.label_code and not any(
-            cue.lower() in evidence for cue in rule.cues
+        if unit.label_code == evidence_rule.label_code and not any(
+            cue.lower() in evidence for cue in evidence_rule.cues
         ):
             return None, unknown_semantic_from_unit(
                 unit,
-                opinion=rule.unknown_opinion,
-                reason=rule.unknown_reason,
+                opinion=evidence_rule.unknown_opinion,
+                reason=evidence_rule.unknown_reason,
                 disposition=SemanticDisposition.MAPPING_UNCERTAIN,
             )
 
-    for rule in rules.implicit_evidence_rules:
-        if taxonomy.recognition_profile == "semantic_v1" and rule.semantic_requirement:
+    for implicit_rule in rules.implicit_evidence_rules:
+        if (
+            taxonomy.recognition_profile == "semantic_v1"
+            and implicit_rule.semantic_requirement
+        ):
             continue
-        if unit.label_code == rule.label_code and any(
-            cue.lower() in evidence for cue in rule.cues
+        if unit.label_code == implicit_rule.label_code and any(
+            cue.lower() in evidence for cue in implicit_rule.cues
         ):
             unit = unit.model_copy(update={"implicit": True})
 
-    for rule in rules.claim_evidence_requirements:
-        if taxonomy.recognition_profile == "semantic_v1" and rule.semantic_requirement:
+    for claim_rule in rules.claim_evidence_requirements:
+        if (
+            taxonomy.recognition_profile == "semantic_v1"
+            and claim_rule.semantic_requirement
+        ):
             continue
         if (
-            unit.label_code == rule.label_code
-            and unit.claim_id == rule.claim_id
-            and not any(cue.lower() in evidence for cue in rule.cues)
+            unit.label_code == claim_rule.label_code
+            and unit.claim_id == claim_rule.claim_id
+            and not any(cue.lower() in evidence for cue in claim_rule.cues)
         ):
             unit = unit.model_copy(
                 update={

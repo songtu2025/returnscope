@@ -112,7 +112,9 @@ class DatasetReturnImportMixin:
         inspection: dict[str, Any],
     ) -> dict[str, Any] | None:
         duplicate = inspection.get("duplicate")
-        duplicate_in_target = duplicate and (
+        if not isinstance(duplicate, dict):
+            return None
+        duplicate_in_target = (
             mode == "analyze_only"
             or (mode == "create" and duplicate.get("usage_scope") == "managed")
             or str(duplicate["dataset_id"]) == dataset_id

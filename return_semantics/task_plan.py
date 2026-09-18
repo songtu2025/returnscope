@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
@@ -90,6 +91,15 @@ def _scope_segment_key(store: str, listing: str, agent_key: str) -> str:
     return f"{store}/{listing or '*'}/{agent_key}"
 
 
+def _product_match_statuses(unique_comments: pd.DataFrame) -> pd.Series:
+    if "product_match_status" not in unique_comments.columns:
+        return pd.Series("matched", index=unique_comments.index)
+    values = unique_comments["product_match_status"]
+    if not isinstance(values, pd.Series):
+        raise ValueError("product_match_status 列必须唯一")
+    return values.fillna("").astype(str).str.strip()
+
+
 def build_category_execution_plan(
     dataset: ReturnDataset,
     registry: CapabilityRegistry,
@@ -114,8 +124,8 @@ def build_category_execution_plan(
     for row in unique_comments.itertuples(index=False):
         category_a = str(row.category_a).strip()
         category_b = str(row.category_b).strip()
-        match_status = str(getattr(row, "product_match_status", "matched")).strip()
-        if match_status != "matched":
+        row_match_status = str(getattr(row, "product_match_status", "matched")).strip()
+        if row_match_status != "matched":
             assignments_list.append("excluded")
             continue
         if not category_a or not category_b:
@@ -139,11 +149,7 @@ def build_category_execution_plan(
 
     excluded = unique_comments.loc[assignment_series.eq("excluded")].copy()
     blocked = unique_comments.loc[assignment_series.isna()].copy()
-    match_status = (
-        unique_comments["product_match_status"].fillna("").astype(str).str.strip()
-        if "product_match_status" in unique_comments.columns
-        else pd.Series("matched", index=unique_comments.index)
-    )
+    match_status = _product_match_statuses(unique_comments)
     unmatched_product = unique_comments.loc[match_status.ne("matched")].copy()
     missing_category = unique_comments.loc[
         match_status.eq("matched")
@@ -154,10 +160,12 @@ def build_category_execution_plan(
     ].copy()
     for capability in registry.capabilities:
         if split_scopes:
-            scope_groups = unique_comments.groupby(
-                ["store", "listing"],
-                sort=True,
-                dropna=False,
+            scope_groups: Iterable[tuple[tuple[Any, Any], pd.DataFrame]] = (
+                unique_comments.groupby(
+                    ["store", "listing"],
+                    sort=True,
+                    dropna=False,
+                )
             )
         else:
             scope_groups = [((store, listing or ""), unique_comments)]

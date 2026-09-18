@@ -4,6 +4,7 @@ import html
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 from zipfile import BadZipFile
 
 import pandas as pd
@@ -41,7 +42,7 @@ class ReturnDataset:
     scope_mode: str = "manual"
 
 
-def normalize_comment(value: object) -> str:
+def normalize_comment(value: Any) -> str:
     if pd.isna(value):
         return ""
     text = html.unescape(str(value))

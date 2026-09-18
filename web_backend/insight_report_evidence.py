@@ -170,7 +170,7 @@ def _build_evidence(
                 "value": text[:160] or "未提供评论",
                 "data": sample,
             }
-    samples = []
+    samples: list[dict[str, Any]] = []
     seen_samples: set[str] = set()
     for diagnostic in safe_diagnostics:
         code = str(diagnostic.get("reason_code") or "unknown")

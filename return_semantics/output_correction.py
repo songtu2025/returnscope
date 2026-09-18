@@ -71,18 +71,14 @@ def correct_invalid_output(
         corrected.classification, comment, taxonomy, claims
     )
     corrected_evidence = [
-        unit.evidence
-        for unit in [
-            *corrected.classification.semantic_units,
-            *corrected.classification.unknown_semantics,
-        ]
-    ]
-    for unit in [
-        *result.classification.semantic_units,
-        *result.classification.unknown_semantics,
-    ]:
-        if unit.evidence in comment and not any(
-            unit.evidence in evidence for evidence in corrected_evidence
+        unit.evidence for unit in corrected.classification.semantic_units
+    ] + [unit.evidence for unit in corrected.classification.unknown_semantics]
+    original_evidence = [
+        unit.evidence for unit in result.classification.semantic_units
+    ] + [unit.evidence for unit in result.classification.unknown_semantics]
+    for evidence_text in original_evidence:
+        if evidence_text in comment and not any(
+            evidence_text in evidence for evidence in corrected_evidence
         ):
             remaining.append("纠正结果丢失原有证据，需要人工核对")
             break

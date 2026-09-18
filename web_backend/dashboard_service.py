@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 import sqlite3
 from typing import Any
 
@@ -267,7 +268,7 @@ class DashboardService:
         output["version"] = serialize_version(dict(version))
         return output
 
-    def versions(self, dashboard_id: str) -> list[dict[str, Any]]:
+    def versions(self, dashboard_id: str) -> builtins.list[dict[str, Any]]:
         with self.database.connect() as connection:
             exists = connection.execute(
                 "SELECT 1 FROM analysis_dashboards WHERE id = ?",
@@ -294,7 +295,9 @@ class DashboardService:
     def text_quality(self, dashboard_id: str, version_id: str) -> dict[str, Any]:
         return build_text_quality(self.database, dashboard_id, version_id)
 
-    def sources(self, dashboard_id: str, version_id: str) -> list[dict[str, Any]]:
+    def sources(
+        self, dashboard_id: str, version_id: str
+    ) -> builtins.list[dict[str, Any]]:
         return list_sources(self.database, dashboard_id, version_id)
 
     def insights(
@@ -329,10 +332,10 @@ class DashboardService:
         self,
         dashboard_id: str,
         version_id: str,
-        reason_codes: list[str],
+        reason_codes: builtins.list[str],
         *,
         max_cases_per_reason: int = 3,
-    ) -> list[dict[str, Any]]:
+    ) -> builtins.list[dict[str, Any]]:
         return list_issue_cases(
             self.database,
             dashboard_id,
@@ -483,6 +486,7 @@ class DashboardService:
 
     @staticmethod
     def _mixed_hierarchy(
-        connection: sqlite3.Connection, sources: list[dict[str, Any]]
+        connection: sqlite3.Connection,
+        sources: builtins.list[dict[str, Any]],
     ) -> bool:
         return mixed_hierarchy(connection, sources)

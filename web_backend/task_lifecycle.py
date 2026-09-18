@@ -236,7 +236,7 @@ class TaskLifecycleMixin:
                 """,
                 (status, stage, now, task_id, expected_revision),
             )
-            event_data = {
+            event_data: dict[str, Any] = {
                 "before": {"status": task["status"], "stage": task["stage"]},
                 "after": {"status": status, "stage": stage},
             }
@@ -329,7 +329,7 @@ class TaskLifecycleMixin:
                 """,
                 (now, task_id, expected_revision),
             )
-            event_data = {
+            event_data: dict[str, Any] = {
                 "before": {"status": source_status, "stage": task["stage"]},
                 "after": {"status": "queued", "stage": "等待继续执行"},
                 "note": clean_note,

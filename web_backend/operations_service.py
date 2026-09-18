@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
@@ -450,7 +451,7 @@ class AuditLogService:
     @staticmethod
     def _target_context(
         connection: Any,
-        audit_rows: list[Any],
+        audit_rows: builtins.list[Any],
     ) -> dict[tuple[str, str], dict[str, Any]]:
         ids_by_type: dict[str, set[str]] = {}
         for row in audit_rows:

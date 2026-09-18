@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from typing import Any
 
 from return_semantics.analysis_context import (
     REVIEW_CONTEXT,
@@ -68,7 +69,7 @@ def _label_catalog(taxonomy: TaxonomyConfig) -> str:
                 fields.append(",".join(label.keywords))
             lines.append("|".join(fields))
             continue
-        entry = {
+        entry: dict[str, Any] = {
             "编码": label.code,
             "名称": label.name,
             "完整路径": label_path(taxonomy, label.code),

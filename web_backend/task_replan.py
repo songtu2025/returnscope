@@ -170,7 +170,7 @@ class TaskReplanMixin:
                     expected_revision,
                 ),
             )
-            event_data = {
+            event_data: dict[str, Any] = {
                 "before": {
                     "product_version_id": row["product_version_id"],
                     "plan_hash": old_plan.get("plan_hash"),

@@ -147,16 +147,17 @@ def _requires_boundary_review(
 ) -> bool:
     if taxonomy.recognition_profile not in {"semantic_v1", "fact_v2"}:
         return False
-    boundaries = [
-        *taxonomy.validation_rules.evidence_requirements,
-        *taxonomy.validation_rules.claim_evidence_requirements,
-    ]
-    return any(
+    evidence_boundary = any(
+        rule.label_code == unit.label_code and rule.semantic_requirement
+        for rule in taxonomy.validation_rules.evidence_requirements
+    )
+    claim_boundary = any(
         rule.label_code == unit.label_code
         and rule.semantic_requirement
-        and (not hasattr(rule, "claim_id") or rule.claim_id == unit.claim_id)
-        for rule in boundaries
+        and rule.claim_id == unit.claim_id
+        for rule in taxonomy.validation_rules.claim_evidence_requirements
     )
+    return evidence_boundary or claim_boundary
 
 
 def _claim_error(

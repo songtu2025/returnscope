@@ -31,13 +31,13 @@ def _existing_paths(content: dict[str, Any]) -> tuple[dict, dict]:
 
     def path(item: dict[str, Any]) -> tuple[str, ...]:
         names = [item["name"]]
-        parent = item.get("parent_code")
+        parent = _text(item.get("parent_code"))
         visited: set[str] = set()
         while parent in categories and parent not in visited:
             visited.add(parent)
             category = categories[parent]
             names.insert(0, category["name"])
-            parent = category.get("parent_code")
+            parent = _text(category.get("parent_code"))
         return tuple(names)
 
     category_paths = {path(item): item for item in categories.values()}

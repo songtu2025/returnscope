@@ -6,6 +6,7 @@ from datetime import date, timedelta
 from itertools import combinations, groupby
 from math import log
 from operator import itemgetter
+from typing import Any
 
 import pandas as pd
 
@@ -38,7 +39,7 @@ SIZE_DIRECTION_NAMES = {
 SPECIFIC_PART_EXCLUSIONS = {"WHOLE_SHOE", "UNSPECIFIED"}
 
 
-def split_values(value: object) -> list[str]:
+def split_values(value: Any) -> list[str]:
     if value is None or pd.isna(value):
         return []
     return [item.strip() for item in str(value).split(" | ") if item.strip()]
@@ -309,7 +310,7 @@ def problem_priority_summary(
         .size()
     )
     top_products = (
-        product_counts.groupby("标签编码", as_index=False)["size"]
+        product_counts.groupby("标签编码", as_index=False)[["size"]]
         .max()
         .rename(columns={"size": "Top SKU记录数"})
     )
@@ -391,7 +392,7 @@ def common_problem_summary(
         style_counts.groupby("标签编码")["size"].transform("sum")
     )
     top_styles = (
-        style_counts.groupby("标签编码", as_index=False)["size"]
+        style_counts.groupby("标签编码", as_index=False)[["size"]]
         .max()
         .rename(columns={"size": "Top款式记录数"})
     )

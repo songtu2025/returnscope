@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import threading
 from concurrent.futures import CancelledError, Future, ThreadPoolExecutor
+from functools import partial
 from typing import Any
 
 from web_backend.agent_runner import AgentRunner
@@ -71,9 +72,7 @@ class TaskWorker(WorkerHealthMixin):
                         segment_id,
                     )
                     future.add_done_callback(
-                        lambda completed, claimed_id=segment_id: self._segment_finished(
-                            claimed_id, completed
-                        )
+                        partial(self._segment_finished, segment_id)
                     )
                 self._finalize_pending_results()
             except Exception as exc:

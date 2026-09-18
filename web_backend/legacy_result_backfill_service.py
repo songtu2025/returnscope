@@ -64,7 +64,7 @@ class LegacyResultBackfillService:
             ],
         }
         preview_hash = hashlib.sha256(json_text(hash_input).encode("utf-8")).hexdigest()
-        output = {
+        output: dict[str, Any] = {
             "mode": "preview",
             "preview_hash": preview_hash,
             "counts": {name: len(items) for name, items in buckets.items()},

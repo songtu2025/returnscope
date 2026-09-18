@@ -34,7 +34,7 @@ def _evaluate_live_quality(
     product_level_trusted = mapping_trusted
     pending_count = int(source.get("pending_review_record_count") or 0)
     review_bias = analysis.get("review_bias", {})
-    source_issues = []
+    source_issues: list[dict[str, Any]] = []
     if not text_trusted:
         source_issues.append(
             {

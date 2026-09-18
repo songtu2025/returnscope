@@ -722,10 +722,10 @@ def _classify_selected_comments(
             ):
                 checkpoint(classifier.tracker.snapshot())
     run = classifier.tracker.snapshot()
-    ordered_results = {
-        row.classification_key: run.classifications[row.classification_key]
+    ordered_results: dict[str, ValidatedClassification] = {
+        str(row.classification_key): run.classifications[str(row.classification_key)]
         for row in rows
-        if row.classification_key in run.classifications
+        if str(row.classification_key) in run.classifications
     }
     return replace(run, classifications=ordered_results)
 

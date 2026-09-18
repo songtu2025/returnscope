@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 from copy import deepcopy
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, SupportsInt, cast
 
 from return_semantics.data import load_return_dataset_auto
 from return_semantics.prompt import prompt_version, recognition_fingerprint
@@ -234,7 +234,7 @@ class ClassificationStandardValidationSourcesMixin:
                     "category_b": category[1],
                     "store": str(row.store),
                     "listing": str(row.listing),
-                    "record_count": int(row.record_count),
+                    "record_count": int(cast(SupportsInt, row.record_count)),
                     "baseline": {},
                 }
             )

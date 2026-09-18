@@ -48,7 +48,7 @@ class DataQualityService:
             returns_version_id,
             products_version_id,
         )
-        payload = {
+        payload: dict[str, Any] = {
             "returns_version": self._public_version(entry.returns),
             "products_version": self._public_version(entry.products),
             "match_key": {

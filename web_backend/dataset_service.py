@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -156,7 +157,7 @@ class DatasetService(
             item["audit"] = list_audit(self.database, "dataset", dataset_id)
         return item
 
-    def list_versions(self, kind: str | None = None) -> list[dict[str, Any]]:
+    def list_versions(self, kind: str | None = None) -> builtins.list[dict[str, Any]]:
         query = """
             SELECT v.*, d.name AS dataset_name, d.kind, d.current_version,
                    d.source_key, d.usage_scope,
@@ -274,7 +275,7 @@ class DatasetService(
             ).fetchone()
         return dict(row) if row else None
 
-    def product_scopes(self, version_id: str) -> list[dict[str, Any]]:
+    def product_scopes(self, version_id: str) -> builtins.list[dict[str, Any]]:
         with self.database.connect() as connection:
             row = connection.execute(
                 """

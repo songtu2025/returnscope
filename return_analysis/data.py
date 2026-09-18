@@ -4,6 +4,7 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -115,7 +116,7 @@ def _first_text(values: pd.Series) -> str:
     return next((value for value in cleaned if value), "")
 
 
-def _parse_standard_sku(value: object) -> tuple[str, str, str]:
+def _parse_standard_sku(value: Any) -> tuple[str, str, str]:
     text = "" if pd.isna(value) else str(value).strip()
     style_match = re.search(r"^[^-]+-([^\s]+)", text)
     size_match = re.search(r"\s(\d+(?:\.\d+)?(?:-\d+(?:\.\d+)?)?)$", text)

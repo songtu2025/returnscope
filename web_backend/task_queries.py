@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 from typing import Any
 
 from web_backend.classification_result_queries import system_rerun_counts
@@ -215,7 +216,7 @@ class TaskQueriesMixin:
         item["owner_segment_limit"] = SEGMENT_USER_LIMIT
         return item
 
-    def events(self, task_id: str, after_id: int = 0) -> list[dict[str, Any]]:
+    def events(self, task_id: str, after_id: int = 0) -> builtins.list[dict[str, Any]]:
         with self.database.connect() as connection:
             rows = connection.execute(
                 """
