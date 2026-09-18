@@ -1705,7 +1705,16 @@ describe("关键用户流程", () => {
       primary_model: "gpt-main",
       primary_effort: "medium",
       metrics: {},
-      snapshot: { execution_plan: { unresolved_policy: "run_ready" } },
+      snapshot: {
+        execution_plan: { unresolved_policy: "run_ready" },
+        config: {
+          strategy_source: "task",
+          connection: "生产线路",
+          version: 1,
+          primary_model: "gpt-task-snapshot",
+          primary_effort: "high",
+        },
+      },
       segments: [completedSegment],
     };
     apiMock.tasks.mockResolvedValue([task]);
@@ -1734,8 +1743,53 @@ describe("关键用户流程", () => {
       "/classification-download",
     );
     expect(screen.getByText("任务配置")).toBeVisible();
+    await user.click(screen.getByRole("tab", { name: "任务配置" }));
+    expect(screen.getByText("生产线路 · #1 · 任务自定义")).toBeVisible();
+    expect(screen.getByText("gpt-task-snapshot · 高")).toBeVisible();
+    expect(screen.queryByText("gpt-main · 中")).not.toBeInTheDocument();
     expect(screen.queryByText("任务快照")).not.toBeInTheDocument();
     expect(document.querySelector(".task-stage-rail")).not.toBeInTheDocument();
+  });
+
+  test("历史任务缺少配置快照时回退显示基础连接配置", async () => {
+    const user = userEvent.setup();
+    const task = {
+      id: "task-legacy-config",
+      title: "历史任务配置",
+      status: "completed",
+      revision: 1,
+      progress_percent: 100,
+      progress_current: 1,
+      progress_total: 1,
+      owner_name: "管理员",
+      created_at: "2026-08-12T08:00:00Z",
+      dataset_name: "用户反馈",
+      dataset_version: 1,
+      product_name: "产品信息",
+      product_version: 1,
+      connection_name: "历史连接",
+      config_version: 2,
+      primary_model: "gpt-legacy",
+      primary_effort: "medium",
+      metrics: {},
+      snapshot: { execution_plan: { unresolved_policy: "run_ready" } },
+      segments: [],
+    };
+    apiMock.tasks.mockResolvedValue([task]);
+    apiMock.task.mockResolvedValue(task);
+
+    render(
+      <TaskMonitor
+        notify={vi.fn()}
+        onNavigate={vi.fn()}
+        onChanged={vi.fn()}
+        focusId={task.id}
+      />,
+    );
+
+    await user.click(await screen.findByRole("tab", { name: "任务配置" }));
+    expect(screen.getByText("历史连接 · #2")).toBeVisible();
+    expect(screen.getByText("gpt-legacy · 中")).toBeVisible();
   });
 
   test("模型服务连续失败会显示请求明细和恢复入口", async () => {

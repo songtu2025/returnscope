@@ -131,6 +131,17 @@ export function TaskDetail({
   );
   const remainingSegments = summary.remaining;
   const firstStandard = executableSegments.find((segment) => segment.standard_name);
+  const snapshotConfig = task.snapshot?.config;
+  const connectionName = snapshotConfig?.connection || task.connection_name || "—";
+  const configVersion = snapshotConfig?.version ?? task.config_version ?? "—";
+  const primaryModel = snapshotConfig?.primary_model || task.primary_model || "—";
+  const primaryEffort = snapshotConfig?.primary_effort || task.primary_effort;
+  const configSource =
+    snapshotConfig?.strategy_source === "task"
+      ? "任务自定义"
+      : snapshotConfig?.strategy_source === "connection"
+        ? "连接默认配置"
+        : null;
 
   return (
     <AntdProvider>
@@ -400,12 +411,14 @@ export function TaskDetail({
                 />
                 <InfoRow
                   label="模型配置"
-                  value={`${task.connection_name || "—"} · #${task.config_version || "—"}`}
+                  value={`${connectionName} · #${configVersion}${
+                    configSource ? ` · ${configSource}` : ""
+                  }`}
                 />
                 <InfoRow
                   label="主模型"
-                  value={`${task.primary_model || "—"} · ${
-                    (task.primary_effort && EFFORT_LABELS[task.primary_effort]) || "—"
+                  value={`${primaryModel} · ${
+                    (primaryEffort && EFFORT_LABELS[primaryEffort]) || "—"
                   }`}
                 />
               </div>

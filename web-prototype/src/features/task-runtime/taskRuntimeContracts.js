@@ -3,6 +3,13 @@
  * @typedef {"ready" | "queued" | "running" | "pause_pending" | "cancel_pending" | "paused" | "completed" | "completed_with_errors" | "failed" | "blocked" | "cancelled" | "not_started" | "retry_pending"} TaskSegmentStatus
  * @typedef {"pause" | "resume" | "cancel"} SegmentAction
  *
+ * @typedef {Object} TaskConfigSnapshot
+ * @property {"connection" | "task"} [strategy_source]
+ * @property {string} [connection]
+ * @property {number} [version]
+ * @property {string} [primary_model]
+ * @property {"low" | "medium" | "high"} [primary_effort]
+ *
  * @typedef {Object} TaskSegmentVariant
  * @property {string} category_a
  * @property {string} category_b
@@ -78,7 +85,7 @@
  * @property {number} [max_parallel_segments]
  * @property {number} [owner_running_segments]
  * @property {number} [owner_segment_limit]
- * @property {{execution_plan?: {unresolved_policy?: string, summary?: {blocked_count?: number}}, config?: Record<string, string | number | null | undefined>}} [snapshot]
+ * @property {{execution_plan?: {unresolved_policy?: string, summary?: {blocked_count?: number}}, config?: TaskConfigSnapshot}} [snapshot]
  *
  * @typedef {Object} TaskEventChange
  * @property {string} [title]
