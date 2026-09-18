@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import dataclass
 from typing import Any
 
 from web_backend.insight_report_consistency import _report_consistency
@@ -13,11 +14,29 @@ from web_backend.insight_report_diagnostics import (
 )
 
 
-def _evaluate_live_quality(
+@dataclass
+class _LiveQualityEvaluation:
+    content: dict[str, Any]
+    evidence: dict[str, Any]
+    text_quality: dict[str, Any]
+    source: dict[str, Any]
+    analysis: dict[str, Any]
+    catalog: dict[str, Any]
+    consistency: dict[str, Any]
+    product_mapping: dict[str, Any]
+    review_bias: dict[str, Any]
+    source_issues: list[dict[str, Any]]
+    product_names: list[str]
+    text_trusted: bool
+    mapping_trusted: bool
+    pending_count: int
+
+
+def _prepare_live_quality(
     content: dict[str, Any],
     evidence: dict[str, Any],
     text_quality: dict[str, Any],
-) -> dict[str, Any]:
+) -> _LiveQualityEvaluation:
     safe_content = deepcopy(content)
     safe_evidence = deepcopy(evidence)
     source = safe_evidence.setdefault("source", {})
@@ -31,7 +50,6 @@ def _evaluate_live_quality(
     product_mapping = source.get("product_mapping", {})
     text_trusted = text_quality.get("status") != "needs_review"
     mapping_trusted = product_mapping.get("status") != "needs_review"
-    product_level_trusted = mapping_trusted
     pending_count = int(source.get("pending_review_record_count") or 0)
     review_bias = analysis.get("review_bias", {})
     source_issues: list[dict[str, Any]] = []
@@ -72,18 +90,43 @@ def _evaluate_live_quality(
         for item in analysis.get("product_reason_matrix", [])
         if item.get("value")
     ]
+    return _LiveQualityEvaluation(
+        content=safe_content,
+        evidence=safe_evidence,
+        text_quality=text_quality,
+        source=source,
+        analysis=analysis,
+        catalog=catalog,
+        consistency=consistency,
+        product_mapping=product_mapping,
+        review_bias=review_bias,
+        source_issues=source_issues,
+        product_names=product_names,
+        text_trusted=text_trusted,
+        mapping_trusted=mapping_trusted,
+        pending_count=pending_count,
+    )
 
-    source["text_quality"] = text_quality
-    source["quality_issue_codes"] = [item["code"] for item in source_issues]
-    source["report_status"] = "provisional" if source_issues else "final"
-    analysis["text_quality"] = text_quality
-    catalog["text_quality"] = {
+
+def _apply_quality_metadata(context: _LiveQualityEvaluation) -> None:
+    context.source["text_quality"] = context.text_quality
+    context.source["quality_issue_codes"] = [
+        item["code"] for item in context.source_issues
+    ]
+    context.source["report_status"] = (
+        "provisional" if context.source_issues else "final"
+    )
+    context.analysis["text_quality"] = context.text_quality
+    context.catalog["text_quality"] = {
         "label": "评论文本质量",
-        "value": str(text_quality.get("note") or "未发现明显编码异常"),
-        "data": text_quality,
+        "value": str(context.text_quality.get("note") or "未发现明显编码异常"),
+        "data": context.text_quality,
     }
 
-    if not product_level_trusted:
+
+def _sanitize_analysis(context: _LiveQualityEvaluation) -> None:
+    analysis = context.analysis
+    if not context.mapping_trusted:
         analysis["product_reason_matrix"] = []
         analysis["business_issues"] = []
         analysis["issue_cases"] = []
@@ -111,149 +154,152 @@ def _evaluate_live_quality(
             }
             for sample in analysis.get("samples", [])
         ]
-    if not text_trusted:
-        analysis["diagnostics"] = [
-            _filter_diagnostic_text(diagnostic)
-            for diagnostic in analysis.get("diagnostics", [])
-        ]
-        analysis["issue_cases"] = [
-            _filter_issue_case_text(case) for case in analysis.get("issue_cases", [])
-        ]
-        analysis["business_issues"] = [
-            _filter_business_issue_text(issue)
-            for issue in analysis.get("business_issues", [])
-        ]
-        analysis["samples"] = [
-            sample
-            for sample in analysis.get("samples", [])
-            if not _has_text_anomaly(
-                sample.get("comment"),
-                sample.get("reason"),
-            )
-        ]
+    if context.text_trusted:
+        return
+    analysis["diagnostics"] = [
+        _filter_diagnostic_text(diagnostic)
+        for diagnostic in analysis.get("diagnostics", [])
+    ]
+    analysis["issue_cases"] = [
+        _filter_issue_case_text(case) for case in analysis.get("issue_cases", [])
+    ]
+    analysis["business_issues"] = [
+        _filter_business_issue_text(issue)
+        for issue in analysis.get("business_issues", [])
+    ]
+    analysis["samples"] = [
+        sample
+        for sample in analysis.get("samples", [])
+        if not _has_text_anomaly(sample.get("comment"), sample.get("reason"))
+    ]
 
-    blocked_catalog_markers = []
-    if not product_level_trusted:
-        blocked_catalog_markers.extend(
-            [
-                ".hotspot.",
-                ".variant.",
-                "business_issue.",
-                "issue_case.",
-            ]
-        )
-    for evidence_id in list(catalog):
-        if any(marker in evidence_id for marker in blocked_catalog_markers):
-            catalog.pop(evidence_id, None)
+
+def _sanitize_catalog(context: _LiveQualityEvaluation) -> None:
+    blocked_markers = (
+        (".hotspot.", ".variant.", "business_issue.", "issue_case.")
+        if not context.mapping_trusted
+        else ()
+    )
+    for evidence_id in list(context.catalog):
+        if any(marker in evidence_id for marker in blocked_markers):
+            context.catalog.pop(evidence_id, None)
             continue
-        if not text_trusted and any(
-            marker in evidence_id for marker in (".sample.", ".opinion.")
-        ):
-            data = catalog[evidence_id].get("data", {})
+        if context.text_trusted:
+            continue
+        if any(marker in evidence_id for marker in (".sample.", ".opinion.")):
+            data = context.catalog[evidence_id].get("data", {})
             if _has_text_anomaly(
                 data.get("opinion"),
                 data.get("evidence"),
                 data.get("comment"),
                 data.get("reason"),
             ):
-                catalog.pop(evidence_id, None)
-        elif not text_trusted and evidence_id.startswith("business_issue."):
-            catalog[evidence_id]["data"] = _filter_business_issue_text(
-                catalog[evidence_id].get("data", {})
+                context.catalog.pop(evidence_id, None)
+        elif evidence_id.startswith("business_issue."):
+            context.catalog[evidence_id]["data"] = _filter_business_issue_text(
+                context.catalog[evidence_id].get("data", {})
             )
 
-    if not product_level_trusted:
-        safe_content["findings"] = [
-            finding
-            for finding in safe_content.get("findings", [])
-            if finding.get("kind") != "diagnostic"
-        ]
 
-    summaries = []
-    for summary in safe_content.get("executive_summary", []):
+def _summary_is_blocked(
+    summary: dict[str, Any], context: _LiveQualityEvaluation
+) -> bool:
+    references = summary.get("evidence_ids", [])
+    if not context.mapping_trusted:
         summary_text = f"{summary.get('title', '')} {summary.get('statement', '')}"
-        references = summary.get("evidence_ids", [])
-        if not product_level_trusted and (
-            any(name in summary_text for name in product_names)
-            or any(
-                marker in item
-                for item in references
-                for marker in (
-                    ".hotspot.",
-                    ".variant.",
-                    "business_issue.",
-                    "issue_case.",
-                )
-            )
-        ):
-            continue
-        if not text_trusted and any(
+        references_product = any(
             marker in item
             for item in references
-            for marker in (".sample.", ".opinion.")
-        ):
-            continue
-        summaries.append(summary)
+            for marker in (
+                ".hotspot.",
+                ".variant.",
+                "business_issue.",
+                "issue_case.",
+            )
+        )
+        if any(name in summary_text for name in context.product_names):
+            return True
+        if references_product:
+            return True
+    return not context.text_trusted and any(
+        marker in item for item in references for marker in (".sample.", ".opinion.")
+    )
 
-    quality_issues = list(source_issues)
-    if consistency["status"] == "blocked":
+
+def _gate_summary(
+    quality_issues: list[dict[str, Any]], consistency_blocked: bool
+) -> dict[str, Any] | None:
+    if not quality_issues:
+        return None
+    issue_labels = "、".join(item["label"] for item in quality_issues)
+    evidence_ids = list(
+        dict.fromkeys(
+            evidence_id
+            for item in quality_issues
+            for evidence_id in item["evidence_ids"]
+        )
+    )
+    return {
+        "id": "summary.quality_gate",
+        "title": "当前报告不可使用" if consistency_blocked else "当前结论仅供诊断",
+        "statement": (
+            f"{issue_labels}。"
+            + (
+                "请重新生成报告后再使用。"
+                if consistency_blocked
+                else "问题修复前，不应直接下发商品整改。"
+            )
+        ),
+        "tone": "warning",
+        "evidence_ids": evidence_ids or ["scope"],
+    }
+
+
+def _apply_summaries(
+    context: _LiveQualityEvaluation,
+) -> list[dict[str, Any]]:
+    if not context.mapping_trusted:
+        context.content["findings"] = [
+            finding
+            for finding in context.content.get("findings", [])
+            if finding.get("kind") != "diagnostic"
+        ]
+    summaries = [
+        summary
+        for summary in context.content.get("executive_summary", [])
+        if not _summary_is_blocked(summary, context)
+    ]
+    quality_issues = list(context.source_issues)
+    consistency_blocked = context.consistency["status"] == "blocked"
+    if consistency_blocked:
         quality_issues.insert(
             0,
             {
                 "code": "report_consistency",
                 "label": "报告内部数据不一致",
-                "detail": "；".join(consistency["issues"][:3]),
+                "detail": "；".join(context.consistency["issues"][:3]),
                 "evidence_ids": [],
             },
         )
         summaries = []
-    gate_summary = None
-    if quality_issues:
-        issue_labels = "、".join(item["label"] for item in quality_issues)
-        evidence_ids = list(
-            dict.fromkeys(
-                evidence_id
-                for item in quality_issues
-                for evidence_id in item["evidence_ids"]
-            )
-        )
-        gate_summary = {
-            "id": "summary.quality_gate",
-            "title": (
-                "当前报告不可使用"
-                if consistency["status"] == "blocked"
-                else "当前结论仅供诊断"
-            ),
-            "statement": (
-                f"{issue_labels}。"
-                + (
-                    "请重新生成报告后再使用。"
-                    if consistency["status"] == "blocked"
-                    else "问题修复前，不应直接下发商品整改。"
-                )
-            ),
-            "tone": "warning",
-            "evidence_ids": evidence_ids or ["scope"],
-        }
-    summary_candidates = [gate_summary, *summaries] if gate_summary else summaries
-    unique_summaries = []
-    seen_summaries = set()
-    for summary in summary_candidates:
+    gate_summary = _gate_summary(quality_issues, consistency_blocked)
+    candidates = [gate_summary, *summaries] if gate_summary else summaries
+    unique_summaries: list[dict[str, Any]] = []
+    seen_summaries: set[tuple[Any, Any]] = set()
+    for summary in candidates:
         key = (summary.get("title"), summary.get("statement"))
         if key in seen_summaries:
             continue
         seen_summaries.add(key)
         unique_summaries.append(summary)
-    safe_content["executive_summary"] = unique_summaries[:4]
+    context.content["executive_summary"] = unique_summaries[:4]
+    return quality_issues
 
-    actions = [
-        action
-        for action in safe_content.get("actions", [])
-        if action.get("id") != "action.diagnostic" or product_level_trusted
-    ]
-    gate_actions = []
-    if not text_trusted:
-        gate_actions.append(
+
+def _quality_gate_actions(context: _LiveQualityEvaluation) -> list[dict[str, Any]]:
+    actions: list[dict[str, Any]] = []
+    if not context.text_trusted:
+        actions.append(
             {
                 "id": "action.text_quality",
                 "priority": "P0",
@@ -271,9 +317,8 @@ def _evaluate_live_quality(
                 "evidence_ids": ["text_quality", "scope"],
             }
         )
-    if not mapping_trusted:
-        actions = [action for action in actions if action.get("id") != "action.mapping"]
-        gate_actions.append(
+    if not context.mapping_trusted:
+        actions.append(
             {
                 "id": "action.mapping",
                 "priority": "P0",
@@ -291,22 +336,26 @@ def _evaluate_live_quality(
                 "evidence_ids": ["product_mapping", "scope"],
             }
         )
+    return actions
+
+
+def _apply_actions(context: _LiveQualityEvaluation) -> None:
     actions = [
         action
-        for action in actions
-        if action.get("id") not in {item["id"] for item in gate_actions}
+        for action in context.content.get("actions", [])
+        if action.get("id") != "action.diagnostic" or context.mapping_trusted
     ]
-    action_candidates = (
-        []
-        if consistency["status"] == "blocked"
-        else [
-            *gate_actions,
-            *actions,
-        ]
+    gate_actions = _quality_gate_actions(context)
+    if not context.mapping_trusted:
+        actions = [action for action in actions if action.get("id") != "action.mapping"]
+    gate_ids = {item["id"] for item in gate_actions}
+    actions = [action for action in actions if action.get("id") not in gate_ids]
+    candidates = (
+        [] if context.consistency["status"] == "blocked" else [*gate_actions, *actions]
     )
-    unique_actions = []
-    seen_action_ids = set()
-    for action in action_candidates:
+    unique_actions: list[dict[str, Any]] = []
+    seen_action_ids: set[Any] = set()
+    for action in candidates:
         action_id = action.get("id")
         if action_id in seen_action_ids:
             continue
@@ -319,61 +368,81 @@ def _evaluate_live_quality(
         "action.information": 3,
         "action.scope": 4,
     }
-    unique_actions.sort(key=lambda action: action_order.get(action.get("id"), 99))
-    safe_content["actions"] = unique_actions[:6]
+    unique_actions.sort(
+        key=lambda action: action_order.get(str(action.get("id") or ""), 99)
+    )
+    context.content["actions"] = unique_actions[:6]
 
+
+def _decision_readiness(context: _LiveQualityEvaluation) -> dict[str, str]:
     warnings = []
-    if not text_trusted:
+    if not context.text_trusted:
         warnings.append(
             "评论文本质量未通过门禁：在重新导入干净源数据前，"
             "本报告只可用于定位数据问题，不可下发商品整改。"
         )
-    if not mapping_trusted:
-        warnings.append(str(product_mapping.get("note") or "商品主数据需核对。"))
-    if pending_count:
-        warnings.append(str(review_bias.get("note") or source_issues[-1]["detail"]))
-    caveats = [*warnings, *safe_content.get("caveats", [])]
-    safe_content["caveats"] = list(dict.fromkeys(caveats))
-    if consistency["status"] == "blocked":
-        decision_readiness = {
+    if not context.mapping_trusted:
+        warnings.append(
+            str(context.product_mapping.get("note") or "商品主数据需核对。")
+        )
+    if context.pending_count:
+        warnings.append(
+            str(context.review_bias.get("note") or context.source_issues[-1]["detail"])
+        )
+    caveats = [*warnings, *context.content.get("caveats", [])]
+    context.content["caveats"] = list(dict.fromkeys(caveats))
+    if context.consistency["status"] == "blocked":
+        return {
             "status": "unusable",
             "label": "不可使用",
             "reason": "报告内部数据不一致，请重新生成报告。",
         }
-    elif source_issues:
-        decision_readiness = {
+    if context.source_issues:
+        labels = "、".join(item["label"] for item in context.source_issues)
+        return {
             "status": "diagnostic_only",
             "label": "仅供诊断",
-            "reason": (
-                f"当前存在{'、'.join(item['label'] for item in source_issues)}，"
-                "不应直接下发商品整改。"
-            ),
+            "reason": f"当前存在{labels}，不应直接下发商品整改。",
         }
-    else:
-        decision_readiness = {
-            "status": "actionable",
-            "label": "可行动",
-            "reason": "数据质量与报告一致性校验均已通过。",
-        }
+    return {
+        "status": "actionable",
+        "label": "可行动",
+        "reason": "数据质量与报告一致性校验均已通过。",
+    }
 
-    if consistency["status"] == "blocked":
-        gate_status = "blocked"
-    elif source_issues:
-        gate_status = "warning"
-    else:
-        gate_status = "passed"
+
+def _quality_gate_status(context: _LiveQualityEvaluation) -> str:
+    if context.consistency["status"] == "blocked":
+        return "blocked"
+    if context.source_issues:
+        return "warning"
+    return "passed"
+
+
+def _evaluate_live_quality(
+    content: dict[str, Any],
+    evidence: dict[str, Any],
+    text_quality: dict[str, Any],
+) -> dict[str, Any]:
+    context = _prepare_live_quality(content, evidence, text_quality)
+    _apply_quality_metadata(context)
+    _sanitize_analysis(context)
+    _sanitize_catalog(context)
+    quality_issues = _apply_summaries(context)
+    _apply_actions(context)
+    decision_readiness = _decision_readiness(context)
     quality_gate = ReportQualityGate.model_validate(
         {
-            "status": gate_status,
+            "status": _quality_gate_status(context),
             "issues": quality_issues,
-            "text_quality": text_quality,
-            "product_mapping": product_mapping,
-            "consistency": consistency,
+            "text_quality": context.text_quality,
+            "product_mapping": context.product_mapping,
+            "consistency": context.consistency,
             "decision_readiness": decision_readiness,
         }
     ).model_dump()
     return {
-        "content": safe_content,
-        "evidence": safe_evidence,
+        "content": context.content,
+        "evidence": context.evidence,
         "quality_gate": quality_gate,
     }

@@ -67,17 +67,17 @@ def check_commands() -> list[tuple[str, list[str], Path]]:
             ],
             PROJECT_ROOT,
         ),
+        (
+            "Python type check",
+            [sys.executable, "-m", "mypy"],
+            PROJECT_ROOT,
+        ),
         ("Frontend quality checks", npm_command("run", "quality"), FRONTEND_ROOT),
     ]
 
 
 def audit_commands() -> list[tuple[str, list[str], Path]]:
     return [
-        (
-            "Python type audit",
-            [sys.executable, "-m", "mypy"],
-            PROJECT_ROOT,
-        ),
         (
             "Python complexity audit",
             [
