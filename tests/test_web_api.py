@@ -385,6 +385,95 @@ def test_return_version_fills_only_missing_store_values(tmp_path: Path) -> None:
         assert first_snapshot.json()["source_total"] == 1
 
 
+def _create_and_verify_dashboard(
+    client: TestClient,
+    result_version_id: str,
+) -> tuple[str, str]:
+    dashboard_plan = client.post(
+        "/api/dashboard-plans/preflight",
+        json={"result_version_ids": [result_version_id], "filters": {}},
+    )
+    assert dashboard_plan.status_code == 200, dashboard_plan.text
+    plan = dashboard_plan.json()
+    assert plan["ready"] is True
+    assert plan["summary"]["record_count"] == 1
+    assert plan["summary"]["pending_review_comment_count"] == 0
+
+    response = client.post(
+        "/api/analysis-dashboards",
+        json={
+            "name": "真实闭环分析看板",
+            "description": "验证人工复核派生版本进入下游分析",
+            "result_version_ids": [result_version_id],
+            "filters": {},
+            "plan_hash": plan["plan_hash"],
+            "reason": "验证结果复核到看板的完整闭环",
+        },
+    )
+    assert response.status_code == 201, response.text
+    dashboard = response.json()
+    dashboard_id = dashboard["id"]
+    dashboard_version_id = dashboard["version"]["version_id"]
+    sources = client.get(
+        f"/api/analysis-dashboards/{dashboard_id}/versions/"
+        f"{dashboard_version_id}/sources"
+    )
+    assert sources.status_code == 200, sources.text
+    assert sources.json()[0]["result_version_id"] == result_version_id
+    summary = client.get(
+        f"/api/analysis-dashboards/{dashboard_id}/versions/"
+        f"{dashboard_version_id}/summary"
+    )
+    assert summary.status_code == 200, summary.text
+    assert summary.json()["record_count"] == 1
+    assert summary.json()["pending_review_comment_count"] == 0
+    return dashboard_id, dashboard_version_id
+
+
+def _verify_persistence_after_restart(
+    settings: Settings,
+    *,
+    task_id: str,
+    result_version_id: str,
+    review_batch_id: str,
+    dashboard_ids: tuple[str, str],
+) -> None:
+    dashboard_id, dashboard_version_id = dashboard_ids
+    restarted_app = create_app(start_worker=True, settings_override=settings)
+    with TestClient(restarted_app) as client:
+        login = client.post(
+            "/api/auth/login",
+            json={
+                "email": "admin@example.com",
+                "password": "new-test-password-456",
+            },
+        )
+        assert login.status_code == 200
+        task = client.get(f"/api/tasks/{task_id}")
+        assert task.status_code == 200, task.text
+        assert task.json()["status"] == "completed"
+        result = client.get(f"/api/classification-results/{result_version_id}")
+        assert result.status_code == 200, result.text
+        assert result.json()["version"] == 2
+        batch = client.get(f"/api/review-batches/{review_batch_id}")
+        assert batch.status_code == 200, batch.text
+        assert batch.json()["status"] == "published"
+        assert batch.json()["published_version_id"] == result_version_id
+        dashboard = client.get(
+            f"/api/analysis-dashboards/{dashboard_id}",
+            params={"version_id": dashboard_version_id},
+        )
+        assert dashboard.status_code == 200, dashboard.text
+        assert dashboard.json()["version"]["version_id"] == dashboard_version_id
+        summary = client.get(
+            f"/api/analysis-dashboards/{dashboard_id}/versions/"
+            f"{dashboard_version_id}/summary"
+        )
+        assert summary.status_code == 200, summary.text
+        assert summary.json()["record_count"] == 1
+        assert summary.json()["pending_review_comment_count"] == 0
+
+
 def test_real_web_task_flow(tmp_path: Path) -> None:
     server = ThreadingHTTPServer(("127.0.0.1", 0), FakeResponsesHandler)
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -928,6 +1017,11 @@ def test_real_web_task_flow(tmp_path: Path) -> None:
                 f"/api/classification-results/{base_version_id}/versions"
             ).json()
             assert [item["version"] for item in history] == [2, 1]
+            derived_version_id = published.json()["version_id"]
+            dashboard_id, dashboard_version_id = _create_and_verify_dashboard(
+                client,
+                derived_version_id,
+            )
             collaborator = client.post(
                 "/api/users",
                 json={
@@ -1111,6 +1205,13 @@ def test_real_web_task_flow(tmp_path: Path) -> None:
                 ).status_code
                 == 200
             )
+        _verify_persistence_after_restart(
+            settings,
+            task_id=task_id,
+            result_version_id=derived_version_id,
+            review_batch_id=batch["id"],
+            dashboard_ids=(dashboard_id, dashboard_version_id),
+        )
     finally:
         server.shutdown()
         server.server_close()
