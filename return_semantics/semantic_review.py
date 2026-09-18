@@ -392,28 +392,16 @@ def _analysis_failure_item(
     return item
 
 
-def build_semantic_review_view(
-    result: object,
-    source_text: str,
-    taxonomy: TaxonomyConfig | None = None,
-    *,
-    processing_status: str | ProcessingStatus | None = None,
-) -> dict[str, object]:
-    """将现有分类结果投影为人工可核验的证据清单。
-
-    该函数只整理已有事实和映射，不判断结果是否正确，也不使用主因决定处置。
-    """
-    facts = _list(result, "extracted_facts") or _list(result, "facts")
-    mappings = _list(result, "fact_mappings")
-    units = _list(result, "semantic_units")
-    unknowns = [
-        *_list(result, "unknown_semantics"),
-        *_list(result, "ignored_semantics"),
-    ]
+def _fact_review_items(
+    facts: list[object],
+    mappings: list[object],
+    units: list[object],
+    unknowns: list[object],
+    taxonomy: TaxonomyConfig | None,
+) -> tuple[list[dict[str, object]], set[int], set[int]]:
     mapping_by_fact = _index_by_fact_id(mappings)
     unit_by_fact = _index_by_fact_id(units)
     unknown_by_fact = _index_by_fact_id(unknowns)
-
     items: list[dict[str, object]] = []
     handled_units: set[int] = set()
     handled_unknowns: set[int] = set()
@@ -454,7 +442,15 @@ def build_semantic_review_view(
                 taxonomy=taxonomy,
             )
         )
+    return items, handled_units, handled_unknowns
 
+
+def _unhandled_unit_items(
+    units: list[object],
+    handled_units: set[int],
+    taxonomy: TaxonomyConfig | None,
+) -> list[dict[str, object]]:
+    items = []
     for unit in units:
         if id(unit) in handled_units:
             continue
@@ -474,7 +470,15 @@ def build_semantic_review_view(
                 taxonomy=taxonomy,
             )
         )
+    return items
 
+
+def _unhandled_unknown_items(
+    unknowns: list[object],
+    handled_unknowns: set[int],
+    taxonomy: TaxonomyConfig | None,
+) -> list[dict[str, object]]:
+    items = []
     for unknown in unknowns:
         if id(unknown) in handled_unknowns:
             continue
@@ -493,15 +497,19 @@ def build_semantic_review_view(
                 taxonomy=taxonomy,
             )
         )
+    return items
 
-    status = _enum_value(
-        processing_status or _get(result, "processing_status") or _get(result, "status")
-    )
+
+def _analysis_failure_items(
+    result: object,
+    status: str,
+    taxonomy: TaxonomyConfig | None,
+) -> list[dict[str, object]]:
     structured_diagnostics = _list(result, "review_diagnostics")
     structured_codes = {
         _text(_get(diagnostic, "code")) for diagnostic in structured_diagnostics
     }
-    items.extend(
+    items = [
         _analysis_failure_item(
             _text(_get(diagnostic, "detail"))
             or _text(_get(diagnostic, "code"))
@@ -510,7 +518,7 @@ def build_semantic_review_view(
             structured_diagnostic=diagnostic,
         )
         for diagnostic in structured_diagnostics
-    )
+    ]
     if status == ProcessingStatus.MODEL_ERROR.value:
         reasons = [_text(reason) for reason in _list(result, "review_reasons")]
         if not structured_codes.intersection({"MODEL_RUN_TIMEOUT", "MODEL_RUN_FAILED"}):
@@ -522,26 +530,30 @@ def build_semantic_review_view(
                     model_error=True,
                 )
             )
-    elif system_reasons := _system_review_reasons(result):
-        items.extend(
-            _analysis_failure_item(reason, taxonomy)
-            for reason in system_reasons
-            if _text(_failure_diagnostic(reason)["diagnostic_code"])
-            not in structured_codes
-        )
+        return items
 
-    coverage_evidence: list[str] = []
+    items.extend(
+        _analysis_failure_item(reason, taxonomy)
+        for reason in _system_review_reasons(result)
+        if _text(_failure_diagnostic(reason)["diagnostic_code"]) not in structured_codes
+    )
+    return items
+
+
+def _coverage_evidence(items: list[dict[str, object]]) -> list[str]:
+    evidence: list[str] = []
     for item in items:
         raw_evidence = item.pop("_coverage_evidence", [])
         if isinstance(raw_evidence, list):
-            coverage_evidence.extend(
-                str(evidence) for evidence in raw_evidence if str(evidence)
-            )
-    unexplained = (
-        [] if facts else _unexplained_fragments(source_text, coverage_evidence)
-    )
+            evidence.extend(str(value) for value in raw_evidence if str(value))
+    return evidence
+
+
+def _coverage_summary(
+    items: list[dict[str, object]], unexplained: list[str]
+) -> dict[str, object]:
     counts = Counter(_text(item["disposition"]) for item in items)
-    coverage_summary = {
+    return {
         "total": len(items),
         "mapped": counts[MAPPED],
         "no_tag_needed": counts[NO_TAG_NEEDED],
@@ -555,9 +567,43 @@ def build_semantic_review_view(
             for disposition in (TAXONOMY_GAP, TRUE_AMBIGUITY, ANALYSIS_FAILURE)
         ),
     }
+
+
+def build_semantic_review_view(
+    result: object,
+    source_text: str,
+    taxonomy: TaxonomyConfig | None = None,
+    *,
+    processing_status: str | ProcessingStatus | None = None,
+) -> dict[str, object]:
+    """将现有分类结果投影为人工可核验的证据清单。
+
+    该函数只整理已有事实和映射，不判断结果是否正确，也不使用主因决定处置。
+    """
+    facts = _list(result, "extracted_facts") or _list(result, "facts")
+    mappings = _list(result, "fact_mappings")
+    units = _list(result, "semantic_units")
+    unknowns = [
+        *_list(result, "unknown_semantics"),
+        *_list(result, "ignored_semantics"),
+    ]
+    items, handled_units, handled_unknowns = _fact_review_items(
+        facts, mappings, units, unknowns, taxonomy
+    )
+    items.extend(_unhandled_unit_items(units, handled_units, taxonomy))
+    items.extend(_unhandled_unknown_items(unknowns, handled_unknowns, taxonomy))
+
+    status = _enum_value(
+        processing_status or _get(result, "processing_status") or _get(result, "status")
+    )
+    items.extend(_analysis_failure_items(result, status, taxonomy))
+    coverage_evidence = _coverage_evidence(items)
+    unexplained = (
+        [] if facts else _unexplained_fragments(source_text, coverage_evidence)
+    )
     return {
         "semantic_items": items,
-        "coverage_summary": coverage_summary,
+        "coverage_summary": _coverage_summary(items, unexplained),
         "unexplained_fragments": unexplained,
     }
 
