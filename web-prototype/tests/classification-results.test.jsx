@@ -47,6 +47,7 @@ const resultVersion = {
   product_names: ["产品表权威名称", "产品表第二名称"],
   record_count: 3,
   unit_count: 1,
+  analysis_context: "returns",
   agent_family: "鞋履智能体",
   product_version: 4,
   published_at: "2026-08-12T08:00:00Z",
@@ -236,6 +237,49 @@ test("分类结果摘要完整展示记录去向并可对账", async () => {
   expect(
     screen.getByText("记录对账：50 = 41 可用 + 6 需复核 + 1 已忽略 + 2 不可用"),
   ).toBeVisible();
+});
+
+test("用户反馈结果不再把标题展示为退货原因", async () => {
+  const user = userEvent.setup();
+  apiMock.classificationResult.mockResolvedValue({
+    ...resultVersion,
+    analysis_context: "user_feedback",
+  });
+  apiMock.classificationResultRecords.mockResolvedValue({
+    items: [
+      {
+        ...record,
+        reason: "Great winter gloves",
+        comment: "Warm and comfortable",
+        problem_labels: [],
+        classification: {
+          ...record.classification,
+          primary_label_codes: [],
+          problem_label_codes: [],
+          positive_label_codes: ["COMFORT_POSITIVE"],
+        },
+      },
+    ],
+    total: 1,
+    page: 1,
+    page_size: 20,
+  });
+  window.location.hash =
+    "classification-results?result_version_id=classification-version-1";
+
+  render(<ClassificationResultsPage notify={vi.fn()} />);
+
+  const section = (await screen.findByText("用户反馈记录")).closest("section");
+  expect(within(section).getByText("反馈标题 / 正文")).toBeVisible();
+  expect(within(section).getByText("Great winter gloves")).toBeVisible();
+  expect(within(section).getByText("Warm and comfortable")).toBeVisible();
+
+  await user.click(within(section).getByRole("button", { name: "查看证据" }));
+  const drawer = screen.getByRole("dialog", { name: "分类结果与证据" });
+  expect(within(drawer).getByText("用户反馈原文")).toBeVisible();
+  expect(within(drawer).getByText("反馈标题")).toBeVisible();
+  expect(within(drawer).getByText("正向标签")).toBeVisible();
+  expect(within(drawer).queryByText("Amazon原因")).not.toBeInTheDocument();
 });
 
 afterEach(() => cleanup());

@@ -249,7 +249,9 @@ test("退货数据源页集中展示当前状态并从详情按需查看历史",
     />,
   );
 
-  expect(await screen.findByRole("heading", { name: "退货数据源管理" })).toBeVisible();
+  expect(
+    await screen.findByRole("heading", { name: "用户反馈数据源管理" }),
+  ).toBeVisible();
   expect(screen.getByText("SENWAYZON CA、SENWAYZON US 退货数据")).toBeVisible();
   expect(screen.getByText("SENWAYZON:CA · SENWAYZON:US")).toBeVisible();
   expect(screen.getByText("3 个任务")).toBeVisible();

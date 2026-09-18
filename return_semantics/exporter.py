@@ -15,7 +15,6 @@ from return_semantics.schemas import (
 )
 from return_semantics.semantic_review import (
     build_semantic_review_view,
-    requires_business_review,
 )
 from return_semantics.taxonomy_hierarchy import label_path, label_path_codes
 
@@ -431,27 +430,23 @@ def export_results(
 ) -> None:
     detail = pd.DataFrame(_build_detail_rows(dataset, results, taxonomy))
     semantics = pd.DataFrame(_build_semantic_rows(dataset, results, taxonomy))
-    review_counts = detail["分类键"].value_counts()
-    unique_map = dataset.unique_comments.set_index("classification_key")
-    actionable_keys = {
-        _display_key(classification_key)
-        for classification_key, result in results.items()
-        if requires_business_review(
-            result,
-            str(unique_map.loc[classification_key]["comment_normalized"] or ""),
-            taxonomy,
-        )
-    }
-    review = (
-        detail.loc[detail["分类键"].isin(actionable_keys)]
-        .drop_duplicates(subset=["分类键"])
-        .copy()
-    )
-    review.insert(2, "重复记录数", review["分类键"].map(review_counts))
     unknown = pd.DataFrame(_build_unknown_rows(dataset, results))
     semantic_review = pd.DataFrame(
         _build_semantic_review_rows(dataset, results, taxonomy)
     )
+    if semantic_review.empty:
+        business_review = semantic_review.copy()
+        system_rerun = semantic_review.copy()
+    else:
+        system_rerun = semantic_review.loc[
+            semantic_review["处置状态"].isin(["ANALYSIS_FAILURE", "MODEL_ERROR"])
+            & semantic_review["是否需要业务判断"].eq("否")
+        ].copy()
+        system_rerun_keys = set(system_rerun["分类键"])
+        business_review = semantic_review.loc[
+            semantic_review["是否需要业务判断"].eq("是")
+            & ~semantic_review["分类键"].isin(system_rerun_keys)
+        ].copy()
     decisions = pd.DataFrame(_build_dimension_decision_rows(results))
     statistics = pd.DataFrame(_build_statistics(dataset, results, taxonomy))
 
@@ -459,7 +454,8 @@ def export_results(
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         detail.to_excel(writer, sheet_name="分类明细", index=False)
         semantics.to_excel(writer, sheet_name="语义单元", index=False)
-        review.to_excel(writer, sheet_name="人工复核", index=False)
+        business_review.to_excel(writer, sheet_name="人工复核", index=False)
+        system_rerun.to_excel(writer, sheet_name="系统待重跑", index=False)
         unknown.to_excel(writer, sheet_name="未知语义", index=False)
         semantic_review.to_excel(writer, sheet_name="语义核验", index=False)
         decisions.to_excel(writer, sheet_name="维度裁决", index=False)

@@ -1,4 +1,8 @@
-from return_semantics.review import reconcile_secondary, should_run_secondary
+from return_semantics.review import (
+    build_model_difference_diagnostics,
+    reconcile_secondary,
+    should_run_secondary,
+)
 from return_semantics.schemas import ValidatedClassification
 
 
@@ -59,12 +63,37 @@ def test_disagreeing_secondary_result_requires_manual_review() -> None:
     assert "两次模型的语义结果不一致" in reconciled.review_reasons
     diagnostic = reconciled.review_diagnostics[0]
     assert diagnostic.code == "MODEL_RESULT_MISMATCH"
-    assert diagnostic.evidence_text == "1. Need smaller size"
+    assert diagnostic.evidence_text == "Need smaller size"
     assert "FIT_TOO_LARGE" in diagnostic.primary_result
     assert "FIT_TOO_SMALL" in diagnostic.secondary_result
     assert diagnostic.action == (
         "请业务员以原文证据为准，核对两次分析结果并选择正确标签。"
     )
+
+
+def test_model_mismatch_returns_one_diagnostic_per_evidence_item() -> None:
+    primary = _result()
+    primary.semantic_units.append(
+        primary.semantic_units[0].model_copy(
+            update={"label_code": "QUALITY_POOR", "evidence": "Also stiff"}
+        )
+    )
+    secondary = _result(label_code="FIT_TOO_SMALL")
+    secondary.semantic_units.append(
+        secondary.semantic_units[0].model_copy(
+            update={"label_code": "FLEXIBILITY_GOOD", "evidence": "Also stiff"}
+        )
+    )
+
+    diagnostics = build_model_difference_diagnostics(primary, secondary)
+
+    assert len(diagnostics) == 2
+    assert {item.evidence_text for item in diagnostics} == {
+        "Need smaller size",
+        "Also stiff",
+    }
+    assert all("\n" not in item.primary_result for item in diagnostics)
+    assert all("\n" not in item.secondary_result for item in diagnostics)
 
 
 def test_primary_label_difference_does_not_trigger_review() -> None:

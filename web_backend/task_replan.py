@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from return_semantics.analysis_context import analysis_context_from_snapshot
 from web_backend.common import json_text, json_value
 from web_backend.database import Database
 from web_backend.security import utc_now
@@ -36,6 +37,7 @@ class TaskReplanMixin:
         if task["status"] not in {"blocked", "partial"}:
             raise ValueError("仅阻断或部分完成的任务可以重新规划")
         snapshot_scope = task.get("snapshot", {}).get("scope", {})
+        task_snapshot = task.get("snapshot", {})
         model_policy = self._snapshot_model_policy(task)
         return self.plan_service.preflight(
             dataset_version_id=str(task["dataset_version_id"]),
@@ -46,6 +48,7 @@ class TaskReplanMixin:
             listing=(None if snapshot_scope.get("mode") == "auto" else task["listing"]),
             config_version_id=str(task["config_version_id"]),
             model_policy=model_policy,
+            analysis_context=analysis_context_from_snapshot(task_snapshot),
         )
 
     def replan(
@@ -217,6 +220,7 @@ class TaskReplanMixin:
         if source is None:
             raise ValueError("任务不存在")
         source_scope = source.get("snapshot", {}).get("scope", {})
+        source_snapshot = source.get("snapshot", {})
         model_policy = self._snapshot_model_policy(source)
         prepared = self.plan_service.prepare(
             dataset_version_id=str(source["dataset_version_id"]),
@@ -227,6 +231,7 @@ class TaskReplanMixin:
             listing=(None if source_scope.get("mode") == "auto" else source["listing"]),
             config_version_id=str(source["config_version_id"]),
             model_policy=model_policy,
+            analysis_context=analysis_context_from_snapshot(source_snapshot),
         )
         current_hash = str(prepared.response["plan_hash"])
         if current_hash != plan_hash:

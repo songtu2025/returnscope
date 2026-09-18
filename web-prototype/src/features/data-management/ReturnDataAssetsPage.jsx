@@ -61,7 +61,10 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
       setSources(items);
       setDetailsBySource({});
     } catch (error) {
-      notify(error instanceof Error ? error.message : "退货数据源读取失败", "error");
+      notify(
+        error instanceof Error ? error.message : "用户反馈数据源读取失败",
+        "error",
+      );
     } finally {
       setLoading(false);
     }
@@ -162,15 +165,17 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
     if (result.dataset?.id) {
       onRouteChange({ view: "returns", dataset: result.dataset.id, tab: "" });
     }
-    notify(result.duplicate ? "该批次已存在，已定位到原数据源" : "退货数据源已更新");
+    notify(
+      result.duplicate ? "该批次已存在，已定位到原数据源" : "用户反馈数据源已更新",
+    );
   };
 
   return (
     <div className="standard-page data-page returns-assets-page">
       <PageHeading
         eyebrow="数据资产"
-        title="退货数据源管理"
-        description="管理可复用的退货数据源和最近导入状态。"
+        title="用户反馈数据源管理"
+        description="管理可复用的用户反馈数据源和最近导入状态。"
         action={
           <Button
             type="primary"
@@ -188,12 +193,12 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
 
       {loading ? (
         <section className="content-card returns-assets-loading">
-          <InlineLoading label="正在读取退货数据源…" />
+          <InlineLoading label="正在读取用户反馈数据源…" />
         </section>
       ) : sources.length === 0 ? (
         <EmptyState
           icon={FileCsv}
-          title="尚未建立退货数据源"
+          title="尚未建立用户反馈数据源"
           description="导入首个批次后，系统会识别业务范围并建立可复用的数据源。"
           action={
             <Button
@@ -206,7 +211,7 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
           }
         />
       ) : (
-        <section className="returns-registry" aria-label="退货数据源清单">
+        <section className="returns-registry" aria-label="用户反馈数据源清单">
           <header className="returns-registry-toolbar">
             <div className="returns-registry-summary">
               <span>
@@ -223,7 +228,7 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
             <div className="returns-registry-filters">
               <Input
                 className="returns-registry-search"
-                aria-label="搜索退货数据源"
+                aria-label="搜索用户反馈数据源"
                 prefix={<MagnifyingGlass size={17} />}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}

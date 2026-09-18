@@ -793,7 +793,7 @@ def test_real_web_task_flow(tmp_path: Path) -> None:
                 "classification-standards-"
             )
             assert current["segments"][0]["standard_version_id"]
-            assert current["segments"][0]["standard_name"] == "鞋履退货问题标准"
+            assert current["segments"][0]["standard_name"] == "鞋履用户反馈语义标准"
             assert current["segments"][0]["standard_version"] == 1
             category_segment = current["metrics"]["category_segments"][0]
             assert category_segment["agent_family"] == "鞋履智能体"

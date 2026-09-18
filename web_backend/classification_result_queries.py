@@ -3,14 +3,52 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from return_semantics.schemas import TaxonomyConfig
+from return_semantics.semantic_review import requires_system_rerun
 from web_backend.classification_result_payload import PAGE_SIZE_DEFAULT
 from web_backend.classification_result_publication import (
     ClassificationResultNotFound,
 )
-from web_backend.common import json_value
+from web_backend.common import json_text, json_value
 from web_backend.database import Database
 from web_backend.result_hierarchy import result_taxonomy
 from web_backend.result_state import result_delivery_state
+
+
+def system_rerun_counts(
+    connection: Any,
+    result_version_ids: list[str],
+) -> dict[str, int]:
+    """统计已发布结果版本中待系统重跑的分类单元。"""
+    version_ids = list(dict.fromkeys(result_version_ids))
+    if not version_ids:
+        return {}
+    rows = connection.execute(
+        """
+        SELECT result_version_id, classification_json, processing_status, comment
+        FROM classification_units
+        WHERE result_version_id IN (SELECT value FROM json_each(?))
+        """,
+        (json_text(version_ids),),
+    ).fetchall()
+    counts = dict.fromkeys(version_ids, 0)
+    for row in rows:
+        if not requires_system_rerun(
+            json_value(row["classification_json"], {}),
+            str(row["comment"] or ""),
+            processing_status=str(row["processing_status"] or ""),
+        ):
+            continue
+        version_id = str(row["result_version_id"])
+        counts[version_id] += 1
+    return counts
+
+
+def system_rerun_count(connection: Any, result_version_id: str) -> int:
+    """统计单个已发布结果版本的待系统重跑单元。"""
+    return system_rerun_counts(connection, [result_version_id]).get(
+        result_version_id,
+        0,
+    )
 
 
 class _ClassificationResultQueries:
@@ -101,6 +139,10 @@ class _ClassificationResultQueries:
                          )
                    ), 0) AS changed_unit_count,
                    r.source_task_id, r.source_segment_id,
+                   COALESCE(
+                       json_extract(task.snapshot_json, '$.analysis_context'),
+                       'returns'
+                   ) AS analysis_context,
                    r.dataset_version_id, r.product_version_id,
                    r.store_site, r.listing, r.agent_key, r.agent_family,
                    r.logic_version, r.taxonomy_version,
@@ -130,6 +172,7 @@ class _ClassificationResultQueries:
             JOIN datasets rd ON rd.id = dv.dataset_id
             JOIN dataset_versions pv ON pv.id = r.product_version_id
             JOIN datasets pd ON pd.id = pv.dataset_id
+            LEFT JOIN tasks task ON task.id = r.source_task_id
             LEFT JOIN classification_standard_versions standard_version
               ON standard_version.id = r.standard_version_id
             LEFT JOIN classification_standards standard

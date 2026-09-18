@@ -4,6 +4,7 @@ import threading
 from collections import Counter
 from typing import Any, Callable
 
+from return_semantics.analysis_context import analysis_context_from_snapshot
 from return_semantics.data import ReturnDataset
 from return_semantics.exporter import REVIEW_STATUSES
 from return_semantics.schemas import TaxonomyConfig, ValidatedClassification
@@ -45,6 +46,7 @@ class ParentResultMixin:
                 str(snapshot.get("scope", {}).get("mode", "manual")),
                 str(task["return_sha256"]),
                 str(task["product_sha256"]),
+                analysis_context_from_snapshot(snapshot),
             )
             try:
                 self._build_parent_result(task_id, dataset, str(task["status"]))
@@ -121,6 +123,7 @@ class ParentResultMixin:
                         str(snapshot.get("scope", {}).get("mode", "manual")),
                         str(task["return_sha256"]),
                         str(task["product_sha256"]),
+                        analysis_context_from_snapshot(snapshot),
                     )
                 try:
                     self._build_parent_result(task_id, dataset, parent_status)

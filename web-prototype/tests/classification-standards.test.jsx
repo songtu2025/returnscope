@@ -30,7 +30,6 @@ const standardApiMock = vi.hoisted(() => ({
   classificationStandardValidationRuns: vi.fn(),
   createClassificationStandardValidationRun: vi.fn(),
   classificationStandardValidationRun: vi.fn(),
-  approveClassificationStandardValidationRun: vi.fn(),
 }));
 
 const validationApiMock = {
@@ -491,13 +490,10 @@ test("显式选择悬挂时轮询仍刷新用户期望的运行记录", async ()
   });
 });
 
-test("验证创建、审批和详情选择失败均恢复操作状态并提示", async () => {
+test("验证创建和详情选择失败均恢复操作状态并提示", async () => {
   validationApiMock.sources.mockResolvedValue([validationSource]);
   validationApiMock.runs.mockResolvedValue([readyRun]);
   validationApiMock.start.mockRejectedValue(new Error("验证创建失败"));
-  standardApiMock.approveClassificationStandardValidationRun.mockRejectedValue(
-    new Error("验证审批失败"),
-  );
   validationApiMock.run.mockRejectedValue(new Error("验证详情失败"));
   const { result, notify, setBusy } = renderValidationController();
 
@@ -506,13 +502,11 @@ test("验证创建、审批和详情选择失败均恢复操作状态并提示",
   });
   expect(result.current.validationRuns).toEqual([readyRun]);
   await act(async () => result.current.startSampleValidation(null));
-  await act(async () => result.current.approveSampleValidation(readyRun.id, "确认"));
   await act(async () => result.current.selectValidation(readyRun.id));
 
   expect(notify).toHaveBeenCalledWith("验证创建失败", "error");
-  expect(notify).toHaveBeenCalledWith("验证审批失败", "error");
   expect(notify).toHaveBeenCalledWith("验证详情失败", "error");
-  expect(setBusy.mock.calls).toEqual([["validation"], [""], ["approval"], [""]]);
+  expect(setBusy.mock.calls).toEqual([["validation"], [""]]);
 });
 
 test("轮询失败静默并在卸载时清理两秒定时器", async () => {
@@ -540,7 +534,7 @@ test("轮询失败静默并在卸载时清理两秒定时器", async () => {
   expect(clearIntervalSpy).toHaveBeenCalledWith(91);
 });
 
-test("质量门槛分开展示发布阻断项与人工复核警告", async () => {
+test("质量检查分开展示发布风险项与人工复核警告", async () => {
   const { ClassificationValidationQuality } =
     await import("../src/features/classification-standards/ClassificationValidationQuality");
   const run = {
@@ -557,7 +551,7 @@ test("质量门槛分开展示发布阻断项与人工复核警告", async () =>
   render(<ClassificationValidationQuality run={run} />);
 
   const alert = screen.getByRole("alert");
-  expect(within(alert).getByText("发布阻断项")).toBeVisible();
+  expect(within(alert).getByText("发布风险项")).toBeVisible();
   expect(within(alert).getByText("证据检查失败=1，要求不超过 0")).toBeVisible();
   expect(within(alert).getByText("人工复核警告")).toBeVisible();
   expect(within(alert).getByText("漏标实例=1，请人工复核")).toBeVisible();
@@ -1296,7 +1290,7 @@ test("已发布标签支持停用、恢复和撤销停用", async () => {
   expect(screen.getByText("镜框或镜腿造成压迫")).toBeVisible();
 });
 
-test("编辑页只允许发布当前修订已验证的草稿", async () => {
+test("编辑页可携带当前修订的测试记录发布", async () => {
   const notify = vi.fn();
   standardApiMock.classificationStandard.mockResolvedValue({
     ...detail,
@@ -1322,17 +1316,21 @@ test("编辑页只允许发布当前修订已验证的草稿", async () => {
     await screen.findByRole("button", { name: "发布", exact: true }),
   );
   await userEvent.click(await screen.findByRole("button", { name: "发布并启用" }));
+  await userEvent.click(await screen.findByRole("button", { name: "验收并发布" }));
 
   await waitFor(() =>
     expect(standardApiMock.publishClassificationStandardDraft).toHaveBeenCalledWith(
       draft.id,
-      expect.objectContaining({ expected_revision: 2 }),
+      expect.objectContaining({
+        expected_revision: 2,
+        validation_run_id: readyRun.id,
+      }),
     ),
   );
   expect(notify).toHaveBeenCalledWith("分类标准已更新并启用");
 });
 
-test("草稿未完成样本验证时禁止发布", async () => {
+test("草稿未运行测试时可以确认直接发布", async () => {
   standardApiMock.classificationStandard.mockResolvedValue({
     ...detail,
     draft_id: validDraft.id,
@@ -1351,12 +1349,19 @@ test("草稿未完成样本验证时禁止发布", async () => {
     await screen.findByRole("button", { name: "发布", exact: true }),
   );
   const validationRegion = await screen.findByRole("region", {
-    name: "发布前样本验证",
+    name: "可选测试验收",
   });
   expect(validationRegion.closest("details")).toBeNull();
-  expect(within(validationRegion).getByText("必需")).toBeVisible();
-  expect(await screen.findByRole("button", { name: "等待样本验证" })).toBeDisabled();
-  expect(standardApiMock.publishClassificationStandardDraft).not.toHaveBeenCalled();
+  expect(within(validationRegion).getByText("可选")).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "发布并启用" }));
+  expect(screen.getByText(/当前没有可关联的已完成测试/)).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "确认直接发布" }));
+  await waitFor(() =>
+    expect(standardApiMock.publishClassificationStandardDraft).toHaveBeenCalledWith(
+      validDraft.id,
+      expect.objectContaining({ validation_run_id: null }),
+    ),
+  );
 });
 
 test("草稿保存失败后保留未保存内容并恢复操作状态", async () => {
@@ -1390,6 +1395,7 @@ test("发布失败后保留变更说明并恢复发布操作状态", async () =>
   await userEvent.clear(reasonInput);
   await userEvent.type(reasonInput, "发布失败后继续使用的说明");
   await userEvent.click(screen.getByRole("button", { name: "发布并启用" }));
+  await userEvent.click(screen.getByRole("button", { name: "验收并发布" }));
 
   await waitFor(() =>
     expect(standardApiMock.publishClassificationStandardDraft).toHaveBeenCalledWith(
@@ -1397,6 +1403,7 @@ test("发布失败后保留变更说明并恢复发布操作状态", async () =>
       {
         expected_revision: validDraft.revision,
         reason: "发布失败后继续使用的说明",
+        validation_run_id: readyRun.id,
       },
     ),
   );
@@ -1523,7 +1530,7 @@ test("开始样本验证提交当前草稿修订、来源、规模和验证目�
   expect(notify).toHaveBeenCalledWith("样本验证已进入队列");
 });
 
-test("原始数据验证完成后必须人工确认才能发布", async () => {
+test("原始数据测试完成后无需额外审批即可验收发布", async () => {
   const notify = vi.fn();
   standardApiMock.classificationStandard.mockResolvedValue({
     ...detail,
@@ -1540,10 +1547,9 @@ test("原始数据验证完成后必须人工确认才能发布", async () => {
   standardApiMock.classificationStandardValidationRun.mockResolvedValue(
     awaitingApprovalRun,
   );
-  standardApiMock.approveClassificationStandardValidationRun.mockResolvedValue({
-    ...awaitingApprovalRun,
-    publication_ready: true,
-    approved_at: "2026-08-25T08:00:00Z",
+  standardApiMock.publishClassificationStandardDraft.mockResolvedValue({
+    ...detail,
+    version_no: 2,
   });
 
   render(
@@ -1561,23 +1567,18 @@ test("原始数据验证完成后必须人工确认才能发布", async () => {
     validationSource.result_version_id,
   );
   expect(screen.getByRole("option", { name: /真实手套退货评论/ })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "等待人工确认" })).toBeDisabled();
-  await userEvent.click(screen.getByRole("checkbox", { name: /我已审阅/ }));
-  await userEvent.type(
-    screen.getByRole("textbox", { name: "验证结论" }),
-    "差异符合预期",
-  );
-  await userEvent.click(screen.getByRole("button", { name: "确认验证通过" }));
+  await userEvent.click(screen.getByRole("button", { name: "发布并启用" }));
+  await userEvent.click(screen.getByRole("button", { name: "验收并发布" }));
 
   await waitFor(() =>
-    expect(
-      standardApiMock.approveClassificationStandardValidationRun,
-    ).toHaveBeenCalledWith(awaitingApprovalRun.id, {
-      expected_revision: validDraft.revision,
-      note: "差异符合预期",
-    }),
+    expect(standardApiMock.publishClassificationStandardDraft).toHaveBeenCalledWith(
+      validDraft.id,
+      expect.objectContaining({
+        validation_run_id: awaitingApprovalRun.id,
+      }),
+    ),
   );
-  expect(notify).toHaveBeenCalledWith("当前草稿修订已人工确认，可进入发布确认");
+  expect(notify).toHaveBeenCalledWith("分类标准已更新并启用");
 });
 
 test("新建页一次维护品类和标签并保存草稿", async () => {
@@ -1750,7 +1751,6 @@ test("Review 上传入口不依赖退货数据资产", async () => {
       sourceId=""
       sampleSize={20}
       busy={false}
-      approvalBusy={false}
       onRun={onRun}
       onSourceChange={vi.fn()}
       onSampleSizeChange={onSampleSizeChange}
@@ -1791,10 +1791,8 @@ test("样本验证按钮解释当前优先禁用原因", async () => {
     sourceId: "",
     sampleSize: 20,
     busy: false,
-    approvalBusy: false,
     dirty: false,
     onRun: vi.fn(),
-    onApprove: vi.fn(),
     onSelectRun: vi.fn(),
     onSourceChange: vi.fn(),
     onSampleSizeChange: vi.fn(),

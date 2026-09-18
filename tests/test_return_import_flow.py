@@ -316,7 +316,7 @@ def test_return_import_recognizes_identity_and_separates_task_input(
 
     inspection = service.inspect_return_import(source, source.name)
     assert inspection["source_key"] == "SENWAYZON:US"
-    assert inspection["suggested_name"] == "SENWAYZON US 退货数据"
+    assert inspection["suggested_name"] == "SENWAYZON US 用户反馈数据"
     assert inspection["matches"] == []
 
     one_off = service.import_returns(
@@ -327,7 +327,7 @@ def test_return_import_recognizes_identity_and_separates_task_input(
         actor_id="user-1",
     )
     assert one_off["dataset"]["usage_scope"] == "task_input"
-    assert one_off["dataset"]["source_name"] == "SENWAYZON US 退货数据"
+    assert one_off["dataset"]["source_name"] == "SENWAYZON US 用户反馈数据"
     assert service.list("returns", "managed")
     assert one_off["dataset"]["id"] not in {
         item["id"] for item in service.list("returns", "managed")

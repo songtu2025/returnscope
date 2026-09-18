@@ -159,6 +159,55 @@ def test_classification_key_isolated_by_product_category(tmp_path: Path) -> None
     assert dataset.unique_comments["classification_key"].nunique() == 2
 
 
+def test_user_feedback_title_does_not_change_semantic_identity(tmp_path: Path) -> None:
+    returns_path = tmp_path / "feedback.csv"
+    products_path = tmp_path / "products.xlsx"
+    rows = []
+    for order_id, title in (("1", "Great gloves"), ("2", "Winter favorite")):
+        rows.append(
+            {
+                "return-date": "2026-01-01",
+                "order-id": order_id,
+                "sku": "SKU-GLOVE",
+                "asin": "",
+                "fnsku": "",
+                "product-name": "gloves",
+                "quantity": "1",
+                "reason": title,
+                "customer-comments": "Warm and comfortable",
+            }
+        )
+    pd.DataFrame(rows).to_csv(returns_path, index=False, encoding="utf-8-sig")
+    products = pd.DataFrame(
+        [
+            {
+                "MSKU": "SKU-GLOVE",
+                "店铺/站点": "STORE",
+                "Listing": "GLOVE",
+                "品类A": "手套",
+                "品类B": "冬季手套",
+            }
+        ]
+    )
+    with pd.ExcelWriter(products_path, engine="openpyxl") as writer:
+        products.to_excel(writer, sheet_name="产品信息汇总表", index=False)
+
+    dataset = load_return_dataset(
+        returns_path,
+        products_path,
+        store="STORE",
+        analysis_context="user_feedback",
+    )
+
+    assert len(dataset.records) == 2
+    assert len(dataset.unique_comments) == 1
+    assert set(dataset.records["feedback_title"]) == {
+        "Great gloves",
+        "Winter favorite",
+    }
+    assert "Great gloves" not in dataset.unique_comments.iloc[0]["classification_key"]
+
+
 def test_auto_scope_matches_product_by_store_and_sku(tmp_path: Path) -> None:
     returns_path = tmp_path / "returns.csv"
     products_path = tmp_path / "products.xlsx"

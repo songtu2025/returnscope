@@ -460,6 +460,81 @@ def test_sample_validation_completes_and_becomes_stale_after_edit(
     assert stale["publication_ready"] is False
 
 
+def test_validation_freezes_actor_model_preference(tmp_path: Path) -> None:
+    standards, validations = _services(tmp_path)
+    standard = next(
+        item for item in standards.list() if item["standard_key"] == "eyewear"
+    )
+    source_version_id = _seed_result(standards, standard)
+    with standards.database.transaction() as connection:
+        for model_key in ("preferred-primary", "preferred-secondary"):
+            connection.execute(
+                """
+                INSERT INTO api_models(
+                    id, connection_id, model_key, display_name,
+                    supported_efforts_json, active, validation_status,
+                    validated_at, created_by, created_at, updated_by, updated_at
+                ) VALUES (?, 'connection-1', ?, ?, '["low","medium","high"]',
+                          1, 'validated', 'now', 'user-1', 'now', 'user-1', 'now')
+                """,
+                (f"model-{model_key}", model_key, model_key),
+            )
+        connection.execute(
+            """
+            INSERT INTO user_model_preferences(
+                user_id, connection_id, primary_model, primary_effort,
+                secondary_model, secondary_effort, cheap_audit_percent,
+                updated_at, updated_by
+            ) VALUES ('user-1', 'connection-1', 'preferred-primary', 'high',
+                      'preferred-secondary', 'high', 5, 'now', 'user-1')
+            """
+        )
+    draft = standards.create_draft(standard["id"], "user-1")
+    content = deepcopy(draft["content"])
+    content["product_context"] = "验证用户模型偏好快照"
+    draft = standards.update_draft(
+        draft["id"],
+        draft["revision"],
+        content,
+        "验证模型偏好",
+        "user-1",
+    )
+
+    run = validations.create_run(
+        draft["id"],
+        draft["revision"],
+        source_version_id,
+        20,
+        "user-1",
+    )
+
+    assert run["config_version_id"] == "config-1"
+    with standards.database.connect() as connection:
+        row = connection.execute(
+            "SELECT source_json FROM classification_standard_validation_runs "
+            "WHERE id = ?",
+            (run["id"],),
+        ).fetchone()
+    source = json.loads(row["source_json"])
+    assert source["model_policy"]["actual"] == {
+        "primary": {
+            "role": "primary",
+            "model": "preferred-primary",
+            "effort": "high",
+        },
+        "first_pass": {
+            "role": "primary",
+            "model": "preferred-primary",
+            "effort": "high",
+        },
+        "review": {
+            "role": "secondary",
+            "model": "preferred-secondary",
+            "effort": "high",
+        },
+    }
+
+
 def test_new_standard_uses_matching_categories_from_raw_data(
     tmp_path: Path,
 ) -> None:
@@ -812,14 +887,11 @@ def test_keyword_comparison_uses_same_taxonomy_and_cannot_approve(tmp_path):
         validations.approve(run["id"], draft["revision"], "不得代替发布", "user-1")
 
 
-def test_quality_policy_blocks_approval_and_publishing_even_with_saved_approval(
+def test_quality_policy_warns_but_does_not_block_direct_publishing(
     tmp_path,
 ):
     import pytest
 
-    from web_backend.classification_standard_service import (
-        ClassificationStandardValidationError,
-    )
     from web_backend.classification_validation_quality import FACT_QUALITY_POLICY
 
     standards, validations = _services(tmp_path)
@@ -853,5 +925,7 @@ def test_quality_policy_blocks_approval_and_publishing_even_with_saved_approval(
     assert validations.get(run["id"])["publication_ready"] is False
     with pytest.raises(ValueError, match="质量门槛未通过"):
         validations.approve(run["id"], draft["revision"], "不能绕过", "user-1")
-    with pytest.raises(ClassificationStandardValidationError):
-        standards.publish_draft(draft["id"], draft["revision"], "不能绕过", "user-1")
+    published = standards.publish_draft(
+        draft["id"], draft["revision"], "用户决定直接发布", "user-1"
+    )
+    assert published["version_no"] == 2

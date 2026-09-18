@@ -159,7 +159,7 @@ def create_app(
         validation_executor.shutdown(wait=False, cancel_futures=True)
 
     app = FastAPI(
-        title="退货语义分析智能体",
+        title="用户语义分析智能体",
         version="1.0.0",
         lifespan=lifespan,
         docs_url=None,

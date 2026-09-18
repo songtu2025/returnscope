@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from web_backend.classification_result_queries import system_rerun_counts
 from web_backend.common import json_text, json_value, new_id
 from web_backend.database import Database
 from web_backend.task_contracts import SEGMENT_USER_LIMIT, WAITING_SEGMENT_STATUSES
@@ -69,8 +70,21 @@ class TaskQueriesMixin:
                 """,
                 (json_text(list(items)),),
             ).fetchall()
+            rerun_counts = system_rerun_counts(
+                connection,
+                [
+                    str(segment["result_version_id"])
+                    for segment in segments
+                    if segment["result_version_id"] is not None
+                ],
+            )
             for segment in segments:
                 value = dict(segment)
+                version_id = str(value.get("result_version_id") or "")
+                self._attach_system_retry_state(
+                    value,
+                    rerun_counts.get(version_id, 0),
+                )
                 items[value.pop("task_id")]["segments"].append(value)
         return list(items.values())
 
@@ -116,6 +130,14 @@ class TaskQueriesMixin:
                 """,
                 (task_id,),
             ).fetchall()
+            rerun_counts = system_rerun_counts(
+                connection,
+                [
+                    str(segment["result_version_id"])
+                    for segment in segment_rows
+                    if segment["result_version_id"] is not None
+                ],
+            )
             owner_running = 0
             task_running = 0
             waiting_positions: dict[str, int] = {}
@@ -161,7 +183,11 @@ class TaskQueriesMixin:
             return None
         item = self._serialize(dict(row))
         item["segments"] = [
-            self._serialize_segment(dict(value)) for value in segment_rows
+            self._serialize_segment(
+                dict(value),
+                rerun_counts.get(str(value["result_version_id"] or ""), 0),
+            )
+            for value in segment_rows
         ]
         max_parallel = int(item.get("max_parallel_segments", 3))
         for segment in item["segments"]:
@@ -284,7 +310,23 @@ class TaskQueriesMixin:
         return item
 
     @staticmethod
-    def _serialize_segment(item: dict[str, Any]) -> dict[str, Any]:
+    def _attach_system_retry_state(
+        item: dict[str, Any],
+        system_failure_count: int,
+    ) -> None:
+        item["system_failure_count"] = system_failure_count
+        item["system_retry_available"] = bool(
+            item.get("status") == "completed_with_errors"
+            and item.get("result_version_id")
+            and system_failure_count
+        )
+
+    @classmethod
+    def _serialize_segment(
+        cls,
+        item: dict[str, Any],
+        system_failure_count: int = 0,
+    ) -> dict[str, Any]:
         item["variants"] = json_value(item.pop("variants_json", None), [])
         item["scope"] = json_value(item.pop("scope_json", None), {})
         item["model_policy"] = json_value(
@@ -298,4 +340,5 @@ class TaskQueriesMixin:
             if item.get("status") == "running" and requested_action
             else item.get("status")
         )
+        cls._attach_system_retry_state(item, system_failure_count)
         return item

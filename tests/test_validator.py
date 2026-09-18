@@ -7,7 +7,14 @@ from return_semantics.schemas import (
 from return_semantics.validator import validate_classification
 
 
-def _validate(payload, comment, reason, taxonomy, claims):
+def _validate(
+    payload,
+    comment,
+    reason,
+    taxonomy,
+    claims,
+    analysis_context="returns",
+):
     return validate_classification(
         classification_key=f"{reason}\x1f{comment.lower()}",
         comment=comment,
@@ -17,6 +24,7 @@ def _validate(payload, comment, reason, taxonomy, claims):
         claims=claims,
         model_name="test-model",
         prompt_version="test-prompt",
+        analysis_context=analysis_context,
     )
 
 
@@ -150,6 +158,25 @@ def test_water_shoe_praise_never_becomes_return_problem(
     assert result.problem_label_codes == []
     assert result.primary_label_codes == []
     assert result.positive_label_codes == [code]
+
+
+def test_positive_user_feedback_is_ready_without_return_reason(
+    taxonomy,
+    claims,
+) -> None:
+    comment = "These shoes are lightweight"
+    result = _validate(
+        _payload([_unit("EXPERIENCE_WEIGHT", comment, sentiment="POSITIVE")]),
+        comment,
+        "Great for daily use",
+        taxonomy,
+        claims,
+        analysis_context="user_feedback",
+    )
+
+    assert result.status.value == "AUTO_APPROVED"
+    assert result.review_reasons == []
+    assert result.positive_label_codes == ["EXPERIENCE_WEIGHT"]
 
 
 def test_new_drying_label_can_reference_existing_listing_claim(taxonomy, claims):

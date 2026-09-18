@@ -8,6 +8,12 @@ from zipfile import BadZipFile
 
 import pandas as pd
 
+from return_semantics.analysis_context import (
+    RETURNS_CONTEXT,
+    USER_FEEDBACK_CONTEXT,
+    AnalysisContext,
+)
+
 RETURN_COLUMNS = [
     "return-date",
     "order-id",
@@ -75,7 +81,7 @@ def _select_columns(
         return frame
     missing = [column for column in usecols if column not in frame.columns]
     if missing:
-        raise ValueError(f"退货数据缺少字段: {', '.join(missing)}")
+        raise ValueError(f"用户反馈数据缺少字段: {', '.join(missing)}")
     selected = set(usecols)
     return frame.loc[:, [column for column in frame.columns if column in selected]]
 
@@ -166,7 +172,7 @@ def read_return_file(
         return read_return_csv(path, usecols=usecols, nrows=nrows)
     if suffix == ".xlsx":
         return read_return_xlsx(path, usecols=usecols, nrows=nrows)
-    raise ValueError("退货数据仅支持 .csv、.xlsx 文件")
+    raise ValueError("用户反馈数据仅支持 .csv、.xlsx 文件")
 
 
 def load_mskus(
@@ -286,7 +292,7 @@ def _prepare_return_records(return_path: Path) -> pd.DataFrame:
     records = read_return_file(return_path)
     missing = [column for column in RETURN_COLUMNS if column not in records.columns]
     if missing:
-        raise ValueError(f"退货数据缺少字段: {', '.join(missing)}")
+        raise ValueError(f"用户反馈数据缺少字段: {', '.join(missing)}")
     selected_columns = RETURN_COLUMNS + (
         [RETURN_STORE_COLUMN] if RETURN_STORE_COLUMN in records.columns else []
     )
@@ -311,6 +317,7 @@ def _finalize_return_dataset(
     *,
     primary_store: str,
     scope_mode: str,
+    analysis_context: AnalysisContext,
 ) -> ReturnDataset:
     for column in ("store", "listing", "category_a", "category_b"):
         records[column] = records[column].fillna("").astype(str).str.strip()
@@ -320,6 +327,9 @@ def _finalize_return_dataset(
     records["comment_dedupe"] = records["comment_normalized"].str.lower()
     records["has_text_evidence"] = records["comment_normalized"].ne("")
     records["reason"] = records["reason"].fillna("").str.strip()
+    records["feedback_title"] = (
+        records["reason"] if analysis_context == USER_FEEDBACK_CONTEXT else ""
+    )
     records["classification_key"] = ""
 
     has_text = records["has_text_evidence"]
@@ -334,12 +344,11 @@ def _finalize_return_dataset(
         classification_scope = (
             records["store"] + "\x1d" + records["listing"] + "\x1d" + category_scope
         )
+    key_prefix = classification_scope.loc[has_text] + "\x1f"
+    if analysis_context == RETURNS_CONTEXT:
+        key_prefix += records.loc[has_text, "reason"] + "\x1f"
     records.loc[has_text, "classification_key"] = (
-        classification_scope.loc[has_text]
-        + "\x1f"
-        + records.loc[has_text, "reason"]
-        + "\x1f"
-        + records.loc[has_text, "comment_dedupe"]
+        key_prefix + records.loc[has_text, "comment_dedupe"]
     )
 
     unique_comments = (
@@ -348,6 +357,7 @@ def _finalize_return_dataset(
             [
                 "classification_key",
                 "reason",
+                "feedback_title",
                 "comment_normalized",
                 "category_a",
                 "category_b",
@@ -391,6 +401,7 @@ def load_return_dataset(
     product_path: Path,
     store: str,
     listing: str | None = None,
+    analysis_context: AnalysisContext = RETURNS_CONTEXT,
 ) -> ReturnDataset:
     products = load_product_dimensions(product_path, store=store, listing=listing)
     mskus = frozenset(value for value in products["MSKU"] if value)
@@ -440,12 +451,14 @@ def load_return_dataset(
         mskus,
         primary_store=store,
         scope_mode="manual",
+        analysis_context=analysis_context,
     )
 
 
 def load_return_dataset_auto(
     return_path: Path,
     product_path: Path,
+    analysis_context: AnalysisContext = RETURNS_CONTEXT,
 ) -> ReturnDataset:
     products = _read_product_dimensions(product_path)
     products = products.loc[products["MSKU"].ne("")].copy()
@@ -510,4 +523,5 @@ def load_return_dataset_auto(
         frozenset(products["MSKU"]),
         primary_store=primary_store,
         scope_mode="auto",
+        analysis_context=analysis_context,
     )

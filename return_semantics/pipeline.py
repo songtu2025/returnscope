@@ -7,10 +7,15 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, replace
 from threading import Event, Lock
-from typing import Any, Literal, cast
+from typing import Any
 
 import pandas as pd
 
+from return_semantics.analysis_context import (
+    RETURNS_CONTEXT,
+    AnalysisContext,
+    validate_analysis_context,
+)
 from return_semantics.fact_pipeline import FactPipelineCancelled, classify_facts
 from return_semantics.model_client import (
     JsonlCache,
@@ -281,7 +286,7 @@ class _PipelineContext:
     should_cancel: Callable[[], bool] | None
     model_policy_version: str
     secondary_is_fallback: bool
-    analysis_context: Literal["returns", "review"]
+    analysis_context: AnalysisContext
 
 
 @dataclass(frozen=True)
@@ -444,8 +449,8 @@ class _CommentClassifier:
         category_a = str(getattr(row, "category_a", ""))
         category_b = str(getattr(row, "category_b", ""))
         classification_scope = f"{category_a}\x1f{category_b}"
-        if self.context.analysis_context == "review":
-            classification_scope += "\x1freview"
+        if self.context.analysis_context != RETURNS_CONTEXT:
+            classification_scope += f"\x1f{self.context.analysis_context}"
         input_has_semantic_risk = has_input_semantic_risk(comment)
         use_cheap_model = bool(self.cheap_model and not input_has_semantic_risk)
         self._record_initial_route(use_cheap_model, input_has_semantic_risk)
@@ -659,7 +664,7 @@ class _CommentClassifier:
                     ReviewDiagnostic(
                         code="SECONDARY_MODEL_MISSING",
                         detail="风险复核模型缺失，已使用主模型复核",
-                        action="SYSTEM_RERUN",
+                        action="ADMIN_CONFIG",
                     )
                 ],
             }
@@ -743,8 +748,7 @@ def classify_comments(
     secondary_is_fallback: bool = False,
     analysis_context: str = "returns",
 ) -> PipelineRun:
-    if analysis_context not in {"returns", "review"}:
-        raise ValueError("不支持的分析场景")
+    validated_context = validate_analysis_context(analysis_context)
     claims = adapt_claims_to_taxonomy(claims, taxonomy)
     selected = unique_comments.iloc[offset:]
     if limit is not None:
@@ -765,10 +769,7 @@ def classify_comments(
             should_cancel=should_cancel,
             model_policy_version=model_policy_version,
             secondary_is_fallback=secondary_is_fallback,
-            analysis_context=cast(
-                Literal["returns", "review"],
-                analysis_context,
-            ),
+            analysis_context=validated_context,
         ),
         tracker,
     )

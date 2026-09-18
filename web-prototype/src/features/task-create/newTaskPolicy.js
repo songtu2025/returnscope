@@ -79,7 +79,7 @@ export function normalizeReturnVersion(item) {
 function returnSourceName(stores, fallback) {
   if (!stores.length) return fallback;
   const labels = stores.map((value) => value.replace(/[:_/\\-]+/g, " ").trim());
-  return `${labels.join("、")} 退货数据`;
+  return `${labels.join("、")} 用户反馈数据`;
 }
 
 /** @param {ReturnImportResult} result */
@@ -98,7 +98,7 @@ export function importNotification(result) {
   const skipped = Number(result.summary?.skipped_row_count ?? 0).toLocaleString();
   return result.mode === "append"
     ? `已追加 ${imported} 行，跳过 ${skipped} 行重复记录`
-    : "退货明细已导入并自动选中";
+    : "用户反馈数据已导入并自动选中";
 }
 
 /** @param {TaskExecutionPlan | null | undefined} plan */

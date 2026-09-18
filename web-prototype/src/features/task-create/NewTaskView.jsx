@@ -103,7 +103,7 @@ export function NewTaskView({
       <PageHeading
         titleRef={headingRef}
         title="创建分析任务"
-        description="选择退货数据，准备好后开始分析。"
+        description="选择用户反馈数据，准备好后开始分析。"
       />
       {loadingSetup && (
         <section className="new-task-loading">

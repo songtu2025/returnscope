@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from itertools import product
-from typing import Literal
 
+from return_semantics.analysis_context import RETURNS_CONTEXT, AnalysisContext
 from return_semantics.comment_summary import compile_comment_semantics
 from return_semantics.schemas import (
     AssertionCode,
@@ -15,6 +15,7 @@ from return_semantics.schemas import (
     ListingClaimsConfig,
     ModelClassification,
     ProcessingStatus,
+    ReviewDiagnostic,
     SemanticDisposition,
     SemanticRelation,
     SemanticRelationType,
@@ -47,6 +48,7 @@ class _ValidationState:
     primary_codes: list[str] = field(default_factory=list)
     semantic_relations: list[SemanticRelation] = field(default_factory=list)
     comment_summary: CommentSummary = field(default_factory=CommentSummary)
+    review_diagnostics: list[ReviewDiagnostic] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -68,7 +70,7 @@ class _ValidationRequest:
     claims: ListingClaimsConfig
     model_name: str
     prompt_version: str
-    analysis_context: Literal["returns", "review"]
+    analysis_context: AnalysisContext
 
 
 def validate_classification(
@@ -80,7 +82,7 @@ def validate_classification(
     claims: ListingClaimsConfig,
     model_name: str,
     prompt_version: str,
-    analysis_context: Literal["returns", "review"] = "returns",
+    analysis_context: AnalysisContext = RETURNS_CONTEXT,
 ) -> ValidatedClassification:
     result, _ = _validate_classification(
         _ValidationRequest(
@@ -417,16 +419,17 @@ def _conflict_reasons(
 
 def _append_classification_reviews(
     reason: str,
-    analysis_context: Literal["returns", "review"],
+    analysis_context: AnalysisContext,
     model_result: ModelClassification,
     context: _ValidationContext,
     state: _ValidationState,
 ) -> None:
-    opposite_codes = set(
-        context.taxonomy.validation_rules.opposite_reason_labels.get(reason, [])
-    )
-    if set(state.problem_codes).intersection(opposite_codes):
-        state.soft_reasons.append("Amazon 原因与评论方向冲突")
+    if analysis_context == RETURNS_CONTEXT:
+        opposite_codes = set(
+            context.taxonomy.validation_rules.opposite_reason_labels.get(reason, [])
+        )
+        if set(state.problem_codes).intersection(opposite_codes):
+            state.soft_reasons.append("Amazon 原因与评论方向冲突")
     state.soft_reasons.extend(
         _conflict_reasons(
             state.valid_units,
@@ -439,11 +442,28 @@ def _append_classification_reviews(
         for relation in state.semantic_relations
     ):
         state.soft_reasons.append("同一语义范围内存在相反的已确认事实")
-    all_label_codes = {unit.label_code for unit in state.valid_units}
-    if all_label_codes.intersection(
+    required_review_labels = set(
         context.taxonomy.validation_rules.required_review_labels
-    ):
-        state.soft_reasons.append("标签规则要求人工复核")
+    )
+    state.soft_reasons.extend(
+        f"标签规则要求人工复核: {unit.label_code}；证据={unit.evidence}"
+        for unit in state.valid_units
+        if unit.label_code in required_review_labels
+    )
+    for unit in state.valid_units:
+        if unit.label_code not in required_review_labels:
+            continue
+        label = context.labels[unit.label_code]
+        readable_path = " → ".join(part for part in (label.group, label.name) if part)
+        state.review_diagnostics.append(
+            ReviewDiagnostic(
+                code="LABEL_RULE_REVIEW_REQUIRED",
+                evidence_text=unit.evidence,
+                primary_result=f"{unit.label_code}: {readable_path}",
+                detail="标签体系 required_review_labels 规则要求人工判断",
+                action="请业务员核对原文证据是否足以支持该标签，并确认保留或修改标签。",
+            )
+        )
     if model_result.needs_review:
         state.soft_reasons.append("模型要求复核")
     if not state.valid_units and not state.unknown_semantics:
@@ -451,7 +471,7 @@ def _append_classification_reviews(
     if (
         state.positive_codes
         and not state.problem_codes
-        and analysis_context == "returns"
+        and analysis_context == RETURNS_CONTEXT
     ):
         state.soft_reasons.append("只有正面信息，无法确认退货原因")
 
@@ -492,6 +512,7 @@ def _validate_classification(
     state = _ValidationState(
         soft_reasons=list(model_result.review_reasons),
         unknown_semantics=list(model_result.unknown_semantics),
+        review_diagnostics=list(model_result.review_diagnostics),
     )
     _validate_units(model_result, context, state)
     apply_fallback_precedence(
@@ -535,7 +556,7 @@ def _validate_classification(
         dimension_decisions=model_result.dimension_decisions,
         semantic_relations=state.semantic_relations,
         comment_summary=state.comment_summary,
-        review_diagnostics=model_result.review_diagnostics,
+        review_diagnostics=state.review_diagnostics,
         classification_key=request.classification_key,
         semantic_units=state.valid_units,
         unknown_semantics=state.unknown_semantics,

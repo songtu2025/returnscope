@@ -1,6 +1,11 @@
 from return_semantics.semantic_review import (
+    BUSINESS_REVIEW_REQUIRED,
+    READY,
+    SYSTEM_RERUN_REQUIRED,
     build_semantic_review_view,
     requires_business_review,
+    requires_system_rerun,
+    review_route,
 )
 
 
@@ -391,6 +396,141 @@ def test_model_error_without_extracted_facts_is_not_assigned_to_business() -> No
         ],
     }
 
+    assert requires_business_review(result, "Too small") is False
+
+
+def test_review_route_prioritizes_system_rerun_over_business_items() -> None:
+    result = {
+        "status": "MANUAL_REVIEW",
+        "unknown_semantics": [
+            {
+                "opinion": "标签无法确定",
+                "evidence": "could be either",
+                "disposition": "MAPPING_UNCERTAIN",
+                "reason": "两个标签都可能",
+            }
+        ],
+        "review_diagnostics": [
+            {
+                "code": "SECONDARY_MODEL_TIMEOUT",
+                "detail": "请求超时",
+                "action": "SYSTEM_RERUN",
+            }
+        ],
+    }
+
+    assert review_route(result, "could be either") == SYSTEM_RERUN_REQUIRED
+    assert requires_system_rerun(result, "could be either") is True
+    assert requires_business_review(result, "could be either") is False
+
+
+def test_review_route_assigns_actionable_mismatch_to_business() -> None:
+    result = {
+        "status": "MANUAL_REVIEW",
+        "review_reasons": ["模型要求复核", "两次模型的语义结果不一致"],
+        "review_diagnostics": [
+            {
+                "code": "MODEL_RESULT_MISMATCH",
+                "evidence_text": "warm without bulk",
+                "primary_result": "保暖",
+                "secondary_result": "保暖、轻便",
+                "detail": "复核模型多识别了轻便",
+                "action": "请业务员核对轻便标签。",
+            }
+        ],
+    }
+
+    view = build_semantic_review_view(result, "warm without bulk")
+    assert review_route(result, "warm without bulk") == BUSINESS_REVIEW_REQUIRED
+    assert requires_system_rerun(result, "warm without bulk") is False
+    assert all(item["reason"] != "模型要求复核" for item in view["semantic_items"])
+
+
+def test_label_rule_diagnostic_exposes_actionable_label_review() -> None:
+    result = {
+        "status": "MANUAL_REVIEW",
+        "review_reasons": [
+            "标签规则要求人工复核: EYEWEAR_REASON_UNSPECIFIED_U1；证据=Not as expected",
+            "模型要求复核",
+        ],
+        "review_diagnostics": [
+            {
+                "code": "LABEL_RULE_REVIEW_REQUIRED",
+                "evidence_text": "Not as expected",
+                "primary_result": (
+                    "EYEWEAR_REASON_UNSPECIFIED_U1: 眼镜 → 退货原因 → 原因未明确"
+                ),
+                "detail": "标签体系 required_review_labels 规则要求人工判断",
+                "action": "请业务员核对原文证据是否足以支持该标签，并确认保留或修改标签。",
+            }
+        ],
+    }
+
+    view = build_semantic_review_view(result, "Not as expected")
+    diagnostics = [
+        item
+        for item in view["semantic_items"]
+        if item.get("diagnostic_code") == "LABEL_RULE_REVIEW_REQUIRED"
+    ]
+
+    assert len(diagnostics) == 1
+    diagnostic = diagnostics[0]
+    assert diagnostic["diagnostic_domain"] == "SEMANTIC_ANALYSIS_QUALITY"
+    assert diagnostic["evidence_text"] == "Not as expected"
+    assert "EYEWEAR_REASON_UNSPECIFIED_U1" in diagnostic["primary_result"]
+    assert diagnostic["detail"] == "标签体系 required_review_labels 规则要求人工判断"
+    assert "核对原文证据" in diagnostic["action"]
+    assert diagnostic["business_review_required"] is True
+    assert review_route(result, "Not as expected") == BUSINESS_REVIEW_REQUIRED
+    assert all(item["reason"] != "模型要求复核" for item in view["semantic_items"])
+
+
+def test_review_route_returns_ready_without_actionable_findings() -> None:
+    result = {
+        "status": "AUTO_APPROVED",
+        "semantic_units": [
+            {
+                "opinion": "尺码偏小",
+                "label_code": "FIT_TOO_SMALL",
+                "evidence": "Too small",
+            }
+        ],
+    }
+
+    assert review_route(result, "Too small") == READY
+    assert requires_system_rerun(result, "Too small") is False
+
+
+def test_successful_secondary_fallback_is_non_blocking_configuration_notice() -> None:
+    result = {
+        "status": "MANUAL_REVIEW",
+        "semantic_units": [
+            {
+                "opinion": "尺码偏小",
+                "label_code": "FIT_TOO_SMALL",
+                "evidence": "Too small",
+            }
+        ],
+        "review_diagnostics": [
+            {
+                "code": "SECONDARY_MODEL_MISSING",
+                "detail": "风险复核模型缺失，已使用主模型复核",
+                "action": "ADMIN_CONFIG",
+            }
+        ],
+    }
+
+    view = build_semantic_review_view(result, "Too small")
+    notice = next(
+        item
+        for item in view["semantic_items"]
+        if item.get("diagnostic_code") == "SECONDARY_MODEL_MISSING"
+    )
+
+    assert notice["business_review_required"] is False
+    assert "已使用主模型完成复核" in notice["action"]
+    assert review_route(result, "Too small") == READY
+    assert requires_system_rerun(result, "Too small") is False
     assert requires_business_review(result, "Too small") is False
 
 

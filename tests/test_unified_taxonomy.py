@@ -148,7 +148,19 @@ def test_generic_negative_requires_review_even_when_model_does_not_request_it():
     code = "EYEWEAR_REASON_UNSPECIFIED_U1"
     result = _validate([_unit(code, "Not as expected")], "Not as expected")
     assert result.status == "MANUAL_REVIEW"
-    assert "标签规则要求人工复核" in result.review_reasons
+    assert any(
+        reason == f"标签规则要求人工复核: {code}；证据=Not as expected"
+        for reason in result.review_reasons
+    )
+    diagnostic = next(
+        item
+        for item in result.review_diagnostics
+        if item.code == "LABEL_RULE_REVIEW_REQUIRED"
+    )
+    assert diagnostic.evidence_text == "Not as expected"
+    assert diagnostic.primary_result.startswith(f"{code}: ")
+    assert "required_review_labels" in diagnostic.detail
+    assert "核对原文证据" in diagnostic.action
     assert any("语义边界需人工确认" in reason for reason in result.review_reasons)
 
 

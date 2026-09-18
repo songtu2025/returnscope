@@ -184,30 +184,6 @@ export function useClassificationStandardValidationController({
     }
   };
 
-  const approveSampleValidation = async (
-    /** @type {string} */ runId,
-    /** @type {string} */ note,
-  ) => {
-    if (!draft) return;
-    setBusy("approval");
-    try {
-      const value =
-        await classificationStandardApi.approveClassificationStandardValidationRun(
-          runId,
-          {
-            expected_revision: draft.revision,
-            note,
-          },
-        );
-      await loadValidation(draft.id, value.id);
-      notify("当前草稿修订已人工确认，可进入发布确认");
-    } catch (error) {
-      notify(/** @type {Error} */ (error).message, "error");
-    } finally {
-      setBusy("");
-    }
-  };
-
   const selectValidation = async (/** @type {string} */ runId) => {
     const ownership = requestOwnershipRef.current;
     const draftId = ownership.draftId;
@@ -247,7 +223,6 @@ export function useClassificationStandardValidationController({
     loadValidation,
     clearValidation,
     startSampleValidation,
-    approveSampleValidation,
     selectValidation,
   };
 }

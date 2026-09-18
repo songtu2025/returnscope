@@ -5,25 +5,36 @@ import re
 import sys
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from return_semantics.capabilities import resolve_model_policy
 from return_semantics.data import load_return_dataset
 from return_semantics.exporter import export_results
-from return_semantics.model_client import JsonlCache, create_model_client
+from return_semantics.model_client import (
+    JsonlCache,
+    Sub2APIClient,
+    create_model_client,
+    load_dotenv,
+)
 from return_semantics.pipeline import classify_comments
 from return_semantics.schemas import ListingClaimsConfig, TaxonomyConfig
 from return_semantics.taxonomy import (
     load_listing_claims,
     validate_taxonomy_claims,
 )
+from web_backend.agent_runner import AgentRunner
 from web_backend.classification_standard_service import (
     ClassificationStandardNotFound,
     ClassificationStandardService,
 )
+from web_backend.config_service import ConfigService
 from web_backend.database import Database
+from web_backend.model_preference_service import ModelPreferenceService
+from web_backend.security import SecretBox
 from web_backend.settings import Settings
 
 
@@ -51,7 +62,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--database",
         type=Path,
-        default=Settings.from_env().database_path,
+        default=None,
         help="分类标准数据库；默认使用 Web 应用数据库",
     )
     standard_source = parser.add_mutually_exclusive_group()
@@ -73,6 +84,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--dotenv",
         type=Path,
         default=PROJECT_ROOT / ".env",
+    )
+    parser.add_argument(
+        "--model-config-source",
+        choices=("web", "env"),
+        default="web",
+        help="模型配置来源；默认复用 Web 用户偏好，env 仅用于显式调试",
+    )
+    parser.add_argument(
+        "--model-preference-user-id",
+        help="Web 模型偏好所属用户；仅存在多个用户偏好时必须指定",
     )
     parser.add_argument(
         "--cache",
@@ -135,9 +156,91 @@ def load_standard_taxonomy(
     return taxonomy, version
 
 
+def resolve_database_path(database_path: Path | None, dotenv_path: Path) -> Path:
+    load_dotenv(dotenv_path)
+    return (database_path or Settings.from_env().database_path).resolve()
+
+
+def _model_config(settings: Any) -> dict[str, Any]:
+    return {
+        "primary_model": settings.model,
+        "primary_effort": settings.reasoning_effort,
+        "cheap_model": settings.cheap_model,
+        "cheap_effort": settings.cheap_reasoning_effort,
+        "secondary_model": settings.secondary_model,
+        "secondary_effort": settings.secondary_reasoning_effort,
+    }
+
+
+def _web_model_preference(
+    database: Database,
+    user_id: str | None,
+) -> dict[str, Any]:
+    preferences = ModelPreferenceService(database)
+    if user_id:
+        preference = preferences.task_policy(user_id)
+        if preference is None:
+            raise ValueError("指定用户尚未配置 Web 模型偏好")
+        return preference
+    with database.connect() as connection:
+        rows = connection.execute(
+            "SELECT user_id FROM user_model_preferences ORDER BY updated_at DESC"
+        ).fetchall()
+    if not rows:
+        raise ValueError(
+            "尚未配置 Web 模型偏好；请先在 Web 中配置，或显式使用 "
+            "--model-config-source env"
+        )
+    if len(rows) > 1:
+        raise ValueError("存在多个 Web 模型偏好，请指定 --model-preference-user-id")
+    preference = preferences.task_policy(str(rows[0]["user_id"]))
+    if preference is None:
+        raise ValueError("Web 模型偏好不可用")
+    return preference
+
+
+def build_model_runtime(
+    *,
+    database_path: Path,
+    dotenv_path: Path,
+    source: str,
+    user_id: str | None,
+    standard_version: dict[str, Any],
+    secondary_model: str | None,
+) -> tuple[Sub2APIClient, dict[str, Any]]:
+    capability = ClassificationStandardService._capability_from_snapshot(
+        standard_version["snapshot"]
+    )
+    if source == "env":
+        print("警告: 当前显式使用环境变量模型配置，不与 Web 用户偏好联动")
+        base_settings = create_model_client(dotenv_path).settings
+        config = _model_config(base_settings)
+    else:
+        app_settings = Settings.from_env()
+        database = Database(database_path)
+        preference = _web_model_preference(database, user_id)
+        config_service = ConfigService(
+            database,
+            SecretBox(app_settings.encryption_key),
+        )
+        base_settings = config_service.build_model_settings(
+            str(preference["config_version_id"])
+        )
+        config = preference
+    if secondary_model:
+        config = {**config, "secondary_model": secondary_model}
+    model_policy = resolve_model_policy(capability, config)
+    effective_settings = AgentRunner._settings_for_model_policy(
+        base_settings,
+        model_policy,
+    )
+    return Sub2APIClient(effective_settings), model_policy
+
+
 def main() -> None:
     args = parse_args()
     validate_args(args)
+    database_path = resolve_database_path(args.database, args.dotenv)
     store = args.store.strip()
     listing = (args.listing or "").strip() or None
     scope_slug = build_scope_slug(store, listing)
@@ -149,7 +252,7 @@ def main() -> None:
     )
 
     taxonomy, standard_version = load_standard_taxonomy(
-        args.database,
+        database_path,
         args.standard_id,
         args.standard_version_id,
     )
@@ -180,11 +283,20 @@ def main() -> None:
     if args.dry_run:
         return
 
-    client = create_model_client(args.dotenv)
+    client, model_policy = build_model_runtime(
+        database_path=database_path,
+        dotenv_path=args.dotenv,
+        source=args.model_config_source,
+        user_id=args.model_preference_user_id,
+        standard_version=standard_version,
+        secondary_model=args.secondary_model,
+    )
     cache = JsonlCache(cache_path)
     secondary_model = None
     if not args.skip_secondary:
-        secondary_model = args.secondary_model or client.settings.secondary_model
+        review = model_policy["actual"].get("review")
+        secondary_model = str(review["model"]) if review else None
+    print(f"模型配置来源: {args.model_config_source}")
     print(f"模型提供商: {client.settings.provider}")
     print(f"主模型: {client.settings.model}")
     print(f"二次审核模型: {secondary_model or '未启用'}")
@@ -202,6 +314,12 @@ def main() -> None:
         force=args.force,
         secondary_model=secondary_model,
         progress=print_progress,
+        model_policy_version=str(model_policy["version"]),
+        secondary_is_fallback=bool(
+            model_policy["actual"].get("review")
+            and model_policy["actual"]["review"].get("fallback_from")
+            == "secondary"
+        ),
     )
     export_results(
         output_path=output_path,

@@ -41,6 +41,8 @@
  * @property {string} [result_quality_status]
  * @property {string} [result_state]
  * @property {string} [source_review_batch_id]
+ * @property {boolean} [system_retry_available]
+ * @property {number} [system_failure_count]
  *
  * @typedef {Object} AnalysisTask
  * @property {string} id

@@ -15,6 +15,12 @@ TAXONOMY_GAP = "TAXONOMY_GAP"
 TRUE_AMBIGUITY = "TRUE_AMBIGUITY"
 ANALYSIS_FAILURE = "ANALYSIS_FAILURE"
 
+READY = "READY"
+BUSINESS_REVIEW_REQUIRED = "BUSINESS_REVIEW_REQUIRED"
+SYSTEM_RERUN_REQUIRED = "SYSTEM_RERUN_REQUIRED"
+
+_NON_BLOCKING_DIAGNOSTIC_CODES = {"SECONDARY_MODEL_MISSING"}
+
 _BUSINESS_REVIEW_STATUSES = {
     ProcessingStatus.SECONDARY_REVIEW.value,
     ProcessingStatus.MANUAL_REVIEW.value,
@@ -53,10 +59,15 @@ _DIAGNOSTIC_METADATA = {
         "两次模型结果不一致",
         "请核对两次模型的逐项差异；没有差异明细时请系统重跑。",
     ),
+    "LABEL_RULE_REVIEW_REQUIRED": (
+        "SEMANTIC_ANALYSIS_QUALITY",
+        "标签规则要求人工判断",
+        "请业务员核对原文证据是否足以支持该标签，并确认保留或修改标签。",
+    ),
     "SECONDARY_MODEL_MISSING": (
         "TECHNICAL_CONFIGURATION",
         "风险复核模型未配置",
-        "无需业务员核验；请管理员检查风险复核模型配置后重跑。",
+        "已使用主模型完成复核；无需业务员核验，请管理员补充风险复核模型配置。",
     ),
     "SECONDARY_MODEL_TIMEOUT": (
         "TECHNICAL_RUNTIME",
@@ -315,7 +326,7 @@ def _structured_failure_diagnostic(value: object) -> dict[str, object]:
 
     if code == "COVERAGE_AUDIT_FAILED":
         has_details = bool(evidence_text)
-    elif code == "MODEL_RESULT_MISMATCH":
+    elif code in {"MODEL_RESULT_MISMATCH", "LABEL_RULE_REVIEW_REQUIRED"}:
         has_details = bool(evidence_text or primary_result or secondary_result)
     else:
         has_details = False
@@ -551,6 +562,70 @@ def build_semantic_review_view(
     }
 
 
+def review_route(
+    result: object,
+    source_text: str,
+    taxonomy: TaxonomyConfig | None = None,
+    *,
+    processing_status: str | ProcessingStatus | None = None,
+) -> str:
+    """按业务复核、系统重跑和直接可用三类责任集中路由。"""
+    view = build_semantic_review_view(
+        result,
+        source_text,
+        taxonomy,
+        processing_status=processing_status,
+    )
+    items = cast(list[dict[str, object]], view["semantic_items"])
+    if any(
+        item.get("disposition") == ANALYSIS_FAILURE
+        and item.get("business_review_required") is False
+        and item.get("diagnostic_code") not in _NON_BLOCKING_DIAGNOSTIC_CODES
+        for item in items
+    ):
+        return SYSTEM_RERUN_REQUIRED
+    if any(item.get("business_review_required") is True for item in items):
+        return BUSINESS_REVIEW_REQUIRED
+    if any(item.get("disposition") in {TAXONOMY_GAP, TRUE_AMBIGUITY} for item in items):
+        return BUSINESS_REVIEW_REQUIRED
+    if view["unexplained_fragments"]:
+        return BUSINESS_REVIEW_REQUIRED
+
+    diagnostic_codes = {
+        _text(item.get("diagnostic_code"))
+        for item in items
+        if _text(item.get("diagnostic_code"))
+    }
+    if diagnostic_codes and diagnostic_codes <= _NON_BLOCKING_DIAGNOSTIC_CODES:
+        return READY
+
+    status = _enum_value(
+        processing_status or _get(result, "processing_status") or _get(result, "status")
+    )
+    if status in _BUSINESS_REVIEW_STATUSES:
+        return BUSINESS_REVIEW_REQUIRED
+    return READY
+
+
+def requires_system_rerun(
+    result: object,
+    source_text: str,
+    taxonomy: TaxonomyConfig | None = None,
+    *,
+    processing_status: str | ProcessingStatus | None = None,
+) -> bool:
+    """系统诊断要求重跑时返回真。"""
+    return (
+        review_route(
+            result,
+            source_text,
+            taxonomy,
+            processing_status=processing_status,
+        )
+        == SYSTEM_RERUN_REQUIRED
+    )
+
+
 def requires_business_review(
     result: object,
     source_text: str,
@@ -559,27 +634,12 @@ def requires_business_review(
     processing_status: str | ProcessingStatus | None = None,
 ) -> bool:
     """仅在业务人员能对语义结果采取明确动作时进入人工复核。"""
-    view = build_semantic_review_view(
-        result,
-        source_text,
-        taxonomy,
-        processing_status=processing_status,
+    return (
+        review_route(
+            result,
+            source_text,
+            taxonomy,
+            processing_status=processing_status,
+        )
+        == BUSINESS_REVIEW_REQUIRED
     )
-    items = cast(list[dict[str, object]], view["semantic_items"])
-    if any(item.get("business_review_required") is True for item in items):
-        return True
-    if any(item.get("disposition") in {TAXONOMY_GAP, TRUE_AMBIGUITY} for item in items):
-        return True
-    if any(
-        item.get("disposition") == ANALYSIS_FAILURE
-        and item.get("business_review_required") is False
-        for item in items
-    ):
-        return False
-    if view["unexplained_fragments"]:
-        return True
-
-    status = _enum_value(
-        processing_status or _get(result, "processing_status") or _get(result, "status")
-    )
-    return status in _BUSINESS_REVIEW_STATUSES

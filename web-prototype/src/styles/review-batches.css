@@ -656,6 +656,50 @@
   gap: 8px;
 }
 
+.semantic-review-groups,
+.semantic-review-group {
+  display: grid;
+  gap: 10px;
+}
+
+.semantic-review-group {
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  background: #f8faf9;
+}
+
+.semantic-review-group.is-system {
+  border-color: #ecc2bf;
+  background: #fff7f6;
+}
+
+.semantic-review-group > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.semantic-review-group > header > div {
+  display: grid;
+  gap: 3px;
+}
+
+.semantic-review-group > header span,
+.semantic-review-group-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.semantic-review-group.is-system > header > span {
+  flex: 0 0 auto;
+  color: var(--red);
+  font-weight: 700;
+}
+
 .semantic-review-item {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(165px, 0.8fr);

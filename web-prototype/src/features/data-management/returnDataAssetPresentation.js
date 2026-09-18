@@ -77,8 +77,8 @@ export function sourceDisplayName(item) {
       stores.map((value) => String(value).split(":")[0].trim()).filter(Boolean),
     ),
   ];
-  if (brands.length === 1) return `${brands[0]} 退货数据`;
-  return "未命名退货数据";
+  if (brands.length === 1) return `${brands[0]} 用户反馈数据`;
+  return "未命名用户反馈数据";
 }
 
 /** @param {DatasetRecord} item */

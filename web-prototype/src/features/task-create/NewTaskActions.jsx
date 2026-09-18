@@ -34,7 +34,7 @@ export function TaskLaunchActions({
                 ? `已选 ${mysqlState.rowCount.toLocaleString()} 条退货记录`
                 : "选择店铺和日期，查看本次分析范围"
             : selectedReturns
-              ? `已选 ${selectedReturns.row_count.toLocaleString()} 条退货记录`
+              ? `已选 ${selectedReturns.row_count.toLocaleString()} 条用户反馈`
               : "请选择本次分析数据"}
       </span>
       {prepared ? (
@@ -83,7 +83,7 @@ export function SetupBlock({
 }) {
   /** @type {SetupRow[]} */
   const rows = [
-    [hasReturns, "导入退货明细", "在当前分析任务中导入待分析数据", onUploadReturns],
+    [hasReturns, "导入用户反馈", "在当前分析任务中导入待分析数据", onUploadReturns],
     [
       hasProducts,
       "维护产品信息",
@@ -97,7 +97,7 @@ export function SetupBlock({
       <WarningCircle size={28} />
       <div>
         <h2>还需要完成运行准备</h2>
-        <p>真实任务必须同时具备退货明细、产品信息和已发布模型配置。</p>
+        <p>真实任务必须同时具备用户反馈、产品信息和已发布模型配置。</p>
         <div className="setup-list">
           {rows.map(([done, title, note, action]) => (
             <button

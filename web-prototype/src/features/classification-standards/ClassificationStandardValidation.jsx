@@ -24,12 +24,10 @@ const STATUS_LABELS = {
  * @property {string} sourceId
  * @property {ValidationSampleSize} sampleSize
  * @property {boolean} busy
- * @property {boolean} approvalBusy
  * @property {boolean} dirty
  * @property {(sourceId: string) => void} onSourceChange
  * @property {(sampleSize: ValidationSampleSize) => void} onSampleSizeChange
  * @property {(file: File | null, comparisonType: string) => void} onRun
- * @property {(runId: string, note: string) => void} onApprove
  * @property {(runId: string) => void} onSelectRun
  */
 
@@ -42,12 +40,10 @@ export function ClassificationStandardValidation({
   sourceId,
   sampleSize,
   busy,
-  approvalBusy,
   dirty,
   onSourceChange,
   onSampleSizeChange,
   onRun,
-  onApprove,
   onSelectRun,
 }) {
   const active = runs.some((run) => ["queued", "running"].includes(run.status));
@@ -76,9 +72,7 @@ export function ClassificationStandardValidation({
           key={selectedRun.id}
           run={selectedRun}
           isNew={draft.is_new}
-          approvalBusy={approvalBusy}
           statusLabels={STATUS_LABELS}
-          onApprove={onApprove}
         />
       )}
     </div>

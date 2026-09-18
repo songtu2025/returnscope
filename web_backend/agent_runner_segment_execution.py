@@ -4,15 +4,13 @@ from dataclasses import dataclass, is_dataclass, replace
 from pathlib import Path
 from typing import Any, Callable
 
+from return_semantics.analysis_context import analysis_context_from_snapshot
 from return_semantics.capabilities import CategoryCapability
 from return_semantics.category_pipeline import CategorySegmentRuntime
 from return_semantics.data import ReturnDataset
 from return_semantics.pipeline import PipelineRun
-from return_semantics.schemas import (
-    ProcessingStatus,
-    TaxonomyConfig,
-    ValidatedClassification,
-)
+from return_semantics.schemas import TaxonomyConfig, ValidatedClassification
+from return_semantics.semantic_review import requires_system_rerun
 from web_backend.classification_standard_service import ClassificationStandardService
 from web_backend.common import json_text, json_value
 from web_backend.config_service import ConfigService
@@ -76,7 +74,7 @@ class SegmentExecutionMixin:
         existing_results = {
             key: value
             for key, value in self._load_checkpoint(checkpoint_path).items()
-            if value.status != ProcessingStatus.MODEL_ERROR
+            if not requires_system_rerun(value, "")
         }
         return _SegmentRunContext(
             task_id=task_id,
@@ -103,6 +101,7 @@ class SegmentExecutionMixin:
             scope_mode,
             str(task["return_sha256"]),
             str(task["product_sha256"]),
+            analysis_context_from_snapshot(snapshot),
         )
         all_keys = {
             str(key) for key in json_value(segment["classification_keys_json"], [])

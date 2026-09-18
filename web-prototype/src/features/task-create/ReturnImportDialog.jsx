@@ -136,8 +136,8 @@ export function ReturnImportDialog({ onClose, onDone, purpose = "task" }) {
 
   return (
     <Modal
-      eyebrow={purpose === "asset" ? "退货数据源" : "待分析数据"}
-      title={purpose === "asset" ? "导入新批次" : "导入一批退货明细"}
+      eyebrow={purpose === "asset" ? "用户反馈数据源" : "待分析数据"}
+      title={purpose === "asset" ? "导入新批次" : "导入一批用户反馈"}
       className="return-import-modal"
       onClose={onClose}
     >

@@ -551,6 +551,7 @@ def test_stale_plan_is_rejected_and_segments_are_persisted(tmp_path: Path) -> No
     )
     task = _create_task(database, "run_ready")
 
+    assert task["snapshot"]["analysis_context"] == "user_feedback"
     assert task["snapshot"]["execution_plan"]["plan_hash"] == preflight["plan_hash"]
     assert task["snapshot"]["execution_plan"]["unresolved_policy"] == "run_ready"
     assert task["snapshot"]["returns"] == {
@@ -1963,6 +1964,7 @@ def test_analysis_reads_a_completed_listing_before_parent_finishes(
         products_path,
         store="SEEKWAY:US",
         listing="L1",
+        analysis_context="user_feedback",
     )
     key = str(json.loads(segment["classification_keys_json"])[0])
     result = ValidatedClassification(
@@ -2024,7 +2026,7 @@ def test_analysis_reads_a_completed_listing_before_parent_finishes(
         )
 
 
-def test_manual_review_without_semantics_is_a_segment_quality_error() -> None:
+def test_business_review_without_semantics_is_preserved_for_review() -> None:
     result = ValidatedClassification(
         classification_key="key-1",
         semantic_units=[],
@@ -2039,7 +2041,7 @@ def test_manual_review_without_semantics_is_a_segment_quality_error() -> None:
         taxonomy_version="taxonomy-v1",
     )
 
-    assert AgentRunner._results_have_quality_errors({"key-1": result}) is True
+    assert AgentRunner._results_have_quality_errors({"key-1": result}) is False
     approved = result.model_copy(
         update={"status": ProcessingStatus.AUTO_APPROVED, "review_reasons": []}
     )

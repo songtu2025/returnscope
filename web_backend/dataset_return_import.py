@@ -145,7 +145,7 @@ class DatasetReturnImportMixin:
             return None
         target = self.get(dataset_id)
         if target is None or target["kind"] != "returns":
-            raise ValueError("请选择有效的退货数据源")
+            raise ValueError("请选择有效的用户反馈数据源")
         if target.get("usage_scope") != "managed":
             raise ValueError("一次性任务数据不能作为长期数据源更新")
         target_source_key = str(target.get("source_key") or "")
@@ -221,7 +221,7 @@ class DatasetReturnImportMixin:
             (dataset_id,),
         ).fetchone()
         if target is None or target["kind"] != "returns":
-            raise ValueError("请选择有效的退货数据源")
+            raise ValueError("请选择有效的用户反馈数据源")
         if target["usage_scope"] != "managed":
             raise ValueError("一次性任务数据不能作为长期数据源更新")
         target_source_key = str(target["source_key"] or "")
@@ -242,7 +242,7 @@ class DatasetReturnImportMixin:
         _inspection: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         if mode not in {"analyze_only", "create", "append", "replace"}:
-            raise ValueError("未知的退货数据导入方式")
+            raise ValueError("未知的用户反馈数据导入方式")
         inspection = _inspection or self.inspect_return_import(
             source_path,
             original_name,
@@ -295,16 +295,16 @@ class DatasetReturnImportMixin:
                 effective_dataset_id = new_id("ds")
                 dataset_name = name.strip() or str(inspection["suggested_name"])
                 dataset_description = (
-                    "仅用于一次分析的退货明细"
+                    "仅用于一次分析的用户反馈数据"
                     if mode == "analyze_only"
-                    else "持续维护的退货数据源"
+                    else "持续维护的用户反馈数据源"
                 )
                 usage_scope = "task_input" if mode == "analyze_only" else "managed"
                 prepared = self._prepare_return_version(
                     source_path=source_path,
                     original_name=original_name,
                     content_type=content_type,
-                    change_note=generated_note or "首次导入退货数据",
+                    change_note=generated_note or "首次导入用户反馈数据",
                     inspection=inspection,
                 )
             elif mode == "replace":
@@ -316,7 +316,7 @@ class DatasetReturnImportMixin:
                     source_path=source_path,
                     original_name=original_name,
                     content_type=content_type,
-                    change_note=generated_note or "替换当前退货数据",
+                    change_note=generated_note or "替换当前用户反馈数据",
                 )
             else:
                 assert target is not None

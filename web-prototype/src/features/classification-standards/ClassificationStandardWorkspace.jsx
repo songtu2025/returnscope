@@ -24,7 +24,7 @@ import { labelChanges } from "./labelDraftPolicy";
 /** @typedef {import("../../shared/api/classificationStandardContracts").ReadableRecognitionProfile} ReadableRecognitionProfile */
 /** @typedef {import("../../shared/api/classificationStandardContracts").ValidationSampleSize} ValidationSampleSize */
 /** @typedef {import("./classificationStandardContent").ClassificationStandardFieldErrors} ClassificationStandardFieldErrors */
-/** @typedef {{initiallyEditing: boolean, versions: ClassificationStandardVersion[], notify: (message: string, tone?: string) => void, onDelete: () => void, onRestore: (version: ClassificationStandardVersion) => void, savedContent: ClassificationStandardEditableContent | null, focusLabelCode?: string, isNew: boolean, detail: ClassificationStandardDetail | null, draft: ClassificationStandardDraft | null, content: ClassificationStandardEditableContent, changeReason: string, busy: string, dirty: boolean, validationSources: ClassificationStandardValidationSource[], validationRuns: ClassificationStandardValidationRunSummary[], selectedValidation: ClassificationStandardValidationRunDetail | null, validationSourceId: string, validationSampleSize: ValidationSampleSize, fieldErrors: Partial<ClassificationStandardFieldErrors>, validationAttempt: number, onContentChange: (content: ClassificationStandardEditableContent, field?: string) => void, onReasonChange: (reason: string) => void, onSave: () => void | Promise<void>, onPublish: () => void | Promise<void>, onBack: () => void, onValidationSourceChange: (sourceId: string) => void, onValidationSampleSizeChange: (size: ValidationSampleSize) => void, onValidationRun: (file: File | null, comparisonType?: string) => void | Promise<void>, onValidationApprove: (runId: string, note: string) => void | Promise<void>, onImport: (event: import("react").ChangeEvent<HTMLInputElement>) => void | Promise<void>, onPrepareExcel: () => Promise<ClassificationStandardDraft>, onApplyExcel: (content: ClassificationStandardEditableContent, filename: string) => void, onValidationSelect: (runId: string) => void | Promise<void>}} ClassificationStandardWorkspaceProps */
+/** @typedef {{initiallyEditing: boolean, versions: ClassificationStandardVersion[], notify: (message: string, tone?: string) => void, onDelete: () => void, onRestore: (version: ClassificationStandardVersion) => void, savedContent: ClassificationStandardEditableContent | null, focusLabelCode?: string, isNew: boolean, detail: ClassificationStandardDetail | null, draft: ClassificationStandardDraft | null, content: ClassificationStandardEditableContent, changeReason: string, busy: string, dirty: boolean, validationSources: ClassificationStandardValidationSource[], validationRuns: ClassificationStandardValidationRunSummary[], selectedValidation: ClassificationStandardValidationRunDetail | null, validationSourceId: string, validationSampleSize: ValidationSampleSize, fieldErrors: Partial<ClassificationStandardFieldErrors>, validationAttempt: number, onContentChange: (content: ClassificationStandardEditableContent, field?: string) => void, onReasonChange: (reason: string) => void, onSave: () => void | Promise<void>, onPublish: (validationRunId?: string | null) => void | Promise<void>, onBack: () => void, onValidationSourceChange: (sourceId: string) => void, onValidationSampleSizeChange: (size: ValidationSampleSize) => void, onValidationRun: (file: File | null, comparisonType?: string) => void | Promise<void>, onImport: (event: import("react").ChangeEvent<HTMLInputElement>) => void | Promise<void>, onPrepareExcel: () => Promise<ClassificationStandardDraft>, onApplyExcel: (content: ClassificationStandardEditableContent, filename: string) => void, onValidationSelect: (runId: string) => void | Promise<void>}} ClassificationStandardWorkspaceProps */
 
 /** @param {ClassificationStandardWorkspaceProps} props */
 export function ClassificationStandardWorkspace({
@@ -57,7 +57,6 @@ export function ClassificationStandardWorkspace({
   onValidationSourceChange,
   onValidationSampleSizeChange,
   onValidationRun,
-  onValidationApprove,
   onImport,
   onPrepareExcel,
   onApplyExcel,
@@ -65,6 +64,7 @@ export function ClassificationStandardWorkspace({
 }) {
   const [section, setSection] = useState(isNew ? "settings" : "labels");
   const [confirmBack, setConfirmBack] = useState(false);
+  const [confirmPublish, setConfirmPublish] = useState(false);
   const [fixRequest, setFixRequest] = useState(
     /** @type {ClassificationStandardValidationIssue | null} */ (null),
   );
@@ -99,25 +99,26 @@ export function ClassificationStandardWorkspace({
       JSON.stringify(content[key]) !== JSON.stringify(baseContent?.[key]),
   ).length;
   const changeCount = changes.length + settingsChanges;
-  const publicationReady = validationRuns.some((run) => run.publication_ready);
-  const awaitingApproval = validationRuns.some(
-    (run) =>
-      run.is_current &&
-      run.status === "completed" &&
-      (run.source?.comparison_type ?? "standard_version") === "standard_version" &&
-      Number(run.error_count) === 0 &&
-      !run.approved_at,
-  );
-  const publishDisabled = Boolean(busy) || !draft || dirty || !publicationReady;
+  const validationEvidence =
+    selectedValidation?.is_current &&
+    selectedValidation.status === "completed" &&
+    Number(selectedValidation.error_count) === 0 &&
+    (selectedValidation.source?.comparison_type ?? "standard_version") ===
+      "standard_version"
+      ? selectedValidation
+      : null;
+  const structureBlocked = Boolean(draft?.validation.blocking.length);
+  const publishDisabled =
+    Boolean(busy) || !draft || dirty || structureBlocked || !changeReason.trim();
   const publishLabel = !draft
     ? "请先保存草稿"
     : dirty
       ? "请先保存修改"
-      : publicationReady
-        ? "发布并启用"
-        : awaitingApproval
-          ? "等待人工确认"
-          : "等待样本验证";
+      : structureBlocked
+        ? "请先修复结构问题"
+        : !changeReason.trim()
+          ? "请填写变更说明"
+          : "发布并启用";
 
   useEffect(() => {
     if (!validationAttempt || handledValidationAttempt.current === validationAttempt) {
@@ -279,7 +280,7 @@ export function ClassificationStandardWorkspace({
             <h2>发布前检查</h2>
             <span>对比当前启用版本</span>
           </header>
-          <p>保存草稿不会影响运行中的标准。检查变更后，完成样本验证再发布。</p>
+          <p>保存草稿不会影响运行中的标准。可以直接发布，也可以先测试验收。</p>
           <ClassificationHierarchyChanges content={content} baseContent={baseContent} />
           {content.recognition_profile !== baseContent?.recognition_profile && (
             <p>
@@ -380,10 +381,10 @@ export function ClassificationStandardWorkspace({
         >
           <header className="standard-required-validation-heading">
             <div>
-              <h2 id="standard-required-validation-title">发布前样本验证</h2>
-              <p>发布前必须完成样本验证，并确认当前草稿的分类效果。</p>
+              <h2 id="standard-required-validation-title">可选测试验收</h2>
+              <p>运行测试可辅助判断分类效果，但不会代替你的发布决定。</p>
             </div>
-            <span>必需</span>
+            <span>可选</span>
           </header>
           {draft ? (
             <ClassificationStandardValidation
@@ -394,16 +395,14 @@ export function ClassificationStandardWorkspace({
               sourceId={validationSourceId}
               sampleSize={validationSampleSize}
               busy={busy === "validation"}
-              approvalBusy={busy === "approval"}
               dirty={dirty}
               onSourceChange={onValidationSourceChange}
               onSampleSizeChange={onValidationSampleSizeChange}
               onRun={onValidationRun}
-              onApprove={onValidationApprove}
               onSelectRun={onValidationSelect}
             />
           ) : (
-            <p>请先保存草稿，再运行样本验证；验证通过后才能启用新版本。</p>
+            <p>请先保存草稿，再按需运行测试验收。</p>
           )}
         </section>
       </div>
@@ -431,7 +430,7 @@ export function ClassificationStandardWorkspace({
                 className="primary-button"
                 disabled={publishDisabled}
                 title={publishDisabled ? publishLabel : undefined}
-                onClick={onPublish}
+                onClick={() => setConfirmPublish(true)}
               >
                 {busy === "publish" ? "启用中" : publishLabel}
               </button>
@@ -459,6 +458,55 @@ export function ClassificationStandardWorkspace({
               <Button onClick={() => setConfirmBack(false)}>继续编辑</Button>
               <Button type="primary" danger onClick={onBack}>
                 放弃修改并返回
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+      {confirmPublish && draft && (
+        <Modal
+          eyebrow="发布标签体系"
+          title="发布并立即启用当前草稿？"
+          onClose={() => setConfirmPublish(false)}
+        >
+          <div className="label-action-confirm">
+            <p>
+              发布后会生成新的不可变版本，并立即用于新任务；当前已发布版本仍保留，可用于恢复。
+            </p>
+            {validationEvidence ? (
+              <p>
+                已选择草稿 r{validationEvidence.draft_revision} 的测试记录。
+                {validationEvidence.quality_gate?.passed === false
+                  ? "自动质量检查未通过，你仍可根据业务判断验收并发布。"
+                  : "自动质量检查已通过，仍请以业务判断为准。"}
+              </p>
+            ) : (
+              <p>当前没有可关联的已完成测试，本次将作为直接发布记录。</p>
+            )}
+            <div>
+              <Button onClick={() => setConfirmPublish(false)}>取消</Button>
+              {validationEvidence && (
+                <Button
+                  onClick={() => {
+                    setConfirmPublish(false);
+                    void onPublish(null);
+                  }}
+                >
+                  直接发布
+                </Button>
+              )}
+              <Button
+                type="primary"
+                onClick={() => {
+                  setConfirmPublish(false);
+                  void onPublish(validationEvidence?.id ?? null);
+                }}
+              >
+                {validationEvidence
+                  ? validationEvidence.quality_gate?.passed === false
+                    ? "接受测试结果并发布"
+                    : "验收并发布"
+                  : "确认直接发布"}
               </Button>
             </div>
           </div>

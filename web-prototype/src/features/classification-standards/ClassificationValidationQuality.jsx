@@ -135,10 +135,10 @@ export function ClassificationValidationQuality({ run }) {
       >
         <b>
           {gate?.status === "passed"
-            ? "自动质量门槛通过，仍需人工审阅"
+            ? "自动质量检查通过，仍需人工审阅"
             : gate?.passed === false
-              ? "自动质量门槛未通过，不能确认发布"
-              : "未配置自动质量门槛，保留人工确认流程"}
+              ? "自动质量检查未通过，请人工判断是否发布"
+              : "未配置自动质量检查，请人工判断是否发布"}
         </b>
         <p>
           {gate?.note ||
@@ -146,7 +146,7 @@ export function ClassificationValidationQuality({ run }) {
         </p>
         {blocking.length > 0 && (
           <div>
-            <strong>发布阻断项</strong>
+            <strong>发布风险项</strong>
             <ul>
               {blocking.map((reason) => (
                 <li key={reason}>{reason}</li>
@@ -173,7 +173,7 @@ export function ClassificationValidationQuality({ run }) {
             {gate.policy.max_duplicate_rate}%。
             {gate.policy.thresholds && (
               <>
-                发布阻断零容忍项：
+                自动检查重点项：
                 {Object.entries(gate.policy.thresholds)
                   .filter(([, limit]) => limit === 0)
                   .map(([key]) => ISSUE_LABELS[key] || key)

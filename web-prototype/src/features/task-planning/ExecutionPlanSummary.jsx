@@ -216,21 +216,21 @@ export function ExecutionPlanSummary({
           {!compact && (
             <p>
               {plan.primary_store ? `主要站点 ${plan.primary_store}；` : ""}
-              范围来自退货明细与系统产品信息的确定性匹配。
+              范围来自用户反馈数据与系统产品信息的确定性匹配。
             </p>
           )}
         </div>
       </div>
       {compact ? (
         <p className="task-count-line">
-          {plan.record_count.toLocaleString()} 条退货记录 ·{" "}
+          {plan.record_count.toLocaleString()} 条用户反馈 ·{" "}
           {plan.valid_comment_count.toLocaleString()} 条有文本 · 合并为{" "}
           {counts.unique.toLocaleString()} 组评论
         </p>
       ) : (
         <div className="plan-overview">
           <div>
-            <span>退货记录</span>
+            <span>用户反馈</span>
             <strong>{plan.record_count.toLocaleString()}</strong>
           </div>
           <div>

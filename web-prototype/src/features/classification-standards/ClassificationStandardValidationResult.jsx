@@ -5,12 +5,11 @@ import {
   ClassificationValidationQuality,
   ValidationFactTrace,
 } from "./ClassificationValidationQuality";
-import { ClassificationStandardValidationApproval } from "./ClassificationStandardValidationApproval";
 
 /** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardSentiment} ClassificationStandardSentiment */
 /** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardValidationRunDetail} ClassificationStandardValidationRunDetail */
 /** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationValidationSemanticResult} ClassificationValidationSemanticResult */
-/** @typedef {{run: ClassificationStandardValidationRunDetail, isNew: boolean, approvalBusy: boolean, statusLabels: Record<string, string>, onApprove: (runId: string, note: string) => void}} ClassificationStandardValidationResultProps */
+/** @typedef {{run: ClassificationStandardValidationRunDetail, isNew: boolean, statusLabels: Record<string, string>}} ClassificationStandardValidationResultProps */
 
 /** @type {Record<ClassificationStandardSentiment, string>} */
 const SENTIMENT_LABELS = {
@@ -20,13 +19,7 @@ const SENTIMENT_LABELS = {
 };
 
 /** @param {ClassificationStandardValidationResultProps} props */
-export function ClassificationStandardValidationResult({
-  run,
-  isNew,
-  approvalBusy,
-  statusLabels,
-  onApprove,
-}) {
+export function ClassificationStandardValidationResult({ run, isNew, statusLabels }) {
   const [filter, setFilter] = useState(
     /** @type {"all" | "changed" | "errors" | "unknown"} */ ("all"),
   );
@@ -67,6 +60,10 @@ export function ClassificationStandardValidationResult({
   }
   const summary = run.summary;
   const referenceEvaluation = summary.reference_evaluation;
+  const canAttachToPublication =
+    run.is_current &&
+    Number(run.error_count) === 0 &&
+    (run.source.comparison_type ?? "standard_version") === "standard_version";
   return (
     <section className="standard-validation-result">
       <header>
@@ -74,13 +71,19 @@ export function ClassificationStandardValidationResult({
           <h3>草稿 r{run.draft_revision} 验证结果</h3>
           <p>
             {run.source.filename || run.source.listing || "未指定 Listing"} ·{" "}
-            {run.source.analysis_context === "review" ? "Review 评价" : "退货反馈"} ·{" "}
-            {run.sample_size} 条样本 · {run.model_names.join("、") || "模型未记录"}
+            {run.source.analysis_context === "review"
+              ? "Review 评价"
+              : run.source.analysis_context === "user_feedback"
+                ? "用户反馈"
+                : "退货反馈"}{" "}
+            · {run.sample_size} 条样本 · {run.model_names.join("、") || "模型未记录"}
           </p>
         </div>
-        <span className={run.publication_ready ? "ready" : "stale"}>
-          {run.publication_ready
-            ? "可用于发布"
+        <span className={canAttachToPublication ? "ready" : "stale"}>
+          {canAttachToPublication
+            ? run.quality_gate?.passed === false
+              ? "测试完成，需人工判断"
+              : "自动检查通过"
             : !run.is_current
               ? "已失效"
               : Number(run.error_count) > 0
@@ -88,9 +91,7 @@ export function ClassificationStandardValidationResult({
                 : run.source.comparison_type &&
                     run.source.comparison_type !== "standard_version"
                   ? "诊断完成"
-                  : run.quality_gate?.passed === false
-                    ? "质量门槛未通过"
-                    : "等待人工确认"}
+                  : "测试记录不可用于验收"}
         </span>
       </header>
       {run.source.recognition_contract && (
@@ -260,12 +261,6 @@ export function ClassificationStandardValidationResult({
             </div>
           ))}
       </div>
-      <ClassificationStandardValidationApproval
-        run={run}
-        isNew={isNew}
-        busy={approvalBusy}
-        onApprove={onApprove}
-      />
     </section>
   );
 }

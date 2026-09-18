@@ -123,6 +123,8 @@ class _ClassificationResultPublication:
             quality_status = _classification_quality(
                 result,
                 str(classification["semantic_disposition"]),
+                source_text=str(source.get("comment_normalized") or ""),
+                taxonomy=taxonomy,
             )
             classification.pop("semantic_disposition", None)
             for semantic_unit in classification.get("semantic_units", []):
@@ -329,8 +331,8 @@ class _ClassificationResultPublication:
             row = connection.execute(
                 """
                 SELECT id FROM classification_result_versions
-                WHERE source_segment_id = ? AND version_no = 1
-                      AND publish_status = 'published'
+                WHERE source_segment_id = ? AND publish_status = 'published'
+                ORDER BY version_no DESC LIMIT 1
                 """,
                 (segment_id,),
             ).fetchone()

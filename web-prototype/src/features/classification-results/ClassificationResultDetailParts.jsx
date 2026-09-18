@@ -83,11 +83,21 @@ export function DrilldownColumn({
 /**
  * @param {{
  *   record: ClassificationResultRecord,
+ *   analysisContext: string,
  *   onOpen: (trigger: HTMLButtonElement) => void
  * }} props
  */
-export function ResultRecordRow({ record, onOpen }) {
+export function ResultRecordRow({ record, analysisContext, onOpen }) {
+  const isUserFeedback = analysisContext === "user_feedback";
   const problems = record.problem_labels ?? [];
+  const labels = isUserFeedback
+    ? [
+        ...new Set([
+          ...problems,
+          ...(record.classification?.positive_label_codes ?? []),
+        ]),
+      ]
+    : problems;
   return (
     <article className="result-record-row" role="row">
       <div>
@@ -104,14 +114,19 @@ export function ResultRecordRow({ record, onOpen }) {
       </div>
       <div>
         <b>{record.reason || "未提供"}</b>
-        <span>{record.comment || "没有退货评论"}</span>
+        <span>
+          {record.comment || (isUserFeedback ? "没有反馈正文" : "没有退货评论")}
+        </span>
       </div>
       <div>
         <span className={`result-quality-badge ${resultState(record)}`}>
           {resultStateLabel(record)}
         </span>
         <SemanticStatusBadge status={semanticRecordStatus(record)} />
-        <b>{resultLabelText(record, problems) || "未形成问题标签"}</b>
+        <b>
+          {resultLabelText(record, labels) ||
+            (isUserFeedback ? "未形成语义标签" : "未形成问题标签")}
+        </b>
       </div>
       <div className="result-row-actions">
         <button

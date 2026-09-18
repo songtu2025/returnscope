@@ -99,7 +99,13 @@ function nextManualId(items) {
 
 /** @param {{item: SemanticReviewLedgerItem}} props */
 function DiagnosticDetails({ item }) {
-  if (!item.diagnosticDomain && !item.diagnosticCode && !item.diagnosticTitle) {
+  const systemFailure = ["ANALYSIS_FAILURE", "MODEL_ERROR"].includes(item.disposition);
+  if (
+    !systemFailure &&
+    !item.diagnosticDomain &&
+    !item.diagnosticCode &&
+    !item.diagnosticTitle
+  ) {
     return null;
   }
   const domainLabel = DIAGNOSTIC_DOMAIN_LABELS[item.diagnosticDomain] || "系统诊断";
@@ -116,34 +122,24 @@ function DiagnosticDetails({ item }) {
           {detailStatus ? ` · ${detailStatus}` : ""}
         </small>
       </div>
-      {(item.primaryResult || item.secondaryResult || item.diagnosticDetail) && (
-        <dl>
-          {item.primaryResult && (
-            <div>
-              <dt>首次结果</dt>
-              <dd>{item.primaryResult}</dd>
-            </div>
-          )}
-          {item.secondaryResult && (
-            <div>
-              <dt>复核结果</dt>
-              <dd>{item.secondaryResult}</dd>
-            </div>
-          )}
-          {item.diagnosticDetail && (
-            <div>
-              <dt>差异说明</dt>
-              <dd>{item.diagnosticDetail}</dd>
-            </div>
-          )}
-        </dl>
-      )}
-      {item.diagnosticAction && (
-        <p>
-          <b>处理建议</b>
-          <span>{item.diagnosticAction}</span>
-        </p>
-      )}
+      <dl>
+        <div>
+          <dt>首次结果</dt>
+          <dd>{item.primaryResult || "未提供"}</dd>
+        </div>
+        <div>
+          <dt>复核结果</dt>
+          <dd>{item.secondaryResult || "未提供"}</dd>
+        </div>
+        <div>
+          <dt>差异说明</dt>
+          <dd>{item.diagnosticDetail || item.reason || "未提供"}</dd>
+        </div>
+      </dl>
+      <p>
+        <b>处理建议</b>
+        <span>{item.diagnosticAction || "请联系管理员检查并重新运行。"}</span>
+      </p>
     </div>
   );
 }
@@ -305,6 +301,12 @@ export function SemanticReviewLedger({
   const reviews = itemReviews ?? [];
   const manualItems = (addedItems ?? []).map(manualItem);
   const items = [...ledger.items.filter((item) => !item.manual), ...manualItems];
+  const systemItems = items.filter((item) =>
+    ["ANALYSIS_FAILURE", "MODEL_ERROR"].includes(item.disposition),
+  );
+  const businessItems = items.filter(
+    (item) => !["ANALYSIS_FAILURE", "MODEL_ERROR"].includes(item.disposition),
+  );
   const summary = items.reduce(
     (counts, item) => {
       const review = reviews.find(
@@ -344,6 +346,30 @@ export function SemanticReviewLedger({
     setAdding(false);
   };
 
+  /** @param {SemanticReviewLedgerItem} item */
+  const renderItem = (item) => {
+    const review = reviews.find((candidate) => candidate.semantic_item_id === item.id);
+    return (
+      <ReviewLedgerItem
+        key={item.id}
+        item={item}
+        labels={labels}
+        editable={
+          editable &&
+          !["ANALYSIS_FAILURE", "MODEL_ERROR"].includes(item.disposition) &&
+          item.businessReviewRequired !== false
+        }
+        review={review}
+        onReview={(next) => onItemReviews(upsert(reviews, next))}
+        onReset={() =>
+          onItemReviews(
+            reviews.filter((candidate) => candidate.semantic_item_id !== item.id),
+          )
+        }
+      />
+    );
+  };
+
   return (
     <section className="semantic-review-ledger" aria-label="语义核验清单">
       <header>
@@ -366,33 +392,37 @@ export function SemanticReviewLedger({
       </header>
 
       {items.length ? (
-        <div className="semantic-review-items">
-          {items.map((item) => {
-            const review = reviews.find(
-              (candidate) => candidate.semantic_item_id === item.id,
-            );
-            return (
-              <ReviewLedgerItem
-                key={item.id}
-                item={item}
-                labels={labels}
-                editable={
-                  editable &&
-                  !["ANALYSIS_FAILURE", "MODEL_ERROR"].includes(item.disposition) &&
-                  item.businessReviewRequired !== false
-                }
-                review={review}
-                onReview={(next) => onItemReviews(upsert(reviews, next))}
-                onReset={() =>
-                  onItemReviews(
-                    reviews.filter(
-                      (candidate) => candidate.semantic_item_id !== item.id,
-                    ),
-                  )
-                }
-              />
-            );
-          })}
+        <div className="semantic-review-groups">
+          {systemItems.length > 0 && (
+            <section className="semantic-review-group is-system" aria-label="系统异常">
+              <header>
+                <div>
+                  <b>系统异常 · {systemItems.length} 项</b>
+                  <span>不属于业务标签判断，需由系统重跑或管理员处理。</span>
+                </div>
+                <span>已锁定编辑</span>
+              </header>
+              <div className="semantic-review-items">{systemItems.map(renderItem)}</div>
+            </section>
+          )}
+          <section
+            className="semantic-review-group is-business"
+            aria-label="待人工判断"
+          >
+            <header>
+              <div>
+                <b>待人工判断 · {displayedSummary.needsReview} 项</b>
+                <span>核对业务观点、证据与标签；已归类项也可按证据修正。</span>
+              </div>
+            </header>
+            {businessItems.length > 0 ? (
+              <div className="semantic-review-items">
+                {businessItems.map(renderItem)}
+              </div>
+            ) : (
+              <p className="semantic-review-group-empty">当前没有业务语义项。</p>
+            )}
+          </section>
         </div>
       ) : (
         <div className="semantic-review-empty" role="status">

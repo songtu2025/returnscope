@@ -400,6 +400,7 @@ class Sub2APIClient:
             payload["prompt_cache_key"] = self.settings.prompt_cache_key
 
         last_error: Exception | None = None
+        timeout_failures = 0
         started_at = time.monotonic()
         for attempt in range(self.settings.retries + 1):
             try:
@@ -422,10 +423,15 @@ class Sub2APIClient:
                 TypeError,
                 ValueError,
                 ModelHTTPError,
+                TimeoutError,
                 urllib.error.URLError,
             ) as exc:
                 last_error = exc
+                if isinstance(exc, TimeoutError):
+                    timeout_failures += 1
                 if attempt >= self.settings.retries:
+                    break
+                if timeout_failures > 1:
                     break
                 if isinstance(exc, ModelHTTPError) and (
                     exc.status_code < 500 and exc.status_code not in {408, 409, 429}

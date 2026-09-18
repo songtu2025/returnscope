@@ -127,7 +127,7 @@ class DatasetReturnVersionMixin:
                 source_path=merge_path,
                 original_name=f"{Path(original_name).stem}.csv",
                 content_type="text/csv",
-                change_note=change_note or "追加一批退货数据",
+                change_note=change_note or "追加一批用户反馈数据",
             )
         finally:
             merge_path.unlink(missing_ok=True)
@@ -391,14 +391,14 @@ class DatasetReturnVersionMixin:
             except DatasetRevisionConflict as exc:
                 if attempt + 1 >= RETURN_APPEND_MAX_ATTEMPTS:
                     raise DatasetRevisionConflict(
-                        "退货数据已被其他用户连续修改，请刷新后重试"
+                        "用户反馈数据已被其他用户连续修改，请刷新后重试"
                     ) from exc
                 refreshed = self.get(dataset_id, include={"versions"})
                 if refreshed is None:
-                    raise ValueError("退货数据源不存在") from exc
+                    raise ValueError("用户反馈数据源不存在") from exc
                 current_target = refreshed
 
-        raise DatasetRevisionConflict("退货数据已被其他用户连续修改，请刷新后重试")
+        raise DatasetRevisionConflict("用户反馈数据已被其他用户连续修改，请刷新后重试")
 
     @staticmethod
     def _cleanup_import_source(raw_destination: Path) -> None:

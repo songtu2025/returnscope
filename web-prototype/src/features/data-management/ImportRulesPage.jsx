@@ -8,7 +8,7 @@ import { DataAssetTabs } from "./DataAssetTabs";
 
 /** @type {Record<string, string>} */
 const KIND_LABELS = {
-  returns: "退货数据",
+  returns: "用户反馈数据",
   products: "产品信息",
 };
 

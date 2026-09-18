@@ -10,6 +10,7 @@ from return_semantics.schemas import ValidatedClassification
 
 def test_exporter_creates_expected_sheets(tmp_path: Path, taxonomy) -> None:
     classification_key = "APPAREL_TOO_SMALL\x1ftoo small"
+    business_classification_key = "APPAREL_TOO_SMALL\x1ftoo narrow"
     records = pd.DataFrame(
         [
             {
@@ -25,7 +26,21 @@ def test_exporter_creates_expected_sheets(tmp_path: Path, taxonomy) -> None:
                 "classification_key": classification_key,
                 "category_a": "水鞋",
                 "category_b": "薄底水鞋",
-            }
+            },
+            {
+                "source_row": 3,
+                "return-date": "2026-01-02",
+                "order-id": "ORDER-2",
+                "sku": "SKU-1",
+                "asin": "ASIN-1",
+                "reason": "APPAREL_TOO_SMALL",
+                "comment_raw": "Too narrow",
+                "comment_normalized": "Too narrow",
+                "has_text_evidence": True,
+                "classification_key": business_classification_key,
+                "category_a": "水鞋",
+                "category_b": "薄底水鞋",
+            },
         ]
     )
     unique_comments = pd.DataFrame(
@@ -35,7 +50,13 @@ def test_exporter_creates_expected_sheets(tmp_path: Path, taxonomy) -> None:
                 "reason": "APPAREL_TOO_SMALL",
                 "comment_normalized": "Too small",
                 "record_count": 1,
-            }
+            },
+            {
+                "classification_key": business_classification_key,
+                "reason": "APPAREL_TOO_SMALL",
+                "comment_normalized": "Too narrow",
+                "record_count": 1,
+            },
         ]
     )
     dataset = ReturnDataset(
@@ -79,17 +100,55 @@ def test_exporter_creates_expected_sheets(tmp_path: Path, taxonomy) -> None:
             "primary_label_codes": ["FIT_TOO_SMALL"],
             "status": "AUTO_APPROVED",
             "review_reasons": [],
+            "review_diagnostics": [
+                {
+                    "code": "MODEL_RESULT_MISMATCH",
+                    "evidence_text": "Too small",
+                    "primary_result": "尺码偏小",
+                    "secondary_result": "尺码正常",
+                    "detail": "两次模型对尺码结论不同",
+                    "action": "请业务员核对尺码标签。",
+                },
+                {
+                    "code": "SECONDARY_MODEL_TIMEOUT",
+                    "evidence_text": "Too small",
+                    "primary_result": "尺码偏小",
+                    "secondary_result": "",
+                    "detail": "风险复核超时",
+                    "action": "SYSTEM_RERUN",
+                },
+            ],
             "model_name": "test-model",
             "prompt_version": "test-prompt",
             "taxonomy_version": taxonomy.version,
         }
     )
+    business_result_payload = result.model_dump()
+    business_result_payload.update(
+        {
+            "classification_key": business_classification_key,
+            "review_diagnostics": [
+                {
+                    "code": "MODEL_RESULT_MISMATCH",
+                    "evidence_text": "Too narrow",
+                    "primary_result": "鞋楦偏窄",
+                    "secondary_result": "尺码正常",
+                    "detail": "两次模型对宽度结论不同",
+                    "action": "请业务员核对宽度标签。",
+                }
+            ],
+        }
+    )
+    business_result = ValidatedClassification.model_validate(business_result_payload)
     output_path = tmp_path / "result.xlsx"
 
     export_results(
         output_path,
         dataset,
-        {classification_key: result},
+        {
+            classification_key: result,
+            business_classification_key: business_result,
+        },
         taxonomy,
     )
 
@@ -98,13 +157,29 @@ def test_exporter_creates_expected_sheets(tmp_path: Path, taxonomy) -> None:
         "分类明细",
         "语义单元",
         "人工复核",
+        "系统待重跑",
         "未知语义",
         "语义核验",
         "维度裁决",
         "标签统计",
     ]
-    assert workbook["分类明细"].max_row == 2
-    assert workbook["维度裁决"].max_row == 2
+    assert workbook["分类明细"].max_row == 3
+    assert workbook["维度裁决"].max_row == 3
+
+    business_review = pd.read_excel(output_path, sheet_name="人工复核", dtype=str)
+    system_rerun = pd.read_excel(output_path, sheet_name="系统待重跑", dtype=str)
+    semantic_review = pd.read_excel(output_path, sheet_name="语义核验", dtype=str)
+
+    assert business_review["诊断编码"].tolist() == ["MODEL_RESULT_MISMATCH"]
+    assert business_review["是否需要业务判断"].tolist() == ["是"]
+    assert business_review["分类键"].tolist() == ["APPAREL_TOO_SMALL too narrow"]
+    assert system_rerun["诊断编码"].tolist() == ["SECONDARY_MODEL_TIMEOUT"]
+    assert system_rerun["是否需要业务判断"].tolist() == ["否"]
+    assert system_rerun["分类键"].tolist() == ["APPAREL_TOO_SMALL too small"]
+    assert {
+        "MODEL_RESULT_MISMATCH",
+        "SECONDARY_MODEL_TIMEOUT",
+    }.issubset(set(semantic_review["诊断编码"].dropna()))
 
 
 def test_exporter_marks_missing_category_as_excluded(tmp_path: Path, taxonomy) -> None:

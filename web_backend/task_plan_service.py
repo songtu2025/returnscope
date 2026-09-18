@@ -5,6 +5,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from return_semantics.analysis_context import (
+    USER_FEEDBACK_CONTEXT,
+    AnalysisContext,
+)
 from return_semantics.capabilities import (
     CapabilityRegistry,
 )
@@ -57,6 +61,7 @@ class TaskPlanService:
         listing: str | None,
         config_version_id: str | None = None,
         model_policy: dict[str, Any] | None = None,
+        analysis_context: AnalysisContext = USER_FEEDBACK_CONTEXT,
     ) -> dict[str, Any]:
         return self.prepare(
             dataset_version_id=dataset_version_id,
@@ -65,6 +70,7 @@ class TaskPlanService:
             listing=listing,
             config_version_id=config_version_id,
             model_policy=model_policy,
+            analysis_context=analysis_context,
         ).response
 
     def prepare(
@@ -75,6 +81,7 @@ class TaskPlanService:
         listing: str | None,
         config_version_id: str | None = None,
         model_policy: dict[str, Any] | None = None,
+        analysis_context: AnalysisContext = USER_FEEDBACK_CONTEXT,
     ) -> PreparedTaskPlan:
         clean_store = (store or "").strip()
         clean_listing = (listing or "").strip() or None
@@ -94,6 +101,7 @@ class TaskPlanService:
             "auto" if automatic_scope else "manual",
             str(returns["sha256"]),
             str(products["sha256"]),
+            analysis_context,
         )
         if automatic_scope:
             clean_store = dataset.primary_store or "AUTO"
@@ -151,6 +159,7 @@ class TaskPlanService:
             item for item in unresolved_products if item["issue"] == "missing_category"
         ]
         inputs = {
+            "analysis_context": analysis_context,
             "returns": {
                 "version_id": returns["id"],
                 "sha256": returns["sha256"],
@@ -402,7 +411,7 @@ class TaskPlanService:
                     """
                 ).fetchone()
         if returns_row is None or returns_row["kind"] != "returns":
-            raise ValueError("请选择有效的退货数据版本")
+            raise ValueError("请选择有效的用户反馈数据版本")
         if products_row is None or products_row["kind"] != "products":
             raise ValueError("请选择有效的商品维度版本")
         if config_row is None or config_row["published_at"] is None:

@@ -98,6 +98,7 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
 
   if (!result) return null;
 
+  const isUserFeedback = result.analysis_context === "user_feedback";
   const totalPages = Math.max(Math.ceil((records?.total ?? 0) / route.pageSize), 1);
   const readyRecords = summary?.quality?.find(
     (item) => item.quality_status === "ready",
@@ -418,7 +419,7 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
           <section className="result-record-card" id="classification-order-records">
             <header>
               <div>
-                <b>订单级分类记录</b>
+                <b>{isUserFeedback ? "用户反馈记录" : "订单级分类记录"}</b>
                 <span>{Number(records?.total || 0).toLocaleString()} 条记录</span>
               </div>
               <div className="record-order-search">
@@ -445,7 +446,7 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
             {!recordsLoading && records?.items?.length === 0 && (
               <EmptyState
                 icon={MagnifyingGlass}
-                title="当前条件没有订单记录"
+                title={isUserFeedback ? "当前条件没有反馈记录" : "当前条件没有订单记录"}
                 description="调整问题、产品名称、产品SKU或order-id后重试。"
               />
             )}
@@ -455,17 +456,20 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
                   className={`result-record-table ${recordsLoading ? "is-loading" : ""}`}
                 >
                   <div className="result-record-head" role="row">
-                    <span>order-id</span>
-                    <span>退货SKU（MSKU）</span>
+                    <span>{isUserFeedback ? "记录ID / 日期" : "order-id"}</span>
+                    <span>
+                      {isUserFeedback ? "来源SKU（MSKU）" : "退货SKU（MSKU）"}
+                    </span>
                     <span>产品名称 / 产品SKU</span>
-                    <span>Amazon原因</span>
-                    <span>分类结果</span>
+                    <span>{isUserFeedback ? "反馈标题 / 正文" : "Amazon原因"}</span>
+                    <span>{isUserFeedback ? "语义结果" : "分类结果"}</span>
                     <span>操作</span>
                   </div>
                   {records.items.map((record) => (
                     <ResultRecordRow
                       key={record.source_record_id}
                       record={record}
+                      analysisContext={result.analysis_context}
                       onOpen={openEvidence(record)}
                     />
                   ))}
@@ -485,6 +489,7 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
           {selectedRecord && (
             <EvidenceDrawer
               record={selectedRecord}
+              analysisContext={result.analysis_context}
               onClose={closeEvidence}
               returnFocusRef={evidenceTriggerRef}
             />

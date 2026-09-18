@@ -756,11 +756,11 @@ describe("关键用户流程", () => {
       }),
     );
     expect(screen.getByText("2 组评论不进入语义分析")).toBeVisible();
-    expect(screen.getByText(/12 条退货记录 · 10 条有文本/)).toBeVisible();
+    expect(screen.getByText(/12 条用户反馈 · 10 条有文本/)).toBeVisible();
     expect(screen.queryByText("选择未解决品类处理方式")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /启动 8 组可执行评论/ })).toBeDisabled();
     await user.click(screen.getByLabelText(/我确认本次仅分析 8 组评论/));
-    expect(screen.getByLabelText("任务名称")).toHaveValue("8月退货数据 · 退货分析");
+    expect(screen.getByLabelText("任务名称")).toHaveValue("8月退货数据 · 用户语义分析");
     const confirmation = screen.getByRole("region", { name: "确认并开始分析" });
     expect(within(confirmation).getByRole("heading")).toHaveFocus();
     expect(within(confirmation).getByText(/低成本初筛：gpt-cheap/)).toBeVisible();
@@ -926,7 +926,7 @@ describe("关键用户流程", () => {
     await user.click(screen.getByRole("button", { name: "导入并分析本批" }));
 
     await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith("退货明细已导入并自动选中"),
+      expect(notify).toHaveBeenCalledWith("用户反馈数据已导入并自动选中"),
     );
     expect(apiMock.addDatasetVersion).not.toHaveBeenCalled();
     expect(apiMock.createDataset).not.toHaveBeenCalled();
@@ -947,7 +947,7 @@ describe("关键用户流程", () => {
       change_note: "",
     });
     expect(onChanged).toHaveBeenCalledOnce();
-    expect(notify).toHaveBeenCalledWith("退货明细已导入并自动选中");
+    expect(notify).toHaveBeenCalledWith("用户反馈数据已导入并自动选中");
   });
 
   test("存在未知品类时必须选择策略并处理计划过期", async () => {

@@ -105,7 +105,7 @@ class ClassificationStandardDraftsMixin:
         with self.database.transaction(immediate=True) as connection:
             row = connection.execute(
                 """
-                SELECT s.current_version_id, v.snapshot_json
+                SELECT s.current_version_id, s.name, v.snapshot_json
                 FROM classification_standards s
                 JOIN classification_standard_versions v
                   ON v.id = s.current_version_id
@@ -115,6 +115,8 @@ class ClassificationStandardDraftsMixin:
             ).fetchone()
             if row is None:
                 raise ClassificationStandardNotFound("分类标准不存在或已停用")
+            snapshot = json.loads(row["snapshot_json"])
+            snapshot["name"] = row["name"]
             connection.execute(
                 """
                 INSERT INTO classification_standard_drafts(
@@ -127,7 +129,7 @@ class ClassificationStandardDraftsMixin:
                     draft_id,
                     standard_id,
                     row["current_version_id"],
-                    row["snapshot_json"],
+                    json_text(snapshot),
                     json_text(
                         {
                             "blocking": ["草稿与当前已发布版本没有差异"],

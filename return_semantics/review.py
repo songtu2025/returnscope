@@ -298,39 +298,12 @@ def build_model_difference_diagnostics(
         )
         for outcome in unmatched_secondary
     )
-    if not diagnostics:
-        return [
-            ReviewDiagnostic(
-                code="MODEL_RESULT_MISMATCH",
-                detail="两次模型的结构化语义结果不一致",
-                action=_MODEL_MISMATCH_ACTION,
-            )
-        ]
-
-    def numbered(values: list[str], empty: str) -> str:
-        return "\n".join(
-            f"{index}. {value or empty}" for index, value in enumerate(values, start=1)
-        )
-
+    if diagnostics:
+        return diagnostics
     return [
         ReviewDiagnostic(
             code="MODEL_RESULT_MISMATCH",
-            evidence_text=numbered(
-                [item.evidence_text for item in diagnostics],
-                "未保留证据",
-            ),
-            primary_result=numbered(
-                [item.primary_result for item in diagnostics],
-                "主模型未确认",
-            ),
-            secondary_result=numbered(
-                [item.secondary_result for item in diagnostics],
-                "复核模型未确认",
-            ),
-            detail=numbered(
-                [item.detail for item in diagnostics],
-                "结构化结果不同",
-            ),
+            detail="两次模型的结构化语义结果不一致",
             action=_MODEL_MISMATCH_ACTION,
         )
     ]

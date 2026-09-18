@@ -88,6 +88,7 @@
 /** @typedef {{expected_revision: number, content: ClassificationStandardDraftContentRequest, change_reason?: string}} ClassificationStandardUpdatePayload */
 /** @typedef {{expected_revision: number, document: unknown, change_reason: string}} ClassificationStandardImportPayload */
 /** @typedef {{expected_revision: number, reason: string}} ClassificationStandardActionPayload */
+/** @typedef {ClassificationStandardActionPayload & {validation_run_id?: string | null}} ClassificationStandardPublishPayload */
 /** @typedef {{id: string, mode: "deleted" | "deactivated", status: "deleted" | "inactive"}} ClassificationStandardDeleteResult */
 /** @typedef {{id: string, standard_id: string}} ClassificationStandardDiscardResult */
 /** @typedef {{hierarchy_columns?: string[], source_label_column?: string, sentiment_column?: string}} ClassificationStandardExcelColumns */
@@ -165,7 +166,6 @@
  * }} ClassificationStandardValidationRunDetail
  */
 /** @typedef {{expected_revision: number, source_result_version_id: string, sample_size: ValidationSampleSize, comparison_type?: ValidationComparisonType}} ClassificationStandardValidationRunPayload */
-/** @typedef {{expected_revision: number, note: string}} ClassificationStandardValidationApprovalPayload */
 /**
  * @typedef {object} ClassificationResultTaxonomy
  * @property {string} version

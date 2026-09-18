@@ -4,6 +4,12 @@ from typing import Any
 
 CLASSIFICATION_STANDARD_SEED_MIGRATION = "20260824_01_seed_classification_standards"
 CLASSIFICATION_STANDARD_RULES_MIGRATION = "20260825_01_embed_taxonomy_validation_rules"
+CLASSIFICATION_STANDARD_NAME_MIGRATION = (
+    "20260918_01_rename_gloves_user_feedback_standard"
+)
+CLASSIFICATION_STANDARD_CATEGORY_NAMES_MIGRATION = (
+    "20260918_02_rename_category_user_feedback_standards"
+)
 
 
 class ClassificationStandardNotFound(ValueError):

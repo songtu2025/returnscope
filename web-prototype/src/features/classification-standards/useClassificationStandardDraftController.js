@@ -79,7 +79,6 @@ export function useClassificationStandardDraftController({
     loadValidation,
     clearValidation,
     startSampleValidation,
-    approveSampleValidation,
     selectValidation,
   } = validation;
 
@@ -276,7 +275,7 @@ export function useClassificationStandardDraftController({
     return created;
   };
 
-  const publish = async () => {
+  const publish = async (/** @type {string | null} */ validationRunId = null) => {
     setBusy("publish");
     try {
       const saved = await persistDraft();
@@ -287,6 +286,7 @@ export function useClassificationStandardDraftController({
         await classificationStandardApi.publishClassificationStandardDraft(saved.id, {
           expected_revision: saved.revision,
           reason: changeReason.trim() || "更新分类标准",
+          validation_run_id: validationRunId,
         });
       await loadStandards();
       await loadSelected(standard.id);
@@ -375,7 +375,6 @@ export function useClassificationStandardDraftController({
     setValidationSourceId,
     setValidationSampleSize,
     startSampleValidation,
-    approveSampleValidation,
     selectValidation,
     setChangeReason,
     loadSelected,

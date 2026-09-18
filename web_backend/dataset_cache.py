@@ -6,6 +6,7 @@ import threading
 from collections import OrderedDict
 from pathlib import Path
 
+from return_semantics.analysis_context import RETURNS_CONTEXT, AnalysisContext
 from return_semantics.data import (
     ReturnDataset,
     load_return_dataset,
@@ -24,6 +25,7 @@ def load_cached_dataset(
     scope_mode: str,
     return_sha256: str,
     product_sha256: str,
+    analysis_context: AnalysisContext = RETURNS_CONTEXT,
 ) -> ReturnDataset:
     """调用方只读共享结果；需要修改数据时先复制对应的 DataFrame。"""
     automatic = scope_mode == "auto"
@@ -33,6 +35,7 @@ def load_cached_dataset(
         return_sha256,
         product_sha256,
         scope_mode,
+        analysis_context,
         "" if automatic else store,
         "" if automatic else (listing or ""),
         *(
@@ -48,7 +51,9 @@ def load_cached_dataset(
         if dataset is None:
             if automatic:
                 dataset = load_return_dataset_auto(
-                    Path(return_file_path), Path(product_file_path)
+                    Path(return_file_path),
+                    Path(product_file_path),
+                    analysis_context=analysis_context,
                 )
             else:
                 dataset = load_return_dataset(
@@ -56,6 +61,7 @@ def load_cached_dataset(
                     Path(product_file_path),
                     store=store,
                     listing=listing,
+                    analysis_context=analysis_context,
                 )
             _cache[key] = dataset
         _cache.move_to_end(key)

@@ -377,7 +377,7 @@ def test_secondary_fallback_is_marked_as_system_diagnostic(
     result = next(iter(run.classifications.values()))
     assert result.status.value == "MANUAL_REVIEW"
     assert result.review_diagnostics[-1].code == "SECONDARY_MODEL_MISSING"
-    assert result.review_diagnostics[-1].action == "SYSTEM_RERUN"
+    assert result.review_diagnostics[-1].action == "ADMIN_CONFIG"
 
 
 @pytest.mark.parametrize(

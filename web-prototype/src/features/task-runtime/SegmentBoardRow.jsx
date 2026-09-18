@@ -104,6 +104,9 @@ export function SegmentBoardRow({ task, segment, position, queue, rowState, acti
   const modelRequests = Number(segment.model_calls || 0) + modelFailures;
   const orderableIndex = orderableKeys.indexOf(segment.segment_key);
   const canOrder = canManageQueue && orderableIndex >= 0 && orderableKeys.length > 1;
+  const canRetrySystemAnomalies =
+    segment.system_retry_available === true &&
+    !["queued", "running"].includes(task.status);
   const segmentLabel = segment.scope?.listing || segment.agent_family;
   const displayStatus = segment.display_status || segment.status;
   const publishStatus = resultPublishStatus(segment);
@@ -250,7 +253,21 @@ export function SegmentBoardRow({ task, segment, position, queue, rowState, acti
                 <Play size={14} /> 继续
               </Button>
             )}
-            {canRetrySegment(task, segment) && (
+            {canRetrySystemAnomalies && (
+              <Button
+                className="secondary-button compact-button"
+                title={
+                  segment.system_failure_count
+                    ? `重新处理 ${segment.system_failure_count} 个系统异常`
+                    : "重新处理系统异常"
+                }
+                onClick={() => onRetry(segment)}
+              >
+                <ArrowClockwise size={15} />
+                重试系统异常
+              </Button>
+            )}
+            {!canRetrySystemAnomalies && canRetrySegment(task, segment) && (
               <Button
                 className="secondary-button compact-button"
                 onClick={() => onRetry(segment)}

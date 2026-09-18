@@ -53,6 +53,23 @@ def test_json_example_uses_allowed_direction(taxonomy, claims, sentiment):
     )
 
 
+def test_user_feedback_prompt_has_no_return_or_negative_assumption(
+    taxonomy,
+    claims,
+) -> None:
+    system = prompt.build_messages(
+        "Great fit",
+        taxonomy,
+        claims,
+        analysis_context="user_feedback",
+    )[0]["content"]
+
+    assert "通用用户反馈分析" in system
+    assert "正向、负向、中性和混合表达都是有效语义" in system
+    assert "不得预设用户正在退货、投诉或描述问题" in system
+    assert "只有正向体验时，退货原因仍然未知" not in system
+
+
 @pytest.mark.parametrize(
     ("profile", "old_version"),
     [

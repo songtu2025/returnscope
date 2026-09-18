@@ -278,7 +278,7 @@ export function NewTaskPage({
         focusAfterPreparation.current = true;
         setForm((current) => ({
           ...current,
-          title: current.title || `${selectedReturns.dataset_name} · 退货分析`,
+          title: current.title || `${selectedReturns.dataset_name} · 用户语义分析`,
         }));
         setPrepared(true);
       }}

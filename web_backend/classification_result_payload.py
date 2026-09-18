@@ -10,7 +10,10 @@ from return_semantics.schemas import (
     TaxonomyConfig,
     ValidatedClassification,
 )
-from return_semantics.semantic_review import build_semantic_review_view
+from return_semantics.semantic_review import (
+    build_semantic_review_view,
+    requires_system_rerun,
+)
 from return_semantics.taxonomy_hierarchy import label_path, label_path_codes
 
 QUALITY_STATUSES = {"ready", "review_required", "unusable", "excluded"}
@@ -43,8 +46,16 @@ def _nullable_text(value: Any) -> str | None:
 def _classification_quality(
     result: ValidatedClassification,
     semantic_disposition: str | None = None,
+    *,
+    source_text: str = "",
+    taxonomy: TaxonomyConfig | None = None,
 ) -> str:
-    if result.status == ProcessingStatus.MODEL_ERROR:
+    if requires_system_rerun(
+        result,
+        source_text,
+        taxonomy,
+        processing_status=result.status,
+    ):
         return "unusable"
     if semantic_disposition in REVIEW_DISPOSITIONS:
         return "review_required"
@@ -423,7 +434,7 @@ def _prepare_classification_payload(
 
 
 def _version_quality(qualities: list[str]) -> str:
-    if qualities and all(value == "unusable" for value in qualities):
+    if "unusable" in qualities:
         return "unusable"
     if any(value != "ready" for value in qualities):
         return "review_required"

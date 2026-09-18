@@ -3,6 +3,11 @@ from __future__ import annotations
 import hashlib
 import json
 
+from return_semantics.analysis_context import (
+    REVIEW_CONTEXT,
+    USER_FEEDBACK_CONTEXT,
+    validate_analysis_context,
+)
 from return_semantics.schemas import ListingClaimsConfig, SubjectCode, TaxonomyConfig
 from return_semantics.taxonomy_hierarchy import label_path
 
@@ -120,12 +125,21 @@ def build_messages(
     category_context: dict[str, str] | None = None,
     analysis_context: str = "returns",
 ) -> list[dict[str, str]]:
-    task_name = "商品评价" if analysis_context == "review" else "退货评论"
-    context_rule = (
-        "当前是 Review 评价分析：正向评价不需要解释退货原因，不得虚构退货行为。"
-        if analysis_context == "review"
-        else "当前是退货反馈分析：只有正向体验时，退货原因仍然未知。"
-    )
+    context = validate_analysis_context(analysis_context)
+    if context == USER_FEEDBACK_CONTEXT:
+        task_name = "用户反馈"
+        context_rule = (
+            "当前是通用用户反馈分析：正向、负向、中性和混合表达都是有效语义，"
+            "不得预设用户正在退货、投诉或描述问题。"
+        )
+    elif context == REVIEW_CONTEXT:
+        task_name = "商品评价"
+        context_rule = (
+            "当前是 Review 评价分析：正向评价不需要解释退货原因，不得虚构退货行为。"
+        )
+    else:
+        task_name = "退货评论"
+        context_rule = "当前是退货反馈分析：只有正向体验时，退货原因仍然未知。"
     example_label = taxonomy.labels[0]
     example_sentiment = example_label.allowed_sentiments[0].value
     example_primary = [example_label.code] if example_sentiment == "NEGATIVE" else []

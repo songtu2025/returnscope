@@ -745,6 +745,10 @@ export type ClassificationResultVersionResponse = {
    */
   agent_key: string;
   /**
+   * Analysis Context
+   */
+  analysis_context: "returns" | "review" | "user_feedback";
+  /**
    * Blocking Reasons
    */
   blocking_reasons: Array<ClassificationResultBlockingReasonResponse>;

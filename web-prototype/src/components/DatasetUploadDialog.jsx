@@ -64,7 +64,7 @@ export function DatasetUploadDialog({ dialog, onClose, onDone, storeOptions = []
       title={
         dialog.mode === "create"
           ? kind === "returns"
-            ? "导入退货明细"
+            ? "导入用户反馈数据"
             : "导入产品信息"
           : `为 ${dialog.dataset.name} 创建新版本`
       }
@@ -74,7 +74,7 @@ export function DatasetUploadDialog({ dialog, onClose, onDone, storeOptions = []
         {dialog.mode === "create" && (
           <>
             <label>
-              {kind === "returns" ? "退货明细名称" : "产品信息名称"}
+              {kind === "returns" ? "用户反馈数据名称" : "产品信息名称"}
               <input
                 value={name}
                 onChange={(event) => setName(event.target.value)}

@@ -74,7 +74,6 @@ export function ClassificationStandardsPage({ route, notify }) {
     setValidationSourceId,
     setValidationSampleSize,
     startSampleValidation,
-    approveSampleValidation,
     selectValidation,
     setChangeReason,
     loadSelected,
@@ -211,7 +210,6 @@ export function ClassificationStandardsPage({ route, notify }) {
               onValidationSourceChange={setValidationSourceId}
               onValidationSampleSizeChange={setValidationSampleSize}
               onValidationRun={startSampleValidation}
-              onValidationApprove={approveSampleValidation}
               onImport={importJson}
               onPrepareExcel={prepareExcelDraft}
               onApplyExcel={applyExcel}

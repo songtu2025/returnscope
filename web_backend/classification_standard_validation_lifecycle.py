@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Callable
 
+from return_semantics.capabilities import resolve_model_policy
 from web_backend.classification_standard_service import (
     ClassificationStandardConflict,
     ClassificationStandardService,
@@ -15,6 +16,7 @@ from web_backend.classification_standard_validation_leakage import (
 )
 from web_backend.common import add_audit, json_text, new_id
 from web_backend.database import Database
+from web_backend.model_preference_service import ModelPreferenceService
 from web_backend.security import utc_now
 
 
@@ -85,6 +87,7 @@ class ClassificationStandardValidationLifecycleMixin:
             expected_revision,
             comparison_type,
         )
+        self._freeze_model_context(source, draft, actor_id)
         run_id = new_id("classification_standard_validation")
         now = utc_now()
         with self.database.transaction(immediate=True) as connection:
@@ -141,6 +144,19 @@ class ClassificationStandardValidationLifecycleMixin:
             },
         )
         return self.get(run_id)
+
+    def _freeze_model_context(
+        self,
+        source: dict[str, Any],
+        draft: dict[str, Any],
+        actor_id: str,
+    ) -> None:
+        preference = ModelPreferenceService(self.database).task_policy(actor_id)
+        if preference is None:
+            return
+        capability = self.standard_service._capability_from_snapshot(draft["snapshot"])
+        source["config_version_id"] = str(preference["config_version_id"])
+        source["model_policy"] = resolve_model_policy(capability, preference)
 
     def approve(
         self,

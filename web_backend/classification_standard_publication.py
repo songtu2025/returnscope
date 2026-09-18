@@ -10,10 +10,6 @@ from web_backend.classification_standard_contracts import (
     ClassificationStandardConflict,
     ClassificationStandardValidationError,
 )
-from web_backend.classification_standard_validation_leakage import (
-    find_taxonomy_sample_leaks,
-    format_taxonomy_sample_leaks,
-)
 from web_backend.classification_validation_quality import publication_quality_gate
 from web_backend.common import add_audit, new_id
 from web_backend.database import Database
@@ -32,6 +28,7 @@ class ClassificationStandardPublicationMixin:
         expected_revision: int,
         reason: str,
         actor_id: str,
+        validation_run_id: str | None = None,
     ) -> dict[str, Any]:
         if not reason.strip():
             raise ValueError("变更说明不能为空")
@@ -43,55 +40,11 @@ class ClassificationStandardPublicationMixin:
         )
         if validation["blocking"]:
             raise ClassificationStandardValidationError(validation)
-        with self.database.connect() as connection:
-            sample_validation = connection.execute(
-                """
-                SELECT id, source_json, sample_json, result_json, summary_json
-                FROM classification_standard_validation_runs
-                WHERE draft_id = ? AND draft_revision = ?
-                  AND status = 'completed' AND error_count = 0
-                  AND approved_at IS NOT NULL
-                ORDER BY completed_at DESC, id DESC
-                LIMIT 1
-                """,
-                (draft_id, expected_revision),
-            ).fetchone()
-        leakage_issues = (
-            find_taxonomy_sample_leaks(
-                draft["snapshot"]["taxonomy"],
-                json.loads(sample_validation["sample_json"] or "[]"),
-            )
-            if sample_validation is not None
-            else []
+        validation_evidence = self._validation_evidence(
+            draft,
+            expected_revision,
+            validation_run_id,
         )
-        if leakage_issues:
-            raise ClassificationStandardValidationError(
-                {
-                    "blocking": [format_taxonomy_sample_leaks(leakage_issues)],
-                    "warnings": validation["warnings"],
-                }
-            )
-        sample_validation_id = (
-            str(sample_validation["id"])
-            if sample_validation is not None
-            and validation_contract_matches(
-                draft["snapshot"], json.loads(sample_validation["source_json"])
-            )
-            and publication_quality_gate(
-                draft["snapshot"],
-                json.loads(sample_validation["source_json"]),
-                json.loads(sample_validation["result_json"] or "[]"),
-                json.loads(sample_validation["summary_json"] or "{}"),
-            )["passed"]
-            else None
-        )
-        if sample_validation_id is None:
-            raise ClassificationStandardValidationError(
-                {
-                    "blocking": ["请先完成并人工确认当前草稿修订的样本验证"],
-                    "warnings": validation["warnings"],
-                }
-            )
         now = utc_now()
         standard_id = str(draft["standard_id"])
         with self.database.transaction(immediate=True) as connection:
@@ -170,13 +123,13 @@ class ClassificationStandardPublicationMixin:
                 "DELETE FROM classification_standard_drafts WHERE id = ?",
                 (draft_id,),
             )
-            if sample_validation_id is not None:
+            if validation_evidence is not None:
                 connection.execute(
                     """
                     UPDATE classification_standard_validation_runs
                     SET published_version_id = ? WHERE id = ?
                     """,
-                    (version_id, sample_validation_id),
+                    (version_id, validation_evidence["id"]),
                 )
         add_audit(
             self.database,
@@ -189,7 +142,77 @@ class ClassificationStandardPublicationMixin:
                 "version_id": version_id,
                 "version": version_no,
                 "reason": reason,
-                "sample_validation_id": sample_validation_id,
+                "publication_mode": (
+                    "validated" if validation_evidence is not None else "direct"
+                ),
+                "validation_run_id": (
+                    validation_evidence["id"]
+                    if validation_evidence is not None
+                    else None
+                ),
+                "validation_quality_passed": (
+                    validation_evidence["quality_gate_passed"]
+                    if validation_evidence is not None
+                    else None
+                ),
             },
         )
         return self.get(standard_id)
+
+    def _validation_evidence(
+        self,
+        draft: dict[str, Any],
+        expected_revision: int,
+        validation_run_id: str | None,
+    ) -> dict[str, Any] | None:
+        if validation_run_id is None:
+            return None
+        with self.database.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT id, draft_id, draft_revision, status, error_count,
+                       source_json, result_json, summary_json
+                FROM classification_standard_validation_runs
+                WHERE id = ?
+                """,
+                (validation_run_id,),
+            ).fetchone()
+        if row is None:
+            raise ClassificationStandardValidationError(
+                {
+                    "blocking": ["所选测试记录不存在，请刷新后重试"],
+                    "warnings": [],
+                }
+            )
+        source = json.loads(row["source_json"] or "{}")
+        if (
+            str(row["draft_id"]) != str(draft["id"])
+            or int(row["draft_revision"]) != expected_revision
+            or source.get("comparison_type", "standard_version") != "standard_version"
+            or not validation_contract_matches(draft["snapshot"], source)
+        ):
+            raise ClassificationStandardValidationError(
+                {
+                    "blocking": [
+                        "所选测试记录不属于当前草稿修订，请重新测试或直接发布"
+                    ],
+                    "warnings": [],
+                }
+            )
+        if row["status"] != "completed" or int(row["error_count"]) > 0:
+            raise ClassificationStandardValidationError(
+                {
+                    "blocking": ["所选测试尚未成功完成，请重新测试或直接发布"],
+                    "warnings": [],
+                }
+            )
+        gate = publication_quality_gate(
+            draft["snapshot"],
+            source,
+            json.loads(row["result_json"] or "[]"),
+            json.loads(row["summary_json"] or "{}"),
+        )
+        return {
+            "id": str(row["id"]),
+            "quality_gate_passed": bool(gate["passed"]),
+        }

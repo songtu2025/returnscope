@@ -92,6 +92,7 @@ class TaskCreationMixin:
             task_id = new_id("task")
             now = utc_now()
             snapshot = {
+                "analysis_context": prepared.response["inputs"]["analysis_context"],
                 "returns": self._dataset_version_snapshot(returns),
                 "products": self._dataset_version_snapshot(products),
                 "config": self._model_config_snapshot(config, model_policy),

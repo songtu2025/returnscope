@@ -49,7 +49,7 @@ export function useTaskImport({
       dataset_version_id: result.version_id,
       title:
         current.title ||
-        `${source === "mysql" ? mysqlDraft?.store || "全部店铺" : "退货数据"} · 退货分析`,
+        `${source === "mysql" ? mysqlDraft?.store || "全部店铺" : "用户反馈数据"} · 用户语义分析`,
     }));
     setUploadOpen(false);
     onChanged();

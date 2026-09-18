@@ -24,6 +24,10 @@ from web_backend.database import Database
 from web_backend.security import utc_now
 
 CLASSIFICATION_STANDARD_RULES_MIGRATION = _defs.CLASSIFICATION_STANDARD_RULES_MIGRATION
+CLASSIFICATION_STANDARD_NAME_MIGRATION = _defs.CLASSIFICATION_STANDARD_NAME_MIGRATION
+CLASSIFICATION_STANDARD_CATEGORY_NAMES_MIGRATION = (
+    _defs.CLASSIFICATION_STANDARD_CATEGORY_NAMES_MIGRATION
+)
 CLASSIFICATION_STANDARD_SEED_MIGRATION = _defs.CLASSIFICATION_STANDARD_SEED_MIGRATION
 ClassificationStandardConflict = _defs.ClassificationStandardConflict
 ClassificationStandardNotFound = _defs.ClassificationStandardNotFound
@@ -76,6 +80,8 @@ class ClassificationStandardService(
                     ),
                 )
             self._migrate_taxonomy_validation_rules(connection)
+            self._migrate_gloves_standard_name(connection)
+            self._migrate_category_standard_names(connection)
             self._backfill_bindings(connection)
 
     def create_standard(

@@ -34,7 +34,7 @@ test("v2策略说明包含后端配置的事件、条件、责任主体与主因
   );
   expect(
     screen.getByText(
-      /发布阻断零容忍项：事件关系错误、条件遗漏、责任主体错误、主因错误，均须为 0/,
+      /自动检查重点项：事件关系错误、条件遗漏、责任主体错误、主因错误，均须为 0/,
     ),
   ).toBeVisible();
 });
@@ -229,10 +229,8 @@ function validationProps(overrides = {}) {
     sourceId: "source",
     sampleSize: 20,
     busy: false,
-    approvalBusy: false,
     dirty: false,
     onRun: vi.fn(),
-    onApprove: vi.fn(),
     onSelectRun: vi.fn(),
     onSourceChange: vi.fn(),
     onSampleSizeChange: vi.fn(),
@@ -303,7 +301,7 @@ test("样本验证呈现各运行状态并允许选择验证记录", async () =>
     />,
   );
   expect(screen.getByRole("heading", { name: "草稿 r3 验证结果" })).toBeVisible();
-  expect(screen.getByText("可用于发布")).toBeVisible();
+  expect(screen.getByText("自动检查通过")).toBeVisible();
 });
 
 test("完成态可筛选结果不同记录", async () => {
@@ -320,36 +318,6 @@ test("完成态可筛选结果不同记录", async () => {
   expect(screen.queryByText("普通未变化记录")).not.toBeInTheDocument();
 });
 
-test("人工确认要求勾选和非空结论并提交去除空白的内容", async () => {
-  const user = userEvent.setup();
-  const onApprove = vi.fn();
-  render(
-    <ClassificationStandardValidation
-      {...validationProps({
-        runs: [completedRun],
-        selectedRun: completedRun,
-        onApprove,
-      })}
-    />,
-  );
-  const submit = screen.getByRole("button", { name: "确认验证通过" });
-  const confirmation = screen.getByRole("checkbox", {
-    name: "我已审阅新旧版本差异和样本证据",
-  });
-  const note = screen.getByRole("textbox", { name: "验证结论" });
-
-  expect(submit).toBeDisabled();
-  await user.click(confirmation);
-  expect(submit).toBeDisabled();
-  await user.type(note, "   ");
-  expect(submit).toBeDisabled();
-  await user.type(note, "已核对样本和证据   ");
-  expect(submit).toBeEnabled();
-  await user.click(submit);
-
-  expect(onApprove).toHaveBeenCalledWith("completed-run", "已核对样本和证据");
-});
-
 test("质量问题按根因展开并显示事实状态和对象", async () => {
   const user = userEvent.setup();
   render(<ClassificationValidationQuality run={run} />);
@@ -364,7 +332,7 @@ test("质量问题按根因展开并显示事实状态和对象", async () => {
   expect(screen.getAllByText(/使用者 child/)[0]).toBeVisible();
 });
 
-test("门槛失败时不能显示确认通过按钮，即使调用错误数为零", () => {
+test("质量检查失败时提示人工判断而不是阻断发布", () => {
   render(
     <ClassificationStandardValidation
       draft={{ validation: { blocking: [] } }}
@@ -378,12 +346,12 @@ test("门槛失败时不能显示确认通过按钮，即使调用错误数为�
   expect(
     screen.queryByRole("button", { name: "确认验证通过" }),
   ).not.toBeInTheDocument();
-  expect(screen.getByText("自动质量门槛未通过，不能确认发布")).toBeVisible();
+  expect(screen.getByText("自动质量检查未通过，请人工判断是否发布")).toBeVisible();
 });
 
 test("旧运行无自动评分时不显示虚假通过", () => {
   render(<ClassificationValidationQuality run={{ items: [] }} />);
-  expect(screen.getByText("未配置自动质量门槛，保留人工确认流程")).toBeVisible();
+  expect(screen.getByText("未配置自动质量检查，请人工判断是否发布")).toBeVisible();
 });
 
 test("参考确认留空移至非阻断记录，真实漏标和未覆盖语义仍保留", () => {

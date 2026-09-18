@@ -4,9 +4,10 @@ import json
 from pathlib import Path
 from typing import Any, Callable
 
+from return_semantics.analysis_context import analysis_context_from_snapshot
 from return_semantics.data import ReturnDataset
-from return_semantics.exporter import REVIEW_STATUSES
-from return_semantics.schemas import ProcessingStatus, ValidatedClassification
+from return_semantics.schemas import ValidatedClassification
+from return_semantics.semantic_review import requires_system_rerun
 from web_backend.classification_result_service import (
     ClassificationResultService,
     ResultPublicationError,
@@ -115,6 +116,7 @@ class ResultPublicationMixin:
             str(snapshot.get("scope", {}).get("mode", "manual")),
             str(task["return_sha256"]),
             str(task["product_sha256"]),
+            analysis_context_from_snapshot(snapshot),
         )
         segment_dataset = self._subset_dataset(dataset, all_keys)
         dataset_keys = {
@@ -138,18 +140,7 @@ class ResultPublicationMixin:
     def _results_have_quality_errors(
         results: dict[str, ValidatedClassification],
     ) -> bool:
-        if any(
-            value.status == ProcessingStatus.MODEL_ERROR for value in results.values()
-        ):
-            return True
-        has_semantics = any(
-            value.semantic_units or value.unknown_semantics
-            for value in results.values()
-        )
-        has_review_result = any(
-            value.status.value in REVIEW_STATUSES for value in results.values()
-        )
-        return bool(results) and has_review_result and not has_semantics
+        return any(requires_system_rerun(value, "") for value in results.values())
 
     @staticmethod
     def _load_checkpoint(

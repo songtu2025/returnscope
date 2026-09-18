@@ -4,10 +4,11 @@ import threading
 from collections import Counter
 from dataclasses import is_dataclass, replace
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 import pandas as pd
 
+from return_semantics.analysis_context import analysis_context_from_snapshot
 from return_semantics.capabilities import load_capability_registry
 from return_semantics.category_pipeline import CategorySegmentRuntime
 from return_semantics.claims import NO_CLAIMS_VERSION, ClaimsResolver
@@ -17,6 +18,7 @@ from return_semantics.model_client import (
     JsonlCache,
     RequestRateLimiter,
     Sub2APIClient,
+    Sub2APISettings,
 )
 from return_semantics.pipeline import (
     ModelServiceUnavailable,
@@ -195,6 +197,7 @@ class AgentRunner(
                 routing={},
             )
         task = context.task
+        snapshot = json_value(task.get("snapshot_json"), {})
         return classify_comments(
             unique_comments=selected,
             taxonomy=taxonomy,
@@ -215,6 +218,7 @@ class AgentRunner(
             ),
             checkpoint=checkpoint,
             on_model_degraded=model_degraded,
+            analysis_context=analysis_context_from_snapshot(snapshot),
         )
 
     def _export_legacy_segment_result(
@@ -266,6 +270,9 @@ class AgentRunner(
         if source.get("kind") in {"raw_dataset", "review_file"}:
             config_version_id = str(source["config_version_id"])
             settings = self.config_service.build_model_settings(config_version_id)
+            model_policy = source.get("model_policy")
+            if model_policy is not None:
+                settings = self._settings_for_model_policy(settings, model_policy)
             claims = self.claims_resolver.resolve(
                 str(source.get("store") or ""),
                 source.get("listing"),
@@ -285,10 +292,19 @@ class AgentRunner(
                 claims=claims,
                 client=client,
                 cache=self._get_cache("classification-standard-validation"),
-                secondary_model=settings.secondary_model,
+                secondary_model=(
+                    str(model_policy["actual"]["review"]["model"])
+                    if model_policy and model_policy["actual"].get("review")
+                    else settings.secondary_model
+                ),
                 progress=progress,
                 model_policy_version=str(source["model_policy_version"]),
-                secondary_is_fallback=False,
+                secondary_is_fallback=bool(
+                    model_policy
+                    and model_policy["actual"].get("review")
+                    and model_policy["actual"]["review"].get("fallback_from")
+                    == "secondary"
+                ),
                 analysis_context=source.get("analysis_context", "returns"),
             )
         task = source["task"]
@@ -315,6 +331,7 @@ class AgentRunner(
             secondary_is_fallback=bool(
                 review and review.get("fallback_from") == "secondary"
             ),
+            analysis_context=analysis_context_from_snapshot(snapshot),
         )
 
     def _build_parent_result(
@@ -502,25 +519,11 @@ class AgentRunner(
             )
 
         actual = model_policy["actual"]
-        primary = actual["primary"]
-        first_pass = actual["first_pass"]
         review = actual.get("review")
-        if is_dataclass(base_settings):
-            segment_settings = replace(
-                base_settings,
-                model=str(primary["model"]),
-                reasoning_effort=str(primary["effort"]),
-                cheap_model=(
-                    str(first_pass["model"]) if first_pass["role"] == "cheap" else None
-                ),
-                cheap_reasoning_effort=str(first_pass["effort"]),
-                secondary_model=(str(review["model"]) if review else None),
-                secondary_reasoning_effort=(
-                    str(review["effort"]) if review else str(primary["effort"])
-                ),
-            )
-        else:
-            segment_settings = base_settings
+        segment_settings = self._settings_for_model_policy(
+            base_settings,
+            model_policy,
+        )
         expected_claims_version = (
             str(segment["claims_version"])
             if segment.get("claims_version")
@@ -545,4 +548,30 @@ class AgentRunner(
             claims=claims,
             secondary_model=(str(review["model"]) if review else None),
             model_policy=model_policy,
+        )
+
+    @staticmethod
+    def _settings_for_model_policy(
+        base_settings: Any,
+        model_policy: dict[str, Any],
+    ) -> Any:
+        if not is_dataclass(base_settings):
+            return base_settings
+        settings = cast(Sub2APISettings, base_settings)
+        actual = model_policy["actual"]
+        primary = actual["primary"]
+        first_pass = actual["first_pass"]
+        review = actual.get("review")
+        return replace(
+            settings,
+            model=str(primary["model"]),
+            reasoning_effort=str(primary["effort"]),
+            cheap_model=(
+                str(first_pass["model"]) if first_pass["role"] == "cheap" else None
+            ),
+            cheap_reasoning_effort=str(first_pass["effort"]),
+            secondary_model=(str(review["model"]) if review else None),
+            secondary_reasoning_effort=(
+                str(review["effort"]) if review else str(primary["effort"])
+            ),
         )

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from web_backend.api_schemas import (
     ClassificationStandardDraftActionRequest,
     ClassificationStandardDraftImportRequest,
+    ClassificationStandardDraftPublishRequest,
     ClassificationStandardDraftRevisionRequest,
     ClassificationStandardDraftUpdateRequest,
 )
@@ -103,12 +104,16 @@ class _DraftOperations:
     def publish_draft(
         self,
         draft_id: str,
-        payload: ClassificationStandardDraftActionRequest,
+        payload: ClassificationStandardDraftPublishRequest,
         user: dict[str, Any],
     ) -> dict[str, Any]:
         try:
             return self.service.publish_draft(
-                draft_id, payload.expected_revision, payload.reason, str(user["id"])
+                draft_id,
+                payload.expected_revision,
+                payload.reason,
+                str(user["id"]),
+                payload.validation_run_id,
             )
         except ValueError as exc:
             raise self.handle_error(exc) from exc
@@ -183,7 +188,7 @@ def register_draft_routes(
     @router.post("/api/classification-standard-drafts/{draft_id}/publish")
     def publish_draft(
         draft_id: str,
-        payload: ClassificationStandardDraftActionRequest,
+        payload: ClassificationStandardDraftPublishRequest,
         user: User,
     ) -> dict[str, Any]:
         return operations.publish_draft(draft_id, payload, user)

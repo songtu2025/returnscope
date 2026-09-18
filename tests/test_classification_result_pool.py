@@ -13,7 +13,11 @@ from fastapi.testclient import TestClient
 from return_semantics.capabilities import load_capability_registry
 from return_semantics.data import load_return_dataset, load_return_dataset_auto
 from return_semantics.pipeline import PipelineRun
-from return_semantics.schemas import ProcessingStatus, ValidatedClassification
+from return_semantics.schemas import (
+    ProcessingStatus,
+    ReviewDiagnostic,
+    ValidatedClassification,
+)
 from return_semantics.task_plan import build_category_execution_plan
 from web_backend.agent_runner import AgentRunner
 from web_backend.analysis_service import AnalysisService
@@ -383,6 +387,7 @@ def test_publish_preserves_product_snapshot_and_duplicate_orders(
     )
 
     assert version["unit_count"] == 1
+    assert version["analysis_context"] == "returns"
     assert version["record_count"] == 3
     assert records["total"] == 3
     assert {item["classification_key"] for item in records["items"]} == {context.key}
@@ -396,6 +401,19 @@ def test_publish_preserves_product_snapshot_and_duplicate_orders(
         "version-returns:3",
         "version-returns:4",
     ]
+
+
+def test_result_version_exposes_user_feedback_context(tmp_path: Path) -> None:
+    context = _seed_result_context(tmp_path)
+    with context.database.transaction() as connection:
+        connection.execute(
+            "UPDATE tasks SET snapshot_json = ? WHERE id = ?",
+            (json_text({"analysis_context": "user_feedback"}), context.task_id),
+        )
+
+    version = _publish(context)
+
+    assert version["analysis_context"] == "user_feedback"
 
 
 def test_agent_runner_completion_publishes_result_reference(tmp_path: Path) -> None:
@@ -534,6 +552,163 @@ def test_publish_is_idempotent_and_rejects_hash_conflict(tmp_path: Path) -> None
             """
         ).fetchone()
     assert event is not None
+
+
+def test_system_failure_retry_publishes_new_version_without_overwrite(
+    tmp_path: Path,
+) -> None:
+    context = _seed_result_context(tmp_path)
+    service = ClassificationResultService(context.database)
+    original = context.results[context.key]
+    system_failure = original.model_copy(
+        update={
+            "status": ProcessingStatus.MANUAL_REVIEW,
+            "review_reasons": ["二次模型调用失败: 请求超时"],
+            "review_diagnostics": [
+                ReviewDiagnostic(
+                    code="SECONDARY_MODEL_TIMEOUT",
+                    detail="请求超时",
+                    action="SYSTEM_RERUN",
+                )
+            ],
+        }
+    )
+    first = service.publish_v1(
+        task_id=context.task_id,
+        segment_id=context.segment_id,
+        dataset=context.dataset,
+        results={context.key: system_failure},
+        taxonomy=context.taxonomy,
+        segment_status="completed_with_errors",
+        progress_total=1,
+        model_calls=1,
+        cache_hits=0,
+        checkpoint_path="checkpoint.json",
+        legacy_result_version=1,
+    )
+    assert first["quality_status"] == "unusable"
+
+    task_service = TaskService(context.database)
+    current = task_service.get(context.task_id)
+    assert current is not None
+    current_segment = next(
+        value for value in current["segments"] if value["id"] == context.segment_id
+    )
+    assert current_segment["system_retry_available"] is True
+    assert current_segment["system_failure_count"] == 1
+    listed = task_service.list()
+    listed_segment = next(
+        value
+        for value in listed[0]["segments"]
+        if value["agent_key"] == current_segment["agent_key"]
+    )
+    assert listed_segment["system_retry_available"] is True
+    assert listed_segment["system_failure_count"] == 1
+    retried = task_service.retry_segment(
+        task_id=context.task_id,
+        segment_key="footwear",
+        actor_id="user-1",
+        expected_revision=int(current["revision"]),
+        reason="系统异常已恢复",
+    )
+    retry_segment = retried["segments"][0]
+    assert retry_segment["status"] == "retry_pending"
+    with context.database.transaction(immediate=True) as connection:
+        connection.execute(
+            "UPDATE task_segments SET status = 'running' WHERE id = ?",
+            (context.segment_id,),
+        )
+
+    second = service.publish_v1(
+        task_id=context.task_id,
+        segment_id=context.segment_id,
+        dataset=context.dataset,
+        results=context.results,
+        taxonomy=context.taxonomy,
+        segment_status="completed",
+        progress_total=1,
+        model_calls=2,
+        cache_hits=0,
+        checkpoint_path="checkpoint.json",
+        legacy_result_version=2,
+    )
+
+    assert second["version"] == 2
+    assert second["parent_version_id"] == first["version_id"]
+    assert second["quality_status"] == "ready"
+    repeated = service.publish_v1(
+        task_id=context.task_id,
+        segment_id=context.segment_id,
+        dataset=context.dataset,
+        results=context.results,
+        taxonomy=context.taxonomy,
+        segment_status="completed",
+        progress_total=1,
+        model_calls=2,
+        cache_hits=0,
+        checkpoint_path="checkpoint.json",
+        legacy_result_version=2,
+    )
+    assert repeated["version_id"] == second["version_id"]
+    with context.database.connect() as connection:
+        versions = connection.execute(
+            """
+            SELECT id, version_no, parent_version_id, version_reason
+            FROM classification_result_versions
+            ORDER BY version_no
+            """
+        ).fetchall()
+        audit = connection.execute(
+            """
+            SELECT after_json FROM audit_logs
+            WHERE action = 'segment_retry' ORDER BY created_at DESC LIMIT 1
+            """
+        ).fetchone()
+    assert [int(value["version_no"]) for value in versions] == [1, 2]
+    assert versions[1]["parent_version_id"] == versions[0]["id"]
+    assert versions[1]["version_reason"] == "系统异常局部重跑"
+    assert json_value(audit["after_json"], {})["system_rerun_count"] == 1
+
+
+def test_published_business_review_segment_cannot_retry(tmp_path: Path) -> None:
+    context = _seed_result_context(tmp_path)
+    business_review = context.results[context.key].model_copy(
+        update={
+            "status": ProcessingStatus.MANUAL_REVIEW,
+            "review_reasons": ["语义边界需人工确认"],
+        }
+    )
+    version = ClassificationResultService(context.database).publish_v1(
+        task_id=context.task_id,
+        segment_id=context.segment_id,
+        dataset=context.dataset,
+        results={context.key: business_review},
+        taxonomy=context.taxonomy,
+        segment_status="completed_with_errors",
+        progress_total=1,
+        model_calls=1,
+        cache_hits=0,
+        checkpoint_path="checkpoint.json",
+        legacy_result_version=1,
+    )
+    assert version["quality_status"] == "review_required"
+    task_service = TaskService(context.database)
+    current = task_service.get(context.task_id)
+    assert current is not None
+    current_segment = next(
+        value for value in current["segments"] if value["id"] == context.segment_id
+    )
+    assert current_segment["system_retry_available"] is False
+    assert current_segment["system_failure_count"] == 0
+
+    with pytest.raises(ValueError, match="只有业务复核项"):
+        task_service.retry_segment(
+            task_id=context.task_id,
+            segment_key="footwear",
+            actor_id="user-1",
+            expected_revision=int(current["revision"]),
+            reason="尝试重跑业务复核",
+        )
 
 
 def test_publication_failure_rolls_back_all_result_data(

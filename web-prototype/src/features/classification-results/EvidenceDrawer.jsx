@@ -11,11 +11,13 @@ import { SemanticResultPanel } from "./SemanticResultPanel";
 /**
  * @param {{
  *   record: ClassificationResultRecord,
+ *   analysisContext: string,
  *   onClose: () => void,
  *   returnFocusRef: { current: HTMLElement | null }
  * }} props
  */
-export function EvidenceDrawer({ record, onClose, returnFocusRef }) {
+export function EvidenceDrawer({ record, analysisContext, onClose, returnFocusRef }) {
+  const isUserFeedback = analysisContext === "user_feedback";
   const classification = record.classification ?? {};
   const drawerRef = useRef(/** @type {HTMLElement | null} */ (null));
   const closeButtonRef = useRef(/** @type {HTMLButtonElement | null} */ (null));
@@ -91,7 +93,10 @@ export function EvidenceDrawer({ record, onClose, returnFocusRef }) {
           <DrawerField label="店铺/站点" value={record.store_site} />
           <DrawerField label="Listing" value={record.listing} />
           <DrawerField label="产品名称" value={record.product_name} />
-          <DrawerField label="退货SKU（MSKU）" value={record.source_sku} />
+          <DrawerField
+            label={isUserFeedback ? "来源SKU（MSKU）" : "退货SKU（MSKU）"}
+            value={record.source_sku}
+          />
           <DrawerField label="匹配MSKU" value={record.matched_msku} />
           <DrawerField label="产品SKU" value={record.product_sku} />
           <DrawerField
@@ -101,21 +106,32 @@ export function EvidenceDrawer({ record, onClose, returnFocusRef }) {
         </section>
 
         <section className="drawer-section">
-          <b>退货原文</b>
-          <DrawerField label="Amazon原因" value={record.reason} />
-          <blockquote>{record.comment || "未提供退货评论"}</blockquote>
+          <b>{isUserFeedback ? "用户反馈原文" : "退货原文"}</b>
+          <DrawerField
+            label={isUserFeedback ? "反馈标题" : "Amazon原因"}
+            value={record.reason}
+          />
+          <blockquote>
+            {record.comment || (isUserFeedback ? "未提供反馈正文" : "未提供退货评论")}
+          </blockquote>
         </section>
 
         <section className="drawer-section">
           <b>业务标签</b>
           <DrawerField
-            label="主要问题"
+            label={isUserFeedback ? "主要问题（如有）" : "主要问题"}
             value={resultLabelText(record, classification.primary_label_codes)}
           />
           <DrawerField
             label="问题标签"
             value={resultLabelText(record, classification.problem_label_codes)}
           />
+          {isUserFeedback && (
+            <DrawerField
+              label="正向标签"
+              value={resultLabelText(record, classification.positive_label_codes)}
+            />
+          )}
           <DrawerField label="处理状态" value={record.processing_status} />
           <DrawerField
             label="复核原因"

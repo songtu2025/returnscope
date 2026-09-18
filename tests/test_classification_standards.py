@@ -13,12 +13,15 @@ from fastapi.testclient import TestClient
 from return_semantics.prompt import recognition_fingerprint
 from return_semantics.schemas import TaxonomyConfig
 from web_backend.classification_standard_service import (
+    CLASSIFICATION_STANDARD_CATEGORY_NAMES_MIGRATION,
+    CLASSIFICATION_STANDARD_NAME_MIGRATION,
     CLASSIFICATION_STANDARD_RULES_MIGRATION,
     ClassificationStandardConflict,
     ClassificationStandardNotFound,
     ClassificationStandardService,
     ClassificationStandardValidationError,
 )
+from web_backend.classification_validation_quality import FACT_QUALITY_POLICY
 from web_backend.database import Database
 from web_backend.routers.classification_standards import (
     create_classification_standard_router,
@@ -166,10 +169,118 @@ def test_existing_category_config_is_imported_as_published_standards(
         "headwear",
     }
     assert all(item["status"] == "active" for item in standards)
+    assert {item["name"] for item in standards} == {
+        "眼镜用户反馈语义标准",
+        "鞋履用户反馈语义标准",
+        "手套用户反馈语义标准",
+        "帽类用户反馈语义标准",
+    }
     assert migration is not None
     assert migration["migration_id"] == ("20260824_01_seed_classification_standards")
     assert migration["status"] == "applied"
     assert len(migration["checksum"]) == 64
+
+
+def test_legacy_gloves_standard_name_is_migrated_without_changing_version(
+    tmp_path: Path,
+) -> None:
+    service = _service(tmp_path)
+    gloves = next(item for item in service.list() if item["standard_key"] == "gloves")
+    version_id = gloves["standard_version_id"]
+    draft = service.create_draft(gloves["id"], "user-1")
+    with service.database.transaction() as connection:
+        connection.execute(
+            """
+            UPDATE classification_standards
+            SET name = '手套退货问题标准' WHERE id = ?
+            """,
+            (gloves["id"],),
+        )
+        snapshot = draft["snapshot"]
+        snapshot["name"] = "手套退货问题标准"
+        connection.execute(
+            """
+            UPDATE classification_standard_drafts
+            SET snapshot_json = ? WHERE id = ?
+            """,
+            (json.dumps(snapshot, ensure_ascii=False), draft["id"]),
+        )
+        connection.execute(
+            "DELETE FROM app_migrations WHERE migration_id = ?",
+            (CLASSIFICATION_STANDARD_NAME_MIGRATION,),
+        )
+
+    restored = ClassificationStandardService(service.database)
+    migrated = restored.get(gloves["id"])
+    migrated_draft = restored.get_draft(draft["id"])
+    with service.database.connect() as connection:
+        migration = connection.execute(
+            "SELECT status FROM app_migrations WHERE migration_id = ?",
+            (CLASSIFICATION_STANDARD_NAME_MIGRATION,),
+        ).fetchone()
+
+    assert migrated["name"] == "手套用户反馈语义标准"
+    assert migrated["standard_version_id"] == version_id
+    assert migrated_draft["snapshot"]["name"] == "手套用户反馈语义标准"
+    assert migration["status"] == "applied"
+
+
+def test_legacy_category_standard_names_are_migrated_without_changing_versions(
+    tmp_path: Path,
+) -> None:
+    service = _service(tmp_path)
+    standards = {
+        item["standard_key"]: item
+        for item in service.list()
+        if item["standard_key"] != "gloves"
+    }
+    legacy_names = {
+        "eyewear": "眼镜退货问题标准",
+        "footwear": "鞋履退货问题标准",
+        "headwear": "帽类退货问题标准",
+    }
+    drafts = {
+        key: service.create_draft(item["id"], "user-1")
+        for key, item in standards.items()
+    }
+    with service.database.transaction() as connection:
+        for key, standard in standards.items():
+            connection.execute(
+                "UPDATE classification_standards SET name = ? WHERE id = ?",
+                (legacy_names[key], standard["id"]),
+            )
+            snapshot = drafts[key]["snapshot"]
+            snapshot["name"] = legacy_names[key]
+            connection.execute(
+                """
+                UPDATE classification_standard_drafts
+                SET snapshot_json = ? WHERE id = ?
+                """,
+                (json.dumps(snapshot, ensure_ascii=False), drafts[key]["id"]),
+            )
+        connection.execute(
+            "DELETE FROM app_migrations WHERE migration_id = ?",
+            (CLASSIFICATION_STANDARD_CATEGORY_NAMES_MIGRATION,),
+        )
+
+    restored = ClassificationStandardService(service.database)
+    expected_names = {
+        "eyewear": "眼镜用户反馈语义标准",
+        "footwear": "鞋履用户反馈语义标准",
+        "headwear": "帽类用户反馈语义标准",
+    }
+    for key, standard in standards.items():
+        migrated = restored.get(standard["id"])
+        migrated_draft = restored.get_draft(drafts[key]["id"])
+        assert migrated["name"] == expected_names[key]
+        assert migrated["standard_version_id"] == standard["standard_version_id"]
+        assert migrated_draft["snapshot"]["name"] == expected_names[key]
+    with service.database.connect() as connection:
+        migration = connection.execute(
+            "SELECT status FROM app_migrations WHERE migration_id = ?",
+            (CLASSIFICATION_STANDARD_CATEGORY_NAMES_MIGRATION,),
+        ).fetchone()
+    assert migration["status"] == "applied"
 
 
 def test_existing_standards_are_baselined_without_reimport(tmp_path: Path) -> None:
@@ -472,7 +583,45 @@ def test_candidate_validation_keeps_v1_and_v2_policy_boundaries(
     ]
 
 
-def test_publish_requires_current_sample_validation(tmp_path: Path) -> None:
+def test_publish_allows_direct_release_without_sample_validation(
+    tmp_path: Path,
+) -> None:
+    service = _service(tmp_path)
+    standard = next(
+        item for item in service.list() if item["standard_key"] == "eyewear"
+    )
+    draft = service.create_draft(standard["id"], "user-1")
+    content = deepcopy(draft["content"])
+    content["product_context"] = "儿童及骑行眼镜"
+    updated = service.update_draft(
+        draft["id"],
+        draft["revision"],
+        content,
+        "调整适用范围",
+        "user-1",
+    )
+
+    published = service.publish_draft(
+        draft["id"],
+        updated["revision"],
+        "直接发布新版本",
+        "user-1",
+    )
+
+    assert published["version_no"] == 2
+    with service.database.connect() as connection:
+        audit = connection.execute(
+            "SELECT after_json FROM audit_logs WHERE action = 'publish' "
+            "ORDER BY created_at DESC, id DESC LIMIT 1"
+        ).fetchone()
+    after = json.loads(audit["after_json"])
+    assert after["publication_mode"] == "direct"
+    assert after["validation_run_id"] is None
+
+
+def test_publish_rejects_invalid_test_evidence_but_keeps_direct_path(
+    tmp_path: Path,
+) -> None:
     service = _service(tmp_path)
     standard = next(
         item for item in service.list() if item["standard_key"] == "eyewear"
@@ -492,12 +641,19 @@ def test_publish_requires_current_sample_validation(tmp_path: Path) -> None:
         service.publish_draft(
             draft["id"],
             updated["revision"],
-            "发布新版本",
+            "错误地关联测试",
             "user-1",
+            "missing-validation-run",
         )
-    assert exc_info.value.validation["blocking"] == [
-        "请先完成并人工确认当前草稿修订的样本验证"
-    ]
+    assert exc_info.value.validation["blocking"] == ["所选测试记录不存在，请刷新后重试"]
+
+    published = service.publish_draft(
+        draft["id"],
+        updated["revision"],
+        "改为直接发布",
+        "user-1",
+    )
+    assert published["version_no"] == 2
 
 
 def test_glove_draft_accepts_detailed_hand_parts(tmp_path: Path) -> None:
@@ -891,6 +1047,17 @@ def test_draft_api_supports_edit_validation_and_conflict(tmp_path: Path) -> None
         assert publish_response.status_code == 400
         assert publish_response.json()["detail"] == "变更说明不能为空"
 
+        direct_publish_response = client.post(
+            f"/api/classification-standard-drafts/{draft['id']}/publish",
+            json={
+                "expected_revision": updated["revision"],
+                "reason": "用户确认直接发布",
+                "validation_run_id": None,
+            },
+        )
+        assert direct_publish_response.status_code == 200
+        assert direct_publish_response.json()["version_no"] == 2
+
 
 def test_published_version_export_can_only_import_into_draft(
     tmp_path: Path,
@@ -991,7 +1158,9 @@ def test_draft_validation_reports_blank_business_fields(tmp_path: Path) -> None:
     )
 
 
-def test_publish_rechecks_approved_sample_for_taxonomy_leakage(tmp_path: Path) -> None:
+def test_tested_publish_records_quality_result_without_turning_it_into_a_gate(
+    tmp_path: Path,
+) -> None:
     service = _service(tmp_path)
     standard = next(
         item for item in service.list() if item["standard_key"] == "eyewear"
@@ -1019,10 +1188,20 @@ def test_publish_rechecks_approved_sample_for_taxonomy_leakage(tmp_path: Path) -
     )
     run_id = _mark_sample_validation_ready(service, updated)
     with service.database.transaction() as connection:
+        source = json.loads(
+            connection.execute(
+                "SELECT source_json FROM classification_standard_validation_runs "
+                "WHERE id = ?",
+                (run_id,),
+            ).fetchone()["source_json"]
+        )
+        source["quality_policy"] = FACT_QUALITY_POLICY
         connection.execute(
-            "UPDATE classification_standard_validation_runs SET sample_json = ? "
+            "UPDATE classification_standard_validation_runs "
+            "SET source_json = ?, sample_json = ? "
             "WHERE id = ?",
             (
+                json.dumps(source),
                 json.dumps(
                     [
                         {
@@ -1035,13 +1214,26 @@ def test_publish_rechecks_approved_sample_for_taxonomy_leakage(tmp_path: Path) -
             ),
         )
 
-    with pytest.raises(ClassificationStandardValidationError) as exc_info:
-        service.publish_draft(
-            updated["id"],
-            updated["revision"],
-            "发布前复查",
-            "user-1",
-        )
+    published = service.publish_draft(
+        updated["id"],
+        updated["revision"],
+        "验收测试后发布",
+        "user-1",
+        run_id,
+    )
 
-    assert "数据泄漏" in exc_info.value.validation["blocking"][0]
-    assert "review-1234-abcd" in exc_info.value.validation["blocking"][0]
+    with service.database.connect() as connection:
+        validation = connection.execute(
+            "SELECT published_version_id FROM classification_standard_validation_runs "
+            "WHERE id = ?",
+            (run_id,),
+        ).fetchone()
+        audit = connection.execute(
+            "SELECT after_json FROM audit_logs WHERE action = 'publish' "
+            "ORDER BY created_at DESC, id DESC LIMIT 1"
+        ).fetchone()
+    after = json.loads(audit["after_json"])
+    assert validation["published_version_id"] == published["standard_version_id"]
+    assert after["publication_mode"] == "validated"
+    assert after["validation_run_id"] == run_id
+    assert after["validation_quality_passed"] is False

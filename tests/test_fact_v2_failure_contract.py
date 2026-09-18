@@ -13,6 +13,7 @@ from return_semantics.pipeline import classify_comments
 from return_semantics.schemas import (
     ListingClaimsConfig,
     ProcessingStatus,
+    ReviewDiagnostic,
     TaxonomyConfig,
 )
 from web_backend.agent_runner import AgentRunner
@@ -161,8 +162,34 @@ def test_fact_v2_checkpoint_resume_keeps_success_and_excludes_model_error(
     assert AgentRunner._results_have_quality_errors(run.classifications)
     assert [len(item.classifications) for item in checkpoint_snapshots] == [1, 2]
 
+    business_review = successful.model_copy(
+        update={
+            "classification_key": "key-3",
+            "status": ProcessingStatus.MANUAL_REVIEW,
+            "review_reasons": ["语义边界需人工确认"],
+        }
+    )
+    secondary_failure = successful.model_copy(
+        update={
+            "classification_key": "key-4",
+            "status": ProcessingStatus.MANUAL_REVIEW,
+            "review_reasons": ["二次模型调用失败: 请求超时"],
+            "review_diagnostics": [
+                ReviewDiagnostic(
+                    code="SECONDARY_MODEL_TIMEOUT",
+                    detail="请求超时",
+                    action="SYSTEM_RERUN",
+                )
+            ],
+        }
+    )
+    checkpoint_results = {
+        **run.classifications,
+        "key-3": business_review,
+        "key-4": secondary_failure,
+    }
     checkpoint_path = tmp_path / "classifications.json"
-    AgentRunner._write_checkpoint(checkpoint_path, run.classifications)
+    AgentRunner._write_checkpoint(checkpoint_path, checkpoint_results)
     runner = object.__new__(AgentRunner)
     runner.settings = SimpleNamespace(data_dir=tmp_path)
     context = runner._segment_run_context(
@@ -177,8 +204,9 @@ def test_fact_v2_checkpoint_resume_keeps_success_and_excludes_model_error(
         },
     )
 
-    assert set(context.existing_results) == {"key-1"}
+    assert set(context.existing_results) == {"key-1", "key-3"}
     assert context.existing_results["key-1"] == successful
+    assert context.existing_results["key-3"] == business_review
     assert context.runtime_totals() == (
         run.model_calls,
         run.cache_hits,

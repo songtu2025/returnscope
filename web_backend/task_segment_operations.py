@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from web_backend.classification_result_queries import system_rerun_count
 from web_backend.common import json_text, json_value
 from web_backend.database import Database
 from web_backend.security import utc_now
@@ -13,6 +14,18 @@ from web_backend.task_contracts import (
     TaskRevisionConflict,
 )
 from web_backend.task_state import summarize_task_status
+
+
+def _retry_system_failure_count(connection: Any, segment: Any) -> int:
+    if (
+        segment["status"] != "completed_with_errors"
+        or segment["result_version_id"] is None
+    ):
+        return 0
+    count = system_rerun_count(connection, str(segment["result_version_id"]))
+    if not count:
+        raise ValueError("该片段只有业务复核项，请通过复核批次生成新版本")
+    return count
 
 
 class TaskSegmentOperationsMixin:
@@ -150,11 +163,7 @@ class TaskSegmentOperationsMixin:
             allowed = {"failed", "completed_with_errors", "not_started"}
             if segment["status"] not in allowed:
                 raise ValueError("该片段当前状态不允许重试")
-            if (
-                segment["status"] == "completed_with_errors"
-                and segment["result_version_id"] is not None
-            ):
-                raise ValueError("该片段已有分类结果版本，请通过复核批次生成新版本")
+            system_failure_count = _retry_system_failure_count(connection, segment)
             if segment["status"] == "not_started":
                 snapshot = json_value(task["snapshot_json"], {})
                 policy = snapshot.get("execution_plan", {}).get(
@@ -200,6 +209,10 @@ class TaskSegmentOperationsMixin:
                 "before_status": segment["status"],
                 "after_status": "retry_pending",
                 "reason": clean_reason,
+                "retry_scope": (
+                    "system_failures_only" if system_failure_count else "full_segment"
+                ),
+                "system_rerun_count": system_failure_count,
             }
             connection.execute(
                 """
@@ -224,6 +237,8 @@ class TaskSegmentOperationsMixin:
                     "segment_key": segment_key,
                     "status": "retry_pending",
                     "reason": clean_reason,
+                    "retry_scope": event_data["retry_scope"],
+                    "system_rerun_count": system_failure_count,
                 },
                 now,
             )

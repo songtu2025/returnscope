@@ -51,7 +51,7 @@ def _inspect_returns(path: Path) -> tuple[pd.DataFrame, dict[str, Any]]:
     frame = read_return_file(path)
     missing = [column for column in RETURN_COLUMNS if column not in frame.columns]
     if missing:
-        raise ValueError(f"退货数据缺少字段：{', '.join(missing)}")
+        raise ValueError(f"用户反馈数据缺少字段：{', '.join(missing)}")
     valid_comments = int(frame["customer-comments"].fillna("").str.strip().ne("").sum())
     stores = (
         frame[RETURN_STORE_COLUMN].fillna("").astype(str).str.strip()
@@ -246,6 +246,6 @@ def _return_source_key(stores: list[str]) -> str:
 def _return_source_name(stores: list[str], original_name: str) -> str:
     if stores:
         labels = [re.sub(r"[:_/\\-]+", " ", value).strip() for value in stores]
-        return f"{'、'.join(labels)} 退货数据"
+        return f"{'、'.join(labels)} 用户反馈数据"
     stem = re.sub(r"[_-]+", " ", Path(original_name).stem).strip()
-    return f"{stem or '未命名'} 退货数据"
+    return f"{stem or '未命名'} 用户反馈数据"

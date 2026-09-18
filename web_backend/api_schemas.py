@@ -212,6 +212,7 @@ class ClassificationResultVersionResponse(CompatibleResponse):
     inherited_unit_count: int
     source_task_id: str
     source_segment_id: str
+    analysis_context: Literal["returns", "review", "user_feedback"]
     dataset_version_id: str
     product_version_id: str
     store_site: str | None
@@ -696,6 +697,12 @@ class ClassificationStandardDraftRevisionRequest(BaseModel):
 class ClassificationStandardDraftActionRequest(BaseModel):
     expected_revision: int = Field(ge=1)
     reason: str = Field(min_length=1, max_length=500)
+
+
+class ClassificationStandardDraftPublishRequest(
+    ClassificationStandardDraftActionRequest
+):
+    validation_run_id: str | None = Field(default=None, min_length=1, max_length=120)
 
 
 class ClassificationStandardSampleValidationRequest(BaseModel):
