@@ -26,10 +26,16 @@ from return_semantics.fact_extraction import (
     coverage_audit_messages as coverage_audit_messages,
 )
 from return_semantics.fact_extraction import (
+    coverage_correction_messages as coverage_correction_messages,
+)
+from return_semantics.fact_extraction import (
     extraction_messages as extraction_messages,
 )
 from return_semantics.fact_extraction import (
     merge_coverage_facts as merge_coverage_facts,
+)
+from return_semantics.fact_extraction import (
+    validate_coverage_correction as validate_coverage_correction,
 )
 from return_semantics.fact_mapping import (
     EvidenceLabelAdjudication as EvidenceLabelAdjudication,
@@ -147,6 +153,8 @@ def _audit_fact_coverage(
     metrics["coverage_audit_added_facts"] = 0
     metrics["coverage_audit_rejected_facts"] = 0
     metrics["coverage_audit_failures"] = 0
+    metrics["coverage_audit_repair_calls"] = 0
+    metrics["coverage_audit_repaired_facts"] = 0
     try:
         response = call(coverage_audit_messages(comment, facts, taxonomy))
         merged = merge_coverage_facts(
@@ -171,10 +179,57 @@ def _audit_fact_coverage(
                 )
             ],
         )
+    if merged.rejections:
+        metrics["coverage_audit_repair_calls"] = 1
+        try:
+            response = call(
+                coverage_correction_messages(
+                    comment,
+                    merged.facts,
+                    merged.rejections,
+                    taxonomy,
+                )
+            )
+            validate_coverage_correction(response, merged.rejected)
+            repaired = merge_coverage_facts(
+                merged.facts,
+                response,
+                comment=comment,
+                taxonomy=taxonomy,
+            )
+        except FactPipelineCancelled:
+            raise
+        except Exception as exc:
+            merged = CoverageMergeResult(
+                facts=merged.facts,
+                added=merged.added,
+                rejected=merged.rejected,
+                diagnostics=[
+                    diagnostic.model_copy(
+                        update={
+                            "detail": (
+                                f"{diagnostic.detail}；覆盖审计自动修复未完成：{exc}"
+                            )
+                        }
+                    )
+                    for diagnostic in merged.diagnostics
+                ],
+                rejections=merged.rejections,
+            )
+        else:
+            metrics["coverage_audit_repaired_facts"] = repaired.added
+            merged = CoverageMergeResult(
+                facts=repaired.facts,
+                added=len(repaired.facts) - len(facts),
+                rejected=repaired.rejected,
+                diagnostics=repaired.diagnostics,
+                rejections=repaired.rejections,
+            )
+
     metrics["coverage_audit_added_facts"] = merged.added
     metrics["coverage_audit_rejected_facts"] = merged.rejected
     if merged.rejected:
-        metrics["coverage_audit_failures"] += 1
+        metrics["coverage_audit_failures"] = 1
     return merged
 
 

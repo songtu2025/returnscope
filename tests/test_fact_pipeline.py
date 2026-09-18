@@ -12,8 +12,12 @@ from return_semantics.fact_pipeline import (
     compile_evidence_label_adjudications,
     compile_fact_classification,
 )
-from return_semantics.model_client import JsonlCache, JsonModelCallResult
-from return_semantics.pipeline import _call_with_cache
+from return_semantics.model_client import (
+    JsonlCache,
+    JsonModelCallResult,
+    ModelCallResult,
+)
+from return_semantics.pipeline import _call_with_cache, build_cache_key
 from return_semantics.schemas import (
     ExtractedFact,
     FactMapping,
@@ -136,12 +140,25 @@ class FakeJsonClient:
 
 
 class CoverageJsonClient(FakeJsonClient):
-    def __init__(self, payloads, coverage_payload):
+    def __init__(self, payloads, coverage_payload, coverage_repair_payload=None):
         super().__init__(payloads)
         self.coverage_payload = coverage_payload
+        self.coverage_repair_payload = coverage_repair_payload
 
     def generate_json(self, messages, **kwargs):
         payload = json.loads(messages[1]["content"])
+        if "rejected_facts" in payload:
+            self.messages.append(messages)
+            repair_payload = self.coverage_repair_payload
+            if repair_payload is None:
+                repair_payload = {
+                    "facts": [item["fact"] for item in payload["rejected_facts"]]
+                }
+            return JsonModelCallResult(
+                repair_payload,
+                "test",
+                {"total_tokens": 5},
+            )
         if "existing_facts" in payload:
             self.messages.append(messages)
             return JsonModelCallResult(
@@ -283,6 +300,80 @@ def test_coverage_audit_isolates_invalid_item_and_keeps_valid_item(fact_taxonomy
     assert diagnostic.code == "COVERAGE_AUDIT_FAILED"
     assert diagnostic.evidence_text == "missing"
     assert diagnostic.action == "SYSTEM_RERUN"
+
+
+def test_coverage_audit_repairs_only_rejected_causal_fact(fact_taxonomy):
+    existing = make_fact()
+    invalid = make_fact(
+        "b",
+        opinion="商品表现不佳",
+        sentiment="NEGATIVE",
+        evidence_spans=[{"text": "cold"}],
+    ).model_dump(mode="json")
+    invalid["causal_attribution_reason"] = "天气寒冷"
+    repaired = {**invalid, "causal_attribution_reason": ""}
+    client = CoverageJsonClient(
+        [
+            {"facts": [existing.model_dump(mode="json")]},
+            {
+                "mappings": [
+                    {"fact_id": "a", "label_codes": ["WARM"]},
+                    {"fact_id": "b", "label_codes": ["COLD"]},
+                ]
+            },
+        ],
+        {"facts": [invalid]},
+        {"facts": [repaired]},
+    )
+
+    result = classify_facts(
+        comment="warm and cold",
+        taxonomy=fact_taxonomy,
+        client=client,
+        model_name="test",
+        reasoning_effort="low",
+    )
+
+    assert [fact.fact_id for fact in result.classification.extracted_facts] == [
+        "a",
+        "b",
+    ]
+    assert result.metrics["coverage_audit_repair_calls"] == 1
+    assert result.metrics["coverage_audit_repaired_facts"] == 1
+    assert result.metrics["coverage_audit_rejected_facts"] == 0
+    assert result.metrics["coverage_audit_failures"] == 0
+    assert result.classification.review_diagnostics == []
+    correction = json.loads(client.messages[2][1]["content"])
+    assert [item["fact"]["fact_id"] for item in correction["rejected_facts"]] == ["b"]
+    assert [fact["fact_id"] for fact in correction["existing_facts"]] == ["a"]
+
+
+def test_coverage_repair_cannot_drop_rejected_fact(fact_taxonomy):
+    existing = make_fact()
+    invalid = make_fact("b").model_dump(mode="json")
+    invalid["causal_attribution_reason"] = "缺少对应归属"
+    client = CoverageJsonClient(
+        [
+            {"facts": [existing.model_dump(mode="json")]},
+            {"mappings": [{"fact_id": "a", "label_codes": ["WARM"]}]},
+        ],
+        {"facts": [invalid]},
+        {"facts": []},
+    )
+
+    result = classify_facts(
+        comment="warm",
+        taxonomy=fact_taxonomy,
+        client=client,
+        model_name="test",
+        reasoning_effort="low",
+    )
+
+    assert result.metrics["coverage_audit_repair_calls"] == 1
+    assert result.metrics["coverage_audit_repaired_facts"] == 0
+    assert result.metrics["coverage_audit_rejected_facts"] == 1
+    assert result.metrics["coverage_audit_failures"] == 1
+    assert result.classification.review_diagnostics[0].action == "SYSTEM_RERUN"
 
 
 def test_coverage_audit_failure_is_system_diagnostic(fact_taxonomy):
@@ -652,6 +743,73 @@ def test_two_calls_map_only_selected_branch_and_cache(fact_taxonomy, tmp_path):
     assert result.usage == {"total_tokens": 20}
     assert result.metrics["fact_model_calls"] == 4
     assert result.classification.extracted_facts == [fact]
+
+
+def test_system_rerun_cache_entry_is_ignored_and_replaced(fact_taxonomy, tmp_path):
+    cache = JsonlCache(tmp_path / "cache.jsonl")
+    claims = ListingClaimsConfig(version="none", claims=[])
+    cache_key = build_cache_key(
+        comment="warm",
+        model_name="test",
+        provider_name="test",
+        taxonomy_version=fact_taxonomy.version,
+        claims_version=claims.version,
+        effective_prompt_version=prompt.prompt_version(fact_taxonomy),
+        recognition_key=prompt.recognition_fingerprint(fact_taxonomy),
+        thinking=False,
+        classification_scope="test",
+        reasoning_effort="low",
+        model_policy_version="test",
+    )
+    cache.put(
+        cache_key,
+        ModelCallResult(
+            classification=ModelClassification.model_validate(
+                {
+                    "needs_review": True,
+                    "review_reasons": ["覆盖审计失败，分析结果尚未完成"],
+                    "review_diagnostics": [
+                        {
+                            "code": "COVERAGE_AUDIT_FAILED",
+                            "detail": "历史异常缓存",
+                            "action": "SYSTEM_RERUN",
+                        }
+                    ],
+                }
+            ),
+            model_name="test",
+            usage={},
+        ),
+    )
+    fact = make_fact()
+    client = FakeJsonClient(
+        [
+            {"facts": [fact.model_dump(mode="json")]},
+            {"mappings": [{"fact_id": "a", "label_codes": ["WARM"]}]},
+        ]
+    )
+    kwargs = dict(
+        comment="warm",
+        model_name="test",
+        thinking=False,
+        messages=[],
+        taxonomy=fact_taxonomy,
+        claims=claims,
+        client=client,
+        cache=cache,
+        force=False,
+        classification_scope="test",
+        model_policy_version="test",
+    )
+
+    result, cached = _call_with_cache(**kwargs)
+    again, cached_again = _call_with_cache(**kwargs)
+
+    assert not cached
+    assert cached_again
+    assert result == again
+    assert result.classification.review_diagnostics == []
+    assert len(client.messages) == 4
 
 
 def test_different_objects_and_conditions_survive(fact_taxonomy):

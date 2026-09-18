@@ -19,11 +19,18 @@ from return_semantics.taxonomy_hierarchy import label_path, label_path_codes
 
 
 @dataclass(frozen=True)
+class CoverageFactRejection:
+    raw_fact: object
+    diagnostic: ReviewDiagnostic
+
+
+@dataclass(frozen=True)
 class CoverageMergeResult:
     facts: list[ExtractedFact]
     added: int
     rejected: int
     diagnostics: list[ReviewDiagnostic]
+    rejections: tuple[CoverageFactRejection, ...] = ()
 
 
 class FactPipelineCancelled(RuntimeError):
@@ -207,6 +214,62 @@ def coverage_audit_messages(
     )
 
 
+def coverage_correction_messages(
+    comment: str,
+    facts: list[ExtractedFact],
+    rejections: tuple[CoverageFactRejection, ...],
+    taxonomy: TaxonomyConfig,
+) -> list[dict[str, str]]:
+    """只要求模型修复覆盖审计中被拒绝的候选事实。"""
+    branches = _branch_catalog(taxonomy)
+    rejected_facts = []
+    for rejection in rejections:
+        raw_fact = rejection.raw_fact
+        if isinstance(raw_fact, ExtractedFact):
+            raw_fact = raw_fact.model_dump(mode="json")
+        rejected_facts.append(
+            {
+                "fact": raw_fact,
+                "validation_error": rejection.diagnostic.detail,
+            }
+        )
+    return _messages(
+        "只修复rejected_facts中的覆盖审计候选事实，输出schema规定JSON。"
+        "每个被拒绝候选必须返回一个修复后的完整事实，不得省略、复制existing_facts或新增其他事实。"
+        "只依据原评论、校验错误和现有事实修复结构及语义冲突，不得编造原文没有的内容。"
+        "因果归属与因果说明必须成对：没有明确因果时两者均留空或使用UNKNOWN；"
+        "原文明示因果时才选择非UNKNOWN归属并提供说明。"
+        "fact_id保持不变，evidence_spans必须逐字引用原评论连续片段。",
+        {
+            "comment": comment,
+            "existing_facts": [fact.model_dump(mode="json") for fact in facts],
+            "rejected_facts": rejected_facts,
+            "branches": [
+                {
+                    "code": code,
+                    "name": branch["name"],
+                    "topics": branch["topics"],
+                }
+                for code, branch in branches.items()
+            ],
+            "schema": FactExtraction.model_json_schema(),
+        },
+    )
+
+
+def validate_coverage_correction(
+    payload: FactExtraction | dict,
+    expected_count: int,
+) -> FactExtraction | dict:
+    """修复结果必须逐项回应失败候选，不能静默丢弃事实。"""
+    facts = (
+        payload.facts if isinstance(payload, FactExtraction) else payload.get("facts")
+    )
+    if not isinstance(facts, list) or len(facts) != expected_count:
+        raise ValueError(f"覆盖审计修复必须返回 {expected_count} 条候选事实")
+    return payload
+
+
 def _coverage_fact_identity(fact: ExtractedFact) -> tuple:
     return (
         fact.actor_ref,
@@ -268,6 +331,7 @@ def merge_coverage_facts(
     known_identities = {_coverage_fact_identity(fact) for fact in accepted}
     rejected = 0
     diagnostics: list[ReviewDiagnostic] = []
+    rejections: list[CoverageFactRejection] = []
     for raw_fact in raw_facts:
         try:
             if isinstance(raw_fact, ExtractedFact):
@@ -294,7 +358,11 @@ def merge_coverage_facts(
             _allowed_labels_by_fact(candidate, taxonomy)
         except (TypeError, ValueError) as exc:
             rejected += 1
-            diagnostics.append(_coverage_failure_diagnostic(raw_fact, exc))
+            diagnostic = _coverage_failure_diagnostic(raw_fact, exc)
+            diagnostics.append(diagnostic)
+            rejections.append(
+                CoverageFactRejection(raw_fact=raw_fact, diagnostic=diagnostic)
+            )
             continue
         accepted.append(fact)
         known_ids.add(fact.fact_id)
@@ -304,6 +372,7 @@ def merge_coverage_facts(
         added=len(accepted) - len(existing_facts),
         rejected=rejected,
         diagnostics=diagnostics,
+        rejections=tuple(rejections),
     )
 
 

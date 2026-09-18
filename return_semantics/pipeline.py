@@ -44,6 +44,7 @@ from return_semantics.schemas import (
     TaxonomyConfig,
     ValidatedClassification,
 )
+from return_semantics.semantic_review import requires_system_rerun
 from return_semantics.taxonomy import adapt_claims_to_taxonomy
 from return_semantics.validator import validate_classification
 
@@ -233,7 +234,11 @@ def _call_with_cache(
     )
     with cache.lock_for(cache_key):
         cached = None if force else cache.get(cache_key)
-        if cached is not None:
+        if cached is not None and not requires_system_rerun(
+            cached.classification,
+            comment,
+            taxonomy,
+        ):
             return cached, True
 
         if taxonomy.recognition_profile == "fact_v2":
@@ -266,7 +271,8 @@ def _call_with_cache(
                 thinking=thinking,
                 should_cancel=should_cancel,
             )
-        cache.put(cache_key, result)
+        if not requires_system_rerun(result.classification, comment, taxonomy):
+            cache.put(cache_key, result)
         return result, False
 
 
