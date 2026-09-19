@@ -2,6 +2,7 @@ FROM node:22-alpine AS frontend
 WORKDIR /build/web-prototype
 COPY web-prototype/package.json web-prototype/package-lock.json ./
 RUN npm ci
+COPY config/taxonomy_alignment.json /build/config/taxonomy_alignment.json
 COPY web-prototype/ ./
 RUN npm run build
 
