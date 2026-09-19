@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from return_semantics.schemas import TaxonomyConfig
-from return_semantics.semantic_review import requires_system_rerun
 from web_backend.classification_result_payload import PAGE_SIZE_DEFAULT
 from web_backend.classification_result_publication import (
     ClassificationResultNotFound,
@@ -24,22 +23,17 @@ def system_rerun_counts(
         return {}
     rows = connection.execute(
         """
-        SELECT result_version_id, classification_json, processing_status, comment
+        SELECT result_version_id, COUNT(*) AS rerun_count
         FROM classification_units
         WHERE result_version_id IN (SELECT value FROM json_each(?))
+          AND system_rerun_required = 1
+        GROUP BY result_version_id
         """,
         (json_text(version_ids),),
     ).fetchall()
     counts = dict.fromkeys(version_ids, 0)
     for row in rows:
-        if not requires_system_rerun(
-            json_value(row["classification_json"], {}),
-            str(row["comment"] or ""),
-            processing_status=str(row["processing_status"] or ""),
-        ):
-            continue
-        version_id = str(row["result_version_id"])
-        counts[version_id] += 1
+        counts[str(row["result_version_id"])] = int(row["rerun_count"])
     return counts
 
 

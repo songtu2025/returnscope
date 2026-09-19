@@ -157,7 +157,12 @@ def test_existing_category_config_is_imported_as_published_standards(
 
     standards = service.list()
     with service.database.connect() as connection:
-        migration = connection.execute("SELECT * FROM app_migrations").fetchone()
+        migration = connection.execute(
+            """
+            SELECT * FROM app_migrations
+            WHERE migration_id = '20260824_01_seed_classification_standards'
+            """
+        ).fetchone()
 
     assert len(standards) == 4
     assert sum(item["category_count"] for item in standards) == 24

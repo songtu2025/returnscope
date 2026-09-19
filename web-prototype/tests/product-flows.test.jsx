@@ -3623,6 +3623,40 @@ describe("关键用户流程", () => {
     expect(apiMock.task).not.toHaveBeenCalled();
   });
 
+  test("任务列表仅在有运行任务时保持十秒刷新", async () => {
+    vi.useFakeTimers();
+    try {
+      const runningTask = {
+        id: "task-running-refresh",
+        title: "运行任务",
+        status: "running",
+        segments: [],
+      };
+      const completedTask = {
+        ...runningTask,
+        status: "completed",
+      };
+      apiMock.tasks
+        .mockResolvedValueOnce([runningTask])
+        .mockResolvedValue([completedTask]);
+
+      render(<TaskMonitor notify={vi.fn()} onNavigate={vi.fn()} onChanged={vi.fn()} />);
+      await act(async () => Promise.resolve());
+      expect(apiMock.tasks).toHaveBeenCalledTimes(1);
+
+      await act(async () => vi.advanceTimersByTimeAsync(10000));
+      expect(apiMock.tasks).toHaveBeenCalledTimes(2);
+
+      await act(async () => vi.advanceTimersByTimeAsync(10000));
+      expect(apiMock.tasks).toHaveBeenCalledTimes(2);
+
+      await act(async () => vi.advanceTimersByTimeAsync(50000));
+      expect(apiMock.tasks).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test("任务管理表支持创建类似任务和批量归档", async () => {
     const user = userEvent.setup();
     const baseTask = {

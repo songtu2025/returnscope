@@ -705,6 +705,10 @@ def test_task_list_includes_result_and_execution_states(tmp_path: Path) -> None:
         )
     listed = service.list(owner_id="user-1", status=task["status"])[0]
     detail = service.get(task["id"])
+    assert "snapshot" not in listed
+    assert "metrics" not in listed
+    assert "results_json_path" not in listed
+    assert isinstance(listed["partial_queue"], bool)
     assert len(listed["segments"]) == len(detail["segments"])
     listed_segment = next(
         value

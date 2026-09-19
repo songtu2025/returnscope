@@ -19,18 +19,44 @@ class TaskQueriesMixin:
         include_archived: bool = False,
     ) -> list[dict[str, Any]]:
         query = """
-            SELECT t.*, u.display_name AS owner_name,
+            SELECT t.id, t.title, t.store, t.listing, t.status,
+                   t.progress_current, t.progress_total, t.progress_percent,
+                   t.result_file_path, t.result_version,
+                   t.created_at, t.completed_at, t.archived_at,
+                   u.display_name AS owner_name,
                    rd.name AS dataset_name, rv.version AS dataset_version,
-                   pd.name AS product_name, pv.version AS product_version,
-                   c.name AS connection_name, cv.version AS config_version,
-                   cv.primary_model,
                    COALESCE(t.completed_at, t.heartbeat_at, t.started_at,
                             t.created_at) AS updated_at,
                    (SELECT COUNT(*) FROM task_segments segment
                     WHERE segment.task_id = t.id) AS listing_count,
-                   (SELECT GROUP_CONCAT(segment.scope_json, ' ')
+                   (SELECT GROUP_CONCAT(
+                               TRIM(
+                                   COALESCE(
+                                       json_extract(segment.scope_json, '$.store'),
+                                       ''
+                                   ) || ' ' ||
+                                   COALESCE(
+                                       json_extract(segment.scope_json, '$.listing'),
+                                       ''
+                                   )
+                               ),
+                               ' '
+                           )
                     FROM task_segments segment
                     WHERE segment.task_id = t.id) AS listing_search_text,
+                   CASE WHEN t.status = 'queued'
+                             AND json_extract(
+                                 t.snapshot_json,
+                                 '$.execution_plan.unresolved_policy'
+                             ) = 'run_ready'
+                             AND COALESCE(
+                                 json_extract(
+                                     t.snapshot_json,
+                                     '$.execution_plan.summary.blocked_count'
+                                 ),
+                                 0
+                             ) > 0
+                        THEN 1 ELSE 0 END AS partial_queue,
                    CASE WHEN t.status = 'queued' THEN (
                        SELECT COUNT(*) + 1 FROM tasks q
                        WHERE q.status = 'queued' AND q.created_at < t.created_at
@@ -39,10 +65,6 @@ class TaskQueriesMixin:
             JOIN users u ON u.id = t.owner_id
             JOIN dataset_versions rv ON rv.id = t.dataset_version_id
             JOIN datasets rd ON rd.id = rv.dataset_id
-            JOIN dataset_versions pv ON pv.id = t.product_version_id
-            JOIN datasets pd ON pd.id = pv.dataset_id
-            JOIN api_config_versions cv ON cv.id = t.config_version_id
-            JOIN api_connections c ON c.id = cv.connection_id
             WHERE 1 = 1
         """
         params: list[object] = []
@@ -57,7 +79,7 @@ class TaskQueriesMixin:
         query += " ORDER BY t.created_at DESC"
         with self.database.connect() as connection:
             rows = connection.execute(query, tuple(params)).fetchall()
-            items = {row["id"]: self._serialize(dict(row)) for row in rows}
+            items = {row["id"]: self._serialize_list(dict(row)) for row in rows}
             for item in items.values():
                 item["segments"] = []
             # 一次读取列表所需的执行与结果状态，避免逐任务加载完整详情。
@@ -88,6 +110,11 @@ class TaskQueriesMixin:
                 )
                 items[value.pop("task_id")]["segments"].append(value)
         return list(items.values())
+
+    @staticmethod
+    def _serialize_list(item: dict[str, Any]) -> dict[str, Any]:
+        item["partial_queue"] = bool(item.get("partial_queue"))
+        return item
 
     def get(self, task_id: str) -> dict[str, Any] | None:
         with self.database.connect() as connection:

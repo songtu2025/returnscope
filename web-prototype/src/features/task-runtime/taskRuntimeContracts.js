@@ -85,6 +85,7 @@
  * @property {number} [max_parallel_segments]
  * @property {number} [owner_running_segments]
  * @property {number} [owner_segment_limit]
+ * @property {boolean} [partial_queue]
  * @property {{execution_plan?: {unresolved_policy?: string, summary?: {blocked_count?: number}}, config?: TaskConfigSnapshot}} [snapshot]
  *
  * @typedef {Object} TaskEventChange

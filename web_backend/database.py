@@ -1,10 +1,77 @@
 from __future__ import annotations
 
+import hashlib
 import secrets
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
+
+CLASSIFICATION_UNIT_RERUN_MIGRATION = "20260919_classification_unit_rerun_state"
+CLASSIFICATION_UNIT_RERUN_MIGRATION_CHECKSUM = hashlib.sha256(
+    b"classification_units.system_rerun_required:v1"
+).hexdigest()
+
+
+def _backfill_classification_unit_rerun_state(
+    connection: sqlite3.Connection,
+) -> None:
+    from return_semantics.semantic_review import requires_system_rerun
+    from web_backend.common import json_value
+
+    rows = connection.execute(
+        """
+        SELECT id, classification_json, processing_status, comment
+        FROM classification_units
+        """
+    ).fetchall()
+    connection.executemany(
+        """
+        UPDATE classification_units
+        SET system_rerun_required = ?
+        WHERE id = ?
+        """,
+        (
+            (
+                int(
+                    requires_system_rerun(
+                        json_value(row["classification_json"], {}),
+                        str(row["comment"] or ""),
+                        processing_status=str(row["processing_status"] or ""),
+                    )
+                ),
+                row["id"],
+            )
+            for row in rows
+        ),
+    )
+
+
+def _apply_classification_unit_rerun_migration(
+    connection: sqlite3.Connection,
+) -> None:
+    columns = {
+        row["name"]
+        for row in connection.execute(
+            "PRAGMA table_info(classification_units)"
+        ).fetchall()
+    }
+    if "system_rerun_required" not in columns:
+        connection.execute(
+            """
+            ALTER TABLE classification_units
+            ADD COLUMN system_rerun_required INTEGER NOT NULL DEFAULT 0
+            CHECK(system_rerun_required IN (0, 1))
+            """
+        )
+    _backfill_classification_unit_rerun_state(connection)
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_classification_units_system_rerun
+        ON classification_units(result_version_id, system_rerun_required)
+        """
+    )
+
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS app_migrations (
@@ -415,6 +482,8 @@ CREATE TABLE IF NOT EXISTS classification_units (
     comment TEXT,
     classification_json TEXT NOT NULL,
     problem_labels_json TEXT NOT NULL DEFAULT '[]',
+    system_rerun_required INTEGER NOT NULL DEFAULT 0
+        CHECK(system_rerun_required IN (0, 1)),
     processing_status TEXT NOT NULL,
     quality_status TEXT NOT NULL
         CHECK(quality_status IN ('ready', 'review_required', 'unusable', 'excluded')),
@@ -822,6 +891,7 @@ class Database:
             self._migrate_review_records(connection)
             self._repair_draft_review_batches(connection)
             self._migrate_excluded_quality_status(connection)
+            self._migrate_classification_unit_rerun_state(connection)
             connection.execute(
                 """
                 CREATE INDEX IF NOT EXISTS idx_review_records_batch
@@ -1382,6 +1452,42 @@ class Database:
         )
 
     @staticmethod
+    def _migrate_classification_unit_rerun_state(
+        connection: sqlite3.Connection,
+    ) -> None:
+        migration = connection.execute(
+            """
+            SELECT checksum FROM app_migrations
+            WHERE migration_id = ?
+            """,
+            (CLASSIFICATION_UNIT_RERUN_MIGRATION,),
+        ).fetchone()
+        if migration is not None:
+            if migration["checksum"] != CLASSIFICATION_UNIT_RERUN_MIGRATION_CHECKSUM:
+                raise RuntimeError("分类单元系统重跑迁移校验失败")
+            return
+
+        connection.execute("SAVEPOINT migrate_classification_unit_rerun_state")
+        try:
+            _apply_classification_unit_rerun_migration(connection)
+            connection.execute(
+                """
+                INSERT INTO app_migrations(
+                    migration_id, checksum, status, applied_at
+                ) VALUES (?, ?, 'applied', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                """,
+                (
+                    CLASSIFICATION_UNIT_RERUN_MIGRATION,
+                    CLASSIFICATION_UNIT_RERUN_MIGRATION_CHECKSUM,
+                ),
+            )
+            connection.execute("RELEASE migrate_classification_unit_rerun_state")
+        except Exception:
+            connection.execute("ROLLBACK TO migrate_classification_unit_rerun_state")
+            connection.execute("RELEASE migrate_classification_unit_rerun_state")
+            raise
+
+    @staticmethod
     def _migrate_excluded_quality_status(
         connection: sqlite3.Connection,
     ) -> None:
@@ -1424,6 +1530,8 @@ class Database:
                         comment TEXT,
                         classification_json TEXT NOT NULL,
                         problem_labels_json TEXT NOT NULL DEFAULT '[]',
+                        system_rerun_required INTEGER NOT NULL DEFAULT 0
+                            CHECK(system_rerun_required IN (0, 1)),
                         processing_status TEXT NOT NULL,
                         quality_status TEXT NOT NULL CHECK(
                             quality_status IN (
@@ -1440,8 +1548,19 @@ class Database:
                 )
                 connection.execute(
                     """
-                    INSERT INTO classification_units
-                    SELECT * FROM legacy_classification_units
+                    INSERT INTO classification_units(
+                        id, result_version_id, classification_key,
+                        reason, comment, classification_json,
+                        problem_labels_json, processing_status,
+                        quality_status, record_count, model_name,
+                        prompt_version, taxonomy_version
+                    )
+                    SELECT id, result_version_id, classification_key,
+                           reason, comment, classification_json,
+                           problem_labels_json, processing_status,
+                           quality_status, record_count, model_name,
+                           prompt_version, taxonomy_version
+                    FROM legacy_classification_units
                     """
                 )
                 connection.execute("DROP TABLE legacy_classification_units")

@@ -42,6 +42,8 @@ import { TaskRegistry } from "./TaskRegistry";
  * }}
  */
 const taskMonitorApi = api;
+const ACTIVE_LIST_REFRESH_MS = 10000;
+const IDLE_LIST_REFRESH_MS = 60000;
 
 /** @param {unknown} error */
 function errorMessage(error) {
@@ -176,9 +178,15 @@ export function TaskMonitor({
 
   useEffect(() => {
     if (selectedId) return undefined;
-    const timer = window.setInterval(() => {
-      if (!document.hidden) loadTasks(true);
-    }, 10000);
+    const hasActiveTasks = tasks.some((task) =>
+      ["queued", "running"].includes(task.status),
+    );
+    const timer = window.setInterval(
+      () => {
+        if (!document.hidden) loadTasks(true);
+      },
+      hasActiveTasks ? ACTIVE_LIST_REFRESH_MS : IDLE_LIST_REFRESH_MS,
+    );
     const frame = window.requestAnimationFrame(() =>
       window.scrollTo(0, listScroll.current),
     );
@@ -186,7 +194,7 @@ export function TaskMonitor({
       window.clearInterval(timer);
       window.cancelAnimationFrame(frame);
     };
-  }, [selectedId, loadTasks]);
+  }, [selectedId, loadTasks, tasks]);
 
   const showTaskDetail = Boolean(selectedId);
   const returnToList = () => {

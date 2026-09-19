@@ -79,8 +79,11 @@ export function taskSummary(task) {
         : "";
   const partialQueue =
     task.status === "queued" &&
-    task.snapshot?.execution_plan?.unresolved_policy === "run_ready" &&
-    Number(task.snapshot?.execution_plan?.summary?.blocked_count || 0) > 0;
+    Boolean(
+      task.partial_queue ??
+      (task.snapshot?.execution_plan?.unresolved_policy === "run_ready" &&
+        Number(task.snapshot?.execution_plan?.summary?.blocked_count || 0) > 0),
+    );
   return {
     total,
     generated,

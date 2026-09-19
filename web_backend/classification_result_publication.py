@@ -6,6 +6,7 @@ from typing import Any
 
 from return_semantics.data import ReturnDataset
 from return_semantics.schemas import TaxonomyConfig, ValidatedClassification
+from return_semantics.semantic_review import requires_system_rerun
 from web_backend.classification_result_payload import (
     _classification_quality,
     _nullable_text,
@@ -236,9 +237,9 @@ class _ClassificationResultPublication:
             INSERT INTO classification_units(
                 id, result_version_id, classification_key, reason, comment,
                 classification_json, problem_labels_json,
-                processing_status, quality_status, record_count,
+                system_rerun_required, processing_status, quality_status, record_count,
                 model_name, prompt_version, taxonomy_version
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -249,6 +250,13 @@ class _ClassificationResultPublication:
                     value["comment"],
                     json_text(value["classification"]),
                     json_text(value["problem_labels"]),
+                    int(
+                        requires_system_rerun(
+                            value["classification"],
+                            str(value["comment"] or ""),
+                            processing_status=str(value["processing_status"] or ""),
+                        )
+                    ),
                     value["processing_status"],
                     value["quality_status"],
                     value["record_count"],

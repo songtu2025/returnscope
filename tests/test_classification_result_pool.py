@@ -590,6 +590,17 @@ def test_system_failure_retry_publishes_new_version_without_overwrite(
         legacy_result_version=1,
     )
     assert first["quality_status"] == "unusable"
+    with context.database.connect() as connection:
+        rerun_state = connection.execute(
+            """
+            SELECT system_rerun_required
+            FROM classification_units
+            WHERE result_version_id = ?
+            """,
+            (first["version_id"],),
+        ).fetchone()
+    assert rerun_state is not None
+    assert rerun_state["system_rerun_required"] == 1
 
     task_service = TaskService(context.database)
     current = task_service.get(context.task_id)
