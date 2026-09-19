@@ -36,6 +36,7 @@ vi.mock("../src/api", () => ({ api: resultApiMock }));
 import { useHashRoute } from "../src/app/hashRouter";
 import { AiInsightReport } from "../src/features/analysis-dashboards/AiInsightReport";
 import { AnalysisDashboardPage } from "../src/features/analysis-dashboards/AnalysisDashboardPage";
+import { analysisContextTerms } from "../src/features/analysis-dashboards/analysisContextPresentation";
 import {
   createDashboardSelection,
   readDashboardSelection,
@@ -94,6 +95,19 @@ function planFor(ids, overrides = {}) {
     ...overrides,
   };
 }
+
+test("分析场景决定看板与报告用语", () => {
+  expect(analysisContextTerms("user_feedback")).toMatchObject({
+    pageTitle: "用户反馈语义洞察",
+    reportTitle: "AI 用户反馈语义洞察报告",
+    sampleShareLabel: "反馈样本内占比",
+  });
+  expect(analysisContextTerms("returns")).toMatchObject({
+    pageTitle: "退货原因洞察",
+    reportTitle: "AI 退货洞察报告",
+    sampleShareLabel: "退货样本内占比",
+  });
+});
 
 beforeEach(() => {
   sessionStorage.clear();
@@ -568,6 +582,7 @@ test("看板详情聚焦退货原因洞察并保留证据与版本入口", async
     evidence: [{ label_code: "FIT_TOO_SMALL", evidence: "too small" }],
   };
   dashboardApiMock.analysisDashboardInsights.mockResolvedValue({
+    analysis_context: "returns",
     summary: {
       record_count: 2000,
       total_record_count: 2300,
@@ -625,7 +640,9 @@ test("看板详情聚焦退货原因洞察并保留证据与版本入口", async
 
   expect(await screen.findByText("退货经营看板")).toBeVisible();
   expect(screen.getByText("退货原因洞察")).toBeVisible();
-  expect(screen.getByText(/已分析 2,000\/2,300 条/)).toBeVisible();
+  expect(
+    screen.getByText(/同一退货记录可命中多个原因，占比之和可能超过 100%/),
+  ).toBeVisible();
   expect(screen.getByText("具体退货原因")).toBeVisible();
   expect(screen.getByRole("button", { name: "质量与耐用性" })).toBeVisible();
   expect(screen.getByRole("button", { name: "自定义分组" })).toBeVisible();
@@ -1193,6 +1210,7 @@ test.each([
     },
     evidence: {
       source: {
+        analysis_context: "returns",
         date_range: { date_from: "2025-11-02", date_to: "2026-03-01" },
         report_profile: { category_name: "手套" },
         included_record_count: 425,

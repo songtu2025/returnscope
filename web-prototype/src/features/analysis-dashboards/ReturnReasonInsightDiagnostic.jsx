@@ -17,6 +17,7 @@ import {
   selectedSemanticUnit,
   shortDate,
 } from "./returnReasonInsightPresentation";
+import { analysisContextTerms } from "./analysisContextPresentation";
 
 /** @typedef {import("./analysisDashboardContracts").DashboardInsights} DashboardInsights */
 /** @typedef {import("./analysisDashboardContracts").DashboardRecord} DashboardRecord */
@@ -25,7 +26,7 @@ import {
 /** @typedef {import("./analysisDashboardContracts").InsightProduct} InsightProduct */
 /** @typedef {import("./analysisDashboardContracts").InsightReason} InsightReason */
 /** @typedef {import("./analysisDashboardContracts").InsightSemanticProfile} InsightSemanticProfile */
-/** @typedef {{data: DashboardInsights, selected?: InsightReason, products: InsightProduct[], coReasons: InsightReason[], semanticProfile: InsightSemanticProfile, evidence: InsightEvidence, onUpdateRoute: (changes: Partial<DashboardRoute>) => void, onEvidence: (record: DashboardRecord, trigger: HTMLElement | null) => void}} ReturnReasonInsightDiagnosticProps */
+/** @typedef {{data: DashboardInsights, selected?: InsightReason, products: InsightProduct[], coReasons: InsightReason[], semanticProfile: InsightSemanticProfile, evidence: InsightEvidence, analysisContext: string, onUpdateRoute: (changes: Partial<DashboardRoute>) => void, onEvidence: (record: DashboardRecord, trigger: HTMLElement | null) => void}} ReturnReasonInsightDiagnosticProps */
 
 /** @param {ReturnReasonInsightDiagnosticProps} props */
 export function ReturnReasonInsightDiagnostic({
@@ -35,10 +36,12 @@ export function ReturnReasonInsightDiagnostic({
   coReasons,
   semanticProfile,
   evidence,
+  analysisContext,
   onUpdateRoute,
   onEvidence,
 }) {
   const [showDefinition, setShowDefinition] = useState(false);
+  const terms = analysisContextTerms(analysisContext);
 
   return (
     <main className="return-insight-diagnostic">
@@ -55,7 +58,7 @@ export function ReturnReasonInsightDiagnostic({
             <div className="return-diagnostic-metrics">
               <InsightStat label="相关评论" value={`${selected.record_count} 条`} />
               <InsightStat
-                label="占有效退货"
+                label={terms.shareLabel}
                 value={formatPercent(selected.percentage)}
               />
               <InsightStat
@@ -87,7 +90,7 @@ export function ReturnReasonInsightDiagnostic({
               <header>
                 <div>
                   <h3>{selected.label}原因占比趋势</h3>
-                  <span>柱形为周退货量，折线为原因占比</span>
+                  <span>柱形为{terms.weeklyVolumeLabel}，折线为原因占比</span>
                 </div>
                 <b>按周</b>
               </header>
@@ -119,7 +122,7 @@ export function ReturnReasonInsightDiagnostic({
                       <Tooltip
                         labelFormatter={(value) => `周起始 ${formatDate(value)}`}
                         formatter={(value, name, item) =>
-                          name === "周退货量"
+                          name === terms.weeklyVolumeLabel
                             ? [`${value} 条`, name]
                             : [
                                 `${Number(value).toFixed(1)}%（${item.payload.record_count} 条）`,
@@ -129,7 +132,7 @@ export function ReturnReasonInsightDiagnostic({
                       />
                       <Bar
                         yAxisId="volume"
-                        name="周退货量"
+                        name={terms.weeklyVolumeLabel}
                         dataKey="total_record_count"
                         fill="#dcebe5"
                         radius={[3, 3, 0, 0]}
@@ -270,7 +273,7 @@ export function ReturnReasonInsightDiagnostic({
                   return (
                     <article key={record.id || record.source_record_id}>
                       <p title={record.comment || record.reason || undefined}>
-                        {record.comment || record.reason || "没有退货评论"}
+                        {record.comment || record.reason || terms.missingText}
                       </p>
                       <div>
                         <b>{unit.opinion || selected.label}</b>
@@ -300,7 +303,7 @@ export function ReturnReasonInsightDiagnostic({
         </>
       ) : (
         <div className="return-insight-empty return-diagnostic-empty">
-          请选择一个退货原因开始诊断
+          {terms.selectReasonPrompt}
         </div>
       )}
     </main>

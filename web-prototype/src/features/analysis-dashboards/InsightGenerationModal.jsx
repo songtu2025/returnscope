@@ -2,6 +2,7 @@ import { WarningCircle } from "@phosphor-icons/react";
 
 import { InlineLoading, Modal } from "../../components/SharedUi";
 import { preferredInsightEffort } from "./insightModelOptions";
+import { analysisContextTerms } from "./analysisContextPresentation";
 
 /** @typedef {import("./analysisDashboardContracts").InsightGenerationForm} InsightGenerationForm */
 /** @typedef {import("./analysisDashboardContracts").InsightModel} InsightModel */
@@ -21,6 +22,7 @@ import { preferredInsightEffort } from "./insightModelOptions";
  * @property {number} unitCount
  * @property {number} pendingRecords
  * @property {number} excludedRecords
+ * @property {string} analysisContext
  */
 
 /** @param {InsightGenerationModalProps} props */
@@ -39,7 +41,9 @@ export function InsightGenerationModal({
   unitCount,
   pendingRecords,
   excludedRecords,
+  analysisContext,
 }) {
+  const terms = analysisContextTerms(analysisContext);
   const selectedModel = models.find((model) => model.id === form.modelId);
   const supportedEfforts = selectedModel?.supported_efforts ?? [];
   const canSubmit =
@@ -78,7 +82,7 @@ export function InsightGenerationModal({
             <div className="insight-field-value">
               <b>{scopeLabel}</b>
               <small>
-                已纳入 {includedRecords.toLocaleString()} 条可用退货记录
+                已纳入 {includedRecords.toLocaleString()} 条{terms.includedRecordLabel}
                 {unitCount ? ` · ${unitCount.toLocaleString()} 个分类单元` : ""}
               </small>
             </div>

@@ -67,6 +67,7 @@
  * @property {string} [listing]
  * @property {number} [record_count]
  * @property {string} [quality_status]
+ * @property {"returns" | "review" | "user_feedback"} [analysis_context]
  *
  * @typedef {Object} ReportIssue
  * @property {string} id
@@ -180,6 +181,7 @@
  * @property {number} [pending_review_record_count]
  * @property {number} [included_record_count]
  * @property {number} [total_record_count]
+ * @property {"returns" | "review" | "user_feedback"} [analysis_context]
  * @typedef {{analysis?: InsightReportAnalysis, source?: InsightReportSource, catalog?: InsightEvidenceCatalog}} InsightReportEvidence
  *
  * @typedef {{category?: string | null, listing?: string | null, product?: string | null, sku?: string | null}} ReportIssueScope
@@ -210,6 +212,7 @@
  * @typedef {{date_from?: string, date_to?: string}} InsightDateRange
  * @typedef {Record<string, unknown> & {comment_count?: number, record_count?: number, total_comment_count?: number, total_record_count?: number, pending_review_comment_count?: number, pending_review_record_count?: number, comment_statuses?: Array<{status?: string, summary_status?: string, comment_count?: number, record_count?: number, count?: number}> | Record<string, number>, semantic_statuses?: Array<{status?: string, summary_status?: string, comment_count?: number, record_count?: number, count?: number}> | Record<string, number>}} InsightSummary
  * @typedef {Object} DashboardInsights
+ * @property {"returns" | "review" | "user_feedback"} [analysis_context]
  * @property {InsightSummary} [summary]
  * @property {InsightReason[]} [reasons]
  * @property {InsightHierarchyNode[]} [hierarchy_problems]

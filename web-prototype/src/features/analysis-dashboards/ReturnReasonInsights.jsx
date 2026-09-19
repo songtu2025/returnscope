@@ -7,12 +7,13 @@ import { commentStatusCounts, orderGroups } from "./returnReasonInsightPresentat
 /** @typedef {import("./analysisDashboardContracts").DashboardRecord} DashboardRecord */
 /** @typedef {import("./analysisDashboardContracts").DashboardRoute} DashboardRoute */
 /** @typedef {import("./analysisDashboardContracts").UpdateDashboardRoute} UpdateDashboardRoute */
-/** @param {{route: DashboardRoute, updateRoute: UpdateDashboardRoute, data: DashboardInsights, loading: boolean, onEvidence: (record: DashboardRecord, trigger: HTMLElement | null) => void}} props */
+/** @param {{route: DashboardRoute, updateRoute: UpdateDashboardRoute, data: DashboardInsights, loading: boolean, analysisContext: string, onEvidence: (record: DashboardRecord, trigger: HTMLElement | null) => void}} props */
 export function ReturnReasonInsights({
   route,
   updateRoute: replaceRoute,
   data,
   loading,
+  analysisContext,
   onEvidence,
 }) {
   const summary = data.summary ?? {};
@@ -32,9 +33,6 @@ export function ReturnReasonInsights({
   const groups = orderGroups(data.category_groups ?? []);
   const includedCount = Number(
     summary.comment_count ?? summary.record_count ?? data.total_comment_count ?? 0,
-  );
-  const totalCount = Number(
-    summary.total_comment_count ?? summary.total_record_count ?? includedCount,
   );
   const pendingCount = Number(
     summary.pending_review_comment_count ?? summary.pending_review_record_count ?? 0,
@@ -59,9 +57,9 @@ export function ReturnReasonInsights({
         dateRange={dateRange}
         options={options}
         includedCount={includedCount}
-        totalCount={totalCount}
         pendingCount={pendingCount}
         statusCounts={statusCounts}
+        analysisContext={analysisContext}
         onUpdateFilters={updateFilters}
       />
 
@@ -76,6 +74,7 @@ export function ReturnReasonInsights({
           subjects={subjects}
           groups={groups}
           onUpdateRoute={updateRoute}
+          analysisContext={analysisContext}
         />
         <ReturnReasonInsightDiagnostic
           data={data}
@@ -86,6 +85,7 @@ export function ReturnReasonInsights({
           evidence={evidence}
           onUpdateRoute={updateRoute}
           onEvidence={onEvidence}
+          analysisContext={analysisContext}
         />
       </div>
     </div>

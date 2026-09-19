@@ -21,6 +21,7 @@ import {
   shortDate,
   signedPercentagePoints,
 } from "./AiInsightReportPresentation";
+import { analysisContextTerms } from "./analysisContextPresentation";
 
 /** @typedef {import("./analysisDashboardContracts").InsightEvidenceCatalog} InsightEvidenceCatalog */
 /** @typedef {import("./analysisDashboardContracts").ReportBusinessIssue} ReportBusinessIssue */
@@ -30,8 +31,9 @@ import {
 /** @typedef {import("./AiInsightReportPresentation").SizeTrendRow} SizeTrendRow */
 /** @typedef {{code: string, label: string, rows: ReportHotspot[]}} HotspotGroup */
 
-/** @param {{issue: ReportBusinessIssue}} props */
-function BusinessIssueCard({ issue }) {
+/** @param {{issue: ReportBusinessIssue, analysisContext: string}} props */
+function BusinessIssueCard({ issue, analysisContext }) {
+  const terms = analysisContextTerms(analysisContext);
   const hotspots = issue.hotspots ?? [];
   const leadHotspot = hotspots[0];
   const trend = issue.trend_summary ?? {};
@@ -139,7 +141,7 @@ function BusinessIssueCard({ issue }) {
             <blockquote>
               <Quotes size={18} weight="fill" />
               <p>“{samples[0].comment || samples[0].reason}”</p>
-              <cite>{samples[0].product_name || "原始退货评论"}</cite>
+              <cite>{samples[0].product_name || terms.originalFeedback}</cite>
             </blockquote>
           )}
         </div>
@@ -153,13 +155,17 @@ function BusinessIssueCard({ issue }) {
   );
 }
 
-/** @param {{issues: ReportBusinessIssue[]}} props */
-function BusinessIssueGrid({ issues }) {
+/** @param {{issues: ReportBusinessIssue[], analysisContext: string}} props */
+function BusinessIssueGrid({ issues, analysisContext }) {
   if (!issues.length) return null;
   return (
     <div className="ai-report-business-issues">
       {issues.map((issue) => (
-        <BusinessIssueCard issue={issue} key={issue.id || issue.reason_code} />
+        <BusinessIssueCard
+          issue={issue}
+          analysisContext={analysisContext}
+          key={issue.id || issue.reason_code}
+        />
       ))}
     </div>
   );
@@ -239,7 +245,7 @@ function HotspotBenchmark({ group }) {
   );
 }
 
-/** @param {{diagnosticFinding?: ReportFinding, hasBusinessIssues: boolean, businessIssues: ReportBusinessIssue[], smallTrend: ReportTrendSummary, largeTrend: ReportTrendSummary, sizeTrend: SizeTrendRow[], hotspotBenchmarks: HotspotGroup[], otherFindings: ReportFinding[], catalog: InsightEvidenceCatalog}} props */
+/** @param {{diagnosticFinding?: ReportFinding, hasBusinessIssues: boolean, businessIssues: ReportBusinessIssue[], smallTrend: ReportTrendSummary, largeTrend: ReportTrendSummary, sizeTrend: SizeTrendRow[], hotspotBenchmarks: HotspotGroup[], otherFindings: ReportFinding[], catalog: InsightEvidenceCatalog, analysisContext: string}} props */
 export function ReportDiagnosticsSection({
   diagnosticFinding,
   hasBusinessIssues,
@@ -250,7 +256,9 @@ export function ReportDiagnosticsSection({
   hotspotBenchmarks,
   otherFindings,
   catalog,
+  analysisContext,
 }) {
+  const terms = analysisContextTerms(analysisContext);
   if (
     !diagnosticFinding &&
     !hasBusinessIssues &&
@@ -276,7 +284,9 @@ export function ReportDiagnosticsSection({
         </div>
       )}
 
-      {hasBusinessIssues && <BusinessIssueGrid issues={businessIssues} />}
+      {hasBusinessIssues && (
+        <BusinessIssueGrid issues={businessIssues} analysisContext={analysisContext} />
+      )}
 
       {(smallTrend.status === "available" || largeTrend.status === "available") && (
         <div className="ai-report-delta-strip" aria-label="尺码问题趋势变化摘要">
@@ -310,7 +320,7 @@ export function ReportDiagnosticsSection({
           <figcaption>
             <div>
               <b>偏小与偏大问题占比趋势</b>
-              <span>按完整自然周统计，占当周已分析退货记录的比例</span>
+              <span>按完整自然周统计，占当周{terms.includedLabel}的比例</span>
             </div>
             <div className="ai-report-chart-legend" aria-label="图例">
               <span>

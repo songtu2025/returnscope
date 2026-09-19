@@ -4,6 +4,7 @@ import sqlite3
 from datetime import date
 from typing import Any
 
+from return_semantics.analysis_context import aggregate_analysis_context
 from return_semantics.taxonomy_hierarchy import descendant_label_codes
 from web_backend.common import json_value
 from web_backend.dashboard_common import (
@@ -39,6 +40,10 @@ def version_context(
                r.store_site, r.listing, r.agent_key, r.agent_family,
                r.logic_version, r.taxonomy_version, r.standard_version_id,
                r.model_policy_version, r.claims_version,
+               COALESCE(
+                   json_extract(task.snapshot_json, '$.analysis_context'),
+                   'returns'
+               ) AS analysis_context,
                COALESCE((
                    SELECT COUNT(DISTINCT revision.review_record_id)
                    FROM review_batches batch
@@ -86,6 +91,7 @@ def version_context(
           ON product_version.id = r.product_version_id
         JOIN datasets product_dataset
           ON product_dataset.id = product_version.dataset_id
+        LEFT JOIN tasks task ON task.id = r.source_task_id
         LEFT JOIN users creator ON creator.id = v.created_by
         WHERE source.dataset_version_id = ?
         ORDER BY r.store_site ASC, r.listing ASC, v.id ASC
@@ -98,6 +104,9 @@ def version_context(
         "filters": json_value(version["filters_json"], {}),
         "sources": sources,
         "source_ids": [str(source["result_version_id"]) for source in sources],
+        "analysis_context": aggregate_analysis_context(
+            source.get("analysis_context") for source in sources
+        ),
     }
 
 

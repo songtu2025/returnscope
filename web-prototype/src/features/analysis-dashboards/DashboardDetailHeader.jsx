@@ -9,6 +9,7 @@ import Button from "antd/es/button";
 
 import { dashboardVersionNumber } from "./dashboardFields";
 import { dashboardVersionId } from "./DashboardDetailHelpers";
+import { analysisContextTerms } from "./analysisContextPresentation";
 
 /** @typedef {import("./analysisDashboardContracts").Dashboard} Dashboard */
 /** @typedef {import("./analysisDashboardContracts").DashboardTab} DashboardTab */
@@ -20,6 +21,7 @@ import { dashboardVersionId } from "./DashboardDetailHelpers";
  * @property {DashboardVersion | null} selectedVersion
  * @property {boolean} showReport
  * @property {InsightReport | null} selectedReport
+ * @property {string} analysisContext
  * @property {boolean} showDataInfo
  * @property {DashboardVersion[]} versions
  * @property {string} versionId
@@ -45,6 +47,7 @@ export function DashboardDetailHeader({
   selectedVersion,
   showReport,
   selectedReport,
+  analysisContext,
   showDataInfo,
   versions,
   versionId,
@@ -63,6 +66,7 @@ export function DashboardDetailHeader({
   onShowOverview,
   onShowReport,
 }) {
+  const terms = analysisContextTerms(analysisContext);
   return (
     <>
       <header className="return-insight-page-header">
@@ -73,7 +77,7 @@ export function DashboardDetailHeader({
             icon={<ArrowLeft size={18} />}
             onClick={onBack}
           />
-          <h1>{showReport ? "AI退货洞察报告" : "退货原因洞察"}</h1>
+          <h1>{showReport ? terms.reportTitle : terms.pageTitle}</h1>
           <span>{dashboard.name || "未命名看板"}</span>
         </div>
         <div className="return-insight-header-actions">

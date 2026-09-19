@@ -22,6 +22,7 @@ import {
   DashboardDetailLoading,
 } from "./DashboardDetailStateViews";
 import { InsightGenerationModal } from "./InsightGenerationModal";
+import { dashboardAnalysisContext } from "./analysisContextPresentation";
 import {
   insightModels,
   preferredInsightEffort,
@@ -491,6 +492,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
   };
   const reportSummary =
     selectedReport?.evidence?.analysis?.summary || selectedVersion?.summary || {};
+  const analysisContext = dashboardAnalysisContext(content.data, selectedReport);
 
   return (
     <div className="standard-page analysis-dashboard-page dashboard-detail-page return-insight-page">
@@ -499,6 +501,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
         selectedVersion={selectedVersion}
         showReport={showReport}
         selectedReport={selectedReport}
+        analysisContext={analysisContext}
         showDataInfo={showDataInfo}
         versions={main.versions}
         versionId={route.versionId}
@@ -556,6 +559,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
         versions={main.versions}
         currentVersionId={currentVersionId}
         decisionState={decisionState}
+        analysisContext={analysisContext}
         onReloadContent={loadContent}
         onEvidence={(
           /** @type {DashboardRecord} */ record,
@@ -587,6 +591,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
           record={selectedRecord}
           onClose={() => setSelectedRecord(null)}
           returnFocusRef={evidenceTriggerRef}
+          analysisContext={analysisContext}
         />
       )}
       {generationOpen && (
@@ -605,6 +610,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
           unitCount={Number(reportSummary.unit_count || 0)}
           pendingRecords={Number(reportSummary.pending_review_record_count || 0)}
           excludedRecords={Number(reportSummary.excluded_record_count || 0)}
+          analysisContext={analysisContext}
         />
       )}
     </div>

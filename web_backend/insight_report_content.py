@@ -11,6 +11,13 @@ from web_backend.insight_report_contracts import (
 
 
 def _messages_v6(evidence: dict[str, Any]) -> list[dict[str, str]]:
+    is_returns = evidence.get("source", {}).get("analysis_context") == "returns"
+    role = "电商退货分析负责人" if is_returns else "用户反馈语义分析负责人"
+    sample_boundary = (
+        "不得把退货样本内占比称为退货率"
+        if is_returns
+        else "不得把反馈样本内占比称为总体发生率"
+    )
     schema = {
         "issues": [
             {
@@ -27,11 +34,11 @@ def _messages_v6(evidence: dict[str, Any]) -> list[dict[str, str]]:
         {
             "role": "system",
             "content": (
-                "你是资深电商退货分析负责人。系统已经确定问题列表、排序、"
+                f"你是资深{role}。系统已经确定问题列表、排序、"
                 "范围、指标、已知事实、证据引用和可信状态。你只负责用中文解释"
                 "这些证据、列出尚未回答的问题，并给出验证建议。不得增加或修改"
                 "任何数字，不得改写问题 id、排序、范围、指标、已知事实、证据引用"
-                "和可信状态。不得把退货样本内占比称为退货率，不得推断因果，"
+                f"和可信状态。{sample_boundary}，不得推断因果，"
                 "不得提出直接整改、任务、负责人、截止时间或商品开发方案。"
                 "只返回 JSON，不要返回 Markdown。"
             ),
@@ -124,6 +131,12 @@ def _assemble_content_v6(
 
 
 def _messages(evidence: dict[str, Any]) -> list[dict[str, str]]:
+    is_returns = evidence.get("source", {}).get("analysis_context") == "returns"
+    role = "电商退货分析负责人" if is_returns else "用户反馈语义分析负责人"
+    report_name = "退货原因洞察报告" if is_returns else "用户反馈语义洞察报告"
+    sample_boundary = (
+        "不要把样本占比称为真实退货率" if is_returns else "不要把样本占比称为总体发生率"
+    )
     schema = {
         "findings": [
             {
@@ -146,8 +159,8 @@ def _messages(evidence: dict[str, Any]) -> list[dict[str, str]]:
         {
             "role": "system",
             "content": (
-                "你是资深电商退货分析负责人。请用中文生成面向产品和业务负责人的"
-                "退货原因洞察报告。系统已经固定事实、结论、报告结构和证据引用；你只负责"
+                f"你是资深{role}。请用中文生成面向产品和业务负责人的"
+                f"{report_name}。系统已经固定事实、结论、报告结构和证据引用；你只负责"
                 "解释这些事实的业务含义，并提出可验证的行动假设。解释必须结合商品热点、"
                 "趋势、伴随原因、语义观点或原始评论中的至少一类诊断证据，不能只改写结论。"
                 "优先使用 business_issues.cases 中的具体 SKU、分子分母、整体基线、"
@@ -155,7 +168,7 @@ def _messages(evidence: dict[str, Any]) -> list[dict[str, str]]:
                 "每项解释先说明信号集中在哪里，再说明仍需验证什么。"
                 "明确区分已验证事实、待验证解释和行动假设。"
                 "行动必须说明验证对象和判断是否有效的条件。只能使用 evidence 中已有事实，"
-                "不要引入新数字，不要把样本占比称为真实退货率，不要推断因果，也不要把"
+                f"不要引入新数字，{sample_boundary}，不要推断因果，也不要把"
                 "总量最大直接等同于最高行动优先级。"
                 "不得输出或修改 evidence_ids、标题、结论和优先级。只返回 JSON，不要返回 Markdown。"
             ),
@@ -182,6 +195,8 @@ def _assemble_content(
     evidence: dict[str, Any],
     payload: Any,
 ) -> InsightReportContent:
+    is_returns = evidence.get("source", {}).get("analysis_context") == "returns"
+    feedback_label = "退货反馈" if is_returns else "用户反馈"
     if not isinstance(payload, dict):
         raise ValueError("模型返回的报告解释不是 JSON 对象")
     blueprint = evidence["blueprint"]
@@ -198,7 +213,8 @@ def _assemble_content(
                 "conclusion": item["conclusion"],
                 "interpretation": _text(
                     generated.get("interpretation"),
-                    "该信号来自当前分类结果版本中的重复退货反馈，仍需回看原始评论确认具体情境。",
+                    f"该信号来自当前分类结果版本中的重复{feedback_label}，"
+                    "仍需回看原始反馈确认具体情境。",
                     800,
                 ),
                 "implication": _text(

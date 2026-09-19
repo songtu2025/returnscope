@@ -468,6 +468,7 @@ test("看板以评论数展示互斥的评论级结论分布", () => {
   expect(within(distribution).getByText("仅正向")).toBeVisible();
   expect(within(distribution).getByText("4")).toBeVisible();
   expect(within(distribution).getByText("疑似冲突")).toBeVisible();
-  expect(screen.getByText(/已分析 10\/12 条评论/)).toBeVisible();
-  expect(screen.getByText(/事实数和事件数仅用于证据下钻/)).toBeVisible();
+  expect(
+    screen.getByText(/同一反馈可命中多个原因，占比之和可能超过 100%/),
+  ).toBeVisible();
 });

@@ -10,12 +10,13 @@ import {
   filterOptions,
   formatPercent,
 } from "./returnReasonInsightPresentation";
+import { analysisContextTerms } from "./analysisContextPresentation";
 
 /** @typedef {import("./analysisDashboardContracts").DashboardInsights} DashboardInsights */
 /** @typedef {import("./analysisDashboardContracts").DashboardRoute} DashboardRoute */
 /** @typedef {import("./analysisDashboardContracts").InsightDateRange} InsightDateRange */
 /** @typedef {import("./analysisDashboardContracts").InsightFilterOptions} InsightFilterOptions */
-/** @typedef {{route: DashboardRoute, data: DashboardInsights, dateRange: InsightDateRange, options: InsightFilterOptions, includedCount: number, totalCount: number, pendingCount: number, statusCounts: Record<string, number> | null, onUpdateFilters: (changes: Partial<DashboardRoute>) => void}} ReturnReasonInsightSummaryProps */
+/** @typedef {{route: DashboardRoute, data: DashboardInsights, dateRange: InsightDateRange, options: InsightFilterOptions, includedCount: number, pendingCount: number, statusCounts: Record<string, number> | null, analysisContext: string, onUpdateFilters: (changes: Partial<DashboardRoute>) => void}} ReturnReasonInsightSummaryProps */
 
 /** @param {ReturnReasonInsightSummaryProps} props */
 export function ReturnReasonInsightSummary({
@@ -24,14 +25,15 @@ export function ReturnReasonInsightSummary({
   dateRange,
   options,
   includedCount,
-  totalCount,
   pendingCount,
   statusCounts,
+  analysisContext,
   onUpdateFilters,
 }) {
+  const terms = analysisContextTerms(analysisContext);
   return (
     <>
-      <section className="return-insight-filters" aria-label="退货原因洞察筛选">
+      <section className="return-insight-filters" aria-label={terms.filterAria}>
         <label className="return-insight-date-filter">
           <span>时间</span>
           <div>
@@ -94,7 +96,7 @@ export function ReturnReasonInsightSummary({
       <section className="return-insight-trust" aria-label="数据可信度">
         <div>
           <ShieldCheck size={19} weight="duotone" />
-          <span>有效评论</span>
+          <span>{terms.includedLabel}</span>
           <b>{includedCount.toLocaleString()} 条</b>
         </div>
         <div>
@@ -108,14 +110,8 @@ export function ReturnReasonInsightSummary({
           <b>{pendingCount.toLocaleString()} 条</b>
         </div>
         <p>
-          当前洞察使用已确认与自动通过的数据；同一评论在每个分组内只计一次，多标签原因占比之和可能超过
-          100%。
-          {data.group_alignment === "unified-v1" &&
-            " 跨版本已统一一级分组，具体标签保留原版本口径。"}
-          <span>
-            已分析 {includedCount.toLocaleString()}/{totalCount.toLocaleString()}{" "}
-            条评论；事实数和事件数仅用于证据下钻
-          </span>
+          同一{terms.recordUnit}可命中多个原因，占比之和可能超过 100%。
+          {data.group_alignment === "unified-v1" && " 跨版本已统一一级分组。"}
         </p>
       </section>
 

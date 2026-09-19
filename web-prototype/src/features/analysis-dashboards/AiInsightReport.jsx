@@ -30,7 +30,7 @@ import {
 /** @typedef {import("./analysisDashboardContracts").DashboardVersion} DashboardVersion */
 /** @typedef {import("./analysisDashboardContracts").InsightReportEvidence} InsightReportEvidence */
 /** @typedef {import("./analysisDashboardContracts").LegacyInsightReportContent} LegacyInsightReportContent */
-/** @typedef {{report: InsightReport | null, reports: InsightReport[], attempts?: InsightReport[], latestReport: InsightReport | null, dashboard: Dashboard, version: DashboardVersion | null, onGenerate: () => void | Promise<void>, onRetry: () => void | Promise<void>, onSelect: (reportId: string) => void, selectedIssueId: string, decisionState: DashboardDecisionState, onDecision: (issueId: string, status: string) => void | Promise<void>, onSelectIssue: (issueId: string) => void}} AiInsightReportProps */
+/** @typedef {{report: InsightReport | null, reports: InsightReport[], attempts?: InsightReport[], latestReport: InsightReport | null, dashboard: Dashboard, version: DashboardVersion | null, analysisContext: string, onGenerate: () => void | Promise<void>, onRetry: () => void | Promise<void>, onSelect: (reportId: string) => void, selectedIssueId: string, decisionState: DashboardDecisionState, onDecision: (issueId: string, status: string) => void | Promise<void>, onSelectIssue: (issueId: string) => void}} AiInsightReportProps */
 
 /** @param {AiInsightReportProps} props */
 export function AiInsightReport({
@@ -40,6 +40,7 @@ export function AiInsightReport({
   latestReport,
   dashboard,
   version,
+  analysisContext,
   onGenerate,
   onRetry,
   onSelect,
@@ -82,6 +83,7 @@ export function AiInsightReport({
         onDecision={onDecision}
         onSelect={onSelect}
         onSelectIssue={onSelectIssue}
+        analysisContext={analysisContext}
       />
     );
   }
@@ -174,6 +176,7 @@ export function AiInsightReport({
           source={source}
           productMapping={productMapping}
           textQuality={textQuality}
+          analysisContext={analysisContext}
         />
         <ReportStructureSection
           structureFinding={structureFinding}
@@ -181,6 +184,7 @@ export function AiInsightReport({
           primaryGroup={primaryGroup}
           maxGroupCount={maxGroupCount}
           catalog={catalog}
+          analysisContext={analysisContext}
         />
         <ReportDiagnosticsSection
           diagnosticFinding={diagnosticFinding}
@@ -192,6 +196,7 @@ export function AiInsightReport({
           hotspotBenchmarks={hotspotBenchmarks}
           otherFindings={otherFindings}
           catalog={catalog}
+          analysisContext={analysisContext}
         />
         <ReportInformationSection
           informationFinding={informationFinding}

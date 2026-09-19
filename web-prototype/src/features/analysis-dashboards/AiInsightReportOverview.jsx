@@ -16,6 +16,7 @@ import {
   STATUS_LABELS,
 } from "./AiInsightReportPresentation";
 import { dashboardVersionNumber } from "./dashboardFields";
+import { analysisContextTerms } from "./analysisContextPresentation";
 
 /** @typedef {import("./analysisDashboardContracts").Dashboard} Dashboard */
 /** @typedef {import("./analysisDashboardContracts").DashboardVersion} DashboardVersion */
@@ -101,14 +102,16 @@ export function ReportChapterNavigation({ scrollTo }) {
   );
 }
 
-/** @param {{content: LegacyInsightReportContent, summary: InsightSummary, source: InsightReportSource, productMapping: ReportDataQuality, textQuality: ReportDataQuality}} props */
+/** @param {{content: LegacyInsightReportContent, summary: InsightSummary, source: InsightReportSource, productMapping: ReportDataQuality, textQuality: ReportDataQuality, analysisContext: string}} props */
 export function ReportExecutiveSummary({
   content,
   summary,
   source,
   productMapping,
   textQuality,
+  analysisContext,
 }) {
+  const terms = analysisContextTerms(analysisContext);
   return (
     <section className="ai-report-executive" id="report-summary">
       <span className="ai-report-eyebrow">Executive Summary</span>
@@ -140,7 +143,10 @@ export function ReportExecutiveSummary({
           <span>待审核</span>
           <b>{number(summary.pending_review_record_count).toLocaleString()} 条</b>
         </div>
-        <p>多标签问题占比不可直接相加；当前占比描述退货样本结构，不代表真实退货率。</p>
+        <p>
+          多标签问题占比不可直接相加；当前占比描述{terms.sampleStructure}，
+          {terms.rateBoundary}。
+        </p>
       </div>
       {productMapping.status === "needs_review" && (
         <div className="ai-report-review-note">
@@ -158,19 +164,21 @@ export function ReportExecutiveSummary({
   );
 }
 
-/** @param {{structureFinding?: ReportFinding, groups: InsightReason[], primaryGroup?: InsightReason, maxGroupCount: number, catalog: InsightEvidenceCatalog}} props */
+/** @param {{structureFinding?: ReportFinding, groups: InsightReason[], primaryGroup?: InsightReason, maxGroupCount: number, catalog: InsightEvidenceCatalog, analysisContext: string}} props */
 export function ReportStructureSection({
   structureFinding,
   groups,
   primaryGroup,
   maxGroupCount,
   catalog,
+  analysisContext,
 }) {
+  const terms = analysisContextTerms(analysisContext);
   return (
     <section className="ai-report-section" id="report-structure">
       <SectionHeading
         number="01"
-        title={structureFinding?.title || "退货问题结构"}
+        title={structureFinding?.title || terms.problemStructure}
         description="先区分可行动的商品问题与宽泛的非商品原因。"
       />
       <div className="ai-report-editorial-intro">
@@ -191,7 +199,10 @@ export function ReportStructureSection({
               {number(primaryGroup?.record_count).toLocaleString()} 条相关记录
             </small>
           </figcaption>
-          <div className="ai-report-size-bars" aria-label="退货问题组规模比较">
+          <div
+            className="ai-report-size-bars"
+            aria-label={`${terms.sampleStructure}问题组规模比较`}
+          >
             {groups.slice(0, 6).map((group) => (
               <div key={group.value}>
                 <span>{group.value}</span>

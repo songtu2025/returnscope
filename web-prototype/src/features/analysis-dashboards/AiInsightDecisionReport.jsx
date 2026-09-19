@@ -8,6 +8,7 @@ import {
   ShieldCheck,
   WarningCircle,
 } from "@phosphor-icons/react";
+import { analysisContextTerms } from "./analysisContextPresentation";
 
 const DECISION_LABELS = /** @type {Record<string, string>} */ ({
   pending: "待决策",
@@ -96,16 +97,18 @@ function MetricCard({ label, value, note, tone = "neutral" }) {
   );
 }
 
-/** @param {{report: InsightReport, reports: InsightReport[], selectedIssueId: string, decisionState: DashboardDecisionState, onDecision: (issueId: string, status: string) => void | Promise<void>, onSelect: (reportId: string) => void, onSelectIssue: (issueId: string) => void}} props */
+/** @param {{report: InsightReport, reports: InsightReport[], selectedIssueId: string, decisionState: DashboardDecisionState, analysisContext: string, onDecision: (issueId: string, status: string) => void | Promise<void>, onSelect: (reportId: string) => void, onSelectIssue: (issueId: string) => void}} props */
 export function AiInsightDecisionReport({
   report,
   reports,
   selectedIssueId,
   decisionState,
+  analysisContext,
   onDecision,
   onSelect,
   onSelectIssue,
 }) {
+  const terms = analysisContextTerms(analysisContext);
   const content = /** @type {InsightDecisionReportContent} */ (report.content ?? {});
   const source = report.evidence?.source ?? {};
   const catalog = report.evidence?.catalog ?? {};
@@ -238,7 +241,7 @@ export function AiInsightDecisionReport({
 
           <div className="ai-decision-metrics">
             <MetricCard
-              label="退货样本内占比"
+              label={terms.sampleShareLabel}
               value={percentage(metrics.return_sample_share)}
               note={`${number(metrics.matched_return_samples)} / ${number(
                 metrics.scoped_return_samples,
@@ -330,7 +333,7 @@ export function AiInsightDecisionReport({
               </div>
             </div>
             <footer>
-              <span>口径：多标签占比不可直接相加，也不等于退货率。</span>
+              <span>口径：多标签占比不可直接相加，也{terms.rateBoundary}。</span>
               <details>
                 <summary>
                   <Database size={15} />

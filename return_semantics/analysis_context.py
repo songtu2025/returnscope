@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from typing import Literal, cast
 
 AnalysisContext = Literal["returns", "review", "user_feedback"]
@@ -23,3 +23,10 @@ def analysis_context_from_snapshot(snapshot: Mapping[str, object]) -> AnalysisCo
     return validate_analysis_context(
         str(snapshot.get("analysis_context") or RETURNS_CONTEXT)
     )
+
+
+def aggregate_analysis_context(values: Iterable[object]) -> AnalysisContext:
+    contexts = [str(value or RETURNS_CONTEXT) for value in values]
+    if contexts and all(value == RETURNS_CONTEXT for value in contexts):
+        return RETURNS_CONTEXT
+    return USER_FEEDBACK_CONTEXT

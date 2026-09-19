@@ -47,6 +47,10 @@ def build_plan(
                r.store_site, r.listing, r.agent_key, r.agent_family,
                r.logic_version, r.taxonomy_version, r.standard_version_id,
                r.model_policy_version, r.claims_version,
+               COALESCE(
+                   json_extract(task.snapshot_json, '$.analysis_context'),
+                   'returns'
+               ) AS analysis_context,
                COALESCE((
                    SELECT COUNT(DISTINCT revision.review_record_id)
                    FROM review_batches batch
@@ -92,6 +96,7 @@ def build_plan(
           ON product_version.id = r.product_version_id
         JOIN datasets product_dataset
           ON product_dataset.id = product_version.dataset_id
+        LEFT JOIN tasks task ON task.id = r.source_task_id
         LEFT JOIN users creator ON creator.id = v.created_by
         WHERE v.id IN ({placeholders})
         ORDER BY v.id
@@ -223,6 +228,7 @@ def build_plan(
                 "taxonomy_version",
                 "model_policy_version",
                 "claims_version",
+                "analysis_context",
                 "parent_version_id",
             )
         }

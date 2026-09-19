@@ -386,6 +386,39 @@ def test_v6_blueprint_keeps_same_category_multi_listing_scope_generic() -> None:
     assert issue["scope"]["listing"] is None
 
 
+def test_v6_user_feedback_context_uses_generic_report_language() -> None:
+    evidence = InsightReportService._build_evidence(
+        {
+            "analysis_context": "user_feedback",
+            "summary": {
+                "record_count": 20,
+                "total_record_count": 20,
+                "pending_review_record_count": 0,
+                "coverage_rate": 100.0,
+            },
+            "filter_options": {
+                "listings": ["RGA803"],
+                "product_names": [],
+            },
+            "sources": [{"agent_key": "gloves", "listing": "RGA803"}],
+            "review_bias": {"status": "not_applicable"},
+            "text_quality": {
+                "status": "passed",
+                "checked_record_count": 20,
+                "anomaly_record_count": 0,
+            },
+        },
+        prompt_version=PROMPT_VERSION,
+    )
+
+    assert evidence["source"]["analysis_context"] == "user_feedback"
+    assert evidence["blueprint"]["title"] == "RGA803 用户反馈问题判断报告"
+    assert "反馈样本内占比" in evidence["blueprint"]["caveats"][0]
+    system_prompt = InsightReportService._messages_v6(evidence)[0]["content"]
+    assert "用户反馈语义分析负责人" in system_prompt
+    assert "总体发生率" in system_prompt
+
+
 def test_v6_blueprint_generic_fallback_has_only_common_scope_fields() -> None:
     evidence = InsightReportService._build_evidence(
         {

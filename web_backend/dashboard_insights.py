@@ -54,6 +54,7 @@ def build_insights(
             return {
                 "dashboard_id": dashboard_id,
                 "version_id": version_id,
+                "analysis_context": context["analysis_context"],
                 "hierarchy_conflict": True,
                 "message": "该看板包含不同层级标准版本，请按标准版本分别建立看板。",
                 "reasons": [],
@@ -207,6 +208,7 @@ def build_insights(
     return {
         "dashboard_id": dashboard_id,
         "version_id": version_id,
+        "analysis_context": context["analysis_context"],
         "summary": summary,
         "group_alignment": "unified-v1"
         if mixed_versions and not (taxonomy and taxonomy.structure_version == 2)

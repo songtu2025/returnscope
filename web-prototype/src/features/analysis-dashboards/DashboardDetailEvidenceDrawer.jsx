@@ -3,11 +3,18 @@ import { X } from "@phosphor-icons/react";
 
 import { resultLabelText } from "../../lib/taxonomyPresentation";
 import { SemanticResultPanel } from "../classification-results/SemanticResultPanel";
+import { analysisContextTerms } from "./analysisContextPresentation";
 
 /** @typedef {import("./analysisDashboardContracts").DashboardRecord} DashboardRecord */
-/** @param {{record: DashboardRecord, onClose: () => void, returnFocusRef: import("react").RefObject<HTMLElement | null>}} props */
-export function DashboardDetailEvidenceDrawer({ record, onClose, returnFocusRef }) {
+/** @param {{record: DashboardRecord, analysisContext: string, onClose: () => void, returnFocusRef: import("react").RefObject<HTMLElement | null>}} props */
+export function DashboardDetailEvidenceDrawer({
+  record,
+  analysisContext,
+  onClose,
+  returnFocusRef,
+}) {
   const classification = record.classification ?? {};
+  const terms = analysisContextTerms(analysisContext);
   const drawerRef = useRef(/** @type {HTMLElement | null} */ (null));
   const closeButtonRef = useRef(/** @type {HTMLButtonElement | null} */ (null));
 
@@ -81,13 +88,13 @@ export function DashboardDetailEvidenceDrawer({ record, onClose, returnFocusRef 
           <DrawerField label="Listing" value={record.listing} />
           <DrawerField label="产品名称" value={record.product_name} />
           <DrawerField label="产品SKU" value={record.product_sku} />
-          <DrawerField label="退货SKU（MSKU）" value={record.source_sku} />
+          <DrawerField label={terms.sourceSkuLabel} value={record.source_sku} />
           <DrawerField label="匹配MSKU" value={record.matched_msku} />
         </section>
         <section className="drawer-section">
-          <b>退货原文</b>
-          <DrawerField label="Amazon原因" value={record.amazon_reason} />
-          <blockquote>{record.comment || "未提供退货评论"}</blockquote>
+          <b>{terms.originalTextLabel}</b>
+          <DrawerField label={terms.sourceReasonLabel} value={record.amazon_reason} />
+          <blockquote>{record.comment || terms.missingText}</blockquote>
         </section>
         <section className="drawer-section">
           <b>业务标签</b>

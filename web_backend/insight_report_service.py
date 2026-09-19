@@ -92,13 +92,18 @@ class InsightReportService:
         scope_name = (
             listings[0] if len(listings) == 1 else f"{len(listings)} 个 Listing"
         )
+        is_returns = all(
+            source.get("analysis_context", "returns") == "returns"
+            for source in plan.get("sources", [])
+        )
+        report_name = "AI 退货洞察报告" if is_returns else "AI 用户反馈语义洞察报告"
         dashboard = self.dashboard_service.create(
             name=f"AI 洞察 · {scope_name}",
-            description="由分类结果自动创建，用于承载 AI 退货洞察报告。",
+            description=f"由分类结果自动创建，用于承载 {report_name}。",
             result_version_ids=result_version_ids,
             filters=filters,
             plan_hash=plan_hash,
-            reason="生成 AI 退货洞察报告",
+            reason=f"生成 {report_name}",
             actor_id=actor_id,
         )
         report = self._create_report(

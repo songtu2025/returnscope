@@ -2,13 +2,14 @@ import { useState } from "react";
 import { ArrowCounterClockwise } from "@phosphor-icons/react";
 import { taxonomyPath } from "../../lib/taxonomyPresentation";
 import { formatPercent } from "./returnReasonInsightPresentation";
+import { analysisContextTerms } from "./analysisContextPresentation";
 
 /** @typedef {import("../../shared/api/reviewBatchContracts").ReviewLabel} ReviewLabel */
 /** @typedef {import("./analysisDashboardContracts").DashboardInsights} DashboardInsights */
 /** @typedef {import("./analysisDashboardContracts").DashboardRoute} DashboardRoute */
 /** @typedef {import("./analysisDashboardContracts").InsightHierarchyNode} InsightHierarchyNode */
 /** @typedef {import("./analysisDashboardContracts").InsightReason} InsightReason */
-/** @typedef {{route: DashboardRoute, data: DashboardInsights, reasons: InsightReason[], hierarchy: InsightHierarchyNode[], taxonomyLabels: Map<string, ReviewLabel>, selected?: InsightReason, subjects: InsightReason[], groups: string[], onUpdateRoute: (changes: Partial<DashboardRoute>) => void}} ReturnReasonInsightExplorerProps */
+/** @typedef {{route: DashboardRoute, data: DashboardInsights, reasons: InsightReason[], hierarchy: InsightHierarchyNode[], taxonomyLabels: Map<string, ReviewLabel>, selected?: InsightReason, subjects: InsightReason[], groups: string[], analysisContext: string, onUpdateRoute: (changes: Partial<DashboardRoute>) => void}} ReturnReasonInsightExplorerProps */
 
 /** @param {ReturnReasonInsightExplorerProps} props */
 export function ReturnReasonInsightExplorer({
@@ -20,8 +21,10 @@ export function ReturnReasonInsightExplorer({
   selected,
   subjects,
   groups,
+  analysisContext,
   onUpdateRoute,
 }) {
+  const terms = analysisContextTerms(analysisContext);
   const [selectedSubject, setSelectedSubject] = useState("");
   const visibleReasons = selectedSubject
     ? reasons.filter((reason) => reason.subjects?.includes(selectedSubject))
@@ -52,7 +55,7 @@ export function ReturnReasonInsightExplorer({
   };
 
   return (
-    <aside className="return-insight-explorer" aria-label="选择主题与退货原因">
+    <aside className="return-insight-explorer" aria-label={terms.reasonChooserAria}>
       <header>
         <div>
           <span>1</span>
@@ -90,7 +93,7 @@ export function ReturnReasonInsightExplorer({
 
       <section className="return-reason-groups">
         <h3>原因类别</h3>
-        <nav aria-label="退货原因类别">
+        <nav aria-label={terms.reasonCategoryAria}>
           {["", ...groups].map((group) => (
             <button
               key={group || "all"}
@@ -108,7 +111,7 @@ export function ReturnReasonInsightExplorer({
       <section className="return-reason-ranking">
         <header>
           <div>
-            <h3>具体退货原因</h3>
+            <h3>{terms.reasonHeading}</h3>
             <p>按有效评论排序</p>
           </div>
           <span>{visibleReasons.length} 项</span>

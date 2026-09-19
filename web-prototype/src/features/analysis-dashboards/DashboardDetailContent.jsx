@@ -37,6 +37,7 @@ import { asItems, dashboardVersionId } from "./DashboardDetailHelpers";
  * @property {DashboardVersion[]} versions
  * @property {string} currentVersionId
  * @property {DashboardDecisionState} decisionState
+ * @property {string} analysisContext
  * @property {() => void | Promise<void>} onReloadContent
  * @property {(record: DashboardRecord, trigger: HTMLElement | null) => void} onEvidence
  * @property {() => void | Promise<void>} onReloadReports
@@ -63,6 +64,7 @@ export function DashboardDetailContent({
   versions,
   currentVersionId,
   decisionState,
+  analysisContext,
   onReloadContent,
   onEvidence,
   onReloadReports,
@@ -96,6 +98,7 @@ export function DashboardDetailContent({
           }
           loading={content.loading}
           onEvidence={onEvidence}
+          analysisContext={analysisContext}
         />
       )}
       {route.tab === "report" && reports.loading && !reports.items.length && (
@@ -125,6 +128,7 @@ export function DashboardDetailContent({
           onDecision={onIssueDecision}
           onSelectIssue={onSelectIssue}
           onSelect={onSelectReport}
+          analysisContext={analysisContext}
         />
       )}
       {!content.error && route.tab === "source" && content.data && (

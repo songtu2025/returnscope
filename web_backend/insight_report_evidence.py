@@ -32,6 +32,8 @@ def _build_evidence(
     listings = list(analysis.get("filter_options", {}).get("listings", []))
     product_names = list(analysis.get("filter_options", {}).get("product_names", []))
     sources = list(analysis.get("sources", []))
+    is_returns = analysis.get("analysis_context", "returns") == "returns"
+    analyzed_record_label = "已分析退货" if is_returns else "已分析反馈"
     profile = resolve_insight_report_profile(sources)
     product_mapping = _product_mapping_check(
         summary,
@@ -127,7 +129,10 @@ def _build_evidence(
     for index, product in enumerate(safe_products, 1):
         catalog[f"product.{index}"] = {
             "label": str(product.get("value") or f"商品 {index}"),
-            "value": f"{int(product.get('total_record_count') or 0)} 条已分析退货",
+            "value": (
+                f"{int(product.get('total_record_count') or 0)} 条"
+                f"{analyzed_record_label}"
+            ),
             "data": product,
         }
     for case in safe_issue_cases:
@@ -279,6 +284,7 @@ def _build_evidence(
         "source": {
             "dashboard_id": analysis.get("dashboard_id"),
             "dashboard_version_id": analysis.get("version_id"),
+            "analysis_context": analysis.get("analysis_context", "returns"),
             "date_range": analysis.get("date_range", {}),
             "label_coverage": analysis.get("label_coverage", 0),
             "listings": listings,

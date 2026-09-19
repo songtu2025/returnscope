@@ -15,6 +15,11 @@ def _build_decision_blueprint(evidence: dict[str, Any]) -> dict[str, Any]:
     listing = str(listings[0]) if len(listings) == 1 else None
     category = profile.category_name if profile.key != "generic" else None
     source_limited = bool(source.get("quality_issue_codes"))
+    is_returns = source.get("analysis_context") == "returns"
+    sample_label = "退货样本" if is_returns else "反馈样本"
+    rate_label = "真实退货率" if is_returns else "总体发生率"
+    report_subject = "退货问题" if is_returns else "用户反馈问题"
+    original_feedback = "原始退货评论" if is_returns else "原始用户反馈"
     candidates: list[dict[str, Any]] = []
 
     for business_issue in analysis.get("business_issues", []):
@@ -118,8 +123,8 @@ def _build_decision_blueprint(evidence: dict[str, Any]) -> dict[str, Any]:
             target = sku or product
             title = f"{target} · {label}" if target else label
             known = [
-                f"{matched} / {scoped} 条退货样本命中“{label}”，"
-                f"退货样本内占比 {share:.1f}%。"
+                f"{matched} / {scoped} 条{sample_label}命中“{label}”，"
+                f"{sample_label}内占比 {share:.1f}%。"
             ]
             if baseline is not None:
                 known.append(
@@ -195,8 +200,8 @@ def _build_decision_blueprint(evidence: dict[str, Any]) -> dict[str, Any]:
                     },
                     "known": known[:6],
                     "fallback_evidence_explanation": (
-                        "该信号在当前退货样本中形成集中分化，"
-                        "但仅凭评论与样本结构不能判断真实发生率或因果。"
+                        f"该信号在当前{sample_label}中形成集中分化，"
+                        f"但仅凭反馈与样本结构不能判断{rate_label}或因果。"
                     ),
                     "fallback_unknown": list(dict.fromkeys(questions))[:5],
                     "fallback_recommendation": {
@@ -209,7 +214,7 @@ def _build_decision_blueprint(evidence: dict[str, Any]) -> dict[str, Any]:
                             "页面信息或业务分母验证原因与影响。"
                         ),
                         "suggested_evidence": [
-                            "复核命中的原始评论",
+                            f"复核命中的{original_feedback}",
                             "核对相同范围的商品信息与实物表现",
                             "补充订单量或销量分母",
                         ],
@@ -279,14 +284,14 @@ def _build_decision_blueprint(evidence: dict[str, Any]) -> dict[str, Any]:
         else "当前范围"
     )
     caveats = [
-        "所有占比均为退货样本内占比，不代表真实退货率。",
+        f"所有占比均为{sample_label}内占比，不代表{rate_label}。",
         "当前缺少订单量、销量、成本和批次等分母，不能据此推断因果。",
     ]
     if source.get("pending_review_record_count"):
         caveats.append("待审核记录未进入本次统计，结论可能随复核推进而变化。")
     return {
         "report_type": "problem_decision",
-        "title": f"{scope_name} 退货问题判断报告",
+        "title": f"{scope_name} {report_subject}判断报告",
         "issues": issues,
         "caveats": caveats,
     }

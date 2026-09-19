@@ -314,7 +314,12 @@ def test_dashboard_drilldown_and_records_follow_business_hierarchy(
 
 def test_dashboard_insights_are_derived_from_ready_records(tmp_path: Path) -> None:
     context, version, service = _ready_result(tmp_path)
-    _plan, dashboard = _create_dashboard(service, str(version["version_id"]))
+    with context.database.transaction() as connection:
+        connection.execute(
+            "UPDATE tasks SET snapshot_json = ? WHERE id = 'task-1'",
+            ('{"analysis_context":"user_feedback"}',),
+        )
+    plan, dashboard = _create_dashboard(service, str(version["version_id"]))
     dashboard_id = str(dashboard["id"])
     dashboard_version_id = str(dashboard["version"]["version_id"])
     product_name = str(context.dataset.records.iloc[0]["product_name"])
@@ -325,6 +330,12 @@ def test_dashboard_insights_are_derived_from_ready_records(tmp_path: Path) -> No
         problem="FIT_TOO_SMALL_U1",
     )
 
+    assert plan["sources"][0]["analysis_context"] == "user_feedback"
+    assert (
+        service.sources(dashboard_id, dashboard_version_id)[0]["analysis_context"]
+        == "user_feedback"
+    )
+    assert insights["analysis_context"] == "user_feedback"
     assert insights["summary"]["record_count"] == 3
     assert insights["summary"]["comment_count"] == 3
     assert insights["summary"]["total_comment_count"] == 3

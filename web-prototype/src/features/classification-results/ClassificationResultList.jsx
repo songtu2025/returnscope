@@ -14,6 +14,7 @@ import { navigateHash } from "../../app/hashRouter";
 import { EmptyState, InlineLoading, PageHeading } from "../../components/SharedUi";
 import { dashboardApi } from "../../shared/api/dashboardApi";
 import { InsightGenerationModal } from "../analysis-dashboards/InsightGenerationModal";
+import { dashboardAnalysisContext } from "../analysis-dashboards/analysisContextPresentation";
 import {
   createDashboardSelection,
   readDashboardSelection,
@@ -59,6 +60,7 @@ import { useClassificationResultListData } from "./useClassificationResultListDa
  * @property {Record<string, string | string[] | null>} [filters]
  * @property {{ message: string }[]} [blockers]
  * @property {unknown[]} [conflicts]
+ * @property {import("../analysis-dashboards/analysisDashboardContracts").DashboardSource[]} [sources]
  * @property {{ record_count?: number, pending_review_record_count?: number, excluded_record_count?: number }} [summary]
  */
 /**
@@ -550,6 +552,10 @@ export function ClassificationResultList({ route, updateRoute, notify, userId })
           )}
           excludedRecords={Number(
             insightState.plan?.summary?.excluded_record_count || 0,
+          )}
+          analysisContext={dashboardAnalysisContext(
+            insightState.plan?.sources ?? [],
+            null,
           )}
         />
       )}
