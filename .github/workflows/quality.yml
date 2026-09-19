@@ -31,6 +31,16 @@ jobs:
           WEBAPP_ENCRYPTION_KEY: dummy-ci-encryption-key
           WEBAPP_MIGRATION_SOURCE: .
         run: docker compose config --quiet
+      - name: Validate shared-server Docker Compose configuration
+        env:
+          APP_DOMAIN: example.invalid
+          APP_IMAGE_TAG: ci
+          WEBAPP_BOOTSTRAP_EMAIL: ci@example.invalid
+          WEBAPP_BOOTSTRAP_NAME: CI Placeholder
+          WEBAPP_BOOTSTRAP_PASSWORD: dummy-ci-password
+          WEBAPP_ENCRYPTION_KEY: dummy-ci-encryption-key
+          WEBAPP_MIGRATION_SOURCE: .
+        run: docker compose -f compose.yaml -f compose.server.yaml config --quiet
       - run: pip install -r requirements-dev.txt
       - run: npm ci
         working-directory: web-prototype

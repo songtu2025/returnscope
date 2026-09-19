@@ -1,0 +1,40 @@
+services:
+  app:
+    image: user-feedback-semantics:${APP_IMAGE_TAG:-local}
+    init: true
+    ports:
+      - "127.0.0.1:${APP_PORT:-18082}:8000"
+    cap_drop:
+      - ALL
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  backup:
+    image: user-feedback-semantics:${APP_IMAGE_TAG:-local}
+    init: true
+    cap_drop:
+      - ALL
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  migrate:
+    image: user-feedback-semantics:${APP_IMAGE_TAG:-local}
+    environment:
+      WEBAPP_DATA_DIR: /app/runtime
+      WEBAPP_DATABASE_PATH: /app/runtime/app.db
+      WEBAPP_BACKUP_DIR: /app/backups
+      WEBAPP_ENCRYPTION_KEY: ${WEBAPP_ENCRYPTION_KEY}
+    cap_drop:
+      - ALL
+
+  caddy:
+    profiles:
+      - standalone
