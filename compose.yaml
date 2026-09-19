@@ -2,6 +2,9 @@ services:
   app:
     build: .
     restart: unless-stopped
+    env_file:
+      - path: .env.mysql
+        required: false
     environment:
       WEBAPP_PRODUCTION: "true"
       WEBAPP_DATA_DIR: /app/runtime
