@@ -2936,6 +2936,71 @@ describe("关键用户流程", () => {
     expect(screen.queryByText("gpt-5.6")).not.toBeInTheDocument();
   });
 
+  test("模型服务加载完成前不显示未创建状态", async () => {
+    let resolveConfigs;
+    apiMock.configs.mockReturnValue(
+      new Promise((resolve) => {
+        resolveConfigs = resolve;
+      }),
+    );
+
+    render(<ApiManagement notify={vi.fn()} />);
+
+    expect(screen.getByText("正在读取模型服务…")).toBeVisible();
+    expect(screen.queryByText("尚未创建模型服务")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "新增模型服务" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("0 个可用模型")).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveConfigs([
+        {
+          id: "conn-1",
+          name: "sub2api",
+          provider: "responses-compatible",
+          active_version_id: "cfg-1",
+          active_version: {
+            id: "cfg-1",
+            version: 4,
+            base_url: "https://api.example.com/v1",
+            validation_status: "validated",
+          },
+          versions: [],
+          models: [],
+        },
+      ]);
+    });
+
+    expect(await screen.findByRole("heading", { name: "sub2api" })).toBeVisible();
+    expect(screen.queryByText("正在读取模型服务…")).not.toBeInTheDocument();
+  });
+
+  test("模型服务只有读取成功后才显示真实空状态", async () => {
+    apiMock.configs.mockResolvedValue([]);
+
+    render(<ApiManagement notify={vi.fn()} />);
+
+    expect(await screen.findByText("尚未创建模型服务")).toBeVisible();
+    expect(screen.getByRole("button", { name: "新增模型服务" })).toBeVisible();
+    expect(screen.queryByText("正在读取模型服务…")).not.toBeInTheDocument();
+  });
+
+  test("模型服务读取失败时显示重试且不伪装为空状态", async () => {
+    const user = userEvent.setup();
+    apiMock.configs
+      .mockRejectedValueOnce(new Error("模型服务暂时不可用"))
+      .mockResolvedValueOnce([]);
+
+    render(<ApiManagement notify={vi.fn()} />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("模型服务暂时不可用");
+    expect(screen.queryByText("尚未创建模型服务")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "重新加载" }));
+    expect(await screen.findByText("尚未创建模型服务")).toBeVisible();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   test("用户设置首屏使用用户与安全标题", async () => {
     render(
       <TeamPage
@@ -2947,6 +3012,61 @@ describe("关键用户流程", () => {
     expect(await screen.findByRole("heading", { name: "用户与安全" })).toBeVisible();
     expect(screen.getByText("用户账号")).toBeVisible();
     expect(screen.getByText("账号安全")).toBeVisible();
+  });
+
+  test("用户数据加载完成前不显示零用户状态", async () => {
+    let resolveUsers;
+    apiMock.users.mockReturnValue(
+      new Promise((resolve) => {
+        resolveUsers = resolve;
+      }),
+    );
+
+    render(
+      <TeamPage
+        notify={vi.fn()}
+        currentUser={{ id: "user-1", display_name: "管理员" }}
+      />,
+    );
+
+    expect(screen.getByText("正在读取用户与安全设置…")).toBeVisible();
+    expect(screen.queryByText("0/5 个启用账号 · 0 个账号")).not.toBeInTheDocument();
+    expect(screen.queryByText("暂无用户账号")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "新增用户" })).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveUsers([
+        {
+          id: "user-1",
+          display_name: "管理员",
+          email: "admin@example.com",
+          active: true,
+        },
+      ]);
+    });
+
+    expect(await screen.findByText("1/5 个启用账号 · 1 个账号")).toBeVisible();
+    expect(screen.queryByText("正在读取用户与安全设置…")).not.toBeInTheDocument();
+  });
+
+  test("用户数据读取失败时显示重试且不伪装为空列表", async () => {
+    const user = userEvent.setup();
+    apiMock.users
+      .mockRejectedValueOnce(new Error("用户数据暂时不可用"))
+      .mockResolvedValueOnce([]);
+
+    render(
+      <TeamPage
+        notify={vi.fn()}
+        currentUser={{ id: "user-1", display_name: "管理员" }}
+      />,
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("用户数据暂时不可用");
+    expect(screen.queryByText("暂无用户账号")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "重新加载" }));
+    expect(await screen.findByText("暂无用户账号")).toBeVisible();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   test("用户与安全仅在表单完成后启用主操作", async () => {
@@ -3066,6 +3186,25 @@ describe("关键用户流程", () => {
       screen.queryByRole("heading", { name: "用户与安全" }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "模型服务" })).toBeVisible();
+  });
+
+  test("系统设置快速切换时只显示当前标签的加载状态", () => {
+    apiMock.configs.mockReturnValue(new Promise(() => {}));
+    apiMock.users.mockReturnValue(new Promise(() => {}));
+    window.location.hash = "#settings?tab=service";
+    render(<SystemSettingsRouteHarness />);
+
+    expect(screen.getByText("正在读取模型服务…")).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "用户与安全" }));
+    expect(screen.getByText("正在读取用户与安全设置…")).toBeVisible();
+    expect(screen.queryByText("正在读取模型服务…")).not.toBeInTheDocument();
+    expect(screen.queryByText("暂无用户账号")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "模型服务" }));
+    expect(screen.getByText("正在读取模型服务…")).toBeVisible();
+    expect(screen.queryByText("正在读取用户与安全设置…")).not.toBeInTheDocument();
+    expect(screen.queryByText("尚未创建模型服务")).not.toBeInTheDocument();
   });
 
   test("旧 API 与模型标签统一进入模型服务且只高亮一个子导航", async () => {

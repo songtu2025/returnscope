@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Power, UserPlus } from "@phosphor-icons/react";
+import { Power, UserPlus, WarningCircle } from "@phosphor-icons/react";
 import { api } from "../api";
 import { navigateHash } from "../app/hashRouter";
-import { CardHeading, Modal, PageHeading } from "../components/SharedUi";
+import {
+  CardHeading,
+  EmptyState,
+  InlineLoading,
+  Modal,
+  PageHeading,
+} from "../components/SharedUi";
 import { classNames, formatTime } from "../lib/presentation";
 
 /** @typedef {import("../shared/api/systemSettingsContracts").TeamUser} TeamUser */
@@ -40,6 +46,10 @@ export function TeamPage({
   focusUserId = null,
 }) {
   const [users, setUsers] = useState(/** @type {TeamUser[]} */ ([]));
+  const [loadState, setLoadState] = useState(
+    /** @type {"loading" | "ready" | "error"} */ ("loading"),
+  );
+  const [loadError, setLoadError] = useState("");
   const [form, setForm] = useState({
     email: "",
     display_name: "",
@@ -60,7 +70,27 @@ export function TeamPage({
   const [statusUpdating, setStatusUpdating] = useState(false);
   const passwordInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const focusedUserRef = useRef(/** @type {HTMLDivElement | null} */ (null));
-  const load = useCallback(() => api.users().then(setUsers), []);
+  const hasLoadedUsers = useRef(false);
+  const load = useCallback(async () => {
+    const isInitialLoad = !hasLoadedUsers.current;
+    if (isInitialLoad) {
+      setLoadState("loading");
+      setLoadError("");
+    }
+    try {
+      const values = await api.users();
+      setUsers(values);
+      hasLoadedUsers.current = true;
+      setLoadState("ready");
+      setLoadError("");
+    } catch (error) {
+      if (isInitialLoad) {
+        setLoadState("error");
+        setLoadError(requestError(error).message);
+      }
+      throw error;
+    }
+  }, []);
   useEffect(() => {
     load().catch((error) => notify(error.message, "error"));
   }, [load, notify]);
@@ -147,100 +177,126 @@ export function TeamPage({
         title="用户与安全"
         description="管理可登录账号与当前账号密码。"
       />
-      <div className="team-layout">
-        <section className="content-card">
-          <CardHeading
-            title="用户账号"
-            note={`${activeCount}/5 个启用账号 · ${users.length} 个账号`}
+      {loadState === "loading" && <InlineLoading label="正在读取用户与安全设置…" />}
+      {loadState === "error" && (
+        <section role="alert">
+          <EmptyState
+            icon={WarningCircle}
+            title="用户与安全设置读取失败"
+            description={loadError}
             action={
               <button
-                className="primary-button compact-button"
-                disabled={activeCount >= 5}
-                onClick={() => setShowCreateModal(true)}
+                type="button"
+                className="secondary-button"
+                onClick={() =>
+                  load().catch((error) => notify(requestError(error).message, "error"))
+                }
               >
-                <UserPlus size={16} />
-                {activeCount >= 5 ? "已达 5 人上限" : "新增用户"}
+                重新加载
               </button>
             }
           />
-          <div className="member-table">
-            <div className="table-head">
-              <span>用户</span>
-              <span>邮箱</span>
-              <span>状态</span>
-              <span>操作</span>
-            </div>
-            {users.map((user) => {
-              const isFocused = String(user.id) === String(focusUserId);
-              const isCurrentUser = String(user.id) === String(currentUser?.id);
-              return (
-                <div
-                  key={user.id}
-                  ref={isFocused ? focusedUserRef : null}
-                  className={isFocused ? "is-targeted" : ""}
-                  aria-current={isFocused ? "true" : undefined}
-                >
-                  <span className="member-name">
-                    <i>{user.display_name.slice(0, 1)}</i>
-                    <b>
-                      {user.display_name}
-                      {user.id === currentUser?.id && <small>当前账号</small>}
-                    </b>
-                  </span>
-                  <span>{user.email}</span>
-                  <em className={user.active ? "online" : ""}>
-                    {user.active ? "启用" : "停用"}
-                  </em>
-                  <div className="member-actions">
-                    {isCurrentUser ? (
-                      <button
-                        className="member-toggle"
-                        onClick={() => setShowPasswordModal(true)}
-                      >
-                        改密码
-                      </button>
-                    ) : (
-                      <button
-                        className={classNames("member-toggle", user.active && "danger")}
-                        onClick={() => {
-                          setStatusTarget(user);
-                          setStatusNote("");
-                        }}
-                      >
-                        {user.active ? "停用" : "启用"}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-            {users.length === 0 && <div className="team-empty-row">暂无用户账号</div>}
-          </div>
-          <div className="team-security-bar" id="change-password">
-            <div>
-              <span>账号安全</span>
-              <b>
-                当前登录账号：{currentDisplayName} · {currentEmail}
-              </b>
-              <small>关键操作会写入审计记录。</small>
-            </div>
-            <div className="team-security-actions">
-              <button
-                className="secondary-button"
-                onClick={() => setShowPasswordModal(true)}
-              >
-                修改我的密码
-              </button>
-              <button
-                className="secondary-button"
-                onClick={() => navigateHash("settings", { tab: "audit" })}
-              >
-                查看审计记录
-              </button>
-            </div>
-          </div>
         </section>
-      </div>
+      )}
+      {loadState === "ready" && (
+        <div className="team-layout">
+          <section className="content-card">
+            <CardHeading
+              title="用户账号"
+              note={`${activeCount}/5 个启用账号 · ${users.length} 个账号`}
+              action={
+                <button
+                  className="primary-button compact-button"
+                  disabled={activeCount >= 5}
+                  onClick={() => setShowCreateModal(true)}
+                >
+                  <UserPlus size={16} />
+                  {activeCount >= 5 ? "已达 5 人上限" : "新增用户"}
+                </button>
+              }
+            />
+            <div className="member-table">
+              <div className="table-head">
+                <span>用户</span>
+                <span>邮箱</span>
+                <span>状态</span>
+                <span>操作</span>
+              </div>
+              {users.map((user) => {
+                const isFocused = String(user.id) === String(focusUserId);
+                const isCurrentUser = String(user.id) === String(currentUser?.id);
+                return (
+                  <div
+                    key={user.id}
+                    ref={isFocused ? focusedUserRef : null}
+                    className={isFocused ? "is-targeted" : ""}
+                    aria-current={isFocused ? "true" : undefined}
+                  >
+                    <span className="member-name">
+                      <i>{user.display_name.slice(0, 1)}</i>
+                      <b>
+                        {user.display_name}
+                        {user.id === currentUser?.id && <small>当前账号</small>}
+                      </b>
+                    </span>
+                    <span>{user.email}</span>
+                    <em className={user.active ? "online" : ""}>
+                      {user.active ? "启用" : "停用"}
+                    </em>
+                    <div className="member-actions">
+                      {isCurrentUser ? (
+                        <button
+                          className="member-toggle"
+                          onClick={() => setShowPasswordModal(true)}
+                        >
+                          改密码
+                        </button>
+                      ) : (
+                        <button
+                          className={classNames(
+                            "member-toggle",
+                            user.active && "danger",
+                          )}
+                          onClick={() => {
+                            setStatusTarget(user);
+                            setStatusNote("");
+                          }}
+                        >
+                          {user.active ? "停用" : "启用"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              {users.length === 0 && <div className="team-empty-row">暂无用户账号</div>}
+            </div>
+            <div className="team-security-bar" id="change-password">
+              <div>
+                <span>账号安全</span>
+                <b>
+                  当前登录账号：{currentDisplayName} · {currentEmail}
+                </b>
+                <small>关键操作会写入审计记录。</small>
+              </div>
+              <div className="team-security-actions">
+                <button
+                  className="secondary-button"
+                  onClick={() => setShowPasswordModal(true)}
+                >
+                  修改我的密码
+                </button>
+                <button
+                  className="secondary-button"
+                  onClick={() => navigateHash("settings", { tab: "audit" })}
+                >
+                  查看审计记录
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
       {showCreateModal && (
         <Modal
           eyebrow="用户账号"

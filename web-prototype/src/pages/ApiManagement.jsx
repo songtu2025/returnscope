@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { WarningCircle } from "@phosphor-icons/react";
 import Button from "antd/es/button";
 import { api } from "../api";
 import { AntdProvider } from "../components/AntdProvider";
-import { PageHeading } from "../components/SharedUi";
+import { EmptyState, InlineLoading, PageHeading } from "../components/SharedUi";
 import { ModelEditorDialog } from "../features/system-settings/ModelEditorDialog";
 import { ModelServiceEditor } from "../features/system-settings/ModelServiceEditor";
 import { ModelServiceSummary } from "../features/system-settings/ModelServiceSummary";
@@ -80,6 +81,10 @@ export function ApiManagement({
   focusModelId = null,
 }) {
   const [connections, setConnections] = useState(/** @type {ModelConnection[]} */ ([]));
+  const [loadState, setLoadState] = useState(
+    /** @type {"loading" | "ready" | "error"} */ ("loading"),
+  );
+  const [loadError, setLoadError] = useState("");
   const [selectedConnectionId, setSelectedConnectionId] = useState(
     /** @type {string | null} */ (null),
   );
@@ -109,6 +114,7 @@ export function ApiManagement({
   );
   const [validationElapsed, setValidationElapsed] = useState(0);
   const [discardConfirmation, setDiscardConfirmation] = useState(false);
+  const hasLoadedConnections = useRef(false);
   const preserveConfigForm = useRef(false);
   const focusedModelRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const validationActive = validationRun
@@ -123,15 +129,31 @@ export function ApiManagement({
   }, [focusConfigVersionId, focusModelId]);
 
   const load = useCallback(async () => {
-    const values = await modelServiceApi.configs();
-    setConnections(values);
-    setSelectedConnectionId(
-      (current) =>
-        values.find((item) => String(item.id) === String(focusConnectionId))?.id ??
-        current ??
-        values[0]?.id ??
-        null,
-    );
+    const isInitialLoad = !hasLoadedConnections.current;
+    if (isInitialLoad) {
+      setLoadState("loading");
+      setLoadError("");
+    }
+    try {
+      const values = await modelServiceApi.configs();
+      setConnections(values);
+      setSelectedConnectionId(
+        (current) =>
+          values.find((item) => String(item.id) === String(focusConnectionId))?.id ??
+          current ??
+          values[0]?.id ??
+          null,
+      );
+      hasLoadedConnections.current = true;
+      setLoadState("ready");
+      setLoadError("");
+    } catch (error) {
+      if (isInitialLoad) {
+        setLoadState("error");
+        setLoadError(errorMessage(error));
+      }
+      throw error;
+    }
   }, [focusConnectionId]);
   useEffect(() => {
     load().catch((error) => notify(errorMessage(error), "error"));
@@ -649,7 +671,28 @@ export function ApiManagement({
             ) : null
           }
         />
-        {!activePanel ? (
+        {loadState === "loading" ? (
+          <InlineLoading label="正在读取模型服务…" />
+        ) : loadState === "error" ? (
+          <section role="alert">
+            <EmptyState
+              icon={WarningCircle}
+              title="模型服务读取失败"
+              description={loadError}
+              action={
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() =>
+                    load().catch((error) => notify(errorMessage(error), "error"))
+                  }
+                >
+                  重新加载
+                </button>
+              }
+            />
+          </section>
+        ) : !activePanel ? (
           <ModelServiceSummary
             connections={connections}
             selectedConnectionId={selectedConnectionId}
