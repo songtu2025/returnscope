@@ -40,6 +40,10 @@ export const PAGE_IDS = new Set([
   "task-create",
   "legacy-results",
   "review",
+  "login",
+  "forgot-password",
+  "register",
+  "reset-password",
 ]);
 
 /** @type {Record<string, {page: string, query?: RouteQuery}>} */

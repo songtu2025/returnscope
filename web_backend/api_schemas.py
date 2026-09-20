@@ -397,6 +397,27 @@ class LoginRequest(BaseModel):
     password: str = Field(max_length=200)
 
 
+class InvitationCreateRequest(BaseModel):
+    email: str = Field(max_length=254)
+
+
+class AuthTokenRequest(BaseModel):
+    token: str = Field(min_length=20, max_length=500)
+
+
+class RegisterRequest(AuthTokenRequest):
+    display_name: str = Field(min_length=1, max_length=60)
+    password: str = Field(max_length=200)
+
+
+class PasswordResetRequest(BaseModel):
+    email: str = Field(max_length=254)
+
+
+class PasswordResetCompleteRequest(AuthTokenRequest):
+    new_password: str = Field(max_length=200)
+
+
 class UserCreateRequest(BaseModel):
     email: str
     display_name: str = Field(min_length=1, max_length=60)

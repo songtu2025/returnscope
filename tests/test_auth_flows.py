@@ -1,0 +1,463 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
+
+from cryptography.fernet import Fernet
+from fastapi.testclient import TestClient
+
+from web_backend.database import (
+    AUTH_ACTION_TOKEN_MIGRATION,
+    AUTH_ACTION_TOKEN_MIGRATION_CHECKSUM,
+    Database,
+)
+from web_backend.settings import Settings
+
+
+@dataclass
+class FakeMailSender:
+    invitations: list[dict[str, str]] = field(default_factory=list)
+    password_resets: list[dict[str, str]] = field(default_factory=list)
+    fail_invitation: bool = False
+    fail_password_reset: bool = False
+
+    def send_invitation(self, email: str, invitation_url: str) -> None:
+        if self.fail_invitation:
+            raise RuntimeError("模拟邀请邮件失败")
+        self.invitations.append({"email": email, "url": invitation_url})
+
+    def send_password_reset(self, email: str, reset_url: str) -> None:
+        if self.fail_password_reset:
+            raise RuntimeError("模拟重置邮件失败")
+        self.password_resets.append({"email": email, "url": reset_url})
+
+
+def _settings(tmp_path: Path) -> Settings:
+    return Settings(
+        data_dir=tmp_path / "runtime",
+        database_path=tmp_path / "runtime" / "app.db",
+        session_days=14,
+        task_workers=1,
+        bootstrap_email="admin@example.com",
+        bootstrap_name="管理员",
+        bootstrap_password="test-password-123",
+        encryption_key=Fernet.generate_key().decode("ascii"),
+        secure_cookies=False,
+        public_web_url="https://feedback.example.com",
+    )
+
+
+def _token_from_url(url: str) -> str:
+    fragment = urlsplit(url).fragment
+    query = fragment.split("?", maxsplit=1)[1]
+    return parse_qs(query)["token"][0]
+
+
+def _login_admin(client: TestClient) -> None:
+    response = client.post(
+        "/api/auth/login",
+        json={
+            "email": "admin@example.com",
+            "password": "test-password-123",
+        },
+    )
+    assert response.status_code == 200
+
+
+def _create_member(client: TestClient) -> None:
+    response = client.post(
+        "/api/users",
+        json={
+            "email": "member@example.com",
+            "display_name": "测试成员",
+            "password": "member-password-123",
+        },
+    )
+    assert response.status_code == 201
+
+
+def test_auth_action_token_migration_is_idempotent(tmp_path: Path) -> None:
+    database = Database(tmp_path / "app.db")
+
+    database.initialize()
+    database.initialize()
+
+    with database.connect() as connection:
+        migration = connection.execute(
+            "SELECT * FROM app_migrations WHERE migration_id = ?",
+            (AUTH_ACTION_TOKEN_MIGRATION,),
+        ).fetchone()
+        columns = {
+            row["name"]
+            for row in connection.execute(
+                "PRAGMA table_info(auth_action_tokens)"
+            ).fetchall()
+        }
+    assert migration["checksum"] == AUTH_ACTION_TOKEN_MIGRATION_CHECKSUM
+    assert {
+        "id",
+        "user_id",
+        "email",
+        "purpose",
+        "token_hash",
+        "expires_at",
+        "used_at",
+        "revoked_at",
+        "created_by",
+        "created_at",
+    } == columns
+
+
+def test_admin_invites_member_and_member_registers_once(tmp_path: Path) -> None:
+    from web_backend.app import create_app
+
+    sender = FakeMailSender()
+    app = create_app(
+        start_worker=False,
+        settings_override=_settings(tmp_path),
+        mail_sender_override=sender,
+    )
+
+    with TestClient(app) as client:
+        _login_admin(client)
+        invited = client.post(
+            "/api/invitations",
+            json={"email": "Member@Example.com"},
+        )
+        assert invited.status_code == 201
+        assert invited.json()["email"] == "member@example.com"
+        assert len(sender.invitations) == 1
+        raw_token = _token_from_url(sender.invitations[0]["url"])
+        assert sender.invitations[0]["url"].startswith(
+            "https://feedback.example.com/#register?token="
+        )
+
+        with app.state.database.connect() as connection:
+            token_row = connection.execute(
+                "SELECT token_hash FROM auth_action_tokens WHERE id = ?",
+                (invited.json()["id"],),
+            ).fetchone()
+        assert token_row["token_hash"] != raw_token
+        assert raw_token not in token_row["token_hash"]
+
+        validated = client.post(
+            "/api/auth/invitations/validate",
+            json={"token": raw_token},
+        )
+        assert validated.status_code == 200
+        assert validated.json()["email"] == "member@example.com"
+
+        registered = client.post(
+            "/api/auth/register",
+            json={
+                "token": raw_token,
+                "display_name": "测试成员",
+                "password": "member-password-123",
+            },
+        )
+        assert registered.status_code == 200
+        assert registered.json()["email"] == "member@example.com"
+        assert client.get("/api/auth/me").json()["display_name"] == "测试成员"
+        reused = client.post(
+            "/api/auth/invitations/validate",
+            json={"token": raw_token},
+        )
+        assert reused.status_code == 400
+
+
+def test_resend_and_revoke_invitation_invalidates_links(tmp_path: Path) -> None:
+    from web_backend.app import create_app
+
+    sender = FakeMailSender()
+    app = create_app(
+        start_worker=False,
+        settings_override=_settings(tmp_path),
+        mail_sender_override=sender,
+    )
+
+    with TestClient(app) as client:
+        _login_admin(client)
+        invited = client.post(
+            "/api/invitations",
+            json={"email": "member@example.com"},
+        ).json()
+        old_token = _token_from_url(sender.invitations[-1]["url"])
+
+        resent = client.post(f"/api/invitations/{invited['id']}/resend")
+        assert resent.status_code == 201
+        new_token = _token_from_url(sender.invitations[-1]["url"])
+        assert new_token != old_token
+        assert (
+            client.post(
+                "/api/auth/invitations/validate",
+                json={"token": old_token},
+            ).status_code
+            == 400
+        )
+        assert (
+            client.post(
+                "/api/auth/invitations/validate",
+                json={"token": new_token},
+            ).status_code
+            == 200
+        )
+
+        revoked = client.post(f"/api/invitations/{resent.json()['id']}/revoke")
+        assert revoked.status_code == 204
+        assert (
+            client.post(
+                "/api/auth/invitations/validate",
+                json={"token": new_token},
+            ).status_code
+            == 400
+        )
+        assert client.get("/api/invitations").json() == []
+
+
+def test_pending_invitations_reserve_team_seats(tmp_path: Path) -> None:
+    from web_backend.app import create_app
+
+    sender = FakeMailSender()
+    app = create_app(
+        start_worker=False,
+        settings_override=_settings(tmp_path),
+        mail_sender_override=sender,
+    )
+
+    with TestClient(app) as client:
+        _login_admin(client)
+        invitations = []
+        for index in range(1, 5):
+            response = client.post(
+                "/api/invitations",
+                json={"email": f"member{index}@example.com"},
+            )
+            assert response.status_code == 201
+            invitations.append(response.json())
+        full = client.post(
+            "/api/invitations",
+            json={"email": "member5@example.com"},
+        )
+        assert full.status_code == 409
+
+        assert (
+            client.post(f"/api/invitations/{invitations[0]['id']}/revoke").status_code
+            == 204
+        )
+        replacement = client.post(
+            "/api/invitations",
+            json={"email": "member5@example.com"},
+        )
+        assert replacement.status_code == 201
+
+
+def test_invitation_requires_admin_and_rejects_expired_or_short_password(
+    tmp_path: Path,
+) -> None:
+    from web_backend.app import create_app
+
+    sender = FakeMailSender()
+    app = create_app(
+        start_worker=False,
+        settings_override=_settings(tmp_path),
+        mail_sender_override=sender,
+    )
+
+    with TestClient(app) as client:
+        _login_admin(client)
+        _create_member(client)
+        invited = client.post(
+            "/api/invitations",
+            json={"email": "invited@example.com"},
+        )
+        assert invited.status_code == 201
+        raw_token = _token_from_url(sender.invitations[-1]["url"])
+        short_password = client.post(
+            "/api/auth/register",
+            json={
+                "token": raw_token,
+                "display_name": "受邀成员",
+                "password": "short-pass",
+            },
+        )
+        assert short_password.status_code == 400
+
+        with app.state.database.transaction() as connection:
+            connection.execute(
+                "UPDATE auth_action_tokens SET expires_at = ? WHERE id = ?",
+                ("2000-01-01T00:00:00+00:00", invited.json()["id"]),
+            )
+        expired = client.post(
+            "/api/auth/invitations/validate",
+            json={"token": raw_token},
+        )
+        assert expired.status_code == 400
+
+        assert client.post("/api/auth/logout").status_code == 204
+        assert (
+            client.post(
+                "/api/auth/login",
+                json={
+                    "email": "member@example.com",
+                    "password": "member-password-123",
+                },
+            ).status_code
+            == 200
+        )
+        assert client.get("/api/invitations").status_code == 403
+        assert (
+            client.post(
+                "/api/invitations",
+                json={"email": "unauthorized@example.com"},
+            ).status_code
+            == 403
+        )
+
+
+def test_password_reset_is_private_single_use_and_revokes_sessions(
+    tmp_path: Path,
+) -> None:
+    from web_backend.app import create_app
+
+    sender = FakeMailSender()
+    app = create_app(
+        start_worker=False,
+        settings_override=_settings(tmp_path),
+        mail_sender_override=sender,
+    )
+
+    with TestClient(app) as client:
+        _login_admin(client)
+        _create_member(client)
+        assert client.post("/api/auth/logout").status_code == 204
+        assert (
+            client.post(
+                "/api/auth/login",
+                json={
+                    "email": "member@example.com",
+                    "password": "member-password-123",
+                },
+            ).status_code
+            == 200
+        )
+
+        existing = client.post(
+            "/api/auth/password-reset/request",
+            json={"email": "member@example.com"},
+        )
+        missing = client.post(
+            "/api/auth/password-reset/request",
+            json={"email": "missing@example.com"},
+        )
+        assert existing.status_code == missing.status_code == 204
+        assert len(sender.password_resets) == 1
+        raw_token = _token_from_url(sender.password_resets[0]["url"])
+        assert (
+            client.post(
+                "/api/auth/password-reset/validate",
+                json={"token": raw_token},
+            ).status_code
+            == 200
+        )
+
+        completed = client.post(
+            "/api/auth/password-reset/complete",
+            json={
+                "token": raw_token,
+                "new_password": "new-member-password-456",
+            },
+        )
+        assert completed.status_code == 204
+        assert client.get("/api/auth/me").status_code == 401
+        assert (
+            client.post(
+                "/api/auth/login",
+                json={
+                    "email": "member@example.com",
+                    "password": "member-password-123",
+                },
+            ).status_code
+            == 401
+        )
+        assert (
+            client.post(
+                "/api/auth/login",
+                json={
+                    "email": "member@example.com",
+                    "password": "new-member-password-456",
+                },
+            ).status_code
+            == 200
+        )
+        reused = client.post(
+            "/api/auth/password-reset/complete",
+            json={
+                "token": raw_token,
+                "new_password": "another-member-password-789",
+            },
+        )
+        assert reused.status_code == 400
+
+
+def test_password_reset_request_is_rate_limited(tmp_path: Path) -> None:
+    from web_backend.app import create_app
+
+    sender = FakeMailSender()
+    app = create_app(
+        start_worker=False,
+        settings_override=_settings(tmp_path),
+        mail_sender_override=sender,
+    )
+
+    with TestClient(app) as client:
+        _login_admin(client)
+        for _ in range(3):
+            response = client.post(
+                "/api/auth/password-reset/request",
+                json={"email": "admin@example.com"},
+            )
+            assert response.status_code == 204
+        limited = client.post(
+            "/api/auth/password-reset/request",
+            json={"email": "admin@example.com"},
+        )
+        assert limited.status_code == 429
+        assert limited.headers["retry-after"]
+
+
+def test_mail_failures_leave_no_usable_tokens(tmp_path: Path) -> None:
+    from web_backend.app import create_app
+
+    sender = FakeMailSender(fail_invitation=True)
+    app = create_app(
+        start_worker=False,
+        settings_override=_settings(tmp_path),
+        mail_sender_override=sender,
+    )
+
+    with TestClient(app) as client:
+        _login_admin(client)
+        failed_invitation = client.post(
+            "/api/invitations",
+            json={"email": "member@example.com"},
+        )
+        assert failed_invitation.status_code == 502
+        assert client.get("/api/invitations").json() == []
+
+        sender.fail_invitation = False
+        _create_member(client)
+        sender.fail_password_reset = True
+        reset = client.post(
+            "/api/auth/password-reset/request",
+            json={"email": "member@example.com"},
+        )
+        assert reset.status_code == 204
+        with app.state.database.connect() as connection:
+            usable_tokens = connection.execute(
+                """
+                SELECT COUNT(*) AS count FROM auth_action_tokens
+                WHERE used_at IS NULL AND revoked_at IS NULL
+                """
+            ).fetchone()["count"]
+        assert usable_tokens == 0

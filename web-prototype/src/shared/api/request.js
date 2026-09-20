@@ -81,7 +81,11 @@ export async function request(path, options = {}) {
         : "请求失败";
     throw new ApiError(message, response.status);
   }
-  if (path === "/api/auth/login" || path === "/api/auth/me") {
+  if (
+    path === "/api/auth/login" ||
+    path === "/api/auth/me" ||
+    path === "/api/auth/register"
+  ) {
     resetSessionExpiration();
   }
   return payload;

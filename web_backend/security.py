@@ -4,6 +4,7 @@ import base64
 import hashlib
 import hmac
 import secrets
+import sqlite3
 import threading
 import time
 from dataclasses import dataclass
@@ -57,6 +58,13 @@ def utc_now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def normalize_email(value: str) -> str:
+    email = value.strip().lower()
+    if "@" not in email or email.startswith("@") or email.endswith("@"):
+        raise ValueError("请输入有效邮箱")
+    return email
+
+
 def hash_password(password: str) -> str:
     if len(password) < 10:
         raise ValueError("密码至少需要 10 个字符")
@@ -108,26 +116,34 @@ class SessionService:
         self.session_days = session_days
 
     def create(self, user_id: str) -> Session:
+        with self.database.transaction(immediate=True) as connection:
+            return self.create_in_connection(connection, user_id)
+
+    def create_in_connection(
+        self,
+        connection: sqlite3.Connection,
+        user_id: str,
+    ) -> Session:
+        """在调用方事务中创建会话，供原子注册流程复用。"""
         token = secrets.token_urlsafe(36)
         expires_at = datetime.now(UTC) + timedelta(days=self.session_days)
-        with self.database.transaction(immediate=True) as connection:
-            connection.execute(
-                "DELETE FROM sessions WHERE expires_at <= ?",
-                (utc_now(),),
-            )
-            connection.execute(
-                """
-                INSERT INTO sessions(id, user_id, token_hash, expires_at, created_at)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (
-                    secrets.token_hex(16),
-                    user_id,
-                    token_hash(token),
-                    expires_at.isoformat(),
-                    utc_now(),
-                ),
-            )
+        connection.execute(
+            "DELETE FROM sessions WHERE expires_at <= ?",
+            (utc_now(),),
+        )
+        connection.execute(
+            """
+            INSERT INTO sessions(id, user_id, token_hash, expires_at, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                secrets.token_hex(16),
+                user_id,
+                token_hash(token),
+                expires_at.isoformat(),
+                utc_now(),
+            ),
+        )
         return Session(token=token, expires_at=expires_at.isoformat())
 
     def resolve(self, token: str | None) -> dict[str, object] | None:

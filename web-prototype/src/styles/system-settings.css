@@ -14,6 +14,63 @@
   border-top: 1px solid var(--line-soft);
   font-size: 12px;
 }
+.pending-invitations {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line-soft);
+}
+.pending-invitations-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 12px 10px;
+}
+.pending-invitations-heading b,
+.pending-invitations-heading span {
+  display: block;
+}
+.pending-invitations-heading b {
+  font-size: 13px;
+}
+.pending-invitations-heading span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.pending-invitations-heading em {
+  color: var(--amber);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+.invitation-table > div {
+  display: grid;
+  grid-template-columns:
+    minmax(220px, 1.45fr) minmax(180px, 1fr) minmax(88px, 0.45fr)
+    minmax(180px, 0.8fr);
+  align-items: center;
+  min-height: 48px;
+  padding: 0 12px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 12px;
+}
+.invitation-table em {
+  width: fit-content;
+  padding: 4px 7px;
+  border-radius: 8px;
+  color: var(--amber);
+  background: var(--amber-pale);
+  font-style: normal;
+}
+.invitation-actions {
+  gap: 7px;
+}
+.invitation-table > div.team-empty-row {
+  display: flex;
+  min-height: 56px;
+  color: var(--muted);
+}
 .member-name {
   display: flex;
   align-items: center;

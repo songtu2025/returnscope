@@ -12,7 +12,7 @@ import {
 import { classNames, formatTime } from "../lib/presentation";
 
 /** @typedef {import("../shared/api/systemSettingsContracts").TeamUser} TeamUser */
-/** @typedef {{email: string, display_name: string, password: string}} AccountForm */
+/** @typedef {import("../shared/api/systemSettingsContracts").TeamInvitation} TeamInvitation */
 /** @typedef {{current_password: string, new_password: string}} PasswordForm */
 /** @typedef {Error & {status?: number}} TeamRequestError */
 
@@ -23,18 +23,10 @@ function requestError(error) {
     : new Error("请求失败");
 }
 
-/** @param {AccountForm} form */
-function createAccountHint(form) {
-  if (!form.display_name.trim()) return "请填写姓名。";
-  if (!/^\S+@\S+\.\S+$/.test(form.email)) return "请填写有效邮箱。";
-  if (form.password.length < 10) return "初始密码至少 10 位。";
-  return "";
-}
-
 /** @param {PasswordForm} form */
 function passwordHint(form) {
   if (!form.current_password) return "请填写当前密码。";
-  if (form.new_password.length < 10) return "新密码至少 10 位。";
+  if (form.new_password.length < 12) return "新密码至少 12 位。";
   return "";
 }
 
@@ -46,22 +38,20 @@ export function TeamPage({
   focusUserId = null,
 }) {
   const [users, setUsers] = useState(/** @type {TeamUser[]} */ ([]));
+  const [invitations, setInvitations] = useState(/** @type {TeamInvitation[]} */ ([]));
   const [loadState, setLoadState] = useState(
     /** @type {"loading" | "ready" | "error"} */ ("loading"),
   );
   const [loadError, setLoadError] = useState("");
-  const [form, setForm] = useState({
-    email: "",
-    display_name: "",
-    password: "",
-  });
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [showInviteModal, setShowInviteModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
     current_password: "",
     new_password: "",
   });
-  const [adding, setAdding] = useState(false);
+  const [inviting, setInviting] = useState(false);
+  const [invitationAction, setInvitationAction] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
   const [statusTarget, setStatusTarget] = useState(
     /** @type {TeamUser | null} */ (null),
@@ -78,8 +68,12 @@ export function TeamPage({
       setLoadError("");
     }
     try {
-      const values = await api.users();
-      setUsers(values);
+      const [userValues, invitationValues] = await Promise.all([
+        api.users(),
+        api.invitations(),
+      ]);
+      setUsers(userValues);
+      setInvitations(invitationValues);
       hasLoadedUsers.current = true;
       setLoadState("ready");
       setLoadError("");
@@ -107,28 +101,47 @@ export function TeamPage({
     focusedUserRef.current.scrollIntoView?.({ block: "center" });
   }, [focusUserId, users]);
   const activeCount = users.filter((user) => Boolean(user.active)).length;
+  const seatCount = activeCount + invitations.length;
   const currentAccount = users.find(
     (user) => String(user.id) === String(currentUser?.id),
   );
   const currentDisplayName =
     currentAccount?.display_name || currentUser?.display_name || "当前账号";
   const currentEmail = currentAccount?.email || currentUser?.email || "未提供邮箱";
-  const accountHint = createAccountHint(form);
+  const inviteHint = /^\S+@\S+\.\S+$/.test(inviteEmail) ? "" : "请填写有效邮箱。";
   const passwordFormHint = passwordHint(passwordForm);
   /** @param {import("react").FormEvent<HTMLFormElement>} event */
   const submit = async (event) => {
     event.preventDefault();
-    setAdding(true);
+    setInviting(true);
     try {
-      await api.createUser(form);
-      setForm({ email: "", display_name: "", password: "" });
-      setShowCreateModal(false);
+      await api.inviteUser({ email: inviteEmail });
+      setInviteEmail("");
+      setShowInviteModal(false);
       await load();
-      notify("团队账号已创建");
+      notify("邀请邮件已发送");
     } catch (error) {
       notify(requestError(error).message, "error");
     } finally {
-      setAdding(false);
+      setInviting(false);
+    }
+  };
+  /** @param {string} invitationId @param {"resend" | "revoke"} action */
+  const handleInvitation = async (invitationId, action) => {
+    setInvitationAction(`${action}:${invitationId}`);
+    try {
+      if (action === "resend") {
+        await api.resendInvitation(invitationId);
+        notify("邀请邮件已重新发送");
+      } else {
+        await api.revokeInvitation(invitationId);
+        notify("邀请已撤销");
+      }
+      await load();
+    } catch (error) {
+      notify(requestError(error).message, "error");
+    } finally {
+      setInvitationAction("");
     }
   };
   /** @param {import("react").FormEvent<HTMLFormElement>} event */
@@ -203,15 +216,15 @@ export function TeamPage({
           <section className="content-card">
             <CardHeading
               title="用户账号"
-              note={`${activeCount}/5 个启用账号 · ${users.length} 个账号`}
+              note={`${seatCount}/5 个席位 · ${activeCount} 个启用账号 · ${invitations.length} 个待注册`}
               action={
                 <button
                   className="primary-button compact-button"
-                  disabled={activeCount >= 5}
-                  onClick={() => setShowCreateModal(true)}
+                  disabled={seatCount >= 5}
+                  onClick={() => setShowInviteModal(true)}
                 >
                   <UserPlus size={16} />
-                  {activeCount >= 5 ? "已达 5 人上限" : "新增用户"}
+                  {seatCount >= 5 ? "已达 5 人上限" : "邀请用户"}
                 </button>
               }
             />
@@ -271,6 +284,53 @@ export function TeamPage({
               })}
               {users.length === 0 && <div className="team-empty-row">暂无用户账号</div>}
             </div>
+            <div className="pending-invitations">
+              <div className="pending-invitations-heading">
+                <div>
+                  <b>待注册邀请</b>
+                  <span>邀请在注册完成前占用一个团队席位。</span>
+                </div>
+                <em>{invitations.length} 个待处理</em>
+              </div>
+              <div className="invitation-table">
+                <div className="table-head">
+                  <span>邮箱</span>
+                  <span>有效期至</span>
+                  <span>状态</span>
+                  <span>操作</span>
+                </div>
+                {invitations.map((invitation) => (
+                  <div key={invitation.id}>
+                    <span>{invitation.email}</span>
+                    <span>{formatTime(invitation.expires_at)}</span>
+                    <em>待注册</em>
+                    <div className="member-actions invitation-actions">
+                      <button
+                        className="member-toggle"
+                        disabled={Boolean(invitationAction)}
+                        onClick={() => handleInvitation(invitation.id, "resend")}
+                      >
+                        {invitationAction === `resend:${invitation.id}`
+                          ? "发送中…"
+                          : "重新发送"}
+                      </button>
+                      <button
+                        className="member-toggle danger"
+                        disabled={Boolean(invitationAction)}
+                        onClick={() => handleInvitation(invitation.id, "revoke")}
+                      >
+                        {invitationAction === `revoke:${invitation.id}`
+                          ? "撤销中…"
+                          : "撤销"}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {invitations.length === 0 && (
+                  <div className="team-empty-row">暂无待注册邀请</div>
+                )}
+              </div>
+            </div>
             <div className="team-security-bar" id="change-password">
               <div>
                 <span>账号安全</span>
@@ -297,62 +357,43 @@ export function TeamPage({
           </section>
         </div>
       )}
-      {showCreateModal && (
+      {showInviteModal && (
         <Modal
-          eyebrow="用户账号"
-          title="新增用户"
-          onClose={() => setShowCreateModal(false)}
+          eyebrow="团队邀请"
+          title="邀请用户"
+          onClose={() => setShowInviteModal(false)}
         >
           <form className="modal-form invite-card" onSubmit={submit}>
             <label>
-              姓名
+              邮箱
               <input
-                value={form.display_name}
-                onChange={(event) =>
-                  setForm({ ...form, display_name: event.target.value })
-                }
+                aria-label="邮箱"
+                type="email"
+                value={inviteEmail}
+                onChange={(event) => setInviteEmail(event.target.value)}
                 required
                 autoFocus
               />
-            </label>
-            <label>
-              邮箱
-              <input
-                type="email"
-                value={form.email}
-                onChange={(event) => setForm({ ...form, email: event.target.value })}
-                required
-              />
-            </label>
-            <label>
-              初始密码
-              <input
-                type="password"
-                minLength={10}
-                value={form.password}
-                onChange={(event) => setForm({ ...form, password: event.target.value })}
-                required
-              />
-              <small>至少 10 位，建议由成员首次登录后更换。</small>
+              <small>成员将通过邮件中的一次性链接设置姓名和密码。</small>
             </label>
             <div className="modal-actions">
               <button
                 type="button"
                 className="secondary-button"
-                onClick={() => setShowCreateModal(false)}
+                onClick={() => setShowInviteModal(false)}
               >
                 取消
               </button>
               <button
                 className="primary-button"
-                disabled={adding || activeCount >= 5 || Boolean(accountHint)}
+                disabled={inviting || seatCount >= 5 || Boolean(inviteHint)}
               >
-                {adding ? "正在创建…" : "创建用户"}
+                {inviting ? "正在发送…" : "发送邀请"}
               </button>
             </div>
-            {activeCount < 5 && accountHint && (
+            {seatCount < 5 && inviteHint && (
               <small role="status" aria-live="polite">
-                {accountHint}
+                {inviteHint}
               </small>
             )}
           </form>
@@ -385,7 +426,7 @@ export function TeamPage({
               新密码
               <input
                 type="password"
-                minLength={10}
+                minLength={12}
                 value={passwordForm.new_password}
                 onChange={(event) =>
                   setPasswordForm({
@@ -395,7 +436,7 @@ export function TeamPage({
                 }
                 required
               />
-              <small>密码至少 10 位。修改成功后需要重新登录。</small>
+              <small>密码至少 12 位。修改成功后需要重新登录。</small>
             </label>
             <div className="modal-actions">
               <button

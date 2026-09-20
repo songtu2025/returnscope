@@ -4,14 +4,10 @@ import {
   Pulse,
   ArrowRight,
   CaretRight,
-  CheckCircle,
-  Clock,
   Database,
   ListChecks,
-  LockKey,
   MagnifyingGlass,
   PlayCircle,
-  ShieldCheck,
   SignOut,
   WarningCircle,
 } from "@phosphor-icons/react";
@@ -26,6 +22,7 @@ import { useDialogFocus } from "./hooks/useDialogFocus";
 import { classNames } from "./lib/presentation";
 import { SESSION_EXPIRED_EVENT } from "./shared/api/request";
 import { serverStateConfig } from "./shared/serverState";
+import { AuthPages } from "./pages/AuthPages";
 
 const loadWorkbenchPage = () =>
   import("./features/workbench/WorkbenchPage").then((module) => ({
@@ -75,6 +72,12 @@ const loadSystemSettingsPage = () =>
     default: module.SystemSettingsPage,
   }));
 const SystemSettingsPage = lazy(loadSystemSettingsPage);
+const PUBLIC_AUTH_PAGES = new Set([
+  "login",
+  "forgot-password",
+  "register",
+  "reset-password",
+]);
 
 /** @type {Record<string, () => Promise<unknown>>} */
 const PAGE_PRELOADERS = {
@@ -170,10 +173,17 @@ function App() {
     return () => window.removeEventListener("keydown", handleShortcut);
   }, [user]);
 
+  useEffect(() => {
+    if (user && PUBLIC_AUTH_PAGES.has(route.page)) {
+      navigateHash("workbench", {}, { replace: true });
+    }
+  }, [route.page, user]);
+
   if (booting) return <LoadingScreen />;
   if (!user) {
     return (
-      <LoginPage
+      <AuthPages
+        route={route}
         onLogin={(value) => {
           setUser(value);
           refreshSystem();
@@ -181,6 +191,7 @@ function App() {
       />
     );
   }
+  if (PUBLIC_AUTH_PAGES.has(route.page)) return <LoadingScreen />;
 
   const page = route.page;
   return (
@@ -361,101 +372,6 @@ function LoadingScreen() {
       </div>
       <strong>正在连接智能体工作台</strong>
       <span>读取任务与运行状态…</span>
-    </div>
-  );
-}
-
-/** @param {{onLogin: (user: CurrentUser) => void}} props */
-function LoginPage({ onLogin }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-
-  const submit = async (/** @type {import("react").FormEvent} */ event) => {
-    event.preventDefault();
-    setSubmitting(true);
-    setError("");
-    try {
-      onLogin(await api.login(email, password));
-    } catch (requestError) {
-      setError(errorMessage(requestError));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="login-page">
-      <section className="login-story">
-        <div className="brand-lockup">
-          <img src="/assets/brand-mark.png" alt="" />
-          <span>Seekway Intelligence</span>
-        </div>
-        <div>
-          <p className="eyebrow light">用户语义分析智能体</p>
-          <h1>
-            让每一条用户反馈
-            <br />
-            都进入可追踪的决策流程
-          </h1>
-          <p className="login-lead">
-            数据版本、模型运行、人工复核与结果交付集中在一个工作台，所有修改都有留痕。
-          </p>
-        </div>
-        <div className="login-proof">
-          <span>
-            <CheckCircle size={18} /> 后台持续运行
-          </span>
-          <span>
-            <ShieldCheck size={18} /> 配置与数据快照
-          </span>
-          <span>
-            <Clock size={18} /> 全流程修改留痕
-          </span>
-        </div>
-      </section>
-      <section className="login-panel">
-        <form className="login-card" onSubmit={submit}>
-          <div className="login-icon">
-            <LockKey size={24} />
-          </div>
-          <p className="eyebrow">团队工作台</p>
-          <h2>登录并继续分析</h2>
-          <p>使用团队管理员为你创建的账号。</p>
-          <label>
-            邮箱
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              autoComplete="username"
-              required
-            />
-          </label>
-          <label>
-            密码
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              autoComplete="current-password"
-              required
-              autoFocus
-            />
-          </label>
-          {error && (
-            <div className="form-error">
-              <WarningCircle size={17} />
-              {error}
-            </div>
-          )}
-          <button className="primary-button login-submit" disabled={submitting}>
-            {submitting ? "正在登录…" : "进入工作台"}
-            <ArrowRight size={18} />
-          </button>
-        </form>
-      </section>
     </div>
   );
 }

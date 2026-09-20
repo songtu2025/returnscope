@@ -12,7 +12,15 @@ import { request } from "./request";
  *   changePassword: (payload: TeamPayload) => TeamRequest,
  *   status: (options?: RequestInit) => TeamRequest,
  *   users: () => Promise<TeamUser[]>,
- *   createUser: (payload: TeamPayload) => TeamRequest,
+ *   invitations: () => TeamRequest,
+ *   inviteUser: (payload: TeamPayload) => TeamRequest,
+ *   resendInvitation: (id: string) => TeamRequest,
+ *   revokeInvitation: (id: string) => TeamRequest,
+ *   validateInvitation: (token: string) => TeamRequest,
+ *   register: (payload: TeamPayload) => TeamRequest,
+ *   requestPasswordReset: (email: string) => TeamRequest,
+ *   validatePasswordReset: (token: string) => TeamRequest,
+ *   completePasswordReset: (payload: TeamPayload) => TeamRequest,
  *   updateUserStatus: (id: string, payload: TeamPayload) => TeamRequest
  * }}
  */
@@ -31,8 +39,38 @@ export const teamApi = {
     }),
   status: (options = {}) => request("/api/system/status", options),
   users: () => request("/api/users"),
-  createUser: (payload) =>
-    request("/api/users", {
+  invitations: () => request("/api/invitations"),
+  inviteUser: (payload) =>
+    request("/api/invitations", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  resendInvitation: (id) =>
+    request(`/api/invitations/${id}/resend`, { method: "POST" }),
+  revokeInvitation: (id) =>
+    request(`/api/invitations/${id}/revoke`, { method: "POST" }),
+  validateInvitation: (token) =>
+    request("/api/auth/invitations/validate", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    }),
+  register: (payload) =>
+    request("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  requestPasswordReset: (email) =>
+    request("/api/auth/password-reset/request", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+  validatePasswordReset: (token) =>
+    request("/api/auth/password-reset/validate", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    }),
+  completePasswordReset: (payload) =>
+    request("/api/auth/password-reset/complete", {
       method: "POST",
       body: JSON.stringify(payload),
     }),

@@ -70,6 +70,17 @@ const { apiMock } = vi.hoisted(() => ({
     modelPreference: vi.fn(),
     saveModelPreference: vi.fn(),
     users: vi.fn(),
+    invitations: vi.fn(),
+    inviteUser: vi.fn(),
+    resendInvitation: vi.fn(),
+    revokeInvitation: vi.fn(),
+    validateInvitation: vi.fn(),
+    register: vi.fn(),
+    requestPasswordReset: vi.fn(),
+    validatePasswordReset: vi.fn(),
+    completePasswordReset: vi.fn(),
+    changePassword: vi.fn(),
+    updateUserStatus: vi.fn(),
   },
 }));
 
@@ -224,6 +235,7 @@ beforeEach(() => {
   apiMock.taxonomy.mockResolvedValue({ labels: [] });
   apiMock.activeValidation.mockResolvedValue(null);
   apiMock.users.mockResolvedValue([]);
+  apiMock.invitations.mockResolvedValue([]);
   apiMock.eventUrl.mockReturnValue("/events");
   apiMock.validationEventUrl.mockReturnValue("/validation-events");
   apiMock.analysisDownloadUrl.mockReturnValue("/analysis-download");
@@ -298,6 +310,75 @@ describe("关键用户流程", () => {
     expect(await screen.findByRole("navigation", { name: "主导航" })).toBeVisible();
   });
 
+  test("登录页可申请密码重置且不泄露账号是否存在", async () => {
+    const user = userEvent.setup();
+    apiMock.me.mockRejectedValue(new Error("未登录"));
+    apiMock.requestPasswordReset.mockResolvedValue(null);
+
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "忘记密码？" }));
+    expect(window.location.hash).toBe("#forgot-password");
+    await user.type(screen.getByLabelText("邮箱"), "member@example.com");
+    await user.click(screen.getByRole("button", { name: /发送重置链接/ }));
+
+    expect(apiMock.requestPasswordReset).toHaveBeenCalledWith("member@example.com");
+    expect(await screen.findByRole("heading", { name: "请检查邮箱" })).toBeVisible();
+    expect(screen.getByText(/如果该邮箱对应可用账号/)).toBeVisible();
+  });
+
+  test("受邀成员验证链接后设置账号并进入工作台", async () => {
+    const user = userEvent.setup();
+    window.location.hash = "#register?token=invitation-token-value";
+    apiMock.me.mockRejectedValue(new Error("未登录"));
+    apiMock.validateInvitation.mockResolvedValue({ email: "member@example.com" });
+    apiMock.register.mockResolvedValue({
+      id: "user-2",
+      email: "member@example.com",
+      display_name: "测试成员",
+    });
+
+    render(<App />);
+
+    expect(await screen.findByDisplayValue("member@example.com")).toHaveAttribute(
+      "readonly",
+    );
+    await user.type(screen.getByLabelText("姓名"), "测试成员");
+    await user.type(screen.getByLabelText(/^密码$/), "member-password-123");
+    await user.type(screen.getByLabelText("确认密码"), "member-password-123");
+    await user.click(screen.getByRole("button", { name: /注册并进入工作台/ }));
+
+    expect(apiMock.register).toHaveBeenCalledWith({
+      token: "invitation-token-value",
+      display_name: "测试成员",
+      password: "member-password-123",
+    });
+    expect(await screen.findByRole("navigation", { name: "主导航" })).toBeVisible();
+    expect(window.location.hash).toBe("#workbench");
+  });
+
+  test("密码重置成功后返回登录页并显示确认信息", async () => {
+    const user = userEvent.setup();
+    window.location.hash = "#reset-password?token=reset-token-value";
+    apiMock.me.mockRejectedValue(new Error("未登录"));
+    apiMock.validatePasswordReset.mockResolvedValue({ valid: true });
+    apiMock.completePasswordReset.mockResolvedValue(null);
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "设置新密码" });
+    await user.type(screen.getByLabelText("新密码"), "new-password-123");
+    await user.type(screen.getByLabelText("确认新密码"), "new-password-123");
+    await user.click(screen.getByRole("button", { name: /更新密码/ }));
+
+    expect(apiMock.completePasswordReset).toHaveBeenCalledWith({
+      token: "reset-token-value",
+      new_password: "new-password-123",
+    });
+    expect(await screen.findByText("密码已重置，请使用新密码登录。")).toBeVisible();
+    expect(window.location.hash).toContain("#login?notice=password-reset");
+  });
+
   test("任意子页面会话失效后退出已登录应用壳", async () => {
     apiMock.me.mockResolvedValue({
       id: "user-1",
@@ -316,6 +397,21 @@ describe("关键用户流程", () => {
     expect(
       screen.queryByRole("navigation", { name: "主导航" }),
     ).not.toBeInTheDocument();
+  });
+
+  test("已登录用户访问公开认证路由时返回首页", async () => {
+    window.location.hash = "#register?token=unused-token";
+    apiMock.me.mockResolvedValue({
+      id: "user-1",
+      email: "admin@example.com",
+      display_name: "管理员",
+    });
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "首页" })).toBeVisible();
+    expect(window.location.hash).toBe("#workbench");
+    expect(apiMock.validateInvitation).not.toHaveBeenCalled();
   });
 
   test("全局搜索约束焦点并在 Esc 与背景关闭后恢复触发点", async () => {
@@ -3064,9 +3160,11 @@ describe("关键用户流程", () => {
     );
 
     expect(screen.getByText("正在读取用户与安全设置…")).toBeVisible();
-    expect(screen.queryByText("0/5 个启用账号 · 0 个账号")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("0/5 个席位 · 0 个启用账号 · 0 个待注册"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("暂无用户账号")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "新增用户" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "邀请用户" })).not.toBeInTheDocument();
 
     await act(async () => {
       resolveUsers([
@@ -3079,7 +3177,9 @@ describe("关键用户流程", () => {
       ]);
     });
 
-    expect(await screen.findByText("1/5 个启用账号 · 1 个账号")).toBeVisible();
+    expect(
+      await screen.findByText("1/5 个席位 · 1 个启用账号 · 0 个待注册"),
+    ).toBeVisible();
     expect(screen.queryByText("正在读取用户与安全设置…")).not.toBeInTheDocument();
   });
 
@@ -3103,7 +3203,7 @@ describe("关键用户流程", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  test("用户与安全仅在表单完成后启用主操作", async () => {
+  test("用户与安全仅在邀请邮箱和密码表单完成后启用主操作", async () => {
     const user = userEvent.setup();
     render(
       <TeamPage
@@ -3112,22 +3212,20 @@ describe("关键用户流程", () => {
       />,
     );
 
-    await user.click(await screen.findByRole("button", { name: "新增用户" }));
-    const createButton = await screen.findByRole("button", {
-      name: "创建用户",
+    await user.click(await screen.findByRole("button", { name: "邀请用户" }));
+    const inviteButton = await screen.findByRole("button", {
+      name: "发送邀请",
     });
-    expect(createButton).toBeDisabled();
-    expect(screen.getByText("请填写姓名。")).toBeVisible();
+    expect(inviteButton).toBeDisabled();
+    expect(screen.getByText("请填写有效邮箱。")).toBeVisible();
 
-    await user.type(screen.getByLabelText("姓名"), "测试成员");
     await user.type(screen.getByLabelText("邮箱"), "invalid-email");
-    await user.type(screen.getByLabelText(/^初始密码/), "1234567890");
-    expect(createButton).toBeDisabled();
+    expect(inviteButton).toBeDisabled();
     expect(screen.getByText("请填写有效邮箱。")).toBeVisible();
 
     await user.clear(screen.getByLabelText("邮箱"));
     await user.type(screen.getByLabelText("邮箱"), "member@example.com");
-    expect(createButton).toBeEnabled();
+    expect(inviteButton).toBeEnabled();
 
     await user.click(screen.getByRole("button", { name: "取消" }));
     await user.click(screen.getByRole("button", { name: "修改我的密码" }));
@@ -3138,12 +3236,43 @@ describe("关键用户流程", () => {
     expect(screen.getByText("请填写当前密码。")).toBeVisible();
 
     await user.type(screen.getByLabelText("当前密码"), "old-password");
-    await user.type(screen.getByLabelText(/^新密码/), "123456789");
+    await user.type(screen.getByLabelText(/^新密码/), "12345678901");
     expect(updatePasswordButton).toBeDisabled();
-    expect(screen.getByText("新密码至少 10 位。")).toBeVisible();
+    expect(screen.getByText("新密码至少 12 位。")).toBeVisible();
 
     await user.type(screen.getByLabelText(/^新密码/), "0");
     expect(updatePasswordButton).toBeEnabled();
+  });
+
+  test("待注册邀请可重新发送和撤销", async () => {
+    const user = userEvent.setup();
+    apiMock.invitations.mockResolvedValue([
+      {
+        id: "invitation-1",
+        email: "member@example.com",
+        expires_at: "2026-09-21T08:00:00Z",
+        created_at: "2026-09-20T08:00:00Z",
+        created_by: "user-1",
+      },
+    ]);
+    apiMock.resendInvitation.mockResolvedValue({ id: "invitation-2" });
+    apiMock.revokeInvitation.mockResolvedValue(null);
+
+    render(
+      <TeamPage
+        notify={vi.fn()}
+        currentUser={{ id: "user-1", display_name: "管理员" }}
+      />,
+    );
+
+    expect(await screen.findByText("member@example.com")).toBeVisible();
+    expect(screen.getByText("1/5 个席位 · 0 个启用账号 · 1 个待注册")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "重新发送" }));
+    expect(apiMock.resendInvitation).toHaveBeenCalledWith("invitation-1");
+
+    await user.click(screen.getByRole("button", { name: "撤销" }));
+    expect(apiMock.revokeInvitation).toHaveBeenCalledWith("invitation-1");
   });
 
   test("我的模型偏好不再编辑初筛抽检比例", async () => {

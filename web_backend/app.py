@@ -1,5 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from typing import Annotated, Any, AsyncIterator
 
 from fastapi import Cookie, FastAPI, HTTPException, Request
@@ -8,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from web_backend.agent_runner import AgentRunner
 from web_backend.analysis_service import AnalysisService
+from web_backend.auth_service import AuthService
 from web_backend.classification_result_service import ClassificationResultService
 from web_backend.classification_standard_service import ClassificationStandardService
 from web_backend.classification_standard_validation_service import (
@@ -24,11 +26,13 @@ from web_backend.database import Database
 from web_backend.dataset_service import DatasetService
 from web_backend.insight_report_service import InsightReportService
 from web_backend.insight_report_worker import InsightReportWorker
+from web_backend.mail_service import MailSender, create_mail_sender
 from web_backend.model_preference_service import ModelPreferenceService
 from web_backend.operations_service import AuditLogService, WorkbenchService
 from web_backend.request_timing import RequestTimingMiddleware
 from web_backend.review_service import ReviewService
 from web_backend.routers.accounts import SESSION_COOKIE, create_account_router
+from web_backend.routers.auth_actions import create_auth_action_router
 from web_backend.routers.classification_results import (
     create_classification_result_router,
 )
@@ -54,6 +58,35 @@ from web_backend.settings import PROJECT_ROOT, Settings
 from web_backend.task_plan_service import TaskPlanService
 from web_backend.task_service import TaskService
 from web_backend.worker import TaskWorker
+
+
+@dataclass(frozen=True)
+class AuthRuntime:
+    session_service: SessionService
+    mail_sender: MailSender
+    auth_service: AuthService
+    account_login_limiter: LoginAttemptLimiter
+    address_login_limiter: LoginAttemptLimiter
+    reset_account_limiter: LoginAttemptLimiter
+    reset_address_limiter: LoginAttemptLimiter
+
+
+def _create_auth_runtime(
+    database: Database,
+    settings: Settings,
+    mail_sender_override: MailSender | None,
+) -> AuthRuntime:
+    session_service = SessionService(database, settings.session_days)
+    mail_sender = mail_sender_override or create_mail_sender(settings)
+    return AuthRuntime(
+        session_service=session_service,
+        mail_sender=mail_sender,
+        auth_service=AuthService(database, settings, mail_sender, session_service),
+        account_login_limiter=LoginAttemptLimiter(5, 15 * 60),
+        address_login_limiter=LoginAttemptLimiter(30, 15 * 60),
+        reset_account_limiter=LoginAttemptLimiter(3, 15 * 60),
+        reset_address_limiter=LoginAttemptLimiter(10, 15 * 60),
+    )
 
 
 def _bootstrap_user(database: Database, settings: Settings) -> None:
@@ -84,19 +117,23 @@ def _bootstrap_user(database: Database, settings: Settings) -> None:
             )
 
 
-def create_app(
-    start_worker: bool = True,
-    settings_override: Settings | None = None,
-) -> FastAPI:
-    settings = settings_override or Settings.from_env()
+def _create_database(settings: Settings) -> Database:
     settings.ensure_directories()
     database = Database(settings.database_path)
     database.initialize()
     _bootstrap_user(database, settings)
+    return database
+
+
+def create_app(
+    start_worker: bool = True,
+    settings_override: Settings | None = None,
+    mail_sender_override: MailSender | None = None,
+) -> FastAPI:
+    settings = settings_override or Settings.from_env()
+    database = _create_database(settings)
     secret_box = SecretBox(settings.encryption_key)
-    session_service = SessionService(database, settings.session_days)
-    account_login_limiter = LoginAttemptLimiter(5, 15 * 60)
-    address_login_limiter = LoginAttemptLimiter(30, 15 * 60)
+    auth_runtime = _create_auth_runtime(database, settings, mail_sender_override)
     dummy_password_hash = hash_password("invalid-password-only")
     dataset_service = DatasetService(database, settings)
     config_service = ConfigService(database, secret_box)
@@ -171,7 +208,7 @@ def create_app(
     def current_user(
         session_token: Annotated[str | None, Cookie(alias=SESSION_COOKIE)] = None,
     ) -> dict[str, Any]:
-        user = session_service.resolve(session_token)
+        user = auth_runtime.session_service.resolve(session_token)
         if user is None:
             raise HTTPException(status_code=401, detail="请先登录")
         return user
@@ -180,15 +217,24 @@ def create_app(
         create_account_router(
             database=database,
             settings=settings,
-            session_service=session_service,
-            account_login_limiter=account_login_limiter,
-            address_login_limiter=address_login_limiter,
+            session_service=auth_runtime.session_service,
+            account_login_limiter=auth_runtime.account_login_limiter,
+            address_login_limiter=auth_runtime.address_login_limiter,
             dummy_password_hash=dummy_password_hash,
             task_service=task_service,
             worker=worker,
             insight_report_worker=insight_report_worker,
             standard_validation_worker=standard_validation_worker,
             start_worker=start_worker,
+            current_user=current_user,
+        )
+    )
+    app.include_router(
+        create_auth_action_router(
+            auth_service=auth_runtime.auth_service,
+            settings=settings,
+            reset_account_limiter=auth_runtime.reset_account_limiter,
+            reset_address_limiter=auth_runtime.reset_address_limiter,
             current_user=current_user,
         )
     )
@@ -278,6 +324,8 @@ def create_app(
 
     app.state.settings = settings
     app.state.database = database
+    app.state.auth_service = auth_runtime.auth_service
+    app.state.mail_sender = auth_runtime.mail_sender
     app.state.worker = worker
     app.state.insight_report_service = insight_report_service
     app.state.insight_report_worker = insight_report_worker

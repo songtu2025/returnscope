@@ -11,6 +11,28 @@ CLASSIFICATION_UNIT_RERUN_MIGRATION = "20260919_classification_unit_rerun_state"
 CLASSIFICATION_UNIT_RERUN_MIGRATION_CHECKSUM = hashlib.sha256(
     b"classification_units.system_rerun_required:v1"
 ).hexdigest()
+AUTH_ACTION_TOKEN_MIGRATION = "20260920_auth_action_tokens"
+AUTH_ACTION_TOKEN_MIGRATION_SQL = """
+CREATE TABLE IF NOT EXISTS auth_action_tokens (
+    id TEXT PRIMARY KEY,
+    user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+    email TEXT NOT NULL,
+    purpose TEXT NOT NULL CHECK(purpose IN ('invitation', 'password_reset')),
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at TEXT NOT NULL,
+    used_at TEXT,
+    revoked_at TEXT,
+    created_by TEXT REFERENCES users(id),
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_auth_action_tokens_email_purpose
+ON auth_action_tokens(email, purpose, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_auth_action_tokens_user_purpose
+ON auth_action_tokens(user_id, purpose, created_at DESC);
+"""
+AUTH_ACTION_TOKEN_MIGRATION_CHECKSUM = hashlib.sha256(
+    AUTH_ACTION_TOKEN_MIGRATION_SQL.encode("utf-8")
+).hexdigest()
 
 
 def _backfill_classification_unit_rerun_state(
@@ -880,6 +902,7 @@ class Database:
         with self.connect() as connection:
             connection.execute("PRAGMA journal_mode = WAL")
             connection.executescript(SCHEMA)
+            self._migrate_auth_action_tokens(connection)
             self._migrate_user_columns(connection)
             self._migrate_dataset_columns(connection)
             self._migrate_api_config_version_columns(connection)
@@ -909,6 +932,39 @@ class Database:
             self._recover_interrupted_result_publishing(connection)
             self._migrate_api_models(connection)
             connection.execute("PRAGMA optimize")
+
+    @staticmethod
+    def _migrate_auth_action_tokens(connection: sqlite3.Connection) -> None:
+        migration = connection.execute(
+            "SELECT checksum FROM app_migrations WHERE migration_id = ?",
+            (AUTH_ACTION_TOKEN_MIGRATION,),
+        ).fetchone()
+        if migration is not None:
+            if migration["checksum"] != AUTH_ACTION_TOKEN_MIGRATION_CHECKSUM:
+                raise RuntimeError("身份操作令牌迁移校验失败")
+            return
+
+        connection.execute("SAVEPOINT migrate_auth_action_tokens")
+        try:
+            for statement in AUTH_ACTION_TOKEN_MIGRATION_SQL.split(";"):
+                if statement.strip():
+                    connection.execute(statement)
+            connection.execute(
+                """
+                INSERT INTO app_migrations(
+                    migration_id, checksum, status, applied_at
+                ) VALUES (?, ?, 'applied', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                """,
+                (
+                    AUTH_ACTION_TOKEN_MIGRATION,
+                    AUTH_ACTION_TOKEN_MIGRATION_CHECKSUM,
+                ),
+            )
+            connection.execute("RELEASE migrate_auth_action_tokens")
+        except Exception:
+            connection.execute("ROLLBACK TO migrate_auth_action_tokens")
+            connection.execute("RELEASE migrate_auth_action_tokens")
+            raise
 
     @staticmethod
     def _migrate_user_columns(connection: sqlite3.Connection) -> None:

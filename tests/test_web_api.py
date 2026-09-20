@@ -1371,11 +1371,31 @@ def test_production_settings_accept_secure_values(
         Fernet.generate_key().decode("ascii"),
     )
     monkeypatch.setenv("WEBAPP_SECURE_COOKIES", "true")
+    monkeypatch.setenv("WEBAPP_PUBLIC_URL", "https://feedback.example.com")
+    monkeypatch.setenv("WEBAPP_MAIL_PROVIDER", "smtp")
+    monkeypatch.setenv("WEBAPP_SMTP_HOST", "smtp.example.com")
+    monkeypatch.setenv("WEBAPP_SMTP_FROM", "no-reply@example.com")
 
     settings = Settings.from_env()
 
     assert settings.production is True
     assert settings.secure_cookies is True
+
+
+def test_production_settings_require_smtp(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("WEBAPP_PRODUCTION", "true")
+    monkeypatch.setenv("WEBAPP_DATA_DIR", str(tmp_path / "runtime"))
+    monkeypatch.setenv("WEBAPP_BOOTSTRAP_PASSWORD", "strong-password-123")
+    monkeypatch.setenv(
+        "WEBAPP_ENCRYPTION_KEY",
+        Fernet.generate_key().decode("ascii"),
+    )
+    monkeypatch.setenv("WEBAPP_SECURE_COOKIES", "true")
+    monkeypatch.setenv("WEBAPP_PUBLIC_URL", "https://feedback.example.com")
+    monkeypatch.setenv("WEBAPP_MAIL_PROVIDER", "console")
+
+    with pytest.raises(ValueError, match="WEBAPP_MAIL_PROVIDER=smtp"):
+        Settings.from_env()
 
 
 def test_production_settings_require_full_team_listing_capacity(
@@ -1390,6 +1410,10 @@ def test_production_settings_require_full_team_listing_capacity(
         Fernet.generate_key().decode("ascii"),
     )
     monkeypatch.setenv("WEBAPP_SECURE_COOKIES", "true")
+    monkeypatch.setenv("WEBAPP_PUBLIC_URL", "https://feedback.example.com")
+    monkeypatch.setenv("WEBAPP_MAIL_PROVIDER", "smtp")
+    monkeypatch.setenv("WEBAPP_SMTP_HOST", "smtp.example.com")
+    monkeypatch.setenv("WEBAPP_SMTP_FROM", "no-reply@example.com")
     monkeypatch.setenv("WEBAPP_TASK_WORKERS", "14")
 
     with pytest.raises(ValueError, match="15 个 Listing 槽位"):
@@ -1410,6 +1434,10 @@ def test_production_app_starts_with_secure_session(
         encryption_key=Fernet.generate_key().decode("ascii"),
         secure_cookies=True,
         production=True,
+        public_web_url="https://feedback.example.com",
+        mail_provider="smtp",
+        smtp_host="smtp.example.com",
+        smtp_from="no-reply@example.com",
     )
     settings.validate()
     app = create_app(start_worker=False, settings_override=settings)

@@ -2417,6 +2417,69 @@ label small {
 .login-card label {
   margin-top: 13px;
 }
+.login-card label small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+.auth-wide-card {
+  width: 405px;
+}
+.auth-text-action,
+.auth-back-action {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border: 0;
+  color: var(--green);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.auth-text-action {
+  margin-top: 9px;
+  margin-left: auto;
+  padding: 0;
+}
+.auth-back-action {
+  gap: 5px;
+  margin: 14px auto 0;
+  padding: 4px;
+}
+.auth-success {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 8px;
+  padding: 9px 10px;
+  border: 1px solid #cfe5db;
+  border-radius: 8px;
+  color: var(--green-dark);
+  background: var(--green-pale);
+  font-size: 12px;
+}
+.auth-form-hint {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+.auth-result-card p {
+  line-height: 1.7;
+}
+.auth-full-button {
+  display: inline-flex;
+  justify-content: center;
+  width: 100%;
+}
+.auth-warning-icon {
+  color: var(--amber);
+  background: var(--amber-pale);
+}
 .login-submit {
   width: 100%;
   margin-top: 18px;

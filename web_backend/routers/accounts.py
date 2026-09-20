@@ -195,6 +195,11 @@ def create_account_router(
             str(row["password_hash"]),
         ):
             raise HTTPException(status_code=400, detail="当前密码错误")
+        if len(payload.new_password) < settings.password_min_length:
+            raise HTTPException(
+                status_code=400,
+                detail=f"密码至少需要 {settings.password_min_length} 位",
+            )
         try:
             password_hash = hash_password(payload.new_password)
         except ValueError as exc:
