@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -12,6 +12,7 @@ const { apiMock } = vi.hoisted(() => ({
 vi.mock("../src/api", () => ({ api: apiMock }));
 
 import { ClassificationResultsPage } from "../src/pages/ClassificationResultsPage";
+import { renderWithServerState as render } from "./renderWithServerState";
 
 const resultVersion = {
   version_id: "classification-version-qa",

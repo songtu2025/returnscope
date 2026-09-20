@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 
@@ -31,6 +31,7 @@ import {
 } from "../src/features/task-create/taskDraftStorage";
 import { TaskRuntimePage } from "../src/features/task-runtime/TaskRuntimePage";
 import { SegmentBoardRow } from "../src/features/task-runtime/SegmentBoardRow";
+import { renderWithServerState as render } from "./renderWithServerState";
 
 afterEach(() => {
   cleanup();

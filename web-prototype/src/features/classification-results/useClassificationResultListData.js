@@ -1,94 +1,55 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import useSWR from "swr";
 
 import { api } from "../../api";
+import { serverStateKeys } from "../../shared/serverState";
 
 /**
  * @param {NonNullable<import("../../shared/api/generated/classification-results/types.gen").ListResultsApiClassificationResultsGetData["query"]>} query
  */
 export function useClassificationResultListData(query) {
-  const [data, setData] = useState(
-    /** @type {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultListResponse | null} */ (
-      null
-    ),
-  );
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [hasNewResults, setHasNewResults] = useState(false);
   const firstResultRef = useRef("");
-  const listGenerationRef = useRef(0);
   const listControllerRef = useRef(/** @type {AbortController | null} */ (null));
   const pollGenerationRef = useRef(0);
   const pollControllerRef = useRef(/** @type {AbortController | null} */ (null));
 
-  const load = useCallback(async () => {
-    const generation = listGenerationRef.current + 1;
-    listGenerationRef.current = generation;
+  const fetchResults = useCallback(async () => {
     listControllerRef.current?.abort();
     const controller = new AbortController();
     listControllerRef.current = controller;
-    setLoading(true);
-    setError("");
     try {
-      const value = await api.classificationResults(query, {
+      return await api.classificationResults(query, {
         signal: controller.signal,
       });
-      if (listGenerationRef.current !== generation) return;
-      setData(value);
-      firstResultRef.current = value.items?.[0]?.version_id ?? "";
-      setHasNewResults(false);
-    } catch (loadError) {
-      if (
-        listGenerationRef.current === generation &&
-        (!(loadError instanceof Error) || loadError.name !== "AbortError")
-      ) {
-        setError(loadError instanceof Error ? loadError.message : "请求失败");
-      }
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") return undefined;
+      throw error;
     } finally {
-      if (listGenerationRef.current === generation) setLoading(false);
       if (listControllerRef.current === controller) {
         listControllerRef.current = null;
       }
     }
   }, [query]);
+  const {
+    data = null,
+    error: loadError,
+    isLoading,
+    isValidating,
+    mutate,
+  } = useSWR(serverStateKeys.classificationResultList(query), fetchResults, {
+    keepPreviousData: true,
+  });
+
+  const load = useCallback(async () => {
+    setHasNewResults(false);
+    await mutate();
+  }, [mutate]);
 
   useEffect(() => {
-    const generation = listGenerationRef.current + 1;
-    listGenerationRef.current = generation;
-    listControllerRef.current?.abort();
-    const controller = new AbortController();
-    listControllerRef.current = controller;
-    setLoading(true);
-    setError("");
-    api
-      .classificationResults(query, { signal: controller.signal })
-      .then((value) => {
-        if (listGenerationRef.current !== generation) return;
-        setData(value);
-        firstResultRef.current = value.items?.[0]?.version_id ?? "";
-        setHasNewResults(false);
-      })
-      .catch((loadError) => {
-        if (
-          listGenerationRef.current === generation &&
-          (!(loadError instanceof Error) || loadError.name !== "AbortError")
-        ) {
-          setError(loadError instanceof Error ? loadError.message : "请求失败");
-        }
-      })
-      .finally(() => {
-        if (listGenerationRef.current === generation) setLoading(false);
-        if (listControllerRef.current === controller) {
-          listControllerRef.current = null;
-        }
-      });
-    return () => {
-      if (listGenerationRef.current === generation) {
-        listGenerationRef.current += 1;
-      }
-      listControllerRef.current?.abort();
-      listControllerRef.current = null;
-    };
-  }, [query]);
+    firstResultRef.current = data?.items?.[0]?.version_id ?? "";
+    setHasNewResults(false);
+  }, [data, query]);
 
   useEffect(() => {
     const generation = pollGenerationRef.current + 1;
@@ -126,5 +87,15 @@ export function useClassificationResultListData(query) {
     };
   }, [query]);
 
-  return { data, loading, error, hasNewResults, load };
+  return {
+    data,
+    loading: isLoading || isValidating,
+    error: loadError
+      ? loadError instanceof Error
+        ? loadError.message
+        : "请求失败"
+      : "",
+    hasNewResults,
+    load,
+  };
 }

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import useSWR from "swr";
 
 import { api } from "../../api";
+import { serverStateKeys } from "../../shared/serverState";
 
 /** @typedef {import("./taskCreateContracts").ApiConnection} ApiConnection */
 /** @typedef {import("./taskCreateContracts").DataVersion} DataVersion */
@@ -19,6 +21,16 @@ const taskSetupApi = {
       : Promise.resolve(null),
 };
 
+async function loadTaskSetup() {
+  const [data, connections, status, preference] = await Promise.all([
+    taskSetupApi.dataVersions(),
+    taskSetupApi.configs(),
+    taskSetupApi.status(),
+    taskSetupApi.modelPreference(),
+  ]);
+  return { data, connections, status, preference };
+}
+
 /** @param {unknown} error */
 function setupErrorMessage(error) {
   return error instanceof Error ? error.message : "暂时无法读取数据与模型配置。";
@@ -26,12 +38,6 @@ function setupErrorMessage(error) {
 
 /** @param {TaskDraft | null | undefined} draft */
 export function useNewTaskSetup(draft) {
-  const [versions, setVersions] = useState(/** @type {DataVersion[]} */ ([]));
-  const [configs, setConfigs] = useState(/** @type {ApiConnection[]} */ ([]));
-  const [system, setSystem] = useState(/** @type {TaskSystemStatus | null} */ (null));
-  const [loadingSetup, setLoadingSetup] = useState(true);
-  const [setupError, setSetupError] = useState("");
-  const [setupAttempt, setSetupAttempt] = useState(0);
   const [form, setForm] = useState(
     /** @type {TaskForm} */ ({
       title: "",
@@ -43,63 +49,65 @@ export function useNewTaskSetup(draft) {
       ...draft?.form,
     }),
   );
+  const {
+    data: setup,
+    error,
+    isLoading,
+    mutate,
+  } = useSWR(serverStateKeys.taskCreateSetup, loadTaskSetup);
 
   useEffect(() => {
-    setLoadingSetup(true);
-    setSetupError("");
-    Promise.all([
-      taskSetupApi.dataVersions(),
-      taskSetupApi.configs(),
-      taskSetupApi.status(),
-      taskSetupApi.modelPreference
-        ? taskSetupApi.modelPreference()
-        : Promise.resolve(null),
-    ])
-      .then(([data, connections, status, preference]) => {
-        setVersions(data);
-        setConfigs(connections);
-        setSystem(status);
-        const products = data.find((item) => item.kind === "products");
-        const activeConfig = connections.find(
-          (item) => item.active_version,
-        )?.active_version;
-        setForm((current) => ({
-          ...current,
-          product_version_id: current.product_version_id || products?.version_id || "",
-          config_version_id:
-            current.config_version_id ||
-            preference?.config_version_id ||
-            activeConfig?.id ||
-            "",
-          model_policy:
-            current.model_policy ||
-            (preference
-              ? {
-                  connection_id: preference.connection_id,
-                  cheap_model: preference.cheap_model,
-                  cheap_effort: preference.cheap_effort,
-                  primary_model: preference.primary_model,
-                  primary_effort: preference.primary_effort,
-                  secondary_model: preference.secondary_model,
-                  secondary_effort: preference.secondary_effort,
-                  cheap_audit_percent: preference.cheap_audit_percent ?? 5,
-                }
-              : undefined),
-        }));
-      })
-      .catch((error) => setSetupError(setupErrorMessage(error)))
-      .finally(() => setLoadingSetup(false));
-  }, [setupAttempt]);
+    if (!setup) return;
+    const products = setup.data.find((item) => item.kind === "products");
+    const activeConfig = setup.connections.find(
+      (item) => item.active_version,
+    )?.active_version;
+    setForm((current) => ({
+      ...current,
+      product_version_id: current.product_version_id || products?.version_id || "",
+      config_version_id:
+        current.config_version_id ||
+        setup.preference?.config_version_id ||
+        activeConfig?.id ||
+        "",
+      model_policy:
+        current.model_policy ||
+        (setup.preference
+          ? {
+              connection_id: setup.preference.connection_id,
+              cheap_model: setup.preference.cheap_model,
+              cheap_effort: setup.preference.cheap_effort,
+              primary_model: setup.preference.primary_model,
+              primary_effort: setup.preference.primary_effort,
+              secondary_model: setup.preference.secondary_model,
+              secondary_effort: setup.preference.secondary_effort,
+              cheap_audit_percent: setup.preference.cheap_audit_percent ?? 5,
+            }
+          : undefined),
+    }));
+  }, [setup]);
+
+  /** @type {import("react").Dispatch<import("react").SetStateAction<DataVersion[]>>} */
+  const setVersions = (next) => {
+    void mutate(
+      (current) => {
+        if (!current) return current;
+        const data = typeof next === "function" ? next(current.data) : next;
+        return { ...current, data };
+      },
+      { revalidate: false },
+    );
+  };
 
   return {
-    configs,
+    configs: setup?.connections ?? [],
     form,
-    loadingSetup,
+    loadingSetup: isLoading && !setup,
     setForm,
-    setSetupAttempt,
+    setSetupAttempt: () => void mutate(),
     setVersions,
-    setupError,
-    system,
-    versions,
+    setupError: error ? setupErrorMessage(error) : "",
+    system: setup?.status ?? null,
+    versions: setup?.data ?? [],
   };
 }

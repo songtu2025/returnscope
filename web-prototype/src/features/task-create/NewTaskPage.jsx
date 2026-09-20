@@ -308,7 +308,7 @@ export function NewTaskPage({
           loading: loadingSetup,
           error: setupError,
           ready,
-          onRetry: () => setSetupAttempt((value) => value + 1),
+          onRetry: setSetupAttempt,
           onNavigate,
           returns,
           products,

@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -46,6 +46,7 @@ import { ReturnDataAssetsPage } from "../src/features/data-management/ReturnData
 import { ReturnImportDialog } from "../src/features/task-create/ReturnImportDialog";
 import { DatasetUploadDialog } from "../src/components/DatasetUploadDialog";
 import { DatasetReferences } from "../src/pages/DataManagement";
+import { renderWithServerState as render } from "./renderWithServerState";
 
 beforeEach(() => {
   importRules.mockReset();

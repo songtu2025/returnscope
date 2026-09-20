@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import "../../styles/task-flow.css";
+import useSWR from "swr";
 
 import { api } from "../../api";
 import { InlineLoading } from "../../components/SharedUi";
+import { serverStateKeys } from "../../shared/serverState";
 import { NewTaskPage } from "./NewTaskPage";
 import {
   clearTaskDraft,
@@ -20,39 +22,24 @@ import {
 
 export function TaskCreatePage({ route, notify, onNavigate, onChanged, userId }) {
   const templateTaskId = route.query.template_task;
-  const [templateTask, setTemplateTask] = useState(
-    /** @type {AnalysisTask | null} */ (null),
+  const {
+    data: templateTask = null,
+    error: templateError,
+    isLoading: templateLoading,
+  } = useSWR(
+    templateTaskId ? serverStateKeys.taskTemplate(templateTaskId) : null,
+    () => (templateTaskId ? api.task(templateTaskId) : null),
   );
-  const [templateLoading, setTemplateLoading] = useState(Boolean(templateTaskId));
 
   useEffect(() => {
-    let active = true;
-    if (!templateTaskId) {
-      setTemplateTask(null);
-      setTemplateLoading(false);
-      return () => {
-        active = false;
-      };
-    }
-    setTemplateLoading(true);
-    api
-      .task(templateTaskId)
-      .then((task) => {
-        if (active) setTemplateTask(task);
-      })
-      .catch((error) => {
-        if (active) {
-          setTemplateTask(null);
-          notify(`无法读取原任务：${error.message}`, "error");
-        }
-      })
-      .finally(() => {
-        if (active) setTemplateLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [notify, templateTaskId]);
+    if (!templateError) return;
+    notify(
+      `无法读取原任务：${
+        templateError instanceof Error ? templateError.message : "请求失败"
+      }`,
+      "error",
+    );
+  }, [notify, templateError]);
 
   const draft = useMemo(() => {
     const stored = readTaskDraft(userId);

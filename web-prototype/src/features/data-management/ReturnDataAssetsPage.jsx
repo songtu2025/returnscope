@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CaretDown,
   CaretLeft,
@@ -13,10 +13,12 @@ import {
 } from "@phosphor-icons/react";
 import Button from "antd/es/button";
 import Input from "antd/es/input";
+import useSWR from "swr";
 
 import { EmptyState, InlineLoading, PageHeading } from "../../components/SharedUi";
 import { formatTime } from "../../lib/presentation";
 import { dataApi } from "../../shared/api/dataApi";
+import { serverStateKeys } from "../../shared/serverState";
 import { ReturnImportDialog } from "../task-create/ReturnImportDialog";
 import { DataAssetTabs } from "./DataAssetTabs";
 import { SourceDetail } from "./ReturnDataAssetDetail";
@@ -32,7 +34,7 @@ const PAGE_SIZE = 20;
 
 /** @typedef {import("../../shared/api/dataManagementContracts").DatasetSource} DatasetSource */
 /** @typedef {import("../task-create/taskCreateContracts").ReturnImportResult} ReturnImportResult */
-/** @typedef {{query: {dataset?: string, tab?: string}}} DataAssetsRoute */
+/** @typedef {{query: {dataset?: string, tab?: string, q?: string, status?: string, page?: string | number}}} DataAssetsRoute */
 /**
  * @param {{
  *   route: DataAssetsRoute,
@@ -41,42 +43,32 @@ const PAGE_SIZE = 20;
  * }} props
  */
 export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
-  const [sources, setSources] = useState(/** @type {DatasetSource[]} */ ([]));
-  const [loading, setLoading] = useState(true);
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
-  const [page, setPage] = useState(1);
-  const [detailsBySource, setDetailsBySource] = useState(
-    /** @type {Record<string, DatasetSource>} */ ({}),
-  );
   const [expandedOverride, setExpandedOverride] = useState(
     /** @type {string | null} */ (null),
   );
-
-  const loadSources = useCallback(async () => {
-    setLoading(true);
-    try {
-      const items = canonicalSources(await dataApi.managedDatasets("returns"));
-      setSources(items);
-      setDetailsBySource({});
-    } catch (error) {
-      notify(
-        error instanceof Error ? error.message : "用户反馈数据源读取失败",
-        "error",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [notify]);
+  const query = route.query.q ?? "";
+  const status = ["all", "available", "attention"].includes(route.query.status ?? "")
+    ? route.query.status
+    : "all";
+  const requestedPage = Number(route.query.page) || 1;
+  const {
+    data: sourceData,
+    error: sourcesError,
+    isLoading,
+    mutate: mutateSources,
+  } = useSWR(serverStateKeys.returnSources, async () =>
+    canonicalSources(await dataApi.managedDatasets("returns")),
+  );
+  const sources = useMemo(() => sourceData ?? [], [sourceData]);
 
   useEffect(() => {
-    loadSources();
-  }, [loadSources]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [query, status]);
+    if (!sourcesError) return;
+    notify(
+      sourcesError instanceof Error ? sourcesError.message : "用户反馈数据源读取失败",
+      "error",
+    );
+  }, [notify, sourcesError]);
 
   const filteredSources = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -93,6 +85,7 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
   }, [query, sources, status]);
 
   const totalPages = Math.max(1, Math.ceil(filteredSources.length / PAGE_SIZE));
+  const page = Math.min(requestedPage, totalPages);
   const visibleSources = filteredSources.slice(
     (page - 1) * PAGE_SIZE,
     page * PAGE_SIZE,
@@ -105,38 +98,41 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
     visibleSources[0]?.id ||
     "";
   const expandedId = expandedOverride ?? defaultExpandedId;
+  const expandedSource = sources.find((source) => source.id === expandedId);
+  const {
+    data: expandedDetail,
+    error: detailError,
+    isLoading: detailLoading,
+    mutate: mutateDetail,
+  } = useSWR(
+    expandedSource
+      ? serverStateKeys.returnSourceDetails(
+          expandedSource.id,
+          expandedSource.member_ids,
+        )
+      : null,
+    async () => {
+      if (!expandedSource) return null;
+      const members = await Promise.all(
+        expandedSource.member_ids.map((id) =>
+          dataApi.dataset(id, { include: "versions,imports" }),
+        ),
+      );
+      return mergeSourceDetails(expandedSource, members);
+    },
+  );
 
   useEffect(() => {
     setExpandedOverride(null);
   }, [route.query.dataset]);
 
   useEffect(() => {
-    const source = sources.find((item) => item.id === expandedId);
-    if (!source || detailsBySource[expandedId]) return undefined;
-    const controller = new AbortController();
-    Promise.all(
-      source.member_ids.map((id) =>
-        dataApi.dataset(id, {
-          include: "versions,imports",
-          signal: controller.signal,
-        }),
-      ),
-    )
-      .then((members) => {
-        if (!controller.signal.aborted) {
-          setDetailsBySource((current) => ({
-            ...current,
-            [expandedId]: mergeSourceDetails(source, members),
-          }));
-        }
-      })
-      .catch((error) => {
-        const requestError =
-          error instanceof Error ? error : new Error("数据源详情读取失败");
-        if (requestError.name !== "AbortError") notify(requestError.message, "error");
-      });
-    return () => controller.abort();
-  }, [detailsBySource, expandedId, notify, sources]);
+    if (!detailError) return;
+    notify(
+      detailError instanceof Error ? detailError.message : "数据源详情读取失败",
+      "error",
+    );
+  }, [detailError, notify]);
   const availableCount = sources.filter(
     (source) => dataStatus(source).value === "available",
   ).length;
@@ -161,7 +157,7 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
   /** @param {ReturnImportResult} result */
   const finishImport = async (result) => {
     setUploadOpen(false);
-    await loadSources();
+    await Promise.all([mutateSources(), mutateDetail()]);
     if (result.dataset?.id) {
       onRouteChange({ view: "returns", dataset: result.dataset.id, tab: "" });
     }
@@ -191,7 +187,7 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
         onChange={(view) => onRouteChange({ view, dataset: "", tab: "" })}
       />
 
-      {loading ? (
+      {isLoading && sourceData === undefined ? (
         <section className="content-card returns-assets-loading">
           <InlineLoading label="正在读取用户反馈数据源…" />
         </section>
@@ -231,7 +227,7 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
                 aria-label="搜索用户反馈数据源"
                 prefix={<MagnifyingGlass size={17} />}
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => onRouteChange({ q: event.target.value, page: 1 })}
                 placeholder="搜索数据源或业务范围"
               />
               <label className="returns-registry-filter">
@@ -239,7 +235,9 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
                 <select
                   aria-label="按数据状态筛选"
                   value={status}
-                  onChange={(event) => setStatus(event.target.value)}
+                  onChange={(event) =>
+                    onRouteChange({ status: event.target.value, page: 1 })
+                  }
                 >
                   <option value="all">全部状态</option>
                   <option value="available">当前可用</option>
@@ -301,18 +299,20 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
                       </button>
                     </div>
                     {expanded &&
-                      (detailsBySource[source.id] ? (
+                      (expandedDetail ? (
                         <SourceDetail
-                          source={detailsBySource[source.id]}
+                          source={expandedDetail}
                           notify={notify}
-                          onStorageChanged={loadSources}
+                          onStorageChanged={async () => {
+                            await Promise.all([mutateSources(), mutateDetail()]);
+                          }}
                           initiallyShowTrace={["imports", "snapshots"].includes(
                             route.query.tab ?? "",
                           )}
                         />
-                      ) : (
+                      ) : detailLoading ? (
                         <InlineLoading label="正在读取数据源详情…" />
-                      ))}
+                      ) : null)}
                   </article>
                 );
               })}
@@ -332,7 +332,7 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
                 <button
                   aria-label="上一页"
                   disabled={page === 1}
-                  onClick={() => setPage((current) => current - 1)}
+                  onClick={() => onRouteChange({ page: page - 1 })}
                 >
                   <CaretLeft size={16} />
                 </button>
@@ -341,7 +341,7 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
                 <button
                   aria-label="下一页"
                   disabled={page === totalPages}
-                  onClick={() => setPage((current) => current + 1)}
+                  onClick={() => onRouteChange({ page: page + 1 })}
                 >
                   <CaretRight size={16} />
                 </button>

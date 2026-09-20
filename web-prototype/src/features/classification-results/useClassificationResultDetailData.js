@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import useSWR from "swr";
 
 import { api } from "../../api";
+import { serverStateKeys } from "../../shared/serverState";
 
 /** @typedef {import("./classificationResultRoute").ClassificationResultRoute} ClassificationResultRoute */
 
@@ -8,66 +10,34 @@ import { api } from "../../api";
  * @param {{ route: ClassificationResultRoute, notify: (message: string, type: "error") => void }} options
  */
 export function useClassificationResultDetailData({ route, notify }) {
-  const [result, setResult] = useState(
-    /** @type {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultVersionResponse | null} */ (
-      null
-    ),
-  );
-  const [summary, setSummary] = useState(
-    /** @type {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultSummaryResponse | null} */ (
-      null
-    ),
-  );
-  const [records, setRecords] = useState(
-    /** @type {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultRecordsResponse | null} */ (
-      null
-    ),
-  );
-  const [drilldowns, setDrilldowns] = useState({
-    problem:
-      /** @type {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultDrilldownItemResponse[]} */ ([]),
-    product_name:
-      /** @type {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultDrilldownItemResponse[]} */ ([]),
-    product_sku:
-      /** @type {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultDrilldownItemResponse[]} */ ([]),
-  });
-  const [loading, setLoading] = useState(true);
-  const [recordsLoading, setRecordsLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [reloadRevision, setReloadRevision] = useState(0);
-
-  useEffect(() => {
-    let active = true;
+  const overviewControllerRef = useRef(/** @type {AbortController | null} */ (null));
+  const recordsControllerRef = useRef(/** @type {AbortController | null} */ (null));
+  const loadOverview = useCallback(async () => {
+    overviewControllerRef.current?.abort();
     const controller = new AbortController();
-    setLoading(true);
-    setError("");
-    Promise.all([
-      api.classificationResult(route.version, { signal: controller.signal }),
-      api.classificationResultSummary(route.version, { signal: controller.signal }),
-    ])
-      .then(([version, versionSummary]) => {
-        if (!active) return;
-        setResult(version);
-        setSummary(versionSummary);
-      })
-      .catch((loadError) => {
-        if (
-          active &&
-          (!(loadError instanceof Error) || loadError.name !== "AbortError")
-        ) {
-          setError(loadError instanceof Error ? loadError.message : "请求失败");
-        }
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-      controller.abort();
-    };
-  }, [reloadRevision, route.version]);
-
-  const retry = useCallback(() => setReloadRevision((current) => current + 1), []);
+    overviewControllerRef.current = controller;
+    try {
+      const [result, summary] = await Promise.all([
+        api.classificationResult(route.version, { signal: controller.signal }),
+        api.classificationResultSummary(route.version, { signal: controller.signal }),
+      ]);
+      return { result, summary };
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") return undefined;
+      throw error;
+    } finally {
+      if (overviewControllerRef.current === controller) {
+        overviewControllerRef.current = null;
+      }
+    }
+  }, [route.version]);
+  const {
+    data: overview,
+    error: overviewError,
+    isLoading: overviewLoading,
+    mutate: mutateOverview,
+  } = useSWR(serverStateKeys.classificationResultOverview(route.version), loadOverview);
+  const retry = useCallback(() => void mutateOverview(), [mutateOverview]);
 
   const detailQuery = useMemo(
     () => ({
@@ -88,76 +58,90 @@ export function useClassificationResultDetailData({ route, notify }) {
     ],
   );
 
-  useEffect(() => {
-    if (route.tab === "history") {
-      setRecordsLoading(false);
-      return undefined;
-    }
-    let active = true;
+  const loadRecords = useCallback(async () => {
+    recordsControllerRef.current?.abort();
     const controller = new AbortController();
-    setRecordsLoading(true);
-    Promise.all([
-      api.classificationResultRecords(route.version, detailQuery, {
-        signal: controller.signal,
-      }),
-      api.classificationResultDrilldown(
-        route.version,
-        "problem",
-        { page: 1, page_size: 100 },
-        { signal: controller.signal },
-      ),
-      api.classificationResultDrilldown(
-        route.version,
-        "product_name",
-        { page: 1, page_size: 100, problem: route.problem },
-        { signal: controller.signal },
-      ),
-      api.classificationResultDrilldown(
-        route.version,
-        "product_sku",
-        {
-          page: 1,
-          page_size: 100,
-          problem: route.problem,
-          product_name: route.productName,
-        },
-        { signal: controller.signal },
-      ),
-    ])
-      .then(([recordPage, problems, names, skus]) => {
-        if (!active) return;
-        setRecords(recordPage);
-        setDrilldowns({
+    recordsControllerRef.current = controller;
+    try {
+      const [records, problems, names, skus] = await Promise.all([
+        api.classificationResultRecords(route.version, detailQuery, {
+          signal: controller.signal,
+        }),
+        api.classificationResultDrilldown(
+          route.version,
+          "problem",
+          { page: 1, page_size: 100 },
+          { signal: controller.signal },
+        ),
+        api.classificationResultDrilldown(
+          route.version,
+          "product_name",
+          { page: 1, page_size: 100, problem: route.problem },
+          { signal: controller.signal },
+        ),
+        api.classificationResultDrilldown(
+          route.version,
+          "product_sku",
+          {
+            page: 1,
+            page_size: 100,
+            problem: route.problem,
+            product_name: route.productName,
+          },
+          { signal: controller.signal },
+        ),
+      ]);
+      return {
+        records,
+        drilldowns: {
           problem: problems.items ?? [],
           product_name: names.items ?? [],
           product_sku: skus.items ?? [],
-        });
-      })
-      .catch((loadError) => {
-        if (
-          active &&
-          (!(loadError instanceof Error) || loadError.name !== "AbortError")
-        ) {
-          notify(loadError instanceof Error ? loadError.message : "请求失败", "error");
-        }
-      })
-      .finally(() => {
-        if (active) setRecordsLoading(false);
-      });
-    return () => {
-      active = false;
-      controller.abort();
-    };
-  }, [detailQuery, notify, route.productName, route.problem, route.tab, route.version]);
+        },
+      };
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") return undefined;
+      throw error;
+    } finally {
+      if (recordsControllerRef.current === controller) {
+        recordsControllerRef.current = null;
+      }
+    }
+  }, [detailQuery, route.problem, route.productName, route.version]);
+  const {
+    data: recordData,
+    error: recordsError,
+    isLoading: recordsLoading,
+  } = useSWR(
+    route.tab === "history"
+      ? null
+      : serverStateKeys.classificationResultRecords(route.version, detailQuery),
+    loadRecords,
+  );
+
+  useEffect(() => {
+    if (!recordsError) return;
+    notify(recordsError instanceof Error ? recordsError.message : "请求失败", "error");
+  }, [notify, recordsError]);
+
+  const emptyDrilldowns = {
+    problem: [],
+    product_name: [],
+    product_sku: [],
+  };
 
   return {
-    result,
-    summary,
-    records,
-    drilldowns,
-    loading,
-    recordsLoading,
-    error,
+    result: overview?.result ?? null,
+    summary: overview?.summary ?? null,
+    records: recordData?.records ?? null,
+    drilldowns: recordData?.drilldowns ?? emptyDrilldowns,
+    loading: overviewLoading,
+    recordsLoading: route.tab === "history" ? false : recordsLoading,
+    error: overviewError
+      ? overviewError instanceof Error
+        ? overviewError.message
+        : "请求失败"
+      : "",
     retry,
   };
 }

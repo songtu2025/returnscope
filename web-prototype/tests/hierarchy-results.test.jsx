@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -18,6 +18,7 @@ vi.mock("../src/api", () => ({ api: apiMock }));
 import { ClassificationResultsPage } from "../src/pages/ClassificationResultsPage";
 import { ReturnReasonInsights } from "../src/features/analysis-dashboards/ReturnReasonInsights";
 import { ReviewRecordRow } from "../src/features/review-batches/ReviewRecordComponents";
+import { renderWithServerState as render } from "./renderWithServerState";
 
 const hierarchy = Array.from({ length: 14 }, (_, index) => ({
   value: `CAT_${index}`,

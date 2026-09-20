@@ -3,7 +3,6 @@ import {
   act,
   cleanup,
   fireEvent,
-  render,
   screen,
   waitFor,
   within,
@@ -35,6 +34,7 @@ vi.mock("../src/shared/api/dashboardApi", () => ({
 }));
 
 import { ClassificationResultsPage } from "../src/pages/ClassificationResultsPage";
+import { renderWithServerState as render } from "./renderWithServerState";
 
 const resultVersion = {
   version_id: "classification-version-1",

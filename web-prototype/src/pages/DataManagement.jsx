@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowRight,
   Database,
@@ -6,6 +6,7 @@ import {
   UploadSimple,
 } from "@phosphor-icons/react";
 import Button from "antd/es/button";
+import useSWR from "swr";
 import { api } from "../api";
 import { DatasetUploadDialog } from "../components/DatasetUploadDialog";
 import { CardHeading, EmptyState, PageHeading } from "../components/SharedUi";
@@ -14,6 +15,7 @@ import { DatasetReferences } from "../features/data-management/DatasetReferences
 import { ProductDimensionRows } from "../features/data-management/ProductDimensionRows";
 import { TaskCategoryCompletion } from "../features/data-management/TaskCategoryCompletion";
 import { formatTime } from "../lib/presentation";
+import { serverStateKeys } from "../shared/serverState";
 
 export { DatasetReferences } from "../features/data-management/DatasetReferences";
 
@@ -52,16 +54,35 @@ export function DataManagement({
   onAssetViewChange = () => {},
 }) {
   const [selectedId, setSelectedId] = useState(/** @type {string | null} */ (null));
-  const [selected, setSelected] = useState(/** @type {DatasetRecord | null} */ (null));
   const [dialog, setDialog] = useState(/** @type {UploadDialog | null} */ (null));
   const [detailTab, setDetailTab] = useState("rows");
 
-  const load = useCallback(async () => {
-    const values = await api.datasets("products");
+  const {
+    data: datasets = [],
+    error: datasetsError,
+    mutate: mutateDatasets,
+  } = useSWR(serverStateKeys.productDatasets, () => api.datasets("products"));
+  const detailInclude = detailTab === "impact" ? "versions,audit" : "versions";
+  const {
+    data: selected = null,
+    error: detailError,
+    mutate: mutateSelected,
+  } = useSWR(
+    selectedId ? serverStateKeys.productDataset(selectedId, detailInclude) : null,
+    () => {
+      if (!selectedId) return null;
+      return api.dataset(selectedId, { include: detailInclude });
+    },
+    { keepPreviousData: true },
+  );
+
+  useEffect(() => {
     setSelectedId((current) =>
-      values.some((item) => item.id === current) ? current : (values[0]?.id ?? null),
+      datasets.some((item) => item.id === current)
+        ? current
+        : (datasets[0]?.id ?? null),
     );
-  }, []);
+  }, [datasets]);
   useEffect(() => {
     if (["rows", "versions", "impact"].includes(routeDetailTab)) {
       setDetailTab(routeDetailTab);
@@ -70,25 +91,24 @@ export function DataManagement({
     }
   }, [routeDetailTab]);
   useEffect(() => {
-    load().catch((error) => notify(error.message, "error"));
-  }, [load, notify]);
+    if (!datasetsError) return;
+    notify(
+      datasetsError instanceof Error ? datasetsError.message : "商品数据读取失败",
+      "error",
+    );
+  }, [datasetsError, notify]);
+  useEffect(() => {
+    if (!detailError) return;
+    notify(
+      detailError instanceof Error ? detailError.message : "商品详情读取失败",
+      "error",
+    );
+  }, [detailError, notify]);
   useEffect(() => {
     if (!focus || focus.datasetKind !== "products") return;
     setSelectedId(focus.id ?? null);
     setDetailTab("rows");
   }, [focus]);
-  useEffect(() => {
-    if (!selectedId) {
-      setSelected(null);
-      return;
-    }
-    api
-      .dataset(selectedId, {
-        include: detailTab === "impact" ? "versions,audit" : "versions",
-      })
-      .then(setSelected)
-      .catch((error) => notify(error.message, "error"));
-  }, [detailTab, selectedId, notify]);
 
   const dimensionAudit =
     selected?.audit?.filter((entry) =>
@@ -249,7 +269,10 @@ export function DataManagement({
                 <ProductDimensionRows
                   dataset={selected}
                   notify={notify}
-                  onChanged={setSelected}
+                  onChanged={(dataset) => {
+                    void mutateSelected(dataset, false);
+                    void mutateDatasets();
+                  }}
                 />
               )}
               {detailTab === "versions" && (
@@ -358,7 +381,7 @@ export function DataManagement({
           onClose={() => setDialog(null)}
           onDone={async () => {
             setDialog(null);
-            await load();
+            await Promise.all([mutateDatasets(), mutateSelected()]);
             notify(dialog.mode === "create" ? "产品信息已创建" : "新版本已创建");
           }}
         />
