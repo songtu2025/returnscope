@@ -9,6 +9,7 @@ import {
   Modal,
   PageHeading,
 } from "../components/SharedUi";
+import { EmailChangeModal } from "../components/EmailChangeModal";
 import { classNames, formatTime } from "../lib/presentation";
 
 /** @typedef {import("../shared/api/systemSettingsContracts").TeamUser} TeamUser */
@@ -45,6 +46,7 @@ export function TeamPage({
   const [loadError, setLoadError] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
     current_password: "",
@@ -342,6 +344,12 @@ export function TeamPage({
               <div className="team-security-actions">
                 <button
                   className="secondary-button"
+                  onClick={() => setShowEmailModal(true)}
+                >
+                  修改我的邮箱
+                </button>
+                <button
+                  className="secondary-button"
                   onClick={() => setShowPasswordModal(true)}
                 >
                   修改我的密码
@@ -398,6 +406,13 @@ export function TeamPage({
             )}
           </form>
         </Modal>
+      )}
+      {showEmailModal && (
+        <EmailChangeModal
+          currentEmail={currentEmail}
+          notify={notify}
+          onClose={() => setShowEmailModal(false)}
+        />
       )}
       {showPasswordModal && (
         <Modal

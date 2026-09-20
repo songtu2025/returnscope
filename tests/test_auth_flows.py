@@ -10,6 +10,8 @@ from fastapi.testclient import TestClient
 from web_backend.database import (
     AUTH_ACTION_TOKEN_MIGRATION,
     AUTH_ACTION_TOKEN_MIGRATION_CHECKSUM,
+    EMAIL_CHANGE_TOKEN_MIGRATION,
+    EMAIL_CHANGE_TOKEN_MIGRATION_CHECKSUM,
     Database,
 )
 from web_backend.settings import Settings
@@ -19,8 +21,10 @@ from web_backend.settings import Settings
 class FakeMailSender:
     invitations: list[dict[str, str]] = field(default_factory=list)
     password_resets: list[dict[str, str]] = field(default_factory=list)
+    email_changes: list[dict[str, str]] = field(default_factory=list)
     fail_invitation: bool = False
     fail_password_reset: bool = False
+    fail_email_change: bool = False
 
     def send_invitation(self, email: str, invitation_url: str) -> None:
         if self.fail_invitation:
@@ -31,6 +35,11 @@ class FakeMailSender:
         if self.fail_password_reset:
             raise RuntimeError("模拟重置邮件失败")
         self.password_resets.append({"email": email, "url": reset_url})
+
+    def send_email_change(self, email: str, change_url: str) -> None:
+        if self.fail_email_change:
+            raise RuntimeError("模拟邮箱变更邮件失败")
+        self.email_changes.append({"email": email, "url": change_url})
 
 
 def _settings(tmp_path: Path) -> Settings:
@@ -88,6 +97,10 @@ def test_auth_action_token_migration_is_idempotent(tmp_path: Path) -> None:
             "SELECT * FROM app_migrations WHERE migration_id = ?",
             (AUTH_ACTION_TOKEN_MIGRATION,),
         ).fetchone()
+        email_change_migration = connection.execute(
+            "SELECT * FROM app_migrations WHERE migration_id = ?",
+            (EMAIL_CHANGE_TOKEN_MIGRATION,),
+        ).fetchone()
         columns = {
             row["name"]
             for row in connection.execute(
@@ -95,6 +108,7 @@ def test_auth_action_token_migration_is_idempotent(tmp_path: Path) -> None:
             ).fetchall()
         }
     assert migration["checksum"] == AUTH_ACTION_TOKEN_MIGRATION_CHECKSUM
+    assert email_change_migration["checksum"] == EMAIL_CHANGE_TOKEN_MIGRATION_CHECKSUM
     assert {
         "id",
         "user_id",
@@ -107,6 +121,17 @@ def test_auth_action_token_migration_is_idempotent(tmp_path: Path) -> None:
         "created_by",
         "created_at",
     } == columns
+
+    with database.transaction() as connection:
+        connection.execute(
+            """
+            INSERT INTO auth_action_tokens(
+                id, user_id, email, purpose, token_hash, expires_at, created_at
+            ) VALUES ('email-change-test', NULL, 'new@example.com',
+                'email_change', 'hash', '2099-01-01T00:00:00+00:00',
+                '2026-09-20T00:00:00+00:00')
+            """
+        )
 
 
 def test_admin_invites_member_and_member_registers_once(tmp_path: Path) -> None:
@@ -400,6 +425,154 @@ def test_password_reset_is_private_single_use_and_revokes_sessions(
         assert reused.status_code == 400
 
 
+def test_email_change_verifies_new_address_and_preserves_user_id(
+    tmp_path: Path,
+) -> None:
+    from web_backend.app import create_app
+
+    sender = FakeMailSender()
+    settings = _settings(tmp_path)
+    app = create_app(
+        start_worker=False,
+        settings_override=settings,
+        mail_sender_override=sender,
+    )
+
+    with TestClient(app) as client:
+        _login_admin(client)
+        original_user_id = client.get("/api/auth/me").json()["id"]
+        requested = client.post(
+            "/api/auth/email-change/request",
+            json={
+                "current_password": "test-password-123",
+                "new_email": "WCH@SeekwayGroup.com",
+            },
+        )
+        assert requested.status_code == 204
+        assert sender.email_changes[0]["email"] == "wch@seekwaygroup.com"
+        raw_token = _token_from_url(sender.email_changes[0]["url"])
+        assert sender.email_changes[0]["url"].startswith(
+            "https://feedback.example.com/#change-email?token="
+        )
+
+        validated = client.post(
+            "/api/auth/email-change/validate",
+            json={"token": raw_token},
+        )
+        assert validated.status_code == 200
+        assert validated.json()["email"] == "wch@seekwaygroup.com"
+
+        completed = client.post(
+            "/api/auth/email-change/complete",
+            json={"token": raw_token},
+        )
+        assert completed.status_code == 204
+        assert client.get("/api/auth/me").status_code == 401
+        assert (
+            client.post(
+                "/api/auth/login",
+                json={
+                    "email": "admin@example.com",
+                    "password": "test-password-123",
+                },
+            ).status_code
+            == 401
+        )
+        login = client.post(
+            "/api/auth/login",
+            json={
+                "email": "wch@seekwaygroup.com",
+                "password": "test-password-123",
+            },
+        )
+        assert login.status_code == 200
+        assert login.json()["id"] == original_user_id
+        assert (
+            client.post(
+                "/api/auth/email-change/complete",
+                json={"token": raw_token},
+            ).status_code
+            == 400
+        )
+
+        with app.state.database.connect() as connection:
+            users = connection.execute(
+                "SELECT id, email FROM users ORDER BY created_at"
+            ).fetchall()
+            audit = connection.execute(
+                """
+                SELECT action FROM audit_logs
+                WHERE entity_type = 'user' AND entity_id = ?
+                ORDER BY created_at DESC
+                """,
+                (original_user_id,),
+            ).fetchall()
+        assert [dict(row) for row in users] == [
+            {"id": original_user_id, "email": "wch@seekwaygroup.com"}
+        ]
+        assert "change_email" in {row["action"] for row in audit}
+
+
+def test_email_change_rejects_invalid_password_and_reserved_email(
+    tmp_path: Path,
+) -> None:
+    from web_backend.app import create_app
+
+    sender = FakeMailSender()
+    app = create_app(
+        start_worker=False,
+        settings_override=_settings(tmp_path),
+        mail_sender_override=sender,
+    )
+
+    with TestClient(app) as client:
+        _login_admin(client)
+        wrong_password = client.post(
+            "/api/auth/email-change/request",
+            json={
+                "current_password": "wrong-password",
+                "new_email": "wch@seekwaygroup.com",
+            },
+        )
+        assert wrong_password.status_code == 400
+        assert sender.email_changes == []
+
+        invited = client.post(
+            "/api/invitations",
+            json={"email": "reserved@example.com"},
+        )
+        assert invited.status_code == 201
+        reserved = client.post(
+            "/api/auth/email-change/request",
+            json={
+                "current_password": "test-password-123",
+                "new_email": "reserved@example.com",
+            },
+        )
+        assert reserved.status_code == 409
+
+
+def test_bootstrap_email_is_only_used_for_initial_user(tmp_path: Path) -> None:
+    from web_backend.app import create_app
+
+    settings = _settings(tmp_path)
+    first_app = create_app(start_worker=False, settings_override=settings)
+    with first_app.state.database.transaction() as connection:
+        connection.execute(
+            "UPDATE users SET email = 'wch@seekwaygroup.com' WHERE email = ?",
+            (settings.bootstrap_email,),
+        )
+
+    restarted_app = create_app(start_worker=False, settings_override=settings)
+    with restarted_app.state.database.connect() as connection:
+        users = connection.execute(
+            "SELECT email, is_admin FROM users ORDER BY created_at"
+        ).fetchall()
+    assert [dict(row) for row in users] == [
+        {"email": "wch@seekwaygroup.com", "is_admin": 1}
+    ]
+
+
 def test_password_reset_request_is_rate_limited(tmp_path: Path) -> None:
     from web_backend.app import create_app
 
@@ -453,6 +626,15 @@ def test_mail_failures_leave_no_usable_tokens(tmp_path: Path) -> None:
             json={"email": "member@example.com"},
         )
         assert reset.status_code == 204
+        sender.fail_email_change = True
+        email_change = client.post(
+            "/api/auth/email-change/request",
+            json={
+                "current_password": "test-password-123",
+                "new_email": "wch@seekwaygroup.com",
+            },
+        )
+        assert email_change.status_code == 502
         with app.state.database.connect() as connection:
             usable_tokens = connection.execute(
                 """

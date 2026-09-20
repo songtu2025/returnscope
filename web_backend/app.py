@@ -95,7 +95,12 @@ def _bootstrap_user(database: Database, settings: Settings) -> None:
             "SELECT id FROM users WHERE email = ?",
             (settings.bootstrap_email,),
         ).fetchone()
-        if exists is None:
+        user_count = int(
+            connection.execute("SELECT COUNT(*) AS count FROM users").fetchone()[
+                "count"
+            ]
+        )
+        if exists is None and user_count == 0:
             connection.execute(
                 """
                 INSERT INTO users(
@@ -110,7 +115,7 @@ def _bootstrap_user(database: Database, settings: Settings) -> None:
                     utc_now(),
                 ),
             )
-        else:
+        elif exists is not None:
             connection.execute(
                 "UPDATE users SET is_admin = 1 WHERE email = ?",
                 (settings.bootstrap_email,),

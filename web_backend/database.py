@@ -33,6 +33,39 @@ ON auth_action_tokens(user_id, purpose, created_at DESC);
 AUTH_ACTION_TOKEN_MIGRATION_CHECKSUM = hashlib.sha256(
     AUTH_ACTION_TOKEN_MIGRATION_SQL.encode("utf-8")
 ).hexdigest()
+EMAIL_CHANGE_TOKEN_MIGRATION = "20260920_email_change_tokens"
+EMAIL_CHANGE_TOKEN_MIGRATION_SQL = """
+ALTER TABLE auth_action_tokens RENAME TO auth_action_tokens_v1;
+CREATE TABLE auth_action_tokens (
+    id TEXT PRIMARY KEY,
+    user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+    email TEXT NOT NULL,
+    purpose TEXT NOT NULL
+        CHECK(purpose IN ('invitation', 'password_reset', 'email_change')),
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at TEXT NOT NULL,
+    used_at TEXT,
+    revoked_at TEXT,
+    created_by TEXT REFERENCES users(id),
+    created_at TEXT NOT NULL
+);
+INSERT INTO auth_action_tokens(
+    id, user_id, email, purpose, token_hash, expires_at,
+    used_at, revoked_at, created_by, created_at
+)
+SELECT
+    id, user_id, email, purpose, token_hash, expires_at,
+    used_at, revoked_at, created_by, created_at
+FROM auth_action_tokens_v1;
+DROP TABLE auth_action_tokens_v1;
+CREATE INDEX idx_auth_action_tokens_email_purpose
+ON auth_action_tokens(email, purpose, created_at DESC);
+CREATE INDEX idx_auth_action_tokens_user_purpose
+ON auth_action_tokens(user_id, purpose, created_at DESC);
+"""
+EMAIL_CHANGE_TOKEN_MIGRATION_CHECKSUM = hashlib.sha256(
+    EMAIL_CHANGE_TOKEN_MIGRATION_SQL.encode("utf-8")
+).hexdigest()
 
 
 def _backfill_classification_unit_rerun_state(
@@ -903,6 +936,7 @@ class Database:
             connection.execute("PRAGMA journal_mode = WAL")
             connection.executescript(SCHEMA)
             self._migrate_auth_action_tokens(connection)
+            self._migrate_email_change_tokens(connection)
             self._migrate_user_columns(connection)
             self._migrate_dataset_columns(connection)
             self._migrate_api_config_version_columns(connection)
@@ -964,6 +998,39 @@ class Database:
         except Exception:
             connection.execute("ROLLBACK TO migrate_auth_action_tokens")
             connection.execute("RELEASE migrate_auth_action_tokens")
+            raise
+
+    @staticmethod
+    def _migrate_email_change_tokens(connection: sqlite3.Connection) -> None:
+        migration = connection.execute(
+            "SELECT checksum FROM app_migrations WHERE migration_id = ?",
+            (EMAIL_CHANGE_TOKEN_MIGRATION,),
+        ).fetchone()
+        if migration is not None:
+            if migration["checksum"] != EMAIL_CHANGE_TOKEN_MIGRATION_CHECKSUM:
+                raise RuntimeError("邮箱变更令牌迁移校验失败")
+            return
+
+        connection.execute("SAVEPOINT migrate_email_change_tokens")
+        try:
+            for statement in EMAIL_CHANGE_TOKEN_MIGRATION_SQL.split(";"):
+                if statement.strip():
+                    connection.execute(statement)
+            connection.execute(
+                """
+                INSERT INTO app_migrations(
+                    migration_id, checksum, status, applied_at
+                ) VALUES (?, ?, 'applied', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                """,
+                (
+                    EMAIL_CHANGE_TOKEN_MIGRATION,
+                    EMAIL_CHANGE_TOKEN_MIGRATION_CHECKSUM,
+                ),
+            )
+            connection.execute("RELEASE migrate_email_change_tokens")
+        except Exception:
+            connection.execute("ROLLBACK TO migrate_email_change_tokens")
+            connection.execute("RELEASE migrate_email_change_tokens")
             raise
 
     @staticmethod

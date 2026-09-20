@@ -79,6 +79,9 @@ const { apiMock } = vi.hoisted(() => ({
     requestPasswordReset: vi.fn(),
     validatePasswordReset: vi.fn(),
     completePasswordReset: vi.fn(),
+    requestEmailChange: vi.fn(),
+    validateEmailChange: vi.fn(),
+    completeEmailChange: vi.fn(),
     changePassword: vi.fn(),
     updateUserStatus: vi.fn(),
   },
@@ -97,6 +100,7 @@ vi.mock("../src/shared/api/resultApi", () => ({
 
 import { App, Sidebar } from "../src/App";
 import { useHashRoute } from "../src/app/hashRouter";
+import { AuthPages } from "../src/pages/AuthPages";
 import { ApiManagement } from "../src/pages/ApiManagement";
 import { ModelPreferencePage } from "../src/features/system-settings/ModelPreferencePage";
 import { SystemSettingsPage } from "../src/features/system-settings/SystemSettingsPage";
@@ -3242,6 +3246,76 @@ describe("关键用户流程", () => {
 
     await user.type(screen.getByLabelText(/^新密码/), "0");
     expect(updatePasswordButton).toBeEnabled();
+  });
+
+  test("当前用户验证密码后可以申请修改登录邮箱", async () => {
+    const user = userEvent.setup();
+    apiMock.users.mockResolvedValue([
+      {
+        id: "user-1",
+        display_name: "管理员",
+        email: "admin@example.com",
+        active: true,
+      },
+    ]);
+    apiMock.requestEmailChange.mockResolvedValue(null);
+
+    render(
+      <TeamPage
+        notify={vi.fn()}
+        currentUser={{
+          id: "user-1",
+          display_name: "管理员",
+          email: "admin@example.com",
+        }}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "修改我的邮箱" }));
+    const sendButton = screen.getByRole("button", { name: "发送验证邮件" });
+    expect(sendButton).toBeDisabled();
+    await user.type(screen.getByLabelText("新邮箱"), "WCH@SeekwayGroup.com");
+    await user.type(screen.getByLabelText("邮箱修改当前密码"), "current-password");
+    expect(sendButton).toBeEnabled();
+    await user.click(sendButton);
+
+    expect(apiMock.requestEmailChange).toHaveBeenCalledWith({
+      current_password: "current-password",
+      new_email: "wch@seekwaygroup.com",
+    });
+    expect(await screen.findByText(/验证邮件已发送至/)).toHaveTextContent(
+      "wch@seekwaygroup.com",
+    );
+  });
+
+  test("邮箱验证页确认后结束旧会话并返回登录", async () => {
+    const user = userEvent.setup();
+    const onSessionEnded = vi.fn();
+    apiMock.validateEmailChange.mockResolvedValue({
+      email: "wch@seekwaygroup.com",
+      expires_at: "2026-09-20T10:30:00Z",
+    });
+    apiMock.completeEmailChange.mockResolvedValue(null);
+
+    render(
+      <AuthPages
+        route={{ page: "change-email", query: { token: "email-token" } }}
+        onLogin={vi.fn()}
+        onSessionEnded={onSessionEnded}
+      />,
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "确认修改登录邮箱" }),
+    ).toBeVisible();
+    expect(screen.getByText(/@seekwaygroup.com/)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "确认修改邮箱" }));
+
+    await waitFor(() => {
+      expect(apiMock.completeEmailChange).toHaveBeenCalledWith("email-token");
+      expect(onSessionEnded).toHaveBeenCalledTimes(1);
+      expect(window.location.hash).toContain("#login?notice=email-changed");
+    });
   });
 
   test("待注册邀请可重新发送和撤销", async () => {

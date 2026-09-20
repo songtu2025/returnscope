@@ -77,6 +77,7 @@ const PUBLIC_AUTH_PAGES = new Set([
   "forgot-password",
   "register",
   "reset-password",
+  "change-email",
 ]);
 
 /** @type {Record<string, () => Promise<unknown>>} */
@@ -174,19 +175,23 @@ function App() {
   }, [user]);
 
   useEffect(() => {
-    if (user && PUBLIC_AUTH_PAGES.has(route.page)) {
+    if (user && PUBLIC_AUTH_PAGES.has(route.page) && route.page !== "change-email") {
       navigateHash("workbench", {}, { replace: true });
     }
   }, [route.page, user]);
 
   if (booting) return <LoadingScreen />;
-  if (!user) {
+  if (!user || route.page === "change-email") {
     return (
       <AuthPages
         route={route}
         onLogin={(value) => {
           setUser(value);
           refreshSystem();
+        }}
+        onSessionEnded={() => {
+          setUser(null);
+          setSystem(null);
         }}
       />
     );

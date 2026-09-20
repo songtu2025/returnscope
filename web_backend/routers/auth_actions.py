@@ -4,14 +4,14 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from web_backend.api_schemas import (
     AuthTokenRequest,
+    EmailChangeRequest,
     InvitationCreateRequest,
     PasswordResetCompleteRequest,
     PasswordResetRequest,
     RegisterRequest,
 )
 from web_backend.auth_service import AuthService, AuthServiceError
-from web_backend.routers.accounts import SESSION_COOKIE
-from web_backend.security import LoginAttemptLimiter, normalize_email
+from web_backend.security import SESSION_COOKIE, LoginAttemptLimiter, normalize_email
 from web_backend.settings import Settings
 
 
@@ -156,6 +156,69 @@ def _create_password_reset_router(
     return router
 
 
+def _create_email_change_router(
+    auth_service: AuthService,
+    account_limiter: LoginAttemptLimiter,
+    address_limiter: LoginAttemptLimiter,
+    current_user: Callable[..., dict[str, Any]],
+) -> APIRouter:
+    router = APIRouter()
+    User = Annotated[dict[str, Any], Depends(current_user)]
+
+    @router.post("/api/auth/email-change/request", status_code=204)
+    def request_email_change(
+        payload: EmailChangeRequest,
+        request: Request,
+        user: User,
+    ) -> Response:
+        account_key = f"email-change:{user['id']}"
+        address = request.client.host if request.client else "unknown"
+        address_key = f"email-change:{address}"
+        retry_after = max(
+            account_limiter.retry_after(account_key),
+            address_limiter.retry_after(address_key),
+        )
+        if retry_after:
+            raise HTTPException(
+                status_code=429,
+                detail="邮箱修改请求过于频繁，请稍后再试",
+                headers={"Retry-After": str(retry_after)},
+            )
+        account_limiter.record_failure(account_key)
+        address_limiter.record_failure(address_key)
+        try:
+            auth_service.request_email_change(
+                str(user["id"]),
+                payload.current_password,
+                payload.new_email,
+            )
+        except AuthServiceError as error:
+            _raise_http(error)
+        return Response(status_code=204)
+
+    @router.post("/api/auth/email-change/validate")
+    def validate_email_change(payload: AuthTokenRequest) -> dict[str, Any]:
+        try:
+            return auth_service.validate_email_change(payload.token)
+        except AuthServiceError as error:
+            _raise_http(error)
+
+    @router.post("/api/auth/email-change/complete", status_code=204)
+    def complete_email_change(
+        payload: AuthTokenRequest,
+        response: Response,
+    ) -> Response:
+        try:
+            auth_service.complete_email_change(payload.token)
+        except AuthServiceError as error:
+            _raise_http(error)
+        response.delete_cookie(SESSION_COOKIE, path="/")
+        response.status_code = 204
+        return response
+
+    return router
+
+
 def create_auth_action_router(
     auth_service: AuthService,
     settings: Settings,
@@ -173,6 +236,14 @@ def create_auth_action_router(
             auth_service,
             reset_account_limiter,
             reset_address_limiter,
+        )
+    )
+    router.include_router(
+        _create_email_change_router(
+            auth_service,
+            reset_account_limiter,
+            reset_address_limiter,
+            current_user,
         )
     )
     return router

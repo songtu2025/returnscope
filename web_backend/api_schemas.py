@@ -418,6 +418,11 @@ class PasswordResetCompleteRequest(AuthTokenRequest):
     new_password: str = Field(max_length=200)
 
 
+class EmailChangeRequest(BaseModel):
+    current_password: str = Field(max_length=200)
+    new_email: str = Field(max_length=254)
+
+
 class UserCreateRequest(BaseModel):
     email: str
     display_name: str = Field(min_length=1, max_length=60)

@@ -54,6 +54,9 @@ class MailSender(Protocol):
     def send_password_reset(self, email: str, reset_url: str) -> None:
         """发送一次性密码重置链接。"""
 
+    def send_email_change(self, email: str, change_url: str) -> None:
+        """发送一次性邮箱变更确认链接。"""
+
 
 @dataclass(frozen=True)
 class ActionEmailContent:
@@ -146,6 +149,26 @@ class SmtpMailSender:
         )
         self._send(message)
 
+    def send_email_change(self, email: str, change_url: str) -> None:
+        message = EmailMessage()
+        message["Subject"] = f"确认修改{PRODUCT_NAME}登录邮箱"
+        message["From"] = self.settings.smtp_from
+        message["To"] = email
+        _set_action_email_content(
+            message,
+            ActionEmailContent(
+                heading="确认新的登录邮箱",
+                paragraphs=("我们收到了修改登录邮箱的请求。", "请确认使用此邮箱登录。"),
+                action_label="确认修改邮箱",
+                action_url=change_url,
+                expiry_text=(
+                    f"链接将在 {self.settings.password_reset_ttl_minutes} 分钟后失效，且只能使用一次。"
+                ),
+                security_note="如果不是你发起的请求，忽略此邮件即可，当前登录邮箱不会改变。",
+            ),
+        )
+        self._send(message)
+
     def _send(self, message: EmailMessage) -> None:
         tls_context = (
             ssl.create_default_context()
@@ -183,6 +206,10 @@ class ConsoleMailSender:
     def send_password_reset(self, email: str, reset_url: str) -> None:
         print(f"重置邮箱: {email}")
         print(f"重置链接: {reset_url}")
+
+    def send_email_change(self, email: str, change_url: str) -> None:
+        print(f"新登录邮箱: {email}")
+        print(f"邮箱确认链接: {change_url}")
 
 
 def create_mail_sender(settings: Settings) -> MailSender:

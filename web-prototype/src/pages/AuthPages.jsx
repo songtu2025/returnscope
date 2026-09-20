@@ -25,6 +25,13 @@ function errorMessage(error) {
   return error instanceof Error ? error.message : "请求失败";
 }
 
+/** @param {string} email */
+function maskedEmail(email) {
+  const [local = "", domain = ""] = email.split("@");
+  const visible = local.slice(0, Math.min(2, local.length));
+  return `${visible}${"*".repeat(Math.max(3, local.length - visible.length))}@${domain}`;
+}
+
 /** @param {{children: import("react").ReactNode}} props */
 function AuthShell({ children }) {
   return (
@@ -473,6 +480,94 @@ function ResetPasswordPage({ token }) {
   );
 }
 
+/** @param {{token: string, onSessionEnded: () => void}} props */
+function ChangeEmailPage({ token, onSessionEnded }) {
+  const [state, setState] = useState(
+    /** @type {"loading" | "valid" | "invalid"} */ ("loading"),
+  );
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (!token) {
+      setState("invalid");
+      return () => {
+        active = false;
+      };
+    }
+    api
+      .validateEmailChange(token)
+      .then((result) => {
+        if (!active) return;
+        setEmail(result.email);
+        setState("valid");
+      })
+      .catch(() => active && setState("invalid"));
+    return () => {
+      active = false;
+    };
+  }, [token]);
+
+  const complete = async () => {
+    setSubmitting(true);
+    setError("");
+    try {
+      await api.completeEmailChange(token);
+      onSessionEnded();
+      navigateHash("login", { notice: "email-changed" }, { replace: true });
+    } catch (requestError) {
+      setError(errorMessage(requestError));
+      setSubmitting(false);
+    }
+  };
+
+  if (state === "loading") {
+    return <InlineLoading label="正在验证邮箱修改链接…" />;
+  }
+  if (state === "invalid") {
+    return (
+      <InvalidLinkCard
+        title="邮箱验证链接不可用"
+        description="该链接可能已过期、已使用或已被新请求替代。"
+      />
+    );
+  }
+
+  return (
+    <section
+      className="login-card auth-result-card"
+      aria-labelledby="email-change-title"
+    >
+      <div className="login-icon">
+        <EnvelopeSimple size={24} />
+      </div>
+      <p className="eyebrow">账号安全</p>
+      <h2 id="email-change-title">确认修改登录邮箱</h2>
+      <p>
+        登录邮箱将修改为 <b>{maskedEmail(email)}</b>
+        。完成后所有设备需要使用新邮箱重新登录。
+      </p>
+      <FormError message={error} />
+      <button
+        className="primary-button auth-full-button"
+        disabled={submitting}
+        onClick={complete}
+      >
+        {submitting ? "正在修改…" : "确认修改邮箱"}
+      </button>
+      <button
+        type="button"
+        className="auth-back-action"
+        onClick={() => navigateHash("login")}
+      >
+        暂不修改
+      </button>
+    </section>
+  );
+}
+
 /** @param {{title: string, description: string, actionLabel?: string, actionPage?: string}} props */
 function InvalidLinkCard({
   title,
@@ -498,8 +593,8 @@ function InvalidLinkCard({
   );
 }
 
-/** @param {{route: AuthRoute, onLogin: (user: CurrentUser) => void}} props */
-export function AuthPages({ route, onLogin }) {
+/** @param {{route: AuthRoute, onLogin: (user: CurrentUser) => void, onSessionEnded?: () => void}} props */
+export function AuthPages({ route, onLogin, onSessionEnded = () => {} }) {
   let content;
   if (route.page === "forgot-password") {
     content = <ForgotPasswordPage />;
@@ -507,6 +602,13 @@ export function AuthPages({ route, onLogin }) {
     content = <RegisterPage token={route.query.token ?? ""} onLogin={onLogin} />;
   } else if (route.page === "reset-password") {
     content = <ResetPasswordPage token={route.query.token ?? ""} />;
+  } else if (route.page === "change-email") {
+    content = (
+      <ChangeEmailPage
+        token={route.query.token ?? ""}
+        onSessionEnded={onSessionEnded}
+      />
+    );
   } else {
     content = (
       <LoginPage
@@ -519,7 +621,9 @@ export function AuthPages({ route, onLogin }) {
         notice={
           route.query.notice === "password-reset"
             ? "密码已重置，请使用新密码登录。"
-            : ""
+            : route.query.notice === "email-changed"
+              ? "登录邮箱已更新，请使用新邮箱登录。"
+              : ""
         }
       />
     );

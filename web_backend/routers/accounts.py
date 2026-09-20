@@ -15,6 +15,7 @@ from web_backend.common import add_audit, list_audit, new_id
 from web_backend.database import Database
 from web_backend.insight_report_worker import InsightReportWorker
 from web_backend.security import (
+    SESSION_COOKIE,
     LoginAttemptLimiter,
     SessionService,
     hash_password,
@@ -24,8 +25,6 @@ from web_backend.security import (
 from web_backend.settings import Settings
 from web_backend.task_service import TaskService
 from web_backend.worker import TaskWorker
-
-SESSION_COOKIE = "seekway_session"
 
 
 def _worker_health(worker: Any, enabled: bool) -> dict[str, Any]:

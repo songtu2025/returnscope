@@ -44,6 +44,7 @@ export const PAGE_IDS = new Set([
   "forgot-password",
   "register",
   "reset-password",
+  "change-email",
 ]);
 
 /** @type {Record<string, {page: string, query?: RouteQuery}>} */

@@ -15,6 +15,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from web_backend.database import Database
 
 PBKDF2_ITERATIONS = 600_000
+SESSION_COOKIE = "seekway_session"
 
 
 class LoginAttemptLimiter:

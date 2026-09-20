@@ -21,6 +21,9 @@ import { request } from "./request";
  *   requestPasswordReset: (email: string) => TeamRequest,
  *   validatePasswordReset: (token: string) => TeamRequest,
  *   completePasswordReset: (payload: TeamPayload) => TeamRequest,
+ *   requestEmailChange: (payload: TeamPayload) => TeamRequest,
+ *   validateEmailChange: (token: string) => TeamRequest,
+ *   completeEmailChange: (token: string) => TeamRequest,
  *   updateUserStatus: (id: string, payload: TeamPayload) => TeamRequest
  * }}
  */
@@ -73,6 +76,21 @@ export const teamApi = {
     request("/api/auth/password-reset/complete", {
       method: "POST",
       body: JSON.stringify(payload),
+    }),
+  requestEmailChange: (payload) =>
+    request("/api/auth/email-change/request", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  validateEmailChange: (token) =>
+    request("/api/auth/email-change/validate", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    }),
+  completeEmailChange: (token) =>
+    request("/api/auth/email-change/complete", {
+      method: "POST",
+      body: JSON.stringify({ token }),
     }),
   updateUserStatus: (id, payload) =>
     request(`/api/users/${id}`, {
