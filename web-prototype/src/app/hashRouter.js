@@ -6,6 +6,8 @@ import { LEGACY_ROUTES, PAGE_IDS, routeForDestination } from "./navigation";
 /** @typedef {import("./navigation").NavigationFocus} NavigationFocus */
 /** @typedef {import("./navigation").RouteQuery} RouteQuery */
 
+const ROUTE_CHANGE_EVENT = "app:routechange";
+
 /** @param {URLSearchParams} params */
 function queryObject(params) {
   return Object.fromEntries(params.entries());
@@ -56,6 +58,10 @@ function replaceHash(hash) {
   );
 }
 
+function notifyRouteChange() {
+  window.dispatchEvent(new Event(ROUTE_CHANGE_EVENT));
+}
+
 /**
  * @param {string} page
  * @param {Record<string, string | number | boolean | null | undefined>} [query]
@@ -65,10 +71,10 @@ export function navigateHash(page, query = {}, { replace = false } = {}) {
   const hash = buildHash(page, query);
   if (replace) {
     replaceHash(hash);
-    window.dispatchEvent(new HashChangeEvent("hashchange"));
-    return;
+  } else {
+    window.location.hash = hash;
   }
-  window.location.hash = hash;
+  notifyRouteChange();
 }
 
 export function useHashRoute() {
@@ -80,11 +86,17 @@ export function useHashRoute() {
       if (next.isLegacy && window.location.hash !== next.canonicalHash) {
         replaceHash(next.canonicalHash);
       }
-      setRoute(next);
+      setRoute((current) =>
+        current.canonicalHash === next.canonicalHash ? current : next,
+      );
     };
     sync();
     window.addEventListener("hashchange", sync);
-    return () => window.removeEventListener("hashchange", sync);
+    window.addEventListener(ROUTE_CHANGE_EVENT, sync);
+    return () => {
+      window.removeEventListener("hashchange", sync);
+      window.removeEventListener(ROUTE_CHANGE_EVENT, sync);
+    };
   }, []);
 
   const navigate = useCallback(

@@ -85,6 +85,7 @@ vi.mock("../src/shared/api/resultApi", () => ({
 }));
 
 import { App, Sidebar } from "../src/App";
+import { useHashRoute } from "../src/app/hashRouter";
 import { ApiManagement } from "../src/pages/ApiManagement";
 import { ModelPreferencePage } from "../src/features/system-settings/ModelPreferencePage";
 import { SystemSettingsPage } from "../src/features/system-settings/SystemSettingsPage";
@@ -96,6 +97,17 @@ import { NewTaskPage, TaskMonitor } from "../src/pages/Tasks";
 import { SESSION_EXPIRED_EVENT } from "../src/shared/api/request";
 import { serverStateKeys } from "../src/shared/serverState";
 import systemSettingsStyles from "../src/styles/system-settings.css?raw";
+
+function SystemSettingsRouteHarness() {
+  const { route } = useHashRoute();
+  return (
+    <SystemSettingsPage
+      route={route}
+      notify={vi.fn()}
+      currentUser={{ id: "user-1", is_admin: true }}
+    />
+  );
+}
 
 const systemStatus = {
   worker_status: "ok",
@@ -3029,6 +3041,31 @@ describe("关键用户流程", () => {
     expect(apiMock.saveModelPreference).toHaveBeenCalledWith(
       expect.objectContaining({ cheap_audit_percent: 11 }),
     );
+  });
+
+  test("系统设置标签在当前交互内切换且不保留旧页面内容", () => {
+    window.location.hash = "#settings?tab=service";
+    render(<SystemSettingsRouteHarness />);
+
+    expect(screen.getByRole("heading", { name: "模型服务" })).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "用户与安全" }));
+
+    expect(window.location.hash).toBe("#settings?tab=users");
+    expect(screen.queryByRole("heading", { name: "模型服务" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "用户与安全" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "用户与安全" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "模型服务" }));
+
+    expect(window.location.hash).toBe("#settings?tab=service");
+    expect(
+      screen.queryByRole("heading", { name: "用户与安全" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "模型服务" })).toBeVisible();
   });
 
   test("旧 API 与模型标签统一进入模型服务且只高亮一个子导航", async () => {
