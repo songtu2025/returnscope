@@ -36,6 +36,7 @@ vi.mock("../src/api", () => ({ api: resultApiMock }));
 import { useHashRoute } from "../src/app/hashRouter";
 import { AiInsightReport } from "../src/features/analysis-dashboards/AiInsightReport";
 import { AnalysisDashboardPage } from "../src/features/analysis-dashboards/AnalysisDashboardPage";
+import { ReturnReasonInsights } from "../src/features/analysis-dashboards/ReturnReasonInsights";
 import { analysisContextTerms } from "../src/features/analysis-dashboards/analysisContextPresentation";
 import {
   createDashboardSelection,
@@ -107,6 +108,54 @@ test("分析场景决定看板与报告用语", () => {
     reportTitle: "AI 退货洞察报告",
     sampleShareLabel: "退货样本内占比",
   });
+});
+
+test("筛选更新时明确标记旧结果并在失败后保留结果", async () => {
+  const user = userEvent.setup();
+  const onRetry = vi.fn();
+  const props = {
+    route: {
+      page: "analysis-dashboards",
+      dashboardId: "dashboard-1",
+      versionId: "dashboard-version-1",
+      tab: "overview",
+      problem: "",
+      labelGroup: "",
+      listing: "L001",
+      productName: "",
+      productSku: "",
+      dateFrom: "",
+      dateTo: "",
+      recordPage: 1,
+    },
+    updateRoute: vi.fn(),
+    data: {
+      summary: { record_count: 2 },
+      date_range: {},
+      filter_options: { listings: ["L001", "L002"] },
+      category_groups: [],
+      reasons: [],
+      products: [],
+      co_reasons: [],
+      evidence: { items: [], total: 0 },
+    },
+    analysisContext: "user_feedback",
+    onRetry,
+    onEvidence: vi.fn(),
+  };
+  const view = render(<ReturnReasonInsights {...props} loading />);
+
+  const region = screen.getByRole("region", { name: "语义洞察结果" });
+  expect(region).toHaveAttribute("aria-busy", "true");
+  expect(screen.getByRole("status")).toHaveTextContent("正在更新筛选结果");
+  expect(screen.getByRole("combobox", { name: "Listing" })).toBeDisabled();
+
+  view.rerender(<ReturnReasonInsights {...props} loading={false} error="请求超时" />);
+  expect(region).toHaveAttribute("aria-busy", "false");
+  expect(screen.getByRole("alert")).toHaveTextContent("更新失败，当前显示上一次结果");
+  expect(screen.getByText("有效反馈")).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "重试" }));
+  expect(onRetry).toHaveBeenCalledOnce();
 });
 
 beforeEach(() => {

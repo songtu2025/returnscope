@@ -7,13 +7,15 @@ import { commentStatusCounts, orderGroups } from "./returnReasonInsightPresentat
 /** @typedef {import("./analysisDashboardContracts").DashboardRecord} DashboardRecord */
 /** @typedef {import("./analysisDashboardContracts").DashboardRoute} DashboardRoute */
 /** @typedef {import("./analysisDashboardContracts").UpdateDashboardRoute} UpdateDashboardRoute */
-/** @param {{route: DashboardRoute, updateRoute: UpdateDashboardRoute, data: DashboardInsights, loading: boolean, analysisContext: string, onEvidence: (record: DashboardRecord, trigger: HTMLElement | null) => void}} props */
+/** @param {{route: DashboardRoute, updateRoute: UpdateDashboardRoute, data: DashboardInsights, loading: boolean, error?: string, analysisContext: string, onRetry: () => void | Promise<void>, onEvidence: (record: DashboardRecord, trigger: HTMLElement | null) => void}} props */
 export function ReturnReasonInsights({
   route,
   updateRoute: replaceRoute,
   data,
   loading,
+  error,
   analysisContext,
+  onRetry,
   onEvidence,
 }) {
   const summary = data.summary ?? {};
@@ -50,43 +52,64 @@ export function ReturnReasonInsights({
     });
 
   return (
-    <div className={`return-insight-content ${loading ? "is-loading" : ""}`}>
-      <ReturnReasonInsightSummary
-        route={route}
-        data={data}
-        dateRange={dateRange}
-        options={options}
-        includedCount={includedCount}
-        pendingCount={pendingCount}
-        statusCounts={statusCounts}
-        analysisContext={analysisContext}
-        onUpdateFilters={updateFilters}
-      />
-
-      <div className="return-insight-workbench">
-        <ReturnReasonInsightExplorer
+    <div
+      className="return-insight-content"
+      role="region"
+      aria-label="语义洞察结果"
+      aria-busy={loading}
+    >
+      {loading && (
+        <div className="return-insight-refresh-status" role="status" aria-live="polite">
+          正在更新筛选结果…
+        </div>
+      )}
+      {!loading && error && (
+        <div className="return-insight-refresh-error" role="alert">
+          <span>更新失败，当前显示上一次结果。</span>
+          <button type="button" className="text-button" onClick={onRetry}>
+            重试
+          </button>
+        </div>
+      )}
+      <div className={`return-insight-refresh-body ${loading ? "is-loading" : ""}`}>
+        <ReturnReasonInsightSummary
           route={route}
           data={data}
-          reasons={reasons}
-          hierarchy={hierarchy}
-          taxonomyLabels={taxonomyLabels}
-          selected={selected}
-          subjects={subjects}
-          groups={groups}
-          onUpdateRoute={updateRoute}
+          dateRange={dateRange}
+          options={options}
+          includedCount={includedCount}
+          pendingCount={pendingCount}
+          statusCounts={statusCounts}
+          loading={loading}
           analysisContext={analysisContext}
+          onUpdateFilters={updateFilters}
         />
-        <ReturnReasonInsightDiagnostic
-          data={data}
-          selected={selected}
-          products={products}
-          coReasons={coReasons}
-          semanticProfile={semanticProfile}
-          evidence={evidence}
-          onUpdateRoute={updateRoute}
-          onEvidence={onEvidence}
-          analysisContext={analysisContext}
-        />
+
+        <div className="return-insight-workbench">
+          <ReturnReasonInsightExplorer
+            route={route}
+            data={data}
+            reasons={reasons}
+            hierarchy={hierarchy}
+            taxonomyLabels={taxonomyLabels}
+            selected={selected}
+            subjects={subjects}
+            groups={groups}
+            onUpdateRoute={updateRoute}
+            analysisContext={analysisContext}
+          />
+          <ReturnReasonInsightDiagnostic
+            data={data}
+            selected={selected}
+            products={products}
+            coReasons={coReasons}
+            semanticProfile={semanticProfile}
+            evidence={evidence}
+            onUpdateRoute={updateRoute}
+            onEvidence={onEvidence}
+            analysisContext={analysisContext}
+          />
+        </div>
       </div>
     </div>
   );

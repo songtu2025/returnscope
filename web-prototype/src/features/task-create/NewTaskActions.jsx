@@ -31,7 +31,7 @@ export function TaskLaunchActions({
             ? mysqlState.busy === "import"
               ? "正在保存本次数据…"
               : mysqlState.ready
-                ? `已选 ${mysqlState.rowCount.toLocaleString()} 条退货记录`
+                ? `已选 ${mysqlState.rowCount.toLocaleString()} 条用户反馈`
                 : "选择店铺和日期，查看本次分析范围"
             : selectedReturns
               ? `已选 ${selectedReturns.row_count.toLocaleString()} 条用户反馈`

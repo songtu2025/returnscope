@@ -111,7 +111,7 @@ test.each([
   vi.setSystemTime(new Date(2024, 2, 1, 0, 30));
   const user = userEvent.setup();
   render(<ImportView onDone={vi.fn()} />);
-  await user.click(await screen.findByText("退货日期", { exact: true }));
+  await user.click(await screen.findByText("反馈日期", { exact: true }));
   await user.click(screen.getByRole("button", { name: label, exact: true }));
   expect(screen.getByLabelText("开始日期")).toHaveValue(start);
   expect(screen.getByLabelText("结束日期")).toHaveValue(end);
@@ -229,6 +229,17 @@ test("字段缺失时先补充固定店铺，未配置时提示连接设置", as
   expect(screen.getByRole("button", { name: "准备分析" })).toBeDisabled();
 });
 
+test("数据库导入使用用户反馈用语并保留来源字段映射", async () => {
+  render(<ImportView onDone={vi.fn()} />);
+
+  const table = await screen.findByRole("table", { name: "用户反馈数据样例" });
+  for (const heading of ["反馈日期", "来源原因", "反馈原文"]) {
+    expect(within(table).getByRole("columnheader", { name: heading })).toBeVisible();
+  }
+  await userEvent.click(screen.getByText("数据连接与字段 · 已就绪"));
+  expect(screen.getByLabelText("客户评论字段映射")).toBeVisible();
+});
+
 test("数据库准备后在原页预检，修改范围会退出准备状态", async () => {
   const user = userEvent.setup();
   const product = {
@@ -259,6 +270,7 @@ test("数据库准备后在原页预检，修改范围会退出准备状态", as
   apiMock.qualityPreflight.mockResolvedValue({});
   render(<NewTaskPage notify={vi.fn()} onChanged={vi.fn()} onNavigate={vi.fn()} />);
   await screen.findByText("尺码偏小");
+  expect(await screen.findByText("已选 1 条用户反馈")).toBeVisible();
   await user.click(screen.getByRole("button", { name: "准备分析" }));
   await screen.findByText("计划验证检查点");
   expect(apiMock.preflightTask).toHaveBeenCalledWith(

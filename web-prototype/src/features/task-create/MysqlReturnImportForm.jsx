@@ -328,7 +328,7 @@ export function MysqlReturnImportForm({
             </label>
             <details className="mysql-date-filter">
               <summary>
-                退货日期{" "}
+                反馈日期{" "}
                 <b>
                   {form.date_from || "不限起始"} — {form.date_to || "不限结束"}
                 </b>
@@ -489,7 +489,7 @@ export function MysqlReturnImportForm({
           </details>
           {!prepared && !preview && !loading && mappingReady && !invalidDateRange && (
             <div className="mysql-preview-empty" role="status">
-              {error ? "暂时无法显示数据" : "正在读取符合条件的退货数据…"}
+              {error ? "暂时无法显示数据" : "正在读取符合条件的用户反馈…"}
               {error && (
                 <button
                   type="button"
@@ -516,7 +516,7 @@ export function MysqlReturnImportForm({
                 <span className="mysql-preview-caption">数据样例</span>
               </summary>
               {preview.row_count === 0 && (
-                <p>没有符合条件的退货数据，请调整筛选条件。</p>
+                <p>没有符合条件的用户反馈，请调整筛选条件。</p>
               )}
               {preview.missing_store_rows > 0 && (
                 <p role="alert">
@@ -555,7 +555,7 @@ function MysqlPreviewTable({ rows, fields }) {
 
   return (
     <div className="mysql-preview-records">
-      <table aria-label="退货数据样例" className="mysql-preview-table">
+      <table aria-label="用户反馈数据样例" className="mysql-preview-table">
         <colgroup>
           <col className="mysql-preview-date-col" />
           <col className="mysql-preview-product-col" />
@@ -566,7 +566,7 @@ function MysqlPreviewTable({ rows, fields }) {
         </colgroup>
         <thead>
           <tr>
-            {["退货日期", "商品 / 店铺", "数量", "退货原因", "客户评论", "操作"].map(
+            {["反馈日期", "商品 / 店铺", "数量", "来源原因", "反馈原文", "操作"].map(
               (label) => (
                 <th key={label} scope="col">
                   {label}
@@ -601,7 +601,7 @@ function MysqlPreviewTable({ rows, fields }) {
                   </td>
                   <td>
                     <span className="mysql-preview-excerpt">
-                      {row["customer-comments"] || "未填写评论"}
+                      {row["customer-comments"] || "未填写反馈"}
                     </span>
                   </td>
                   <td>

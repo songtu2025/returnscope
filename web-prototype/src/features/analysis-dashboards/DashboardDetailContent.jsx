@@ -78,7 +78,7 @@ export function DashboardDetailContent({
   return (
     <>
       {content.loading && !content.data && <InlineLoading label="正在读取看板数据…" />}
-      {content.error && (
+      {content.error && !content.data && (
         <section className="dashboard-error" role="alert">
           <b>看板数据读取失败</b>
           <span>{content.error}</span>
@@ -87,7 +87,7 @@ export function DashboardDetailContent({
           </button>
         </section>
       )}
-      {!content.error && route.tab === "overview" && content.data && (
+      {route.tab === "overview" && content.data && (
         <ReturnReasonInsights
           route={route}
           updateRoute={updateRoute}
@@ -97,6 +97,8 @@ export function DashboardDetailContent({
             )
           }
           loading={content.loading}
+          error={content.error}
+          onRetry={onReloadContent}
           onEvidence={onEvidence}
           analysisContext={analysisContext}
         />
