@@ -52,6 +52,7 @@ test("business pages use tiered desktop work widths", () => {
   expect(styles).not.toMatch(/--desktop-(?:form-)?page-max-width/);
   expect(styles).not.toMatch(/width:\s*min\(100%,\s*1029px\)/);
   expect(styles).not.toMatch(/max-width:\s*(1220px|1280px|1480px)/);
+  expect(styles).not.toMatch(/\.classification-standard-page\s*{[^}]*max-width:/s);
 });
 
 test("模型服务默认使用摘要布局，高级编辑不保留常驻三栏", () => {
