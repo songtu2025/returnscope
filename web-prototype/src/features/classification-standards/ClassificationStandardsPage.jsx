@@ -3,6 +3,7 @@ import "../../styles/classification-standards.css";
 
 import { navigateHash } from "../../app/hashRouter";
 import { AntdProvider } from "../../components/AntdProvider";
+import { InlineLoading } from "../../components/SharedUi";
 import { classificationStandardApi } from "../../shared/api/classificationStandardApi";
 import {
   ClassificationStandardDeleteDialog,
@@ -154,7 +155,7 @@ export function ClassificationStandardsPage({ route, notify }) {
     }
   };
 
-  if (loading) return <div className="inline-loading">正在读取分类标准…</div>;
+  if (loading) return <InlineLoading label="正在读取分类标准…" />;
 
   return (
     <AntdProvider>
@@ -177,7 +178,7 @@ export function ClassificationStandardsPage({ route, notify }) {
 
         {(mode === "new" || mode === "edit") &&
           (pageLoading ? (
-            <div className="inline-loading">正在读取分类标准…</div>
+            <InlineLoading label="正在读取分类标准…" />
           ) : (
             <ClassificationStandardWorkspace
               key={`${selectedId || "new"}-${detail?.standard_version_id || ""}`}

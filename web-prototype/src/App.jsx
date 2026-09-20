@@ -19,6 +19,7 @@ import { ApiError, api } from "./api";
 import { AppShell } from "./app/AppShell";
 import { navigateHash, useHashRoute } from "./app/hashRouter";
 import { PRIMARY_NAV_ITEMS, SETTINGS_NAV_ITEM } from "./app/navigation";
+import { InlineLoading } from "./components/SharedUi";
 import { Toast } from "./components/Toast";
 import { STATUS_LABELS } from "./constants";
 import { useDialogFocus } from "./hooks/useDialogFocus";
@@ -235,7 +236,7 @@ function App() {
           </>
         }
       >
-        <Suspense fallback={<div className="empty-state">正在加载页面…</div>}>
+        <Suspense fallback={<InlineLoading label="正在加载页面…" />}>
           {page === "workbench" && <WorkbenchPage onNavigate={navigate} />}
           {page === "task-create" && (
             <TaskCreatePage
@@ -295,9 +296,7 @@ function App() {
             <ClassificationStandardsPage route={route} notify={notify} />
           )}
           {page === "legacy-results" && (
-            <Suspense
-              fallback={<div className="empty-state">正在加载旧版任务分析…</div>}
-            >
+            <Suspense fallback={<InlineLoading label="正在加载旧版任务分析…" />}>
               <div className="legacy-results-notice" role="status">
                 <div>
                   <b>旧版任务分析</b>
@@ -334,7 +333,7 @@ function App() {
             </Suspense>
           )}
           {page === "classification-results" && (
-            <Suspense fallback={<div className="empty-state">正在加载分类结果池…</div>}>
+            <Suspense fallback={<InlineLoading label="正在加载分类结果池…" />}>
               <ClassificationResultsPage
                 notify={notify}
                 route={route}

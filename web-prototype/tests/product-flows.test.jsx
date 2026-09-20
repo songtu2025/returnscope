@@ -548,9 +548,14 @@ describe("关键用户流程", () => {
         ],
       },
     };
-    apiMock.analysis.mockImplementation((_id, query) =>
-      Promise.resolve({ ...analysisPayload, view: query.view }),
-    );
+    let resolveDiagnosis;
+    apiMock.analysis.mockImplementation((_id, query) => {
+      const result = { ...analysisPayload, view: query.view };
+      if (query.view !== "diagnosis") return Promise.resolve(result);
+      return new Promise((resolve) => {
+        resolveDiagnosis = () => resolve(result);
+      });
+    });
 
     render(
       <ResultsPage
@@ -572,12 +577,19 @@ describe("关键用户流程", () => {
     ).toBeVisible();
     expect(screen.getByText("退货记录").parentElement).toHaveTextContent("12");
     await user.click(screen.getByRole("tab", { name: "问题诊断" }));
-    expect(await screen.findByRole("heading", { name: "问题优先级" })).toBeVisible();
-    expect(apiMock.analysis).toHaveBeenLastCalledWith(
-      "task-live-result",
-      expect.objectContaining({ listing: "SR001", view: "diagnosis" }),
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    await waitFor(() =>
+      expect(apiMock.analysis).toHaveBeenLastCalledWith(
+        "task-live-result",
+        expect.objectContaining({ listing: "SR001", view: "diagnosis" }),
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      ),
     );
+    expect(await screen.findByText("正在更新分析结果…")).toBeVisible();
+    expect(
+      screen.getByText("正在更新分析结果…").closest(".inline-loading"),
+    ).toHaveClass("ant-spin");
+    await act(async () => resolveDiagnosis());
+    expect(await screen.findByRole("heading", { name: "问题优先级" })).toBeVisible();
     await user.click(screen.getByRole("tab", { name: "数据明细" }));
     expect(await screen.findByText("鞋子太大")).toBeVisible();
     expect(apiMock.analysis).toHaveBeenLastCalledWith(
@@ -585,6 +597,28 @@ describe("关键用户流程", () => {
       expect.objectContaining({ listing: "SR001", view: "details" }),
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
+  });
+
+  test("旧版分析结果首次读取统一使用公共加载态", async () => {
+    apiMock.tasks.mockResolvedValue([
+      {
+        id: "task-loading",
+        title: "正在加载的任务",
+        status: "completed",
+        store: "SEEKWAY:US",
+        result_version: 1,
+        dataset_name: "用户反馈数据",
+        dataset_version: 1,
+        completed_at: "2026-08-12T09:00:00Z",
+      },
+    ]);
+    apiMock.analysis.mockReturnValue(new Promise(() => {}));
+
+    render(<ResultsPage notify={vi.fn()} onNavigate={vi.fn()} />);
+
+    expect(
+      (await screen.findByText("正在准备分析工作台…")).closest(".inline-loading"),
+    ).toHaveClass("ant-spin");
   });
 
   test("零标签覆盖时明确提示结果不可用于分析", async () => {

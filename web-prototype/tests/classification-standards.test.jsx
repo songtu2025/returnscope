@@ -868,6 +868,16 @@ test("查看与编辑原位切换，保留搜索、选中标签和未保存内�
   copy.mockRestore();
 });
 
+test("分类标准首次读取统一使用公共加载态", () => {
+  standardApiMock.classificationStandards.mockReturnValue(new Promise(() => {}));
+
+  render(<ClassificationStandardsPage route={{ query: {} }} notify={vi.fn()} />);
+
+  expect(screen.getByText("正在读取分类标准…").closest(".inline-loading")).toHaveClass(
+    "ant-spin",
+  );
+});
+
 test("分类标准首页使用全宽列表并支持搜索", async () => {
   const { container } = render(
     <ClassificationStandardsPage route={{ query: {} }} notify={vi.fn()} />,

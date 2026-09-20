@@ -11,7 +11,7 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react";
 import { api } from "../api";
-import { EmptyState, PageHeading } from "../components/SharedUi";
+import { EmptyState, InlineLoading, PageHeading } from "../components/SharedUi";
 import {
   DetailsSection,
   DiagnosisSection,
@@ -473,13 +473,19 @@ export function ResultsPage({ notify, onNavigate, focus = null }) {
                     downloadUrl={downloadUrl}
                   />
                 )}
-                {loading && <div className="analysis-loading">正在更新分析结果…</div>}
+                {loading && (
+                  <div className="analysis-loading">
+                    <InlineLoading label="正在更新分析结果…" />
+                  </div>
+                )}
               </div>
             </>
           )}
 
           {!analysis && loading && (
-            <div className="analysis-first-loading">正在准备分析工作台…</div>
+            <div className="analysis-first-loading">
+              <InlineLoading label="正在准备分析工作台…" />
+            </div>
           )}
         </>
       )}
