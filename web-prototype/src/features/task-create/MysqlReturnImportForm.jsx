@@ -1,6 +1,8 @@
 import { Fragment, useEffect, useState } from "react";
+import useSWR from "swr";
 import { api } from "../../api";
 import { InlineLoading } from "../../components/SharedUi";
+import { serverStateKeys } from "../../shared/serverState";
 import "../../styles/mysql-return-import.css";
 
 /** @typedef {{ name: string, label: string, required?: boolean }} MysqlField */
@@ -133,37 +135,33 @@ export function MysqlReturnImportForm({
   prepared = false,
   disabled = false,
 }) {
-  const [schema, setSchema] = useState(/** @type {MysqlSchema | null} */ (null));
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [preview, setPreview] = useState(/** @type {MysqlPreview | null} */ (null));
-  const [schemaRevision, setSchemaRevision] = useState(0);
+  const [refreshingSchema, setRefreshingSchema] = useState(false);
   const [previewRevision, setPreviewRevision] = useState(0);
   const [form, setForm] = useState(() => initialForm(draft));
+  const {
+    data: schema,
+    error: schemaError,
+    isLoading: loadingSchema,
+    mutate: mutateSchema,
+  } = useSWR(serverStateKeys.mysqlReturnSchema, () =>
+    mysqlReturnApi.mysqlReturnSchema(),
+  );
+  const loading = (loadingSchema && !schema) || refreshingSchema;
+  const displayError = error || (schemaError ? errorMessage(schemaError) : "");
 
   useEffect(() => {
-    const controller = new AbortController();
-    mysqlReturnApi
-      .mysqlReturnSchema({ signal: controller.signal, refresh: schemaRevision > 0 })
-      .then((result) => {
-        setSchema(result);
-        setForm((current) => ({
-          ...current,
-          mapping: {
-            ...(result.configured ? result.mapping : {}),
-            ...current.mapping,
-          },
-        }));
-      })
-      .catch((requestError) => {
-        if (!controller.signal.aborted) setError(errorMessage(requestError));
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, [schemaRevision]);
+    if (!schema?.configured) return;
+    setForm((current) => ({
+      ...current,
+      mapping: {
+        ...schema.mapping,
+        ...current.mapping,
+      },
+    }));
+  }, [schema]);
 
   useEffect(() => {
     onDraftChange?.(form);
@@ -174,8 +172,12 @@ export function MysqlReturnImportForm({
     setPreview(null);
     setBusy("");
     setError("");
-    setLoading(true);
-    setSchemaRevision((current) => current + 1);
+    setRefreshingSchema(true);
+    void mysqlReturnApi
+      .mysqlReturnSchema({ refresh: true })
+      .then((result) => mutateSchema(result, { revalidate: false }))
+      .catch((requestError) => setError(errorMessage(requestError)))
+      .finally(() => setRefreshingSchema(false));
   };
 
   /** @param {Partial<MysqlReturnFormState>} changes */
@@ -282,9 +284,9 @@ export function MysqlReturnImportForm({
       aria-label="从数据库取数"
     >
       {loading && <InlineLoading label="正在连接数据库并读取字段…" />}
-      {error && (
+      {displayError && (
         <div className="form-error" role="alert">
-          {error}
+          {displayError}
           {!schema && (
             <button type="button" className="text-button" onClick={refreshSchema}>
               重新连接

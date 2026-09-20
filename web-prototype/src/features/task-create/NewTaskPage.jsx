@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { useSWRConfig } from "swr";
 import { api } from "../../api";
 import { AntdProvider } from "../../components/AntdProvider";
+import { serverStateKeys } from "../../shared/serverState";
 import { taskPlanCounts } from "../task-planning/taskPlanPolicy";
 import { TaskLaunchActions } from "./NewTaskActions";
 import { NewTaskView } from "./NewTaskView";
@@ -32,6 +34,7 @@ export function NewTaskPage({
   onDraftChange,
   onDraftComplete,
 }) {
+  const { mutate: mutateServerState } = useSWRConfig();
   const [prepared, setPrepared] = useState(Boolean(draft?.resumePreflight));
   const [mysqlState, setMysqlState] = useState({ ready: false, busy: "", rowCount: 0 });
   const headingRef = useRef(/** @type {HTMLHeadingElement | null} */ (null));
@@ -212,6 +215,17 @@ export function NewTaskPage({
         unresolved_policy: unresolvedPolicy,
         segment_order: segmentOrder,
       });
+      try {
+        await mutateServerState(
+          serverStateKeys.taskList,
+          api.tasks({ include_archived: true }),
+          { revalidate: false },
+        );
+      } catch {
+        await mutateServerState(serverStateKeys.taskList, undefined, {
+          revalidate: false,
+        });
+      }
       notify("任务已创建，后台执行器会自动领取");
       onDraftComplete?.();
       onChanged();

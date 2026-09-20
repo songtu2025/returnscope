@@ -8,6 +8,7 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import useSWR from "swr";
 import { renderWithServerState as render } from "./renderWithServerState";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -93,6 +94,7 @@ import { ResultsPage } from "../src/pages/ResultsPage";
 import { TeamPage } from "../src/pages/TeamPage";
 import { NewTaskPage, TaskMonitor } from "../src/pages/Tasks";
 import { SESSION_EXPIRED_EVENT } from "../src/shared/api/request";
+import { serverStateKeys } from "../src/shared/serverState";
 import systemSettingsStyles from "../src/styles/system-settings.css?raw";
 
 const systemStatus = {
@@ -102,6 +104,14 @@ const systemStatus = {
   task_counts: {},
   warnings: [],
 };
+
+function ClassificationCacheProbe() {
+  const { data } = useSWR(
+    serverStateKeys.classificationResultOverview("cached-result"),
+    () => Promise.resolve({ cached: true }),
+  );
+  return <span>{data ? "分类结果缓存存在" : "分类结果缓存已清除"}</span>;
+}
 
 test("分类结果角标只使用新版批次待处理数", () => {
   const { rerender } = render(
@@ -823,6 +833,7 @@ describe("关键用户流程", () => {
         }),
       ),
     );
+    expect(apiMock.tasks).toHaveBeenCalledWith({ include_archived: true });
     expect(onChanged).toHaveBeenCalled();
     expect(onNavigate).toHaveBeenCalledWith("tasks");
   });
@@ -2694,8 +2705,14 @@ describe("关键用户流程", () => {
     });
     apiMock.resolveReview.mockResolvedValue({});
 
-    render(<ReviewCenter notify={vi.fn()} onChanged={onChanged} focus={null} />);
+    render(
+      <>
+        <ClassificationCacheProbe />
+        <ReviewCenter notify={vi.fn()} onChanged={onChanged} focus={null} />
+      </>,
+    );
 
+    expect(await screen.findByText("分类结果缓存存在")).toBeVisible();
     expect(await screen.findByText("客户评论原文")).toBeVisible();
     await user.type(
       screen.getByPlaceholderText("必填：说明判断依据，便于后续追溯"),
@@ -2710,6 +2727,7 @@ describe("关键用户流程", () => {
         note: "证据明确，确认模型标签",
       }),
     );
+    expect(await screen.findByText("分类结果缓存已清除")).toBeVisible();
     expect(onChanged).toHaveBeenCalled();
   });
 

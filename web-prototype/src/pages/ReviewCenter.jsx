@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSWRConfig } from "swr";
 import "../styles/review-center.css";
 
 import { CheckCircle, ListChecks } from "@phosphor-icons/react";
@@ -27,6 +28,7 @@ function reviewError(error) {
 
 /** @param {ReviewCenterProps} props */
 export function ReviewCenter({ notify, onChanged, focus }) {
+  const { mutate: mutateServerState } = useSWRConfig();
   const [status, setStatus] = useState("pending");
   const [rows, setRows] = useState(/** @type {LegacyReviewRecord[]} */ ([]));
   const [selectedId, setSelectedId] = useState(/** @type {string | null} */ (null));
@@ -90,6 +92,11 @@ export function ReviewCenter({ notify, onChanged, focus }) {
       });
       notify("复核修改已写入新的结果版本");
       await load();
+      await mutateServerState(
+        (key) => Array.isArray(key) && key[0] === "classification-results",
+        undefined,
+        { revalidate: false },
+      );
       onChanged();
     } catch (error) {
       const requestError = reviewError(error);

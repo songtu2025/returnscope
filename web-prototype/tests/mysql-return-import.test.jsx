@@ -1,12 +1,5 @@
 import { useState } from "react";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -27,6 +20,7 @@ vi.mock("../src/api", () => ({ api: apiMock }));
 
 import { MysqlReturnImportForm } from "../src/features/task-create/MysqlReturnImportForm";
 import { NewTaskPage } from "../src/features/task-create/NewTaskPage";
+import { renderWithServerState as render } from "./renderWithServerState";
 
 const schema = {
   configured: true,
@@ -80,6 +74,39 @@ function ImportView(props) {
     </>
   );
 }
+
+function CacheReuseView(props) {
+  const [visible, setVisible] = useState(true);
+  return (
+    <>
+      <button type="button" onClick={() => setVisible((current) => !current)}>
+        切换页面
+      </button>
+      {visible && <ImportView {...props} />}
+    </>
+  );
+}
+
+test("重新进入数据库取数时立即复用字段并在后台重新校验", async () => {
+  const user = userEvent.setup();
+  let resolveRevalidation;
+  apiMock.mysqlReturnSchema.mockResolvedValueOnce(schema).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolveRevalidation = resolve;
+      }),
+  );
+
+  render(<CacheReuseView onDone={vi.fn()} />);
+  await screen.findByText("数据连接与字段 · 已就绪");
+  await user.click(screen.getByRole("button", { name: "切换页面" }));
+  await user.click(screen.getByRole("button", { name: "切换页面" }));
+
+  expect(screen.queryByText("正在连接数据库并读取字段…")).not.toBeInTheDocument();
+  expect(screen.getByText("数据连接与字段 · 已就绪")).toBeVisible();
+  await waitFor(() => expect(apiMock.mysqlReturnSchema).toHaveBeenCalledTimes(2));
+  resolveRevalidation(schema);
+});
 
 test("自动预览后准备分析，筛选修改立即使旧范围失效", async () => {
   const user = userEvent.setup();

@@ -27,6 +27,7 @@ export const serverStateKeys = {
     memberIds,
   ],
   taskCreateSetup: ["task-create", "setup"],
+  mysqlReturnSchema: ["task-create", "mysql-return-schema"],
   /** @param {string} taskId */
   taskTemplate: (taskId) => ["task-create", "template", taskId],
   /** @param {Record<string, string | number | null | undefined>} query */
