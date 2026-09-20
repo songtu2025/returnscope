@@ -32,7 +32,10 @@ from web_backend.operations_service import AuditLogService, WorkbenchService
 from web_backend.request_timing import RequestTimingMiddleware
 from web_backend.review_service import ReviewService
 from web_backend.routers.accounts import SESSION_COOKIE, create_account_router
-from web_backend.routers.auth_actions import create_auth_action_router
+from web_backend.routers.auth_actions import (
+    AuthActionLimiters,
+    create_auth_action_router,
+)
 from web_backend.routers.classification_results import (
     create_classification_result_router,
 )
@@ -67,8 +70,7 @@ class AuthRuntime:
     auth_service: AuthService
     account_login_limiter: LoginAttemptLimiter
     address_login_limiter: LoginAttemptLimiter
-    reset_account_limiter: LoginAttemptLimiter
-    reset_address_limiter: LoginAttemptLimiter
+    action_limiters: AuthActionLimiters
 
 
 def _create_auth_runtime(
@@ -84,8 +86,18 @@ def _create_auth_runtime(
         auth_service=AuthService(database, settings, mail_sender, session_service),
         account_login_limiter=LoginAttemptLimiter(5, 15 * 60),
         address_login_limiter=LoginAttemptLimiter(30, 15 * 60),
-        reset_account_limiter=LoginAttemptLimiter(3, 15 * 60),
-        reset_address_limiter=LoginAttemptLimiter(10, 15 * 60),
+        action_limiters=AuthActionLimiters(
+            reset_account=LoginAttemptLimiter(3, 15 * 60),
+            reset_address=LoginAttemptLimiter(10, 15 * 60),
+            invitation_admin=LoginAttemptLimiter(
+                settings.invitation_send_limit_per_admin,
+                settings.invitation_send_window_seconds,
+            ),
+            invitation_recipient=LoginAttemptLimiter(
+                settings.invitation_send_limit_per_recipient,
+                settings.invitation_send_window_seconds,
+            ),
+        ),
     )
 
 
@@ -238,8 +250,7 @@ def create_app(
         create_auth_action_router(
             auth_service=auth_runtime.auth_service,
             settings=settings,
-            reset_account_limiter=auth_runtime.reset_account_limiter,
-            reset_address_limiter=auth_runtime.reset_address_limiter,
+            limiters=auth_runtime.action_limiters,
             current_user=current_user,
         )
     )

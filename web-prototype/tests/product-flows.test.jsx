@@ -3144,8 +3144,9 @@ describe("关键用户流程", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "用户与安全" })).toBeVisible();
-    expect(screen.getByText("用户账号")).toBeVisible();
-    expect(screen.getByText("账号安全")).toBeVisible();
+    expect(screen.getByText("访问控制台")).toBeVisible();
+    expect(screen.getByRole("table", { name: "团队成员" })).toBeVisible();
+    expect(screen.getByRole("table", { name: "待注册邀请" })).toBeVisible();
   });
 
   test("用户数据加载完成前不显示零用户状态", async () => {
@@ -3164,9 +3165,7 @@ describe("关键用户流程", () => {
     );
 
     expect(screen.getByText("正在读取用户与安全设置…")).toBeVisible();
-    expect(
-      screen.queryByText("0/5 个席位 · 0 个启用账号 · 0 个待注册"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("0 个启用账号 · 0 个待注册")).not.toBeInTheDocument();
     expect(screen.queryByText("暂无用户账号")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "邀请用户" })).not.toBeInTheDocument();
 
@@ -3181,9 +3180,7 @@ describe("关键用户流程", () => {
       ]);
     });
 
-    expect(
-      await screen.findByText("1/5 个席位 · 1 个启用账号 · 0 个待注册"),
-    ).toBeVisible();
+    expect(await screen.findByText("1 个启用账号 · 0 个待注册")).toBeVisible();
     expect(screen.queryByText("正在读取用户与安全设置…")).not.toBeInTheDocument();
   });
 
@@ -3207,8 +3204,38 @@ describe("关键用户流程", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
+  test("用户账号超过五个时仍可继续邀请", async () => {
+    apiMock.users.mockResolvedValue(
+      Array.from({ length: 6 }, (_, index) => ({
+        id: `user-${index + 1}`,
+        display_name: `成员 ${index + 1}`,
+        email: `member${index + 1}@example.com`,
+        active: true,
+      })),
+    );
+
+    render(
+      <TeamPage
+        notify={vi.fn()}
+        currentUser={{ id: "user-1", display_name: "成员 1" }}
+      />,
+    );
+
+    expect(await screen.findByText("6 个启用账号 · 0 个待注册")).toBeVisible();
+    expect(screen.getByRole("button", { name: "邀请用户" })).toBeEnabled();
+    expect(screen.queryByText(/席位|人数上限/)).not.toBeInTheDocument();
+  });
+
   test("用户与安全仅在邀请邮箱和密码表单完成后启用主操作", async () => {
     const user = userEvent.setup();
+    apiMock.users.mockResolvedValue([
+      {
+        id: "user-1",
+        display_name: "管理员",
+        email: "admin@example.com",
+        active: true,
+      },
+    ]);
     render(
       <TeamPage
         notify={vi.fn()}
@@ -3232,7 +3259,7 @@ describe("关键用户流程", () => {
     expect(inviteButton).toBeEnabled();
 
     await user.click(screen.getByRole("button", { name: "取消" }));
-    await user.click(screen.getByRole("button", { name: "修改我的密码" }));
+    await user.click(screen.getByRole("button", { name: "修改密码" }));
     const updatePasswordButton = await screen.findByRole("button", {
       name: "保存并重新登录",
     });
@@ -3271,7 +3298,7 @@ describe("关键用户流程", () => {
       />,
     );
 
-    await user.click(await screen.findByRole("button", { name: "修改我的邮箱" }));
+    await user.click(await screen.findByRole("button", { name: "修改邮箱" }));
     const sendButton = screen.getByRole("button", { name: "发送验证邮件" });
     expect(sendButton).toBeDisabled();
     await user.type(screen.getByLabelText("新邮箱"), "WCH@SeekwayGroup.com");
@@ -3340,7 +3367,7 @@ describe("关键用户流程", () => {
     );
 
     expect(await screen.findByText("member@example.com")).toBeVisible();
-    expect(screen.getByText("1/5 个席位 · 0 个启用账号 · 1 个待注册")).toBeVisible();
+    expect(screen.getByText("0 个启用账号 · 1 个待注册")).toBeVisible();
 
     await user.click(screen.getByRole("button", { name: "重新发送" }));
     expect(apiMock.resendInvitation).toHaveBeenCalledWith("invitation-1");
@@ -3814,7 +3841,7 @@ describe("关键用户流程", () => {
       />,
     );
 
-    const target = (await screen.findByText("复核员")).closest(".member-table > div");
+    const target = (await screen.findByText("复核员")).closest("tr");
     expect(target).toHaveClass("is-targeted");
     expect(target).toHaveAttribute("aria-current", "true");
     expect(scrollProbe).toHaveBeenCalled();

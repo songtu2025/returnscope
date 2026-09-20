@@ -3,73 +3,116 @@
   flex-direction: column;
   gap: var(--desktop-section-gap);
 }
-.member-table > div {
-  display: grid;
-  grid-template-columns:
-    minmax(180px, 1.2fr) minmax(220px, 1.45fr) minmax(88px, 0.45fr)
-    minmax(100px, 0.5fr);
-  align-items: center;
-  min-height: 52px;
-  padding: 0 12px;
-  border-top: 1px solid var(--line-soft);
-  font-size: 12px;
+.access-console > .card-heading {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line-soft);
 }
-.pending-invitations {
-  margin-top: 16px;
+.access-section {
   padding-top: 16px;
+}
+.access-section + .access-section {
+  margin-top: 18px;
   border-top: 1px solid var(--line-soft);
 }
-.pending-invitations-heading {
+.access-section-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 0 12px 10px;
+  padding: 0 4px 10px;
 }
-.pending-invitations-heading b,
-.pending-invitations-heading span {
-  display: block;
+.access-section-heading h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 14px;
 }
-.pending-invitations-heading b {
-  font-size: 13px;
-}
-.pending-invitations-heading span {
-  margin-top: 3px;
+.access-section-heading p {
+  margin: 3px 0 0;
   color: var(--muted);
   font-size: 11px;
 }
-.pending-invitations-heading em {
-  color: var(--amber);
+.access-section-heading > span {
+  flex: 0 0 auto;
+  color: var(--muted);
   font-size: 11px;
-  font-style: normal;
   font-weight: 700;
 }
-.invitation-table > div {
-  display: grid;
-  grid-template-columns:
-    minmax(220px, 1.45fr) minmax(180px, 1fr) minmax(88px, 0.45fr)
-    minmax(180px, 0.8fr);
-  align-items: center;
-  min-height: 48px;
-  padding: 0 12px;
-  border-top: 1px solid var(--line-soft);
+.access-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.member-table,
+.invitation-table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  table-layout: fixed;
   font-size: 12px;
 }
+.member-table th,
+.member-table td,
+.invitation-table th,
+.invitation-table td {
+  padding: 9px 12px;
+  text-align: left;
+  vertical-align: middle;
+}
+.member-table th,
+.invitation-table th {
+  height: var(--desktop-table-head-height);
+  color: #617069;
+  background: #f7f9f7;
+  font-size: 11px;
+  font-weight: 700;
+}
+.member-table td,
+.invitation-table td {
+  height: 52px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--ink);
+}
+.member-table th:nth-child(1) {
+  width: 28%;
+}
+.member-table th:nth-child(2) {
+  width: 34%;
+}
+.member-table th:nth-child(3) {
+  width: 12%;
+}
+.member-table th:nth-child(4) {
+  width: 26%;
+}
+.invitation-table th:nth-child(1) {
+  width: 34%;
+}
+.invitation-table th:nth-child(2) {
+  width: 28%;
+}
+.invitation-table th:nth-child(3) {
+  width: 12%;
+}
+.invitation-table th:nth-child(4) {
+  width: 26%;
+}
+.member-table tbody tr.current-account {
+  background: #f7fbf9;
+}
+.member-table em,
 .invitation-table em {
   width: fit-content;
   padding: 4px 7px;
   border-radius: 8px;
+  font-style: normal;
+}
+.invitation-table em {
   color: var(--amber);
   background: var(--amber-pale);
-  font-style: normal;
 }
 .invitation-actions {
   gap: 7px;
-}
-.invitation-table > div.team-empty-row {
-  display: flex;
-  min-height: 56px;
-  color: var(--muted);
 }
 .member-name {
   display: flex;
@@ -95,12 +138,8 @@
   font-weight: 500;
 }
 .member-table em {
-  width: fit-content;
-  padding: 4px 7px;
-  border-radius: 8px;
   color: #7a6650;
   background: #f2ece4;
-  font-style: normal;
 }
 .member-table em.online {
   color: var(--green);
@@ -108,7 +147,8 @@
 }
 .member-toggle {
   width: fit-content;
-  padding: 4px 7px;
+  min-height: var(--desktop-compact-height);
+  padding: 5px 9px;
   border: 1px solid var(--line);
   border-radius: 6px;
   color: var(--green);
@@ -126,41 +166,15 @@
 }
 .member-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-start;
+  gap: 7px;
 }
-.member-table > div.team-empty-row {
-  display: flex;
-  min-height: 64px;
-  align-items: center;
+.member-table .team-empty-row td,
+.invitation-table .team-empty-row td {
+  height: 64px;
   color: var(--muted);
-}
-.team-security-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-top: 16px;
-  padding: 14px 16px;
-  border: 1px solid #d9e8e1;
-  border-radius: 11px;
-  background: #f7fbf9;
-}
-.team-security-bar span,
-.team-security-bar small {
-  display: block;
-  color: var(--muted);
-  font-size: 12px;
-}
-.team-security-bar b {
-  display: block;
-  margin: 3px 0;
-  color: var(--ink);
-  font-size: 13px;
-}
-.team-security-actions {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 8px;
+  text-align: center;
 }
 .account-status-confirm {
   align-items: center;

@@ -23,7 +23,6 @@ from web_backend.settings import Settings
 
 logger = logging.getLogger(__name__)
 
-TEAM_ACCOUNT_LIMIT = 5
 INVITATION_PURPOSE = "invitation"
 PASSWORD_RESET_PURPOSE = "password_reset"
 EMAIL_CHANGE_PURPOSE = "email_change"
@@ -88,19 +87,7 @@ class AuthService:
         return self._get_invitation(token_id)
 
     def resend_invitation(self, invitation_id: str, actor_id: str) -> dict[str, Any]:
-        with self.database.connect() as connection:
-            current = connection.execute(
-                """
-                SELECT email FROM auth_action_tokens
-                WHERE id = ? AND purpose = ?
-                  AND used_at IS NULL AND revoked_at IS NULL
-                """,
-                (invitation_id, INVITATION_PURPOSE),
-            ).fetchone()
-        if current is None:
-            raise AuthServiceError(409, "该邀请已不能重发")
-
-        email = str(current["email"])
+        email = self.pending_invitation_email(invitation_id)
         replacement_id, raw_token = self._insert_replacement_invitation(
             email,
             actor_id,
@@ -132,6 +119,20 @@ class AuthService:
                 after={"email": email},
             )
         return self._get_invitation(replacement_id)
+
+    def pending_invitation_email(self, invitation_id: str) -> str:
+        with self.database.connect() as connection:
+            current = connection.execute(
+                """
+                SELECT email FROM auth_action_tokens
+                WHERE id = ? AND purpose = ?
+                  AND used_at IS NULL AND revoked_at IS NULL
+                """,
+                (invitation_id, INVITATION_PURPOSE),
+            ).fetchone()
+        if current is None:
+            raise AuthServiceError(409, "该邀请已不能重发")
+        return str(current["email"])
 
     def revoke_invitation(self, invitation_id: str, actor_id: str) -> None:
         now = utc_now()
@@ -202,12 +203,6 @@ class AuthService:
             ).fetchone()
             if existing_user is not None:
                 raise AuthServiceError(409, "该邮箱已经存在")
-            active_count = connection.execute(
-                "SELECT COUNT(*) AS count FROM users WHERE active = 1"
-            ).fetchone()
-            if int(active_count["count"]) >= TEAM_ACCOUNT_LIMIT:
-                raise AuthServiceError(409, "团队账号席位已满")
-
             consumed = connection.execute(
                 """
                 UPDATE auth_action_tokens
@@ -570,21 +565,6 @@ class AuthService:
             ).fetchone()
             if pending_email_change is not None:
                 raise AuthServiceError(409, "该邮箱正在验证修改")
-            active_count = connection.execute(
-                "SELECT COUNT(*) AS count FROM users WHERE active = 1"
-            ).fetchone()
-            pending_count = connection.execute(
-                """
-                SELECT COUNT(*) AS count FROM auth_action_tokens
-                WHERE purpose = ? AND used_at IS NULL AND revoked_at IS NULL
-                  AND expires_at > ?
-                """,
-                (INVITATION_PURPOSE, now),
-            ).fetchone()
-            if int(active_count["count"]) + int(pending_count["count"]) >= (
-                TEAM_ACCOUNT_LIMIT
-            ):
-                raise AuthServiceError(409, "最多可保留 5 个团队账号或有效邀请")
             return self._insert_invitation_row(connection, email, actor_id, now)
 
     def _insert_replacement_invitation(

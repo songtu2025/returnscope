@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Power, UserPlus, WarningCircle } from "@phosphor-icons/react";
 import { api } from "../api";
-import { navigateHash } from "../app/hashRouter";
 import {
   CardHeading,
   EmptyState,
@@ -61,7 +60,7 @@ export function TeamPage({
   const [statusNote, setStatusNote] = useState("");
   const [statusUpdating, setStatusUpdating] = useState(false);
   const passwordInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
-  const focusedUserRef = useRef(/** @type {HTMLDivElement | null} */ (null));
+  const focusedUserRef = useRef(/** @type {HTMLTableRowElement | null} */ (null));
   const hasLoadedUsers = useRef(false);
   const load = useCallback(async () => {
     const isInitialLoad = !hasLoadedUsers.current;
@@ -103,12 +102,9 @@ export function TeamPage({
     focusedUserRef.current.scrollIntoView?.({ block: "center" });
   }, [focusUserId, users]);
   const activeCount = users.filter((user) => Boolean(user.active)).length;
-  const seatCount = activeCount + invitations.length;
   const currentAccount = users.find(
     (user) => String(user.id) === String(currentUser?.id),
   );
-  const currentDisplayName =
-    currentAccount?.display_name || currentUser?.display_name || "当前账号";
   const currentEmail = currentAccount?.email || currentUser?.email || "未提供邮箱";
   const inviteHint = /^\S+@\S+\.\S+$/.test(inviteEmail) ? "" : "请填写有效邮箱。";
   const passwordFormHint = passwordHint(passwordForm);
@@ -186,11 +182,11 @@ export function TeamPage({
     }
   };
   return (
-    <div className="standard-page team-page">
+    <div className="standard-page narrow-page team-page">
       <PageHeading
         eyebrow="账号管理"
         title="用户与安全"
-        description="管理可登录账号与当前账号密码。"
+        description="管理团队账号、邀请与当前账号凭据。"
       />
       {loadState === "loading" && <InlineLoading label="正在读取用户与安全设置…" />}
       {loadState === "error" && (
@@ -215,153 +211,177 @@ export function TeamPage({
       )}
       {loadState === "ready" && (
         <div className="team-layout">
-          <section className="content-card">
+          <section className="content-card access-console">
             <CardHeading
-              title="用户账号"
-              note={`${seatCount}/5 个席位 · ${activeCount} 个启用账号 · ${invitations.length} 个待注册`}
+              title="访问控制台"
+              note={`${activeCount} 个启用账号 · ${invitations.length} 个待注册`}
               action={
                 <button
+                  type="button"
                   className="primary-button compact-button"
-                  disabled={seatCount >= 5}
                   onClick={() => setShowInviteModal(true)}
                 >
                   <UserPlus size={16} />
-                  {seatCount >= 5 ? "已达 5 人上限" : "邀请用户"}
+                  邀请用户
                 </button>
               }
             />
-            <div className="member-table">
-              <div className="table-head">
-                <span>用户</span>
-                <span>邮箱</span>
-                <span>状态</span>
-                <span>操作</span>
+            <section className="access-section" aria-labelledby="member-list-title">
+              <div className="access-section-heading">
+                <h3 id="member-list-title">团队成员</h3>
+                <span>{users.length} 个账号</span>
               </div>
-              {users.map((user) => {
-                const isFocused = String(user.id) === String(focusUserId);
-                const isCurrentUser = String(user.id) === String(currentUser?.id);
-                return (
-                  <div
-                    key={user.id}
-                    ref={isFocused ? focusedUserRef : null}
-                    className={isFocused ? "is-targeted" : ""}
-                    aria-current={isFocused ? "true" : undefined}
-                  >
-                    <span className="member-name">
-                      <i>{user.display_name.slice(0, 1)}</i>
-                      <b>
-                        {user.display_name}
-                        {user.id === currentUser?.id && <small>当前账号</small>}
-                      </b>
-                    </span>
-                    <span>{user.email}</span>
-                    <em className={user.active ? "online" : ""}>
-                      {user.active ? "启用" : "停用"}
-                    </em>
-                    <div className="member-actions">
-                      {isCurrentUser ? (
-                        <button
-                          className="member-toggle"
-                          onClick={() => setShowPasswordModal(true)}
-                        >
-                          改密码
-                        </button>
-                      ) : (
-                        <button
+              <div className="access-table-scroll">
+                <table className="member-table" aria-label="团队成员">
+                  <thead>
+                    <tr>
+                      <th scope="col">用户</th>
+                      <th scope="col">邮箱</th>
+                      <th scope="col">状态</th>
+                      <th scope="col">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.map((user) => {
+                      const isFocused = String(user.id) === String(focusUserId);
+                      const isCurrentUser = String(user.id) === String(currentUser?.id);
+                      return (
+                        <tr
+                          key={user.id}
+                          ref={isFocused ? focusedUserRef : null}
                           className={classNames(
-                            "member-toggle",
-                            user.active && "danger",
+                            isCurrentUser && "current-account",
+                            isFocused && "is-targeted",
                           )}
-                          onClick={() => {
-                            setStatusTarget(user);
-                            setStatusNote("");
-                          }}
+                          aria-current={isFocused ? "true" : undefined}
                         >
-                          {user.active ? "停用" : "启用"}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-              {users.length === 0 && <div className="team-empty-row">暂无用户账号</div>}
-            </div>
-            <div className="pending-invitations">
-              <div className="pending-invitations-heading">
+                          <td>
+                            <span className="member-name">
+                              <i>{user.display_name.slice(0, 1)}</i>
+                              <b>
+                                {user.display_name}
+                                {isCurrentUser && <small>当前账号</small>}
+                              </b>
+                            </span>
+                          </td>
+                          <td>{user.email}</td>
+                          <td>
+                            <em className={user.active ? "online" : ""}>
+                              {user.active ? "启用" : "停用"}
+                            </em>
+                          </td>
+                          <td>
+                            <div className="member-actions">
+                              {isCurrentUser ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="member-toggle"
+                                    onClick={() => setShowEmailModal(true)}
+                                  >
+                                    修改邮箱
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="member-toggle"
+                                    onClick={() => setShowPasswordModal(true)}
+                                  >
+                                    修改密码
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className={classNames(
+                                    "member-toggle",
+                                    user.active && "danger",
+                                  )}
+                                  onClick={() => {
+                                    setStatusTarget(user);
+                                    setStatusNote("");
+                                  }}
+                                >
+                                  {user.active ? "停用" : "启用"}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {users.length === 0 && (
+                      <tr className="team-empty-row">
+                        <td colSpan={4}>暂无用户账号</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+            <section
+              className="access-section pending-invitations"
+              aria-labelledby="pending-invitations-title"
+            >
+              <div className="access-section-heading">
                 <div>
-                  <b>待注册邀请</b>
-                  <span>邀请在注册完成前占用一个团队席位。</span>
+                  <h3 id="pending-invitations-title">待注册邀请</h3>
+                  <p>等待成员通过邮件完成注册。</p>
                 </div>
-                <em>{invitations.length} 个待处理</em>
+                <span>{invitations.length} 个待处理</span>
               </div>
-              <div className="invitation-table">
-                <div className="table-head">
-                  <span>邮箱</span>
-                  <span>有效期至</span>
-                  <span>状态</span>
-                  <span>操作</span>
-                </div>
-                {invitations.map((invitation) => (
-                  <div key={invitation.id}>
-                    <span>{invitation.email}</span>
-                    <span>{formatTime(invitation.expires_at)}</span>
-                    <em>待注册</em>
-                    <div className="member-actions invitation-actions">
-                      <button
-                        className="member-toggle"
-                        disabled={Boolean(invitationAction)}
-                        onClick={() => handleInvitation(invitation.id, "resend")}
-                      >
-                        {invitationAction === `resend:${invitation.id}`
-                          ? "发送中…"
-                          : "重新发送"}
-                      </button>
-                      <button
-                        className="member-toggle danger"
-                        disabled={Boolean(invitationAction)}
-                        onClick={() => handleInvitation(invitation.id, "revoke")}
-                      >
-                        {invitationAction === `revoke:${invitation.id}`
-                          ? "撤销中…"
-                          : "撤销"}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                {invitations.length === 0 && (
-                  <div className="team-empty-row">暂无待注册邀请</div>
-                )}
+              <div className="access-table-scroll">
+                <table className="invitation-table" aria-label="待注册邀请">
+                  <thead>
+                    <tr>
+                      <th scope="col">邮箱</th>
+                      <th scope="col">有效期至</th>
+                      <th scope="col">状态</th>
+                      <th scope="col">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invitations.map((invitation) => (
+                      <tr key={invitation.id}>
+                        <td>{invitation.email}</td>
+                        <td>{formatTime(invitation.expires_at)}</td>
+                        <td>
+                          <em>待注册</em>
+                        </td>
+                        <td>
+                          <div className="member-actions invitation-actions">
+                            <button
+                              type="button"
+                              className="member-toggle"
+                              disabled={Boolean(invitationAction)}
+                              onClick={() => handleInvitation(invitation.id, "resend")}
+                            >
+                              {invitationAction === `resend:${invitation.id}`
+                                ? "发送中…"
+                                : "重新发送"}
+                            </button>
+                            <button
+                              type="button"
+                              className="member-toggle danger"
+                              disabled={Boolean(invitationAction)}
+                              onClick={() => handleInvitation(invitation.id, "revoke")}
+                            >
+                              {invitationAction === `revoke:${invitation.id}`
+                                ? "撤销中…"
+                                : "撤销"}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {invitations.length === 0 && (
+                      <tr className="team-empty-row">
+                        <td colSpan={4}>暂无待注册邀请</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
-            </div>
-            <div className="team-security-bar" id="change-password">
-              <div>
-                <span>账号安全</span>
-                <b>
-                  当前登录账号：{currentDisplayName} · {currentEmail}
-                </b>
-                <small>关键操作会写入审计记录。</small>
-              </div>
-              <div className="team-security-actions">
-                <button
-                  className="secondary-button"
-                  onClick={() => setShowEmailModal(true)}
-                >
-                  修改我的邮箱
-                </button>
-                <button
-                  className="secondary-button"
-                  onClick={() => setShowPasswordModal(true)}
-                >
-                  修改我的密码
-                </button>
-                <button
-                  className="secondary-button"
-                  onClick={() => navigateHash("settings", { tab: "audit" })}
-                >
-                  查看审计记录
-                </button>
-              </div>
-            </div>
+            </section>
           </section>
         </div>
       )}
@@ -394,12 +414,12 @@ export function TeamPage({
               </button>
               <button
                 className="primary-button"
-                disabled={inviting || seatCount >= 5 || Boolean(inviteHint)}
+                disabled={inviting || Boolean(inviteHint)}
               >
                 {inviting ? "正在发送…" : "发送邀请"}
               </button>
             </div>
-            {seatCount < 5 && inviteHint && (
+            {inviteHint && (
               <small role="status" aria-live="polite">
                 {inviteHint}
               </small>

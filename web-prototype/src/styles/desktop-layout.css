@@ -174,23 +174,14 @@
 }
 
 @media (max-width: 720px) {
-  .team-page .member-table {
+  .team-page .access-table-scroll {
     max-width: 100%;
     overflow-x: auto;
-  }
-
-  .team-page .team-security-bar {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .team-page .team-security-actions {
-    flex-wrap: wrap;
   }
 }
 
 .model-catalog-row.is-targeted,
-.member-table > div.is-targeted {
+.member-table tr.is-targeted {
   position: relative;
   z-index: 1;
   background: #eef8f4;

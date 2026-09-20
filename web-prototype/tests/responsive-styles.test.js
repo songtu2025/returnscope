@@ -147,13 +147,13 @@ test("用户与安全和审计记录使用紧凑桌面布局", () => {
     /\.team-layout\s*{[^}]*grid-template-columns:[^;}]*620px[^;}]*310px;/s,
   );
   expect(styles).toMatch(
-    /\.team-security-bar\s*{[^}]*justify-content:\s*space-between;[^}]*padding:\s*14px 16px;/s,
+    /\.access-table-scroll\s*{[^}]*overflow-x:\s*auto;[^}]*border:\s*1px solid var\(--line\);/s,
   );
   expect(styles).toMatch(
-    /@media \(max-width:\s*720px\)[\s\S]*?\.team-page \.member-table\s*{[^}]*max-width:\s*100%;[^}]*overflow-x:\s*auto;/,
+    /\.member-table,[\s\S]*?\.invitation-table\s*{[^}]*border-collapse:\s*collapse;[^}]*table-layout:\s*fixed;/,
   );
   expect(styles).toMatch(
-    /@media \(max-width:\s*720px\)[\s\S]*?\.team-page \.team-security-bar\s*{[^}]*flex-direction:\s*column;/,
+    /@media \(max-width:\s*720px\)[\s\S]*?\.team-page \.access-table-scroll\s*{[^}]*max-width:\s*100%;[^}]*overflow-x:\s*auto;/,
   );
   expect(styles).toMatch(
     /\.audit-filter-form\s*{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);/s,

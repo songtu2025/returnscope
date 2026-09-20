@@ -47,6 +47,9 @@ class Settings:
     smtp_use_tls: bool = True
     smtp_use_ssl: bool = False
     invitation_ttl_hours: int = 24
+    invitation_send_limit_per_admin: int = 20
+    invitation_send_limit_per_recipient: int = 3
+    invitation_send_window_seconds: int = 3600
     password_reset_ttl_minutes: int = 30
     password_min_length: int = 12
     mysql_host: str = "127.0.0.1"
@@ -109,6 +112,15 @@ class Settings:
             smtp_use_tls=_read_bool("WEBAPP_SMTP_USE_TLS", True),
             smtp_use_ssl=_read_bool("WEBAPP_SMTP_USE_SSL"),
             invitation_ttl_hours=_read_int("WEBAPP_INVITATION_TTL_HOURS", 24),
+            invitation_send_limit_per_admin=_read_int(
+                "WEBAPP_INVITATION_SEND_LIMIT_PER_ADMIN", 20
+            ),
+            invitation_send_limit_per_recipient=_read_int(
+                "WEBAPP_INVITATION_SEND_LIMIT_PER_RECIPIENT", 3
+            ),
+            invitation_send_window_seconds=_read_int(
+                "WEBAPP_INVITATION_SEND_WINDOW_SECONDS", 3600
+            ),
             password_reset_ttl_minutes=_read_int(
                 "WEBAPP_PASSWORD_RESET_TTL_MINUTES", 30
             ),
@@ -150,9 +162,7 @@ class Settings:
         if not self.secure_cookies:
             raise ValueError("生产环境必须启用 WEBAPP_SECURE_COOKIES")
         if self.task_workers < 15:
-            raise ValueError(
-                "生产环境至少需要 15 个 Listing 槽位，以支持 5 个用户各并行 3 个片段"
-            )
+            raise ValueError("生产环境至少需要 15 个 Listing 槽位")
         if not self.database_path.is_relative_to(self.data_dir):
             raise ValueError("生产环境数据库必须位于 WEBAPP_DATA_DIR 内")
 

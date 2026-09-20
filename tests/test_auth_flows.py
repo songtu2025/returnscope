@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
@@ -240,7 +240,7 @@ def test_resend_and_revoke_invitation_invalidates_links(tmp_path: Path) -> None:
         assert client.get("/api/invitations").json() == []
 
 
-def test_pending_invitations_reserve_team_seats(tmp_path: Path) -> None:
+def test_team_accounts_are_not_limited_to_five(tmp_path: Path) -> None:
     from web_backend.app import create_app
 
     sender = FakeMailSender()
@@ -252,29 +252,74 @@ def test_pending_invitations_reserve_team_seats(tmp_path: Path) -> None:
 
     with TestClient(app) as client:
         _login_admin(client)
-        invitations = []
-        for index in range(1, 5):
+        for index in range(1, 7):
             response = client.post(
                 "/api/invitations",
                 json={"email": f"member{index}@example.com"},
             )
             assert response.status_code == 201
-            invitations.append(response.json())
-        full = client.post(
+        assert len(client.get("/api/invitations").json()) == 6
+
+        for index, invitation in enumerate(sender.invitations, start=1):
+            registered = client.post(
+                "/api/auth/register",
+                json={
+                    "token": _token_from_url(invitation["url"]),
+                    "display_name": f"成员 {index}",
+                    "password": "member-password-123",
+                },
+            )
+            assert registered.status_code == 200
+
+        _login_admin(client)
+        assert len(client.get("/api/users").json()) == 7
+
+
+def test_invitation_email_sends_are_rate_limited(tmp_path: Path) -> None:
+    from web_backend.app import create_app
+
+    sender = FakeMailSender()
+    settings = replace(
+        _settings(tmp_path),
+        invitation_send_limit_per_admin=3,
+        invitation_send_limit_per_recipient=2,
+        invitation_send_window_seconds=60,
+    )
+    app = create_app(
+        start_worker=False,
+        settings_override=settings,
+        mail_sender_override=sender,
+    )
+
+    with TestClient(app) as client:
+        _login_admin(client)
+        invited = client.post(
             "/api/invitations",
-            json={"email": "member5@example.com"},
+            json={"email": "member@example.com"},
         )
-        assert full.status_code == 409
+        assert invited.status_code == 201
+
+        resent = client.post(f"/api/invitations/{invited.json()['id']}/resend")
+        assert resent.status_code == 201
+        recipient_limited = client.post(
+            f"/api/invitations/{resent.json()['id']}/resend"
+        )
+        assert recipient_limited.status_code == 429
+        assert int(recipient_limited.headers["Retry-After"]) > 0
 
         assert (
-            client.post(f"/api/invitations/{invitations[0]['id']}/revoke").status_code
-            == 204
+            client.post(
+                "/api/invitations",
+                json={"email": "member2@example.com"},
+            ).status_code
+            == 201
         )
-        replacement = client.post(
+        admin_limited = client.post(
             "/api/invitations",
-            json={"email": "member5@example.com"},
+            json={"email": "member3@example.com"},
         )
-        assert replacement.status_code == 201
+        assert admin_limited.status_code == 429
+        assert int(admin_limited.headers["Retry-After"]) > 0
 
 
 def test_invitation_requires_admin_and_rejects_expired_or_short_password(

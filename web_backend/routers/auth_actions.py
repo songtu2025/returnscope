@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Annotated, Any, Callable, NoReturn
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -15,24 +16,62 @@ from web_backend.security import SESSION_COOKIE, LoginAttemptLimiter, normalize_
 from web_backend.settings import Settings
 
 
+@dataclass(frozen=True)
+class AuthActionLimiters:
+    reset_account: LoginAttemptLimiter
+    reset_address: LoginAttemptLimiter
+    invitation_admin: LoginAttemptLimiter
+    invitation_recipient: LoginAttemptLimiter
+
+
 def _raise_http(error: AuthServiceError) -> NoReturn:
     raise HTTPException(status_code=error.status_code, detail=error.detail) from error
 
 
+def _require_invitation_admin(user: dict[str, Any]) -> None:
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="仅系统管理员可管理团队邀请")
+
+
+def _check_invitation_send_limit(
+    actor_id: str,
+    email: str,
+    admin_limiter: LoginAttemptLimiter,
+    recipient_limiter: LoginAttemptLimiter,
+) -> str:
+    try:
+        normalized_email = normalize_email(email)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    admin_key = f"invitation-admin:{actor_id}"
+    recipient_key = f"invitation-recipient:{normalized_email}"
+    retry_after = max(
+        admin_limiter.retry_after(admin_key),
+        recipient_limiter.retry_after(recipient_key),
+    )
+    if retry_after:
+        raise HTTPException(
+            status_code=429,
+            detail="邀请邮件发送过于频繁，请稍后再试",
+            headers={"Retry-After": str(retry_after)},
+        )
+    admin_limiter.record_failure(admin_key)
+    recipient_limiter.record_failure(recipient_key)
+    return normalized_email
+
+
 def _create_invitation_management_router(
     auth_service: AuthService,
+    admin_limiter: LoginAttemptLimiter,
+    recipient_limiter: LoginAttemptLimiter,
     current_user: Callable[..., dict[str, Any]],
 ) -> APIRouter:
     router = APIRouter()
     User = Annotated[dict[str, Any], Depends(current_user)]
 
-    def require_admin(user: dict[str, Any]) -> None:
-        if not user.get("is_admin"):
-            raise HTTPException(status_code=403, detail="仅系统管理员可管理团队邀请")
-
     @router.get("/api/invitations")
     def invitations(user: User) -> list[dict[str, Any]]:
-        require_admin(user)
+        _require_invitation_admin(user)
         return auth_service.list_pending_invitations()
 
     @router.post("/api/invitations", status_code=201)
@@ -40,23 +79,38 @@ def _create_invitation_management_router(
         payload: InvitationCreateRequest,
         user: User,
     ) -> dict[str, Any]:
-        require_admin(user)
+        _require_invitation_admin(user)
+        actor_id = str(user["id"])
+        email = _check_invitation_send_limit(
+            actor_id,
+            payload.email,
+            admin_limiter,
+            recipient_limiter,
+        )
         try:
-            return auth_service.create_invitation(payload.email, str(user["id"]))
+            return auth_service.create_invitation(email, actor_id)
         except AuthServiceError as error:
             _raise_http(error)
 
     @router.post("/api/invitations/{invitation_id}/resend", status_code=201)
     def resend_invitation(invitation_id: str, user: User) -> dict[str, Any]:
-        require_admin(user)
+        _require_invitation_admin(user)
+        actor_id = str(user["id"])
         try:
-            return auth_service.resend_invitation(invitation_id, str(user["id"]))
+            email = auth_service.pending_invitation_email(invitation_id)
+            _check_invitation_send_limit(
+                actor_id,
+                email,
+                admin_limiter,
+                recipient_limiter,
+            )
+            return auth_service.resend_invitation(invitation_id, actor_id)
         except AuthServiceError as error:
             _raise_http(error)
 
     @router.post("/api/invitations/{invitation_id}/revoke", status_code=204)
     def revoke_invitation(invitation_id: str, user: User) -> Response:
-        require_admin(user)
+        _require_invitation_admin(user)
         try:
             auth_service.revoke_invitation(invitation_id, str(user["id"]))
         except AuthServiceError as error:
@@ -222,27 +276,31 @@ def _create_email_change_router(
 def create_auth_action_router(
     auth_service: AuthService,
     settings: Settings,
-    reset_account_limiter: LoginAttemptLimiter,
-    reset_address_limiter: LoginAttemptLimiter,
+    limiters: AuthActionLimiters,
     current_user: Callable[..., dict[str, Any]],
 ) -> APIRouter:
     router = APIRouter()
     router.include_router(
-        _create_invitation_management_router(auth_service, current_user)
+        _create_invitation_management_router(
+            auth_service,
+            limiters.invitation_admin,
+            limiters.invitation_recipient,
+            current_user,
+        )
     )
     router.include_router(_create_registration_router(auth_service, settings))
     router.include_router(
         _create_password_reset_router(
             auth_service,
-            reset_account_limiter,
-            reset_address_limiter,
+            limiters.reset_account,
+            limiters.reset_address,
         )
     )
     router.include_router(
         _create_email_change_router(
             auth_service,
-            reset_account_limiter,
-            reset_address_limiter,
+            limiters.reset_account,
+            limiters.reset_address,
             current_user,
         )
     )
