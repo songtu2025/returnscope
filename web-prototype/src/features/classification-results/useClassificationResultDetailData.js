@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { api } from "../../api";
 
@@ -34,6 +34,7 @@ export function useClassificationResultDetailData({ route, notify }) {
   const [loading, setLoading] = useState(true);
   const [recordsLoading, setRecordsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [reloadRevision, setReloadRevision] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -64,7 +65,9 @@ export function useClassificationResultDetailData({ route, notify }) {
       active = false;
       controller.abort();
     };
-  }, [route.version]);
+  }, [reloadRevision, route.version]);
+
+  const retry = useCallback(() => setReloadRevision((current) => current + 1), []);
 
   const detailQuery = useMemo(
     () => ({
@@ -155,5 +158,6 @@ export function useClassificationResultDetailData({ route, notify }) {
     loading,
     recordsLoading,
     error,
+    retry,
   };
 }

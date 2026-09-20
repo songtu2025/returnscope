@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import time
 from dataclasses import dataclass, is_dataclass, replace
 from pathlib import Path
 from typing import Any, Callable
@@ -18,6 +20,8 @@ from web_backend.database import Database
 from web_backend.dataset_cache import load_cached_dataset
 from web_backend.security import utc_now
 from web_backend.settings import Settings
+
+performance_logger = logging.getLogger("uvicorn.error.performance")
 
 
 @dataclass
@@ -93,6 +97,7 @@ class SegmentExecutionMixin:
         segment = context.segment
         snapshot = json_value(task.get("snapshot_json"), {})
         scope_mode = str(snapshot.get("scope", {}).get("mode", "manual"))
+        data_started = time.perf_counter()
         dataset = load_cached_dataset(
             str(task["return_file_path"]),
             str(task["product_file_path"]),
@@ -103,6 +108,8 @@ class SegmentExecutionMixin:
             str(task["product_sha256"]),
             analysis_context_from_snapshot(snapshot),
         )
+        data_ms = (time.perf_counter() - data_started) * 1000
+        setup_started = time.perf_counter()
         all_keys = {
             str(key) for key in json_value(segment["classification_keys_json"], [])
         }
@@ -128,6 +135,8 @@ class SegmentExecutionMixin:
             str(task["store"]),
             task["listing"],
         )
+        setup_ms = (time.perf_counter() - setup_started) * 1000
+        model_started = time.perf_counter()
         run = self._classify_segment(
             context,
             selected,
@@ -135,8 +144,22 @@ class SegmentExecutionMixin:
             runtime,
             len(all_keys),
         )
+        model_ms = (time.perf_counter() - model_started) * 1000
         context.latest_run = run
+        persist_started = time.perf_counter()
         self._complete_segment_run(context, dataset, all_keys, taxonomy, run)
+        persist_ms = (time.perf_counter() - persist_started) * 1000
+        performance_logger.info(
+            "segment_stages task_id=%s segment_id=%s records=%s "
+            "data_ms=%.2f setup_ms=%.2f model_ms=%.2f persist_ms=%.2f",
+            context.task_id,
+            context.segment_id,
+            len(all_keys),
+            data_ms,
+            setup_ms,
+            model_ms,
+            persist_ms,
+        )
 
     def _save_segment_checkpoint(
         self,

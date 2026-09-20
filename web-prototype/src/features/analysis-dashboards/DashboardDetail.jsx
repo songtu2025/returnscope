@@ -344,6 +344,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
   useEffect(() => {
     if (!activeReportId) return undefined;
     const timer = window.setInterval(async () => {
+      if (document.hidden) return;
       try {
         const updated = await dashboardApi.insightReport(activeReportId);
         setReports((current) => ({

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 import threading
+import time
 from collections import Counter
 from dataclasses import is_dataclass, replace
 from pathlib import Path
@@ -49,6 +51,8 @@ from web_backend.config_service import ConfigService
 from web_backend.database import Database
 from web_backend.security import utc_now
 from web_backend.settings import PROJECT_ROOT, Settings
+
+performance_logger = logging.getLogger("uvicorn.error.performance")
 
 
 class AgentRunner(
@@ -100,14 +104,24 @@ class AgentRunner(
             return cache
 
     def run_segment(self, task_id: str, segment_id: str) -> None:
+        started = time.perf_counter()
+        outcome = "completed"
         task = self._load_task(task_id)
         segment = self._load_segment(segment_id)
         if task is None or segment is None or segment["status"] != "running":
+            performance_logger.info(
+                "segment_performance task_id=%s segment_id=%s outcome=skipped "
+                "total_ms=%.2f",
+                task_id,
+                segment_id,
+                (time.perf_counter() - started) * 1000,
+            )
             return
         context = self._segment_run_context(task_id, segment_id, task, segment)
         try:
             self._execute_segment(context)
         except PipelineCancelled:
+            outcome = "interrupted"
             self._finish_interrupted_segment(
                 task_id,
                 segment_id,
@@ -117,6 +131,7 @@ class AgentRunner(
                 *context.runtime_totals(),
             )
         except ModelServiceUnavailable as exc:
+            outcome = "model_service_paused"
             self._finish_model_service_paused(
                 task_id,
                 segment_id,
@@ -127,6 +142,7 @@ class AgentRunner(
                 *context.runtime_totals(),
             )
         except ResultPublicationError as exc:
+            outcome = "result_publish_failed"
             self._finish_result_publish_failed_segment(
                 task_id,
                 segment_id,
@@ -137,6 +153,7 @@ class AgentRunner(
                 *context.runtime_totals(),
             )
         except Exception as exc:
+            outcome = "failed"
             self._finish_failed_segment(
                 task_id,
                 segment_id,
@@ -145,6 +162,14 @@ class AgentRunner(
                 context.checkpoint_path,
                 context.existing_results,
                 *context.runtime_totals(),
+            )
+        finally:
+            performance_logger.info(
+                "segment_performance task_id=%s segment_id=%s outcome=%s total_ms=%.2f",
+                task_id,
+                segment_id,
+                outcome,
+                (time.perf_counter() - started) * 1000,
             )
 
     def _classify_segment(

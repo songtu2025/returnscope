@@ -3657,6 +3657,24 @@ describe("关键用户流程", () => {
     }
   });
 
+  test("任务列表恢复可见时立即刷新", async () => {
+    apiMock.tasks.mockResolvedValue([]);
+    Object.defineProperty(document, "hidden", { configurable: true, value: true });
+    try {
+      render(<TaskMonitor notify={vi.fn()} onNavigate={vi.fn()} onChanged={vi.fn()} />);
+      await waitFor(() => expect(apiMock.tasks).toHaveBeenCalledTimes(1));
+
+      document.dispatchEvent(new Event("visibilitychange"));
+      expect(apiMock.tasks).toHaveBeenCalledTimes(1);
+
+      Object.defineProperty(document, "hidden", { configurable: true, value: false });
+      document.dispatchEvent(new Event("visibilitychange"));
+      await waitFor(() => expect(apiMock.tasks).toHaveBeenCalledTimes(2));
+    } finally {
+      Object.defineProperty(document, "hidden", { configurable: true, value: false });
+    }
+  });
+
   test("任务管理表支持创建类似任务和批量归档", async () => {
     const user = userEvent.setup();
     const baseTask = {

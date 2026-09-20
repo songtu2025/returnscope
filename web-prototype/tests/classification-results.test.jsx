@@ -686,9 +686,11 @@ test("结果池区分初始空状态和接口错误", async () => {
   expect(screen.getByText("服务暂不可用")).toBeVisible();
 });
 
-test("不存在的分类结果详情只显示页面内联错误", async () => {
+test("不存在的分类结果详情支持页面内局部重试", async () => {
   const notify = vi.fn();
-  apiMock.classificationResult.mockRejectedValueOnce(new Error("分类结果不存在"));
+  apiMock.classificationResult
+    .mockRejectedValueOnce(new Error("分类结果不存在"))
+    .mockResolvedValueOnce(resultVersion);
   window.location.hash =
     "classification-results?result_version_id=missing-classification-version";
 
@@ -696,7 +698,29 @@ test("不存在的分类结果详情只显示页面内联错误", async () => {
 
   expect(await screen.findByText("分类结果读取失败")).toBeVisible();
   expect(screen.getByText("分类结果不存在")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "重试" }));
+  expect(await screen.findByRole("heading", { name: "SR001 分类结果" })).toBeVisible();
+  expect(apiMock.classificationResult).toHaveBeenCalledTimes(2);
   expect(notify).not.toHaveBeenCalled();
+});
+
+test("结果池在页面隐藏时暂停新结果轮询", async () => {
+  vi.useFakeTimers();
+  Object.defineProperty(document, "hidden", { configurable: true, value: true });
+  try {
+    render(<ClassificationResultsPage notify={vi.fn()} />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(apiMock.classificationResults).toHaveBeenCalledTimes(1);
+
+    await act(async () => vi.advanceTimersByTimeAsync(15000));
+    expect(apiMock.classificationResults).toHaveBeenCalledTimes(1);
+  } finally {
+    Object.defineProperty(document, "hidden", { configurable: true, value: false });
+    vi.useRealTimers();
+  }
 });
 
 test("旧筛选轮询晚返回不会覆盖当前列表或触发新结果提示", async () => {

@@ -1326,6 +1326,29 @@ def test_health_reports_recent_worker_error(tmp_path: Path) -> None:
     assert app.state.standard_validation_worker is not None
 
 
+def test_responses_include_server_timing(tmp_path: Path) -> None:
+    settings = Settings(
+        data_dir=tmp_path / "runtime",
+        database_path=tmp_path / "runtime" / "app.db",
+        session_days=14,
+        task_workers=1,
+        bootstrap_email="admin@example.com",
+        bootstrap_name="管理员",
+        bootstrap_password="test-password-123",
+        encryption_key=Fernet.generate_key().decode("ascii"),
+        secure_cookies=False,
+    )
+    app = create_app(start_worker=False, settings_override=settings)
+
+    with TestClient(app) as client:
+        response = client.get("/api/health")
+
+    assert response.status_code == 200
+    timing = response.headers["server-timing"]
+    assert timing.startswith("app;dur=")
+    assert float(timing.removeprefix("app;dur=")) >= 0
+
+
 def test_production_settings_reject_development_defaults(monkeypatch) -> None:
     monkeypatch.setenv("WEBAPP_PRODUCTION", "true")
     monkeypatch.delenv("WEBAPP_BOOTSTRAP_PASSWORD", raising=False)

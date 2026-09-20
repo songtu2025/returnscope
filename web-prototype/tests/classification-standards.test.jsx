@@ -525,6 +525,10 @@ test("轮询失败静默并在卸载时清理两秒定时器", async () => {
   await act(async () => result.current.loadValidation(validDraft.id));
   await waitFor(() => expect(intervalCallbacks).toHaveLength(1));
 
+  Object.defineProperty(document, "hidden", { configurable: true, value: true });
+  intervalCallbacks.at(-1)();
+  expect(validationApiMock.sources).toHaveBeenCalledTimes(1);
+  Object.defineProperty(document, "hidden", { configurable: true, value: false });
   validationApiMock.sources.mockRejectedValueOnce(new Error("轮询失败"));
   intervalCallbacks.at(-1)();
   await waitFor(() => expect(validationApiMock.sources).toHaveBeenCalledTimes(2));

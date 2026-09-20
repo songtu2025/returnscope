@@ -94,6 +94,7 @@ export function useClassificationResultListData(query) {
     const generation = pollGenerationRef.current + 1;
     pollGenerationRef.current = generation;
     const timer = window.setInterval(() => {
+      if (document.hidden) return;
       pollControllerRef.current?.abort();
       const controller = new AbortController();
       pollControllerRef.current = controller;

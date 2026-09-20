@@ -26,6 +26,7 @@ from web_backend.insight_report_service import InsightReportService
 from web_backend.insight_report_worker import InsightReportWorker
 from web_backend.model_preference_service import ModelPreferenceService
 from web_backend.operations_service import AuditLogService, WorkbenchService
+from web_backend.request_timing import RequestTimingMiddleware
 from web_backend.review_service import ReviewService
 from web_backend.routers.accounts import SESSION_COOKIE, create_account_router
 from web_backend.routers.classification_results import (
@@ -165,6 +166,7 @@ def create_app(
         docs_url=None,
         redoc_url=None,
     )
+    app.add_middleware(RequestTimingMiddleware)
 
     def current_user(
         session_token: Annotated[str | None, Cookie(alias=SESSION_COOKIE)] = None,

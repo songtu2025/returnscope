@@ -140,6 +140,7 @@ export function useClassificationStandardValidationController({
     );
     if (!draft || !active) return undefined;
     const timer = window.setInterval(() => {
+      if (document.hidden) return;
       loadValidation(draft.id, null, true).catch(() => undefined);
     }, 2000);
     return () => window.clearInterval(timer);

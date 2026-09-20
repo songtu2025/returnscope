@@ -196,6 +196,15 @@ export function TaskMonitor({
     };
   }, [selectedId, loadTasks, tasks]);
 
+  useEffect(() => {
+    if (selectedId) return undefined;
+    const refreshWhenVisible = () => {
+      if (!document.hidden) loadTasks(true);
+    };
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => document.removeEventListener("visibilitychange", refreshWhenVisible);
+  }, [selectedId, loadTasks]);
+
   const showTaskDetail = Boolean(selectedId);
   const returnToList = () => {
     setSelectedId(null);

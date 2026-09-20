@@ -71,8 +71,16 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
     [route.orderId, route.problem, route.productName, route.productSku, route.version],
   );
 
-  const { result, summary, records, drilldowns, loading, recordsLoading, error } =
-    useClassificationResultDetailData({ route, notify });
+  const {
+    result,
+    summary,
+    records,
+    drilldowns,
+    loading,
+    recordsLoading,
+    error,
+    retry,
+  } = useClassificationResultDetailData({ route, notify });
 
   if (loading && !result) {
     return (
@@ -91,7 +99,7 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
         >
           <ArrowLeft size={17} /> 返回结果池
         </button>
-        <ResultError message={error} onRetry={() => window.location.reload()} />
+        <ResultError message={error} onRetry={retry} />
       </div>
     );
   }
