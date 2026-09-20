@@ -112,6 +112,15 @@ test("关键筛选条、表格行和空状态复用共享尺寸", () => {
   );
 });
 
+test("商品信息搜索框由外层控件统一管理高度和焦点", () => {
+  expect(styles).toMatch(
+    /\.product-master-page[\s\S]*?\.dimension-search[\s\S]*?> \.ant-input-affix-wrapper[\s\S]*?> input\.ant-input\.ant-input\s*{[^}]*height:\s*auto;[^}]*min-height:\s*0;[^}]*padding:\s*0;[^}]*border:\s*0;[^}]*background:\s*transparent;/,
+  );
+  expect(styles).toMatch(
+    /\.product-master-page[\s\S]*?\.dimension-search[\s\S]*?> \.ant-input-affix-wrapper[\s\S]*?> input\.ant-input:focus-visible\s*{[^}]*outline:\s*none;/,
+  );
+});
+
 test("分类结果选择表在目标桌面宽度保留完整操作区", () => {
   expect(styles).toMatch(
     /\.result-pool-table\.is-selecting \.result-pool-head,[\s\S]*?grid-template-columns:\s*92px 96px 132px minmax\(132px, 1\.2fr\) 110px 118px 186px;/,
