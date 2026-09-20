@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -7,6 +7,7 @@ const { summary } = vi.hoisted(() => ({ summary: vi.fn() }));
 vi.mock("../src/shared/api/workbenchApi", () => ({ workbenchApi: { summary } }));
 
 import { WorkbenchPage } from "../src/features/workbench/WorkbenchPage";
+import { renderWithServerState as render } from "./renderWithServerState";
 
 beforeEach(() => {
   summary.mockReset();
@@ -48,10 +49,7 @@ test("工作台只调用一次真实汇总并按具体目标跳转", async () =>
   expect(await screen.findByText("商品信息待补充")).toBeVisible();
   expect(screen.getByText("SR001 分类结果")).toBeVisible();
   expect(summary).toHaveBeenCalledTimes(1);
-  expect(summary).toHaveBeenCalledWith(
-    5,
-    expect.objectContaining({ signal: expect.any(AbortSignal) }),
-  );
+  expect(summary).toHaveBeenCalledWith(5);
   expect(screen.queryByText("我的运行额度")).not.toBeInTheDocument();
 
   await userEvent.click(screen.getByText("商品信息待补充"));
@@ -126,6 +124,48 @@ test("工作台无数据展示真实空态且快捷入口可用", async () => {
 
   await userEvent.click(screen.getByRole("button", { name: /查看分析任务/ }));
   expect(onNavigate).toHaveBeenCalledWith("analysis-tasks");
+});
+
+test("再次进入首页立即显示缓存并在后台更新", async () => {
+  let resolveRefresh;
+  summary
+    .mockResolvedValueOnce({
+      actions: [
+        {
+          type: "blocked",
+          object_type: "task",
+          object_id: "task-cached",
+          title: "缓存中的待办",
+          target: { route: "tasks", task_id: "task-cached" },
+        },
+      ],
+      recent_outputs: [],
+      counts: {},
+    })
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRefresh = resolve;
+        }),
+    );
+  const view = render(<WorkbenchPage onNavigate={vi.fn()} />);
+  expect(await screen.findByText("缓存中的待办")).toBeVisible();
+
+  view.rerender(<div>其他模块</div>);
+  view.rerender(<WorkbenchPage onNavigate={vi.fn()} />);
+
+  expect(screen.getByText("缓存中的待办")).toBeVisible();
+  expect(screen.queryByText("正在读取待行动事项…")).not.toBeInTheDocument();
+  await waitFor(() => expect(summary).toHaveBeenCalledTimes(2));
+
+  await act(async () => {
+    resolveRefresh({
+      actions: [],
+      recent_outputs: [],
+      counts: {},
+    });
+  });
+  expect(await screen.findByText("当前没有待处理事项或后台任务")).toBeVisible();
 });
 
 test("首页可直接进入 AI 报告进度和已发布结果", async () => {

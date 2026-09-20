@@ -3,12 +3,12 @@ import {
   act,
   cleanup,
   fireEvent,
-  render,
   screen,
   waitFor,
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { renderWithServerState as render } from "./renderWithServerState";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -2440,7 +2440,7 @@ describe("关键用户流程", () => {
       />,
     );
 
-    expect(await screen.findAllByText("分类中断任务")).toHaveLength(2);
+    await waitFor(() => expect(screen.getAllByText("分类中断任务")).toHaveLength(2));
     expect(document.querySelector(".task-stage-rail")).not.toBeInTheDocument();
 
     await user.type(screen.getByLabelText("搜索 Listing"), "不存在的编号");

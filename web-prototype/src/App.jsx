@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { SWRConfig } from "swr";
 import {
   Pulse,
   ArrowRight,
@@ -23,55 +24,73 @@ import { STATUS_LABELS } from "./constants";
 import { useDialogFocus } from "./hooks/useDialogFocus";
 import { classNames } from "./lib/presentation";
 import { SESSION_EXPIRED_EVENT } from "./shared/api/request";
+import { serverStateConfig } from "./shared/serverState";
 
-const WorkbenchPage = lazy(() =>
+const loadWorkbenchPage = () =>
   import("./features/workbench/WorkbenchPage").then((module) => ({
     default: module.WorkbenchPage,
-  })),
-);
-const TaskCreatePage = lazy(() =>
+  }));
+const WorkbenchPage = lazy(loadWorkbenchPage);
+const loadTaskCreatePage = () =>
   import("./features/task-create/TaskCreatePage").then((module) => ({
     default: module.TaskCreatePage,
-  })),
-);
-const TaskRuntimePage = lazy(() =>
+  }));
+const TaskCreatePage = lazy(loadTaskCreatePage);
+const loadTaskRuntimePage = () =>
   import("./features/task-runtime/TaskRuntimePage").then((module) => ({
     default: module.TaskRuntimePage,
-  })),
-);
+  }));
+const TaskRuntimePage = lazy(loadTaskRuntimePage);
 const ReviewCenter = lazy(() =>
   import("./pages/ReviewCenter").then((module) => ({
     default: module.ReviewCenter,
   })),
 );
-const DataAssetsPage = lazy(() =>
+const loadDataAssetsPage = () =>
   import("./features/data-management/DataAssetsPage").then((module) => ({
     default: module.DataAssetsPage,
-  })),
-);
-const ClassificationStandardsPage = lazy(() =>
+  }));
+const DataAssetsPage = lazy(loadDataAssetsPage);
+const loadClassificationStandardsPage = () =>
   import("./features/classification-standards/ClassificationStandardsPage").then(
     (module) => ({ default: module.ClassificationStandardsPage }),
-  ),
-);
+  );
+const ClassificationStandardsPage = lazy(loadClassificationStandardsPage);
 const ResultsPage = lazy(() =>
   import("./pages/ResultsPage").then((module) => ({ default: module.ResultsPage })),
 );
-const ClassificationResultsPage = lazy(() =>
+const loadClassificationResultsPage = () =>
   import("./pages/ClassificationResultsPage").then((module) => ({
     default: module.ClassificationResultsPage,
-  })),
-);
-const AnalysisDashboardPage = lazy(() =>
+  }));
+const ClassificationResultsPage = lazy(loadClassificationResultsPage);
+const loadAnalysisDashboardPage = () =>
   import("./features/analysis-dashboards/AnalysisDashboardPage").then((module) => ({
     default: module.AnalysisDashboardPage,
-  })),
-);
-const SystemSettingsPage = lazy(() =>
+  }));
+const AnalysisDashboardPage = lazy(loadAnalysisDashboardPage);
+const loadSystemSettingsPage = () =>
   import("./features/system-settings/SystemSettingsPage").then((module) => ({
     default: module.SystemSettingsPage,
-  })),
-);
+  }));
+const SystemSettingsPage = lazy(loadSystemSettingsPage);
+
+/** @type {Record<string, () => Promise<unknown>>} */
+const PAGE_PRELOADERS = {
+  workbench: loadWorkbenchPage,
+  "data-assets": loadDataAssetsPage,
+  "classification-standards": loadClassificationStandardsPage,
+  "analysis-tasks": loadTaskRuntimePage,
+  "classification-results": loadClassificationResultsPage,
+  "analysis-dashboards": loadAnalysisDashboardPage,
+  settings: loadSystemSettingsPage,
+};
+
+/** @param {string} page */
+function preloadPage(page) {
+  const loader = PAGE_PRELOADERS[page];
+  if (loader) void loader();
+}
 
 /** @typedef {import("./app/navigation").NavigationFocus} NavigationFocus */
 /** @typedef {import("./app/navigation").NavigationItem} NavigationItem */
@@ -164,166 +183,174 @@ function App() {
 
   const page = route.page;
   return (
-    <AppShell
-      sidebar={<Sidebar page={page} system={system} onNavigate={navigate} />}
-      topbar={
-        <Topbar
-          user={user}
-          system={system}
-          onRefresh={refreshSystem}
-          onNavigate={navigate}
-          onSearch={() => setSearchOpen(true)}
-          onLogout={async () => {
-            await api.logout();
-            setUser(null);
-          }}
-        />
-      }
-      warning={
-        system?.warnings && system.warnings.length > 0 ? (
-          <div className="system-warning">
-            <WarningCircle size={17} />
-            <span>
-              上线前安全检查：{system.warnings.join("；")}
-              。请前往系统设置修改密码，并在生产环境设置独立加密密钥。
-            </span>
-            <button
-              className="text-button"
-              onClick={() =>
-                navigateHash("settings", { tab: "users", action: "password" })
-              }
-            >
-              修改密码
-              <ArrowRight size={14} />
-            </button>
-          </div>
-        ) : null
-      }
-      overlays={
-        <>
-          {searchOpen && (
-            <GlobalSearch
-              onClose={() => setSearchOpen(false)}
-              onSelect={(destination, focus) => {
-                setSearchOpen(false);
-                navigate(destination, focus);
-              }}
-              notify={notify}
-            />
-          )}
-          {toast && <Toast {...toast} />}
-        </>
-      }
-    >
-      <Suspense fallback={<div className="empty-state">正在加载页面…</div>}>
-        {page === "workbench" && <WorkbenchPage onNavigate={navigate} />}
-        {page === "task-create" && (
-          <TaskCreatePage
-            route={route}
+    <SWRConfig key={user.id} value={serverStateConfig}>
+      <AppShell
+        sidebar={<Sidebar page={page} system={system} onNavigate={navigate} />}
+        topbar={
+          <Topbar
+            user={user}
+            system={system}
+            onRefresh={refreshSystem}
             onNavigate={navigate}
-            notify={notify}
-            onChanged={refreshSystem}
-            userId={user.id}
+            onSearch={() => setSearchOpen(true)}
+            onLogout={async () => {
+              await api.logout();
+              setUser(null);
+            }}
           />
-        )}
-        {page === "analysis-tasks" && (
-          <TaskRuntimePage
-            route={route}
-            notify={notify}
-            onNavigate={navigate}
-            onChanged={refreshSystem}
-          />
-        )}
-        {page === "review" && (
-          <>
-            <div className="legacy-review-notice" role="status">
-              <div>
-                <b>旧版单记录复核</b>
-                <span>仅用于历史任务，与新版复核批次和派生版本相互独立。</span>
-              </div>
+        }
+        warning={
+          system?.warnings && system.warnings.length > 0 ? (
+            <div className="system-warning">
+              <WarningCircle size={17} />
+              <span>
+                上线前安全检查：{system.warnings.join("；")}
+                。请前往系统设置修改密码，并在生产环境设置独立加密密钥。
+              </span>
               <button
-                className="secondary-button"
-                onClick={() => navigate("review-center")}
+                className="text-button"
+                onClick={() =>
+                  navigateHash("settings", { tab: "users", action: "password" })
+                }
               >
-                进入分类结果复核记录
+                修改密码
+                <ArrowRight size={14} />
               </button>
             </div>
-            <ReviewCenter
+          ) : null
+        }
+        overlays={
+          <>
+            {searchOpen && (
+              <GlobalSearch
+                onClose={() => setSearchOpen(false)}
+                onSelect={(destination, focus) => {
+                  setSearchOpen(false);
+                  navigate(destination, focus);
+                }}
+                notify={notify}
+              />
+            )}
+            {toast && <Toast {...toast} />}
+          </>
+        }
+      >
+        <Suspense fallback={<div className="empty-state">正在加载页面…</div>}>
+          {page === "workbench" && <WorkbenchPage onNavigate={navigate} />}
+          {page === "task-create" && (
+            <TaskCreatePage
+              route={route}
+              onNavigate={navigate}
               notify={notify}
               onChanged={refreshSystem}
-              focus={
-                route.query.review
-                  ? {
-                      kind: "review",
-                      id: route.query.review,
-                      status: route.query.status,
-                    }
-                  : null
-              }
+              userId={user.id}
             />
-          </>
-        )}
-        {page === "data-assets" && (
-          <DataAssetsPage
-            route={route}
-            notify={notify}
-            onNavigate={navigate}
-            userId={user.id}
-          />
-        )}
-        {page === "classification-standards" && (
-          <ClassificationStandardsPage route={route} notify={notify} />
-        )}
-        {page === "legacy-results" && (
-          <Suspense fallback={<div className="empty-state">正在加载旧版任务分析…</div>}>
-            <div className="legacy-results-notice" role="status">
-              <div>
-                <b>旧版任务分析</b>
-                <span>此页面仅用于兼容历史任务，不是新版分析看板。</span>
-              </div>
-              <div className="legacy-results-actions">
-                <button
-                  className="secondary-button"
-                  onClick={() => navigate("analysis-dashboards")}
-                >
-                  进入新版分析看板
-                </button>
-                <button
-                  className="secondary-button"
-                  onClick={() => navigate("classification-results")}
-                >
-                  查看分类结果
-                </button>
-              </div>
-            </div>
-            <ResultsPage
+          )}
+          {page === "analysis-tasks" && (
+            <TaskRuntimePage
+              route={route}
               notify={notify}
               onNavigate={navigate}
-              focus={
-                route.query.task_id
-                  ? {
-                      kind: "result",
-                      id: route.query.task_id,
-                      listing: route.query.listing,
-                    }
-                  : null
-              }
+              onChanged={refreshSystem}
             />
-          </Suspense>
-        )}
-        {page === "classification-results" && (
-          <Suspense fallback={<div className="empty-state">正在加载分类结果池…</div>}>
-            <ClassificationResultsPage notify={notify} route={route} userId={user.id} />
-          </Suspense>
-        )}
-        {page === "analysis-dashboards" && (
-          <AnalysisDashboardPage route={route} notify={notify} userId={user.id} />
-        )}
-        {page === "settings" && (
-          <SystemSettingsPage route={route} notify={notify} currentUser={user} />
-        )}
-      </Suspense>
-    </AppShell>
+          )}
+          {page === "review" && (
+            <>
+              <div className="legacy-review-notice" role="status">
+                <div>
+                  <b>旧版单记录复核</b>
+                  <span>仅用于历史任务，与新版复核批次和派生版本相互独立。</span>
+                </div>
+                <button
+                  className="secondary-button"
+                  onClick={() => navigate("review-center")}
+                >
+                  进入分类结果复核记录
+                </button>
+              </div>
+              <ReviewCenter
+                notify={notify}
+                onChanged={refreshSystem}
+                focus={
+                  route.query.review
+                    ? {
+                        kind: "review",
+                        id: route.query.review,
+                        status: route.query.status,
+                      }
+                    : null
+                }
+              />
+            </>
+          )}
+          {page === "data-assets" && (
+            <DataAssetsPage
+              route={route}
+              notify={notify}
+              onNavigate={navigate}
+              userId={user.id}
+            />
+          )}
+          {page === "classification-standards" && (
+            <ClassificationStandardsPage route={route} notify={notify} />
+          )}
+          {page === "legacy-results" && (
+            <Suspense
+              fallback={<div className="empty-state">正在加载旧版任务分析…</div>}
+            >
+              <div className="legacy-results-notice" role="status">
+                <div>
+                  <b>旧版任务分析</b>
+                  <span>此页面仅用于兼容历史任务，不是新版分析看板。</span>
+                </div>
+                <div className="legacy-results-actions">
+                  <button
+                    className="secondary-button"
+                    onClick={() => navigate("analysis-dashboards")}
+                  >
+                    进入新版分析看板
+                  </button>
+                  <button
+                    className="secondary-button"
+                    onClick={() => navigate("classification-results")}
+                  >
+                    查看分类结果
+                  </button>
+                </div>
+              </div>
+              <ResultsPage
+                notify={notify}
+                onNavigate={navigate}
+                focus={
+                  route.query.task_id
+                    ? {
+                        kind: "result",
+                        id: route.query.task_id,
+                        listing: route.query.listing,
+                      }
+                    : null
+                }
+              />
+            </Suspense>
+          )}
+          {page === "classification-results" && (
+            <Suspense fallback={<div className="empty-state">正在加载分类结果池…</div>}>
+              <ClassificationResultsPage
+                notify={notify}
+                route={route}
+                userId={user.id}
+              />
+            </Suspense>
+          )}
+          {page === "analysis-dashboards" && (
+            <AnalysisDashboardPage route={route} notify={notify} userId={user.id} />
+          )}
+          {page === "settings" && (
+            <SystemSettingsPage route={route} notify={notify} currentUser={user} />
+          )}
+        </Suspense>
+      </AppShell>
+    </SWRConfig>
   );
 }
 
@@ -511,6 +538,8 @@ function SidebarNavItem({
     <button
       className={classNames("nav-item", active && "active")}
       onClick={() => onNavigate(id)}
+      onMouseEnter={() => preloadPage(id)}
+      onFocus={() => preloadPage(id)}
       aria-current={active ? "page" : undefined}
     >
       <Icon

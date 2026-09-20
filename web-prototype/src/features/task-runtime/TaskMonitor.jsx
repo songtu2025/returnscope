@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import useSWR from "swr";
 import { ArrowLeft, Plus, Pulse } from "@phosphor-icons/react";
 import { api } from "../../api";
 import { EmptyState, InlineLoading, PageHeading } from "../../components/SharedUi";
+import { serverStateKeys } from "../../shared/serverState";
 import { TaskDetail } from "./TaskDetail";
 import { TaskRegistry } from "./TaskRegistry";
 
@@ -18,7 +20,12 @@ import { TaskRegistry } from "./TaskRegistry";
  * @property {() => void | Promise<unknown>} onChanged
  * @property {string | null} [focusId]
  * @property {string | null} [focusSegmentId]
+ * @property {TaskListState} [listState]
+ * @property {(changes: Partial<TaskListState>) => void} [onListStateChange]
+ * @property {(taskId: string | null) => void} [onTaskFocus]
  */
+
+/** @typedef {{filter: string, query: string, owner: string, sort: string, attentionOnly: boolean}} TaskListState */
 
 /**
  * 当前组件使用的任务 API 响应契约。静态类型集中在消费边界，不改变请求行为。
@@ -44,6 +51,14 @@ import { TaskRegistry } from "./TaskRegistry";
 const taskMonitorApi = api;
 const ACTIVE_LIST_REFRESH_MS = 10000;
 const IDLE_LIST_REFRESH_MS = 60000;
+const DEFAULT_LIST_STATE = {
+  filter: "all",
+  query: "",
+  owner: "all",
+  sort: "updated_desc",
+  attentionOnly: false,
+};
+const EMPTY_TASKS = /** @type {AnalysisTask[]} */ ([]);
 
 /** @param {unknown} error */
 function errorMessage(error) {
@@ -64,37 +79,66 @@ export function TaskMonitor({
   onChanged,
   focusId,
   focusSegmentId = null,
+  listState: controlledListState,
+  onListStateChange,
+  onTaskFocus,
 }) {
-  const [tasks, setTasks] = useState(/** @type {AnalysisTask[]} */ ([]));
+  const [localListState, setLocalListState] = useState(DEFAULT_LIST_STATE);
+  const listState = controlledListState ?? localListState;
   const [selectedId, setSelectedId] = useState(/** @type {string | null} */ (null));
   const [selected, setSelected] = useState(/** @type {AnalysisTask | null} */ (null));
   const [events, setEvents] = useState(/** @type {TaskEvent[]} */ ([]));
-  const [filter, setFilter] = useState("all");
-  const [loading, setLoading] = useState(true);
-  const [listError, setListError] = useState("");
   const [eventStreamVersion, setEventStreamVersion] = useState(0);
   const [actionError, setActionError] = useState("");
   const selectedRequestGeneration = useRef(0);
   const previousFocusId = useRef(/** @type {string | null | undefined} */ (focusId));
   const listScroll = useRef(0);
+  const notifiedListError = useRef("");
   const [detailError, setDetailError] = useState("");
+
+  const {
+    data: taskData,
+    error: taskListError,
+    isLoading,
+    mutate: refreshTasks,
+  } = useSWR(serverStateKeys.taskList, () =>
+    taskMonitorApi.tasks({ include_archived: true }),
+  );
+  const tasks = /** @type {AnalysisTask[]} */ (taskData ?? EMPTY_TASKS);
+  const listError = taskListError ? errorMessage(taskListError) : "";
+  const loading = isLoading && taskData === undefined;
+
+  useEffect(() => {
+    if (!taskListError) {
+      notifiedListError.current = "";
+      return;
+    }
+    if (taskData !== undefined) return;
+    const message = errorMessage(taskListError);
+    if (notifiedListError.current === message) return;
+    notifiedListError.current = message;
+    notify(message, "error");
+  }, [notify, taskData, taskListError]);
+
+  /** @param {Partial<TaskListState>} changes */
+  const updateListState = (changes) => {
+    if (onListStateChange) {
+      onListStateChange(changes);
+      return;
+    }
+    setLocalListState((current) => ({ ...current, ...changes }));
+  };
 
   const loadTasks = useCallback(
     /** @param {boolean} [silent] */
     async (silent = false) => {
-      if (!silent) setLoading(true);
-      setListError("");
       try {
-        const values = await taskMonitorApi.tasks({ include_archived: true });
-        setTasks(values);
+        await refreshTasks();
       } catch (error) {
-        setListError(errorMessage(error));
         if (!silent) notify(errorMessage(error), "error");
-      } finally {
-        setLoading(false);
       }
     },
-    [notify],
+    [notify, refreshTasks],
   );
 
   const loadSelected = useCallback(
@@ -109,9 +153,6 @@ export function TaskMonitor({
     [selectedId],
   );
 
-  useEffect(() => {
-    loadTasks();
-  }, [loadTasks]);
   useEffect(() => {
     const previous = previousFocusId.current;
     previousFocusId.current = focusId;
@@ -208,7 +249,8 @@ export function TaskMonitor({
   const showTaskDetail = Boolean(selectedId);
   const returnToList = () => {
     setSelectedId(null);
-    onNavigate("analysis-tasks");
+    if (onTaskFocus) onTaskFocus(null);
+    else onNavigate("analysis-tasks");
   };
 
   /** @param {string[]} taskIds @param {boolean} archived */
@@ -241,17 +283,19 @@ export function TaskMonitor({
         <TaskRegistry
           tasks={tasks}
           selectedId={selectedId}
-          filter={filter}
-          onFilterChange={setFilter}
+          viewState={listState}
+          onViewStateChange={updateListState}
           loading={loading}
           error={listError}
+          hasData={taskData !== undefined}
           onReload={loadTasks}
           onCreate={() => onNavigate("new")}
           onOpen={(/** @type {AnalysisTask} */ task) => {
             listScroll.current = window.scrollY;
             window.scrollTo(0, 0);
             setSelectedId(task.id);
-            onNavigate("analysis-tasks", { kind: "task", id: task.id });
+            if (onTaskFocus) onTaskFocus(task.id);
+            else onNavigate("analysis-tasks", { kind: "task", id: task.id });
           }}
           onCreateSimilar={(/** @type {AnalysisTask} */ task) =>
             onNavigate("new", { kind: "task-template", id: task.id })
@@ -353,7 +397,7 @@ export function TaskMonitor({
                   setSelected(updated);
                   setActionError("");
                   await loadTasks();
-                  setFilter("active");
+                  updateListState({ filter: "active" });
                   notify(
                     selected.status === "cancelled"
                       ? "未完成 Listing 已重新排队"
@@ -374,7 +418,8 @@ export function TaskMonitor({
                   const retried = await taskMonitorApi.retryTask(selected.id);
                   await loadTasks();
                   setSelectedId(retried.id);
-                  onNavigate("analysis-tasks", { kind: "task", id: retried.id });
+                  if (onTaskFocus) onTaskFocus(retried.id);
+                  else onNavigate("analysis-tasks", { kind: "task", id: retried.id });
                   notify(
                     selected.status === "completed"
                       ? "已按原快照创建再次运行任务"

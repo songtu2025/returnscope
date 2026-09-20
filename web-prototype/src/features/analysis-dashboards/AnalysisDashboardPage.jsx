@@ -16,6 +16,7 @@ import {
 } from "@phosphor-icons/react";
 import Button from "antd/es/button";
 import Input from "antd/es/input";
+import useSWR from "swr";
 
 import { navigateHash } from "../../app/hashRouter";
 import { AntdProvider } from "../../components/AntdProvider";
@@ -24,6 +25,7 @@ import { EmptyState, InlineLoading, PageHeading } from "../../components/SharedU
 import { formatTime } from "../../lib/presentation";
 import { PAGE_SIZES } from "../../shared/pagination";
 import { dashboardApi } from "../../shared/api/dashboardApi";
+import { serverStateKeys } from "../../shared/serverState";
 import { DashboardCreateFlow } from "./DashboardCreateFlow";
 import { createDashboardSelection } from "./dashboardSelectionStorage";
 
@@ -152,16 +154,7 @@ export function AnalysisDashboardPage({ route: appRoute, notify, userId }) {
 
 /** @param {{route: DashboardRoute, updateRoute: UpdateDashboardRoute, userId: string}} props */
 function DashboardList({ route, updateRoute, userId }) {
-  const [state, setState] = useState(
-    /** @type {{loading: boolean, error: string, data: DashboardListPage | null}} */ ({
-      loading: true,
-      error: "",
-      data: null,
-    }),
-  );
   const [filters, setFilters] = useState({ q: route.q, status: route.status });
-  const generationRef = useRef(0);
-  const controllerRef = useRef(/** @type {AbortController | null} */ (null));
 
   useEffect(
     () => setFilters({ q: route.q, status: route.status }),
@@ -178,50 +171,24 @@ function DashboardList({ route, updateRoute, userId }) {
     [route.page, route.pageSize, route.q, route.status],
   );
 
-  const load = useCallback(async () => {
-    const generation = generationRef.current + 1;
-    generationRef.current = generation;
-    controllerRef.current?.abort();
-    const controller = new AbortController();
-    controllerRef.current = controller;
-    setState((current) => ({ ...current, loading: true, error: "" }));
-    try {
-      const data = /** @type {DashboardListPage} */ (
-        await dashboardApi.analysisDashboards(query, {
-          signal: controller.signal,
-        })
-      );
-      if (generationRef.current === generation) {
-        setState({ loading: false, error: "", data });
-      }
-    } catch (error) {
-      if (
-        generationRef.current === generation &&
-        (!(error instanceof Error) || error.name !== "AbortError")
-      ) {
-        setState((current) => ({
-          ...current,
-          loading: false,
-          error: error instanceof Error ? error.message : "分析看板读取失败",
-        }));
-      }
-    }
-  }, [query]);
-
-  useEffect(() => {
-    load();
-    return () => {
-      generationRef.current += 1;
-      controllerRef.current?.abort();
-    };
-  }, [load]);
+  const { data, error, isLoading, isValidating, mutate } = useSWR(
+    serverStateKeys.dashboardList(query),
+    () => dashboardApi.analysisDashboards(query, {}),
+    { keepPreviousData: true },
+  );
+  const message =
+    error instanceof Error ? error.message : error ? "分析看板读取失败" : "";
+  const load = () => mutate();
 
   const chooseResults = () => {
     const token = createDashboardSelection(userId);
     navigateHash("classification-results", { selection_token: token });
   };
-  const totalPages = Math.max(Math.ceil((state.data?.total ?? 0) / route.pageSize), 1);
-  const data = state.data;
+  const dashboardData = /** @type {DashboardListPage | undefined} */ (data);
+  const totalPages = Math.max(
+    Math.ceil((dashboardData?.total ?? 0) / route.pageSize),
+    1,
+  );
 
   return (
     <div className="standard-page analysis-dashboard-page">
@@ -270,17 +237,21 @@ function DashboardList({ route, updateRoute, userId }) {
       </section>
 
       <section className="dashboard-list-card">
-        {state.loading && !state.data && <InlineLoading label="正在读取分析看板…" />}
-        {state.error && (
+        {isLoading && !dashboardData && <InlineLoading label="正在读取分析看板…" />}
+        {message && (
           <div className="dashboard-error" role="alert">
-            <b>分析看板读取失败</b>
-            <span>{state.error}</span>
+            <b>
+              {dashboardData
+                ? "分析看板更新失败，当前显示上一次数据"
+                : "分析看板读取失败"}
+            </b>
+            <span>{message}</span>
             <button className="secondary-button" onClick={load}>
               重新加载
             </button>
           </div>
         )}
-        {!state.loading && !state.error && data?.items.length === 0 && (
+        {!isLoading && dashboardData?.items.length === 0 && (
           <EmptyState
             icon={ChartBar}
             title={route.q || route.status ? "没有符合条件的看板" : "还没有分析看板"}
@@ -291,11 +262,9 @@ function DashboardList({ route, updateRoute, userId }) {
             }
           />
         )}
-        {data && data.items.length > 0 && !state.error && (
+        {dashboardData && dashboardData.items.length > 0 && (
           <>
-            <div
-              className={`dashboard-list-table ${state.loading ? "is-loading" : ""}`}
-            >
+            <div className={`dashboard-list-table ${isValidating ? "is-loading" : ""}`}>
               <div className="dashboard-list-head" role="row">
                 <span>状态</span>
                 <span>看板名称</span>
@@ -306,7 +275,7 @@ function DashboardList({ route, updateRoute, userId }) {
                 <span>创建人</span>
                 <span>操作</span>
               </div>
-              {data.items.map((dashboard) => (
+              {dashboardData.items.map((dashboard) => (
                 <DashboardRow
                   key={dashboard.id || dashboard.dashboard_id}
                   dashboard={dashboard}
@@ -324,7 +293,7 @@ function DashboardList({ route, updateRoute, userId }) {
             <Pagination
               page={route.page}
               pageSize={route.pageSize}
-              total={data.total}
+              total={dashboardData.total}
               totalPages={totalPages}
               onPage={(page) => updateRoute({ page })}
               onPageSize={(pageSize) => updateRoute({ page: 1, pageSize })}

@@ -24,10 +24,11 @@ import {
  * @typedef {Object} TaskRegistryProps
  * @property {AnalysisTask[]} tasks
  * @property {string | null} selectedId
- * @property {string} filter
- * @property {(filter: string) => void} onFilterChange
+ * @property {{filter: string, query: string, owner: string, sort: string, attentionOnly: boolean}} viewState
+ * @property {(changes: Partial<TaskRegistryProps["viewState"]>) => void} onViewStateChange
  * @property {boolean} loading
  * @property {string} error
+ * @property {boolean} hasData
  * @property {() => void | Promise<unknown>} onReload
  * @property {() => void} onCreate
  * @property {(task: AnalysisTask) => void} onOpen
@@ -95,24 +96,22 @@ function sortTasks(tasks, sort) {
 export function TaskRegistry({
   tasks,
   selectedId,
-  filter,
-  onFilterChange,
+  viewState,
+  onViewStateChange,
   loading,
   error,
+  hasData,
   onReload,
   onCreate,
   onOpen,
   onArchive,
   onCreateSimilar,
 }) {
-  const [query, setQuery] = useState("");
+  const { filter, query, owner, sort, attentionOnly } = viewState;
   const deferredQuery = useDeferredValue(query.trim().toLocaleLowerCase());
-  const [owner, setOwner] = useState("all");
-  const [sort, setSort] = useState("updated_desc");
   const [selectedIds, setSelectedIds] = useState(
     () => new Set(/** @type {string[]} */ ([])),
   );
-  const [attentionOnly, setAttentionOnly] = useState(false);
   const [saving, setSaving] = useState(false);
   const selectAllRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const searchInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
@@ -216,7 +215,7 @@ export function TaskRegistry({
           <input
             ref={searchInputRef}
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => onViewStateChange({ query: event.target.value })}
             placeholder="搜索任务、店铺或 Listing"
             aria-label="搜索任务、店铺或 Listing"
           />
@@ -224,7 +223,7 @@ export function TaskRegistry({
             <button
               type="button"
               onClick={() => {
-                setQuery("");
+                onViewStateChange({ query: "" });
                 searchInputRef.current?.focus();
               }}
               aria-label="清空搜索"
@@ -240,7 +239,7 @@ export function TaskRegistry({
           <div className="task-registry-controls">
             <select
               value={owner}
-              onChange={(event) => setOwner(event.target.value)}
+              onChange={(event) => onViewStateChange({ owner: event.target.value })}
               aria-label="按负责人筛选"
             >
               <option value="all">全部负责人</option>
@@ -252,7 +251,7 @@ export function TaskRegistry({
             </select>
             <select
               value={sort}
-              onChange={(event) => setSort(event.target.value)}
+              onChange={(event) => onViewStateChange({ sort: event.target.value })}
               aria-label="任务排序"
             >
               <option value="updated_desc">最近更新</option>
@@ -268,7 +267,7 @@ export function TaskRegistry({
           <button
             key={value}
             className={filter === value ? "active" : ""}
-            onClick={() => onFilterChange(value)}
+            onClick={() => onViewStateChange({ filter: value })}
             aria-pressed={filter === value}
             aria-label={label}
           >
@@ -280,7 +279,9 @@ export function TaskRegistry({
           <input
             type="checkbox"
             checked={attentionOnly}
-            onChange={(event) => setAttentionOnly(event.target.checked)}
+            onChange={(event) =>
+              onViewStateChange({ attentionOnly: event.target.checked })
+            }
           />
           只看需处理
         </label>
@@ -291,7 +292,9 @@ export function TaskRegistry({
         <div className="task-list-error" role="alert">
           <EmptyState
             icon={WarningCircle}
-            title="任务列表读取失败"
+            title={
+              hasData ? "任务列表更新失败，当前显示上一次数据" : "任务列表读取失败"
+            }
             description={error}
             action={
               <button className="secondary-button" onClick={onReload}>
@@ -301,7 +304,7 @@ export function TaskRegistry({
           />
         </div>
       )}
-      {!loading && !error && visibleTasks.length === 0 && (
+      {!loading && (!error || hasData) && visibleTasks.length === 0 && (
         <EmptyState
           icon={PlayCircle}
           title={deferredQuery || owner !== "all" ? "没有匹配任务" : "暂无任务"}
@@ -321,7 +324,7 @@ export function TaskRegistry({
           }
         />
       )}
-      {!loading && !error && visibleTasks.length > 0 && (
+      {!loading && (!error || hasData) && visibleTasks.length > 0 && (
         <div className="task-registry-table" role="table" aria-label="任务管理表">
           <div className="task-registry-head" role="row">
             <span role="columnheader">

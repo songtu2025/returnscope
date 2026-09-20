@@ -190,6 +190,46 @@ test("任务运行页把任务和 Listing 焦点传给监控器", () => {
   });
 });
 
+test("任务列表筛选写入 URL 并保留任务焦点", () => {
+  window.location.hash =
+    "#analysis-tasks?task_id=task-1&status=active&q=%E6%89%8B%E5%A5%97&owner=%E7%AE%A1%E7%90%86%E5%91%98&sort=progress_desc&attention=1";
+  render(
+    <TaskRuntimePage
+      route={{
+        query: {
+          task_id: "task-1",
+          status: "active",
+          q: "手套",
+          owner: "管理员",
+          sort: "progress_desc",
+          attention: "1",
+        },
+      }}
+      notify={vi.fn()}
+      onNavigate={vi.fn()}
+      onChanged={vi.fn()}
+    />,
+  );
+
+  const props = taskMonitorProbe.mock.calls.at(-1)[0];
+  expect(props.listState).toEqual({
+    filter: "active",
+    query: "手套",
+    owner: "管理员",
+    sort: "progress_desc",
+    attentionOnly: true,
+  });
+
+  props.onListStateChange({ query: "冬季手套", filter: "finished" });
+  expect(window.location.hash).toContain("task_id=task-1");
+  expect(window.location.hash).toContain("status=finished");
+  expect(window.location.hash).toContain("q=%E5%86%AC%E5%AD%A3%E6%89%8B%E5%A5%97");
+
+  props.onTaskFocus(null);
+  expect(window.location.hash).not.toContain("task_id");
+  expect(window.location.hash).toContain("status=active");
+});
+
 test("后端标记系统异常可重试时展示专用入口并复用 Listing 重试动作", async () => {
   const onRetry = vi.fn();
   const segment = {

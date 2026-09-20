@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import useSWR from "swr";
 import "../../styles/workbench.css";
 
 import {
@@ -14,6 +14,7 @@ import { routeForTarget } from "../../app/navigation";
 import { EmptyState, InlineLoading, PageHeading } from "../../components/SharedUi";
 import { formatTime } from "../../lib/presentation";
 import { workbenchApi } from "../../shared/api/workbenchApi";
+import { serverStateKeys } from "../../shared/serverState";
 
 /** @typedef {import("../../shared/api/workbenchContracts").WorkbenchTarget} WorkbenchTarget */
 /** @typedef {import("../../shared/api/workbenchContracts").WorkbenchAction} WorkbenchAction */
@@ -62,55 +63,16 @@ function nextActionLabel(action) {
 
 /** @param {{onNavigate: (destination: string) => void}} props */
 export function WorkbenchPage({ onNavigate }) {
-  const [state, setState] = useState(
-    /** @type {{loading: boolean, error: string, actions: WorkbenchAction[], recentOutputs: WorkbenchOutput[], counts: Record<string, number>}} */ ({
-      loading: true,
-      error: "",
-      actions: [],
-      recentOutputs: [],
-      counts: {},
-    }),
+  const { data, error, isLoading, mutate } = useSWR(
+    serverStateKeys.workbenchSummary(5),
+    () => workbenchApi.summary(5),
   );
-  const controllerRef = useRef(/** @type {AbortController | null} */ (null));
-  const generationRef = useRef(0);
-
-  const load = useCallback(async () => {
-    controllerRef.current?.abort();
-    const controller = new AbortController();
-    const generation = generationRef.current + 1;
-    controllerRef.current = controller;
-    generationRef.current = generation;
-    setState((current) => ({ ...current, loading: true, error: "" }));
-    try {
-      const value = await workbenchApi.summary(5, { signal: controller.signal });
-      if (generationRef.current !== generation) return;
-      setState({
-        loading: false,
-        error: "",
-        actions: value.actions ?? [],
-        recentOutputs: value.recent_outputs ?? [],
-        counts: value.counts ?? {},
-      });
-    } catch (error) {
-      const requestError =
-        error instanceof Error ? error : new Error("首页数据读取失败");
-      if (generationRef.current === generation && requestError.name !== "AbortError") {
-        setState((current) => ({
-          ...current,
-          loading: false,
-          error: requestError.message,
-        }));
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-    return () => {
-      generationRef.current += 1;
-      controllerRef.current?.abort();
-    };
-  }, [load]);
+  const actions = /** @type {WorkbenchAction[]} */ (data?.actions ?? []);
+  const recentOutputs = /** @type {WorkbenchOutput[]} */ (data?.recent_outputs ?? []);
+  const hasData = data !== undefined;
+  const message =
+    error instanceof Error ? error.message : error ? "首页数据读取失败" : "";
+  const load = () => mutate();
 
   return (
     <div className="standard-page workbench-page">
@@ -126,8 +88,12 @@ export function WorkbenchPage({ onNavigate }) {
         }
       />
 
-      {!state.loading && state.error && (
-        <WorkbenchError title="首页数据读取失败" message={state.error} onRetry={load} />
+      {!isLoading && message && (
+        <WorkbenchError
+          title={hasData ? "首页更新失败，当前显示上一次数据" : "首页数据读取失败"}
+          message={message}
+          onRetry={load}
+        />
       )}
 
       <div className="workbench-grid workbench-focus-grid">
@@ -144,9 +110,9 @@ export function WorkbenchPage({ onNavigate }) {
               查看分析任务 <ArrowRight size={15} />
             </button>
           </header>
-          {state.loading ? (
+          {isLoading && !hasData ? (
             <InlineLoading label="正在读取待行动事项…" />
-          ) : state.error ? null : state.actions.length === 0 ? (
+          ) : message && !hasData ? null : actions.length === 0 ? (
             <EmptyState
               icon={ListChecks}
               title="当前没有待处理事项或后台任务"
@@ -154,7 +120,7 @@ export function WorkbenchPage({ onNavigate }) {
             />
           ) : (
             <div className="workbench-action-list">
-              {state.actions.map((action) => (
+              {actions.map((action) => (
                 <button
                   key={`${action.object_type}-${action.object_id}`}
                   onClick={() => openTarget(action.target)}
@@ -193,9 +159,9 @@ export function WorkbenchPage({ onNavigate }) {
               查看分类结果 <ArrowRight size={15} />
             </button>
           </header>
-          {state.loading ? (
+          {isLoading && !hasData ? (
             <InlineLoading label="正在读取最近产出…" />
-          ) : state.error ? null : state.recentOutputs.length === 0 ? (
+          ) : message && !hasData ? null : recentOutputs.length === 0 ? (
             <EmptyState
               icon={ChartBar}
               title="还没有可查看的产出"
@@ -212,7 +178,7 @@ export function WorkbenchPage({ onNavigate }) {
             />
           ) : (
             <div className="workbench-output-list">
-              {state.recentOutputs.map((output) => (
+              {recentOutputs.map((output) => (
                 <button
                   key={`${output.type}-${output.version_id}`}
                   onClick={() => openTarget(output.target)}

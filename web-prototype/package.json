@@ -30,6 +30,7 @@
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "recharts": "^3.10.1",
+    "swr": "^2.5.1",
     "vite": "^6.4.3"
   },
   "devDependencies": {

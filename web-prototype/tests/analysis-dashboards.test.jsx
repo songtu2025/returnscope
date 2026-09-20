@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { renderWithServerState as render } from "./renderWithServerState";
 
 const { dashboardApiMock, resultApiMock } = vi.hoisted(() => ({
   dashboardApiMock: {
