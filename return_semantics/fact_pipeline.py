@@ -20,6 +20,7 @@ from return_semantics.fact_extraction import (
 from return_semantics.fact_extraction import (
     _messages,
     _normalize_fact_branch_codes,
+    _restore_evidence_spans,
     _validate_facts,
 )
 from return_semantics.fact_extraction import (
@@ -137,6 +138,7 @@ def _extract_primary_facts(
         FactExtraction.model_validate(normalized).facts,
         taxonomy,
     )
+    facts = _restore_evidence_spans(facts, comment)
     _validate_facts(facts, comment, taxonomy)
     _mapping_payload(facts, taxonomy)
     return facts

@@ -837,7 +837,64 @@ def test_review_coverage_and_changes_include_positive_semantics():
     summary = ClassificationStandardValidationService._summary(items)
     assert summary["coverage_rate"] == 100
     assert summary["changed_count"] == 1
+    assert summary["semantic_changed_count"] == 1
+    assert summary["primary_changed_count"] == 0
+    assert items[0]["semantic_changed"] is True
+    assert items[0]["primary_changed"] is False
     assert items[0]["draft"]["semantic_units"][0]["sentiment"] == "POSITIVE"
+
+
+def test_validation_changes_separate_primary_policy_from_semantic_units():
+    from return_semantics.schemas import SemanticUnit
+
+    unit = SemanticUnit.model_validate(
+        {
+            "subject": "PRODUCT",
+            "label_code": "TOPIC",
+            "sentiment": "NEGATIVE",
+            "part": "LENS",
+            "opinion": "Bad vision",
+            "evidence": "Bad vision",
+            "assertion": "AFFIRMED",
+            "implicit": False,
+        }
+    )
+    result = ValidatedClassification(
+        classification_key="one",
+        semantic_units=[unit],
+        unknown_semantics=[],
+        problem_label_codes=["TOPIC"],
+        positive_label_codes=[],
+        primary_label_codes=[],
+        status=ProcessingStatus.AUTO_APPROVED,
+        review_reasons=[],
+        model_name="fake",
+        prompt_version="test",
+        taxonomy_version="test",
+    )
+    items = ClassificationStandardValidationService._comparison_items(
+        [
+            {
+                "classification_key": "one",
+                "comment": "Bad vision",
+                "category_a": "眼镜",
+                "category_b": "儿童眼镜",
+                "baseline": {
+                    "primary_label_codes": ["TOPIC"],
+                    "semantic_units": [unit.model_dump(mode="json")],
+                },
+            }
+        ],
+        {"one": result},
+    )
+    summary = ClassificationStandardValidationService._summary(items)
+
+    assert items[0]["changed"] is True
+    assert items[0]["semantic_changed"] is False
+    assert items[0]["primary_changed"] is True
+    assert summary["changed_count"] == 1
+    assert summary["semantic_changed_count"] == 0
+    assert summary["primary_changed_count"] == 1
 
 
 def test_keyword_comparison_uses_same_taxonomy_and_cannot_approve(tmp_path):

@@ -175,7 +175,7 @@ def test_coverage_audit_adds_omitted_fact_before_mapping(fact_taxonomy):
         "b",
         opinion="商品表现不佳",
         sentiment="NEGATIVE",
-        evidence_spans=[{"text": "cold"}],
+        evidence_spans=[{"text": "COLD"}],
     )
     original = existing.model_dump(mode="json")
     original["extraction_source"] = "COVERAGE"
@@ -206,6 +206,7 @@ def test_coverage_audit_adds_omitted_fact_before_mapping(fact_taxonomy):
     ]
     assert result.classification.extracted_facts[0].extraction_source == "PRIMARY"
     assert result.classification.extracted_facts[1].extraction_source == "COVERAGE"
+    assert result.classification.extracted_facts[1].evidence_spans[0].text == "cold"
     assert {unit.label_code for unit in result.classification.semantic_units} == {
         "WARM",
         "COLD",
@@ -1846,6 +1847,49 @@ def test_fact_extraction_requests_explicit_primary_and_no_anatomical_inference(
         "当前态度",
     ):
         assert boundary in instruction
+
+
+def test_primary_fact_evidence_case_is_restored_from_comment(fact_taxonomy):
+    from return_semantics.fact_pipeline import _extract_primary_facts
+
+    payload = {
+        "facts": [
+            {
+                **make_fact().model_dump(mode="json"),
+                "evidence_spans": [{"text": "did not like style"}],
+            }
+        ]
+    }
+
+    facts = _extract_primary_facts(
+        payload,
+        taxonomy=fact_taxonomy,
+        comment="Did not like style",
+    )
+
+    assert facts[0].evidence_spans[0].text == "Did not like style"
+
+
+def test_primary_fact_evidence_case_is_not_guessed_when_match_is_ambiguous(
+    fact_taxonomy,
+):
+    from return_semantics.fact_pipeline import _extract_primary_facts
+
+    payload = {
+        "facts": [
+            {
+                **make_fact().model_dump(mode="json"),
+                "evidence_spans": [{"text": "bad"}],
+            }
+        ]
+    }
+
+    with pytest.raises(ValueError, match="事实证据不在原评论中"):
+        _extract_primary_facts(
+            payload,
+            taxonomy=fact_taxonomy,
+            comment="Bad, then BAD again",
+        )
 
 
 @pytest.mark.parametrize(

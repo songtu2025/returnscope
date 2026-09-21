@@ -21,7 +21,9 @@ const SENTIMENT_LABELS = {
 /** @param {ClassificationStandardValidationResultProps} props */
 export function ClassificationStandardValidationResult({ run, isNew, statusLabels }) {
   const [filter, setFilter] = useState(
-    /** @type {"all" | "changed" | "errors" | "unknown"} */ ("all"),
+    /** @type {"all" | "changed" | "semantic" | "primary" | "errors" | "unknown"} */ (
+      "all"
+    ),
   );
   if (["queued", "running"].includes(run.status)) {
     const percent = run.sample_size
@@ -60,6 +62,9 @@ export function ClassificationStandardValidationResult({ run, isNew, statusLabel
   }
   const summary = run.summary;
   const referenceEvaluation = summary.reference_evaluation;
+  const hasChangeBreakdown =
+    typeof summary.semantic_changed_count === "number" &&
+    typeof summary.primary_changed_count === "number";
   const canAttachToPublication =
     run.is_current &&
     Number(run.error_count) === 0 &&
@@ -148,10 +153,25 @@ export function ClassificationStandardValidationResult({ run, isNew, statusLabel
       )}
       <div className="standard-validation-metrics">
         <Metric
-          label={isNew ? "有效样本" : "标签变化"}
-          value={isNew ? summary.sample_size : `${summary.changed_rate}%`}
-          note={isNew ? "条真实评论" : `${summary.changed_count} 条`}
+          label={isNew ? "有效样本" : hasChangeBreakdown ? "语义变化" : "结果变化"}
+          value={
+            isNew
+              ? summary.sample_size
+              : `${hasChangeBreakdown ? summary.semantic_changed_rate : summary.changed_rate}%`
+          }
+          note={
+            isNew
+              ? "条真实评论"
+              : `${hasChangeBreakdown ? summary.semantic_changed_count : summary.changed_count} 条`
+          }
         />
+        {!isNew && hasChangeBreakdown && (
+          <Metric
+            label="主因变化"
+            value={`${summary.primary_changed_rate}%`}
+            note={`${summary.primary_changed_count} 条`}
+          />
+        )}
         <Metric
           label="标签覆盖"
           value={`${summary.coverage_rate}%`}
@@ -180,14 +200,16 @@ export function ClassificationStandardValidationResult({ run, isNew, statusLabel
           value={filter}
           onChange={(event) =>
             setFilter(
-              /** @type {"all" | "changed" | "errors" | "unknown"} */ (
+              /** @type {"all" | "changed" | "semantic" | "primary" | "errors" | "unknown"} */ (
                 event.target.value
               ),
             )
           }
         >
           <option value="all">全部结果</option>
-          <option value="changed">结果不同</option>
+          <option value="changed">任一结果变化</option>
+          {hasChangeBreakdown && <option value="semantic">语义结果变化</option>}
+          {hasChangeBreakdown && <option value="primary">主因变化</option>}
           <option value="errors">模型错误</option>
           <option value="unknown">未知语义</option>
         </select>
@@ -204,6 +226,8 @@ export function ClassificationStandardValidationResult({ run, isNew, statusLabel
             (item) =>
               filter === "all" ||
               (filter === "changed" && item.changed) ||
+              (filter === "semantic" && item.semantic_changed) ||
+              (filter === "primary" && item.primary_changed) ||
               (filter === "errors" &&
                 [item.baseline.status, item.draft.status].includes("MODEL_ERROR")) ||
               (filter === "unknown" && (item.draft.unknown_semantics?.length ?? 0) > 0),
@@ -218,6 +242,17 @@ export function ClassificationStandardValidationResult({ run, isNew, statusLabel
                 <small>
                   {item.category_a || "未分类"} / {item.category_b || "未分类"}
                 </small>
+                {hasChangeBreakdown && item.changed && (
+                  <small>
+                    变化：
+                    {[
+                      item.semantic_changed ? "语义结果" : "",
+                      item.primary_changed ? "主因" : "",
+                    ]
+                      .filter(Boolean)
+                      .join("、")}
+                  </small>
+                )}
               </span>
               {isNew ? (
                 <span>{item.baseline.reason || "未填写"}</span>

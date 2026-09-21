@@ -205,6 +205,10 @@ const completedRun = {
     sample_size: 2,
     changed_rate: 50,
     changed_count: 1,
+    semantic_changed_rate: 50,
+    semantic_changed_count: 1,
+    primary_changed_rate: 50,
+    primary_changed_count: 1,
     coverage_rate: 100,
     coverage_count: 2,
     review_rate: 0,
@@ -215,7 +219,11 @@ const completedRun = {
     error_count: 0,
   },
   items: [
-    validationItem("changed", "仅结果不同记录", true),
+    {
+      ...validationItem("changed", "语义和主因均变化记录", true),
+      semantic_changed: true,
+      primary_changed: true,
+    },
     validationItem("unchanged", "普通未变化记录"),
   ],
 };
@@ -304,7 +312,7 @@ test("样本验证呈现各运行状态并允许选择验证记录", async () =>
   expect(screen.getByText("自动检查通过")).toBeVisible();
 });
 
-test("完成态可筛选结果不同记录", async () => {
+test("完成态分别呈现并筛选语义变化与主因变化", async () => {
   const user = userEvent.setup();
   render(
     <ClassificationStandardValidation
@@ -313,8 +321,17 @@ test("完成态可筛选结果不同记录", async () => {
   );
   const filter = screen.getByRole("combobox", { name: "验证结果筛选" });
 
-  await user.selectOptions(filter, "changed");
-  expect(screen.getByText("仅结果不同记录")).toBeVisible();
+  expect(screen.getByText("语义变化")).toBeVisible();
+  expect(
+    screen.getByText("主因变化", { selector: ".standard-validation-metrics span" }),
+  ).toBeVisible();
+
+  await user.selectOptions(filter, "semantic");
+  expect(screen.getByText("语义和主因均变化记录")).toBeVisible();
+  expect(screen.queryByText("普通未变化记录")).not.toBeInTheDocument();
+
+  await user.selectOptions(filter, "primary");
+  expect(screen.getByText("语义和主因均变化记录")).toBeVisible();
   expect(screen.queryByText("普通未变化记录")).not.toBeInTheDocument();
 });
 

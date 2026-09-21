@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 
 from return_semantics.schemas import (
@@ -348,6 +349,7 @@ def merge_coverage_facts(
             else:
                 raise ValueError("新增事实必须是对象")
             fact = _normalize_fact_branch_codes([fact], taxonomy)[0]
+            fact = _restore_evidence_spans([fact], comment)[0]
             if fact.fact_id in known_ids:
                 raise ValueError("覆盖审计不得复用现有事实编号")
             identity = _coverage_fact_identity(fact)
@@ -451,6 +453,27 @@ def _normalize_fact_branch_codes(
                 codes.append(code)
         normalized.append(fact.model_copy(update={"candidate_branch_codes": codes}))
     return normalized
+
+
+def _restore_evidence_spans(
+    facts: list[ExtractedFact], comment: str
+) -> list[ExtractedFact]:
+    """仅在忽略大小写后唯一匹配时，还原证据在原文中的真实写法。"""
+    restored = []
+    for fact in facts:
+        spans = []
+        for span in fact.evidence_spans:
+            if span.text in comment:
+                spans.append(span)
+                continue
+            matches = list(re.finditer(re.escape(span.text), comment, re.IGNORECASE))
+            spans.append(
+                span.model_copy(update={"text": matches[0].group(0)})
+                if len(matches) == 1
+                else span
+            )
+        restored.append(fact.model_copy(update={"evidence_spans": spans}))
+    return restored
 
 
 def _validate_facts(

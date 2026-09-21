@@ -199,6 +199,10 @@ class ClassificationStandardValidationExecutionMixin:
                     }
                 )
 
+            semantic_changed = signature(
+                sample["baseline"].get("semantic_units", [])
+            ) != signature(result.get("semantic_units", []))
+            primary_changed = baseline_labels != draft_labels
             output.append(
                 {
                     "classification_key": key,
@@ -239,11 +243,9 @@ class ClassificationStandardValidationExecutionMixin:
                         "review_reasons": result.get("review_reasons", []),
                         "model_name": result.get("model_name"),
                     },
-                    "changed": (
-                        baseline_labels != draft_labels
-                        or signature(sample["baseline"].get("semantic_units", []))
-                        != signature(result.get("semantic_units", []))
-                    ),
+                    "semantic_changed": semantic_changed,
+                    "primary_changed": primary_changed,
+                    "changed": semantic_changed or primary_changed,
                 }
             )
         return output
@@ -252,6 +254,10 @@ class ClassificationStandardValidationExecutionMixin:
     def _summary(items: list[dict[str, Any]]) -> dict[str, Any]:
         total = len(items)
         changed_count = sum(bool(item["changed"]) for item in items)
+        semantic_changed_count = sum(
+            bool(item.get("semantic_changed")) for item in items
+        )
+        primary_changed_count = sum(bool(item.get("primary_changed")) for item in items)
         unknown_count = sum(bool(item["draft"]["unknown_semantics"]) for item in items)
         review_count = sum(
             str(item["draft"]["status"]) in REVIEW_STATUSES for item in items
@@ -270,6 +276,10 @@ class ClassificationStandardValidationExecutionMixin:
             "sample_size": total,
             "changed_count": changed_count,
             "changed_rate": rate(changed_count),
+            "semantic_changed_count": semantic_changed_count,
+            "semantic_changed_rate": rate(semantic_changed_count),
+            "primary_changed_count": primary_changed_count,
+            "primary_changed_rate": rate(primary_changed_count),
             "coverage_count": coverage_count,
             "coverage_rate": rate(coverage_count),
             "unknown_count": unknown_count,
