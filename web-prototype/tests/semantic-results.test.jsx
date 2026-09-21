@@ -171,6 +171,86 @@ describe("评论级语义呈现", () => {
     ).toBeVisible();
   });
 
+  test("相同语义事实只显示一张卡片，重复证据只显示一次", () => {
+    const fact = {
+      label_code: "BUYER_NO_NEED",
+      label_path: ["买家原因", "买家自身原因", "不需要"],
+      opinion: "My needs changed",
+      evaluation_direction: "NEUTRAL",
+      assertion_status: "EVALUATION",
+      subject: "BUYER_REASON",
+      evidence_source: "COMMENT",
+      evidence: "My needs changed",
+    };
+    const record = {
+      atomic_facts: [
+        { ...fact, fact_id: "F1" },
+        { ...fact, fact_id: "F2" },
+      ],
+    };
+
+    const { container } = render(<SemanticResultPanel record={record} />);
+    const group = within(container).getByRole("region", {
+      name: "买家原因 → 买家自身原因 → 不需要",
+    });
+    expect(group.querySelectorAll(".semantic-fact-card")).toHaveLength(1);
+    expect(group.querySelectorAll("blockquote")).toHaveLength(1);
+    expect(within(group).getByText("F1、F2")).toBeVisible();
+    expect(within(container).getByText("1 个标签 · 1 条事实")).toBeVisible();
+  });
+
+  test("相同语义事实的不同证据合并在一张卡片内", () => {
+    const fact = {
+      label_code: "BUYER_NO_NEED",
+      label_path: ["买家原因", "买家自身原因", "不需要"],
+      opinion: "需求已改变",
+      evaluation_direction: "NEUTRAL",
+      assertion_status: "EVALUATION",
+    };
+    const record = {
+      atomic_facts: [
+        { ...fact, fact_id: "F1", evidence: "My needs changed." },
+        { ...fact, fact_id: "F2", evidence: "I no longer need it." },
+      ],
+    };
+
+    const { container } = render(<SemanticResultPanel record={record} />);
+    const group = within(container).getByRole("region", {
+      name: "买家原因 → 买家自身原因 → 不需要",
+    });
+    expect(group.querySelectorAll(".semantic-fact-card")).toHaveLength(1);
+    expect(group.querySelectorAll("blockquote")).toHaveLength(2);
+    expect(
+      within(group).getByText("My needs changed.", { exact: false }),
+    ).toBeVisible();
+    expect(
+      within(group).getByText("I no longer need it.", { exact: false }),
+    ).toBeVisible();
+  });
+
+  test("相同标签和中文事实但作用域不同仍保留两张卡片", () => {
+    const fact = {
+      label_code: "FIT_SMALL",
+      label_path: ["尺码与适配", "偏小"],
+      opinion: "穿着偏小",
+      evaluation_direction: "NEGATIVE",
+      assertion_status: "EVALUATION",
+    };
+    const record = {
+      atomic_facts: [
+        { ...fact, fact_id: "F1", variant_ref: "SIZE_M", evidence: "M is small." },
+        { ...fact, fact_id: "F2", variant_ref: "SIZE_L", evidence: "L is small." },
+      ],
+    };
+
+    const { container } = render(<SemanticResultPanel record={record} />);
+    const group = within(container).getByRole("region", {
+      name: "尺码与适配 → 偏小",
+    });
+    expect(group.querySelectorAll(".semantic-fact-card")).toHaveLength(2);
+    expect(group.querySelectorAll("blockquote")).toHaveLength(2);
+  });
+
   test("同标签正负评价合并到标签区块但各自方向与证据不丢失", () => {
     const record = {
       classification: {

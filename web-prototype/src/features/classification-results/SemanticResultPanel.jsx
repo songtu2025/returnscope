@@ -15,6 +15,8 @@ import {
  * @typedef {ReturnType<typeof semanticConclusions>[number]["facts"][number]} NormalizedFact
  * @typedef {ReturnType<typeof semanticUnknownGroups>["review"][number]} NormalizedUnknownSemantic
  * @typedef {ReturnType<typeof semanticUnknownGroups>} UnknownSemanticGroups
+ * @typedef {{ source: string, text: string }} FactEvidence
+ * @typedef {{ fact: NormalizedFact, factIds: string[], evidences: FactEvidence[] }} DisplayFact
  */
 
 /** @type {Record<string, string>} */
@@ -59,7 +61,7 @@ function isOtherLabel(item) {
 
 /** @param {NormalizedFact[]} facts */
 function groupFactsByLabel(facts) {
-  /** @type {Map<string, { key: string, label: string, facts: NormalizedFact[] }>} */
+  /** @type {Map<string, { key: string, label: string, facts: DisplayFact[], identities: Map<string, DisplayFact> }>} */
   const groups = new Map();
   facts.forEach((fact, index) => {
     const path = fact.labelPath.join(" → ");
@@ -68,15 +70,59 @@ function groupFactsByLabel(facts) {
       : path
         ? `path:${path}`
         : `unlabeled:${index}`;
+    /** @type {{ key: string, label: string, facts: DisplayFact[], identities: Map<string, DisplayFact> }} */
     const group = groups.get(key) ?? {
       key,
       label: path || fact.labelCode || "未映射标签",
       facts: [],
+      identities: new Map(),
     };
-    group.facts.push(fact);
+    const identity = JSON.stringify([
+      fact.labelCode,
+      fact.labelPath,
+      fact.opinion || fact.evidence,
+      fact.subject,
+      fact.direction,
+      fact.assertion,
+      fact.sourceRef,
+      fact.experiencerRef,
+      fact.productRef,
+      fact.variantRef,
+      fact.eventRef,
+      fact.referenceBasis,
+      fact.condition,
+      fact.operation,
+      fact.part,
+      fact.decisionReason,
+      fact.mappingReason,
+      fact.relationType,
+      fact.relatedFactIds,
+      fact.causalAttribution,
+    ]);
+    let current = group.identities.get(identity);
+    if (!current) {
+      current = { fact, factIds: [], evidences: [] };
+      group.identities.set(identity, current);
+      group.facts.push(current);
+    }
+    if (fact.factId && !current.factIds.includes(fact.factId)) {
+      current.factIds.push(fact.factId);
+    }
+    if (
+      !current.evidences.some(
+        (evidence) =>
+          evidence.source === fact.evidenceSource && evidence.text === fact.evidence,
+      )
+    ) {
+      current.evidences.push({ source: fact.evidenceSource, text: fact.evidence });
+    }
     groups.set(key, group);
   });
-  return [...groups.values()];
+  return [...groups.values()].map(({ key, label, facts: groupedFacts }) => ({
+    key,
+    label,
+    facts: groupedFacts,
+  }));
 }
 
 /** @param {{item: PresentedFact, legacy: boolean}} props */
@@ -118,8 +164,8 @@ function ScopeDetails({ item, legacy }) {
   );
 }
 
-/** @param {{fact: NormalizedFact, legacy: boolean, context?: boolean, position?: number}} props */
-function FactDetail({ fact, legacy, context = false, position }) {
+/** @param {{fact: NormalizedFact, legacy: boolean, context?: boolean, position?: number, factIds?: string[], evidences?: FactEvidence[]}} props */
+function FactDetail({ fact, legacy, context = false, position, factIds, evidences }) {
   const item = factPresentation(fact);
   const path = item.labelPath.join(" → ");
   return (
@@ -133,7 +179,7 @@ function FactDetail({ fact, legacy, context = false, position }) {
             <small>事实 {position + 1}</small>
           )}
         </div>
-        <span>{display(item.factId, legacy)}</span>
+        <span>{display(factIds?.join("、") || item.factId, legacy)}</span>
       </header>
       {!context && (
         <dl className="semantic-fact-verdict">
@@ -159,10 +205,22 @@ function FactDetail({ fact, legacy, context = false, position }) {
         </div>
       )}
       <ScopeDetails item={item} legacy={legacy} />
-      <div className="semantic-evidence-source">
-        证据来源：{display(item.evidenceSourceLabel, legacy)}
-      </div>
-      <blockquote>“{evidenceDisplay(item.evidence, legacy)}”</blockquote>
+      {(evidences ?? [{ source: fact.evidenceSource, text: fact.evidence }]).map(
+        (evidence, index) => {
+          const presented = factPresentation({
+            ...fact,
+            evidence_source: evidence.source,
+          });
+          return (
+            <div key={`${evidence.source}-${evidence.text}-${index}`}>
+              <div className="semantic-evidence-source">
+                证据来源：{display(presented.evidenceSourceLabel, legacy)}
+              </div>
+              <blockquote>“{evidenceDisplay(evidence.text, legacy)}”</blockquote>
+            </div>
+          );
+        },
+      )}
       {legacy && item.labelPath.length > 0 && item.labelPath.length < 3 && (
         <small className="semantic-legacy-note">旧结果未保存完整标签路径。</small>
       )}
@@ -294,7 +352,11 @@ export function SemanticResultPanel({ record, title = "评论级结论" }) {
                 </div>
                 <SemanticStatusBadge status={conclusion.status} />
                 <small>
-                  {conclusion.labelGroups.length} 个标签 · {conclusion.facts.length}{" "}
+                  {conclusion.labelGroups.length} 个标签 ·{" "}
+                  {conclusion.labelGroups.reduce(
+                    (count, group) => count + group.facts.length,
+                    0,
+                  )}{" "}
                   条事实
                 </small>
                 <CaretDown size={15} aria-hidden="true" />
@@ -322,10 +384,12 @@ export function SemanticResultPanel({ record, title = "评论级结论" }) {
                         <b>{group.label}</b>
                         <span>{group.facts.length} 条事实</span>
                       </header>
-                      {group.facts.map((fact, index) => (
+                      {group.facts.map(({ fact, factIds, evidences }, index) => (
                         <FactDetail
                           key={fact.factId || `${group.key}-${index}`}
                           fact={fact}
+                          factIds={factIds}
+                          evidences={evidences}
                           legacy={conclusion.legacy}
                           position={index}
                         />
