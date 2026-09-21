@@ -92,8 +92,9 @@ const mixedRecord = {
 
 describe("评论级语义呈现", () => {
   test("按主题显示混合结论并展开完整原子事实", async () => {
-    render(<SemanticResultPanel record={mixedRecord} />);
+    const { container } = render(<SemanticResultPanel record={mixedRecord} />);
 
+    expect(container.querySelectorAll(".semantic-label-group")).toHaveLength(2);
     expect(screen.getAllByText("混合表现")).toHaveLength(2);
     expect(screen.getByText("基础操作可用，但精确打字受限")).toBeVisible();
     expect(screen.getByText("功能 → 触屏表现 → 触屏可用")).toBeVisible();
@@ -107,6 +108,101 @@ describe("评论级语义呈现", () => {
     ).toBeVisible();
     expect(screen.getByRole("region", { name: "观点关系" })).toBeVisible();
     expect(screen.getByText("基础操作与精确输入的适用范围不同")).toBeVisible();
+  });
+
+  test("无 ID 的接口镜像只展示一次事实和证据", () => {
+    const fact = {
+      label_code: "SIZE_SMALL",
+      label_path: ["尺码与适配", "偏小"],
+      opinion: "尺码偏小",
+      sentiment: "NEGATIVE",
+      evidence: "The size is too small.",
+    };
+    const record = {
+      atomic_facts: [fact],
+      classification: { semantic_units: [{ ...fact }] },
+    };
+
+    expect(semanticConclusions(record)[0].facts).toHaveLength(1);
+    const { container } = render(<SemanticResultPanel record={record} />);
+    const view = within(container);
+    const group = view.getByRole("region", { name: "尺码与适配 → 偏小" });
+    expect(view.getByText("1 个标签 · 1 条事实")).toBeVisible();
+    expect(view.getAllByText("尺码与适配")).toHaveLength(1);
+    expect(
+      within(group).getByText("The size is too small.", { exact: false }),
+    ).toBeVisible();
+    expect(group.querySelectorAll("blockquote")).toHaveLength(1);
+  });
+
+  test("同标签的两条真实事实合并展示但保留两处证据", () => {
+    const facts = [
+      {
+        label_code: "SIZE_SMALL",
+        label_path: ["尺码与适配", "偏小"],
+        opinion: "手指处偏短",
+        sentiment: "NEGATIVE",
+        evidence: "The fingers are too short.",
+      },
+      {
+        label_code: "SIZE_SMALL",
+        label_path: ["尺码与适配", "偏小"],
+        opinion: "掌部也偏紧",
+        sentiment: "NEGATIVE",
+        evidence: "The palm feels too tight.",
+      },
+    ];
+    const record = {
+      atomic_facts: facts,
+      classification: { semantic_units: facts.map((fact) => ({ ...fact })) },
+    };
+
+    expect(semanticConclusions(record)[0].facts).toHaveLength(2);
+    const { container } = render(<SemanticResultPanel record={record} />);
+    const view = within(container);
+    const group = view.getByRole("region", { name: "尺码与适配 → 偏小" });
+    expect(view.getByText("1 个标签 · 2 条事实")).toBeVisible();
+    expect(group.querySelectorAll("blockquote")).toHaveLength(2);
+    expect(
+      within(group).getByText("The fingers are too short.", { exact: false }),
+    ).toBeVisible();
+    expect(
+      within(group).getByText("The palm feels too tight.", { exact: false }),
+    ).toBeVisible();
+  });
+
+  test("同标签正负评价合并到标签区块但各自方向与证据不丢失", () => {
+    const record = {
+      classification: {
+        semantic_units: [
+          {
+            label_code: "FIT",
+            label_path: ["尺码与适配", "贴合度"],
+            sentiment: "POSITIVE",
+            operation: "日常佩戴",
+            evidence: "It fits well for daily use.",
+          },
+          {
+            label_code: "FIT",
+            label_path: ["尺码与适配", "贴合度"],
+            sentiment: "NEGATIVE",
+            operation: "运动时佩戴",
+            evidence: "It feels loose while running.",
+          },
+        ],
+      },
+    };
+
+    expect(semanticConclusions(record)[0].status).toBe("MIXED");
+    const { container } = render(<SemanticResultPanel record={record} />);
+    const group = within(container).getByRole("region", {
+      name: "尺码与适配 → 贴合度",
+    });
+    expect(group.querySelectorAll("blockquote")).toHaveLength(2);
+    expect(within(group).getByText("正向")).toBeVisible();
+    expect(within(group).getByText("负向")).toBeVisible();
+    expect(within(group).getByText("日常佩戴", { exact: false })).toBeVisible();
+    expect(within(group).getByText("运动时佩戴", { exact: false })).toBeVisible();
   });
 
   test("旧结果缺少条件时不会把正负并存误称为有边界的混合表现", () => {

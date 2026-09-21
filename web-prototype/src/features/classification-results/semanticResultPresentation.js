@@ -528,11 +528,13 @@ function sourceFacts(classification, record) {
   const identified = new Map();
   /** @type {NormalizedFact[]} */
   const anonymous = [];
-  factSources(classification, record).forEach((facts) => {
+  const sources = factSources(classification, record);
+  const primarySourceIndex = sources.findIndex((facts) => facts.length > 0);
+  sources.forEach((facts, sourceIndex) => {
     facts.forEach((fact, index) => {
       const normalized = normalizedFact(object(fact), index);
       if (!normalized.factId) {
-        anonymous.push(normalized);
+        if (sourceIndex === primarySourceIndex) anonymous.push(normalized);
         return;
       }
       const existing = identified.get(normalized.factId);

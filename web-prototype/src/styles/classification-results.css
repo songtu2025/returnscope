@@ -793,6 +793,30 @@
   gap: 8px;
   padding: 0 10px 10px;
 }
+.semantic-label-group {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.semantic-label-group > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  color: var(--green-dark);
+  background: var(--green-pale);
+  font-size: 11px;
+}
+.semantic-label-group > header b {
+  overflow-wrap: anywhere;
+}
+.semantic-label-group > header span {
+  color: var(--muted);
+  white-space: nowrap;
+}
 .semantic-fact-card {
   min-width: 0;
   padding: 10px;

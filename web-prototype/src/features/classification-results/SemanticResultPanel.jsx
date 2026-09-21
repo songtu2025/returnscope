@@ -57,6 +57,28 @@ function isOtherLabel(item) {
   );
 }
 
+/** @param {NormalizedFact[]} facts */
+function groupFactsByLabel(facts) {
+  /** @type {Map<string, { key: string, label: string, facts: NormalizedFact[] }>} */
+  const groups = new Map();
+  facts.forEach((fact, index) => {
+    const path = fact.labelPath.join(" → ");
+    const key = fact.labelCode
+      ? `code:${fact.labelCode}`
+      : path
+        ? `path:${path}`
+        : `unlabeled:${index}`;
+    const group = groups.get(key) ?? {
+      key,
+      label: path || fact.labelCode || "未映射标签",
+      facts: [],
+    };
+    group.facts.push(fact);
+    groups.set(key, group);
+  });
+  return [...groups.values()];
+}
+
 /** @param {{item: PresentedFact, legacy: boolean}} props */
 function ScopeDetails({ item, legacy }) {
   return (
@@ -96,8 +118,8 @@ function ScopeDetails({ item, legacy }) {
   );
 }
 
-/** @param {{fact: NormalizedFact, legacy: boolean, context?: boolean}} props */
-function FactDetail({ fact, legacy, context = false }) {
+/** @param {{fact: NormalizedFact, legacy: boolean, context?: boolean, position?: number}} props */
+function FactDetail({ fact, legacy, context = false, position }) {
   const item = factPresentation(fact);
   const path = item.labelPath.join(" → ");
   return (
@@ -105,7 +127,11 @@ function FactDetail({ fact, legacy, context = false }) {
       <header>
         <div>
           {context && <small>裁决上下文</small>}
-          <b>{path || item.labelCode || (context ? "未映射上下文" : "未映射标签")}</b>
+          {position === undefined ? (
+            <b>{path || item.labelCode || (context ? "未映射上下文" : "未映射标签")}</b>
+          ) : (
+            <small>事实 {position + 1}</small>
+          )}
         </div>
         <span>{display(item.factId, legacy)}</span>
       </header>
@@ -225,6 +251,11 @@ export function SemanticStatusBadge({ status }) {
 /** @param {{record: SemanticRecord, title?: string}} props */
 export function SemanticResultPanel({ record, title = "评论级结论" }) {
   const conclusions = semanticConclusions(record);
+  const groupedConclusions = conclusions.map((conclusion) => ({
+    ...conclusion,
+    topicLabel: conclusion.topicPath.join(" → ") || conclusion.topic,
+    labelGroups: groupFactsByLabel(conclusion.facts),
+  }));
   const overallStatus = semanticRecordStatus(record);
   const relations = semanticRelations(record);
   const unknownGroups = semanticUnknownGroups(record);
@@ -251,15 +282,21 @@ export function SemanticResultPanel({ record, title = "评论级结论" }) {
         </div>
       ) : (
         <div className="semantic-conclusion-list">
-          {conclusions.map((conclusion) => (
+          {groupedConclusions.map((conclusion) => (
             <details key={conclusion.id} className="semantic-conclusion-item" open>
               <summary>
                 <div>
-                  <span>{conclusion.topicPath.join(" → ") || conclusion.topic}</span>
-                  <b>{conclusion.summary || conclusion.topic}</b>
+                  <span>{conclusion.topicLabel}</span>
+                  {conclusion.summary &&
+                    conclusion.summary !== conclusion.topicLabel && (
+                      <b>{conclusion.summary}</b>
+                    )}
                 </div>
                 <SemanticStatusBadge status={conclusion.status} />
-                <small>{conclusion.facts.length} 条确定结论</small>
+                <small>
+                  {conclusion.labelGroups.length} 个标签 · {conclusion.facts.length}{" "}
+                  条事实
+                </small>
                 <CaretDown size={15} aria-hidden="true" />
               </summary>
               {conclusion.status === "MIXED" && (
@@ -274,13 +311,26 @@ export function SemanticResultPanel({ record, title = "评论级结论" }) {
                 </p>
               )}
               <div className="semantic-fact-list">
-                {conclusion.facts.length ? (
-                  conclusion.facts.map((fact, index) => (
-                    <FactDetail
-                      key={fact.factId || `${conclusion.id}-${index}`}
-                      fact={fact}
-                      legacy={conclusion.legacy}
-                    />
+                {conclusion.labelGroups.length ? (
+                  conclusion.labelGroups.map((group) => (
+                    <section
+                      key={group.key}
+                      className="semantic-label-group"
+                      aria-label={group.label}
+                    >
+                      <header>
+                        <b>{group.label}</b>
+                        <span>{group.facts.length} 条事实</span>
+                      </header>
+                      {group.facts.map((fact, index) => (
+                        <FactDetail
+                          key={fact.factId || `${group.key}-${index}`}
+                          fact={fact}
+                          legacy={conclusion.legacy}
+                          position={index}
+                        />
+                      ))}
+                    </section>
                   ))
                 ) : (
                   <p className="drawer-empty">当前结论没有返回原子事实。</p>
