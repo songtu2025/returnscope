@@ -21,6 +21,7 @@ import { labelChanges } from "./labelDraftPolicy";
 /** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardValidationRunSummary} ClassificationStandardValidationRunSummary */
 /** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardValidationSource} ClassificationStandardValidationSource */
 /** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardVersion} ClassificationStandardVersion */
+/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardReviewRole} ClassificationStandardReviewRole */
 /** @typedef {import("../../shared/api/classificationStandardContracts").ReadableRecognitionProfile} ReadableRecognitionProfile */
 /** @typedef {import("../../shared/api/classificationStandardContracts").ValidationSampleSize} ValidationSampleSize */
 /** @typedef {import("./classificationStandardContent").ClassificationStandardFieldErrors} ClassificationStandardFieldErrors */
@@ -239,6 +240,25 @@ export function ClassificationStandardWorkspace({
               <option value="fact_v2">事实策略 · 对象、条件与证据对齐</option>
             </select>
           </label>
+          <label>
+            复核模型
+            <select
+              aria-label="复核模型"
+              disabled={!editable}
+              value={content.review_role ?? "primary"}
+              onChange={(event) =>
+                onContentChange({
+                  ...content,
+                  review_role: /** @type {ClassificationStandardReviewRole} */ (
+                    event.target.value
+                  ),
+                })
+              }
+            >
+              <option value="primary">主模型复核</option>
+              <option value="secondary">独立模型复核</option>
+            </select>
+          </label>
           <p>保存只修改草稿；通过发布验证并启用后，新任务才使用该策略。</p>
         </section>
         {!isNew && editable && (
@@ -296,6 +316,14 @@ export function ClassificationStandardWorkspace({
                 : content.recognition_profile === "semantic_v1"
                   ? "语义策略（定义、边界与证据）"
                   : "现有策略（定义与关键词）"}
+            </p>
+          )}
+          {content.review_role !== baseContent?.review_role && (
+            <p>
+              复核模型：
+              {baseContent?.review_role === "secondary" ? "独立模型" : "主模型"}
+              {" → "}
+              {content.review_role === "secondary" ? "独立模型" : "主模型"}
             </p>
           )}
           {changes.length ? (

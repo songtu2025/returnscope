@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from copy import deepcopy
 from typing import Any, Callable
@@ -52,6 +53,7 @@ class ClassificationStandardContentMixin:
         taxonomy["recognition_profile"] = content.get(
             "recognition_profile", taxonomy.get("recognition_profile", "legacy_v3")
         )
+        self._apply_review_role(snapshot, content.get("review_role"))
         taxonomy["product_context"] = str(content["product_context"]).strip()
         taxonomy["instructions"] = [
             str(value).strip()
@@ -120,6 +122,34 @@ class ClassificationStandardContentMixin:
                 ):
                     label["group"] = definition.group
         return snapshot
+
+    @classmethod
+    def _apply_review_role(
+        cls,
+        snapshot: dict[str, Any],
+        review_role: str | None,
+    ) -> None:
+        if review_role is None or review_role == snapshot["model_policy"].get(
+            "review_role"
+        ):
+            return
+        snapshot["model_policy"]["review_role"] = review_role
+        snapshot["model_policy"]["version"] = cls._model_policy_version(snapshot)
+
+    @staticmethod
+    def _model_policy_version(snapshot: dict[str, Any]) -> str:
+        policy = snapshot["model_policy"]
+        identity = json.dumps(
+            {
+                "first_pass_role": policy["first_pass_role"],
+                "review_role": policy.get("review_role"),
+            },
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:12]
+        return f"{snapshot['standard_key']}-model-policy-{digest}"
 
     def _validate_candidate(
         self,
@@ -322,6 +352,7 @@ class ClassificationStandardContentMixin:
             "categories": deepcopy(taxonomy.get("categories", [])),
             "import_sources": deepcopy(snapshot.get("import_sources", [])),
             "recognition_profile": taxonomy.get("recognition_profile", "legacy_v3"),
+            "review_role": snapshot.get("model_policy", {}).get("review_role"),
             "product_context": taxonomy["product_context"],
             "instructions": list(taxonomy["instructions"]),
             "allowed_parts": list(taxonomy["allowed_parts"]),
@@ -399,6 +430,7 @@ class ClassificationStandardContentMixin:
             "rules_changed": (
                 base_content["recognition_profile"]
                 != candidate_content["recognition_profile"]
+                or base_content["review_role"] != candidate_content["review_role"]
                 or base_content["instructions"] != candidate_content["instructions"]
                 or base_content["allowed_parts"] != candidate_content["allowed_parts"]
                 or base_content["validation_rules"]

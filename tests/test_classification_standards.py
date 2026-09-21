@@ -150,6 +150,41 @@ def test_draft_roundtrip_preserves_new_label_claim_bindings(tmp_path: Path) -> N
     ] == ["CLM_DRY_01"]
 
 
+def test_draft_can_use_independent_review_model_without_changing_published_version(
+    tmp_path: Path,
+) -> None:
+    service = _service(tmp_path)
+    standard = next(item for item in service.list() if item["standard_key"] == "gloves")
+    published = service.get(standard["id"])
+    draft = service.create_draft(standard["id"], "user-1")
+    content = service._editable_content(draft["snapshot"])
+    content["recognition_profile"] = "fact_v2"
+    content["review_role"] = "secondary"
+
+    updated = service.update_draft(
+        draft["id"],
+        draft["revision"],
+        content,
+        "事实策略使用独立模型复核",
+        "user-1",
+    )
+
+    assert updated["content"]["recognition_profile"] == "fact_v2"
+    assert updated["content"]["review_role"] == "secondary"
+    assert updated["snapshot"]["model_policy"]["review_role"] == "secondary"
+    assert updated["snapshot"]["model_policy"]["version"].startswith(
+        "gloves-model-policy-"
+    )
+    assert (
+        updated["snapshot"]["model_policy"]["version"]
+        != (draft["snapshot"]["model_policy"]["version"])
+    )
+    assert updated["diff"]["rules_changed"] is True
+    current = service.get(standard["id"])
+    assert current["standard_version_id"] == published["standard_version_id"]
+    assert current["snapshot"]["model_policy"]["review_role"] == "primary"
+
+
 def test_existing_category_config_is_imported_as_published_standards(
     tmp_path: Path,
 ) -> None:

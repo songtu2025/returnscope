@@ -676,6 +676,7 @@ class ClassificationStandardDraftContentRequest(BaseModel):
     categories: list[dict[str, object]] = Field(default_factory=list)
     import_sources: list[dict[str, object]] = Field(default_factory=list)
     recognition_profile: Literal["legacy_v3", "semantic_v1", "fact_v2"] = "legacy_v3"
+    review_role: Literal["primary", "secondary"] | None = None
     name: str = Field(min_length=1, max_length=120)
     product_context: str = Field(min_length=1, max_length=500)
     instructions: list[str] = Field(max_length=100)

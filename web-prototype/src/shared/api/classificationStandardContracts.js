@@ -1,5 +1,6 @@
 /** @typedef {"legacy_v3" | "semantic_v1" | "fact_v2" | "keyword_free_v1"} ReadableRecognitionProfile */
 /** @typedef {"legacy_v3" | "semantic_v1" | "fact_v2"} WritableRecognitionProfile */
+/** @typedef {"primary" | "secondary"} ClassificationStandardReviewRole */
 /** @typedef {"standard_version" | "keyword_ab" | "semantic_ab"} ValidationComparisonType */
 /** @typedef {20 | 50 | 100} ValidationSampleSize */
 /** @typedef {"NEGATIVE" | "POSITIVE" | "NEUTRAL"} ClassificationStandardSentiment */
@@ -47,6 +48,7 @@
 /**
  * @typedef {object} ClassificationStandardContentFields
  * @property {ReadableRecognitionProfile} recognition_profile
+ * @property {ClassificationStandardReviewRole} review_role
  * @property {string} name
  * @property {string} product_context
  * @property {string[]} instructions
@@ -63,6 +65,7 @@
  * @property {string} name
  * @property {ClassificationStandardVariant[]} [variants]
  * @property {ClassificationStandardImportSource[]} [import_sources]
+ * @property {{version?: string, first_pass_role?: "cheap" | "primary", review_role?: ClassificationStandardReviewRole}} [model_policy]
  * @property {{product_context: string, recognition_profile?: ReadableRecognitionProfile, instructions?: string[], allowed_parts?: string[], validation_rules?: ClassificationStandardValidationRules, structure_version?: 1 | 2, categories?: ClassificationStandardCategory[], labels?: ClassificationStandardSnapshotLabel[]}} taxonomy
  */
 /** @typedef {{kind: string, message: string, field: string | null, label_code?: string, label_index?: number}} ClassificationStandardValidationIssue */

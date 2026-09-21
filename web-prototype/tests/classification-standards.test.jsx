@@ -57,6 +57,7 @@ import { formatDate } from "../src/lib/presentation";
 
 const content = {
   name: "眼镜分类标准",
+  review_role: "secondary",
   product_context: "儿童及运动眼镜",
   instructions: ["识别眼镜佩戴和质量问题"],
   allowed_parts: ["UNSPECIFIED", "FRAME"],
@@ -82,7 +83,11 @@ const snapshot = {
   name: content.name,
   agent_family: "眼镜退货语义智能体",
   logic_version: "eyewear-semantic-v1",
-  model_policy: { version: "eyewear-policy-v1" },
+  model_policy: {
+    version: "eyewear-policy-v1",
+    first_pass_role: "primary",
+    review_role: "secondary",
+  },
   variants: content.variants,
   taxonomy: {
     version: "eyewear-taxonomy-v1",
@@ -716,6 +721,44 @@ test("工作台切换标签保留批量关键词，保存草稿不触发发布",
     "comfy",
   ]);
   expect(payload.content.labels[1]).toEqual(another);
+  expect(standardApiMock.publishClassificationStandardDraft).not.toHaveBeenCalled();
+});
+
+test("复核模型作为草稿配置保存，不直接触发发布", async () => {
+  const primaryContent = { ...content, review_role: "primary" };
+  const primarySnapshot = {
+    ...snapshot,
+    model_policy: { ...snapshot.model_policy, review_role: "primary" },
+  };
+  const primaryDraft = {
+    ...validDraft,
+    content: primaryContent,
+    base_snapshot: primarySnapshot,
+  };
+  standardApiMock.classificationStandard.mockResolvedValue({
+    ...detail,
+    snapshot: primarySnapshot,
+    draft_id: primaryDraft.id,
+    draft_revision: primaryDraft.revision,
+  });
+  standardApiMock.classificationStandardDraft.mockResolvedValue(primaryDraft);
+  standardApiMock.updateClassificationStandardDraft.mockImplementation(
+    async (_id, payload) => ({ ...primaryDraft, content: payload.content }),
+  );
+
+  renderEditPage();
+  await userEvent.click(await screen.findByRole("button", { name: "标准设置" }));
+  await userEvent.selectOptions(
+    screen.getByRole("combobox", { name: "复核模型" }),
+    "secondary",
+  );
+  await userEvent.click(screen.getByRole("button", { name: "保存草稿" }));
+
+  await waitFor(() =>
+    expect(standardApiMock.updateClassificationStandardDraft).toHaveBeenCalled(),
+  );
+  const payload = standardApiMock.updateClassificationStandardDraft.mock.calls[0][1];
+  expect(payload.content.review_role).toBe("secondary");
   expect(standardApiMock.publishClassificationStandardDraft).not.toHaveBeenCalled();
 });
 

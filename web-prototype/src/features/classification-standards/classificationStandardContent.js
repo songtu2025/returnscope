@@ -20,6 +20,7 @@ export const cloneClassificationStandardContent = (value) =>
 /** @type {ClassificationStandardEditableContent} */
 export const EMPTY_CLASSIFICATION_STANDARD_CONTENT = {
   recognition_profile: "semantic_v1",
+  review_role: "secondary",
   name: "",
   product_context: "",
   instructions: ["依据标签名称、完整路径和补充判定说明判断退货原因"],
@@ -41,6 +42,7 @@ export function contentFromClassificationStandardSnapshot(snapshot) {
   return {
     name: snapshot.name,
     recognition_profile: snapshot.taxonomy.recognition_profile ?? "legacy_v3",
+    review_role: snapshot.model_policy?.review_role ?? "primary",
     product_context: snapshot.taxonomy.product_context,
     instructions: snapshot.taxonomy.instructions ?? [],
     allowed_parts: snapshot.taxonomy.allowed_parts ?? ["UNSPECIFIED"],
