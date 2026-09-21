@@ -14,7 +14,7 @@ const { apiMock, dashboardApiMock } = vi.hoisted(() => ({
     classificationResults: vi.fn(),
     classificationResult: vi.fn(),
     classificationResultSummary: vi.fn(),
-    classificationResultRecords: vi.fn(),
+    classificationResultRecordGroups: vi.fn(),
     classificationResultDrilldown: vi.fn(),
     classificationResultDownloadUrl: vi.fn(),
     classificationResultVersions: vi.fn(),
@@ -92,6 +92,20 @@ const record = {
   },
 };
 
+const groupOf = (value) => ({
+  record: value,
+  member_count: 1,
+  members: [
+    {
+      source_record_id: value.source_record_id,
+      source_row: value.source_row,
+      return_date: value.return_date,
+      reason: value.reason,
+      comment: value.comment,
+    },
+  ],
+});
+
 beforeEach(() => {
   window.location.hash = "classification-results";
   Object.values(apiMock).forEach((mock) => mock.mockReset());
@@ -156,9 +170,10 @@ beforeEach(() => {
     processing_statuses: [],
     top_problems: [],
   });
-  apiMock.classificationResultRecords.mockResolvedValue({
-    items: [record],
+  apiMock.classificationResultRecordGroups.mockResolvedValue({
+    items: [groupOf(record)],
     total: 1,
+    source_total: 1,
     page: 1,
     page_size: 20,
   });
@@ -245,9 +260,9 @@ test("用户反馈结果不再把标题展示为退货原因", async () => {
     ...resultVersion,
     analysis_context: "user_feedback",
   });
-  apiMock.classificationResultRecords.mockResolvedValue({
+  apiMock.classificationResultRecordGroups.mockResolvedValue({
     items: [
-      {
+      groupOf({
         ...record,
         reason: "Great winter gloves",
         comment: "Warm and comfortable",
@@ -258,9 +273,10 @@ test("用户反馈结果不再把标题展示为退货原因", async () => {
           problem_label_codes: [],
           positive_label_codes: ["COMFORT_POSITIVE"],
         },
-      },
+      }),
     ],
     total: 1,
+    source_total: 1,
     page: 1,
     page_size: 20,
   });
@@ -280,6 +296,45 @@ test("用户反馈结果不再把标题展示为退货原因", async () => {
   expect(within(drawer).getByText("反馈标题")).toBeVisible();
   expect(within(drawer).getByText("正向标签")).toBeVisible();
   expect(within(drawer).queryByText("Amazon原因")).not.toBeInTheDocument();
+});
+
+test("同一反馈只显示一份结论并可展开两条源明细", async () => {
+  const user = userEvent.setup();
+  apiMock.classificationResultRecordGroups.mockResolvedValue({
+    items: [
+      {
+        record,
+        member_count: 2,
+        members: [
+          groupOf(record).members[0],
+          {
+            source_record_id: "returns-v3:3",
+            source_row: 3,
+            return_date: "2026-08-02",
+            reason: "TOO_SMALL",
+            comment: "Too small for me",
+          },
+        ],
+      },
+    ],
+    total: 1,
+    source_total: 2,
+    page: 1,
+    page_size: 20,
+  });
+  window.location.hash =
+    "classification-results?result_version_id=classification-version-1";
+
+  render(<ClassificationResultsPage notify={vi.fn()} />);
+  const section = (await screen.findByText("订单级分类记录")).closest("section");
+  expect(within(section).getByText(/1 组反馈 · 关联2 条源明细/)).toBeVisible();
+  expect(within(section).getAllByText("ORDER-001")).toHaveLength(1);
+  await user.click(within(section).getByRole("button", { name: "查看证据" }));
+  const drawer = screen.getByRole("dialog", { name: "分类结果与证据" });
+  expect(within(drawer).getByText("关联源明细（2）")).toBeVisible();
+  expect(within(drawer).getByText("源记录 2 · 2026-08-01")).toBeVisible();
+  expect(within(drawer).getByText("源记录 3 · 2026-08-02")).toBeVisible();
+  expect(within(drawer).getAllByText("业务标签")).toHaveLength(1);
 });
 
 afterEach(() => cleanup());
@@ -445,11 +500,12 @@ test("刷新恢复产品名称下钻且切换产品不会混入其他订单", as
     product_name: "产品表第二名称",
     product_sku: "PRODUCT-SKU-2",
   };
-  apiMock.classificationResultRecords.mockImplementation((_versionId, filters) => {
+  apiMock.classificationResultRecordGroups.mockImplementation((_versionId, filters) => {
     const selected = filters.product_name === "产品表第二名称" ? secondRecord : record;
     return Promise.resolve({
-      items: [selected],
+      items: [groupOf(selected)],
       total: 1,
+      source_total: 1,
       page: filters.page,
       page_size: filters.page_size,
     });
@@ -496,7 +552,7 @@ test("刷新恢复产品名称下钻且切换产品不会混入其他订单", as
 
   expect(await screen.findByText("SR001 分类结果")).toBeVisible();
   await waitFor(() =>
-    expect(apiMock.classificationResultRecords).toHaveBeenCalledWith(
+    expect(apiMock.classificationResultRecordGroups).toHaveBeenCalledWith(
       "classification-version-1",
       expect.objectContaining({
         page: 3,
@@ -514,7 +570,7 @@ test("刷新恢复产品名称下钻且切换产品不会混入其他订单", as
 
   await user.click(screen.getByRole("button", { name: /产品表第二名称/ }));
   await waitFor(() =>
-    expect(apiMock.classificationResultRecords).toHaveBeenLastCalledWith(
+    expect(apiMock.classificationResultRecordGroups).toHaveBeenLastCalledWith(
       "classification-version-1",
       expect.objectContaining({
         page: 1,
@@ -570,9 +626,10 @@ test("需复核且没有问题标签时以复核为主操作并说明订单现�
   apiMock.classificationResultSummary.mockResolvedValue({
     quality: [{ quality_status: "review_required", record_count: 318, unit_count: 10 }],
   });
-  apiMock.classificationResultRecords.mockResolvedValue({
+  apiMock.classificationResultRecordGroups.mockResolvedValue({
     items: [],
     total: 0,
+    source_total: 0,
     page: 1,
     page_size: 20,
   });
@@ -626,9 +683,10 @@ test("真正没有记录时问题栏保持通用空态", async () => {
   apiMock.classificationResultSummary.mockResolvedValue({
     quality: [],
   });
-  apiMock.classificationResultRecords.mockResolvedValue({
+  apiMock.classificationResultRecordGroups.mockResolvedValue({
     items: [],
     total: 0,
+    source_total: 0,
     page: 1,
     page_size: 20,
   });
@@ -847,7 +905,7 @@ test("版本历史显示真实派生链且历史版本主动作进入最新版�
     screen.getByText("基于 v1 修改 2 个分类单元，其余 1 个沿用来源版本"),
   ).toBeVisible();
   expect(screen.getByText("复核批次：review-batch-1")).toBeInTheDocument();
-  expect(apiMock.classificationResultRecords).not.toHaveBeenCalled();
+  expect(apiMock.classificationResultRecordGroups).not.toHaveBeenCalled();
   expect(apiMock.classificationResultDrilldown).not.toHaveBeenCalled();
 
   await userEvent.click(screen.getByRole("button", { name: "查看最新版本 v2" }));

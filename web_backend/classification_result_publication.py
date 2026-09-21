@@ -174,6 +174,7 @@ class _ClassificationResultPublication:
                 {
                     "classification_key": classification_key,
                     "source_row": int(row["source_row"]),
+                    "source_origin_id": _nullable_text(row.get("source-origin-id")),
                     "return_date": _nullable_text(row.get("return-date")),
                     "order_id": _nullable_text(row.get("order-id")),
                     "store_site": _nullable_text(row.get("store")),
@@ -298,12 +299,12 @@ class _ClassificationResultPublication:
             """
             INSERT INTO classification_result_records(
                 id, result_version_id, classification_key,
-                source_record_id, source_row, return_date, order_id,
+                source_record_id, source_row, source_origin_id, return_date, order_id,
                 store_site, listing, product_name, source_sku,
                 matched_msku, product_sku, asin, fnsku, category_a,
                 category_b, reason, comment, product_match_status,
                 quality_status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                       ?, ?, ?, ?, ?)
             """,
             [
@@ -313,6 +314,7 @@ class _ClassificationResultPublication:
                     value["classification_key"],
                     f"{dataset_version_id}:{value['source_row']}",
                     value["source_row"],
+                    value.get("source_origin_id"),
                     value["return_date"],
                     value["order_id"],
                     value["store_site"],

@@ -616,6 +616,20 @@
   line-height: 1.55;
   background: #f4f8f6;
 }
+.drawer-source-members details {
+  padding: 9px 0;
+  border-top: 1px solid var(--line-soft);
+}
+.drawer-source-members summary {
+  color: var(--green-dark);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.drawer-source-members summary:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 3px;
+}
 .drawer-field {
   display: grid;
   grid-template-columns: 128px minmax(0, 1fr);

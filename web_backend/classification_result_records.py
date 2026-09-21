@@ -70,6 +70,105 @@ class _ClassificationResultRecords:
             "page_size": page_size,
         }
 
+    def record_groups(
+        self,
+        version_id: str,
+        *,
+        page: int = 1,
+        page_size: int = PAGE_SIZE_DEFAULT,
+        **filters: str | None,
+    ) -> dict[str, Any]:
+        self.get(version_id)
+        page, page_size = self._validate_page(page, page_size)
+        where_sql, params = self._record_filters(version_id, filters)
+        group_key = """
+            CASE
+              WHEN TRIM(COALESCE(r.order_id, '')) = ''
+                OR TRIM(COALESCE(r.classification_key, '')) = ''
+              THEN json_array('record', r.id)
+              ELSE json_array(
+                'feedback', r.store_site, r.listing, r.order_id,
+                r.source_sku, r.matched_msku, r.product_sku,
+                r.product_name, r.classification_key,
+                r.quality_status, r.product_match_status
+              )
+            END
+        """
+        grouped_sql = f"""
+            WITH filtered AS (
+                SELECT r.*, {group_key} AS display_key
+                FROM classification_result_records r
+                WHERE {where_sql}
+            ), grouped AS (
+                SELECT display_key, MIN(source_row) AS first_row,
+                       COUNT(*) AS member_count
+                FROM filtered GROUP BY display_key
+            )
+        """
+        with self.database.connect() as connection:
+            totals = connection.execute(
+                grouped_sql + "SELECT COUNT(*) AS groups, "
+                "COALESCE(SUM(member_count), 0) AS sources FROM grouped",
+                tuple(params),
+            ).fetchone()
+            rows = connection.execute(
+                grouped_sql
+                + """
+                , selected AS (
+                    SELECT display_key, first_row, member_count
+                    FROM grouped
+                    ORDER BY first_row, display_key
+                    LIMIT ? OFFSET ?
+                )
+                SELECT f.*, s.member_count, u.processing_status,
+                       u.problem_labels_json, u.classification_json
+                FROM filtered f
+                JOIN selected s ON s.display_key = f.display_key
+                JOIN classification_units u
+                  ON u.result_version_id = f.result_version_id
+                 AND u.classification_key = f.classification_key
+                ORDER BY s.first_row, f.source_row, f.id
+                """,
+                (*params, page_size, (page - 1) * page_size),
+            ).fetchall()
+        taxonomy = self.taxonomy(version_id)
+        groups: list[dict[str, Any]] = []
+        by_key: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            value = dict(row)
+            key = str(value.pop("display_key"))
+            member_count = int(value.pop("member_count"))
+            member = {
+                name: value[name]
+                for name in (
+                    "source_record_id",
+                    "source_row",
+                    "source_origin_id",
+                    "return_date",
+                    "reason",
+                    "comment",
+                )
+            }
+            group = by_key.get(key)
+            if group is None:
+                group = {
+                    "record": self._enrich_record(
+                        self._serialize_record(value), taxonomy
+                    ),
+                    "member_count": member_count,
+                    "members": [],
+                }
+                by_key[key] = group
+                groups.append(group)
+            group["members"].append(member)
+        return {
+            "items": groups,
+            "total": int(totals["groups"]),
+            "source_total": int(totals["sources"]),
+            "page": page,
+            "page_size": page_size,
+        }
+
     def drilldown(
         self,
         version_id: str,

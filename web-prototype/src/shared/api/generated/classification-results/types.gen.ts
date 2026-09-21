@@ -246,6 +246,80 @@ export type ClassificationResultDrilldownResponse = {
 };
 
 /**
+ * ClassificationResultGroupMemberResponse
+ */
+export type ClassificationResultGroupMemberResponse = {
+  /**
+   * Comment
+   */
+  comment?: string | null;
+  /**
+   * Reason
+   */
+  reason?: string | null;
+  /**
+   * Return Date
+   */
+  return_date?: string | null;
+  /**
+   * Source Origin Id
+   */
+  source_origin_id?: string | null;
+  /**
+   * Source Record Id
+   */
+  source_record_id: string;
+  /**
+   * Source Row
+   */
+  source_row: number;
+  [key: string]: unknown;
+};
+
+/**
+ * ClassificationResultGroupResponse
+ */
+export type ClassificationResultGroupResponse = {
+  /**
+   * Member Count
+   */
+  member_count: number;
+  /**
+   * Members
+   */
+  members: Array<ClassificationResultGroupMemberResponse>;
+  record: ClassificationResultRecordResponse;
+  [key: string]: unknown;
+};
+
+/**
+ * ClassificationResultGroupsResponse
+ */
+export type ClassificationResultGroupsResponse = {
+  /**
+   * Items
+   */
+  items: Array<ClassificationResultGroupResponse>;
+  /**
+   * Page
+   */
+  page: number;
+  /**
+   * Page Size
+   */
+  page_size: number;
+  /**
+   * Source Total
+   */
+  source_total: number;
+  /**
+   * Total
+   */
+  total: number;
+  [key: string]: unknown;
+};
+
+/**
  * ClassificationResultListResponse
  */
 export type ClassificationResultListResponse = {
@@ -485,6 +559,10 @@ export type ClassificationResultRecordResponse = {
    * Semantic Disposition
    */
   semantic_disposition: string;
+  /**
+   * Source Origin Id
+   */
+  source_origin_id?: string | null;
   /**
    * Source Record Id
    */
@@ -1666,6 +1744,84 @@ export type GetDrilldownApiClassificationResultsVersionIdDrilldownGetResponses =
 
 export type GetDrilldownApiClassificationResultsVersionIdDrilldownGetResponse =
   GetDrilldownApiClassificationResultsVersionIdDrilldownGetResponses[keyof GetDrilldownApiClassificationResultsVersionIdDrilldownGetResponses];
+
+export type ListRecordGroupsApiClassificationResultsVersionIdRecordGroupsGetData = {
+  body?: never;
+  path: {
+    /**
+     * Version Id
+     */
+    version_id: string;
+  };
+  query?: {
+    /**
+     * Page
+     */
+    page?: number;
+    /**
+     * Page Size
+     */
+    page_size?: number;
+    /**
+     * Order Id
+     */
+    order_id?: string | null;
+    /**
+     * Listing
+     */
+    listing?: string | null;
+    /**
+     * Product Name
+     */
+    product_name?: string | null;
+    /**
+     * Source Sku
+     */
+    source_sku?: string | null;
+    /**
+     * Matched Msku
+     */
+    matched_msku?: string | null;
+    /**
+     * Product Sku
+     */
+    product_sku?: string | null;
+    /**
+     * Asin
+     */
+    asin?: string | null;
+    /**
+     * Problem
+     */
+    problem?: string | null;
+    /**
+     * Quality Status
+     */
+    quality_status?: string | null;
+  };
+  url: "/api/classification-results/{version_id}/record-groups";
+};
+
+export type ListRecordGroupsApiClassificationResultsVersionIdRecordGroupsGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListRecordGroupsApiClassificationResultsVersionIdRecordGroupsGetError =
+  ListRecordGroupsApiClassificationResultsVersionIdRecordGroupsGetErrors[keyof ListRecordGroupsApiClassificationResultsVersionIdRecordGroupsGetErrors];
+
+export type ListRecordGroupsApiClassificationResultsVersionIdRecordGroupsGetResponses =
+  {
+    /**
+     * Successful Response
+     */
+    200: ClassificationResultGroupsResponse;
+  };
+
+export type ListRecordGroupsApiClassificationResultsVersionIdRecordGroupsGetResponse =
+  ListRecordGroupsApiClassificationResultsVersionIdRecordGroupsGetResponses[keyof ListRecordGroupsApiClassificationResultsVersionIdRecordGroupsGetResponses];
 
 export type ListRecordsApiClassificationResultsVersionIdRecordsGetData = {
   body?: never;

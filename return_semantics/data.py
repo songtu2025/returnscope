@@ -30,6 +30,7 @@ PRODUCT_COLUMNS = ["MSKU", "店铺/站点", "Listing"]
 PRODUCT_CATEGORY_COLUMNS = ["品类A", "品类B"]
 PRODUCT_DETAIL_COLUMNS = ["产品名称", "SKU"]
 RETURN_STORE_COLUMN = "店铺/站点"
+SOURCE_ORIGIN_COLUMN = "source-origin-id"
 
 
 @dataclass(frozen=True)
@@ -294,11 +295,18 @@ def _prepare_return_records(return_path: Path) -> pd.DataFrame:
     missing = [column for column in RETURN_COLUMNS if column not in records.columns]
     if missing:
         raise ValueError(f"用户反馈数据缺少字段: {', '.join(missing)}")
-    selected_columns = RETURN_COLUMNS + (
-        [RETURN_STORE_COLUMN] if RETURN_STORE_COLUMN in records.columns else []
-    )
+    selected_columns = RETURN_COLUMNS + [
+        column
+        for column in (RETURN_STORE_COLUMN, SOURCE_ORIGIN_COLUMN)
+        if column in records.columns
+    ]
     records = records[selected_columns].copy()
     records.insert(0, "source_row", records.index + 2)
+    records[SOURCE_ORIGIN_COLUMN] = (
+        records[SOURCE_ORIGIN_COLUMN].fillna("").astype(str).str.strip()
+        if SOURCE_ORIGIN_COLUMN in records.columns
+        else ""
+    )
     records["sku"] = records["sku"].fillna("").str.strip()
     records["sku_raw"] = records["sku"]
     records["source_sku"] = records["sku"]

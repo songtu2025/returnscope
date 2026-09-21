@@ -316,6 +316,40 @@ def test_review_record_keeps_independent_quality_assessment(tmp_path: Path) -> N
     assert published["human_review_assessment"] == assessment
 
 
+def test_review_version_preserves_source_origin_id(tmp_path: Path) -> None:
+    context, base = _publish_review_required(tmp_path)
+    with context.database.transaction() as connection:
+        connection.execute(
+            "UPDATE classification_result_records SET source_origin_id = ? "
+            "WHERE result_version_id = ? AND source_row = 2",
+            ("12345", base["version_id"]),
+        )
+    service = ReviewService(context.database)
+    batch = service.create_batch(str(base["version_id"]), "user-1", "验证源明细追溯")
+    review = service.batch_records(batch["id"])["items"][0]
+    service.update_batch_record(
+        batch["id"],
+        review["id"],
+        review["revision"],
+        "user-1",
+        None,
+        "确认语义结果",
+        action="confirm",
+    )
+
+    derived = service.publish_batch(
+        batch["id"],
+        service.get_batch(batch["id"])["revision"],
+        "user-1",
+        "发布复核结果",
+    )
+    records = ClassificationResultService(context.database).records(
+        derived["version_id"],
+        page_size=200,
+    )
+    assert records["items"][0]["source_origin_id"] == "12345"
+
+
 def test_review_record_persists_semantic_details_and_publishes_derived_version(
     tmp_path: Path,
 ) -> None:

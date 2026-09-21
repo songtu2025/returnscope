@@ -12,7 +12,11 @@ from typing import Any, Iterator
 
 import pymysql
 
-from return_semantics.data import RETURN_COLUMNS, RETURN_STORE_COLUMN
+from return_semantics.data import (
+    RETURN_COLUMNS,
+    RETURN_STORE_COLUMN,
+    SOURCE_ORIGIN_COLUMN,
+)
 from web_backend.api_schemas import MySQLReturnImportRequest
 from web_backend.common import add_audit, new_id, utc_now
 from web_backend.dataset_service import DatasetService
@@ -158,6 +162,8 @@ class _MySQLQueryBuilder:
                     else ""
                 )
             selections.append(f"{expression} AS {_quote_identifier(key)}")
+        if not self.count_only and "id" in self.columns:
+            selections.append(f"source.id AS {_quote_identifier(SOURCE_ORIGIN_COLUMN)}")
         return selections
 
     def _automatic_store_condition(self) -> str | None:
@@ -441,7 +447,14 @@ class MySQLReturnService:
             "row_count": count,
             "over_limit": count > self.settings.mysql_max_rows,
             "missing_store_rows": int(counts.get("missing_store_rows", 0)),
-            "rows": rows,
+            "rows": [
+                {
+                    key: value
+                    for key, value in row.items()
+                    if key != SOURCE_ORIGIN_COLUMN
+                }
+                for row in rows
+            ],
         }
 
     def import_returns(
@@ -458,7 +471,12 @@ class MySQLReturnService:
                     )
                     with path.open("w", encoding="utf-8-sig", newline="") as output:
                         writer = csv.DictWriter(
-                            output, fieldnames=[*RETURN_COLUMNS, RETURN_STORE_COLUMN]
+                            output,
+                            fieldnames=[
+                                *RETURN_COLUMNS,
+                                RETURN_STORE_COLUMN,
+                                SOURCE_ORIGIN_COLUMN,
+                            ],
                         )
                         writer.writeheader()
                         count = 0

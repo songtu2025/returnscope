@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from test_classification_result_pool import _seed_result_context
 from test_return_import_flow import _return_row
 
-from return_semantics.data import RETURN_STORE_COLUMN
+from return_semantics.data import RETURN_STORE_COLUMN, SOURCE_ORIGIN_COLUMN
 from web_backend import dataset_service as dataset_module
 from web_backend import mysql_return_service as mysql_module
 from web_backend.api_schemas import MySQLReturnImportRequest
@@ -134,6 +134,7 @@ def test_sale_return_schema_joins_real_comments_and_store_names(source):
     assert "source.jijia_account_id = %s AND source.market_id = %s" in query
     assert "JSON_TABLE" not in query
     assert "ORDER BY source.`return_date_time`, source.id" in query
+    assert f"source.id AS `{SOURCE_ORIGIN_COLUMN}`" in query
     assert values == ["测试店铺:US", 1, 11]
 
     count_query, count_values = service._query(
@@ -248,6 +249,22 @@ def test_import_freezes_data_reuses_duplicates_and_records_source(source, monkey
     assert "sale_return_order" in audit[0]["after_json"]
     assert service.settings.mysql_password not in audit[0]["after_json"]
     assert not list((service.settings.data_dir / "tmp").glob("mysql_*.csv"))
+
+
+def test_mysql_import_keeps_source_id_in_snapshot(source):
+    service, cursor, _, payload = source
+    cursor.fetchall.return_value = [
+        {"name": key.replace("-", "_"), "type": "varchar"} for key in FIELD_LABELS
+    ] + [{"name": "id", "type": "bigint"}]
+    row = _return_row("O-1", "偏小")
+    row[SOURCE_ORIGIN_COLUMN] = "12345"
+    cursor.__iter__.side_effect = lambda: iter([row])
+
+    result = service.import_returns(payload, "user-1")
+    version = service.datasets.version_file(result["dataset"]["id"])
+    snapshot = Path(version["file_path"]).read_text(encoding="utf-8-sig")
+    assert SOURCE_ORIGIN_COLUMN in snapshot.splitlines()[0]
+    assert "12345" in snapshot
 
 
 @pytest.mark.parametrize("problem", ["empty", "too_many", "empty_store"])

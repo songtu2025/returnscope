@@ -5,18 +5,19 @@ import { resultLabelText } from "../../lib/taxonomyPresentation";
 import { SemanticResultPanel } from "./SemanticResultPanel";
 
 /**
- * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultRecordResponse} ClassificationResultRecord
+ * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultGroupResponse} ClassificationResultGroup
  */
 
 /**
  * @param {{
- *   record: ClassificationResultRecord,
+ *   group: ClassificationResultGroup,
  *   analysisContext: string,
  *   onClose: () => void,
  *   returnFocusRef: { current: HTMLElement | null }
  * }} props
  */
-export function EvidenceDrawer({ record, analysisContext, onClose, returnFocusRef }) {
+export function EvidenceDrawer({ group, analysisContext, onClose, returnFocusRef }) {
+  const record = group.record;
   const isUserFeedback = analysisContext === "user_feedback";
   const classification = record.classification ?? {};
   const drawerRef = useRef(/** @type {HTMLElement | null} */ (null));
@@ -116,6 +117,25 @@ export function EvidenceDrawer({ record, analysisContext, onClose, returnFocusRe
           </blockquote>
         </section>
 
+        {group.member_count > 1 && (
+          <section className="drawer-section drawer-source-members">
+            <b>关联源明细（{group.member_count}）</b>
+            {group.members.map((member) => (
+              <details key={member.source_record_id}>
+                <summary>
+                  源记录 {member.source_row} · {member.return_date || "日期未提供"}
+                </summary>
+                <DrawerField label="源记录ID" value={member.source_record_id} />
+                {member.source_origin_id && (
+                  <DrawerField label="源表明细ID" value={member.source_origin_id} />
+                )}
+                <DrawerField label="原因" value={member.reason} />
+                <blockquote>{member.comment || "未提供反馈正文"}</blockquote>
+              </details>
+            ))}
+          </section>
+        )}
+
         <section className="drawer-section">
           <b>业务标签</b>
           <DrawerField
@@ -150,6 +170,9 @@ export function EvidenceDrawer({ record, analysisContext, onClose, returnFocusRe
           <DrawerField label="分类体系" value={classification.taxonomy_version} />
           <DrawerField label="classification_key" value={record.classification_key} />
           <DrawerField label="源记录ID" value={record.source_record_id} />
+          {record.source_origin_id && (
+            <DrawerField label="源表明细ID" value={record.source_origin_id} />
+          )}
         </section>
       </aside>
     </div>

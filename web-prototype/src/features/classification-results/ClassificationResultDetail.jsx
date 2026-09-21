@@ -30,7 +30,7 @@ import { EvidenceDrawer } from "./EvidenceDrawer";
 import { resultActionPolicy } from "./resultActionPolicy";
 import { useClassificationResultDetailData } from "./useClassificationResultDetailData";
 
-/** @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultRecordResponse} ClassificationResultRecord */
+/** @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultGroupResponse} ClassificationResultGroup */
 /** @typedef {import("./classificationResultRoute").ClassificationResultRoute} ClassificationResultRoute */
 /**
  * @typedef {object} ClassificationResultDetailProps
@@ -42,12 +42,12 @@ import { useClassificationResultDetailData } from "./useClassificationResultDeta
 
 /** @param {ClassificationResultDetailProps} props */
 export function ClassificationResultDetail({ route, updateRoute, notify, userId }) {
-  const [selectedRecord, setSelectedRecord] = useState(
-    /** @type {ClassificationResultRecord | null} */ (null),
+  const [selectedGroup, setSelectedGroup] = useState(
+    /** @type {ClassificationResultGroup | null} */ (null),
   );
   const [orderInput, setOrderInput] = useState(route.orderId);
   const evidenceTriggerRef = useRef(/** @type {HTMLButtonElement | null} */ (null));
-  const closeEvidence = useCallback(() => setSelectedRecord(null), []);
+  const closeEvidence = useCallback(() => setSelectedGroup(null), []);
 
   const createDashboardFromResult = () => {
     if (!result) return;
@@ -67,7 +67,7 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
 
   useEffect(() => setOrderInput(route.orderId), [route.orderId]);
   useEffect(
-    () => setSelectedRecord(null),
+    () => setSelectedGroup(null),
     [route.orderId, route.problem, route.productName, route.productSku, route.version],
   );
 
@@ -202,12 +202,12 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
   /** @param {string} productSku */
   const selectProductSku = (productSku) => updateRoute({ productSku, recordPage: 1 });
   /**
-   * @param {ClassificationResultRecord} record
+   * @param {ClassificationResultGroup} group
    * @returns {(trigger: HTMLButtonElement) => void}
    */
-  const openEvidence = (record) => (trigger) => {
+  const openEvidence = (group) => (trigger) => {
     evidenceTriggerRef.current = trigger;
-    setSelectedRecord(record);
+    setSelectedGroup(group);
   };
   /** @param {number} recordPage */
   const changeRecordPage = (recordPage) => updateRoute({ recordPage });
@@ -428,7 +428,10 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
             <header>
               <div>
                 <b>{isUserFeedback ? "用户反馈记录" : "订单级分类记录"}</b>
-                <span>{Number(records?.total || 0).toLocaleString()} 条记录</span>
+                <span>
+                  {Number(records?.total || 0).toLocaleString()} 组反馈 · 关联
+                  {Number(records?.source_total || 0).toLocaleString()} 条源明细
+                </span>
               </div>
               <div className="record-order-search">
                 <Input
@@ -473,12 +476,12 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
                     <span>{isUserFeedback ? "语义结果" : "分类结果"}</span>
                     <span>操作</span>
                   </div>
-                  {records.items.map((record) => (
+                  {records.items.map((group) => (
                     <ResultRecordRow
-                      key={record.source_record_id}
-                      record={record}
+                      key={group.record.source_record_id}
+                      group={group}
                       analysisContext={result.analysis_context}
-                      onOpen={openEvidence(record)}
+                      onOpen={openEvidence(group)}
                     />
                   ))}
                 </div>
@@ -494,9 +497,9 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
             )}
           </section>
 
-          {selectedRecord && (
+          {selectedGroup && (
             <EvidenceDrawer
-              record={selectedRecord}
+              group={selectedGroup}
               analysisContext={result.analysis_context}
               onClose={closeEvidence}
               returnFocusRef={evidenceTriggerRef}

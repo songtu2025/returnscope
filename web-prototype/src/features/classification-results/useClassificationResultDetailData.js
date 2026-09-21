@@ -64,7 +64,7 @@ export function useClassificationResultDetailData({ route, notify }) {
     recordsControllerRef.current = controller;
     try {
       const [records, problems, names, skus] = await Promise.all([
-        api.classificationResultRecords(route.version, detailQuery, {
+        api.classificationResultRecordGroups(route.version, detailQuery, {
           signal: controller.signal,
         }),
         api.classificationResultDrilldown(

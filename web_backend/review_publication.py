@@ -305,6 +305,7 @@ class ReviewPublicationMixin:
             {
                 "classification_key": str(row["classification_key"]),
                 "source_row": int(row["source_row"]),
+                "source_origin_id": row["source_origin_id"],
                 "return_date": row["return_date"],
                 "order_id": row["order_id"],
                 "store_site": row["store_site"],

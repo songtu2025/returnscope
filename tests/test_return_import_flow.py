@@ -20,6 +20,8 @@ from return_semantics.data import (
     PRODUCT_COLUMNS,
     RETURN_COLUMNS,
     RETURN_STORE_COLUMN,
+    SOURCE_ORIGIN_COLUMN,
+    _prepare_return_records,
     read_return_file,
 )
 from web_backend.dataset_service import DatasetService
@@ -59,6 +61,17 @@ def _write_returns_xlsx(path: Path, rows: list[dict[str, str]]) -> None:
             sheet_name="退货明细",
             index=False,
         )
+
+
+def test_return_loader_preserves_optional_source_origin_id(tmp_path: Path) -> None:
+    source = tmp_path / "returns.csv"
+    row = _return_row("ORDER-1", "偏小")
+    row[SOURCE_ORIGIN_COLUMN] = "12345"
+    _write_returns(source, [row])
+
+    records = _prepare_return_records(source)
+
+    assert records.loc[0, SOURCE_ORIGIN_COLUMN] == "12345"
 
 
 def _create_managed_returns(

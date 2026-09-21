@@ -10,6 +10,8 @@ import type {
   GetSummaryApiClassificationResultsVersionIdSummaryGetResponse,
   ListRecordsApiClassificationResultsVersionIdRecordsGetData,
   ListRecordsApiClassificationResultsVersionIdRecordsGetResponse,
+  ListRecordGroupsApiClassificationResultsVersionIdRecordGroupsGetData,
+  ListRecordGroupsApiClassificationResultsVersionIdRecordGroupsGetResponse,
   ListResultsApiClassificationResultsGetData,
   ListResultsApiClassificationResultsGetResponse,
 } from "./generated/classification-results/types.gen";
@@ -20,6 +22,9 @@ type ClassificationResultFilters = NonNullable<
 >;
 type ClassificationResultRecordFilters = NonNullable<
   ListRecordsApiClassificationResultsVersionIdRecordsGetData["query"]
+>;
+type ClassificationResultGroupFilters = NonNullable<
+  ListRecordGroupsApiClassificationResultsVersionIdRecordGroupsGetData["query"]
 >;
 type ClassificationResultDrilldownFilters = Omit<
   NonNullable<GetDrilldownApiClassificationResultsVersionIdDrilldownGetData["query"]>,
@@ -54,6 +59,15 @@ export const resultApi = {
   ): Promise<ListRecordsApiClassificationResultsVersionIdRecordsGetResponse> =>
     request(
       `/api/classification-results/${versionId}/records${queryString({ ...filters })}`,
+      options,
+    ),
+  classificationResultRecordGroups: (
+    versionId: ListRecordGroupsApiClassificationResultsVersionIdRecordGroupsGetData["path"]["version_id"],
+    filters: ClassificationResultGroupFilters = {},
+    options: RequestInit = {},
+  ): Promise<ListRecordGroupsApiClassificationResultsVersionIdRecordGroupsGetResponse> =>
+    request(
+      `/api/classification-results/${versionId}/record-groups${queryString({ ...filters })}`,
       options,
     ),
   classificationResultDrilldown: (

@@ -4,12 +4,111 @@ import json
 import sqlite3
 from pathlib import Path
 
+import pytest
+
+from web_backend.backup import restore_backup
 from web_backend.classification_result_queries import system_rerun_counts
 from web_backend.database import (
     CLASSIFICATION_UNIT_RERUN_MIGRATION,
     CLASSIFICATION_UNIT_RERUN_MIGRATION_CHECKSUM,
+    RESULT_SOURCE_ORIGIN_MIGRATION,
+    RESULT_SOURCE_ORIGIN_MIGRATION_CHECKSUM,
     Database,
 )
+from web_backend.migrate_result_source_origin import migrate_result_source_origin
+from web_backend.settings import Settings
+
+
+def test_result_source_origin_migration_keeps_existing_rows(tmp_path: Path) -> None:
+    connection = sqlite3.connect(tmp_path / "legacy-origin.db")
+    connection.row_factory = sqlite3.Row
+    connection.executescript(
+        """
+        CREATE TABLE app_migrations (
+            migration_id TEXT PRIMARY KEY,
+            checksum TEXT NOT NULL,
+            status TEXT NOT NULL,
+            applied_at TEXT NOT NULL
+        );
+        CREATE TABLE classification_result_records (
+            id TEXT PRIMARY KEY,
+            source_record_id TEXT NOT NULL
+        );
+        INSERT INTO classification_result_records(id, source_record_id)
+        VALUES ('record-1', 'version:2');
+        """
+    )
+    Database._migrate_result_source_origin(connection)
+    Database._migrate_result_source_origin(connection)
+    record = connection.execute(
+        "SELECT source_record_id, source_origin_id "
+        "FROM classification_result_records WHERE id = 'record-1'"
+    ).fetchone()
+    migration = connection.execute(
+        "SELECT checksum FROM app_migrations WHERE migration_id = ?",
+        (RESULT_SOURCE_ORIGIN_MIGRATION,),
+    ).fetchone()
+    assert tuple(record) == ("version:2", None)
+    assert migration["checksum"] == RESULT_SOURCE_ORIGIN_MIGRATION_CHECKSUM
+    connection.close()
+
+
+def test_production_requires_explicit_result_origin_migration(tmp_path: Path) -> None:
+    database_path = tmp_path / "app.db"
+    database = Database(database_path)
+    database.initialize()
+    with database.transaction() as connection:
+        connection.execute(
+            "DELETE FROM app_migrations WHERE migration_id = ?",
+            (RESULT_SOURCE_ORIGIN_MIGRATION,),
+        )
+    settings = Settings(
+        data_dir=tmp_path,
+        database_path=database_path,
+        session_days=14,
+        task_workers=1,
+        bootstrap_email="test@example.com",
+        bootstrap_name="测试用户",
+        bootstrap_password="test-password-only",
+        encryption_key="test-key-only",
+        secure_cookies=False,
+    )
+
+    with pytest.raises(RuntimeError, match="尚未完成源明细追溯迁移"):
+        database.initialize(require_result_source_origin=True)
+    with pytest.raises(ValueError, match="必须停止应用"):
+        migrate_result_source_origin(settings, app_stopped=False)
+    with database.connect() as connection:
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM app_migrations WHERE migration_id = ?",
+                (RESULT_SOURCE_ORIGIN_MIGRATION,),
+            ).fetchone()[0]
+            == 0
+        )
+
+    backup_path = migrate_result_source_origin(settings, app_stopped=True)
+
+    assert backup_path.is_file()
+    database.initialize(require_result_source_origin=True)
+    with database.connect() as connection:
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM app_migrations WHERE migration_id = ?",
+                (RESULT_SOURCE_ORIGIN_MIGRATION,),
+            ).fetchone()[0]
+            == 1
+        )
+
+    restore_backup(settings, backup_path)
+    with database.connect() as connection:
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM app_migrations WHERE migration_id = ?",
+                (RESULT_SOURCE_ORIGIN_MIGRATION,),
+            ).fetchone()[0]
+            == 0
+        )
 
 
 def test_classification_unit_rerun_migration_backfills_and_indexes(

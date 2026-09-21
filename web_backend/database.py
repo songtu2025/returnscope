@@ -11,6 +11,10 @@ CLASSIFICATION_UNIT_RERUN_MIGRATION = "20260919_classification_unit_rerun_state"
 CLASSIFICATION_UNIT_RERUN_MIGRATION_CHECKSUM = hashlib.sha256(
     b"classification_units.system_rerun_required:v1"
 ).hexdigest()
+RESULT_SOURCE_ORIGIN_MIGRATION = "20260921_result_source_origin"
+RESULT_SOURCE_ORIGIN_MIGRATION_CHECKSUM = hashlib.sha256(
+    b"classification_result_records.source_origin_id:TEXT:v1"
+).hexdigest()
 AUTH_ACTION_TOKEN_MIGRATION = "20260920_auth_action_tokens"
 AUTH_ACTION_TOKEN_MIGRATION_SQL = """
 CREATE TABLE IF NOT EXISTS auth_action_tokens (
@@ -571,6 +575,7 @@ CREATE TABLE IF NOT EXISTS classification_result_records (
     classification_key TEXT NOT NULL,
     source_record_id TEXT NOT NULL,
     source_row INTEGER NOT NULL,
+    source_origin_id TEXT,
     return_date TEXT,
     order_id TEXT,
     store_site TEXT,
@@ -931,8 +936,11 @@ class Database:
         connection.execute("PRAGMA busy_timeout = 30000")
         return connection
 
-    def initialize(self) -> None:
+    def initialize(self, *, require_result_source_origin: bool = False) -> None:
+        new_database = not self.path.exists()
         with self.connect() as connection:
+            if require_result_source_origin and not new_database:
+                self._require_result_source_origin(connection)
             connection.execute("PRAGMA journal_mode = WAL")
             connection.executescript(SCHEMA)
             self._migrate_auth_action_tokens(connection)
@@ -949,6 +957,8 @@ class Database:
             self._repair_draft_review_batches(connection)
             self._migrate_excluded_quality_status(connection)
             self._migrate_classification_unit_rerun_state(connection)
+            if not require_result_source_origin or new_database:
+                self._migrate_result_source_origin(connection)
             connection.execute(
                 """
                 CREATE INDEX IF NOT EXISTS idx_review_records_batch
@@ -1608,6 +1618,67 @@ class Database:
         except Exception:
             connection.execute("ROLLBACK TO migrate_classification_unit_rerun_state")
             connection.execute("RELEASE migrate_classification_unit_rerun_state")
+            raise
+
+    @staticmethod
+    def _require_result_source_origin(connection: sqlite3.Connection) -> None:
+        try:
+            migration = connection.execute(
+                "SELECT checksum FROM app_migrations WHERE migration_id = ?",
+                (RESULT_SOURCE_ORIGIN_MIGRATION,),
+            ).fetchone()
+            columns = {
+                row["name"]
+                for row in connection.execute(
+                    "PRAGMA table_info(classification_result_records)"
+                ).fetchall()
+            }
+        except sqlite3.OperationalError as exc:
+            raise RuntimeError("生产数据库尚未完成源明细追溯迁移") from exc
+        if (
+            migration is None
+            or migration["checksum"] != RESULT_SOURCE_ORIGIN_MIGRATION_CHECKSUM
+            or "source_origin_id" not in columns
+        ):
+            raise RuntimeError("生产数据库尚未完成源明细追溯迁移")
+
+    @staticmethod
+    def _migrate_result_source_origin(connection: sqlite3.Connection) -> None:
+        migration = connection.execute(
+            "SELECT checksum FROM app_migrations WHERE migration_id = ?",
+            (RESULT_SOURCE_ORIGIN_MIGRATION,),
+        ).fetchone()
+        if migration is not None:
+            if migration["checksum"] != RESULT_SOURCE_ORIGIN_MIGRATION_CHECKSUM:
+                raise RuntimeError("源明细追溯迁移校验失败")
+            return
+        connection.execute("SAVEPOINT migrate_result_source_origin")
+        try:
+            columns = {
+                row["name"]
+                for row in connection.execute(
+                    "PRAGMA table_info(classification_result_records)"
+                ).fetchall()
+            }
+            if "source_origin_id" not in columns:
+                connection.execute(
+                    "ALTER TABLE classification_result_records "
+                    "ADD COLUMN source_origin_id TEXT"
+                )
+            connection.execute(
+                """
+                INSERT INTO app_migrations(migration_id, checksum, status, applied_at)
+                VALUES (?, ?, 'applied', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                """,
+                (
+                    RESULT_SOURCE_ORIGIN_MIGRATION,
+                    RESULT_SOURCE_ORIGIN_MIGRATION_CHECKSUM,
+                ),
+            )
+            connection.execute("RELEASE migrate_result_source_origin")
+        except Exception:
+            connection.execute("ROLLBACK TO migrate_result_source_origin")
+            connection.execute("RELEASE migrate_result_source_origin")
             raise
 
     @staticmethod

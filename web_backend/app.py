@@ -137,7 +137,7 @@ def _bootstrap_user(database: Database, settings: Settings) -> None:
 def _create_database(settings: Settings) -> Database:
     settings.ensure_directories()
     database = Database(settings.database_path)
-    database.initialize()
+    database.initialize(require_result_source_origin=settings.production)
     _bootstrap_user(database, settings)
     return database
 

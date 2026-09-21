@@ -6,7 +6,7 @@ const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     classificationResult: vi.fn(),
     classificationResultSummary: vi.fn(),
-    classificationResultRecords: vi.fn(),
+    classificationResultRecordGroups: vi.fn(),
     classificationResultDrilldown: vi.fn(),
     classificationResultDownloadUrl: vi.fn(),
     classificationResultVersions: vi.fn(),
@@ -57,7 +57,11 @@ test("结果页保留全部层级节点并将父节点作为筛选编码", async
     quality: [{ quality_status: "ready", record_count: 1 }],
     hierarchy_problems: [...hierarchy, leaf],
   });
-  apiMock.classificationResultRecords.mockResolvedValue({ items: [], total: 0 });
+  apiMock.classificationResultRecordGroups.mockResolvedValue({
+    items: [],
+    total: 0,
+    source_total: 0,
+  });
   apiMock.classificationResultDrilldown.mockResolvedValue({ items: [] });
   apiMock.classificationResultVersions.mockResolvedValue([version]);
   apiMock.reviewBatches.mockResolvedValue({ items: [] });

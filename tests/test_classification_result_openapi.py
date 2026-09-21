@@ -136,6 +136,7 @@ def test_schema_only_openapi_export_is_complete_and_deterministic(
         "/api/classification-results/{version_id}/taxonomy",
         "/api/classification-results/{version_id}/summary",
         "/api/classification-results/{version_id}/records",
+        "/api/classification-results/{version_id}/record-groups",
         "/api/classification-results/{version_id}/drilldown",
         "/api/classification-results/{version_id}/download",
     }

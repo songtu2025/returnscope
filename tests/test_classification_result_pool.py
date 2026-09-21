@@ -406,6 +406,66 @@ def test_publish_preserves_product_snapshot_and_duplicate_orders(
     ]
 
 
+def test_record_groups_keep_distinct_source_records_and_page_by_group(
+    tmp_path: Path,
+) -> None:
+    context = _seed_result_context(tmp_path)
+    context.dataset.records.loc[1, "comment_raw"] = "Different evidence"
+    version = _publish(context)
+    service = ClassificationResultService(context.database)
+    version_id = str(version["version_id"])
+
+    first = service.record_groups(version_id, page_size=1)
+    assert first["total"] == 2
+    assert first["source_total"] == 3
+    assert len(first["items"]) == 1
+    duplicate_order = first["items"][0]
+    assert duplicate_order["record"]["order_id"] == "ORDER-DUP"
+    assert duplicate_order["member_count"] == 2
+    assert [item["source_row"] for item in duplicate_order["members"]] == [2, 3]
+    assert {item["comment"] for item in duplicate_order["members"]} == {
+        "Too small",
+        "Different evidence",
+    }
+
+    second = service.record_groups(version_id, page=2, page_size=1)
+    assert second["items"][0]["record"]["order_id"] == "ORDER-OTHER"
+    filtered = service.record_groups(version_id, order_id="ORDER-DUP")
+    assert filtered["total"] == 1
+    assert filtered["source_total"] == 2
+    assert service.records(version_id)["total"] == 3
+
+
+def test_record_groups_do_not_merge_different_source_skus(tmp_path: Path) -> None:
+    context = _seed_result_context(tmp_path)
+    context.dataset.records.loc[1, "source_sku"] = "SOURCE-MSKU-2"
+    version = _publish(context)
+
+    groups = ClassificationResultService(context.database).record_groups(
+        str(version["version_id"]), order_id="ORDER-DUP"
+    )
+
+    assert groups["total"] == 2
+    assert groups["source_total"] == 2
+    assert {group["record"]["source_sku"] for group in groups["items"]} == {
+        "SOURCE-MSKU-1",
+        "SOURCE-MSKU-2",
+    }
+
+
+def test_published_records_preserve_optional_source_origin_id(tmp_path: Path) -> None:
+    context = _seed_result_context(tmp_path)
+    context.dataset.records["source-origin-id"] = ["12345", "12346", "12347"]
+    version = _publish(context)
+    groups = ClassificationResultService(context.database).record_groups(
+        str(version["version_id"]), order_id="ORDER-DUP"
+    )
+    assert [item["source_origin_id"] for item in groups["items"][0]["members"]] == [
+        "12345",
+        "12346",
+    ]
+
+
 def test_result_version_exposes_user_feedback_context(tmp_path: Path) -> None:
     context = _seed_result_context(tmp_path)
     with context.database.transaction() as connection:
@@ -965,6 +1025,15 @@ def test_result_api_paginates_filters_drills_down_and_downloads(
     assert records.status_code == 200
     assert records.json()["total"] == 2
     assert records.json()["items"][0]["source_row"] == 2
+
+    groups = client.get(
+        f"/api/classification-results/{version_id}/record-groups",
+        params={"order_id": "ORDER-DUP", "page_size": 1},
+    )
+    assert groups.status_code == 200
+    assert groups.json()["total"] == 1
+    assert groups.json()["source_total"] == 2
+    assert len(groups.json()["items"][0]["members"]) == 2
 
     by_problem = client.get(
         f"/api/classification-results/{version_id}/drilldown",

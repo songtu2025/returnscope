@@ -7,7 +7,7 @@ import { resultLabelText } from "../../lib/taxonomyPresentation";
 
 /**
  * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultDrilldownItemResponse} ClassificationResultDrilldownItem
- * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultRecordResponse} ClassificationResultRecord
+ * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultGroupResponse} ClassificationResultGroup
  */
 
 /**
@@ -82,12 +82,13 @@ export function DrilldownColumn({
 
 /**
  * @param {{
- *   record: ClassificationResultRecord,
+ *   group: ClassificationResultGroup,
  *   analysisContext: string,
  *   onOpen: (trigger: HTMLButtonElement) => void
  * }} props
  */
-export function ResultRecordRow({ record, analysisContext, onOpen }) {
+export function ResultRecordRow({ group, analysisContext, onOpen }) {
+  const record = group.record;
   const isUserFeedback = analysisContext === "user_feedback";
   const problems = record.problem_labels ?? [];
   const labels = isUserFeedback
@@ -102,7 +103,10 @@ export function ResultRecordRow({ record, analysisContext, onOpen }) {
     <article className="result-record-row" role="row">
       <div>
         <b>{record.order_id || "未提供"}</b>
-        <span>{record.return_date || `源记录 ${record.source_row}`}</span>
+        <span>
+          {record.return_date || `源记录 ${record.source_row}`}
+          {group.member_count > 1 && ` · ${group.member_count} 条源明细`}
+        </span>
       </div>
       <div>
         <b>{record.source_sku || "未提供"}</b>

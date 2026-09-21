@@ -160,6 +160,7 @@ class ClassificationResultRecordResponse(CompatibleResponse):
     classification_key: str
     source_record_id: str
     source_row: int
+    source_origin_id: str | None = None
     return_date: str | None = None
     order_id: str | None = None
     store_site: str | None = None
@@ -182,6 +183,29 @@ class ClassificationResultRecordsResponse(CompatibleResponse):
     taxonomy: TaxonomyConfig | None = None
     items: list[ClassificationResultRecordResponse]
     total: int
+    page: int
+    page_size: int
+
+
+class ClassificationResultGroupMemberResponse(CompatibleResponse):
+    source_record_id: str
+    source_row: int
+    source_origin_id: str | None = None
+    return_date: str | None = None
+    reason: str | None = None
+    comment: str | None = None
+
+
+class ClassificationResultGroupResponse(CompatibleResponse):
+    record: ClassificationResultRecordResponse
+    member_count: int
+    members: list[ClassificationResultGroupMemberResponse]
+
+
+class ClassificationResultGroupsResponse(CompatibleResponse):
+    items: list[ClassificationResultGroupResponse]
+    total: int
+    source_total: int
     page: int
     page_size: int
 
