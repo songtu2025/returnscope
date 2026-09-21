@@ -136,8 +136,13 @@ def test_matching_seed_and_published_standard(tmp_path: Path) -> None:
 
     assert len(comparisons) == 1
     assert comparisons[0].status == "match"
+    assert comparisons[0].impact == "none"
     assert comparisons[0].differences == ()
     assert comparisons[0].seed_hash == comparisons[0].published_hash
+    assert comparisons[0].published_version_id == "version-gloves"
+    assert comparisons[0].published_identity is not None
+    assert comparisons[0].published_identity.recognition_profile == "fact_v2"
+    assert comparisons[0].published_identity.label_count == 1
 
 
 def test_reports_execution_fields_that_drift(tmp_path: Path) -> None:
@@ -165,14 +170,39 @@ def test_reports_execution_fields_that_drift(tmp_path: Path) -> None:
     comparison = compare_published_standards(database_path, registry_path)[0]
 
     assert comparison.status == "drift"
+    assert comparison.impact == "behavioral"
     assert comparison.seed_recognition_profile == "semantic_v1"
     assert comparison.published_recognition_profile == "fact_v2"
     assert comparison.differences == (
-        "model_policy",
+        "model_policy.review_role",
         "taxonomy.version",
         "taxonomy.recognition_profile",
         "taxonomy.labels",
     )
+
+
+def test_reports_metadata_only_drift(tmp_path: Path) -> None:
+    family = _family("footwear", "taxonomy_footwear.json")
+    seed_taxonomy = _taxonomy("footwear-v1")
+    published_taxonomy = deepcopy(seed_taxonomy)
+    published_taxonomy["version"] = "footwear-v2"
+    published_snapshot = _snapshot(family, published_taxonomy)
+    published_snapshot["logic_version"] = "footwear-logic-v2"
+    registry_path = _write_registry(
+        tmp_path,
+        [family],
+        {"taxonomy_footwear.json": seed_taxonomy},
+    )
+    database_path = _write_database(
+        tmp_path,
+        {"footwear": published_snapshot},
+    )
+
+    comparison = compare_published_standards(database_path, registry_path)[0]
+
+    assert comparison.status == "drift"
+    assert comparison.impact == "metadata"
+    assert comparison.differences == ("logic_version", "taxonomy.version")
 
 
 def test_reports_standards_missing_from_either_side(tmp_path: Path) -> None:
@@ -196,3 +226,4 @@ def test_reports_standards_missing_from_either_side(tmp_path: Path) -> None:
         ("footwear", "missing_seed"),
         ("headwear", "missing_published"),
     ]
+    assert [item.impact for item in comparisons] == ["missing", "missing"]

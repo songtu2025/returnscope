@@ -15,6 +15,14 @@ ComparisonStatus = Literal[
     "missing_seed",
     "missing_published",
 ]
+DriftImpact = Literal["none", "metadata", "behavioral", "missing"]
+
+_METADATA_FIELDS = {
+    "logic_version",
+    "model_policy.version",
+    "taxonomy.version",
+    "taxonomy.structure_version",
+}
 
 _TAXONOMY_FIELDS = (
     "version",
@@ -31,9 +39,27 @@ _TAXONOMY_FIELDS = (
 
 
 @dataclass(frozen=True)
+class StandardRuntimeIdentity:
+    agent_family: str
+    logic_version: str
+    model_policy_version: str
+    first_pass_role: str
+    review_role: str | None
+    taxonomy_version: str
+    structure_version: int | None
+    recognition_profile: str
+    variant_count: int
+    category_count: int
+    label_count: int
+
+
+@dataclass(frozen=True)
 class StandardDriftComparison:
     standard_key: str
     status: ComparisonStatus
+    impact: DriftImpact
+    seed_identity: StandardRuntimeIdentity | None
+    published_identity: StandardRuntimeIdentity | None
     seed_taxonomy_version: str | None
     published_taxonomy_version: str | None
     seed_recognition_profile: str | None
@@ -129,6 +155,9 @@ def _compare_standard(
     return StandardDriftComparison(
         standard_key=standard_key,
         status="drift" if differences else "match",
+        impact=_drift_impact(differences),
+        seed_identity=_runtime_identity(canonical_seed),
+        published_identity=_runtime_identity(canonical_published),
         seed_taxonomy_version=canonical_seed["taxonomy"]["version"],
         published_taxonomy_version=canonical_published["taxonomy"]["version"],
         seed_recognition_profile=canonical_seed["taxonomy"]["recognition_profile"],
@@ -156,6 +185,11 @@ def _missing_comparison(
     return StandardDriftComparison(
         standard_key=standard_key,
         status=status,
+        impact="missing",
+        seed_identity=(_runtime_identity(canonical_seed) if canonical_seed else None),
+        published_identity=(
+            _runtime_identity(canonical_published) if canonical_published else None
+        ),
         seed_taxonomy_version=(
             canonical_seed["taxonomy"]["version"] if canonical_seed else None
         ),
@@ -219,13 +253,42 @@ def _execution_differences(
     published: dict[str, Any],
 ) -> list[str]:
     differences = []
-    for field_name in ("agent_family", "logic_version", "model_policy", "variants"):
+    for field_name in ("agent_family", "logic_version", "variants"):
         if seed[field_name] != published[field_name]:
             differences.append(field_name)
+    for field_name in ("version", "first_pass_role", "review_role"):
+        if seed["model_policy"][field_name] != published["model_policy"][field_name]:
+            differences.append(f"model_policy.{field_name}")
     for field_name in _TAXONOMY_FIELDS:
         if seed["taxonomy"][field_name] != published["taxonomy"][field_name]:
             differences.append(f"taxonomy.{field_name}")
     return differences
+
+
+def _drift_impact(differences: list[str]) -> DriftImpact:
+    if not differences:
+        return "none"
+    if set(differences) <= _METADATA_FIELDS:
+        return "metadata"
+    return "behavioral"
+
+
+def _runtime_identity(snapshot: dict[str, Any]) -> StandardRuntimeIdentity:
+    taxonomy = snapshot["taxonomy"]
+    policy = snapshot["model_policy"]
+    return StandardRuntimeIdentity(
+        agent_family=snapshot["agent_family"],
+        logic_version=snapshot["logic_version"],
+        model_policy_version=policy["version"],
+        first_pass_role=policy["first_pass_role"],
+        review_role=policy["review_role"],
+        taxonomy_version=taxonomy["version"],
+        structure_version=taxonomy["structure_version"],
+        recognition_profile=taxonomy["recognition_profile"],
+        variant_count=len(snapshot["variants"]),
+        category_count=len(taxonomy["categories"]),
+        label_count=len(taxonomy["labels"]),
+    )
 
 
 def _content_hash(value: dict[str, Any]) -> str:

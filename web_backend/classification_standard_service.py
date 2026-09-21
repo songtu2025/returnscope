@@ -52,20 +52,13 @@ class ClassificationStandardService(
 
     def ensure_bootstrapped(self) -> None:
         with self.database.transaction(immediate=True) as connection:
+            imported_count = self._import_missing_seed_config(connection)
             migration = connection.execute(
                 "SELECT 1 FROM app_migrations WHERE migration_id = ?",
                 (CLASSIFICATION_STANDARD_SEED_MIGRATION,),
             ).fetchone()
             if migration is None:
-                count = int(
-                    connection.execute(
-                        "SELECT COUNT(*) FROM classification_standards"
-                    ).fetchone()[0]
-                )
-                status = "baselined"
-                if count == 0:
-                    self._import_seed_config(connection)
-                    status = "applied"
+                status = "applied" if imported_count else "baselined"
                 connection.execute(
                     """
                     INSERT INTO app_migrations(

@@ -45,12 +45,21 @@ class ClassificationStandardBootstrapMixin:
         )
         return hashlib.sha256(source.encode("utf-8")).hexdigest()
 
-    def _import_seed_config(self, connection: Any) -> None:
+    def _import_missing_seed_config(self, connection: Any) -> int:
         registry_path = PROJECT_ROOT / "config" / "category_capabilities.json"
         registry_data = json.loads(registry_path.read_text(encoding="utf-8"))
+        existing_keys = {
+            str(row["standard_key"])
+            for row in connection.execute(
+                "SELECT standard_key FROM classification_standards"
+            ).fetchall()
+        }
         now = utc_now()
+        imported_count = 0
         for family in registry_data["families"]:
             standard_key = str(family["key"])
+            if standard_key in existing_keys:
+                continue
             standard_id = f"classification_standard_{standard_key}"
             taxonomy_path = registry_path.parent / str(family["taxonomy"])
             taxonomy = json.loads(taxonomy_path.read_text(encoding="utf-8"))
@@ -112,6 +121,8 @@ class ClassificationStandardBootstrapMixin:
                 """,
                 (version_id, standard_id),
             )
+            imported_count += 1
+        return imported_count
 
     def _migrate_taxonomy_validation_rules(self, connection: Any) -> None:
         migration = connection.execute(
