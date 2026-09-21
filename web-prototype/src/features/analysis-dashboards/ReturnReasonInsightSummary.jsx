@@ -32,6 +32,8 @@ export function ReturnReasonInsightSummary({
   onUpdateFilters,
 }) {
   const terms = analysisContextTerms(analysisContext);
+  const feedbackGroups = data.counting_basis === "feedback_group";
+  const countUnit = feedbackGroups ? "个反馈组" : "条";
   return (
     <>
       <section className="return-insight-filters" aria-label={terms.filterAria}>
@@ -103,7 +105,9 @@ export function ReturnReasonInsightSummary({
         <div>
           <ShieldCheck size={19} weight="duotone" />
           <span>{terms.includedLabel}</span>
-          <b>{includedCount.toLocaleString()} 条</b>
+          <b>
+            {includedCount.toLocaleString()} {countUnit}
+          </b>
         </div>
         <div>
           <TrendUp size={18} />
@@ -113,10 +117,13 @@ export function ReturnReasonInsightSummary({
         <div className={pendingCount ? "warning" : ""}>
           <WarningCircle size={18} />
           <span>待复核</span>
-          <b>{pendingCount.toLocaleString()} 条</b>
+          <b>
+            {pendingCount.toLocaleString()} {countUnit}
+          </b>
         </div>
         <p>
-          同一{terms.recordUnit}可命中多个原因，占比之和可能超过 100%。
+          同一{feedbackGroups ? "反馈组" : terms.recordUnit}
+          可命中多个原因，占比之和可能超过 100%。
           {data.group_alignment === "unified-v1" && " 跨版本已统一一级分组。"}
         </p>
       </section>
@@ -125,14 +132,16 @@ export function ReturnReasonInsightSummary({
         <section className="return-comment-statuses" aria-label="评论级结论分布">
           <header>
             <b>评论级结论</b>
-            <span>互斥口径，每条评论只进入一种状态</span>
+            <span>
+              互斥口径，每{feedbackGroups ? "个反馈组" : "条评论"}只进入一种状态
+            </span>
           </header>
           <div>
             {COMMENT_STATUS_ORDER.map((status) => (
               <article key={status} className={`is-${status.toLowerCase()}`}>
                 <span>{SEMANTIC_STATUS_LABELS[status]}</span>
                 <b>{Number(statusCounts[status] || 0).toLocaleString()}</b>
-                <small>条评论</small>
+                <small>{feedbackGroups ? "个反馈组" : "条评论"}</small>
               </article>
             ))}
           </div>

@@ -183,12 +183,12 @@ beforeEach(() => {
         {
           value: "FIT_TOO_SMALL",
           label_name: "偏小",
-          record_count: 3,
+          record_count: 1,
           unit_count: 1,
         },
       ],
-      product_name: [{ value: "产品表权威名称", record_count: 3, unit_count: 1 }],
-      product_sku: [{ value: "PRODUCT-SKU-1", record_count: 3, unit_count: 1 }],
+      product_name: [{ value: "产品表权威名称", record_count: 1, unit_count: 1 }],
+      product_sku: [{ value: "PRODUCT-SKU-1", record_count: 1, unit_count: 1 }],
     };
     return Promise.resolve({
       group_by: groupBy,
@@ -335,6 +335,24 @@ test("同一反馈只显示一份结论并可展开两条源明细", async () =>
   expect(within(drawer).getByText("源记录 2 · 2026-08-01")).toBeVisible();
   expect(within(drawer).getByText("源记录 3 · 2026-08-02")).toBeVisible();
   expect(within(drawer).getAllByText("业务标签")).toHaveLength(1);
+});
+
+test("业务下钻按反馈组显示数量，源明细单独显示", async () => {
+  apiMock.classificationResultRecordGroups.mockResolvedValue({
+    items: [{ ...groupOf(record), member_count: 2 }],
+    total: 1,
+    source_total: 2,
+    page: 1,
+    page_size: 20,
+  });
+  window.location.hash =
+    "classification-results?result_version_id=classification-version-1";
+
+  render(<ClassificationResultsPage notify={vi.fn()} />);
+
+  expect(await screen.findByRole("button", { name: /偏小\s*1\s*组/ })).toBeVisible();
+  expect(screen.getByRole("button", { name: /产品表权威名称\s*1\s*组/ })).toBeVisible();
+  expect(screen.getByText(/1 组反馈 · 关联2 条源明细/)).toBeVisible();
 });
 
 afterEach(() => cleanup());

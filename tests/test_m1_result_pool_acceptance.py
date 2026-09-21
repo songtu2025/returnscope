@@ -215,12 +215,17 @@ def test_result_pool_api_keeps_pagination_summary_and_download_consistent(
     summary = client.get(f"/api/classification-results/{version_id}/summary").json()
     assert summary["quality"][0]["record_count"] == 205
     assert summary["top_problems"][0]["record_count"] == 205
+    groups = client.get(
+        f"/api/classification-results/{version_id}/record-groups"
+    ).json()
+    assert groups["total"] == 103
+    assert groups["source_total"] == 205
     drilldown = client.get(
         f"/api/classification-results/{version_id}/drilldown",
         params={"group_by": "problem"},
     ).json()
     assert drilldown["page_size"] == 50
-    assert drilldown["items"][0]["record_count"] == 205
+    assert drilldown["items"][0]["record_count"] == 103
     assert drilldown["items"][0]["unit_count"] == 1
     assert (
         client.get(

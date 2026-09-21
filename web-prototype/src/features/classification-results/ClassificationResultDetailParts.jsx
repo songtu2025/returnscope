@@ -71,7 +71,7 @@ export function DrilldownColumn({
               onClick={() => onSelect(value)}
             >
               <span title={label}>{label}</span>
-              <b>{Number(item.record_count || 0).toLocaleString()}</b>
+              <b>{Number(item.record_count || 0).toLocaleString()} 组</b>
             </button>
           );
         })}

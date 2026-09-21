@@ -43,7 +43,7 @@ import {
  * @property {DashboardNotice[]} [blockers]
  * @property {DashboardNotice[]} [warnings]
  * @property {DashboardSelectionItem[]} [sources]
- * @property {Record<string, number | null>} [summary]
+ * @property {import("./analysisDashboardContracts").InsightSummary} [summary]
  */
 
 /**
@@ -515,7 +515,7 @@ export function DashboardCreateFlow({ route, updateRoute, notify, userId }) {
                 <b>{summary.listing_count ?? currentSources.length}</b>
               </span>
               <span>
-                记录
+                {summary.counting_basis === "feedback_group" ? "反馈组" : "记录"}
                 <b>
                   {summary.record_count == null
                     ? "暂无统计"
@@ -528,13 +528,18 @@ export function DashboardCreateFlow({ route, updateRoute, notify, userId }) {
                 <div className="dashboard-coverage-note" role="status">
                   <b>
                     纳入 {Number(summary.record_count || 0).toLocaleString()} /{" "}
-                    {Number(summary.total_record_count || 0).toLocaleString()} 条记录
+                    {Number(summary.total_record_count || 0).toLocaleString()}{" "}
+                    {summary.counting_basis === "feedback_group"
+                      ? "个反馈组"
+                      : "条记录"}
                   </b>
                   <span>
                     待复核{" "}
                     {Number(summary.pending_review_record_count || 0).toLocaleString()}{" "}
-                    条；已排除{" "}
-                    {Number(summary.excluded_record_count || 0).toLocaleString()} 条。
+                    {summary.counting_basis === "feedback_group" ? "个反馈组" : "条"}
+                    ；已排除{" "}
+                    {Number(summary.excluded_record_count || 0).toLocaleString()}{" "}
+                    {summary.counting_basis === "feedback_group" ? "个反馈组" : "条"}。
                   </span>
                 </div>
               )}

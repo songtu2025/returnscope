@@ -1091,8 +1091,8 @@ def test_bulk_exclusion_is_auditable_and_does_not_block_publication(
     assert plan["ready"] is True
     assert plan["filters"] == {"quality_status": ["ready"]}
     assert plan["summary"]["record_count"] == 0
-    assert plan["summary"]["total_record_count"] == 3
-    assert plan["summary"]["excluded_record_count"] == 3
+    assert plan["summary"]["total_record_count"] == 2
+    assert plan["summary"]["excluded_record_count"] == 2
 
 
 def test_empty_legacy_batch_cannot_publish(tmp_path: Path) -> None:

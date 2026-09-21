@@ -13,7 +13,10 @@ from test_classification_result_pool import (
 )
 
 from return_semantics.schemas import ProcessingStatus
+from web_backend.common import json_text
+from web_backend.dashboard_plan import summarize_sources
 from web_backend.dashboard_service import DashboardConflict, DashboardService
+from web_backend.dashboard_support import version_context
 from web_backend.routers.dashboards import create_dashboard_router
 
 
@@ -60,14 +63,14 @@ def test_preflight_hash_is_stable_and_blocks_invalid_sources(tmp_path: Path) -> 
         "source_count": 1,
         "store_count": 1,
         "listing_count": 1,
-        "record_count": 3,
+        "record_count": 2,
         "unit_count": 1,
-        "comment_count": 3,
-        "total_comment_count": 3,
+        "comment_count": 2,
+        "total_comment_count": 2,
         "pending_review_comment_count": 0,
         "comment_statuses": [
             {"status": "POSITIVE", "comment_count": 0},
-            {"status": "NEGATIVE", "comment_count": 3},
+            {"status": "NEGATIVE", "comment_count": 2},
             {"status": "MIXED", "comment_count": 0},
             {"status": "CONFLICT", "comment_count": 0},
             {"status": "NO_CONFIRMED", "comment_count": 0},
@@ -76,6 +79,7 @@ def test_preflight_hash_is_stable_and_blocks_invalid_sources(tmp_path: Path) -> 
         "product_unmatched_count": 0,
         "review_changed_unit_count": 0,
         "taxonomy_versions": ["taxonomy-v1"],
+        "counting_basis": "feedback_group",
     }
     with pytest.raises(ValueError, match="不支持的筛选字段"):
         service.preflight([version_id], {"category_a": "鞋履"})
@@ -160,10 +164,10 @@ def test_preflight_blocks_duplicate_listing_and_review_required(
     assert partial["warnings"][0]["type"] == "quality_review_pending"
     assert partial["filters"] == {"quality_status": ["ready"]}
     assert partial["summary"]["record_count"] == 0
-    assert partial["summary"]["pending_review_record_count"] == 3
+    assert partial["summary"]["pending_review_record_count"] == 2
     assert partial["summary"]["comment_count"] == 0
-    assert partial["summary"]["total_comment_count"] == 3
-    assert partial["summary"]["pending_review_comment_count"] == 3
+    assert partial["summary"]["total_comment_count"] == 2
+    assert partial["summary"]["pending_review_comment_count"] == 2
 
 
 def test_create_and_new_version_are_atomic_and_keep_old_version(
@@ -193,7 +197,7 @@ def test_create_and_new_version_are_atomic_and_keep_old_version(
     )
     assert second["revision"] == 2
     assert second["version"]["version"] == 2
-    assert second["version"]["summary"]["record_count"] == 2
+    assert second["version"]["summary"]["record_count"] == 1
 
     old = service.get(dashboard_id, str(first_version["version_id"]))
     assert old["version"]["version"] == 1
@@ -220,6 +224,107 @@ def test_create_and_new_version_are_atomic_and_keep_old_version(
             (dashboard_id,),
         ).fetchall()
     assert [row["action"] for row in audits] == ["create", "create_version"]
+
+
+def test_existing_dashboard_version_keeps_source_record_basis(tmp_path: Path) -> None:
+    context, version, service = _ready_result(tmp_path)
+    source_id = str(version["version_id"])
+    _plan, dashboard = _create_dashboard(service, source_id)
+    dashboard_id = str(dashboard["id"])
+    old_id = str(dashboard["version"]["version_id"])
+    with context.database.transaction() as connection:
+        old_context = version_context(
+            context.database, connection, dashboard_id, old_id
+        )
+        legacy_summary = summarize_sources(
+            context.database,
+            connection,
+            old_context["source_ids"],
+            old_context["filters"],
+            old_context["sources"],
+        )
+        connection.execute(
+            "UPDATE dashboard_dataset_versions SET summary_json = ? WHERE id = ?",
+            (json_text(legacy_summary), old_context["dataset_version_id"]),
+        )
+
+    next_plan = service.preflight([source_id], {})
+    updated = service.create_version(
+        dashboard_id,
+        expected_revision=1,
+        result_version_ids=[source_id],
+        filters={},
+        plan_hash=next_plan["plan_hash"],
+        reason="采用反馈组口径",
+        actor_id="user-1",
+    )
+    new_id = str(updated["version"]["version_id"])
+    assert service.get(dashboard_id, old_id)["version"]["summary"]["record_count"] == 3
+    assert service.summary(dashboard_id, old_id)["record_count"] == 3
+    assert service.review_bias(dashboard_id, old_id)["total_record_count"] == 3
+    assert service.insights(dashboard_id, old_id)["total_record_count"] == 3
+    assert (
+        service.drilldown(dashboard_id, old_id, "listing")["items"][0]["record_count"]
+        == 3
+    )
+    assert (
+        service.get(dashboard_id, new_id)["version"]["summary"]["counting_basis"]
+        == "feedback_group"
+    )
+    assert service.summary(dashboard_id, new_id)["record_count"] == 2
+    assert service.review_bias(dashboard_id, new_id)["total_record_count"] == 2
+    assert service.insights(dashboard_id, new_id)["total_record_count"] == 2
+    assert (
+        service.drilldown(dashboard_id, new_id, "listing")["items"][0]["record_count"]
+        == 2
+    )
+    assert service.records(dashboard_id, new_id)["total"] == 3
+
+
+def test_dashboard_keeps_distinct_mskus_and_source_evidence(tmp_path: Path) -> None:
+    context, version, service = _ready_result(tmp_path)
+    source_id = str(version["version_id"])
+    with context.database.transaction() as connection:
+        updated = connection.execute(
+            """
+            UPDATE classification_result_records
+            SET source_sku = 'SOURCE-MSKU-2',
+                matched_msku = 'SOURCE-MSKU-2',
+                product_sku = 'PRODUCT-SKU-2',
+                comment = 'Different evidence'
+            WHERE result_version_id = ? AND order_id = 'ORDER-DUP'
+              AND source_row = 3
+            """,
+            (source_id,),
+        )
+        assert updated.rowcount == 1
+        independent_count = connection.execute(
+            """
+            SELECT COUNT(DISTINCT order_id || ':' || source_sku)
+            FROM classification_result_records
+            WHERE result_version_id = ?
+            """,
+            (source_id,),
+        ).fetchone()[0]
+    assert independent_count == 3
+
+    plan, dashboard = _create_dashboard(service, source_id)
+    dashboard_id = str(dashboard["id"])
+    version_id = str(dashboard["version"]["version_id"])
+    assert plan["summary"]["record_count"] == independent_count
+    assert service.insights(dashboard_id, version_id)["total_record_count"] == 3
+    by_order = service.drilldown(dashboard_id, version_id, "order_id")
+    duplicate_order = next(
+        item for item in by_order["items"] if item["value"] == "ORDER-DUP"
+    )
+    assert duplicate_order["record_count"] == 2
+    records = service.records(dashboard_id, version_id, order_id="ORDER-DUP")
+    assert records["total"] == 2
+    assert {item["source_sku"] for item in records["items"]} == {
+        "SOURCE-MSKU-1",
+        "SOURCE-MSKU-2",
+    }
+    assert "Different evidence" in {item["comment"] for item in records["items"]}
 
 
 def test_create_rolls_back_all_dashboard_rows_on_failure(
@@ -305,7 +410,7 @@ def test_dashboard_drilldown_and_records_follow_business_hierarchy(
     assert {item["product_sku"] for item in records["items"]} == {"PRODUCT-SKU-1"}
     assert all(item["classification"] for item in records["items"])
     assert all(item["evidence"] == ["Too small"] for item in records["items"])
-    assert service.summary(dashboard_id, dashboard_version_id)["record_count"] == 3
+    assert service.summary(dashboard_id, dashboard_version_id)["record_count"] == 2
     assert (
         service.sources(dashboard_id, dashboard_version_id)[0]["result_version_id"]
         == version_id
@@ -336,13 +441,14 @@ def test_dashboard_insights_are_derived_from_ready_records(tmp_path: Path) -> No
         == "user_feedback"
     )
     assert insights["analysis_context"] == "user_feedback"
-    assert insights["summary"]["record_count"] == 3
-    assert insights["summary"]["comment_count"] == 3
-    assert insights["summary"]["total_comment_count"] == 3
+    assert insights["counting_basis"] == "feedback_group"
+    assert insights["summary"]["record_count"] == 2
+    assert insights["summary"]["comment_count"] == 2
+    assert insights["summary"]["total_comment_count"] == 2
     assert insights["summary"]["pending_review_comment_count"] == 0
     assert insights["summary"]["comment_statuses"] == [
         {"status": "POSITIVE", "comment_count": 0},
-        {"status": "NEGATIVE", "comment_count": 3},
+        {"status": "NEGATIVE", "comment_count": 2},
         {"status": "MIXED", "comment_count": 0},
         {"status": "CONFLICT", "comment_count": 0},
         {"status": "NO_CONFIRMED", "comment_count": 0},
@@ -351,8 +457,8 @@ def test_dashboard_insights_are_derived_from_ready_records(tmp_path: Path) -> No
         "value": "FIT_TOO_SMALL_U1",
         "label": "偏小",
         "label_group": "尺码与适配",
-        "record_count": 3,
-        "primary_record_count": 3,
+        "record_count": 2,
+        "primary_record_count": 2,
         "companion_only_count": 0,
         "primary_rate": 100.0,
         "subjects": ["PRODUCT"],
@@ -361,8 +467,8 @@ def test_dashboard_insights_are_derived_from_ready_records(tmp_path: Path) -> No
     assert insights["products"] == [
         {
             "value": product_name,
-            "record_count": 3,
-            "total_record_count": 3,
+            "record_count": 2,
+            "total_record_count": 2,
             "reason_share": 100.0,
             "product_reason_rate": 100.0,
             "overall_reason_rate": 100.0,
@@ -374,22 +480,22 @@ def test_dashboard_insights_are_derived_from_ready_records(tmp_path: Path) -> No
     assert insights["label_group_breakdown"] == [
         {
             "value": "尺码与适配",
-            "record_count": 3,
+            "record_count": 2,
             "percentage": 100.0,
         }
     ]
     assert insights["product_reason_matrix"][0]["value"] == product_name
-    assert insights["product_reason_matrix"][0]["total_record_count"] == 3
+    assert insights["product_reason_matrix"][0]["total_record_count"] == 2
     assert insights["product_reason_matrix"][0]["reason_rates"]["FIT_TOO_SMALL_U1"] == {
         "label": "偏小",
-        "record_count": 3,
+        "record_count": 2,
         "percentage": 100.0,
         "lift": 1.0,
     }
     assert insights["subject_breakdown"][0]["value"] == "PRODUCT"
     assert insights["semantic_profile"]["coverage"] == 100.0
-    assert insights["evidence"]["total"] == 3
-    assert len(insights["evidence"]["items"]) == 3
+    assert insights["evidence"]["total"] == 2
+    assert len(insights["evidence"]["items"]) == 2
     assert insights["evidence"]["items"][0]["problem_labels"] == ["偏小"]
     assert insights["filter_options"]["listings"] == ["L1"]
 
@@ -398,7 +504,7 @@ def test_dashboard_insights_are_derived_from_ready_records(tmp_path: Path) -> No
         dashboard_version_id,
         product_name="不存在的产品",
     )
-    assert empty_insights["summary"]["record_count"] == 3
+    assert empty_insights["summary"]["record_count"] == 2
     assert empty_insights["summary"]["comment_count"] == 0
     assert empty_insights["summary"]["total_comment_count"] == 0
     assert empty_insights["summary"]["pending_review_comment_count"] == 0
@@ -527,11 +633,11 @@ def test_issue_cases_keep_variant_context_and_rank_representative_samples(
     case = cases[0]
     assert case["product_name"] == product_name
     assert case["product_sku"] == "PRODUCT-SKU-1"
-    assert case["record_count"] == 12
-    assert case["total_record_count"] == 20
-    assert case["issue_rate"] == 60.0
-    assert case["overall_rate"] == 30.0
-    assert case["lift"] == 2.0
+    assert case["record_count"] == 11
+    assert case["total_record_count"] == 19
+    assert case["issue_rate"] == 57.9
+    assert case["overall_rate"] == 28.2
+    assert case["lift"] == 2.05
     assert case["excess_record_count"] == 6
     assert case["semantic_profile"]["coverage"] == 100.0
     assert case["semantic_profile"]["specified_part_coverage"] == 100.0
@@ -829,4 +935,4 @@ def test_cross_version_group_mapping_deduplicates_records(tmp_path):
     groups = result["label_group_breakdown"]
     assert len(groups) == 1
     assert groups[0]["value"] == "尺码与适配"
-    assert groups[0]["record_count"] == 6
+    assert groups[0]["record_count"] == 4

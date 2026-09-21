@@ -4,7 +4,12 @@ from typing import Any
 
 from web_backend.dashboard_common import TEXT_ENCODING_ANOMALY
 from web_backend.dashboard_plan import summarize_sources
-from web_backend.dashboard_support import percentage, record_where, version_context
+from web_backend.dashboard_support import (
+    feedback_group_scope,
+    percentage,
+    record_where,
+    version_context,
+)
 from web_backend.database import Database
 
 
@@ -20,6 +25,7 @@ def build_summary(
             context["filters"],
             context["sources"],
             include_comment_metrics=False,
+            feedback_groups=context["counting_basis"] == "feedback_group",
         )
     return {
         "dashboard_id": dashboard_id,
@@ -44,6 +50,10 @@ def build_review_bias(
             context["source_ids"],
             scope_filters,
         )
+        if context["counting_basis"] == "feedback_group":
+            where_sql, params = feedback_group_scope(
+                connection, where_sql, params, name="main"
+            )
         overall = connection.execute(
             f"""
             SELECT COUNT(*) AS total_record_count,

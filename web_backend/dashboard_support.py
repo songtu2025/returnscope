@@ -9,13 +9,14 @@ from return_semantics.taxonomy_hierarchy import descendant_label_codes
 from web_backend.common import json_value
 from web_backend.dashboard_common import (
     ALLOWED_FILTERS,
+    FEEDBACK_GROUP_BASIS,
     FILTER_COLUMNS,
     PAGE_SIZE_MAX,
     QUALITY_STATUSES,
     DashboardNotFound,
 )
 from web_backend.database import Database
-from web_backend.result_hierarchy import result_taxonomy
+from web_backend.result_hierarchy import feedback_group_key_sql, result_taxonomy
 
 
 def version_context(
@@ -104,10 +105,47 @@ def version_context(
         "filters": json_value(version["filters_json"], {}),
         "sources": sources,
         "source_ids": [str(source["result_version_id"]) for source in sources],
+        "counting_basis": (
+            FEEDBACK_GROUP_BASIS
+            if json_value(version["summary_json"], {}).get("counting_basis")
+            == FEEDBACK_GROUP_BASIS
+            else "source_record"
+        ),
         "analysis_context": aggregate_analysis_context(
             source.get("analysis_context") for source in sources
         ),
     }
+
+
+def feedback_group_scope(
+    connection: sqlite3.Connection,
+    where_sql: str,
+    params: list[Any],
+    *,
+    name: str,
+) -> tuple[str, list[Any]]:
+    """在当前查询筛选之后，每个反馈组只取一条代表明细。"""
+    if name not in {"main", "options", "cases"}:
+        raise ValueError("反馈组查询范围不合法")
+    table = f"dashboard_feedback_{name}"
+    connection.execute(f"CREATE TEMP TABLE IF NOT EXISTS {table}(id TEXT PRIMARY KEY)")
+    connection.execute(f"DELETE FROM {table}")
+    connection.execute(
+        f"""
+        INSERT INTO {table}(id)
+        SELECT id FROM (
+            SELECT r.id,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY {feedback_group_key_sql("r")}
+                       ORDER BY r.source_row ASC, r.id ASC
+                   ) AS group_rank
+            FROM classification_result_records r
+            WHERE {where_sql}
+        ) WHERE group_rank = 1
+        """,
+        tuple(params),
+    )
+    return f"r.id IN (SELECT id FROM {table})", []
 
 
 def version_row(

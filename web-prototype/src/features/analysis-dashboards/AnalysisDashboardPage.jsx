@@ -325,7 +325,8 @@ function DashboardRow({ dashboard, onOpen }) {
       <b>v{dashboard.current_version || dashboard.version || 1}</b>
       <span>{Number(summary.listing_count || 0).toLocaleString()} 个 Listing</span>
       <span>
-        {Number(summary.comment_count ?? summary.record_count ?? 0).toLocaleString()} 条
+        {Number(summary.comment_count ?? summary.record_count ?? 0).toLocaleString()}{" "}
+        {summary.counting_basis === "feedback_group" ? "个反馈组" : "条"}
       </span>
       <span>{formatTime(dashboard.updated_at || dashboard.created_at)}</span>
       <span>{dashboard.created_by_name || "未提供"}</span>

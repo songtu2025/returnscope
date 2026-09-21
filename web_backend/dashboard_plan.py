@@ -8,6 +8,7 @@ from typing import Any
 from web_backend.common import json_value
 from web_backend.dashboard_common import (
     COMMENT_SUMMARY_STATUSES,
+    FEEDBACK_GROUP_BASIS,
     PLAN_VERSION,
     classification_comment_status,
 )
@@ -17,6 +18,7 @@ from web_backend.dashboard_support import (
     record_where,
 )
 from web_backend.database import Database
+from web_backend.result_hierarchy import feedback_group_key_sql
 
 
 def build_plan(
@@ -205,6 +207,7 @@ def build_plan(
         eligible_ids,
         normalized_filters,
         eligible_sources,
+        feedback_groups=True,
     )
     hash_sources = [
         {
@@ -271,19 +274,21 @@ def summarize_sources(
     sources: list[dict[str, Any]],
     *,
     include_comment_metrics: bool = True,
+    feedback_groups: bool = False,
 ) -> dict[str, Any]:
+    identity = feedback_group_key_sql("r") if feedback_groups else "r.id"
     if source_ids:
         where_sql, params = record_where(database, source_ids, filters)
         row = connection.execute(
             f"""
-            SELECT COUNT(*) AS record_count,
+            SELECT COUNT(DISTINCT {identity}) AS record_count,
                    COUNT(DISTINCT r.result_version_id || ':' ||
                          r.classification_key) AS unit_count,
-                   SUM(CASE WHEN r.product_name IS NULL
+                   COUNT(DISTINCT CASE WHEN r.product_name IS NULL
                                  OR TRIM(r.product_name) = ''
-                            THEN 1 ELSE 0 END) AS product_name_missing_count,
-                   SUM(CASE WHEN r.product_match_status != 'matched'
-                            THEN 1 ELSE 0 END) AS product_unmatched_count
+                            THEN {identity} END) AS product_name_missing_count,
+                   COUNT(DISTINCT CASE WHEN r.product_match_status != 'matched'
+                            THEN {identity} END) AS product_unmatched_count
             FROM classification_result_records r
             WHERE {where_sql}
             """,
@@ -325,6 +330,8 @@ def summarize_sources(
             }
         ),
     }
+    if feedback_groups:
+        summary["counting_basis"] = FEEDBACK_GROUP_BASIS
     if source_ids:
         scope_filters = {
             key: value for key, value in filters.items() if key != "quality_status"
@@ -342,15 +349,16 @@ def summarize_sources(
                     params,
                     scope_where,
                     scope_params,
+                    feedback_groups=feedback_groups,
                 )
             )
         coverage = connection.execute(
             f"""
-            SELECT COUNT(*) AS total_record_count,
-                   SUM(CASE WHEN r.quality_status = 'excluded'
-                            THEN 1 ELSE 0 END) AS excluded_record_count,
-                   SUM(CASE WHEN r.quality_status NOT IN ('ready', 'excluded')
-                            THEN 1 ELSE 0 END) AS pending_review_record_count
+            SELECT COUNT(DISTINCT {identity}) AS total_record_count,
+                   COUNT(DISTINCT CASE WHEN r.quality_status = 'excluded'
+                            THEN {identity} END) AS excluded_record_count,
+                   COUNT(DISTINCT CASE WHEN r.quality_status NOT IN ('ready', 'excluded')
+                            THEN {identity} END) AS pending_review_record_count
             FROM classification_result_records r
             WHERE {scope_where}
             """,
@@ -386,10 +394,17 @@ def comment_summary_metrics(
     params: list[Any],
     total_where_sql: str,
     total_params: list[Any],
+    *,
+    feedback_groups: bool = False,
 ) -> dict[str, Any]:
+    count_sql = (
+        f"COUNT(DISTINCT {feedback_group_key_sql('r')})"
+        if feedback_groups
+        else "COUNT(r.id)"
+    )
     rows = connection.execute(
         f"""
-        SELECT u.classification_json, COUNT(r.id) AS comment_count
+        SELECT u.classification_json, {count_sql} AS comment_count
         FROM classification_result_records r
         JOIN classification_units u
           ON u.result_version_id = r.result_version_id
@@ -412,7 +427,7 @@ def comment_summary_metrics(
                    CASE WHEN pending_review = 1 THEN comment_count ELSE 0 END
                ), 0) AS pending_review_comment_count
         FROM (
-            SELECT COUNT(r.id) AS comment_count,
+            SELECT {count_sql} AS comment_count,
                    MAX(
                        CASE WHEN u.quality_status NOT IN ('ready', 'excluded')
                             THEN 1 ELSE 0 END

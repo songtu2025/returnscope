@@ -45,22 +45,44 @@ def enrich_record(
     return item
 
 
+def feedback_group_key_sql(alias: str) -> str:
+    """返回与分类结果列表相同的反馈组键。"""
+    return f"""
+        CASE
+          WHEN TRIM(COALESCE({alias}.order_id, '')) = ''
+            OR TRIM(COALESCE({alias}.classification_key, '')) = ''
+          THEN json_array('record', {alias}.id)
+          ELSE json_array(
+            'feedback', {alias}.result_version_id, {alias}.store_site,
+            {alias}.listing, {alias}.order_id, {alias}.source_sku,
+            {alias}.matched_msku, {alias}.product_sku,
+            {alias}.product_name, {alias}.classification_key,
+            {alias}.quality_status, {alias}.product_match_status
+          )
+        END
+    """
+
+
 def hierarchy_counts(
     connection: sqlite3.Connection,
     taxonomy: TaxonomyConfig,
     where_sql: str,
     params: list[Any],
+    *,
+    feedback_groups: bool = False,
 ) -> list[dict[str, Any]]:
-    """父级统计合并原始记录集合，不累加兄弟标签或整组权重。"""
+    """父级统计按指定粒度去重，不累加兄弟标签或整组权重。"""
     nodes: dict[str, CategoryDefinition | LabelDefinition] = {
         node.code: node for node in taxonomy.categories
     }
     nodes.update({node.code: node for node in taxonomy.labels})
     records: dict[str, set[str]] = {}
     units: dict[str, set[str]] = {}
+    identity_sql = feedback_group_key_sql("r") if feedback_groups else "r.id"
     rows = connection.execute(
         f"""
-        SELECT r.id, r.result_version_id, r.classification_key, l.label_code
+        SELECT {identity_sql} AS record_key,
+               r.result_version_id, r.classification_key, l.label_code
         FROM classification_result_records r
         JOIN classification_unit_labels l
           ON l.result_version_id = r.result_version_id
@@ -72,7 +94,7 @@ def hierarchy_counts(
     )
     for row in rows:
         for code in label_path_codes(taxonomy, row["label_code"]):
-            records.setdefault(code, set()).add(row["id"])
+            records.setdefault(code, set()).add(row["record_key"])
             units.setdefault(code, set()).add(
                 f"{row['result_version_id']}:{row['classification_key']}"
             )

@@ -184,7 +184,7 @@ def test_report_generation_is_versioned_and_evidence_backed(tmp_path) -> None:
     issue = completed["content"]["issues"][0]
     assert issue["id"] == "issue.reason.FIT_TOO_SMALL_U1"
     assert issue["rank"] == 1
-    assert issue["metrics"]["matched_return_samples"] == 3
+    assert issue["metrics"]["matched_return_samples"] == 2
     assert issue["metrics"]["return_sample_share"] == 100.0
     assert "退货样本内占比" in issue["known"][0]
     assert issue["evidence_explanation"].startswith("当前退货样本")

@@ -5,7 +5,8 @@ from typing import Any
 
 PAGE_SIZE_DEFAULT = 50
 PAGE_SIZE_MAX = 200
-PLAN_VERSION = "dashboard-dataset-plan-v1"
+PLAN_VERSION = "dashboard-dataset-plan-v2"
+FEEDBACK_GROUP_BASIS = "feedback_group"
 QUALITY_STATUSES = {"ready", "review_required", "unusable", "excluded"}
 COMMENT_SUMMARY_STATUSES = (
     "POSITIVE",

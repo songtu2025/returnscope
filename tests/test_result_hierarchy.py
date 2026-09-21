@@ -19,7 +19,7 @@ from web_backend.result_hierarchy import result_taxonomy
 from web_backend.review_service import ReviewService
 
 
-def test_result_tree_filters_count_records_and_exports_paths(
+def test_result_tree_filters_count_feedback_groups_and_exports_paths(
     tmp_path: Path, monkeypatch
 ) -> None:
     context = _seed_result_context(tmp_path)
@@ -53,7 +53,7 @@ def test_result_tree_filters_count_records_and_exports_paths(
     ] == ["尺码", "不合身"]
     counts = service.drilldown(version_id, "category", order_id="ORDER-DUP")
     root = next(item for item in counts["items"] if item["value"] == "ROOT")
-    assert root["record_count"] == 2
+    assert root["record_count"] == 1
     assert root["unit_count"] == 1
     assert root["label_path"] == ["尺码"]
     content, _ = service.download(version_id)
@@ -117,7 +117,7 @@ def test_result_paths_use_bound_snapshot_and_missing_binding_stays_unknown(
     assert path[0] == "历史根节点"
     dashboards = DashboardService(context.database)
     plan = dashboards.preflight([version_id], {"problem": "ROOT"})
-    assert plan["summary"]["record_count"] == 3
+    assert plan["summary"]["record_count"] == 2
     dashboard = dashboards.create(
         name="层级统计",
         description="测试数据",

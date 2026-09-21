@@ -6,6 +6,7 @@ from return_semantics.schemas import TaxonomyConfig
 from web_backend.common import json_value
 from web_backend.dashboard_common import GROUP_COLUMNS, PAGE_SIZE_DEFAULT
 from web_backend.dashboard_support import (
+    feedback_group_scope,
     normalize_filters,
     record_where,
     serialize_record,
@@ -100,6 +101,10 @@ def build_drilldown(
             context["filters"],
             runtime_filters,
         )
+        if context["counting_basis"] == "feedback_group":
+            where_sql, params = feedback_group_scope(
+                connection, where_sql, params, name="main"
+            )
         if group_by == "problem":
             join_sql = """
                 JOIN classification_unit_labels l

@@ -159,6 +159,35 @@ test("筛选更新时明确标记旧结果并在失败后保留结果", async ()
   expect(onRetry).toHaveBeenCalledOnce();
 });
 
+test("新看板显示反馈组单位，历史看板保留记录单位", () => {
+  const props = {
+    route: { listing: "", productName: "", productSku: "", dateFrom: "", dateTo: "" },
+    updateRoute: vi.fn(),
+    loading: false,
+    analysisContext: "user_feedback",
+    onRetry: vi.fn(),
+    onEvidence: vi.fn(),
+  };
+  const data = {
+    summary: { record_count: 2, pending_review_comment_count: 1 },
+    date_range: {},
+    filter_options: {},
+    category_groups: [],
+    reasons: [],
+  };
+  const view = render(
+    <ReturnReasonInsights
+      {...props}
+      data={{ ...data, counting_basis: "feedback_group" }}
+    />,
+  );
+  expect(screen.getByText("2 个反馈组")).toBeVisible();
+  expect(screen.getByText("1 个反馈组")).toBeVisible();
+  view.rerender(<ReturnReasonInsights {...props} data={data} />);
+  expect(screen.getByText("2 条")).toBeVisible();
+  expect(screen.getByText("1 条")).toBeVisible();
+});
+
 beforeEach(() => {
   sessionStorage.clear();
   window.location.hash = "#analysis-dashboards";

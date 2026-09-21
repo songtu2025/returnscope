@@ -131,7 +131,10 @@ export function ReportExecutiveSummary({
         <div>
           <Database size={18} />
           <span>已纳入</span>
-          <b>{number(summary.record_count).toLocaleString()} 条</b>
+          <b>
+            {number(summary.record_count).toLocaleString()}{" "}
+            {summary.counting_basis === "feedback_group" ? "个反馈组" : "条"}
+          </b>
         </div>
         <div>
           <ShieldCheck size={18} />
@@ -141,7 +144,10 @@ export function ReportExecutiveSummary({
         <div className={number(summary.pending_review_record_count) ? "warning" : ""}>
           <WarningCircle size={18} />
           <span>待审核</span>
-          <b>{number(summary.pending_review_record_count).toLocaleString()} 条</b>
+          <b>
+            {number(summary.pending_review_record_count).toLocaleString()}{" "}
+            {summary.counting_basis === "feedback_group" ? "个反馈组" : "条"}
+          </b>
         </div>
         <p>
           多标签问题占比不可直接相加；当前占比描述{terms.sampleStructure}，

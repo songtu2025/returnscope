@@ -11,6 +11,7 @@ from web_backend.dashboard_insight_overview import (
 from web_backend.dashboard_plan import comment_summary_metrics, summarize_sources
 from web_backend.dashboard_support import (
     clean_date,
+    feedback_group_scope,
     mixed_hierarchy,
     normalize_filters,
     percentage,
@@ -97,6 +98,7 @@ def build_insights(
             context["source_ids"],
             context["filters"],
             context["sources"],
+            feedback_groups=context["counting_basis"] == "feedback_group",
         )
         option_where, option_params = record_where(
             database,
@@ -139,8 +141,16 @@ def build_insights(
                 params,
                 comment_scope_where,
                 comment_scope_params,
+                feedback_groups=context["counting_basis"] == "feedback_group",
             )
         )
+        if context["counting_basis"] == "feedback_group":
+            option_where, option_params = feedback_group_scope(
+                connection, option_where, option_params, name="options"
+            )
+            where_sql, params = feedback_group_scope(
+                connection, where_sql, params, name="main"
+            )
         hierarchy_problems = (
             hierarchy_counts(connection, taxonomy, where_sql, params)
             if taxonomy and taxonomy.structure_version == 2
@@ -152,6 +162,7 @@ def build_insights(
             and not clean_date_from
             and not clean_date_to
             and not {key for key in context["filters"] if key != "quality_status"}
+            and context["counting_basis"] != "feedback_group"
         )
         scope = InsightQueryScope(
             connection=connection,
@@ -209,13 +220,18 @@ def build_insights(
         "dashboard_id": dashboard_id,
         "version_id": version_id,
         "analysis_context": context["analysis_context"],
+        "counting_basis": context["counting_basis"],
         "summary": summary,
         "group_alignment": "unified-v1"
         if mixed_versions and not (taxonomy and taxonomy.structure_version == 2)
         else "original",
         "hierarchy_problems": hierarchy_problems,
         "taxonomy": taxonomy.model_dump(mode="json") if taxonomy else None,
-        "counting_note": "按原始记录在每个分组内去重；多标签占比之和可能超过100%。",
+        "counting_note": (
+            "按反馈组在每个分组内去重；多标签占比之和可能超过100%。"
+            if context["counting_basis"] == "feedback_group"
+            else "按原始记录在每个分组内去重；多标签占比之和可能超过100%。"
+        ),
         "date_range": date_range,
         "filter_options": filter_options,
         "category_groups": [str(row["value"]) for row in group_rows],

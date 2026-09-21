@@ -17,7 +17,11 @@ from web_backend.classification_result_payload import (
 )
 from web_backend.common import json_value
 from web_backend.database import Database
-from web_backend.result_hierarchy import enrich_record, hierarchy_counts
+from web_backend.result_hierarchy import (
+    enrich_record,
+    feedback_group_key_sql,
+    hierarchy_counts,
+)
 
 
 class _ClassificationResultRecords:
@@ -81,19 +85,7 @@ class _ClassificationResultRecords:
         self.get(version_id)
         page, page_size = self._validate_page(page, page_size)
         where_sql, params = self._record_filters(version_id, filters)
-        group_key = """
-            CASE
-              WHEN TRIM(COALESCE(r.order_id, '')) = ''
-                OR TRIM(COALESCE(r.classification_key, '')) = ''
-              THEN json_array('record', r.id)
-              ELSE json_array(
-                'feedback', r.store_site, r.listing, r.order_id,
-                r.source_sku, r.matched_msku, r.product_sku,
-                r.product_name, r.classification_key,
-                r.quality_status, r.product_match_status
-              )
-            END
-        """
+        group_key = feedback_group_key_sql("r")
         grouped_sql = f"""
             WITH filtered AS (
                 SELECT r.*, {group_key} AS display_key
@@ -185,11 +177,18 @@ class _ClassificationResultRecords:
             )
         page, page_size = self._validate_page(page, page_size)
         where_sql, params = self._record_filters(version_id, filters)
+        group_key = feedback_group_key_sql("r")
         if group_by == "category":
             taxonomy = self.taxonomy(version_id)
             with self.database.connect() as connection:
                 items = (
-                    hierarchy_counts(connection, taxonomy, where_sql, params)
+                    hierarchy_counts(
+                        connection,
+                        taxonomy,
+                        where_sql,
+                        params,
+                        feedback_groups=True,
+                    )
                     if taxonomy
                     else []
                 )
@@ -233,7 +232,8 @@ class _ClassificationResultRecords:
             )
             rows = connection.execute(
                 f"""
-                SELECT {value_columns}, COUNT(r.id) AS record_count,
+                SELECT {value_columns},
+                       COUNT(DISTINCT {group_key}) AS record_count,
                        COUNT(DISTINCT r.classification_key) AS unit_count
                 {base_sql}
                 ORDER BY record_count DESC, value ASC

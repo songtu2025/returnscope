@@ -25,7 +25,7 @@
  * @typedef {(changes: Partial<DashboardRoute>, options?: {replace?: boolean}) => void} UpdateDashboardRoute
  * @typedef {(message: string, tone?: string) => void} DashboardNotify
  *
- * @typedef {Record<string, unknown> & {listing_count?: number, comment_count?: number, record_count?: number, unit_count?: number}} DashboardSummary
+ * @typedef {Record<string, unknown> & {counting_basis?: "feedback_group" | "source_record", listing_count?: number, comment_count?: number, record_count?: number, unit_count?: number}} DashboardSummary
  *
  * @typedef {Object} DashboardVersion
  * @property {string} [version_id]
@@ -210,10 +210,11 @@
  * @typedef {{items: DashboardRecord[], total: number}} InsightEvidence
  * @typedef {{listings?: string[], product_names?: string[], product_skus?: string[]}} InsightFilterOptions
  * @typedef {{date_from?: string, date_to?: string}} InsightDateRange
- * @typedef {Record<string, unknown> & {comment_count?: number, record_count?: number, total_comment_count?: number, total_record_count?: number, pending_review_comment_count?: number, pending_review_record_count?: number, comment_statuses?: Array<{status?: string, summary_status?: string, comment_count?: number, record_count?: number, count?: number}> | Record<string, number>, semantic_statuses?: Array<{status?: string, summary_status?: string, comment_count?: number, record_count?: number, count?: number}> | Record<string, number>}} InsightSummary
+ * @typedef {Record<string, unknown> & {counting_basis?: "feedback_group" | "source_record", source_count?: number, listing_count?: number, comment_count?: number, record_count?: number, total_comment_count?: number, total_record_count?: number, pending_review_comment_count?: number, pending_review_record_count?: number, excluded_record_count?: number, comment_statuses?: Array<{status?: string, summary_status?: string, comment_count?: number, record_count?: number, count?: number}> | Record<string, number>, semantic_statuses?: Array<{status?: string, summary_status?: string, comment_count?: number, record_count?: number, count?: number}> | Record<string, number>}} InsightSummary
  * @typedef {Object} DashboardInsights
  * @property {"returns" | "review" | "user_feedback"} [analysis_context]
  * @property {InsightSummary} [summary]
+ * @property {"feedback_group" | "source_record"} [counting_basis]
  * @property {InsightReason[]} [reasons]
  * @property {InsightHierarchyNode[]} [hierarchy_problems]
  * @property {import("../../shared/api/reviewBatchContracts").ReviewTaxonomy} [taxonomy]

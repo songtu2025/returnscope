@@ -441,9 +441,9 @@ def test_record_groups_do_not_merge_different_source_skus(tmp_path: Path) -> Non
     context.dataset.records.loc[1, "source_sku"] = "SOURCE-MSKU-2"
     version = _publish(context)
 
-    groups = ClassificationResultService(context.database).record_groups(
-        str(version["version_id"]), order_id="ORDER-DUP"
-    )
+    service = ClassificationResultService(context.database)
+    version_id = str(version["version_id"])
+    groups = service.record_groups(version_id, order_id="ORDER-DUP")
 
     assert groups["total"] == 2
     assert groups["source_total"] == 2
@@ -451,6 +451,33 @@ def test_record_groups_do_not_merge_different_source_skus(tmp_path: Path) -> Non
         "SOURCE-MSKU-1",
         "SOURCE-MSKU-2",
     }
+    problem = service.drilldown(version_id, "problem", order_id="ORDER-DUP")
+    assert problem["items"][0]["record_count"] == 2
+
+
+def test_result_drilldowns_count_feedback_groups_not_source_details(
+    tmp_path: Path,
+) -> None:
+    context = _seed_result_context(tmp_path)
+    version = _publish(context)
+    service = ClassificationResultService(context.database)
+    version_id = str(version["version_id"])
+
+    assert service.record_groups(version_id)["total"] == 2
+    for group_by, value in (
+        ("problem", "FIT_TOO_SMALL_U1"),
+        ("product_name", "产品表权威名称"),
+        ("product_sku", "PRODUCT-SKU-1"),
+    ):
+        item = next(
+            item
+            for item in service.drilldown(version_id, group_by)["items"]
+            if item["value"] == value
+        )
+        assert item["record_count"] == 2
+
+    filtered = service.drilldown(version_id, "problem", order_id="ORDER-DUP")
+    assert filtered["items"][0]["record_count"] == 1
 
 
 def test_published_records_preserve_optional_source_origin_id(tmp_path: Path) -> None:
@@ -1041,7 +1068,7 @@ def test_result_api_paginates_filters_drills_down_and_downloads(
     )
     assert by_problem.status_code == 200
     assert by_problem.json()["items"][0]["value"] == "FIT_TOO_SMALL_U1"
-    assert by_problem.json()["items"][0]["record_count"] == 3
+    assert by_problem.json()["items"][0]["record_count"] == 2
 
     by_product = client.get(
         f"/api/classification-results/{version_id}/drilldown",
@@ -1054,7 +1081,7 @@ def test_result_api_paginates_filters_drills_down_and_downloads(
     assert by_product.json()["items"] == [
         {
             "value": "产品表权威名称",
-            "record_count": 3,
+            "record_count": 2,
             "unit_count": 1,
         }
     ]

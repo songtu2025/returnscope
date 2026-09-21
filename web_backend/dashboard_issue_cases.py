@@ -5,7 +5,12 @@ import sqlite3
 from typing import Any
 
 from web_backend.dashboard_common import TEXT_ENCODING_ANOMALY
-from web_backend.dashboard_support import percentage, record_where, version_context
+from web_backend.dashboard_support import (
+    feedback_group_scope,
+    percentage,
+    record_where,
+    version_context,
+)
 from web_backend.database import Database
 
 
@@ -32,6 +37,10 @@ def list_issue_cases(
             context["source_ids"],
             context["filters"],
         )
+        if context["counting_basis"] == "feedback_group":
+            where_sql, params = feedback_group_scope(
+                connection, where_sql, params, name="cases"
+            )
         placeholders = ",".join("?" for _ in clean_codes)
         total_record_count = int(
             connection.execute(
