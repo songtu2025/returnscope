@@ -56,6 +56,9 @@ export function useClassificationStandardDraftController({
   );
   const [changeReason, setChangeReason] = useState("");
   const [pageLoading, setPageLoading] = useState(false);
+  const [pageError, setPageError] = useState(
+    /** @type {{id: string, message: string} | null} */ (null),
+  );
   const [fieldErrors, setFieldErrors] = useState(
     /** @type {Partial<ClassificationStandardFieldErrors>} */ ({}),
   );
@@ -91,6 +94,7 @@ export function useClassificationStandardDraftController({
     async (/** @type {string} */ standardId) => {
       const generation = ++loadGenerationRef.current;
       setPageLoading(true);
+      setPageError(null);
       try {
         const [standard, versionRows] = await Promise.all([
           classificationStandardApi.classificationStandard(standardId),
@@ -116,7 +120,10 @@ export function useClassificationStandardDraftController({
         if (draftValue) await loadValidation(draftValue.id);
         else clearValidation();
       } catch (error) {
-        if (generation === loadGenerationRef.current) throw error;
+        if (generation === loadGenerationRef.current) {
+          setPageError({ id: standardId, message: errorMessage(error) });
+          throw error;
+        }
       } finally {
         if (generation === loadGenerationRef.current) setPageLoading(false);
       }
@@ -128,6 +135,7 @@ export function useClassificationStandardDraftController({
     if (mode === "new") {
       loadGenerationRef.current += 1;
       setPageLoading(false);
+      setPageError(null);
       clearValidation();
       setDetail(null);
       setVersions([]);
@@ -142,6 +150,7 @@ export function useClassificationStandardDraftController({
     if (!selectedId) {
       loadGenerationRef.current += 1;
       setPageLoading(false);
+      setPageError(null);
       clearValidation();
       return undefined;
     }
@@ -364,6 +373,7 @@ export function useClassificationStandardDraftController({
     savedContent,
     changeReason,
     pageLoading,
+    pageError,
     dirty,
     fieldErrors,
     validationAttempt,

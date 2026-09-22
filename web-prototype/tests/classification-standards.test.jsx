@@ -919,6 +919,32 @@ test("分类标准首次读取统一使用公共加载态", () => {
   expect(screen.getByText("正在读取分类标准…").closest(".inline-loading")).toHaveClass(
     "ant-spin",
   );
+  expect(
+    screen.getByText("正在读取分类标准…").closest(".standard-page"),
+  ).toBeInTheDocument();
+});
+
+test("分类标准详情加载时保留返回入口，不先展示旧详情", async () => {
+  let resolveDetail;
+  standardApiMock.classificationStandard.mockReturnValue(
+    new Promise((resolve) => {
+      resolveDetail = resolve;
+    }),
+  );
+
+  renderEditPage();
+
+  await waitFor(() =>
+    expect(standardApiMock.classificationStandard).toHaveBeenCalledWith(standard.id),
+  );
+  expect(screen.getByText("正在读取分类标准…")).toBeVisible();
+  expect(screen.getByRole("button", { name: "返回" })).toBeVisible();
+  expect(
+    screen.queryByRole("heading", { name: standard.name }),
+  ).not.toBeInTheDocument();
+
+  await act(async () => resolveDetail(detail));
+  expect(await screen.findByRole("heading", { name: standard.name })).toBeVisible();
 });
 
 test("分类标准首页使用全宽列表并支持搜索", async () => {

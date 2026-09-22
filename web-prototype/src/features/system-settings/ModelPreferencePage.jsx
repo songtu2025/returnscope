@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { api } from "../../api";
-import { InlineLoading, PageHeading } from "../../components/SharedUi";
+import { PageHeading, PageLoadingState } from "../../components/SharedUi";
 
 /** @typedef {import("../../shared/api/systemSettingsContracts").ModelConnection} ModelConnection */
 /** @typedef {import("../../shared/api/systemSettingsContracts").CatalogModel} CatalogModel */
@@ -136,15 +136,26 @@ export function ModelPreferencePage({ notify }) {
     }
   };
 
-  if (loading) return <InlineLoading label="正在读取个人模型偏好…" />;
+  const heading = (
+    <PageHeading
+      eyebrow="个人默认设置"
+      title="我的模型偏好"
+      description="新建任务会默认带入此策略；你仍可在创建任务时针对本次执行调整。"
+    />
+  );
+
+  if (loading) {
+    return (
+      <div className="standard-page model-preference-page">
+        {heading}
+        <PageLoadingState label="正在读取个人模型偏好…" heading={false} />
+      </div>
+    );
+  }
 
   return (
     <div className="standard-page model-preference-page">
-      <PageHeading
-        eyebrow="个人默认设置"
-        title="我的模型偏好"
-        description="新建任务会默认带入此策略；你仍可在创建任务时针对本次执行调整。"
-      />
+      {heading}
       <section className="content-card model-preference-card">
         {!connections.length ? (
           <p className="model-preference-empty">

@@ -404,6 +404,39 @@
   background: rgb(247 250 248 / 76%);
 }
 
+.page-loading-state {
+  min-height: 310px;
+}
+
+.page-loading-heading {
+  display: grid;
+  align-content: center;
+  gap: 10px;
+  min-height: 88px;
+}
+
+.page-loading-title,
+.page-loading-subtitle {
+  display: block;
+  border-radius: 7px;
+  background: var(--green-pale);
+}
+
+.page-loading-title {
+  width: min(340px, 48%);
+  height: 28px;
+}
+
+.page-loading-subtitle {
+  width: min(460px, 65%);
+  height: 14px;
+}
+
+.page-loading-state > .inline-loading {
+  width: 100%;
+  min-height: 222px;
+}
+
 .form-error,
 .result-error-state,
 .dashboard-error,

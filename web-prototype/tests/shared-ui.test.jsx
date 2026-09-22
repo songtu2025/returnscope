@@ -4,7 +4,12 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test } from "vitest";
 
-import { EmptyState, InlineLoading, Modal } from "../src/components/SharedUi";
+import {
+  EmptyState,
+  InlineLoading,
+  Modal,
+  PageLoadingState,
+} from "../src/components/SharedUi";
 
 afterEach(() => cleanup());
 
@@ -81,4 +86,18 @@ test("公共行内加载态展示可访问的忙碌状态和文案", () => {
   expect(container.firstChild).toHaveAttribute("aria-live", "polite");
   expect(screen.getByText("正在读取复核批次…")).toBeVisible();
   expect(container.querySelector(".ant-spin-dot")).toBeInTheDocument();
+});
+
+test("页面加载态保留标题与内容占位，且继续复用行内加载组件", () => {
+  const { container, rerender } = render(<PageLoadingState label="正在读取详情…" />);
+
+  expect(container.firstChild).toHaveClass("page-loading-state");
+  expect(container.firstChild).toHaveAttribute("aria-busy", "true");
+  expect(container.querySelector(".page-loading-heading")).toBeInTheDocument();
+  expect(screen.getByText("正在读取详情…").closest(".inline-loading")).toHaveClass(
+    "ant-spin",
+  );
+
+  rerender(<PageLoadingState label="正在读取详情…" heading={false} />);
+  expect(container.querySelector(".page-loading-heading")).not.toBeInTheDocument();
 });

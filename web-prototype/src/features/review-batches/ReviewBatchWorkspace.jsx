@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
+import Button from "antd/es/button";
 import Checkbox from "antd/es/checkbox";
-import { ListChecks } from "@phosphor-icons/react";
+import { ArrowLeft, ListChecks } from "@phosphor-icons/react";
 
 import { navigateHash } from "../../app/hashRouter";
 import { Pagination } from "../../components/Pagination";
-import { EmptyState, InlineLoading } from "../../components/SharedUi";
+import { EmptyState, InlineLoading, PageLoadingState } from "../../components/SharedUi";
 import { reviewBatchApi } from "../../shared/api/reviewBatchApi";
 import {
   createDashboardSelection,
@@ -145,11 +146,23 @@ export function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
     setCheckedIds([]);
   }, [recordQuery]);
 
-  const batch = batchState.data;
-  const records = recordsState.data;
+  const batch = batchState.data?.id === route.batchId ? batchState.data : null;
+  const records = recordsState.batchId === route.batchId ? recordsState.data : null;
   const recordItems = records?.items ?? [];
   const pending = pendingCount(batch);
   const readOnly = batch?.status === "published";
+
+  const returnToList = () =>
+    updateRoute({
+      batchId: "",
+      status: "",
+      page: 1,
+      listing: "",
+      productName: "",
+      productSku: "",
+      orderId: "",
+      q: "",
+    });
 
   const openDerivedVersion = () => {
     if (!batch?.derived_result_version_id) return;
@@ -215,7 +228,12 @@ export function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
       reviewBatchApi.reviewBatchRecords(route.batchId, recordQuery),
     ]);
     setBatchState({ loading: false, error: null, data: latestBatch });
-    setRecordsState({ loading: false, error: null, data: latestPage });
+    setRecordsState({
+      loading: false,
+      error: null,
+      data: latestPage,
+      batchId: route.batchId,
+    });
     const serverRecord = latestPage.items?.find((item) => itemId(item) === selectedId);
     setConflict({ message: error.message, serverRecord });
   };
@@ -355,10 +373,18 @@ export function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
     }
   };
 
-  if (batchState.loading && !batch) {
+  if (!batch && (batchState.loading || batchState.data)) {
     return (
       <div className="standard-page review-batch-page review-batch-stable-state">
-        <InlineLoading label="正在读取复核批次…" />
+        <Button
+          className="review-batch-back"
+          type="text"
+          icon={<ArrowLeft size={17} />}
+          onClick={returnToList}
+        >
+          返回复核批次列表
+        </Button>
+        <PageLoadingState label="正在读取复核批次…" />
       </div>
     );
   }
@@ -366,6 +392,14 @@ export function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
   if (batchState.error && !batch) {
     return (
       <div className="standard-page review-batch-page review-batch-stable-state">
+        <Button
+          className="review-batch-back"
+          type="text"
+          icon={<ArrowLeft size={17} />}
+          onClick={returnToList}
+        >
+          返回复核批次列表
+        </Button>
         <ReviewBatchError error={batchState.error} onRetry={loadBatch} />
       </div>
     );
@@ -379,18 +413,7 @@ export function ReviewBatchWorkspace({ route, updateRoute, notify, userId }) {
         batch={batch}
         pending={pending}
         readOnly={readOnly}
-        onBack={() =>
-          updateRoute({
-            batchId: "",
-            status: "",
-            page: 1,
-            listing: "",
-            productName: "",
-            productSku: "",
-            orderId: "",
-            q: "",
-          })
-        }
+        onBack={returnToList}
         onOpenSource={() =>
           navigateHash(
             "classification-results",

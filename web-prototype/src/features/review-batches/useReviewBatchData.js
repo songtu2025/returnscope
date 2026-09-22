@@ -26,10 +26,11 @@ export function useReviewBatchData({ route, notify }) {
     }),
   );
   const [recordsState, setRecordsState] = useState(
-    /** @type {{loading: boolean, error: ReviewRequestError | null, data: ReviewRecordPage | null}} */ ({
+    /** @type {{loading: boolean, error: ReviewRequestError | null, data: ReviewRecordPage | null, batchId: string | null}} */ ({
       loading: true,
       error: null,
       data: null,
+      batchId: null,
     }),
   );
   const [labels, setLabels] = useState(/** @type {ReviewLabel[]} */ ([]));
@@ -97,13 +98,18 @@ export function useReviewBatchData({ route, notify }) {
         signal: controller.signal,
       });
       if (recordGeneration.current === generation) {
-        setRecordsState({ loading: false, error: null, data });
+        setRecordsState({ loading: false, error: null, data, batchId: route.batchId });
       }
       return data;
     } catch (error) {
       const failure = requestError(error);
       if (recordGeneration.current === generation && failure.name !== "AbortError") {
-        setRecordsState({ loading: false, error: failure, data: null });
+        setRecordsState({
+          loading: false,
+          error: failure,
+          data: null,
+          batchId: route.batchId,
+        });
       }
       throw failure;
     }

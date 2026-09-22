@@ -138,6 +138,37 @@ beforeEach(() => {
 
 afterEach(() => cleanup());
 
+test("复核批次详情等待时保留返回入口与页面占位", async () => {
+  let resolveBatch;
+  reviewBatchApiMock.reviewBatch.mockReturnValue(
+    new Promise((resolve) => {
+      resolveBatch = resolve;
+    }),
+  );
+  reviewBatchApiMock.reviewBatchRecords.mockResolvedValue({
+    items: [],
+    total: 0,
+    page: 1,
+    page_size: 20,
+  });
+
+  render(
+    <ReviewBatchPage
+      route={{ query: { review_batch_id: baseBatch.id } }}
+      notify={vi.fn()}
+    />,
+  );
+
+  expect(await screen.findByText("正在读取复核批次…")).toBeVisible();
+  expect(screen.getByRole("button", { name: "返回复核批次列表" })).toBeVisible();
+  expect(
+    screen.getByText("正在读取复核批次…").closest(".standard-page"),
+  ).toBeInTheDocument();
+
+  await act(async () => resolveBatch(baseBatch));
+  expect(screen.queryByText("正在读取复核批次…")).not.toBeInTheDocument();
+});
+
 test("批次列表从 URL 恢复服务端筛选并进入批次", async () => {
   reviewBatchApiMock.reviewBatches.mockResolvedValue({
     items: [baseBatch],

@@ -172,3 +172,18 @@ export function InlineLoading({ label }) {
     </AntdProvider>
   );
 }
+
+/** @param {{label: import("react").ReactNode, heading?: boolean}} props */
+export function PageLoadingState({ label, heading = true }) {
+  return (
+    <section className="page-loading-state" aria-busy="true">
+      {heading && (
+        <header className="page-loading-heading" aria-hidden="true">
+          <span className="page-loading-title" />
+          <span className="page-loading-subtitle" />
+        </header>
+      )}
+      <InlineLoading label={label} />
+    </section>
+  );
+}

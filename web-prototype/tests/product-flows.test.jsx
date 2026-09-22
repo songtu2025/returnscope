@@ -3432,6 +3432,18 @@ describe("关键用户流程", () => {
     );
   });
 
+  test("我的模型偏好读取时保留页面标题和固定占位", () => {
+    apiMock.configs.mockReturnValue(new Promise(() => {}));
+    apiMock.modelPreference.mockReturnValue(new Promise(() => {}));
+
+    render(<ModelPreferencePage notify={vi.fn()} />);
+
+    expect(screen.getByRole("heading", { name: "我的模型偏好" })).toBeVisible();
+    expect(
+      screen.getByText("正在读取个人模型偏好…").closest(".page-loading-state"),
+    ).toBeInTheDocument();
+  });
+
   test("系统设置标签在当前交互内切换且不保留旧页面内容", () => {
     window.location.hash = "#settings?tab=service";
     render(<SystemSettingsRouteHarness />);
@@ -3914,6 +3926,47 @@ describe("关键用户流程", () => {
     expect(await screen.findByRole("table", { name: "任务管理表" })).toBeVisible();
     expect(container.querySelector(".task-detail-panel")).not.toBeInTheDocument();
     expect(apiMock.task).toHaveBeenCalledTimes(1);
+  });
+
+  test("任务详情等待时保留页面占位和返回列表入口", async () => {
+    let resolveTask;
+    apiMock.tasks.mockResolvedValue([]);
+    apiMock.task.mockReturnValue(
+      new Promise((resolve) => {
+        resolveTask = resolve;
+      }),
+    );
+
+    render(
+      <TaskMonitor
+        notify={vi.fn()}
+        onNavigate={vi.fn()}
+        onChanged={vi.fn()}
+        focusId="task-delayed"
+      />,
+    );
+
+    await waitFor(() =>
+      expect(apiMock.task).toHaveBeenCalledWith(
+        "task-delayed",
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      ),
+    );
+    expect(screen.getByRole("button", { name: "全部任务" })).toBeVisible();
+    expect(
+      screen.getByText("正在读取任务…").closest(".page-loading-state"),
+    ).toBeInTheDocument();
+
+    await act(async () =>
+      resolveTask({
+        id: "task-delayed",
+        title: "延迟返回任务",
+        status: "completed",
+        segments: [],
+        events: [],
+      }),
+    );
+    expect(await screen.findByText("延迟返回任务")).toBeVisible();
   });
 
   test("只看需处理独立于执行状态，主动暂停不算异常", async () => {

@@ -12,7 +12,7 @@ import {
 
 import { api } from "../../api";
 import { navigateHash } from "../../app/hashRouter";
-import { EmptyState, InlineLoading } from "../../components/SharedUi";
+import { EmptyState, InlineLoading, PageLoadingState } from "../../components/SharedUi";
 import { formatTime } from "../../lib/presentation";
 import {
   createDashboardSelection,
@@ -85,7 +85,13 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
   if (loading && !result) {
     return (
       <div className="standard-page classification-results-page">
-        <InlineLoading label="正在读取分类结果详情…" />
+        <button
+          className="text-button result-back-button"
+          onClick={() => updateRoute({ version: "" })}
+        >
+          <ArrowLeft size={17} /> 返回分类结果池
+        </button>
+        <PageLoadingState label="正在读取分类结果详情…" />
       </div>
     );
   }

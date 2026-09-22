@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { ArrowLeft, Plus, Pulse } from "@phosphor-icons/react";
 import { api } from "../../api";
-import { EmptyState, InlineLoading, PageHeading } from "../../components/SharedUi";
+import { EmptyState, PageHeading, PageLoadingState } from "../../components/SharedUi";
 import { serverStateKeys } from "../../shared/serverState";
 import { TaskDetail } from "./TaskDetail";
 import { TaskRegistry } from "./TaskRegistry";
@@ -247,6 +247,7 @@ export function TaskMonitor({
   }, [selectedId, loadTasks]);
 
   const showTaskDetail = Boolean(selectedId);
+  const visibleSelected = selected?.id === selectedId ? selected : null;
   const returnToList = () => {
     setSelectedId(null);
     if (onTaskFocus) onTaskFocus(null);
@@ -308,8 +309,10 @@ export function TaskMonitor({
           <button className="task-back-button" onClick={returnToList}>
             <ArrowLeft size={17} /> 全部任务
           </button>
-          {!selected && !detailError && <InlineLoading label="正在读取任务…" />}
-          {!selected && detailError && (
+          {!visibleSelected && !detailError && (
+            <PageLoadingState label="正在读取任务…" />
+          )}
+          {!visibleSelected && detailError && (
             <EmptyState
               icon={Pulse}
               title="任务读取失败"
@@ -329,7 +332,7 @@ export function TaskMonitor({
               }
             />
           )}
-          {selected && (
+          {selected && selected.id === selectedId && (
             <TaskDetail
               key={selected.id}
               task={selected}

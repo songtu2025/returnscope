@@ -15,7 +15,7 @@ import { ApiError, api } from "./api";
 import { AppShell } from "./app/AppShell";
 import { navigateHash, useHashRoute } from "./app/hashRouter";
 import { PRIMARY_NAV_ITEMS, SETTINGS_NAV_ITEM } from "./app/navigation";
-import { InlineLoading } from "./components/SharedUi";
+import { InlineLoading, PageLoadingState } from "./components/SharedUi";
 import { Toast } from "./components/Toast";
 import { STATUS_LABELS } from "./constants";
 import { useDialogFocus } from "./hooks/useDialogFocus";
@@ -252,7 +252,13 @@ function App() {
           </>
         }
       >
-        <Suspense fallback={<InlineLoading label="正在加载页面…" />}>
+        <Suspense
+          fallback={
+            <div className="standard-page">
+              <PageLoadingState label="正在加载页面…" />
+            </div>
+          }
+        >
           {page === "workbench" && <WorkbenchPage onNavigate={navigate} />}
           {page === "task-create" && (
             <TaskCreatePage
@@ -349,7 +355,13 @@ function App() {
             </Suspense>
           )}
           {page === "classification-results" && (
-            <Suspense fallback={<InlineLoading label="正在加载分类结果池…" />}>
+            <Suspense
+              fallback={
+                <div className="standard-page classification-results-page">
+                  <PageLoadingState label="正在加载分类结果池…" />
+                </div>
+              }
+            >
               <ClassificationResultsPage
                 notify={notify}
                 route={route}

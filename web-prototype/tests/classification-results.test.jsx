@@ -222,6 +222,36 @@ test("分类结果工作区整合结果版本、待复核和复核记录", async
   expect(window.location.hash).toBe("#classification-results?view=reviews");
 });
 
+test("分类结果详情加载时在原页面保留返回入口与稳定占位", async () => {
+  let resolveSummary;
+  apiMock.classificationResultSummary.mockReturnValue(
+    new Promise((resolve) => {
+      resolveSummary = resolve;
+    }),
+  );
+  window.location.hash =
+    "classification-results?result_version_id=classification-version-1";
+
+  render(<ClassificationResultsPage notify={vi.fn()} />);
+
+  expect(await screen.findByText("正在读取分类结果详情…")).toBeVisible();
+  expect(screen.getByRole("button", { name: "返回分类结果池" })).toBeVisible();
+  expect(
+    screen.getByText("正在读取分类结果详情…").closest(".standard-page"),
+  ).toBeInTheDocument();
+
+  await act(async () =>
+    resolveSummary({
+      version_id: resultVersion.version_id,
+      quality: [],
+      processing_statuses: [],
+      top_problems: [],
+    }),
+  );
+  expect(await screen.findByRole("button", { name: "返回分类结果池" })).toBeVisible();
+  expect(screen.queryByText("正在读取分类结果详情…")).not.toBeInTheDocument();
+});
+
 test("分类结果摘要完整展示记录去向并可对账", async () => {
   apiMock.classificationResult.mockResolvedValue({
     ...resultVersion,
