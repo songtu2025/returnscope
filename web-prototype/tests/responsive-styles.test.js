@@ -122,6 +122,15 @@ test("关键筛选条、表格行和空状态复用共享尺寸", () => {
   );
 });
 
+test("看板原因路径完整换行，标签层级数量靠右", () => {
+  expect(styles).toMatch(
+    /\.return-insight-explorer \.return-hierarchy-ranking li button\s*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto;/s,
+  );
+  expect(styles).toMatch(
+    /\.return-insight-explorer \.return-reason-ranking li b\s*{[^}]*text-overflow:\s*clip;[^}]*white-space:\s*normal;[^}]*overflow-wrap:\s*anywhere;/s,
+  );
+});
+
 test("商品信息搜索框由外层控件统一管理高度和焦点", () => {
   expect(styles).toMatch(
     /\.product-master-page[\s\S]*?\.dimension-search[\s\S]*?> \.ant-input-affix-wrapper[\s\S]*?> input\.ant-input\.ant-input\s*{[^}]*height:\s*auto;[^}]*min-height:\s*0;[^}]*padding:\s*0;[^}]*border:\s*0;[^}]*background:\s*transparent;/,

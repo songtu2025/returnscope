@@ -896,10 +896,17 @@
 
 .return-insight-explorer .return-reason-ranking li b {
   font-size: 11px;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .return-insight-explorer .return-reason-ranking li strong {
   font-size: 10px;
+}
+
+.return-insight-explorer .return-hierarchy-ranking li button {
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .return-insight-diagnostic {

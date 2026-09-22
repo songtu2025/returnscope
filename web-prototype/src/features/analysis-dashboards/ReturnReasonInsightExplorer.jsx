@@ -162,7 +162,10 @@ export function ReturnReasonInsightExplorer({
         )}
       </section>
       {hierarchy.length > 0 && (
-        <section className="return-reason-ranking" aria-label="标签层级统计">
+        <section
+          className="return-reason-ranking return-hierarchy-ranking"
+          aria-label="标签层级统计"
+        >
           <header>
             <div>
               <h3>标签层级</h3>

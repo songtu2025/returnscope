@@ -86,6 +86,7 @@ test("看板展示全部父级去重计数，只有末端进入原因诊断", as
       route={{}}
       updateRoute={updateRoute}
       data={{
+        reasons: [{ value: "COLD", label: "不保暖", record_count: 1, percentage: 100 }],
         hierarchy_problems: [...hierarchy, leaf],
         taxonomy: {
           structure_version: 2,
@@ -94,7 +95,14 @@ test("看板展示全部父级去重计数，只有末端进入原因诊断", as
       }}
     />,
   );
+  const reasons = screen.getByText("具体反馈原因").closest("section");
+  expect(
+    within(reasons).getByRole("button", {
+      name: /功能 → 保暖性 → 不保暖.*1 · 100\.0%/,
+    }),
+  ).toBeVisible();
   const section = screen.getByRole("region", { name: "标签层级统计" });
+  expect(section).toHaveClass("return-hierarchy-ranking");
   expect(within(section).getAllByRole("button")).toHaveLength(15);
   expect(
     within(section).getByRole("button", { name: "功能 → 分类13 1 条" }),
