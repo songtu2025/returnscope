@@ -10,6 +10,7 @@ import {
 import { AiInsightReport } from "./AiInsightReport";
 import { ReturnReasonInsights } from "./ReturnReasonInsights";
 import { asItems, dashboardVersionId } from "./DashboardDetailHelpers";
+import { DashboardDetailLoadingBody } from "./DashboardDetailStateViews";
 
 /** @typedef {import("./analysisDashboardContracts").Dashboard} Dashboard */
 /** @typedef {import("./analysisDashboardContracts").DashboardContentState} DashboardContentState */
@@ -77,7 +78,9 @@ export function DashboardDetailContent({
 }) {
   return (
     <>
-      {content.loading && !content.data && <InlineLoading label="正在读取看板数据…" />}
+      {(route.tab === "overview" || route.tab === "source") &&
+        content.loading &&
+        !content.data && <DashboardDetailLoadingBody />}
       {content.error && !content.data && (
         <section className="dashboard-error" role="alert">
           <b>看板数据读取失败</b>

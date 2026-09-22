@@ -37,6 +37,7 @@ vi.mock("../src/api", () => ({ api: resultApiMock }));
 import { useHashRoute } from "../src/app/hashRouter";
 import { AiInsightReport } from "../src/features/analysis-dashboards/AiInsightReport";
 import { AnalysisDashboardPage } from "../src/features/analysis-dashboards/AnalysisDashboardPage";
+import { DashboardDetailLoading } from "../src/features/analysis-dashboards/DashboardDetailStateViews";
 import { ReturnReasonInsights } from "../src/features/analysis-dashboards/ReturnReasonInsights";
 import { analysisContextTerms } from "../src/features/analysis-dashboards/analysisContextPresentation";
 import {
@@ -278,6 +279,85 @@ test("空态只保留一个选择分类结果入口", async () => {
     expect(within(filters).getByText(label, { selector: "span" })).toBeVisible();
   }
   expect(screen.getAllByRole("button", { name: "选择分类结果" })).toHaveLength(1);
+});
+
+test("详情组件与数据加载共用固定的页头和正文占位", async () => {
+  const loadingView = render(<DashboardDetailLoading />);
+  expect(
+    loadingView.container.querySelector(".return-insight-page-header"),
+  ).toBeTruthy();
+  expect(
+    loadingView.container.querySelector(".dashboard-detail-loading-body"),
+  ).toBeTruthy();
+  loadingView.unmount();
+
+  /** @type {(value: unknown) => void} */
+  let resolveDashboard;
+  /** @type {(value: unknown) => void} */
+  let resolveInsights;
+  dashboardApiMock.analysisDashboard.mockImplementation(
+    () => new Promise((resolve) => (resolveDashboard = resolve)),
+  );
+  dashboardApiMock.analysisDashboardInsights.mockImplementation(
+    () => new Promise((resolve) => (resolveInsights = resolve)),
+  );
+  window.location.hash =
+    "#analysis-dashboards?dashboard=dashboard-default&version=dashboard-version-default";
+  const view = render(<DashboardHarness />);
+
+  expect(await screen.findByText("正在打开分析看板…")).toBeVisible();
+  expect(view.container.querySelector(".dashboard-detail-loading-title")).toBeTruthy();
+  await waitFor(() => {
+    expect(dashboardApiMock.analysisDashboard).toHaveBeenCalledTimes(1);
+    expect(dashboardApiMock.analysisDashboardInsights).toHaveBeenCalledTimes(1);
+  });
+
+  await act(async () => {
+    resolveDashboard({
+      id: "dashboard-default",
+      name: "默认看板",
+      status: "active",
+      current_version_id: "dashboard-version-default",
+    });
+  });
+  expect(
+    await screen.findByRole("heading", { name: "用户反馈语义洞察" }),
+  ).toBeVisible();
+  expect(screen.getByText("正在打开分析看板…")).toBeVisible();
+  expect(
+    view.container.querySelectorAll(".dashboard-detail-loading-body"),
+  ).toHaveLength(1);
+
+  await act(async () => {
+    resolveInsights({
+      summary: { record_count: 0 },
+      date_range: {},
+      filter_options: {},
+      category_groups: [],
+      reasons: [],
+      products: [],
+      co_reasons: [],
+      evidence: { items: [], total: 0 },
+    });
+  });
+  expect(screen.queryByText("正在打开分析看板…")).not.toBeInTheDocument();
+  expect(screen.getByText("有效反馈")).toBeVisible();
+});
+
+test("详情正文读取失败时保留页头和重试入口", async () => {
+  dashboardApiMock.analysisDashboardInsights.mockRejectedValue(
+    new Error("模拟读取失败"),
+  );
+  window.location.hash =
+    "#analysis-dashboards?dashboard=dashboard-default&version=dashboard-version-default";
+  render(<DashboardHarness />);
+
+  expect(
+    await screen.findByRole("heading", { name: "用户反馈语义洞察" }),
+  ).toBeVisible();
+  expect(await screen.findByRole("alert")).toHaveTextContent("模拟读取失败");
+  expect(screen.getByRole("button", { name: "重新加载" })).toBeVisible();
+  expect(screen.queryByText("正在打开分析看板…")).not.toBeInTheDocument();
 });
 
 test("搜索条件只在点击筛选后提交并重置到第一页", async () => {

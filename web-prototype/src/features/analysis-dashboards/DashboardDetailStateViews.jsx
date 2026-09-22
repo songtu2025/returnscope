@@ -4,8 +4,20 @@ import { InlineLoading } from "../../components/SharedUi";
 
 export function DashboardDetailLoading() {
   return (
-    <div className="standard-page analysis-dashboard-page">
-      <InlineLoading label="正在读取分析看板…" />
+    <div className="standard-page analysis-dashboard-page dashboard-detail-page return-insight-page">
+      <header className="return-insight-page-header" aria-hidden="true">
+        <span className="dashboard-detail-loading-title" />
+        <span className="dashboard-detail-loading-actions" />
+      </header>
+      <DashboardDetailLoadingBody />
+    </div>
+  );
+}
+
+export function DashboardDetailLoadingBody() {
+  return (
+    <div className="dashboard-detail-loading-body">
+      <InlineLoading label="正在打开分析看板…" />
     </div>
   );
 }

@@ -1,16 +1,4 @@
 /* 退货原因洞察：方案 2 的紧凑桌面分析视图。 */
-.return-insight-page {
-  padding: 18px var(--desktop-page-padding) 30px;
-}
-
-.return-insight-page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 46px;
-  margin-bottom: 10px;
-}
-
 .return-insight-page-header > div {
   display: flex;
   align-items: center;

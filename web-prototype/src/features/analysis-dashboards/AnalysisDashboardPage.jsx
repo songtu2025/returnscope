@@ -27,6 +27,7 @@ import { PAGE_SIZES } from "../../shared/pagination";
 import { dashboardApi } from "../../shared/api/dashboardApi";
 import { serverStateKeys } from "../../shared/serverState";
 import { DashboardCreateFlow } from "./DashboardCreateFlow";
+import { DashboardDetailLoading } from "./DashboardDetailStateViews";
 import { createDashboardSelection } from "./dashboardSelectionStorage";
 
 /** @typedef {import("../../app/navigation").AppRoute} AppRoute */
@@ -124,7 +125,7 @@ export function AnalysisDashboardPage({ route: appRoute, notify, userId }) {
   if (route.dashboardId) {
     return (
       <AntdProvider>
-        <Suspense fallback={<InlineLoading label="正在加载分析看板…" />}>
+        <Suspense fallback={<DashboardDetailLoading />}>
           <DashboardDetail
             route={route}
             updateRoute={updateRoute}
