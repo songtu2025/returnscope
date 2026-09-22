@@ -2334,7 +2334,6 @@ label small {
 .login-story {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   padding: 45px 56px;
   color: #fff;
   background:
@@ -2353,33 +2352,15 @@ label small {
   width: 34px;
   height: 34px;
 }
+.login-story-content {
+  margin: auto 0;
+}
 .login-story h1 {
   max-width: 620px;
-  margin: 12px 0 17px;
+  margin: 12px 0 0;
   font-size: clamp(35px, 4vw, 58px);
   line-height: 1.14;
   letter-spacing: -0.055em;
-}
-.login-lead {
-  max-width: 530px;
-  color: #b5c9c1;
-  font-size: 13px;
-  line-height: 1.75;
-}
-.login-proof {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 22px;
-  color: #a9c3b9;
-  font-size: 13px;
-}
-.login-proof span {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.login-proof svg {
-  color: #61d0a9;
 }
 .login-panel {
   display: grid;

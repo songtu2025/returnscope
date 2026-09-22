@@ -298,9 +298,16 @@ describe("关键用户流程", () => {
 
     render(<App />);
 
+    expect(await screen.findByRole("heading", { name: "登录" })).toBeVisible();
+    expect(screen.queryByText("仅限受邀成员")).not.toBeInTheDocument();
+    expect(document.querySelector(".login-card .login-icon")).not.toBeInTheDocument();
+    expect(screen.getByText("用户语义分析智能体")).toBeVisible();
+    expect(screen.queryByText("后台持续运行")).not.toBeInTheDocument();
+    expect(screen.queryByText("配置与数据快照")).not.toBeInTheDocument();
+    expect(screen.queryByText("全流程修改留痕")).not.toBeInTheDocument();
     expect(
-      await screen.findByRole("heading", { name: "登录并继续分析" }),
-    ).toBeVisible();
+      screen.queryByText(/数据版本、模型运行、人工复核与结果交付集中在一个工作台/),
+    ).not.toBeInTheDocument();
     await user.type(screen.getByLabelText("邮箱"), "admin@example.com");
     await user.type(screen.getByLabelText("密码"), "secure-password");
     await user.click(screen.getByRole("button", { name: /进入工作台/ }));
@@ -395,9 +402,7 @@ describe("关键用户流程", () => {
 
     act(() => window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT)));
 
-    expect(
-      await screen.findByRole("heading", { name: "登录并继续分析" }),
-    ).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "登录" })).toBeVisible();
     expect(
       screen.queryByRole("navigation", { name: "主导航" }),
     ).not.toBeInTheDocument();

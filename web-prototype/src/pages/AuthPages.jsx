@@ -3,10 +3,8 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle,
-  Clock,
   EnvelopeSimple,
   Key,
-  LockKey,
   ShieldCheck,
   WarningCircle,
 } from "@phosphor-icons/react";
@@ -41,27 +39,13 @@ function AuthShell({ children }) {
           <img src="/assets/brand-mark.png" alt="" />
           <span>Seekway Intelligence</span>
         </div>
-        <div>
+        <div className="login-story-content">
           <p className="eyebrow light">用户语义分析智能体</p>
           <h1>
             让每一条用户反馈
             <br />
             都进入可追踪的决策流程
           </h1>
-          <p className="login-lead">
-            数据版本、模型运行、人工复核与结果交付集中在一个工作台，所有修改都有留痕。
-          </p>
-        </div>
-        <div className="login-proof">
-          <span>
-            <CheckCircle size={18} /> 后台持续运行
-          </span>
-          <span>
-            <ShieldCheck size={18} /> 配置与数据快照
-          </span>
-          <span>
-            <Clock size={18} /> 全流程修改留痕
-          </span>
         </div>
       </section>
       <section className="login-panel">{children}</section>
@@ -102,12 +86,7 @@ function LoginPage({ onLogin, notice = "" }) {
 
   return (
     <form className="login-card" onSubmit={submit}>
-      <div className="login-icon">
-        <LockKey size={24} />
-      </div>
-      <p className="eyebrow">团队工作台</p>
-      <h2>登录并继续分析</h2>
-      <p>使用团队管理员邀请你注册的账号。</p>
+      <h2>登录</h2>
       {notice && (
         <div className="auth-success" role="status">
           <CheckCircle size={17} />
