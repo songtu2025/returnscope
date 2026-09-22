@@ -182,7 +182,7 @@ export function TeamPage({
     }
   };
   return (
-    <div className="standard-page narrow-page team-page">
+    <div className="standard-page team-page">
       <PageHeading
         eyebrow="账号管理"
         title="用户与安全"

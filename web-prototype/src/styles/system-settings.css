@@ -1043,8 +1043,15 @@
   color: var(--green);
 }
 
-.model-preference-page {
+.model-preference-page > .page-heading,
+.model-preference-page > .model-preference-card {
   max-width: 980px;
+}
+.team-page > .page-heading,
+.team-page > .team-layout,
+.team-page > [role="alert"],
+.team-page > .inline-loading {
+  max-width: var(--layout-narrow-max);
 }
 .model-preference-card {
   display: grid;
