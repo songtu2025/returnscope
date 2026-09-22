@@ -1,7 +1,6 @@
 /* 退货原因洞察：方案 2 的紧凑桌面分析视图。 */
 .return-insight-page {
-  max-width: 1660px;
-  padding: 18px 20px 30px;
+  padding: 18px var(--desktop-page-padding) 30px;
 }
 
 .return-insight-page-header {

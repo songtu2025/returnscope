@@ -41,7 +41,17 @@ test("business pages use tiered desktop work widths", () => {
     /\.new-task-page\s*{[^}]*--page-max-width:\s*var\(--layout-workflow-max\);[^}]*max-width:\s*var\(--page-max-width\);/s,
   );
   expect(styles).toMatch(
-    /\.dashboard-create-page\s*{[^}]*--page-max-width:\s*var\(--layout-workflow-max\);/s,
+    /\.dashboard-create-page\s*{[^}]*--page-max-width:\s*var\(--layout-wide-max\);/s,
+  );
+  expect(styles).toMatch(
+    /\.dashboard-create-page > \.dashboard-conflict-page,[\s\S]*?\.dashboard-create-page > \.dashboard-confirm-page\s*{[^}]*max-width:\s*var\(--layout-workflow-max\);/s,
+  );
+  expect(styles).toMatch(
+    /\.return-insight-page\s*{[^}]*padding:\s*18px var\(--desktop-page-padding\) 30px;/s,
+  );
+  expect(styles).not.toMatch(/\.return-insight-page\s*{[^}]*max-width:/s);
+  expect(styles).toMatch(
+    /\.dashboard-list-filters\s*{[^}]*grid-template-columns:\s*minmax\(240px, 640px\) 180px max-content;/s,
   );
   expect(styles).toMatch(
     /\.narrow-page\s*{[^}]*--page-max-width:\s*var\(--layout-narrow-max\);/s,
