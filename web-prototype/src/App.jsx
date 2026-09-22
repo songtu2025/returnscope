@@ -100,7 +100,7 @@ function preloadPage(page) {
 /** @typedef {import("./app/navigation").NavigationFocus} NavigationFocus */
 /** @typedef {import("./app/navigation").NavigationItem} NavigationItem */
 /** @typedef {{id: string, email: string, display_name: string, is_admin?: boolean}} CurrentUser */
-/** @typedef {{warnings?: string[], worker_status?: string, worker_concurrency?: number, pending_review_batches?: number, pending_review_batch_count?: number, review_batch_pending_count?: number, my_running_segments?: number, my_running_tasks?: number}} SystemStatus */
+/** @typedef {{warnings?: string[], pending_review_batches?: number, pending_review_batch_count?: number, review_batch_pending_count?: number, my_running_segments?: number, my_running_tasks?: number}} SystemStatus */
 /** @typedef {{message: string, tone: string}} ToastState */
 /** @typedef {(message: string, tone?: string) => void} Notify */
 /** @typedef {(destination: string, focus?: NavigationFocus | null) => void} Navigate */
@@ -436,25 +436,6 @@ export function Sidebar({ page, system, onNavigate }) {
           onNavigate={onNavigate}
         />
       </nav>
-      <div className="sidebar-status">
-        <div>
-          <span
-            className={classNames(
-              "health-dot",
-              system?.worker_status === "unavailable" && "offline",
-            )}
-          />
-          <b>
-            {!system
-              ? "正在连接运行服务"
-              : system.worker_status === "ok"
-                ? "运行服务正常"
-                : "后台执行器异常"}
-          </b>
-        </div>
-        <p>后台 Listing 槽位 {system?.worker_concurrency ?? 15}</p>
-        <small>Desktop Web · v1.0</small>
-      </div>
     </aside>
   );
 }

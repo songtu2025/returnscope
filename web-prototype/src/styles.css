@@ -410,38 +410,6 @@ kbd {
   line-height: 20px;
   text-align: center;
 }
-.sidebar-status {
-  margin-top: 8px;
-  padding: 14px 12px 5px;
-  border-top: 1px solid rgba(255, 255, 255, 0.09);
-}
-.sidebar-status div {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.health-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #6ee0aa;
-  box-shadow: 0 0 0 5px rgba(110, 224, 170, 0.09);
-}
-.health-dot.offline {
-  background: #e45f55;
-  box-shadow: 0 0 0 5px rgba(228, 95, 85, 0.09);
-}
-.sidebar-status b {
-  font-size: 11px;
-}
-.sidebar-status p,
-.sidebar-status small {
-  display: block;
-  margin: 7px 0 0;
-  color: #81978e;
-  font-size: 10px;
-}
-
 .workspace {
   grid-column: 2;
   min-width: 0;

@@ -48,6 +48,19 @@ describe("应用壳层与路由", () => {
     ).toHaveLength(1);
   });
 
+  test("侧栏仅保留导航，不展示运行状态和固定版本号", () => {
+    const { container } = render(
+      <Sidebar
+        page="data-assets"
+        system={{ worker_status: "ok", worker_concurrency: 15 }}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector(".sidebar-status")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "系统设置" })).toBeInTheDocument();
+  });
+
   test("容量入口先刷新并进入无历史焦点的进行中任务列表", async () => {
     const calls = [];
     const onRefresh = vi.fn(async () => calls.push("refresh"));
