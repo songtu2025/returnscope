@@ -108,6 +108,19 @@ def test_active_registry_requires_initialized_database(tmp_path: Path) -> None:
         service.active_registry()
 
 
+def test_standard_list_and_detail_share_catalog_fields(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    standards = service.list()
+
+    assert len(standards) == 4
+    for standard in standards:
+        detail = service.get(str(standard["id"]))
+        assert detail["snapshot"]["standard_key"] == standard["standard_key"]
+        assert {key: value for key, value in detail.items() if key != "snapshot"} == (
+            standard
+        )
+
+
 def test_draft_roundtrip_preserves_new_label_claim_bindings(tmp_path: Path) -> None:
     from web_backend.api_schemas import ClassificationStandardDraftUpdateRequest
 

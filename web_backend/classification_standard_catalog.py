@@ -19,6 +19,35 @@ from web_backend.common import add_audit
 from web_backend.database import Database
 from web_backend.security import utc_now
 
+_STANDARD_CATALOG_SELECT_SQL = """
+SELECT s.*, v.version_no, v.version_key, v.logic_version,
+       v.taxonomy_version, v.model_policy_version,
+       v.snapshot_json, v.published_at,
+       draft.id AS draft_id, draft.revision AS draft_revision,
+       draft.updated_at AS draft_updated_at,
+       (SELECT COUNT(*) FROM task_segments segment
+        WHERE segment.standard_version_id IN (
+            SELECT version.id
+            FROM classification_standard_versions version
+            WHERE version.standard_id = s.id
+        )) AS task_segment_count,
+       (SELECT COUNT(*) FROM classification_results result
+        WHERE result.standard_version_id IN (
+            SELECT version.id
+            FROM classification_standard_versions version
+            WHERE version.standard_id = s.id
+        )) AS result_count,
+       (SELECT COUNT(*)
+        FROM classification_standard_versions version
+        WHERE version.standard_id = s.id
+          AND version.status = 'published') AS published_version_count
+FROM classification_standards s
+JOIN classification_standard_versions v
+  ON v.id = s.current_version_id
+LEFT JOIN classification_standard_drafts draft
+  ON draft.standard_id = s.id
+"""
+
 
 class ClassificationStandardCatalogMixin:
     database: Database
@@ -92,35 +121,7 @@ class ClassificationStandardCatalogMixin:
     def get(self, standard_id: str) -> dict[str, Any]:
         with self.database.connect() as connection:
             row = connection.execute(
-                """
-                SELECT s.*, v.version_no, v.version_key, v.logic_version,
-                       v.taxonomy_version, v.model_policy_version,
-                       v.snapshot_json, v.published_at,
-                       draft.id AS draft_id, draft.revision AS draft_revision,
-                       draft.updated_at AS draft_updated_at,
-                       (SELECT COUNT(*) FROM task_segments segment
-                        WHERE segment.standard_version_id IN (
-                            SELECT version.id
-                            FROM classification_standard_versions version
-                            WHERE version.standard_id = s.id
-                        )) AS task_segment_count,
-                       (SELECT COUNT(*) FROM classification_results result
-                        WHERE result.standard_version_id IN (
-                            SELECT version.id
-                            FROM classification_standard_versions version
-                            WHERE version.standard_id = s.id
-                        )) AS result_count,
-                       (SELECT COUNT(*)
-                        FROM classification_standard_versions version
-                        WHERE version.standard_id = s.id
-                          AND version.status = 'published') AS published_version_count
-                FROM classification_standards s
-                JOIN classification_standard_versions v
-                  ON v.id = s.current_version_id
-                LEFT JOIN classification_standard_drafts draft
-                  ON draft.standard_id = s.id
-                WHERE s.id = ?
-                """,
+                f"{_STANDARD_CATALOG_SELECT_SQL} WHERE s.id = ?",
                 (standard_id,),
             ).fetchone()
         if row is None:
@@ -411,34 +412,7 @@ class ClassificationStandardCatalogMixin:
     def list(self) -> list[dict[str, Any]]:
         with self.database.connect() as connection:
             rows = connection.execute(
-                """
-                SELECT s.*, v.version_no, v.version_key, v.logic_version,
-                       v.taxonomy_version, v.model_policy_version,
-                       v.snapshot_json, v.published_at,
-                       draft.id AS draft_id, draft.revision AS draft_revision,
-                       draft.updated_at AS draft_updated_at,
-                       (SELECT COUNT(*) FROM task_segments segment
-                        WHERE segment.standard_version_id IN (
-                            SELECT version.id
-                            FROM classification_standard_versions version
-                            WHERE version.standard_id = s.id
-                        )) AS task_segment_count,
-                       (SELECT COUNT(*) FROM classification_results result
-                        WHERE result.standard_version_id IN (
-                            SELECT version.id
-                            FROM classification_standard_versions version
-                            WHERE version.standard_id = s.id
-                        )) AS result_count,
-                       (SELECT COUNT(*)
-                        FROM classification_standard_versions version
-                        WHERE version.standard_id = s.id
-                          AND version.status = 'published') AS published_version_count
-                FROM classification_standards s
-                JOIN classification_standard_versions v
-                  ON v.id = s.current_version_id
-                LEFT JOIN classification_standard_drafts draft
-                  ON draft.standard_id = s.id
-                ORDER BY s.name COLLATE NOCASE, s.standard_key
-                """
+                f"{_STANDARD_CATALOG_SELECT_SQL} "
+                "ORDER BY s.name COLLATE NOCASE, s.standard_key"
             ).fetchall()
         return [self._serialize_standard(dict(row)) for row in rows]
