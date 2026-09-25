@@ -122,6 +122,85 @@ def test_preflight_hash_is_stable_and_blocks_invalid_sources(tmp_path: Path) -> 
         )
 
 
+def test_changed_review_record_count_is_shared_by_plan_and_version(
+    tmp_path: Path,
+) -> None:
+    context, version, service = _ready_result(tmp_path)
+    version_id = str(version["version_id"])
+    now = "2026-08-12T00:10:00+00:00"
+    with context.database.transaction() as connection:
+        connection.execute(
+            """
+            INSERT INTO review_batches(
+                id, base_result_version_id, result_id, status, revision,
+                created_by, created_at, updated_at, published_version_id,
+                published_at
+            ) VALUES ('batch-1', ?, ?, 'published', 1, 'user-1', ?, ?, ?, ?)
+            """,
+            (version_id, version["result_id"], now, now, version_id, now),
+        )
+        for review_id, key in (
+            ("review-1", context.key),
+            ("review-2", "other-key"),
+        ):
+            connection.execute(
+                """
+                INSERT INTO review_records(
+                    id, task_id, batch_id, base_result_version_id,
+                    classification_key, comment, workflow_status,
+                    classification_json, updated_by, updated_at
+                ) VALUES (?, 'task-1', 'batch-1', ?, ?, '测试评论',
+                          'resolved', '{}', 'user-1', ?)
+                """,
+                (review_id, version_id, key, now),
+            )
+        changes = (
+            (
+                "revision-1",
+                "review-1",
+                1,
+                {"semantic_units": []},
+                {"semantic_units": [1]},
+            ),
+            (
+                "revision-2",
+                "review-1",
+                2,
+                {"primary_label_codes": []},
+                {"primary_label_codes": ["A"]},
+            ),
+            ("revision-3", "review-2", 1, {"note": "前"}, {"note": "后"}),
+        )
+        for revision_id, review_id, revision, before, after in changes:
+            connection.execute(
+                """
+                INSERT INTO review_revisions(
+                    id, review_record_id, revision, before_json, after_json,
+                    note, actor_id, created_at
+                ) VALUES (?, ?, ?, ?, ?, '', 'user-1', ?)
+                """,
+                (
+                    revision_id,
+                    review_id,
+                    revision,
+                    json_text(before),
+                    json_text(after),
+                    now,
+                ),
+            )
+
+    plan, dashboard = _create_dashboard(service, version_id)
+    assert plan["summary"]["review_changed_unit_count"] == 1
+    with context.database.connect() as connection:
+        current = version_context(
+            context.database,
+            connection,
+            str(dashboard["id"]),
+            str(dashboard["version"]["version_id"]),
+        )
+    assert current["sources"][0]["review_changed_unit_count"] == 1
+
+
 def test_preflight_blocks_duplicate_listing_and_review_required(
     tmp_path: Path,
 ) -> None:

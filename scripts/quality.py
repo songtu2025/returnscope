@@ -15,6 +15,7 @@ PYTHON_TARGETS = (
     "return_analysis",
     "tests",
     "scripts/quality.py",
+    "scripts/server_release.py",
     "scripts/secret_scan.py",
 )
 PRODUCTION_PYTHON_TARGETS = (

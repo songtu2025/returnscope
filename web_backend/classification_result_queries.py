@@ -11,6 +11,7 @@ from web_backend.common import json_text, json_value
 from web_backend.database import Database
 from web_backend.result_hierarchy import result_taxonomy
 from web_backend.result_state import result_delivery_state
+from web_backend.review_statistics_sql import REVIEW_CHANGED_UNIT_COUNT_SQL
 
 
 def system_rerun_counts(
@@ -79,7 +80,7 @@ class _ClassificationResultQueries:
 
     @staticmethod
     def _version_select() -> str:
-        return """
+        return f"""
             SELECT v.id AS version_id, v.result_id, v.version_no AS version,
                    v.content_hash, v.quality_status, v.publish_status,
                    v.unit_count, v.record_count, v.created_at,
@@ -96,42 +97,7 @@ class _ClassificationResultQueries:
                        FROM classification_result_versions parent
                        WHERE parent.id = v.parent_version_id
                    ) AS parent_version_no,
-                   COALESCE((
-                       SELECT COUNT(DISTINCT revision.review_record_id)
-                       FROM review_batches batch
-                       JOIN review_records review
-                         ON review.batch_id = batch.id
-                       JOIN review_revisions revision
-                         ON revision.review_record_id = review.id
-                       WHERE batch.published_version_id = v.id
-                         AND (
-                             json_extract(
-                                 revision.before_json, '$.semantic_units'
-                             ) IS NOT json_extract(
-                                 revision.after_json, '$.semantic_units'
-                             )
-                             OR json_extract(
-                                 revision.before_json, '$.unknown_semantics'
-                             ) IS NOT json_extract(
-                                 revision.after_json, '$.unknown_semantics'
-                             )
-                             OR json_extract(
-                                 revision.before_json, '$.problem_label_codes'
-                             ) IS NOT json_extract(
-                                 revision.after_json, '$.problem_label_codes'
-                             )
-                             OR json_extract(
-                                 revision.before_json, '$.positive_label_codes'
-                             ) IS NOT json_extract(
-                                 revision.after_json, '$.positive_label_codes'
-                             )
-                             OR json_extract(
-                                 revision.before_json, '$.primary_label_codes'
-                             ) IS NOT json_extract(
-                                 revision.after_json, '$.primary_label_codes'
-                             )
-                         )
-                   ), 0) AS changed_unit_count,
+                   {REVIEW_CHANGED_UNIT_COUNT_SQL} AS changed_unit_count,
                    r.source_task_id, r.source_segment_id,
                    COALESCE(
                        json_extract(task.snapshot_json, '$.analysis_context'),

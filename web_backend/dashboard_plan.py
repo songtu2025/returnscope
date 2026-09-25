@@ -19,6 +19,7 @@ from web_backend.dashboard_support import (
 )
 from web_backend.database import Database
 from web_backend.result_hierarchy import feedback_group_key_sql
+from web_backend.review_statistics_sql import REVIEW_CHANGED_UNIT_COUNT_SQL
 
 
 def build_plan(
@@ -53,41 +54,7 @@ def build_plan(
                    json_extract(task.snapshot_json, '$.analysis_context'),
                    'returns'
                ) AS analysis_context,
-               COALESCE((
-                   SELECT COUNT(DISTINCT revision.review_record_id)
-                   FROM review_batches batch
-                   JOIN review_records review ON review.batch_id = batch.id
-                   JOIN review_revisions revision
-                     ON revision.review_record_id = review.id
-                   WHERE batch.published_version_id = v.id
-                     AND (
-                         json_extract(
-                             revision.before_json, '$.semantic_units'
-                         ) IS NOT json_extract(
-                             revision.after_json, '$.semantic_units'
-                         )
-                         OR json_extract(
-                             revision.before_json, '$.unknown_semantics'
-                         ) IS NOT json_extract(
-                             revision.after_json, '$.unknown_semantics'
-                         )
-                         OR json_extract(
-                             revision.before_json, '$.problem_label_codes'
-                         ) IS NOT json_extract(
-                             revision.after_json, '$.problem_label_codes'
-                         )
-                         OR json_extract(
-                             revision.before_json, '$.positive_label_codes'
-                         ) IS NOT json_extract(
-                             revision.after_json, '$.positive_label_codes'
-                         )
-                         OR json_extract(
-                             revision.before_json, '$.primary_label_codes'
-                         ) IS NOT json_extract(
-                             revision.after_json, '$.primary_label_codes'
-                         )
-                     )
-               ), 0) AS review_changed_unit_count
+               {REVIEW_CHANGED_UNIT_COUNT_SQL} AS review_changed_unit_count
         FROM classification_result_versions v
         JOIN classification_results r ON r.id = v.result_id
         JOIN dataset_versions source_version

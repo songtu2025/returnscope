@@ -17,6 +17,7 @@ from web_backend.dashboard_common import (
 )
 from web_backend.database import Database
 from web_backend.result_hierarchy import feedback_group_key_sql, result_taxonomy
+from web_backend.review_statistics_sql import REVIEW_CHANGED_UNIT_COUNT_SQL
 
 
 def version_context(
@@ -27,7 +28,7 @@ def version_context(
 ) -> dict[str, Any]:
     version = version_row(connection, dashboard_id, version_id)
     source_rows = connection.execute(
-        """
+        f"""
         SELECT v.id AS result_version_id, v.result_id, v.version_no,
                v.content_hash, v.publish_status, v.quality_status,
                v.unit_count, v.record_count, v.parent_version_id,
@@ -45,41 +46,7 @@ def version_context(
                    json_extract(task.snapshot_json, '$.analysis_context'),
                    'returns'
                ) AS analysis_context,
-               COALESCE((
-                   SELECT COUNT(DISTINCT revision.review_record_id)
-                   FROM review_batches batch
-                   JOIN review_records review ON review.batch_id = batch.id
-                   JOIN review_revisions revision
-                     ON revision.review_record_id = review.id
-                   WHERE batch.published_version_id = v.id
-                     AND (
-                         json_extract(
-                             revision.before_json, '$.semantic_units'
-                         ) IS NOT json_extract(
-                             revision.after_json, '$.semantic_units'
-                         )
-                         OR json_extract(
-                             revision.before_json, '$.unknown_semantics'
-                         ) IS NOT json_extract(
-                             revision.after_json, '$.unknown_semantics'
-                         )
-                         OR json_extract(
-                             revision.before_json, '$.problem_label_codes'
-                         ) IS NOT json_extract(
-                             revision.after_json, '$.problem_label_codes'
-                         )
-                         OR json_extract(
-                             revision.before_json, '$.positive_label_codes'
-                         ) IS NOT json_extract(
-                             revision.after_json, '$.positive_label_codes'
-                         )
-                         OR json_extract(
-                             revision.before_json, '$.primary_label_codes'
-                         ) IS NOT json_extract(
-                             revision.after_json, '$.primary_label_codes'
-                         )
-                     )
-               ), 0) AS review_changed_unit_count
+               {REVIEW_CHANGED_UNIT_COUNT_SQL} AS review_changed_unit_count
         FROM dashboard_dataset_sources source
         JOIN classification_result_versions v
           ON v.id = source.result_version_id
