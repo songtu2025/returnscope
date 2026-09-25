@@ -13,13 +13,14 @@ from web_backend.dashboard_common import (
     classification_comment_status,
 )
 from web_backend.dashboard_support import (
+    DASHBOARD_SOURCE_COLUMNS_SQL,
+    DASHBOARD_SOURCE_JOINS_SQL,
     mixed_hierarchy,
     normalize_filters,
     record_where,
 )
 from web_backend.database import Database
 from web_backend.result_hierarchy import feedback_group_key_sql
-from web_backend.review_statistics_sql import REVIEW_CHANGED_UNIT_COUNT_SQL
 
 
 def build_plan(
@@ -34,45 +35,56 @@ def build_plan(
     if not clean_ids:
         raise ValueError("result_version_ids 至少需要一个有效值")
     normalized_filters = normalize_filters(filters)
-    placeholders = ",".join("?" for _ in clean_ids)
+    sources = _load_sources(connection, clean_ids)
+    blockers, warnings, eligible_sources = _source_issues(
+        connection, clean_ids, sources
+    )
+    conflicts = _scope_conflicts(sources)
+    eligible_ids = [str(source["result_version_id"]) for source in eligible_sources]
+    _apply_quality_scope(connection, eligible_ids, normalized_filters, warnings)
+    summary = summarize_sources(
+        database,
+        connection,
+        eligible_ids,
+        normalized_filters,
+        eligible_sources,
+        feedback_groups=True,
+    )
+    plan = {
+        "ready": not blockers and not conflicts,
+        "blockers": blockers,
+        "warnings": warnings,
+        "conflicts": conflicts,
+        "sources": sources,
+        "filters": normalized_filters,
+        "summary": summary,
+    }
+    return {"plan_hash": _plan_hash(clean_ids, plan), **plan}
+
+
+def _load_sources(
+    connection: sqlite3.Connection,
+    version_ids: list[str],
+) -> list[dict[str, Any]]:
+    placeholders = ",".join("?" for _ in version_ids)
     rows = connection.execute(
         f"""
-        SELECT v.id AS result_version_id, v.result_id, v.version_no,
-               v.content_hash, v.publish_status, v.quality_status,
-               v.unit_count, v.record_count, v.parent_version_id,
-               v.created_by, creator.display_name AS created_by_name,
-               v.created_at, v.published_at,
-               r.dataset_version_id, r.product_version_id,
-               source_dataset.name AS dataset_name,
-               source_version.version AS dataset_version,
-               product_dataset.name AS product_dataset_name,
-               product_version.version AS product_version,
-               r.store_site, r.listing, r.agent_key, r.agent_family,
-               r.logic_version, r.taxonomy_version, r.standard_version_id,
-               r.model_policy_version, r.claims_version,
-               COALESCE(
-                   json_extract(task.snapshot_json, '$.analysis_context'),
-                   'returns'
-               ) AS analysis_context,
-               {REVIEW_CHANGED_UNIT_COUNT_SQL} AS review_changed_unit_count
+        SELECT {DASHBOARD_SOURCE_COLUMNS_SQL}
         FROM classification_result_versions v
-        JOIN classification_results r ON r.id = v.result_id
-        JOIN dataset_versions source_version
-          ON source_version.id = r.dataset_version_id
-        JOIN datasets source_dataset
-          ON source_dataset.id = source_version.dataset_id
-        JOIN dataset_versions product_version
-          ON product_version.id = r.product_version_id
-        JOIN datasets product_dataset
-          ON product_dataset.id = product_version.dataset_id
-        LEFT JOIN tasks task ON task.id = r.source_task_id
-        LEFT JOIN users creator ON creator.id = v.created_by
+        {DASHBOARD_SOURCE_JOINS_SQL}
         WHERE v.id IN ({placeholders})
         ORDER BY v.id
         """,
-        tuple(clean_ids),
+        tuple(version_ids),
     ).fetchall()
-    sources = [dict(row) for row in rows]
+    return [dict(row) for row in rows]
+
+
+def _source_issues(
+    connection: sqlite3.Connection,
+    requested_ids: list[str],
+    sources: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     found_ids = {str(row["result_version_id"]) for row in sources}
     blockers: list[dict[str, Any]] = [
         {
@@ -80,7 +92,7 @@ def build_plan(
             "result_version_id": version_id,
             "message": "分类结果版本不存在",
         }
-        for version_id in clean_ids
+        for version_id in requested_ids
         if version_id not in found_ids
     ]
     if mixed_hierarchy(connection, sources):
@@ -120,11 +132,21 @@ def build_plan(
                     "message": "分类结果质量状态不是 ready",
                 }
             )
+    eligible_sources = [
+        source
+        for source in sources
+        if source["publish_status"] == "published"
+        and source["quality_status"] in {"ready", "review_required"}
+    ]
+    return blockers, warnings, eligible_sources
+
+
+def _scope_conflicts(sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
     by_scope: dict[tuple[Any, Any], list[str]] = {}
     for source in sources:
         scope = (source["store_site"], source["listing"])
         by_scope.setdefault(scope, []).append(str(source["result_version_id"]))
-    conflicts = [
+    return [
         {
             "type": "duplicate_store_listing",
             "store_site": scope[0],
@@ -137,13 +159,14 @@ def build_plan(
         )
         if len(version_ids) > 1
     ]
-    eligible_sources = [
-        source
-        for source in sources
-        if source["publish_status"] == "published"
-        and source["quality_status"] in {"ready", "review_required"}
-    ]
-    eligible_ids = [str(source["result_version_id"]) for source in eligible_sources]
+
+
+def _apply_quality_scope(
+    connection: sqlite3.Connection,
+    eligible_ids: list[str],
+    normalized_filters: dict[str, list[str]],
+    warnings: list[dict[str, Any]],
+) -> None:
     has_non_ready_records = False
     if eligible_ids:
         eligible_placeholders = ",".join("?" for _ in eligible_ids)
@@ -168,14 +191,10 @@ def build_plan(
         )
     if warnings or has_non_ready_records:
         normalized_filters["quality_status"] = ["ready"]
-    summary = summarize_sources(
-        database,
-        connection,
-        eligible_ids,
-        normalized_filters,
-        eligible_sources,
-        feedback_groups=True,
-    )
+
+
+def _plan_hash(result_version_ids: list[str], plan: dict[str, Any]) -> str:
+    sources = plan["sources"]
     hash_sources = [
         {
             key: source[key]
@@ -206,14 +225,14 @@ def build_plan(
     ]
     hash_payload = {
         "version": PLAN_VERSION,
-        "result_version_ids": clean_ids,
-        "filters": normalized_filters,
+        "result_version_ids": result_version_ids,
+        "filters": plan["filters"],
         "sources": hash_sources,
-        "blockers": blockers,
-        "warnings": warnings,
-        "conflicts": conflicts,
+        "blockers": plan["blockers"],
+        "warnings": plan["warnings"],
+        "conflicts": plan["conflicts"],
     }
-    plan_hash = hashlib.sha256(
+    return hashlib.sha256(
         json.dumps(
             hash_payload,
             ensure_ascii=False,
@@ -221,16 +240,6 @@ def build_plan(
             separators=(",", ":"),
         ).encode("utf-8")
     ).hexdigest()
-    return {
-        "plan_hash": plan_hash,
-        "ready": not blockers and not conflicts,
-        "blockers": blockers,
-        "warnings": warnings,
-        "conflicts": conflicts,
-        "sources": sources,
-        "filters": normalized_filters,
-        "summary": summary,
-    }
 
 
 def summarize_sources(

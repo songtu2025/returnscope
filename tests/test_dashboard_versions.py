@@ -201,6 +201,23 @@ def test_changed_review_record_count_is_shared_by_plan_and_version(
     assert current["sources"][0]["review_changed_unit_count"] == 1
 
 
+def test_plan_and_existing_version_use_the_same_source_fields(
+    tmp_path: Path,
+) -> None:
+    context, version, service = _ready_result(tmp_path)
+    plan, dashboard = _create_dashboard(service, str(version["version_id"]))
+
+    with context.database.connect() as connection:
+        current = version_context(
+            context.database,
+            connection,
+            str(dashboard["id"]),
+            str(dashboard["version"]["version_id"]),
+        )
+
+    assert current["sources"] == plan["sources"]
+
+
 def test_preflight_blocks_duplicate_listing_and_review_required(
     tmp_path: Path,
 ) -> None:
