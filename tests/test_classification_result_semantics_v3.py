@@ -9,8 +9,11 @@ from fastapi.testclient import TestClient
 from test_classification_result_pool import _publish, _seed_result_context
 
 from return_semantics.schemas import ProcessingStatus
+from web_backend.classification_result_payload import prepare_semantic_record
 from web_backend.classification_result_service import ClassificationResultService
 from web_backend.common import json_text
+from web_backend.dashboard_support import serialize_record
+from web_backend.review_queries import ReviewQueriesMixin
 from web_backend.routers.classification_results import (
     create_classification_result_router,
 )
@@ -35,6 +38,60 @@ class ResultPayload:
     def model_dump(self, *, mode: str) -> dict[str, Any]:
         assert mode == "json"
         return self._payload
+
+
+def test_legacy_scope_status_is_consistent_across_record_reads(tmp_path: Path) -> None:
+    taxonomy = _seed_result_context(tmp_path).taxonomy
+    classification = {
+        "semantic_units": [
+            {
+                "fact_id": "F1",
+                "label_code": "FUNCTION_PROTECTION_U1",
+                "sentiment": "POSITIVE",
+            },
+            {
+                "fact_id": "F2",
+                "label_code": "FUNCTION_PROTECTION_U1",
+                "sentiment": "NEGATIVE",
+            },
+        ]
+    }
+    prepared = prepare_semantic_record(
+        {"classification": classification, "comment": "正反评价"}, taxonomy
+    )
+    reviewed = ReviewQueriesMixin._serialize(
+        {"classification_json": json_text(classification), "comment": "正反评价"},
+        taxonomy,
+    )
+    dashboard = serialize_record(
+        {"classification_json": json_text(classification), "comment": "正反评价"},
+        taxonomy,
+    )
+
+    for record in (prepared, reviewed, dashboard):
+        assert record["comment_summary_status"] == "CONFLICT"
+        assert record["comment_conclusions"][0]["status"] == "CONFLICT"
+    assert "comment_summary" not in classification
+
+    legacy = {
+        "semantic_units": [
+            {
+                "label_code": "TOUCH_GOOD",
+                "label_path": ["触屏", "灵敏"],
+                "sentiment": "POSITIVE",
+            },
+            {
+                "label_code": "TOUCH_BAD",
+                "full_label_path": ["触屏", "迟缓"],
+                "sentiment": "NEGATIVE",
+            },
+        ]
+    }
+    legacy_review = ReviewQueriesMixin._serialize(
+        {"classification_json": json_text(legacy)}, None
+    )
+    assert legacy_review["comment_summary_status"] == "CONFLICT"
+    assert len(legacy_review["comment_conclusions"]) == 1
 
 
 def _client(service: ClassificationResultService) -> TestClient:

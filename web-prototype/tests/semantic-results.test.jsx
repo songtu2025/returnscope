@@ -273,7 +273,7 @@ describe("评论级语义呈现", () => {
       },
     };
 
-    expect(semanticConclusions(record)[0].status).toBe("MIXED");
+    expect(semanticConclusions(record)[0].status).toBe("CONFLICT");
     const { container } = render(<SemanticResultPanel record={record} />);
     const group = within(container).getByRole("region", {
       name: "尺码与适配 → 贴合度",
@@ -313,7 +313,7 @@ describe("评论级语义呈现", () => {
     expect(view.getByText(/旧结果兼容视图/)).toBeVisible();
   });
 
-  test("旧结果存在明确不同操作时归为混合表现", () => {
+  test("旧结果只有不同操作而缺少其他作用域时归为疑似冲突", () => {
     const record = {
       classification: {
         semantic_units: [
@@ -330,7 +330,44 @@ describe("评论级语义呈现", () => {
         ],
       },
     };
-    expect(semanticConclusions(record)[0].status).toBe("MIXED");
+    expect(semanticConclusions(record)[0].status).toBe("CONFLICT");
+  });
+
+  test("维度裁决保留证据，但采用服务端提供的主题状态", () => {
+    const record = {
+      comment_conclusions: [
+        {
+          topic_code: "TOUCH",
+          status: "CONFLICT",
+          supporting_fact_ids: ["F1", "F2"],
+        },
+      ],
+      classification: {
+        dimension_decisions: [
+          {
+            parent_code: "TOUCH",
+            verdict_label_code: "TOUCH_GOOD",
+            supporting_fact_ids: ["F1"],
+            reason: "点击流畅",
+          },
+          {
+            parent_code: "TOUCH",
+            verdict_label_code: "TOUCH_BAD",
+            supporting_fact_ids: ["F2"],
+            reason: "输入迟缓",
+          },
+        ],
+        semantic_units: [
+          { fact_id: "F1", label_code: "TOUCH_GOOD", sentiment: "POSITIVE" },
+          { fact_id: "F2", label_code: "TOUCH_BAD", sentiment: "NEGATIVE" },
+        ],
+      },
+    };
+
+    expect(semanticConclusions(record)[0]).toMatchObject({
+      status: "CONFLICT",
+      summary: "点击流畅；输入迟缓",
+    });
   });
 
   test("优先按维度裁决展示完整作用域和标签路径", async () => {

@@ -68,7 +68,7 @@ def list_records(
         taxonomy = (
             TaxonomyConfig.model_validate(snapshot["taxonomy"]) if snapshot else None
         )
-        items.append(enrich_record(serialize_record(item), taxonomy))
+        items.append(enrich_record(serialize_record(item, taxonomy), taxonomy))
     return {
         "items": items,
         "total": total,

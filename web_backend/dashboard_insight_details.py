@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from return_semantics.schemas import TaxonomyConfig
 from web_backend.dashboard_insight_overview import InsightQueryScope
 from web_backend.dashboard_support import percentage, serialize_record
 
@@ -10,6 +11,7 @@ def collect_reason_details(
     scope: InsightQueryScope,
     selected_reason: dict[str, Any] | None,
     overview: dict[str, Any],
+    taxonomy: TaxonomyConfig | None = None,
 ) -> dict[str, Any]:
     connection = scope.connection
     where_sql = scope.where_sql
@@ -311,7 +313,9 @@ def collect_reason_details(
             """,
             (*params, selected_code),
         ).fetchall()
-        evidence_items = [serialize_record(dict(row)) for row in evidence_rows]
+        evidence_items = [
+            serialize_record(dict(row), taxonomy) for row in evidence_rows
+        ]
         for item in evidence_items:
             item["problem_labels"] = [
                 label_names.get(str(label), str(label))

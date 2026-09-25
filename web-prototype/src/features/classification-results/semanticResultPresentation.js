@@ -591,19 +591,17 @@ function dimensionDecisionSources(classification, record) {
 
 /** @param {NormalizedFact} fact @returns {string} */
 function scopeKey(fact) {
-  return [
-    fact.sourceRef,
+  const values = [
     fact.experiencerRef,
     fact.productRef,
-    fact.variantRef,
     fact.eventRef,
-    fact.referenceBasis,
-    fact.part,
     fact.operation,
+    fact.part,
     fact.condition,
-  ]
-    .map((value) => String(value || "").trim())
-    .join("|");
+  ].map((value) => String(value || "").trim());
+  return values.every((value) => value && value !== "UNSPECIFIED")
+    ? values.join("|")
+    : "";
 }
 
 /** @param {NormalizedFact[]} facts @returns {SemanticStatus} */
@@ -616,7 +614,8 @@ function derivedConclusionStatus(facts) {
   if (!positive.length) return "NEGATIVE";
   const negativeScopes = new Set(negative.map(scopeKey));
   const sameScopeConflict = positive.some((fact) => negativeScopes.has(scopeKey(fact)));
-  return sameScopeConflict ? "CONFLICT" : "MIXED";
+  const incompleteScope = [...positive, ...negative].some((fact) => !scopeKey(fact));
+  return incompleteScope || sameScopeConflict ? "CONFLICT" : "MIXED";
 }
 
 /** @param {NormalizedFact} fact @returns {SemanticTopic} */
@@ -841,6 +840,9 @@ export function semanticConclusions(record) {
   const source = object(record);
   const classification = classificationOf(record);
   const facts = sourceFacts(classification, source);
+  const provided = conclusionSources(classification, source).map((conclusion, index) =>
+    normalizeConclusion(conclusion, index, facts),
+  );
   const decisions = dimensionDecisionSources(classification, source);
   if (decisions.length) {
     const { conclusions, consumedFactIds } = decisionConclusions(decisions, facts);
@@ -848,12 +850,22 @@ export function semanticConclusions(record) {
       (fact) =>
         !consumedFactIds.has(fact.factId) && (fact.labelCode || fact.labelPath.length),
     );
-    return [...conclusions, ...deriveConclusions(residual, false)];
+    return [...conclusions, ...deriveConclusions(residual, false)].map((conclusion) => {
+      const authoritative = provided.find(
+        (item) =>
+          item.id === conclusion.id ||
+          item.facts.some((fact) =>
+            conclusion.facts.some(
+              (current) => current.factId && current.factId === fact.factId,
+            ),
+          ),
+      );
+      return authoritative
+        ? { ...conclusion, status: authoritative.status }
+        : conclusion;
+    });
   }
-  const provided = conclusionSources(classification, source);
-  return provided.length
-    ? provided.map((conclusion, index) => normalizeConclusion(conclusion, index, facts))
-    : deriveConclusions(facts);
+  return provided.length ? provided : deriveConclusions(facts);
 }
 
 /** @param {SemanticRecord} record @returns {SemanticStatus} */

@@ -5,7 +5,9 @@ from datetime import date
 from typing import Any
 
 from return_semantics.analysis_context import aggregate_analysis_context
+from return_semantics.schemas import TaxonomyConfig
 from return_semantics.taxonomy_hierarchy import descendant_label_codes
+from web_backend.classification_result_payload import prepare_semantic_record
 from web_backend.common import json_value
 from web_backend.dashboard_common import (
     ALLOWED_FILTERS,
@@ -259,13 +261,16 @@ def record_where(
     return " AND ".join(where), params
 
 
-def serialize_record(value: dict[str, Any]) -> dict[str, Any]:
+def serialize_record(
+    value: dict[str, Any], taxonomy: TaxonomyConfig | None = None
+) -> dict[str, Any]:
     value["problem_labels"] = json_value(
         value.pop("problem_labels_json", None),
         [],
     )
     classification = json_value(value.pop("classification_json", None), {})
     value["classification"] = classification
+    prepare_semantic_record(value, taxonomy)
     value["evidence"] = [
         unit.get("evidence")
         for unit in classification.get("semantic_units", [])

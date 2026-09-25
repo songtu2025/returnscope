@@ -14,6 +14,7 @@ from web_backend.classification_result_payload import (
     REVIEW_DISPOSITIONS,
     _prepare_classification_payload,
     _unknown_disposition,
+    prepare_semantic_record,
 )
 from web_backend.common import json_value
 from web_backend.database import Database
@@ -437,16 +438,8 @@ class _ClassificationResultRecords:
         taxonomy: TaxonomyConfig | None,
     ) -> dict[str, Any]:
         value = enrich_record(value, taxonomy)
-        classification = _prepare_classification_payload(
-            value.get("classification", {}),
-            taxonomy,
-            str(value.get("processing_status") or ""),
-            source_text=str(value.get("comment") or ""),
-        )
-        value["semantic_disposition"] = classification.pop("semantic_disposition")
-        value["comment_summary_status"] = classification.pop("comment_summary_status")
-        value["atomic_facts"] = classification.pop("atomic_facts")
-        value["comment_conclusions"] = classification.pop("comment_conclusions")
+        value = prepare_semantic_record(value, taxonomy)
+        classification = value["classification"]
         all_unknown_semantics = classification.get("unknown_semantics", [])
         value["unknown_semantics"] = [
             item

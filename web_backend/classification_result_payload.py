@@ -184,11 +184,21 @@ def _normalize_semantic_facts(
 def _topic_identity(
     taxonomy: TaxonomyConfig | None,
     label_code: str,
+    fact: dict[str, Any],
 ) -> tuple[str, str, list[str], list[str]]:
-    if taxonomy is None:
-        return label_code, label_code, [], []
-    label = next((value for value in taxonomy.labels if value.code == label_code), None)
-    if label is None:
+    label = (
+        next((value for value in taxonomy.labels if value.code == label_code), None)
+        if taxonomy
+        else None
+    )
+    if taxonomy is None or label is None:
+        path = [
+            str(value)
+            for value in fact.get("label_path") or fact.get("full_label_path") or []
+            if value
+        ]
+        if len(path) > 1:
+            return "/".join(path[:-1]), path[-2], [], path[:-1]
         return label_code, label_code, [], []
     code_path = label_path_codes(taxonomy, label_code)
     name_path = label_path(taxonomy, label_code)
@@ -240,7 +250,7 @@ def _topic_summaries(
     for fact in facts:
         label_code = str(fact.get("label_code") or "")
         topic_code, topic_name, code_path, name_path = _topic_identity(
-            taxonomy, label_code
+            taxonomy, label_code, fact
         )
         topic = topics.setdefault(
             topic_code,
@@ -285,18 +295,22 @@ def _topic_summaries(
             status = "NO_CONFIRMED"
         elif {"POSITIVE", "NEGATIVE"}.issubset(sentiments):
             positive_scopes = {
-                scope
+                _scope_key(value)
                 for value in confirmed
                 if value.get("sentiment") == "POSITIVE"
-                if (scope := _scope_key(value)) is not None
             }
             negative_scopes = {
-                scope
+                _scope_key(value)
                 for value in confirmed
                 if value.get("sentiment") == "NEGATIVE"
-                if (scope := _scope_key(value)) is not None
             }
-            status = "CONFLICT" if positive_scopes & negative_scopes else "MIXED"
+            status = (
+                "CONFLICT"
+                if None in positive_scopes
+                or None in negative_scopes
+                or positive_scopes & negative_scopes
+                else "MIXED"
+            )
         elif "NEGATIVE" in sentiments:
             status = "NEGATIVE"
         else:
@@ -431,6 +445,28 @@ def _prepare_classification_payload(
             processing_status=processing_status,
         )
     return normalized
+
+
+def prepare_semantic_record(
+    record: dict[str, Any],
+    taxonomy: TaxonomyConfig | None,
+) -> dict[str, Any]:
+    """统一读取入口的语义状态，不改写持久化结果。"""
+    classification = _prepare_classification_payload(
+        record.get("classification", {}),
+        taxonomy,
+        str(record.get("processing_status") or ""),
+        source_text=str(record.get("comment") or ""),
+    )
+    for field in (
+        "semantic_disposition",
+        "comment_summary_status",
+        "atomic_facts",
+        "comment_conclusions",
+    ):
+        record[field] = classification.pop(field)
+    record["classification"] = classification
+    return record
 
 
 def _version_quality(qualities: list[str]) -> str:

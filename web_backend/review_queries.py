@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from return_semantics.schemas import TaxonomyConfig
-from return_semantics.semantic_review import build_semantic_review_view
+from web_backend.classification_result_payload import prepare_semantic_record
 from web_backend.classification_result_service import ClassificationResultService
 from web_backend.common import json_value
 from web_backend.database import Database
@@ -69,7 +69,20 @@ class ReviewQueriesMixin:
         query += " ORDER BY r.updated_at DESC"
         with self.database.connect() as connection:
             rows = connection.execute(query, tuple(params)).fetchall()
-        return [self._serialize(dict(row)) for row in rows]
+            taxonomies = {
+                version_id: result_taxonomy(connection, version_id)
+                for version_id in {
+                    str(row["base_result_version_id"])
+                    for row in rows
+                    if row["base_result_version_id"]
+                }
+            }
+        return [
+            self._serialize(
+                dict(row), taxonomies.get(str(row["base_result_version_id"]))
+            )
+            for row in rows
+        ]
 
     def get(self, review_id: str) -> dict[str, Any] | None:
         with self.database.connect() as connection:
@@ -98,7 +111,12 @@ class ReviewQueriesMixin:
                 """,
                 (review_id,),
             ).fetchall()
-        item = self._serialize(dict(row))
+            taxonomy = (
+                result_taxonomy(connection, str(row["base_result_version_id"]))
+                if row["base_result_version_id"]
+                else None
+            )
+        item = self._serialize(dict(row), taxonomy)
         item["revisions"] = [
             self._serialize_revision(dict(value)) for value in revisions
         ]
@@ -371,13 +389,8 @@ class ReviewQueriesMixin:
             item.pop("classification_json", None),
             {},
         )
-        classification["semantic_review"] = build_semantic_review_view(
-            classification,
-            str(item.get("comment") or ""),
-            taxonomy,
-        )
         item["classification"] = classification
-        return item
+        return prepare_semantic_record(item, taxonomy)
 
     @staticmethod
     def _serialize_revision(item: dict[str, Any]) -> dict[str, Any]:

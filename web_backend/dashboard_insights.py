@@ -178,7 +178,7 @@ def build_insights(
         )
         overview = collect_insight_overview(scope)
         selected_reason = overview["selected_reason"]
-        details = collect_reason_details(scope, selected_reason, overview)
+        details = collect_reason_details(scope, selected_reason, overview, taxonomy)
 
         filter_options = {}
         for key, column in (
