@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import json
-from builtins import list as builtin_list
 from collections import Counter
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from return_semantics.data import load_return_dataset
 from return_semantics.exporter import export_results
+from return_semantics.label_statistics import top_problem_labels
 from return_semantics.schemas import ValidatedClassification
 from web_backend.classification_standard_service import ClassificationStandardService
 from web_backend.common import add_audit, json_text, json_value, new_id
@@ -255,23 +255,4 @@ class ReviewResolutionMixin:
                     ),
                 )
 
-    @staticmethod
-    def _top_problem_labels(dataset, results, taxonomy) -> builtin_list[dict[str, Any]]:
-        labels = {label.code: label for label in taxonomy.labels}
-        record_counts = dataset.records["classification_key"].value_counts()
-        counts: Counter[str] = Counter()
-        for key, result in results.items():
-            weight = int(record_counts.get(key, 0))
-            counts.update({code: weight for code in result.problem_label_codes})
-        denominator = max(int(dataset.records["has_text_evidence"].sum()), 1)
-        return [
-            {
-                "code": code,
-                "name": labels[code].name,
-                "group": labels[code].group,
-                "count": count,
-                "share": round(count / denominator * 100, 2),
-            }
-            for code, count in counts.most_common(8)
-            if code in labels
-        ]
+    _top_problem_labels = staticmethod(top_problem_labels)

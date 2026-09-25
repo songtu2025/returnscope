@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import Counter
 from pathlib import Path
 from typing import cast
 
@@ -9,6 +8,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from return_semantics.data import ReturnDataset
+from return_semantics.label_statistics import weighted_label_counts
 from return_semantics.schemas import (
     ProcessingStatus,
     TaxonomyConfig,
@@ -375,16 +375,9 @@ def _build_statistics(
     taxonomy: TaxonomyConfig,
 ) -> list[dict[str, object]]:
     labels = {label.code: label for label in taxonomy.labels}
-    problem_counts: Counter[str] = Counter()
-    positive_counts: Counter[str] = Counter()
-    primary_counts: Counter[str] = Counter()
-
-    record_counts = dataset.records["classification_key"].value_counts()
-    for classification_key, result in results.items():
-        weight = int(record_counts.get(classification_key, 0))
-        problem_counts.update({code: weight for code in result.problem_label_codes})
-        positive_counts.update({code: weight for code in result.positive_label_codes})
-        primary_counts.update({code: weight for code in result.primary_label_codes})
+    problem_counts, positive_counts, primary_counts = weighted_label_counts(
+        dataset, results
+    )
 
     rows = []
     for metric, counts in (

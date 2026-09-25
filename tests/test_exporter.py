@@ -169,8 +169,12 @@ def test_exporter_creates_expected_sheets(tmp_path: Path, taxonomy) -> None:
     business_review = pd.read_excel(output_path, sheet_name="人工复核", dtype=str)
     system_rerun = pd.read_excel(output_path, sheet_name="系统待重跑", dtype=str)
     semantic_review = pd.read_excel(output_path, sheet_name="语义核验", dtype=str)
+    statistics = pd.read_excel(output_path, sheet_name="标签统计")
 
     assert business_review["诊断编码"].tolist() == ["MODEL_RESULT_MISMATCH"]
+    assert statistics.loc[
+        statistics["统计类型"] == "问题标签", ["标签编码", "退货记录数"]
+    ].to_dict("records") == [{"标签编码": "FIT_TOO_SMALL", "退货记录数": 2}]
     assert business_review["是否需要业务判断"].tolist() == ["是"]
     assert business_review["分类键"].tolist() == ["APPAREL_TOO_SMALL too narrow"]
     assert system_rerun["诊断编码"].tolist() == ["SECONDARY_MODEL_TIMEOUT"]

@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import threading
-from collections import Counter
 from typing import Any, Callable
 
 from return_semantics.analysis_context import analysis_context_from_snapshot
 from return_semantics.data import ReturnDataset
 from return_semantics.exporter import REVIEW_STATUSES
-from return_semantics.schemas import TaxonomyConfig, ValidatedClassification
+from return_semantics.label_statistics import top_problem_labels
 from web_backend.common import json_text, json_value
 from web_backend.database import Database
 from web_backend.dataset_cache import load_cached_dataset
@@ -231,30 +230,7 @@ class ParentResultMixin:
             ).fetchone()
         return dict(row) if row else None
 
-    @staticmethod
-    def _top_problem_labels(
-        dataset: ReturnDataset,
-        results: dict[str, ValidatedClassification],
-        taxonomy: TaxonomyConfig,
-    ) -> list[dict[str, Any]]:
-        labels = {label.code: label for label in taxonomy.labels}
-        record_counts = dataset.records["classification_key"].value_counts()
-        counts: Counter[str] = Counter()
-        for key, result in results.items():
-            weight = int(record_counts.get(key, 0))
-            counts.update({code: weight for code in result.problem_label_codes})
-        denominator = max(int(dataset.records["has_text_evidence"].sum()), 1)
-        return [
-            {
-                "code": code,
-                "name": labels[code].name,
-                "group": labels[code].group,
-                "count": count,
-                "share": round(count / denominator * 100, 2),
-            }
-            for code, count in counts.most_common(8)
-            if code in labels
-        ]
+    _top_problem_labels = staticmethod(top_problem_labels)
 
     @staticmethod
     def _public_segment(segment: dict[str, Any]) -> dict[str, Any]:
