@@ -333,6 +333,23 @@ describe("评论级语义呈现", () => {
     expect(semanticConclusions(record)[0].status).toBe("CONFLICT");
   });
 
+  test("服务端明确返回空结论时不从原始事实重新推断", () => {
+    const record = {
+      comment_summary_status: "NO_CONFIRMED",
+      comment_conclusions: [],
+      classification: {
+        semantic_units: [{ label_code: "TOUCH_GOOD", sentiment: "POSITIVE" }],
+      },
+    };
+
+    expect(semanticConclusions(record)).toEqual([]);
+    expect(semanticRecordStatus(record)).toBe("NO_CONFIRMED");
+    const { container } = render(<SemanticResultPanel record={record} />);
+    expect(
+      within(container).getByText("这条评论没有可用于业务统计的确定观点。"),
+    ).toBeVisible();
+  });
+
   test("维度裁决保留证据，但采用服务端提供的主题状态", () => {
     const record = {
       comment_conclusions: [
@@ -349,6 +366,7 @@ describe("评论级语义呈现", () => {
             verdict_label_code: "TOUCH_GOOD",
             supporting_fact_ids: ["F1"],
             reason: "点击流畅",
+            scope: { operation: "点击" },
           },
           {
             parent_code: "TOUCH",
@@ -367,7 +385,11 @@ describe("评论级语义呈现", () => {
     expect(semanticConclusions(record)[0]).toMatchObject({
       status: "CONFLICT",
       summary: "点击流畅；输入迟缓",
+      facts: [{ operation: "点击" }, {}],
+      legacy: false,
     });
+    const { container } = render(<SemanticResultPanel record={record} />);
+    expect(within(container).getAllByText("疑似冲突")).toHaveLength(2);
   });
 
   test("优先按维度裁决展示完整作用域和标签路径", async () => {
