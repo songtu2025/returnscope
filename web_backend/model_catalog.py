@@ -68,6 +68,37 @@ class ModelCatalogService:
             ).fetchone()
         return self.serialize(dict(row)) if row else None
 
+    def prepare_validation(
+        self,
+        model_id: str,
+        effort: str | None,
+    ) -> tuple[dict[str, Any], str, str]:
+        model = self.get(model_id)
+        if model is None:
+            raise ValueError("模型不存在")
+        if not model["active"]:
+            raise ValueError("停用模型不能验证")
+        chosen_effort = effort or (
+            "medium"
+            if "medium" in model["supported_efforts"]
+            else model["supported_efforts"][0]
+        )
+        chosen_effort = validate_effort(chosen_effort, "模型推理强度")
+        if chosen_effort not in model["supported_efforts"]:
+            raise ValueError("所选推理强度不在模型支持范围内")
+        with self.database.connect() as connection:
+            version = connection.execute(
+                """
+                SELECT id FROM api_config_versions
+                WHERE connection_id = ?
+                ORDER BY version DESC LIMIT 1
+                """,
+                (model["connection_id"],),
+            ).fetchone()
+        if version is None:
+            raise ValueError("请先保存 API 接入配置，再验证模型")
+        return model, chosen_effort, str(version["id"])
+
     def add(
         self,
         connection_id: str,

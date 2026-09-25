@@ -7,7 +7,7 @@ from typing import Any, Callable
 
 from web_backend.common import add_audit, new_id
 from web_backend.database import Database
-from web_backend.model_catalog import ModelCatalogService, validate_effort
+from web_backend.model_catalog import ModelCatalogService
 from web_backend.model_probe import ModelProbe, ModelValidationError
 from web_backend.security import utc_now
 
@@ -37,38 +37,17 @@ class ValidationRunService:
         actor_id: str,
         effort: str | None = None,
     ) -> dict[str, Any]:
-        model = self.model_catalog.get(model_id)
-        if model is None:
-            raise ValueError("模型不存在")
-        if not model["active"]:
-            raise ValueError("停用模型不能验证")
-        chosen_effort = effort or (
-            "medium"
-            if "medium" in model["supported_efforts"]
-            else model["supported_efforts"][0]
+        model, chosen_effort, version_id = self.model_catalog.prepare_validation(
+            model_id, effort
         )
-        chosen_effort = validate_effort(chosen_effort, "模型推理强度")
-        if chosen_effort not in model["supported_efforts"]:
-            raise ValueError("所选推理强度不在模型支持范围内")
-        with self.database.connect() as connection:
-            version = connection.execute(
-                """
-                SELECT id FROM api_config_versions
-                WHERE connection_id = ?
-                ORDER BY version DESC LIMIT 1
-                """,
-                (model["connection_id"],),
-            ).fetchone()
-        if version is None:
-            raise ValueError("请先保存 API 接入配置，再验证模型")
-        config = self.get_version(str(version["id"]))
+        config = self.get_version(version_id)
         if config is None:
             raise ValueError("API 配置不存在")
         return self._create_validation_run(
             kind="model",
             target_id=model_id,
             connection_id=str(model["connection_id"]),
-            config_version_id=str(version["id"]),
+            config_version_id=version_id,
             actor_id=actor_id,
             config=config,
             items=[
