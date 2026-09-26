@@ -11,7 +11,7 @@ from pathlib import Path, PurePosixPath
 from typing import Sequence
 
 from web_backend.backup import _validate_archive, create_backup
-from web_backend.database import repair_missing_empty_checkpoint_references
+from web_backend.database_migrations import repair_missing_empty_checkpoint_references
 from web_backend.settings import RUNTIME_DIRECTORIES, Settings
 
 OPTIONAL_SOURCE_DIRECTORIES = {"imports"}

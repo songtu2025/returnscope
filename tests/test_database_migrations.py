@@ -8,12 +8,12 @@ import pytest
 
 from web_backend.backup import restore_backup
 from web_backend.classification_result_queries import system_rerun_counts
-from web_backend.database import (
+from web_backend.database import Database
+from web_backend.database_migrations import (
     CLASSIFICATION_UNIT_RERUN_MIGRATION,
     CLASSIFICATION_UNIT_RERUN_MIGRATION_CHECKSUM,
     RESULT_SOURCE_ORIGIN_MIGRATION,
     RESULT_SOURCE_ORIGIN_MIGRATION_CHECKSUM,
-    Database,
 )
 from web_backend.migrate_result_source_origin import migrate_result_source_origin
 from web_backend.settings import Settings

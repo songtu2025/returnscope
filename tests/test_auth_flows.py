@@ -7,12 +7,12 @@ from urllib.parse import parse_qs, urlsplit
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
-from web_backend.database import (
+from web_backend.database import Database
+from web_backend.database_migrations import (
     AUTH_ACTION_TOKEN_MIGRATION,
     AUTH_ACTION_TOKEN_MIGRATION_CHECKSUM,
     EMAIL_CHANGE_TOKEN_MIGRATION,
     EMAIL_CHANGE_TOKEN_MIGRATION_CHECKSUM,
-    Database,
 )
 from web_backend.settings import Settings
 
