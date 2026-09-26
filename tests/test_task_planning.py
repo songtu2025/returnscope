@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -2015,15 +2016,18 @@ def test_analysis_reads_a_completed_listing_before_parent_finishes(
             ),
         )
 
-    analysis = AnalysisService(database).get(
-        str(task["id"]),
-        AnalysisFilters(listing="L1"),
-    )
+    analysis_service = AnalysisService(database)
+    filters = AnalysisFilters(listing="L1")
+    analysis = analysis_service.get(str(task["id"]), filters)
     assert analysis["scope"]["total_records"] == 1
     assert analysis["task"]["listing"] == "L1"
     assert analysis["task"]["delivery_scope"] == "segment"
     assert analysis["quality_gate"]["status"] == "unusable"
     assert analysis["quality_gate"]["labeled_records"] == 0
+    content, _ = analysis_service.export_filtered(str(task["id"]), filters)
+    exported = pd.read_excel(BytesIO(content), sheet_name="筛选明细")
+    assert len(exported) == analysis["scope"]["filtered_records"]
+    assert exported["Listing"].tolist() == ["L1"]
     with pytest.raises(ValueError, match="尚未生成"):
         AnalysisService(database).get(
             str(task["id"]),

@@ -65,16 +65,30 @@ def test_result_tree_filters_count_feedback_groups_and_exports_paths(
     export_results(workbook, context.dataset, context.results, taxonomy)
     data = load_analysis_data(workbook)
     analysis = AnalysisService(context.database)
-    monkeypatch.setattr(analysis, "_task_source", lambda *_: {"result_version": 1})
+    monkeypatch.setattr(
+        analysis,
+        "_task_source",
+        lambda *_: {
+            "result_version": 1,
+            "revision": 1,
+            "result_file_path": str(workbook),
+            "product_file_path": str(workbook),
+        },
+    )
     monkeypatch.setattr(analysis, "_load_task_data", lambda _: data)
     monkeypatch.setattr(analysis, "_apply_task_scope", lambda frame, _: frame)
     filtered = analysis._filter(
         data.details, AnalysisFilters(problem_code="ROOT"), data.semantics
     )
     assert len(filtered) == 3
-    content, _ = analysis.export_filtered(
-        "task", AnalysisFilters(problem_code="ROOT", start_date=date(2026, 8, 2))
+    filters = AnalysisFilters(
+        problem_code="ROOT", start_date=date(2026, 8, 2), view="details"
     )
+    response = analysis.get("task", filters)
+    content, _ = analysis.export_filtered("task", filters)
+    details = pd.read_excel(BytesIO(content), sheet_name="筛选明细")
+    assert response["scope"]["filtered_records"] == len(details)
+    assert response["details"]["total"] == len(details)
     exported = pd.read_excel(BytesIO(content), sheet_name="语义层级")
     assert exported.iloc[0]["标签编码路径"].startswith("ROOT → FIT → ")
     assert exported.iloc[0]["重复记录数"] == 2

@@ -99,9 +99,7 @@ class AnalysisService:
         filters: AnalysisFilters,
     ) -> dict[str, Any]:
         task = self._task_source(task_id, filters.listing)
-        data = self._load_task_data(task)
-        details = self._apply_task_scope(data.details, task)
-        filtered = self._filter(details, filters, data.semantics)
+        data, details, filtered = self._prepare_filtered(task, filters)
         view = filters.view if filters.view in ANALYSIS_VIEWS else "all"
         metrics = self._metric_summary(filtered)
         payload = {
@@ -155,9 +153,7 @@ class AnalysisService:
         self, task_id: str, filters: AnalysisFilters
     ) -> tuple[bytes, str]:
         task = self._task_source(task_id, filters.listing)
-        data = self._load_task_data(task)
-        details = self._apply_task_scope(data.details, task)
-        filtered = self._filter(details, filters, data.semantics)
+        data, _, filtered = self._prepare_filtered(task, filters)
         export = filtered.drop(columns=["return_date", "has_text"], errors="ignore")
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
@@ -171,6 +167,14 @@ class AnalysisService:
             semantics.to_excel(writer, sheet_name="语义层级", index=False)
         filename = f"{task_id}-filtered-analysis-v{task['result_version']}.xlsx"
         return output.getvalue(), filename
+
+    def _prepare_filtered(
+        self, task: dict[str, Any], filters: AnalysisFilters
+    ) -> tuple[AnalysisData, pd.DataFrame, pd.DataFrame]:
+        data = self._load_task_data(task)
+        details = self._apply_task_scope(data.details, task)
+        filtered = self._filter(details, filters, data.semantics)
+        return data, details, filtered
 
     def _task_source(
         self,
