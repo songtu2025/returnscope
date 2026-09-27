@@ -207,6 +207,8 @@ def _build_issue_candidate(
     sample_label, rate_label, _, original_feedback = _report_language(source)
     case_id, product, sku, issue_id = _issue_scope(code, dimension, row)
     metrics = _issue_metrics(row, business_issue, source)
+    lift_value = row.get("lift")
+    rank_lift = float(lift_value) if lift_value is not None else 0.0
     label = str(business_issue.get("label") or code)
     target = sku or product
     title = f"{target} · {label}" if target else label
@@ -218,7 +220,7 @@ def _build_issue_candidate(
         "rank_key": (
             0 if business_issue.get("role") == "primary" else 1,
             -int(row.get("excess_record_count") or 0),
-            -float(row.get("lift") if row.get("lift") is not None else 0),
+            -rank_lift,
             -metrics["matched_return_samples"],
             title,
         ),
