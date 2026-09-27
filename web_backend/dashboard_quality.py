@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from web_backend.common import json_value
 from web_backend.dashboard_common import TEXT_ENCODING_ANOMALY
-from web_backend.dashboard_plan import summarize_sources
 from web_backend.dashboard_support import (
     feedback_group_scope,
     percentage,
     record_where,
     version_context,
+    version_row,
 )
 from web_backend.database import Database
 
@@ -17,21 +18,12 @@ def build_summary(
     database: Database, dashboard_id: str, version_id: str
 ) -> dict[str, Any]:
     with database.connect() as connection:
-        context = version_context(database, connection, dashboard_id, version_id)
-        summary = summarize_sources(
-            database,
-            connection,
-            context["source_ids"],
-            context["filters"],
-            context["sources"],
-            include_comment_metrics=False,
-            feedback_groups=context["counting_basis"] == "feedback_group",
-        )
+        version = version_row(connection, dashboard_id, version_id)
     return {
         "dashboard_id": dashboard_id,
         "version_id": version_id,
-        "dataset_version_id": context["dataset_version_id"],
-        **summary,
+        "dataset_version_id": version["dataset_version_id"],
+        **json_value(version["summary_json"], {}),
     }
 
 

@@ -355,6 +355,14 @@ def test_existing_dashboard_version_keeps_source_record_basis(tmp_path: Path) ->
         actor_id="user-1",
     )
     new_id = str(updated["version"]["version_id"])
+    for selected_id in (old_id, new_id):
+        stored_version = service.get(dashboard_id, selected_id)["version"]
+        assert service.summary(dashboard_id, selected_id) == {
+            "dashboard_id": dashboard_id,
+            "version_id": selected_id,
+            "dataset_version_id": stored_version["dataset_version_id"],
+            **stored_version["summary"],
+        }
     assert service.get(dashboard_id, old_id)["version"]["summary"]["record_count"] == 3
     assert service.summary(dashboard_id, old_id)["record_count"] == 3
     assert service.review_bias(dashboard_id, old_id)["total_record_count"] == 3
