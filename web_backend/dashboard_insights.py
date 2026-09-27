@@ -24,6 +24,8 @@ from web_backend.dashboard_support import (
 from web_backend.database import Database
 from web_backend.result_hierarchy import hierarchy_counts, result_taxonomy
 
+INSIGHT_PAGE_CACHE_KIB = 64 * 1024
+
 
 @dataclass(frozen=True)
 class InsightOptions:
@@ -197,6 +199,8 @@ def build_insights(
     options: InsightOptions,
 ) -> dict[str, Any]:
     with database.connect() as connection:
+        # 仅本次洞察查询扩大页面缓存，连接关闭后释放。
+        connection.execute(f"PRAGMA cache_size = -{INSIGHT_PAGE_CACHE_KIB}")
         context = version_context(database, connection, dashboard_id, version_id)
         if mixed_hierarchy(connection, context["sources"]):
             return {
