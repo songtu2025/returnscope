@@ -288,7 +288,7 @@ def collect_insight_overview(scope: InsightQueryScope) -> dict[str, Any]:
     ]
     product_matrix_rows = connection.execute(
         f"""
-        WITH filtered_records AS (
+        WITH filtered_records AS MATERIALIZED (
             SELECT r.id, r.result_version_id, r.classification_key,
                    r.product_name
             FROM classification_result_records r
