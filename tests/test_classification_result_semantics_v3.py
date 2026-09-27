@@ -9,7 +9,10 @@ from fastapi.testclient import TestClient
 from test_classification_result_pool import _publish, _seed_result_context
 
 from return_semantics.schemas import ProcessingStatus
-from web_backend.classification_result_payload import prepare_semantic_record
+from web_backend.classification_result_payload import (
+    classification_comment_status,
+    prepare_semantic_record,
+)
 from web_backend.classification_result_service import ClassificationResultService
 from web_backend.common import json_text
 from web_backend.dashboard_support import serialize_record
@@ -92,6 +95,23 @@ def test_legacy_scope_status_is_consistent_across_record_reads(tmp_path: Path) -
     )
     assert legacy_review["comment_summary_status"] == "CONFLICT"
     assert len(legacy_review["comment_conclusions"]) == 1
+
+
+def test_comment_status_uses_result_taxonomy_to_group_legacy_facts(
+    tmp_path: Path,
+) -> None:
+    taxonomy = _seed_result_context(tmp_path).taxonomy
+    classification = {
+        "semantic_units": [
+            {"label_code": "FIT_GOOD_U1", "sentiment": "POSITIVE"},
+            {"label_code": "FIT_TOO_SMALL_U1", "sentiment": "NEGATIVE"},
+        ]
+    }
+
+    assert classification_comment_status(classification, None) == "MIXED"
+    status = classification_comment_status(classification, taxonomy)
+    record = prepare_semantic_record({"classification": classification}, taxonomy)
+    assert status == record["comment_summary_status"] == "CONFLICT"
 
 
 def _client(service: ClassificationResultService) -> TestClient:

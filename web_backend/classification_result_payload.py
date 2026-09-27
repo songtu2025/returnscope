@@ -367,6 +367,15 @@ def _comment_summary_status(
     return "NO_CONFIRMED"
 
 
+def classification_comment_status(
+    payload: dict[str, Any], taxonomy: TaxonomyConfig | None
+) -> str:
+    """按记录详情相同的事实和主题规则计算评论状态。"""
+    facts = _normalize_semantic_facts(payload, taxonomy)
+    summaries = _topic_summaries(facts, taxonomy, payload.get("semantic_relations", []))
+    return _comment_summary_status(payload, summaries)
+
+
 def _prepare_classification_payload(
     payload: dict[str, Any],
     taxonomy: TaxonomyConfig | None,

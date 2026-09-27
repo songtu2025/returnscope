@@ -5,12 +5,13 @@ import json
 import sqlite3
 from typing import Any
 
+from return_semantics.schemas import TaxonomyConfig
+from web_backend.classification_result_payload import classification_comment_status
 from web_backend.common import json_value
 from web_backend.dashboard_common import (
     COMMENT_SUMMARY_STATUSES,
     FEEDBACK_GROUP_BASIS,
     PLAN_VERSION,
-    classification_comment_status,
 )
 from web_backend.dashboard_support import (
     DASHBOARD_SOURCE_COLUMNS_SQL,
@@ -20,7 +21,7 @@ from web_backend.dashboard_support import (
     record_where,
 )
 from web_backend.database import Database
-from web_backend.result_hierarchy import feedback_group_key_sql
+from web_backend.result_hierarchy import feedback_group_key_sql, result_taxonomy
 
 
 def build_plan(
@@ -380,7 +381,8 @@ def comment_summary_metrics(
     )
     rows = connection.execute(
         f"""
-        SELECT u.classification_json, {count_sql} AS comment_count
+        SELECT r.result_version_id, u.classification_json,
+               {count_sql} AS comment_count
         FROM classification_result_records r
         JOIN classification_units u
           ON u.result_version_id = r.result_version_id
@@ -391,9 +393,13 @@ def comment_summary_metrics(
         tuple(params),
     ).fetchall()
     status_counts = {status: 0 for status in COMMENT_SUMMARY_STATUSES}
+    taxonomies: dict[str, TaxonomyConfig | None] = {}
     for row in rows:
+        version_id = str(row["result_version_id"])
+        if version_id not in taxonomies:
+            taxonomies[version_id] = result_taxonomy(connection, version_id)
         payload = json_value(row["classification_json"], {})
-        status = classification_comment_status(payload)
+        status = classification_comment_status(payload, taxonomies[version_id])
         status_counts[status] += int(row["comment_count"] or 0)
 
     coverage = connection.execute(

@@ -13,6 +13,7 @@ from test_classification_result_pool import (
 )
 
 from return_semantics.schemas import ProcessingStatus
+from web_backend.classification_standard_service import ClassificationStandardService
 from web_backend.common import json_text
 from web_backend.dashboard_plan import summarize_sources
 from web_backend.dashboard_service import DashboardConflict, DashboardService
@@ -519,6 +520,70 @@ def test_dashboard_drilldown_and_records_follow_business_hierarchy(
         service.sources(dashboard_id, dashboard_version_id)[0]["result_version_id"]
         == version_id
     )
+
+
+def test_legacy_comment_status_matches_dashboard_and_record_views(
+    tmp_path: Path,
+) -> None:
+    context, version, service = _ready_result(tmp_path)
+    version_id = str(version["version_id"])
+    standards = ClassificationStandardService(context.database)
+    standards.ensure_bootstrapped()
+    standard = next(
+        item for item in standards.list() if item["standard_key"] == "footwear"
+    )
+    legacy = {
+        "semantic_units": [
+            {
+                "fact_id": "F1",
+                "label_code": "FIT_GOOD_U1",
+                "sentiment": "POSITIVE",
+            },
+            {
+                "fact_id": "F2",
+                "label_code": "FIT_TOO_SMALL_U1",
+                "sentiment": "NEGATIVE",
+            },
+        ]
+    }
+    with context.database.transaction() as connection:
+        connection.execute(
+            "UPDATE classification_results SET standard_version_id = ? WHERE id = ?",
+            (standard["standard_version_id"], version["result_id"]),
+        )
+        connection.execute(
+            "UPDATE classification_units SET classification_json = ? "
+            "WHERE result_version_id = ?",
+            (json_text(legacy), version_id),
+        )
+
+    plan, dashboard = _create_dashboard(service, version_id)
+    dashboard_id = str(dashboard["id"])
+    dashboard_version_id = str(dashboard["version"]["version_id"])
+    expected_statuses = [
+        {"status": "POSITIVE", "comment_count": 0},
+        {"status": "NEGATIVE", "comment_count": 0},
+        {"status": "MIXED", "comment_count": 0},
+        {"status": "CONFLICT", "comment_count": 2},
+        {"status": "NO_CONFIRMED", "comment_count": 0},
+    ]
+    summaries = (
+        plan["summary"],
+        service.summary(dashboard_id, dashboard_version_id),
+        service.insights(dashboard_id, dashboard_version_id)["summary"],
+    )
+    for summary in summaries:
+        assert summary["comment_statuses"] == expected_statuses
+        assert summary["comment_count"] == 2
+        assert summary["total_comment_count"] == 2
+    records = service.records(dashboard_id, dashboard_version_id)["items"]
+    assert records
+    assert {record["comment_summary_status"] for record in records} == {"CONFLICT"}
+    assert {
+        conclusion["status"]
+        for record in records
+        for conclusion in record["comment_conclusions"]
+    } == {"CONFLICT"}
 
 
 def test_dashboard_insights_are_derived_from_ready_records(tmp_path: Path) -> None:
