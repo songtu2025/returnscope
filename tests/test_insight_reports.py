@@ -743,10 +743,10 @@ def test_report_diagnostics_share_overview_without_changing_evidence(
     overview_calls = 0
     original_overview = dashboard_insights.collect_insight_overview
 
-    def count_overview(scope):
+    def count_overview(scope, **kwargs):
         nonlocal overview_calls
         overview_calls += 1
-        return original_overview(scope)
+        return original_overview(scope, **kwargs)
 
     monkeypatch.setattr(dashboard_insights, "collect_insight_overview", count_overview)
     actual = [

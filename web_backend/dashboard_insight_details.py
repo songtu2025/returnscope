@@ -201,50 +201,60 @@ def collect_reason_details(
             }
             for row in co_reason_rows
         ]
-        semantic_record_count = int(
-            connection.execute(
-                f"""
-                SELECT COUNT(DISTINCT r.id)
+        semantic_rows = connection.execute(
+            f"""
+            WITH matched AS MATERIALIZED (
+                SELECT r.id AS record_id,
+                       COALESCE(
+                           NULLIF(json_extract(unit.value, '$.part'), ''),
+                           'UNSPECIFIED'
+                       ) AS part,
+                       json_extract(unit.value, '$.opinion') AS opinion,
+                       json_extract(unit.value, '$.subject') AS subject,
+                       json_extract(unit.value, '$.evidence') AS evidence
                 FROM classification_result_records r
                 JOIN classification_units u
                   ON u.result_version_id = r.result_version_id
                  AND u.classification_key = r.classification_key
-                JOIN json_each(
-                    u.classification_json,
-                    '$.semantic_units'
-                ) unit
+                JOIN json_each(u.classification_json, '$.semantic_units') unit
                 WHERE {where_sql}
                   AND json_extract(unit.value, '$.label_code') = ?
-                """,
-                (*params, selected_code),
-            ).fetchone()[0]
-        )
-        part_rows = connection.execute(
-            f"""
-            SELECT COALESCE(
-                       NULLIF(json_extract(unit.value, '$.part'), ''),
-                       'UNSPECIFIED'
-                   ) AS value,
-                   COUNT(DISTINCT r.id) AS record_count
-            FROM classification_result_records r
-            JOIN classification_units u
-              ON u.result_version_id = r.result_version_id
-             AND u.classification_key = r.classification_key
-            JOIN json_each(
-                u.classification_json,
-                '$.semantic_units'
-            ) unit
-            WHERE {where_sql}
-              AND json_extract(unit.value, '$.label_code') = ?
-            GROUP BY COALESCE(
-                NULLIF(json_extract(unit.value, '$.part'), ''),
-                'UNSPECIFIED'
+            ),
+            part_counts AS (
+                SELECT part AS value, COUNT(DISTINCT record_id) AS record_count
+                FROM matched
+                GROUP BY part
+                ORDER BY record_count DESC, value ASC
+                LIMIT 6
+            ),
+            opinion_counts AS (
+                SELECT opinion, subject, part,
+                       COUNT(DISTINCT record_id) AS record_count,
+                       MAX(evidence) AS evidence
+                FROM matched
+                WHERE NULLIF(opinion, '') IS NOT NULL
+                GROUP BY opinion, subject, part
+                ORDER BY record_count DESC, opinion ASC
+                LIMIT 4
             )
-            ORDER BY record_count DESC, value ASC
-            LIMIT 6
+            SELECT 'total' AS kind, NULL AS value, NULL AS subject,
+                   NULL AS part, COUNT(DISTINCT record_id) AS record_count,
+                   NULL AS evidence
+            FROM matched
+            UNION ALL
+            SELECT 'part', value, NULL, NULL, record_count, NULL
+            FROM part_counts
+            UNION ALL
+            SELECT 'opinion', opinion, subject, part, record_count, evidence
+            FROM opinion_counts
             """,
             (*params, selected_code),
         ).fetchall()
+        semantic_record_count = int(semantic_rows[0]["record_count"])
+        part_rows = sorted(
+            (row for row in semantic_rows if row["kind"] == "part"),
+            key=lambda row: (-int(row["record_count"]), str(row["value"])),
+        )
         semantic_parts = [
             {
                 "value": str(row["value"]),
@@ -255,38 +265,17 @@ def collect_reason_details(
             }
             for row in part_rows
         ]
-        opinion_rows = connection.execute(
-            f"""
-            SELECT json_extract(unit.value, '$.opinion') AS opinion,
-                   json_extract(unit.value, '$.subject') AS subject,
-                   COALESCE(
-                       NULLIF(json_extract(unit.value, '$.part'), ''),
-                       'UNSPECIFIED'
-                   ) AS part,
-                   COUNT(DISTINCT r.id) AS record_count,
-                   MAX(json_extract(unit.value, '$.evidence')) AS evidence
-            FROM classification_result_records r
-            JOIN classification_units u
-              ON u.result_version_id = r.result_version_id
-             AND u.classification_key = r.classification_key
-            JOIN json_each(
-                u.classification_json,
-                '$.semantic_units'
-            ) unit
-            WHERE {where_sql}
-              AND json_extract(unit.value, '$.label_code') = ?
-              AND NULLIF(json_extract(unit.value, '$.opinion'), '')
-                  IS NOT NULL
-            GROUP BY opinion, subject, part
-            ORDER BY record_count DESC, opinion ASC
-            LIMIT 4
-            """,
-            (*params, selected_code),
-        ).fetchall()
+        opinion_rows = sorted(
+            (row for row in semantic_rows if row["kind"] == "opinion"),
+            key=lambda row: (-int(row["record_count"]), str(row["value"])),
+        )
         semantic_opinions = [
             {
-                **dict(row),
+                "opinion": row["value"],
+                "subject": row["subject"],
+                "part": row["part"],
                 "record_count": int(row["record_count"]),
+                "evidence": row["evidence"],
             }
             for row in opinion_rows
         ]

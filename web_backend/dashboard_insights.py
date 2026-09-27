@@ -150,12 +150,16 @@ def _prepare_scope(
     ungrouped_where = where_sql
     ungrouped_params = params
     if context["counting_basis"] == "feedback_group":
+        same_group_scope = option_where == where_sql and option_params == params
         option_where, option_params = feedback_group_scope(
             connection, option_where, option_params, name="options"
         )
-        where_sql, params = feedback_group_scope(
-            connection, where_sql, params, name="main"
-        )
+        if same_group_scope:
+            where_sql, params = option_where, option_params
+        else:
+            where_sql, params = feedback_group_scope(
+                connection, where_sql, params, name="main"
+            )
     unit_rollup = (
         options.report_mode
         and not runtime_filters
@@ -213,6 +217,7 @@ def build_insights(
             context["source_ids"],
             context["filters"],
             context["sources"],
+            include_comment_metrics=False,
             feedback_groups=context["counting_basis"] == "feedback_group",
         )
         summary.update(
@@ -230,7 +235,21 @@ def build_insights(
             if taxonomy and taxonomy.structure_version == 2
             else []
         )
-        overview = collect_insight_overview(scope)
+        matches_summary_scope = not any(
+            (
+                options.listing,
+                options.product_name,
+                options.product_sku,
+                options.date_from,
+                options.date_to,
+            )
+        )
+        overview = collect_insight_overview(
+            scope,
+            total_record_count=(
+                int(summary["record_count"]) if matches_summary_scope else None
+            ),
+        )
         selected_reason = overview["selected_reason"]
         details = collect_reason_details(scope, selected_reason, overview, taxonomy)
 

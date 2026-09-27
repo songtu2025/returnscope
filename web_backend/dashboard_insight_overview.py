@@ -22,51 +22,15 @@ class InsightQueryScope:
     report_mode: bool
 
 
-def collect_insight_overview(scope: InsightQueryScope) -> dict[str, Any]:
+def _collect_semantic_breakdown(
+    scope: InsightQueryScope, total_records: int
+) -> tuple[list[dict[str, Any]], dict[str, list[str]]]:
     connection = scope.connection
     context = scope.context
     where_sql = scope.where_sql
     params = scope.params
-    option_where = scope.option_where
-    option_params = scope.option_params
     unit_rollup = scope.unit_rollup
-    clean_group = scope.clean_group
-    requested_problem = scope.requested_problem
-    report_mode = scope.report_mode
 
-    date_range = dict(
-        connection.execute(
-            f"""
-            SELECT MIN(date(r.return_date)) AS date_from,
-                   MAX(date(r.return_date)) AS date_to
-            FROM classification_result_records r
-            WHERE {option_where}
-            """,
-            tuple(option_params),
-        ).fetchone()
-    )
-    total_records = int(
-        connection.execute(
-            f"SELECT COUNT(*) FROM classification_result_records r WHERE {where_sql}",
-            tuple(params),
-        ).fetchone()[0]
-    )
-    labeled_record_count = int(
-        connection.execute(
-            f"""
-            SELECT COUNT(*)
-            FROM classification_result_records r
-            WHERE {where_sql}
-              AND EXISTS (
-                  SELECT 1 FROM classification_unit_labels label
-                  WHERE label.result_version_id = r.result_version_id
-                    AND label.classification_key = r.classification_key
-                    AND label.label_kind = 'problem'
-              )
-            """,
-            tuple(params),
-        ).fetchone()[0]
-    )
     if unit_rollup:
         source_placeholders = ",".join("?" for _ in context["source_ids"])
         subject_rows = connection.execute(
@@ -93,23 +57,54 @@ def collect_insight_overview(scope: InsightQueryScope) -> dict[str, Any]:
             tuple(context["source_ids"]),
         ).fetchall()
     else:
-        subject_rows = connection.execute(
+        semantic_rows = connection.execute(
             f"""
-            SELECT json_extract(unit.value, '$.subject') AS value,
-                   COUNT(DISTINCT r.id) AS record_count,
+            WITH semantic_rows AS MATERIALIZED (
+                SELECT r.id, r.result_version_id, r.classification_key,
+                       json_extract(unit.value, '$.subject') AS subject,
+                       json_extract(unit.value, '$.label_code') AS label_code
+                FROM classification_result_records r
+                JOIN classification_units u
+                  ON u.result_version_id = r.result_version_id
+                 AND u.classification_key = r.classification_key
+                JOIN json_each(u.classification_json, '$.semantic_units') unit
+                WHERE {where_sql}
+            )
+            SELECT 'subject' AS kind, NULL AS label_code,
+                   subject AS value, COUNT(DISTINCT id) AS record_count,
                    COUNT(*) AS semantic_unit_count
-            FROM classification_result_records r
-            JOIN classification_units u
-              ON u.result_version_id = r.result_version_id
-             AND u.classification_key = r.classification_key
-            JOIN json_each(u.classification_json, '$.semantic_units') unit
-            WHERE {where_sql}
-              AND json_extract(unit.value, '$.subject') IS NOT NULL
-            GROUP BY json_extract(unit.value, '$.subject')
-            ORDER BY record_count DESC, value ASC
+            FROM semantic_rows
+            WHERE subject IS NOT NULL
+            GROUP BY subject
+            UNION ALL
+            SELECT 'reason_subject', semantic_rows.label_code,
+                   semantic_rows.subject, COUNT(DISTINCT semantic_rows.id), NULL
+            FROM semantic_rows
+            JOIN classification_unit_labels l
+              ON l.result_version_id = semantic_rows.result_version_id
+             AND l.classification_key = semantic_rows.classification_key
+             AND l.label_kind = 'problem'
+             AND l.label_code = semantic_rows.label_code
+            GROUP BY semantic_rows.label_code, semantic_rows.subject
             """,
             tuple(params),
         ).fetchall()
+        subject_rows = sorted(
+            (row for row in semantic_rows if row["kind"] == "subject"),
+            key=lambda row: (-int(row["record_count"]), str(row["value"])),
+        )
+        reason_subject_rows = sorted(
+            (
+                {
+                    "label_code": row["label_code"],
+                    "subject": row["value"],
+                    "record_count": row["record_count"],
+                }
+                for row in semantic_rows
+                if row["kind"] == "reason_subject"
+            ),
+            key=lambda row: -int(row["record_count"]),
+        )
     subject_breakdown = [
         {
             "value": str(row["value"]),
@@ -120,40 +115,6 @@ def collect_insight_overview(scope: InsightQueryScope) -> dict[str, Any]:
         }
         for row in subject_rows
     ]
-    group_rows = connection.execute(
-        f"""
-        SELECT aligned_group(l.label_group, l.label_code, r.result_version_id) AS value,
-               COUNT(DISTINCT r.id) AS record_count
-        FROM classification_result_records r
-        JOIN classification_unit_labels l
-          ON l.result_version_id = r.result_version_id
-         AND l.classification_key = r.classification_key
-         AND l.label_kind = 'problem'
-        WHERE {where_sql}
-        GROUP BY value
-        ORDER BY record_count DESC, MIN(l.rowid)
-        """,
-        tuple(params),
-    ).fetchall()
-    label_name_rows = connection.execute(
-        f"""
-        SELECT l.label_code,
-               COALESCE(NULLIF(TRIM(l.label_name), ''), l.label_code) AS label,
-               COUNT(DISTINCT r.id) AS record_count
-        FROM classification_result_records r
-        JOIN classification_unit_labels l
-          ON l.result_version_id = r.result_version_id
-         AND l.classification_key = r.classification_key
-         AND l.label_kind = 'problem'
-        WHERE {where_sql}
-        GROUP BY l.label_code, l.label_name
-        """,
-        tuple(params),
-    ).fetchall()
-    label_names = {str(row["label_code"]): str(row["label"]) for row in label_name_rows}
-    label_counts = {
-        str(row["label_code"]): int(row["record_count"]) for row in label_name_rows
-    }
     if unit_rollup:
         reason_subject_rows = connection.execute(
             f"""
@@ -179,33 +140,129 @@ def collect_insight_overview(scope: InsightQueryScope) -> dict[str, Any]:
             """,
             tuple(context["source_ids"]),
         ).fetchall()
-    else:
-        reason_subject_rows = connection.execute(
+    reason_subjects: dict[str, list[str]] = {}
+    for row in reason_subject_rows:
+        reason_subjects.setdefault(str(row["label_code"]), []).append(
+            str(row["subject"])
+        )
+    return subject_breakdown, reason_subjects
+
+
+def _label_catalog(
+    scope: InsightQueryScope, reason_rows: list[sqlite3.Row]
+) -> tuple[dict[str, str], dict[str, int]]:
+    connection = scope.connection
+    where_sql = scope.where_sql
+    params = scope.params
+    clean_group = scope.clean_group
+
+    if clean_group:
+        label_name_rows = connection.execute(
             f"""
             SELECT l.label_code,
-                   json_extract(unit.value, '$.subject') AS subject,
+                   COALESCE(NULLIF(TRIM(l.label_name), ''), l.label_code)
+                       AS label,
                    COUNT(DISTINCT r.id) AS record_count
             FROM classification_result_records r
             JOIN classification_unit_labels l
               ON l.result_version_id = r.result_version_id
              AND l.classification_key = r.classification_key
              AND l.label_kind = 'problem'
-            JOIN classification_units u
-              ON u.result_version_id = r.result_version_id
-             AND u.classification_key = r.classification_key
-            JOIN json_each(u.classification_json, '$.semantic_units') unit
-              ON json_extract(unit.value, '$.label_code') = l.label_code
             WHERE {where_sql}
-            GROUP BY l.label_code, subject
-            ORDER BY record_count DESC
+            GROUP BY l.label_code, l.label_name
             """,
             tuple(params),
         ).fetchall()
-    reason_subjects: dict[str, list[str]] = {}
-    for row in reason_subject_rows:
-        reason_subjects.setdefault(str(row["label_code"]), []).append(
-            str(row["subject"])
+    else:
+        grouped_labels: dict[tuple[str, str | None], dict[str, Any]] = {}
+        for row in reason_rows:
+            key = (str(row["value"]), row["raw_label_name"])
+            if key not in grouped_labels:
+                grouped_labels[key] = {
+                    "label_code": key[0],
+                    "label": str(row["label"]),
+                    "record_count": 0,
+                }
+            grouped_labels[key]["record_count"] += int(row["record_count"])
+        label_name_rows = [
+            grouped_labels[key]
+            for key in sorted(
+                grouped_labels,
+                key=lambda item: (item[0], item[1] is not None, item[1] or ""),
+            )
+        ]
+    label_names = {str(row["label_code"]): str(row["label"]) for row in label_name_rows}
+    label_counts = {
+        str(row["label_code"]): int(row["record_count"]) for row in label_name_rows
+    }
+    return label_names, label_counts
+
+
+def collect_insight_overview(
+    scope: InsightQueryScope, *, total_record_count: int | None = None
+) -> dict[str, Any]:
+    connection = scope.connection
+    where_sql = scope.where_sql
+    params = scope.params
+    option_where = scope.option_where
+    option_params = scope.option_params
+    clean_group = scope.clean_group
+    requested_problem = scope.requested_problem
+    report_mode = scope.report_mode
+
+    date_range = dict(
+        connection.execute(
+            f"""
+            SELECT MIN(date(r.return_date)) AS date_from,
+                   MAX(date(r.return_date)) AS date_to
+            FROM classification_result_records r
+            WHERE {option_where}
+            """,
+            tuple(option_params),
+        ).fetchone()
+    )
+    total_records = total_record_count
+    if total_records is None:
+        total_records = int(
+            connection.execute(
+                f"SELECT COUNT(*) FROM classification_result_records r WHERE {where_sql}",
+                tuple(params),
+            ).fetchone()[0]
         )
+    labeled_record_count = int(
+        connection.execute(
+            f"""
+            SELECT COUNT(*)
+            FROM classification_result_records r
+            WHERE {where_sql}
+              AND EXISTS (
+                  SELECT 1 FROM classification_unit_labels label
+                  WHERE label.result_version_id = r.result_version_id
+                    AND label.classification_key = r.classification_key
+                    AND label.label_kind = 'problem'
+              )
+            """,
+            tuple(params),
+        ).fetchone()[0]
+    )
+    subject_breakdown, reason_subjects = _collect_semantic_breakdown(
+        scope, total_records
+    )
+    group_rows = connection.execute(
+        f"""
+        SELECT aligned_group(l.label_group, l.label_code, r.result_version_id) AS value,
+               COUNT(DISTINCT r.id) AS record_count
+        FROM classification_result_records r
+        JOIN classification_unit_labels l
+          ON l.result_version_id = r.result_version_id
+         AND l.classification_key = r.classification_key
+         AND l.label_kind = 'problem'
+        WHERE {where_sql}
+        GROUP BY value
+        ORDER BY record_count DESC, MIN(l.rowid)
+        """,
+        tuple(params),
+    ).fetchall()
     reason_group_filter = ""
     reason_params = list(params)
     if clean_group:
@@ -218,6 +275,7 @@ def collect_insight_overview(scope: InsightQueryScope) -> dict[str, Any]:
             SELECT l.label_code AS value,
                    COALESCE(NULLIF(TRIM(l.label_name), ''), l.label_code)
                        AS label,
+                   l.label_name AS raw_label_name,
                    aligned_group(l.label_group, l.label_code, r.result_version_id)
                        AS label_group,
                    COUNT(r.id) AS record_count,
@@ -235,6 +293,7 @@ def collect_insight_overview(scope: InsightQueryScope) -> dict[str, Any]:
         reason_sql = f"""
         SELECT l.label_code AS value,
                COALESCE(NULLIF(TRIM(l.label_name), ''), l.label_code) AS label,
+               l.label_name AS raw_label_name,
                aligned_group(l.label_group, l.label_code, r.result_version_id) AS label_group,
                COUNT(r.id) AS record_count,
                SUM(CASE WHEN EXISTS (
@@ -261,9 +320,14 @@ def collect_insight_overview(scope: InsightQueryScope) -> dict[str, Any]:
         reason_sql,
         tuple(reason_params),
     ).fetchall()
+    label_names, label_counts = _label_catalog(scope, reason_rows)
     reasons = [
         {
-            **dict(row),
+            **{
+                key: value
+                for key, value in dict(row).items()
+                if key != "raw_label_name"
+            },
             "record_count": int(row["record_count"]),
             "primary_record_count": (
                 None if report_mode else int(row["primary_record_count"] or 0)

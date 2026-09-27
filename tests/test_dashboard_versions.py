@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
@@ -677,6 +678,86 @@ def test_dashboard_insights_are_derived_from_ready_records(tmp_path: Path) -> No
     assert empty_insights["summary"]["comment_count"] == 0
     assert empty_insights["summary"]["total_comment_count"] == 0
     assert empty_insights["summary"]["pending_review_comment_count"] == 0
+
+
+def test_dashboard_insights_reuse_unchanged_feedback_scope(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    context, version, service = _ready_result(tmp_path)
+    _, dashboard = _create_dashboard(service, str(version["version_id"]))
+    dashboard_id = str(dashboard["id"])
+    version_id = str(dashboard["version"]["version_id"])
+    statements: list[str] = []
+    original_connect = context.database.connect
+
+    def traced_connect():
+        connection = original_connect()
+        connection.set_trace_callback(statements.append)
+        return connection
+
+    monkeypatch.setattr(context.database, "connect", traced_connect)
+    insights = service.insights(dashboard_id, version_id)
+    assert insights["total_record_count"] == insights["summary"]["record_count"]
+    assert (
+        sum("INSERT INTO dashboard_feedback_options" in sql for sql in statements) == 1
+    )
+    assert not any("INSERT INTO dashboard_feedback_main" in sql for sql in statements)
+    assert (
+        sum(
+            "SELECT r.result_version_id, u.classification_json" in sql
+            for sql in statements
+        )
+        == 1
+    )
+
+    statements.clear()
+    filtered = service.insights(dashboard_id, version_id, product_name="不存在的产品")
+    assert filtered["total_record_count"] == 0
+    assert any("INSERT INTO dashboard_feedback_main" in sql for sql in statements)
+
+
+def test_dashboard_insights_count_each_semantic_part_once_per_record(
+    tmp_path: Path,
+) -> None:
+    context, version, service = _ready_result(tmp_path)
+    _, dashboard = _create_dashboard(service, str(version["version_id"]))
+    with context.database.transaction(immediate=True) as connection:
+        row = connection.execute(
+            "SELECT id, classification_json FROM classification_units LIMIT 1"
+        ).fetchone()
+        classification = json.loads(row["classification_json"])
+        semantic = classification["semantic_units"][0]
+        classification["semantic_units"] = [
+            {**semantic, "part": "WHOLE_SHOE", "opinion": "tight", "evidence": "a"},
+            {**semantic, "part": "TOE_BOX", "opinion": "tight", "evidence": "b"},
+            {**semantic, "part": "TOE_BOX", "opinion": "narrow", "evidence": "c"},
+        ]
+        connection.execute(
+            "UPDATE classification_units SET classification_json = ? WHERE id = ?",
+            (json_text(classification), row["id"]),
+        )
+
+    insights = service.insights(
+        str(dashboard["id"]),
+        str(dashboard["version"]["version_id"]),
+        problem="FIT_TOO_SMALL_U1",
+    )
+    semantic_profile = insights["semantic_profile"]
+    assert semantic_profile["record_count"] == 2
+    assert {
+        (item["value"], item["record_count"]) for item in semantic_profile["parts"]
+    } == {
+        ("TOE_BOX", 2),
+        ("WHOLE_SHOE", 2),
+    }
+    assert {
+        (item["opinion"], item["part"], item["record_count"], item["evidence"])
+        for item in semantic_profile["opinions"]
+    } == {
+        ("narrow", "TOE_BOX", 2, "c"),
+        ("tight", "TOE_BOX", 2, "b"),
+        ("tight", "WHOLE_SHOE", 2, "a"),
+    }
 
 
 def test_issue_cases_keep_variant_context_and_rank_representative_samples(
