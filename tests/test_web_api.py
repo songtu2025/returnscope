@@ -385,6 +385,18 @@ def test_return_version_fills_only_missing_store_values(tmp_path: Path) -> None:
         assert first_snapshot.json()["source_total"] == 1
 
 
+def _wait_for_completed_task(client: TestClient, task_id: str) -> dict:
+    deadline = time.time() + 15
+    current = {}
+    while time.time() < deadline:
+        current = client.get(f"/api/tasks/{task_id}").json()
+        if current["status"] in {"completed", "failed"}:
+            break
+        time.sleep(0.1)
+    assert current["status"] == "completed", current
+    return current
+
+
 def _create_and_verify_dashboard(
     client: TestClient,
     result_version_id: str,
@@ -868,14 +880,7 @@ def test_real_web_task_flow(tmp_path: Path) -> None:
             assert task.status_code == 201, task.text
             task_id = task.json()["id"]
 
-            deadline = time.time() + 15
-            current = {}
-            while time.time() < deadline:
-                current = client.get(f"/api/tasks/{task_id}").json()
-                if current["status"] in {"completed", "failed"}:
-                    break
-                time.sleep(0.1)
-            assert current["status"] == "completed", current
+            current = _wait_for_completed_task(client, task_id)
             assert current["progress_percent"] == 100
             assert current["metrics"]["top_problem_labels"][0]["name"] == "偏大"
             assert current["metrics"]["category_registry_version"].startswith(
@@ -949,7 +954,53 @@ def test_real_web_task_flow(tmp_path: Path) -> None:
                 params={"task_id": task_id},
             ).json()
             assert reviews == []
-            base_version_id = current["segments"][0]["result_version_id"]
+            collaborator = client.post(
+                "/api/users",
+                json={
+                    "email": "collaborator@example.com",
+                    "display_name": "协作者",
+                    "password": "collaborator-password-123",
+                },
+            )
+            assert collaborator.status_code == 201
+            collaborator_id = collaborator.json()["id"]
+            assert client.post("/api/auth/logout").status_code == 204
+            member_login = client.post(
+                "/api/auth/login",
+                json={
+                    "email": "collaborator@example.com",
+                    "password": "collaborator-password-123",
+                },
+            )
+            assert member_login.status_code == 200
+            assert member_login.json()["id"] == collaborator_id
+            member_preflight = client.post(
+                "/api/tasks/preflight",
+                json={
+                    "dataset_version_id": returns["version_id"],
+                    "product_version_id": products["version_id"],
+                    "store": "SEEKWAY:US",
+                    "listing": "SK001",
+                },
+            )
+            assert member_preflight.status_code == 200, member_preflight.text
+            member_task = client.post(
+                "/api/tasks",
+                json={
+                    "title": "协作者真实分析",
+                    "dataset_version_id": returns["version_id"],
+                    "product_version_id": products["version_id"],
+                    "store": "SEEKWAY:US",
+                    "listing": "SK001",
+                    "plan_hash": member_preflight.json()["plan_hash"],
+                    "unresolved_policy": "run_ready",
+                },
+            )
+            assert member_task.status_code == 201, member_task.text
+            member_task_id = member_task.json()["id"]
+            member_current = _wait_for_completed_task(client, member_task_id)
+            assert member_current["owner_name"] == "协作者"
+            base_version_id = member_current["segments"][0]["result_version_id"]
             with app.state.database.transaction() as connection:
                 unit = connection.execute(
                     """
@@ -1022,18 +1073,16 @@ def test_real_web_task_flow(tmp_path: Path) -> None:
                 client,
                 derived_version_id,
             )
-            collaborator = client.post(
-                "/api/users",
+            assert client.post("/api/auth/logout").status_code == 204
+            admin_login = client.post(
+                "/api/auth/login",
                 json={
-                    "email": "collaborator@example.com",
-                    "display_name": "协作者",
-                    "password": "collaborator-password-123",
+                    "email": "admin@example.com",
+                    "password": "test-password-123",
                 },
             )
-            assert collaborator.status_code == 201
-            user_audit = client.get(
-                f"/api/audit/user/{collaborator.json()['id']}"
-            ).json()
+            assert admin_login.status_code == 200
+            user_audit = client.get(f"/api/audit/user/{collaborator_id}").json()
             assert user_audit[0]["action"] == "create"
             assert user_audit[0]["actor_name"] == "管理员"
             self_deactivate = client.patch(
@@ -1045,7 +1094,6 @@ def test_real_web_task_flow(tmp_path: Path) -> None:
                 },
             )
             assert self_deactivate.status_code == 400
-            collaborator_id = collaborator.json()["id"]
             deactivated = client.patch(
                 f"/api/users/{collaborator_id}",
                 json={
