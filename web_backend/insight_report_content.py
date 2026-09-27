@@ -12,6 +12,16 @@ from web_backend.insight_report_contracts import (
 
 def _messages_v6(evidence: dict[str, Any]) -> list[dict[str, str]]:
     is_returns = evidence.get("source", {}).get("analysis_context") == "returns"
+    referenced_ids = {
+        evidence_id
+        for issue in evidence["blueprint"]["issues"]
+        for evidence_id in issue["evidence_ids"]
+    }
+    referenced_catalog = {
+        evidence_id: item
+        for evidence_id, item in evidence["catalog"].items()
+        if evidence_id in referenced_ids
+    }
     role = "电商退货分析负责人" if is_returns else "用户反馈语义分析负责人"
     sample_boundary = (
         "不得把退货样本内占比称为退货率"
@@ -51,8 +61,7 @@ def _messages_v6(evidence: dict[str, Any]) -> list[dict[str, str]]:
                     "fixed_blueprint": evidence["blueprint"],
                     "evidence": {
                         "source": evidence["source"],
-                        "catalog": evidence["catalog"],
-                        "analysis": evidence["analysis"],
+                        "catalog": referenced_catalog,
                     },
                 },
                 ensure_ascii=False,

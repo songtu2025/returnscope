@@ -210,6 +210,15 @@ def test_report_generation_is_versioned_and_evidence_backed(tmp_path) -> None:
     assert captured["settings"].reasoning_effort == "high"
     assert "不得增加或修改任何数字" in captured["messages"][0]["content"]
     assert "商品开发方案" in captured["messages"][0]["content"]
+    request = json.loads(captured["messages"][1]["content"])
+    referenced_ids = {
+        evidence_id
+        for blueprint_issue in completed["evidence"]["blueprint"]["issues"]
+        for evidence_id in blueprint_issue["evidence_ids"]
+    }
+    assert set(request["evidence"]["catalog"]) == referenced_ids
+    assert "analysis" not in request["evidence"]
+    assert "analysis" in completed["evidence"]
     assert len(service.list(dashboard_id, dashboard_version_id)) == 1
     workbench = WorkbenchService(_context.database).summary(limit=20)
     output = next(
@@ -417,6 +426,37 @@ def test_v6_user_feedback_context_uses_generic_report_language() -> None:
     system_prompt = InsightReportService._messages_v6(evidence)[0]["content"]
     assert "用户反馈语义分析负责人" in system_prompt
     assert "总体发生率" in system_prompt
+
+
+def test_v6_prompt_only_sends_evidence_referenced_by_blueprint() -> None:
+    evidence = {
+        "source": {"analysis_context": "returns"},
+        "blueprint": {
+            "issues": [
+                {"id": "issue.one", "evidence_ids": ["scope", "reason.one"]},
+                {"id": "issue.two", "evidence_ids": ["scope"]},
+            ]
+        },
+        "catalog": {
+            "scope": {"value": "当前范围"},
+            "reason.one": {"value": "已引用的原因"},
+            "reason.other": {"value": "未引用的原因"},
+        },
+        "analysis": {"unused_details": "无关分析" * 10000},
+    }
+
+    request = json.loads(InsightReportService._messages_v6(evidence)[1]["content"])
+
+    assert request["fixed_blueprint"] == evidence["blueprint"]
+    assert request["evidence"] == {
+        "source": evidence["source"],
+        "catalog": {
+            "scope": evidence["catalog"]["scope"],
+            "reason.one": evidence["catalog"]["reason.one"],
+        },
+    }
+    assert "reason.other" in evidence["catalog"]
+    assert "unused_details" in evidence["analysis"]
 
 
 def test_v6_blueprint_generic_fallback_has_only_common_scope_fields() -> None:
