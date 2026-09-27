@@ -11,7 +11,11 @@ from web_backend.dashboard_common import (
     DashboardConflict,
     DashboardNotFound,
 )
-from web_backend.dashboard_insights import build_insights
+from web_backend.dashboard_insights import (
+    InsightOptions,
+    build_insights,
+    build_report_diagnostics,
+)
 from web_backend.dashboard_issue_cases import list_issue_cases
 from web_backend.dashboard_plan import build_plan
 from web_backend.dashboard_quality import (
@@ -318,14 +322,25 @@ class DashboardService:
             self.database,
             dashboard_id,
             version_id,
-            problem=problem,
-            label_group=label_group,
-            listing=listing,
-            product_name=product_name,
-            product_sku=product_sku,
-            date_from=date_from,
-            date_to=date_to,
-            report_mode=report_mode,
+            InsightOptions(
+                problem=problem,
+                label_group=label_group,
+                listing=listing,
+                product_name=product_name,
+                product_sku=product_sku,
+                date_from=date_from,
+                date_to=date_to,
+                report_mode=report_mode,
+            ),
+        )
+
+    def report_diagnostics(
+        self, dashboard_id: str, version_id: str, reason_codes: builtins.list[str]
+    ) -> builtins.list[dict[str, Any]]:
+        if not reason_codes:
+            return []
+        return build_report_diagnostics(
+            self.database, dashboard_id, version_id, reason_codes
         )
 
     def issue_cases(

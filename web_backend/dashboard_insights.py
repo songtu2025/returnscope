@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import sqlite3
+from dataclasses import dataclass
 from typing import Any
 
+from return_semantics.schemas import TaxonomyConfig
 from return_semantics.taxonomy import aligned_label_group
 from web_backend.dashboard_insight_details import collect_reason_details
 from web_backend.dashboard_insight_overview import (
@@ -22,33 +25,173 @@ from web_backend.database import Database
 from web_backend.result_hierarchy import hierarchy_counts, result_taxonomy
 
 
-def build_insights(
-    database: Database,
-    dashboard_id: str,
-    version_id: str,
-    *,
-    problem: str | None = None,
-    label_group: str | None = None,
-    listing: str | None = None,
-    product_name: str | None = None,
-    product_sku: str | None = None,
-    date_from: str | None = None,
-    date_to: str | None = None,
-    report_mode: bool = False,
+@dataclass(frozen=True)
+class InsightOptions:
+    problem: str | None = None
+    label_group: str | None = None
+    listing: str | None = None
+    product_name: str | None = None
+    product_sku: str | None = None
+    date_from: str | None = None
+    date_to: str | None = None
+    report_mode: bool = False
+
+
+@dataclass(frozen=True)
+class PreparedInsightScope:
+    scope: InsightQueryScope
+    taxonomy: TaxonomyConfig | None
+    mixed_versions: bool
+    ungrouped_where: str
+    ungrouped_params: list[Any]
+    comment_where: str
+    comment_params: list[Any]
+
+
+def _reason_detail_payload(
+    details: dict[str, Any], selected_reason: dict[str, Any] | None
 ) -> dict[str, Any]:
-    clean_date_from = clean_date(date_from)
-    clean_date_to = clean_date(date_to)
+    semantic_record_count = int(details["semantic_record_count"])
+    return {
+        "trend": details["trend"],
+        "products": details["products"],
+        "variants": details["variants"],
+        "co_reasons": details["co_reasons"],
+        "semantic_profile": {
+            "record_count": semantic_record_count,
+            "coverage": percentage(
+                semantic_record_count,
+                int(selected_reason["record_count"]) if selected_reason else 0,
+            ),
+            "parts": details["semantic_parts"],
+            "opinions": details["semantic_opinions"],
+        },
+        "evidence": {
+            "items": details["evidence_items"],
+            "total": int(details["evidence_total"]),
+        },
+    }
+
+
+def _prepare_scope(
+    database: Database,
+    connection: sqlite3.Connection,
+    context: dict[str, Any],
+    options: InsightOptions,
+) -> PreparedInsightScope:
+    clean_date_from = clean_date(options.date_from)
+    clean_date_to = clean_date(options.date_to)
     if clean_date_from and clean_date_to and clean_date_from > clean_date_to:
         raise ValueError("开始日期不能晚于结束日期")
     runtime_filters = normalize_filters(
         {
-            "listing": listing,
-            "product_name": product_name,
-            "product_sku": product_sku,
+            "listing": options.listing,
+            "product_name": options.product_name,
+            "product_sku": options.product_sku,
         }
     )
-    clean_group = (label_group or "").strip()
-    requested_problem = (problem or "").strip()
+    taxonomy = (
+        result_taxonomy(connection, context["source_ids"][0])
+        if context["source_ids"]
+        else None
+    )
+    source_taxonomies = {
+        source["result_version_id"]: source for source in context["sources"]
+    }
+    mixed_versions = (
+        len(
+            {
+                (source["agent_key"], source["taxonomy_version"])
+                for source in context["sources"]
+            }
+        )
+        > 1
+    )
+
+    def group_for_result(group, code, result_id):
+        source = source_taxonomies.get(result_id, {})
+        original = group or "其他原因"
+        if not mixed_versions or (taxonomy and taxonomy.structure_version == 2):
+            return original
+        return aligned_label_group(
+            source.get("agent_key", ""),
+            source.get("taxonomy_version", ""),
+            code,
+            original,
+        )
+
+    connection.create_function("aligned_group", 3, group_for_result)
+    option_where, option_params = record_where(
+        database, context["source_ids"], context["filters"]
+    )
+    where_sql, params = record_where(
+        database, context["source_ids"], context["filters"], runtime_filters
+    )
+    if clean_date_from:
+        where_sql += " AND date(r.return_date) >= date(?)"
+        params.append(clean_date_from)
+    if clean_date_to:
+        where_sql += " AND date(r.return_date) <= date(?)"
+        params.append(clean_date_to)
+    comment_scope_filters = {
+        key: value
+        for key, value in context["filters"].items()
+        if key != "quality_status"
+    }
+    comment_scope_where, comment_scope_params = record_where(
+        database, context["source_ids"], comment_scope_filters, runtime_filters
+    )
+    if clean_date_from:
+        comment_scope_where += " AND date(r.return_date) >= date(?)"
+        comment_scope_params.append(clean_date_from)
+    if clean_date_to:
+        comment_scope_where += " AND date(r.return_date) <= date(?)"
+        comment_scope_params.append(clean_date_to)
+    ungrouped_where = where_sql
+    ungrouped_params = params
+    if context["counting_basis"] == "feedback_group":
+        option_where, option_params = feedback_group_scope(
+            connection, option_where, option_params, name="options"
+        )
+        where_sql, params = feedback_group_scope(
+            connection, where_sql, params, name="main"
+        )
+    unit_rollup = (
+        options.report_mode
+        and not runtime_filters
+        and not clean_date_from
+        and not clean_date_to
+        and not {key for key in context["filters"] if key != "quality_status"}
+        and context["counting_basis"] != "feedback_group"
+    )
+    return PreparedInsightScope(
+        scope=InsightQueryScope(
+            connection=connection,
+            context=context,
+            where_sql=where_sql,
+            params=params,
+            option_where=option_where,
+            option_params=option_params,
+            unit_rollup=unit_rollup,
+            clean_group=(options.label_group or "").strip(),
+            requested_problem=(options.problem or "").strip(),
+            report_mode=options.report_mode,
+        ),
+        taxonomy=taxonomy,
+        mixed_versions=mixed_versions,
+        ungrouped_where=ungrouped_where,
+        ungrouped_params=ungrouped_params,
+        comment_where=comment_scope_where,
+        comment_params=comment_scope_params,
+    )
+
+
+def build_insights(
+    database: Database,
+    dashboard_id: str,
+    version_id: str,
+    options: InsightOptions,
+) -> dict[str, Any]:
     with database.connect() as connection:
         context = version_context(database, connection, dashboard_id, version_id)
         if mixed_hierarchy(connection, context["sources"]):
@@ -61,37 +204,9 @@ def build_insights(
                 "reasons": [],
                 "hierarchy_problems": [],
             }
-        taxonomy = (
-            result_taxonomy(connection, context["source_ids"][0])
-            if context["source_ids"]
-            else None
-        )
-        source_taxonomies = {
-            source["result_version_id"]: source for source in context["sources"]
-        }
-        mixed_versions = (
-            len(
-                {
-                    (source["agent_key"], source["taxonomy_version"])
-                    for source in context["sources"]
-                }
-            )
-            > 1
-        )
-
-        def group_for_result(group, code, result_id):
-            source = source_taxonomies.get(result_id, {})
-            original = group or "其他原因"
-            if not mixed_versions or (taxonomy and taxonomy.structure_version == 2):
-                return original
-            return aligned_label_group(
-                source.get("agent_key", ""),
-                source.get("taxonomy_version", ""),
-                code,
-                original,
-            )
-
-        connection.create_function("aligned_group", 3, group_for_result)
+        prepared = _prepare_scope(database, connection, context, options)
+        scope = prepared.scope
+        taxonomy = prepared.taxonomy
         summary = summarize_sources(
             database,
             connection,
@@ -100,81 +215,20 @@ def build_insights(
             context["sources"],
             feedback_groups=context["counting_basis"] == "feedback_group",
         )
-        option_where, option_params = record_where(
-            database,
-            context["source_ids"],
-            context["filters"],
-        )
-        where_sql, params = record_where(
-            database,
-            context["source_ids"],
-            context["filters"],
-            runtime_filters,
-        )
-        if clean_date_from:
-            where_sql += " AND date(r.return_date) >= date(?)"
-            params.append(clean_date_from)
-        if clean_date_to:
-            where_sql += " AND date(r.return_date) <= date(?)"
-            params.append(clean_date_to)
-        comment_scope_filters = {
-            key: value
-            for key, value in context["filters"].items()
-            if key != "quality_status"
-        }
-        comment_scope_where, comment_scope_params = record_where(
-            database,
-            context["source_ids"],
-            comment_scope_filters,
-            runtime_filters,
-        )
-        if clean_date_from:
-            comment_scope_where += " AND date(r.return_date) >= date(?)"
-            comment_scope_params.append(clean_date_from)
-        if clean_date_to:
-            comment_scope_where += " AND date(r.return_date) <= date(?)"
-            comment_scope_params.append(clean_date_to)
         summary.update(
             comment_summary_metrics(
                 connection,
-                where_sql,
-                params,
-                comment_scope_where,
-                comment_scope_params,
+                prepared.ungrouped_where,
+                prepared.ungrouped_params,
+                prepared.comment_where,
+                prepared.comment_params,
                 feedback_groups=context["counting_basis"] == "feedback_group",
             )
         )
-        if context["counting_basis"] == "feedback_group":
-            option_where, option_params = feedback_group_scope(
-                connection, option_where, option_params, name="options"
-            )
-            where_sql, params = feedback_group_scope(
-                connection, where_sql, params, name="main"
-            )
         hierarchy_problems = (
-            hierarchy_counts(connection, taxonomy, where_sql, params)
+            hierarchy_counts(connection, taxonomy, scope.where_sql, scope.params)
             if taxonomy and taxonomy.structure_version == 2
             else []
-        )
-        unit_rollup = (
-            report_mode
-            and not runtime_filters
-            and not clean_date_from
-            and not clean_date_to
-            and not {key for key in context["filters"] if key != "quality_status"}
-            and context["counting_basis"] != "feedback_group"
-        )
-        scope = InsightQueryScope(
-            connection=connection,
-            context=context,
-            where_sql=where_sql,
-            params=params,
-            option_where=option_where,
-            option_params=option_params,
-            unit_rollup=unit_rollup,
-            clean_group=clean_group,
-            requested_problem=requested_problem,
-            report_mode=report_mode,
         )
         overview = collect_insight_overview(scope)
         selected_reason = overview["selected_reason"]
@@ -190,12 +244,12 @@ def build_insights(
                 f"""
                             SELECT DISTINCT {column} AS value
                             FROM classification_result_records r
-                            WHERE {option_where}
+                            WHERE {scope.option_where}
                               AND {column} IS NOT NULL
                               AND TRIM({column}) <> ''
                             ORDER BY value COLLATE NOCASE ASC
                             """,
-                tuple(option_params),
+                tuple(scope.option_params),
             ).fetchall()
             filter_options[key] = [str(row["value"]) for row in rows]
 
@@ -206,16 +260,6 @@ def build_insights(
     group_rows = overview["group_rows"]
     reasons = overview["reasons"]
     product_reason_matrix = overview["product_reason_matrix"]
-    trend = details["trend"]
-    products = details["products"]
-    variants = details["variants"]
-    co_reasons = details["co_reasons"]
-    semantic_record_count = int(details["semantic_record_count"])
-    semantic_parts = details["semantic_parts"]
-    semantic_opinions = details["semantic_opinions"]
-    evidence_items = details["evidence_items"]
-    evidence_total = int(details["evidence_total"])
-
     return {
         "dashboard_id": dashboard_id,
         "version_id": version_id,
@@ -223,7 +267,8 @@ def build_insights(
         "counting_basis": context["counting_basis"],
         "summary": summary,
         "group_alignment": "unified-v1"
-        if mixed_versions and not (taxonomy and taxonomy.structure_version == 2)
+        if prepared.mixed_versions
+        and not (taxonomy and taxonomy.structure_version == 2)
         else "original",
         "hierarchy_problems": hierarchy_problems,
         "taxonomy": taxonomy.model_dump(mode="json") if taxonomy else None,
@@ -250,21 +295,37 @@ def build_insights(
         "reasons": reasons,
         "product_reason_matrix": product_reason_matrix,
         "selected_reason": selected_reason,
-        "trend": trend,
-        "products": products,
-        "variants": variants,
-        "co_reasons": co_reasons,
-        "semantic_profile": {
-            "record_count": semantic_record_count,
-            "coverage": percentage(
-                semantic_record_count,
-                int(selected_reason["record_count"]) if selected_reason else 0,
-            ),
-            "parts": semantic_parts,
-            "opinions": semantic_opinions,
-        },
-        "evidence": {
-            "items": evidence_items,
-            "total": evidence_total,
-        },
+        **_reason_detail_payload(details, selected_reason),
     }
+
+
+def build_report_diagnostics(
+    database: Database,
+    dashboard_id: str,
+    version_id: str,
+    reason_codes: list[str],
+) -> list[dict[str, Any]]:
+    with database.connect() as connection:
+        context = version_context(database, connection, dashboard_id, version_id)
+        if mixed_hierarchy(connection, context["sources"]):
+            return []
+        prepared = _prepare_scope(database, connection, context, InsightOptions())
+        overview = collect_insight_overview(prepared.scope)
+        reasons = overview["reasons"]
+        diagnostics = []
+        for code in reason_codes:
+            selected_reason = next(
+                (reason for reason in reasons if reason["value"] == code),
+                reasons[0] if reasons else None,
+            )
+            details = collect_reason_details(
+                prepared.scope, selected_reason, overview, prepared.taxonomy
+            )
+            diagnostics.append(
+                {
+                    "date_range": overview["date_range"],
+                    "selected_reason": selected_reason,
+                    **_reason_detail_payload(details, selected_reason),
+                }
+            )
+        return diagnostics

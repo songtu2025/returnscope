@@ -4,11 +4,13 @@ import json
 from copy import deepcopy
 from types import SimpleNamespace
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from test_classification_result_pool import _publish, _seed_result_context
 
 from return_semantics.model_client import JsonModelCallResult, Sub2APISettings
+from web_backend import dashboard_insights
 from web_backend.common import json_text
 from web_backend.dashboard_service import DashboardService
 from web_backend.insight_report_profiles import resolve_insight_report_profile
@@ -597,6 +599,180 @@ def test_diagnostic_reasons_follow_report_blueprint() -> None:
         "FIT_TOO_LARGE",
         "OTHER_NO_LONGER_NEEDED",
     ]
+
+
+@pytest.mark.parametrize("multi_source", [False, True])
+def test_report_diagnostics_share_overview_without_changing_evidence(
+    tmp_path, monkeypatch, multi_source
+) -> None:
+    context, dashboard, service, _captured = _service_context(tmp_path)
+    dashboard_service = service.dashboard_service
+    dashboard_id = str(dashboard["id"])
+    version_id = str(dashboard["version"]["version_id"])
+    with context.database.transaction(immediate=True) as connection:
+        unit = connection.execute(
+            "SELECT * FROM classification_units LIMIT 1"
+        ).fetchone()
+        classification = json.loads(unit["classification_json"])
+        classification["semantic_units"].append(
+            {
+                **classification["semantic_units"][0],
+                "label_code": "APPEARANCE_COLOR_MISMATCH_U1",
+                "opinion": "实物色差",
+                "evidence": "Color different from picture",
+            }
+        )
+        classification["problem_label_codes"].append("APPEARANCE_COLOR_MISMATCH_U1")
+        problem_labels = json.loads(unit["problem_labels_json"])
+        problem_labels.append("APPEARANCE_COLOR_MISMATCH_U1")
+        connection.execute(
+            "UPDATE classification_units "
+            "SET classification_json = ?, problem_labels_json = ? WHERE id = ?",
+            (json_text(classification), json_text(problem_labels), unit["id"]),
+        )
+        connection.execute(
+            """
+            INSERT INTO classification_unit_labels(
+                result_version_id, classification_key, label_kind,
+                label_code, label_name, label_group
+            )
+            SELECT result_version_id, classification_key, label_kind,
+                   'APPEARANCE_COLOR_MISMATCH_U1', '实物色差', '外观与款式'
+            FROM classification_unit_labels
+            WHERE label_code = 'FIT_TOO_SMALL_U1'
+            """
+        )
+        if multi_source:
+
+            def copy_row(table, source, changes):
+                values = {**dict(source), **changes}
+                columns = ", ".join(values)
+                placeholders = ", ".join("?" for _ in values)
+                connection.execute(
+                    f"INSERT INTO {table} ({columns}) VALUES ({placeholders})",
+                    tuple(values.values()),
+                )
+
+            source = connection.execute(
+                "SELECT * FROM dashboard_dataset_sources LIMIT 1"
+            ).fetchone()
+            result_version = connection.execute(
+                "SELECT * FROM classification_result_versions WHERE id = ?",
+                (source["result_version_id"],),
+            ).fetchone()
+            result = connection.execute(
+                "SELECT * FROM classification_results WHERE id = ?",
+                (result_version["result_id"],),
+            ).fetchone()
+            copy_row(
+                "classification_results",
+                result,
+                {
+                    "id": "result-second",
+                    "source_segment_id": "segment-second",
+                    "listing": "L2",
+                },
+            )
+            copy_row(
+                "classification_result_versions",
+                result_version,
+                {
+                    "id": "version-second",
+                    "result_id": "result-second",
+                    "source_segment_id": "segment-second",
+                },
+            )
+            copy_row(
+                "classification_units",
+                unit,
+                {
+                    "id": "unit-second",
+                    "result_version_id": "version-second",
+                    "classification_json": json_text(classification),
+                    "problem_labels_json": json_text(problem_labels),
+                },
+            )
+            connection.execute(
+                """
+                INSERT INTO classification_unit_labels
+                SELECT 'version-second', classification_key, label_kind,
+                       label_code, label_name, label_group
+                FROM classification_unit_labels
+                WHERE result_version_id = ?
+                """,
+                (source["result_version_id"],),
+            )
+            rows = connection.execute(
+                "SELECT * FROM classification_result_records WHERE result_version_id = ?",
+                (source["result_version_id"],),
+            ).fetchall()
+            for row in rows:
+                copy_row(
+                    "classification_result_records",
+                    row,
+                    {
+                        "id": f"second-{row['id']}",
+                        "result_version_id": "version-second",
+                        "listing": "L2",
+                    },
+                )
+            copy_row(
+                "dashboard_dataset_sources",
+                source,
+                {"result_version_id": "version-second", "listing": "L2"},
+            )
+
+    statements = []
+    original_connect = context.database.connect
+
+    def traced_connect():
+        connection = original_connect()
+        connection.set_trace_callback(statements.append)
+        return connection
+
+    monkeypatch.setattr(context.database, "connect", traced_connect)
+    reason_codes = ["FIT_TOO_SMALL_U1", "APPEARANCE_COLOR_MISMATCH_U1"]
+    expected = [
+        service._compact_diagnostic(
+            dashboard_service.insights(dashboard_id, version_id, problem=code)
+        )
+        for code in reason_codes
+    ]
+    legacy_queries = len(statements)
+    statements.clear()
+    overview_calls = 0
+    original_overview = dashboard_insights.collect_insight_overview
+
+    def count_overview(scope):
+        nonlocal overview_calls
+        overview_calls += 1
+        return original_overview(scope)
+
+    monkeypatch.setattr(dashboard_insights, "collect_insight_overview", count_overview)
+    actual = [
+        service._compact_diagnostic(diagnostic)
+        for diagnostic in dashboard_service.report_diagnostics(
+            dashboard_id, version_id, reason_codes
+        )
+    ]
+
+    assert actual == expected
+    assert overview_calls == 1
+    assert len(statements) < legacy_queries
+    analysis = dashboard_service.insights(dashboard_id, version_id, report_mode=True)
+    analysis["sources"] = dashboard_service.sources(dashboard_id, version_id)
+    analysis["review_bias"] = dashboard_service.review_bias(dashboard_id, version_id)
+    analysis["text_quality"] = dashboard_service.text_quality(dashboard_id, version_id)
+    analysis["issue_cases"] = dashboard_service.issue_cases(
+        dashboard_id, version_id, reason_codes
+    )
+    old_evidence = service._build_evidence(
+        {**deepcopy(analysis), "diagnostics": expected}, prompt_version=PROMPT_VERSION
+    )
+    new_evidence = service._build_evidence(
+        {**deepcopy(analysis), "diagnostics": actual}, prompt_version=PROMPT_VERSION
+    )
+    assert json_text(new_evidence) == json_text(old_evidence)
 
 
 def test_glove_profile_prioritizes_category_problems() -> None:

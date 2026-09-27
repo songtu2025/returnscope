@@ -387,14 +387,12 @@ class InsightReportService:
             )
             reason_codes = self._diagnostic_reason_codes(analysis)
             analysis["diagnostics"] = [
-                self._compact_diagnostic(
-                    self.dashboard_service.insights(
-                        str(report["dashboard_id"]),
-                        str(report["dashboard_version_id"]),
-                        problem=reason_code,
-                    )
+                self._compact_diagnostic(diagnostic)
+                for diagnostic in self.dashboard_service.report_diagnostics(
+                    str(report["dashboard_id"]),
+                    str(report["dashboard_version_id"]),
+                    reason_codes,
                 )
-                for reason_code in reason_codes
             ]
             analysis["issue_cases"] = self.dashboard_service.issue_cases(
                 str(report["dashboard_id"]),
