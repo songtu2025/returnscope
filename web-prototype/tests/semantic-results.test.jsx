@@ -119,6 +119,8 @@ describe("评论级语义呈现", () => {
       evidence: "The size is too small.",
     };
     const record = {
+      comment_summary_status: "NEGATIVE",
+      comment_conclusions: [{ topic_path: ["尺码与适配"], status: "NEGATIVE" }],
       atomic_facts: [fact],
       classification: { semantic_units: [{ ...fact }] },
     };
@@ -153,6 +155,8 @@ describe("评论级语义呈现", () => {
       },
     ];
     const record = {
+      comment_summary_status: "NEGATIVE",
+      comment_conclusions: [{ topic_path: ["尺码与适配"], status: "NEGATIVE" }],
       atomic_facts: facts,
       classification: { semantic_units: facts.map((fact) => ({ ...fact })) },
     };
@@ -183,6 +187,10 @@ describe("评论级语义呈现", () => {
       evidence: "My needs changed",
     };
     const record = {
+      comment_summary_status: "NO_CONFIRMED",
+      comment_conclusions: [
+        { topic_path: ["买家原因", "买家自身原因"], status: "NO_CONFIRMED" },
+      ],
       atomic_facts: [
         { ...fact, fact_id: "F1" },
         { ...fact, fact_id: "F2" },
@@ -208,6 +216,10 @@ describe("评论级语义呈现", () => {
       assertion_status: "EVALUATION",
     };
     const record = {
+      comment_summary_status: "NO_CONFIRMED",
+      comment_conclusions: [
+        { topic_path: ["买家原因", "买家自身原因"], status: "NO_CONFIRMED" },
+      ],
       atomic_facts: [
         { ...fact, fact_id: "F1", evidence: "My needs changed." },
         { ...fact, fact_id: "F2", evidence: "I no longer need it." },
@@ -237,6 +249,8 @@ describe("评论级语义呈现", () => {
       assertion_status: "EVALUATION",
     };
     const record = {
+      comment_summary_status: "NEGATIVE",
+      comment_conclusions: [{ topic_path: ["尺码与适配"], status: "NEGATIVE" }],
       atomic_facts: [
         { ...fact, fact_id: "F1", variant_ref: "SIZE_M", evidence: "M is small." },
         { ...fact, fact_id: "F2", variant_ref: "SIZE_L", evidence: "L is small." },
@@ -253,6 +267,8 @@ describe("评论级语义呈现", () => {
 
   test("同标签正负评价合并到标签区块但各自方向与证据不丢失", () => {
     const record = {
+      comment_summary_status: "CONFLICT",
+      comment_conclusions: [{ topic_path: ["尺码与适配"], status: "CONFLICT" }],
       classification: {
         semantic_units: [
           {
@@ -287,6 +303,8 @@ describe("评论级语义呈现", () => {
 
   test("旧结果缺少条件时不会把正负并存误称为有边界的混合表现", () => {
     const record = {
+      comment_summary_status: "CONFLICT",
+      comment_conclusions: [{ topic_path: ["触屏"], status: "CONFLICT" }],
       classification: {
         semantic_units: [
           {
@@ -315,6 +333,8 @@ describe("评论级语义呈现", () => {
 
   test("旧结果只有不同操作而缺少其他作用域时归为疑似冲突", () => {
     const record = {
+      comment_summary_status: "CONFLICT",
+      comment_conclusions: [{ topic_path: ["功能", "触屏"], status: "CONFLICT" }],
       classification: {
         semantic_units: [
           {
@@ -352,6 +372,7 @@ describe("评论级语义呈现", () => {
 
   test("维度裁决保留证据，但采用服务端提供的主题状态", () => {
     const record = {
+      comment_summary_status: "CONFLICT",
       comment_conclusions: [
         {
           topic_code: "TOUCH",
@@ -394,6 +415,8 @@ describe("评论级语义呈现", () => {
 
   test("优先按维度裁决展示完整作用域和标签路径", async () => {
     const record = {
+      comment_summary_status: "MIXED",
+      comment_conclusions: [{ topic_path: ["性能", "防水性"], status: "MIXED" }],
       classification: {
         dimension_decisions: [
           {
@@ -472,6 +495,8 @@ describe("评论级语义呈现", () => {
 
   test("每个标签就近展示中文事实、证据、作用域、因果和判定理由", () => {
     const record = {
+      comment_summary_status: "NEGATIVE",
+      comment_conclusions: [{ topic_path: ["功能", "触屏表现"], status: "NEGATIVE" }],
       classification: {
         extracted_facts: [
           {
@@ -532,7 +557,7 @@ describe("评论级语义呈现", () => {
     expect(view.getByText("“其他”具体内容")).toBeVisible();
   });
 
-  test("仅完整作用域相同的相反结论才标记为冲突", () => {
+  test("原始事实变化不会覆盖服务端给出的结论状态", () => {
     const facts = [
       {
         label_path: ["功能", "触屏", "灵敏"],
@@ -561,13 +586,28 @@ describe("评论级语义呈现", () => {
         condition: "手机",
       },
     ];
-    expect(
-      semanticConclusions({ classification: { semantic_units: facts } })[0].status,
-    ).toBe("CONFLICT");
+    const record = {
+      comment_summary_status: "CONFLICT",
+      comment_conclusions: [{ topic_path: ["功能", "触屏"], status: "CONFLICT" }],
+      classification: { semantic_units: facts },
+    };
+    expect(semanticConclusions(record)[0].status).toBe("CONFLICT");
     facts[1] = { ...facts[1], experiencer_ref: "OTHER_USER" };
-    expect(
-      semanticConclusions({ classification: { semantic_units: facts } })[0].status,
-    ).toBe("MIXED");
+    expect(semanticConclusions(record)[0].status).toBe("CONFLICT");
+    expect(semanticRecordStatus(record)).toBe("CONFLICT");
+  });
+
+  test("没有服务端结论时不从原始事实推断", () => {
+    const record = {
+      classification: {
+        semantic_units: [
+          { label_code: "GOOD", sentiment: "POSITIVE" },
+          { label_code: "BAD", sentiment: "NEGATIVE" },
+        ],
+      },
+    };
+    expect(semanticConclusions(record)).toEqual([]);
+    expect(semanticRecordStatus(record)).toBe("NO_CONFIRMED");
   });
 
   test("未知语义按处置分流且正常弃权默认折叠", async () => {

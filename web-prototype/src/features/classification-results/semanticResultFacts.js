@@ -86,18 +86,6 @@ function assertionOf(fact) {
   ).toUpperCase();
 }
 
-/** @param {RawFact | NormalizedFact} fact @returns {boolean} */
-function isConfirmed(fact) {
-  return ![
-    "PREDICTION",
-    "HYPOTHESIS",
-    "NOT_TESTED",
-    "INTENT",
-    "ADVICE",
-    "RECOMMENDATION",
-  ].includes(assertionOf(fact));
-}
-
 /** @param {RawFact | NormalizedFact} fact @returns {string[]} */
 function pathOf(fact) {
   const source = object(fact);
@@ -390,7 +378,6 @@ export {
   stringArray,
   stringValue,
   classificationOf,
-  isConfirmed,
   firstText,
   coalescedText,
   normalizedFact,

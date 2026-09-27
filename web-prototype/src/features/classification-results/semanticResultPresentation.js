@@ -4,7 +4,6 @@ import {
   stringArray,
   stringValue,
   classificationOf,
-  isConfirmed,
   firstText,
   coalescedText,
   normalizedFact,
@@ -200,7 +199,7 @@ function normalizedStatus(value) {
 /**
  * @param {SemanticObject} classification
  * @param {SemanticObject} record
- * @returns {{ items: unknown[], supplied: boolean }}
+ * @returns {unknown[]}
  */
 function conclusionSources(classification, record) {
   const source =
@@ -212,7 +211,7 @@ function conclusionSources(classification, record) {
     classification.aspect_summaries ??
     classification.semantic_summaries ??
     classification.topic_summaries;
-  return { items: array(source), supplied: Array.isArray(source) };
+  return array(source);
 }
 
 /**
@@ -222,35 +221,6 @@ function conclusionSources(classification, record) {
  */
 function dimensionDecisionSources(classification, record) {
   return array(record.dimension_decisions ?? classification.dimension_decisions);
-}
-
-/** @param {NormalizedFact} fact @returns {string} */
-function scopeKey(fact) {
-  const values = [
-    fact.experiencerRef,
-    fact.productRef,
-    fact.eventRef,
-    fact.operation,
-    fact.part,
-    fact.condition,
-  ].map((value) => String(value || "").trim());
-  return values.every((value) => value && value !== "UNSPECIFIED")
-    ? values.join("|")
-    : "";
-}
-
-/** @param {NormalizedFact[]} facts @returns {SemanticStatus} */
-function derivedConclusionStatus(facts) {
-  const confirmed = facts.filter(isConfirmed);
-  const positive = confirmed.filter((fact) => fact.direction === "POSITIVE");
-  const negative = confirmed.filter((fact) => fact.direction === "NEGATIVE");
-  if (!positive.length && !negative.length) return "NO_CONFIRMED";
-  if (!negative.length) return "POSITIVE";
-  if (!positive.length) return "NEGATIVE";
-  const negativeScopes = new Set(negative.map(scopeKey));
-  const sameScopeConflict = positive.some((fact) => negativeScopes.has(scopeKey(fact)));
-  const incompleteScope = [...positive, ...negative].some((fact) => !scopeKey(fact));
-  return incompleteScope || sameScopeConflict ? "CONFLICT" : "MIXED";
 }
 
 /** @param {NormalizedFact} fact @returns {SemanticTopic} */
@@ -275,34 +245,6 @@ function topicForFact(fact) {
     label: topicPath.at(-1) || fact.labelCode || "未归类主题",
     path: topicPath,
   };
-}
-
-/**
- * @param {NormalizedFact[]} facts
- * @param {boolean} [legacy]
- * @returns {SemanticConclusion[]}
- */
-function deriveConclusions(facts, legacy = true) {
-  /** @type {Map<string, SemanticTopic & { facts: NormalizedFact[] }>} */
-  const groups = new Map();
-  facts
-    .filter((fact) => fact.labelCode || fact.labelPath.length)
-    .forEach((fact) => {
-      const topic = topicForFact(fact);
-      const current = groups.get(topic.key) ?? { ...topic, facts: [] };
-      current.facts.push(fact);
-      groups.set(topic.key, current);
-    });
-  return [...groups.values()].map((group) => ({
-    id: group.key,
-    topic: group.label,
-    topicPath: group.path,
-    status: derivedConclusionStatus(group.facts),
-    summary: "",
-    facts: group.facts,
-    contextFacts: [],
-    legacy,
-  }));
 }
 
 /**
@@ -392,7 +334,7 @@ function normalizeConclusion(conclusionValue, index, allFacts) {
 /**
  * @param {unknown[]} decisions
  * @param {NormalizedFact[]} allFacts
- * @returns {{ conclusions: Omit<SemanticConclusion, "status">[], consumedFactIds: Set<string> }}
+ * @returns {Omit<SemanticConclusion, "status">[]}
  */
 function decisionConclusions(decisions, allFacts) {
   /**
@@ -408,14 +350,10 @@ function decisionConclusions(decisions, allFacts) {
    * }>}
    */
   const groups = new Map();
-  /** @type {Set<string>} */
-  const consumedFactIds = new Set();
   decisions.forEach((decisionValue, index) => {
     const decision = object(decisionValue);
     const supportingIds = stringArray(decision.supporting_fact_ids);
     const contextIds = stringArray(decision.context_fact_ids);
-    supportingIds.forEach((factId) => consumedFactIds.add(factId));
-    contextIds.forEach((factId) => consumedFactIds.add(factId));
     const supportingFacts = supportingIds.map((factId) => {
       const matched = allFacts.find((fact) => fact.factId === factId) ?? {
         fact_id: factId,
@@ -460,13 +398,10 @@ function decisionConclusions(decisions, allFacts) {
     if (reason) current.reasons.push(reason);
     groups.set(key, current);
   });
-  return {
-    conclusions: [...groups.values()].map(({ reasons, ...group }) => ({
-      ...group,
-      summary: reasons.join("；"),
-    })),
-    consumedFactIds,
-  };
+  return [...groups.values()].map(({ reasons, ...group }) => ({
+    ...group,
+    summary: reasons.join("；"),
+  }));
 }
 
 /**
@@ -500,50 +435,17 @@ export function semanticConclusions(record) {
   const source = object(record);
   const classification = classificationOf(record);
   const facts = sourceFacts(classification, source);
-  const supplied = conclusionSources(classification, source);
-  const provided = supplied.items.map((conclusion, index) =>
+  const provided = conclusionSources(classification, source).map((conclusion, index) =>
     normalizeConclusion(conclusion, index, facts),
   );
   const decisions = dimensionDecisionSources(classification, source);
-  if (supplied.supplied) {
-    if (!decisions.length) return provided;
-    const { conclusions } = decisionConclusions(decisions, facts);
-    return suppliedDecisionConclusions(provided, conclusions);
-  }
-  if (!decisions.length) return deriveConclusions(facts);
-  const { conclusions, consumedFactIds } = decisionConclusions(decisions, facts);
-  const residual = facts.filter(
-    (fact) =>
-      !consumedFactIds.has(fact.factId) && (fact.labelCode || fact.labelPath.length),
-  );
-  return [
-    ...conclusions.map((item) => ({
-      ...item,
-      status: derivedConclusionStatus(item.facts),
-    })),
-    ...deriveConclusions(residual, false),
-  ];
+  if (!decisions.length) return provided;
+  return suppliedDecisionConclusions(provided, decisionConclusions(decisions, facts));
 }
 
 /** @param {SemanticRecord} record @returns {SemanticStatus} */
 export function semanticRecordStatus(record) {
-  const source = object(record);
-  const classification = classificationOf(record);
-  const explicit =
-    source.comment_summary_status ??
-    object(source.comment_summary).status ??
-    source.semantic_status ??
-    classification.comment_summary_status ??
-    object(classification.comment_summary).status ??
-    classification.semantic_status;
-  if (explicit) return normalizedStatus(explicit);
-  const statuses = semanticConclusions(record).map((item) => item.status);
-  if (statuses.includes("CONFLICT")) return "CONFLICT";
-  if (statuses.includes("MIXED")) return "MIXED";
-  if (statuses.includes("POSITIVE") && statuses.includes("NEGATIVE")) return "MIXED";
-  if (statuses.includes("NEGATIVE")) return "NEGATIVE";
-  if (statuses.includes("POSITIVE")) return "POSITIVE";
-  return "NO_CONFIRMED";
+  return normalizedStatus(object(record).comment_summary_status);
 }
 
 /** @param {SemanticRecord} record @returns {SemanticRelation[]} */

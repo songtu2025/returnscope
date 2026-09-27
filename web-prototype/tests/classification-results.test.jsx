@@ -73,6 +73,15 @@ const record = {
   processing_status: "AUTO_APPROVED",
   classification_key: "classification-key-1",
   problem_labels: ["FIT_TOO_SMALL"],
+  comment_summary_status: "NO_CONFIRMED",
+  comment_conclusions: [
+    {
+      topic_code: "FIT_TOO_SMALL",
+      topic_name: "尺码偏小",
+      status: "NO_CONFIRMED",
+      label_codes: ["FIT_TOO_SMALL"],
+    },
+  ],
   classification: {
     primary_label_codes: ["FIT_TOO_SMALL"],
     problem_label_codes: ["FIT_TOO_SMALL"],
