@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowCounterClockwise } from "@phosphor-icons/react";
+import { Pagination } from "../../components/Pagination";
 import { taxonomyPath } from "../../lib/taxonomyPresentation";
 import { formatPercent } from "./returnReasonInsightPresentation";
 import { analysisContextTerms } from "./analysisContextPresentation";
@@ -10,6 +11,8 @@ import { analysisContextTerms } from "./analysisContextPresentation";
 /** @typedef {import("./analysisDashboardContracts").InsightHierarchyNode} InsightHierarchyNode */
 /** @typedef {import("./analysisDashboardContracts").InsightReason} InsightReason */
 /** @typedef {{route: DashboardRoute, data: DashboardInsights, reasons: InsightReason[], hierarchy: InsightHierarchyNode[], taxonomyLabels: Map<string, ReviewLabel>, selected?: InsightReason, subjects: InsightReason[], groups: string[], analysisContext: string, onUpdateRoute: (changes: Partial<DashboardRoute>) => void}} ReturnReasonInsightExplorerProps */
+
+const REASON_PAGE_SIZE = 10;
 
 /** @param {ReturnReasonInsightExplorerProps} props */
 export function ReturnReasonInsightExplorer({
@@ -26,13 +29,33 @@ export function ReturnReasonInsightExplorer({
 }) {
   const terms = analysisContextTerms(analysisContext);
   const [selectedSubject, setSelectedSubject] = useState("");
-  const visibleReasons = selectedSubject
-    ? reasons.filter((reason) => reason.subjects?.includes(selectedSubject))
-    : reasons;
+  const [reasonPage, setReasonPage] = useState(1);
+  const visibleReasons = useMemo(
+    () =>
+      selectedSubject
+        ? reasons.filter((reason) => reason.subjects?.includes(selectedSubject))
+        : reasons,
+    [reasons, selectedSubject],
+  );
+  const reasonPageCount = Math.max(
+    1,
+    Math.ceil(visibleReasons.length / REASON_PAGE_SIZE),
+  );
+  const currentReasonPage = Math.min(reasonPage, reasonPageCount);
+  const reasonPageStart = (currentReasonPage - 1) * REASON_PAGE_SIZE;
   const topReasonCount = Math.max(
     ...visibleReasons.map((item) => item.record_count),
     1,
   );
+
+  useEffect(() => {
+    const selectedIndex = visibleReasons.findIndex(
+      (reason) => reason.value === selected?.value,
+    );
+    setReasonPage(
+      selectedIndex < 0 ? 1 : Math.floor(selectedIndex / REASON_PAGE_SIZE) + 1,
+    );
+  }, [visibleReasons, selected?.value]);
 
   /** @param {string} subject */
   const chooseSubject = (subject) => {
@@ -118,47 +141,62 @@ export function ReturnReasonInsightExplorer({
         </header>
         {visibleReasons.length ? (
           <ol>
-            {visibleReasons.map((reason, index) => (
-              <li key={reason.value}>
-                <button
-                  className={selected?.value === reason.value ? "active" : ""}
-                  onClick={() =>
-                    onUpdateRoute({ problem: reason.value, recordPage: 1 })
-                  }
-                >
-                  <span className="return-reason-rank">{index + 1}</span>
-                  <div>
-                    <b>
-                      {taxonomyLabels.has(reason.value)
-                        ? taxonomyPath(
-                            data.taxonomy,
-                            /** @type {ReviewLabel} */ (
-                              taxonomyLabels.get(reason.value)
-                            ),
-                          ).join(" → ")
-                        : reason.label}
-                    </b>
-                    <i aria-hidden="true">
-                      <span
-                        style={{
-                          width: `${Math.max(
-                            (Number(reason.record_count) / topReasonCount) * 100,
-                            2,
-                          )}%`,
-                        }}
-                      />
-                    </i>
-                  </div>
-                  <strong>
-                    {Number(reason.record_count).toLocaleString()} ·{" "}
-                    {formatPercent(reason.percentage)}
-                  </strong>
-                </button>
-              </li>
-            ))}
+            {visibleReasons
+              .slice(reasonPageStart, reasonPageStart + REASON_PAGE_SIZE)
+              .map((reason, index) => (
+                <li key={reason.value}>
+                  <button
+                    className={selected?.value === reason.value ? "active" : ""}
+                    onClick={() =>
+                      onUpdateRoute({ problem: reason.value, recordPage: 1 })
+                    }
+                  >
+                    <span className="return-reason-rank">
+                      {reasonPageStart + index + 1}
+                    </span>
+                    <div>
+                      <b>
+                        {taxonomyLabels.has(reason.value)
+                          ? taxonomyPath(
+                              data.taxonomy,
+                              /** @type {ReviewLabel} */ (
+                                taxonomyLabels.get(reason.value)
+                              ),
+                            ).join(" → ")
+                          : reason.label}
+                      </b>
+                      <i aria-hidden="true">
+                        <span
+                          style={{
+                            width: `${Math.max(
+                              (Number(reason.record_count) / topReasonCount) * 100,
+                              2,
+                            )}%`,
+                          }}
+                        />
+                      </i>
+                    </div>
+                    <strong>
+                      {Number(reason.record_count).toLocaleString()} ·{" "}
+                      {formatPercent(reason.percentage)}
+                    </strong>
+                  </button>
+                </li>
+              ))}
           </ol>
         ) : (
           <div className="return-insight-empty">当前对象下没有匹配原因</div>
+        )}
+        {visibleReasons.length > REASON_PAGE_SIZE && (
+          <Pagination
+            page={currentReasonPage}
+            pageSize={REASON_PAGE_SIZE}
+            total={visibleReasons.length}
+            totalPages={reasonPageCount}
+            onPage={setReasonPage}
+            showTotal={false}
+            simple
+          />
         )}
       </section>
       {hierarchy.length > 0 && (

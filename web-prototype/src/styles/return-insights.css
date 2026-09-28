@@ -867,6 +867,13 @@
   padding: 0;
 }
 
+.return-insight-explorer .return-reason-ranking .result-pagination {
+  justify-content: center;
+  gap: 6px;
+  min-height: 46px;
+  padding: 6px 0;
+}
+
 .return-insight-explorer .return-reason-ranking li button {
   grid-template-columns: 18px minmax(0, 1fr) 70px;
   min-height: 38px;

@@ -46,6 +46,7 @@ import { useHashRoute } from "../src/app/hashRouter";
 import { AiInsightReport } from "../src/features/analysis-dashboards/AiInsightReport";
 import { AnalysisDashboardPage } from "../src/features/analysis-dashboards/AnalysisDashboardPage";
 import { DashboardDetailLoading } from "../src/features/analysis-dashboards/DashboardDetailStateViews";
+import { ReturnReasonInsightExplorer } from "../src/features/analysis-dashboards/ReturnReasonInsightExplorer";
 import { ReturnReasonInsights } from "../src/features/analysis-dashboards/ReturnReasonInsights";
 import { analysisContextTerms } from "../src/features/analysis-dashboards/analysisContextPresentation";
 import {
@@ -106,6 +107,59 @@ function planFor(ids, overrides = {}) {
     ...overrides,
   };
 }
+
+test("具体原因按十项分页，保持全局排名并在筛选后定位选中项", async () => {
+  const user = userEvent.setup();
+  const onUpdateRoute = vi.fn();
+  const reasons = Array.from({ length: 39 }, (_, index) => ({
+    value: `R${index + 1}`,
+    label: `原因${index + 1}`,
+    record_count: 39 - index,
+    percentage: 1,
+    subjects: index < 8 ? ["PRODUCT"] : [],
+  }));
+  const props = {
+    route: { labelGroup: "" },
+    data: {},
+    reasons,
+    hierarchy: [],
+    taxonomyLabels: new Map(),
+    selected: reasons[25],
+    subjects: [
+      { value: "PRODUCT", label: "商品相关", record_count: 39, percentage: 100 },
+    ],
+    groups: [],
+    analysisContext: "returns",
+    onUpdateRoute,
+  };
+  const view = render(<ReturnReasonInsightExplorer {...props} />);
+  const ranking = view.container.querySelector(".return-reason-ranking");
+  expect(within(ranking).getByText("39 项")).toBeVisible();
+  expect(
+    within(ranking).getByRole("navigation", { name: "分页，第 3 页，共 4 页" }),
+  ).toBeVisible();
+  expect(
+    [...ranking.querySelectorAll(".return-reason-rank")].map(
+      (node) => node.textContent,
+    ),
+  ).toEqual(Array.from({ length: 10 }, (_, index) => String(index + 21)));
+  expect(within(ranking).getByRole("button", { name: /原因26/ })).toHaveClass("active");
+
+  await user.click(within(ranking).getByRole("button", { name: "下一页" }));
+  expect(
+    [...ranking.querySelectorAll(".return-reason-rank")].map(
+      (node) => node.textContent,
+    ),
+  ).toEqual(Array.from({ length: 9 }, (_, index) => String(index + 31)));
+  await user.click(within(ranking).getByRole("button", { name: /原因39/ }));
+  expect(onUpdateRoute).toHaveBeenCalledWith({ problem: "R39", recordPage: 1 });
+
+  await user.click(screen.getByRole("button", { name: /商品相关/ }));
+  expect(within(ranking).getByText("8 项")).toBeVisible();
+  expect(ranking.querySelectorAll("ol li")).toHaveLength(8);
+  expect(within(ranking).queryByRole("navigation")).not.toBeInTheDocument();
+  expect(onUpdateRoute).toHaveBeenLastCalledWith({ problem: "R1", recordPage: 1 });
+});
 
 test("分析场景决定看板与报告用语", () => {
   expect(analysisContextTerms("user_feedback")).toMatchObject({
