@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import builtins
 import sqlite3
+from concurrent.futures import Future
+from threading import Lock
 from typing import Any
 
 from web_backend.common import insert_audit, json_text, new_id
@@ -48,6 +50,10 @@ __all__ = [
 class DashboardService:
     def __init__(self, database: Database) -> None:
         self.database = database
+        self._insights_lock = Lock()
+        self._inflight_insights: dict[
+            tuple[str, str, InsightOptions], Future[dict[str, Any]]
+        ] = {}
 
     def preflight(
         self,
@@ -318,21 +324,34 @@ class DashboardService:
         date_to: str | None = None,
         report_mode: bool = False,
     ) -> dict[str, Any]:
-        return build_insights(
-            self.database,
-            dashboard_id,
-            version_id,
-            InsightOptions(
-                problem=problem,
-                label_group=label_group,
-                listing=listing,
-                product_name=product_name,
-                product_sku=product_sku,
-                date_from=date_from,
-                date_to=date_to,
-                report_mode=report_mode,
-            ),
+        options = InsightOptions(
+            problem=problem,
+            label_group=label_group,
+            listing=listing,
+            product_name=product_name,
+            product_sku=product_sku,
+            date_from=date_from,
+            date_to=date_to,
+            report_mode=report_mode,
         )
+        key = (dashboard_id, version_id, options)
+        with self._insights_lock:
+            future = self._inflight_insights.get(key)
+            leader = future is None
+            if future is None:
+                future = Future()
+                self._inflight_insights[key] = future
+        if leader:
+            try:
+                future.set_result(
+                    build_insights(self.database, dashboard_id, version_id, options)
+                )
+            except BaseException as exc:
+                future.set_exception(exc)
+            finally:
+                with self._insights_lock:
+                    del self._inflight_insights[key]
+        return dict(future.result())
 
     def report_diagnostics(
         self, dashboard_id: str, version_id: str, reason_codes: builtins.list[str]
