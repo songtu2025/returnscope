@@ -7,6 +7,7 @@ import { EmptyState, InlineLoading, PageHeading } from "../components/SharedUi";
 import { ModelEditorDialog } from "../features/system-settings/ModelEditorDialog";
 import { ModelServiceEditor } from "../features/system-settings/ModelServiceEditor";
 import { ModelServiceSummary } from "../features/system-settings/ModelServiceSummary";
+import { useModelValidationRun } from "../features/system-settings/useModelValidationRun";
 import {
   CONFIG_DIFF_FIELDS,
   createDefaultModelCatalog,
@@ -25,15 +26,11 @@ import {
 /** @typedef {import("../shared/api/systemSettingsContracts").ConfigVersion} ConfigVersion */
 /** @typedef {import("../shared/api/systemSettingsContracts").ModelConnection} ModelConnection */
 /** @typedef {import("../shared/api/systemSettingsContracts").ValidationRun} ValidationRun */
-/** @typedef {import("../shared/api/systemSettingsContracts").ValidationEvent} ValidationEvent */
 
 /**
  * 当前页面消费的模型服务 API 契约。这里只补静态边界，不改变运行时响应处理。
  * @type {{
  *   configs: () => Promise<ModelConnection[]>,
- *   activeValidation: (connectionId: string) => Promise<ValidationRun | null>,
- *   validationRun: (runId: string) => Promise<ValidationRun>,
- *   validationEventUrl: (runId: string) => string,
  *   createConfig: (payload: object) => Promise<ConfigVersion>,
  *   startConfigValidation: (versionId: string) => Promise<ValidationRun>,
  *   publishConfig: (versionId: string) => Promise<unknown>,
@@ -106,22 +103,10 @@ export function ApiManagement({
     /** @type {ModelEditorMode | null} */ (null),
   );
   const [modelDraft, setModelDraft] = useState(/** @type {ModelDraft | null} */ (null));
-  const [validationRun, setValidationRun] = useState(
-    /** @type {ValidationRun | null} */ (null),
-  );
-  const [validationEvents, setValidationEvents] = useState(
-    /** @type {ValidationEvent[]} */ ([]),
-  );
-  const [validationElapsed, setValidationElapsed] = useState(0);
   const [discardConfirmation, setDiscardConfirmation] = useState(false);
   const hasLoadedConnections = useRef(false);
   const preserveConfigForm = useRef(false);
   const focusedModelRef = useRef(/** @type {HTMLDivElement | null} */ (null));
-  const validationActive = validationRun
-    ? ["queued", "running"].includes(validationRun.status)
-    : false;
-  const validationStartedAt =
-    validationRun?.started_at ?? validationRun?.created_at ?? null;
   useEffect(() => {
     if (focusModelId) setActivePanel("models");
     else if (focusConfigVersionId) setActivePanel("versions");
@@ -155,6 +140,18 @@ export function ApiManagement({
       throw error;
     }
   }, [focusConnectionId]);
+  const {
+    run: validationRun,
+    events: validationEvents,
+    elapsed: validationElapsed,
+    active: validationActive,
+    showRun,
+    clearRun,
+  } = useModelValidationRun({
+    connectionId: selectedConnectionId,
+    notify,
+    onCompleted: load,
+  });
   useEffect(() => {
     load().catch((error) => notify(errorMessage(error), "error"));
   }, [load, notify]);
@@ -229,81 +226,8 @@ export function ApiManagement({
     focusedModelRef.current.scrollIntoView({ block: "center" });
   }, [catalogModels, focusModelId, selectedConnectionId]);
   useEffect(() => {
-    let cancelled = false;
-    if (!selectedConnectionId) {
-      setValidationRun(null);
-      setValidationEvents([]);
-      return undefined;
-    }
-    setValidationRun(null);
-    setValidationEvents([]);
-    modelServiceApi
-      .activeValidation(selectedConnectionId)
-      .then((value) => {
-        if (!cancelled && value) {
-          setValidationRun(value);
-          setValidationEvents([]);
-        }
-      })
-      .catch((error) => notify(errorMessage(error), "error"));
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedConnectionId, notify]);
-  useEffect(() => {
     setDiscardConfirmation(false);
   }, [draftVersion?.id]);
-  useEffect(() => {
-    const runId = validationRun?.id;
-    if (!runId || !validationActive) return undefined;
-    let closed = false;
-    /** @type {Promise<void | ValidationRun>} */
-    let refreshChain = Promise.resolve();
-    const refreshRun = () => {
-      refreshChain = refreshChain
-        .then(() => modelServiceApi.validationRun(runId))
-        .then((value) => {
-          if (!closed) setValidationRun(value);
-          return value;
-        });
-      return refreshChain;
-    };
-    const source = new EventSource(modelServiceApi.validationEventUrl(runId), {
-      withCredentials: true,
-    });
-    source.addEventListener("validation", (event) => {
-      const value = /** @type {ValidationEvent} */ (JSON.parse(event.data));
-      setValidationEvents((current) => [...current.slice(-39), value]);
-      refreshRun();
-    });
-    source.addEventListener("close", () => {
-      source.close();
-      refreshRun().then((value) => {
-        if (closed || !value) return;
-        load();
-        notify(
-          value.status === "passed" ? "模型验证通过" : "模型验证失败",
-          value.status === "passed" ? "success" : "error",
-        );
-      });
-    });
-    return () => {
-      closed = true;
-      source.close();
-    };
-  }, [load, notify, validationActive, validationRun?.id]);
-  useEffect(() => {
-    if (!validationActive || !validationStartedAt) return undefined;
-    const updateElapsed = () => {
-      const started = new Date(validationStartedAt).getTime();
-      setValidationElapsed(
-        Number.isNaN(started) ? 0 : Math.max(0, (Date.now() - started) / 1000),
-      );
-    };
-    updateElapsed();
-    const timer = window.setInterval(updateElapsed, 200);
-    return () => window.clearInterval(timer);
-  }, [validationActive, validationStartedAt]);
   const previousVersion = selectedConnection?.versions?.find(
     (version) => version.version === (selectedVersion?.version ?? 1) - 1,
   );
@@ -401,10 +325,12 @@ export function ApiManagement({
       setBusy("");
     }
   };
-  /** @param {ValidationRun} value */
-  const showValidationRun = (value) => {
-    setValidationRun(value);
-    setValidationEvents([]);
+  /**
+   * @param {ValidationRun} value
+   * @param {string | null} ownerId
+   */
+  const showValidationRun = (value, ownerId) => {
+    if (!showRun(value, ownerId)) return;
     window.requestAnimationFrame(() =>
       document
         .getElementById("validation-process")
@@ -414,12 +340,13 @@ export function ApiManagement({
   /** @param {ConfigVersion | null} [version] */
   const startValidation = async (version = selectedVersion) => {
     if (!version) return;
+    const ownerId = selectedConnectionId;
     showVersion(version);
     setActivePanel("models");
     setBusy("validation-start");
     try {
       const value = await modelServiceApi.startConfigValidation(version.id);
-      showValidationRun(value);
+      showValidationRun(value, ownerId);
     } catch (error) {
       notify(errorMessage(error), "error");
     } finally {
@@ -611,10 +538,11 @@ export function ApiManagement({
 
   /** @param {CatalogModel} model */
   const validateCatalogModel = async (model) => {
+    const ownerId = selectedConnectionId;
     setBusy("validation-start");
     try {
       const value = await modelServiceApi.startModelValidation(model.id);
-      showValidationRun(value);
+      showValidationRun(value, ownerId);
     } catch (error) {
       notify(errorMessage(error), "error");
     } finally {
@@ -739,10 +667,7 @@ export function ApiManagement({
             catalogModels={catalogModels}
             focusModelId={focusModelId}
             focusedModelRef={focusedModelRef}
-            onCloseValidation={() => {
-              setValidationRun(null);
-              setValidationEvents([]);
-            }}
+            onCloseValidation={clearRun}
             onOpenModelEditor={openModelEditor}
             onPublish={publish}
             onToggleModel={toggleModel}
