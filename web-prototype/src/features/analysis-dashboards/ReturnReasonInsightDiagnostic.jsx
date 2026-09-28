@@ -326,6 +326,7 @@ export function ReturnReasonInsightDiagnostic({
                 totalPages={evidencePageCount}
                 onPage={onEvidencePage}
                 disabled={evidenceLoading}
+                showTotal={false}
               />
             )}
           </section>

@@ -84,11 +84,15 @@ describe("Pagination", () => {
         totalPages={913}
         onPage={onPage}
         disabled
+        showTotal={false}
       />,
     );
 
     expect(
       screen.queryByRole("combobox", { name: "每页数量" }),
+    ).not.toBeInTheDocument();
+    expect(
+      container.querySelector(".ant-pagination-total-text"),
     ).not.toBeInTheDocument();
     expect(container.querySelector(".ant-pagination")).toHaveClass(
       "ant-pagination-disabled",

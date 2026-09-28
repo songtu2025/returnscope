@@ -13,6 +13,7 @@ import { AntdProvider } from "./AntdProvider";
  *   onPage: (page: number) => void,
  *   onPageSize?: (pageSize: number) => void,
  *   disabled?: boolean,
+ *   showTotal?: boolean,
  * }} props
  */
 export function Pagination({
@@ -23,6 +24,7 @@ export function Pagination({
   onPage,
   onPageSize,
   disabled = false,
+  showTotal = true,
 }) {
   return (
     <AntdProvider>
@@ -39,7 +41,11 @@ export function Pagination({
         showSizeChanger={
           onPageSize ? { "aria-label": "每页数量", showSearch: false } : false
         }
-        showTotal={(value) => `共 ${Number(value || 0).toLocaleString()} 条`}
+        showTotal={
+          showTotal
+            ? (value) => `共 ${Number(value || 0).toLocaleString()} 条`
+            : undefined
+        }
         itemRender={(_itemPage, type, element) => {
           if (type === "prev") {
             return (
