@@ -1211,6 +1211,15 @@
   font-size: 12px;
 }
 
+.return-insight-evidence .result-pagination {
+  gap: 6px;
+  padding-inline: 10px;
+}
+
+.return-insight-evidence .ant-pagination-options-quick-jumper {
+  white-space: nowrap;
+}
+
 .return-insight-diagnostic .return-insight-evidence header span {
   font-size: 9px;
 }

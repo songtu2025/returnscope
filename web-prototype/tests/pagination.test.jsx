@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -85,6 +85,7 @@ describe("Pagination", () => {
         onPage={onPage}
         disabled
         showTotal={false}
+        showQuickJumper
       />,
     );
 
@@ -97,9 +98,54 @@ describe("Pagination", () => {
     expect(container.querySelector(".ant-pagination")).toHaveClass(
       "ant-pagination-disabled",
     );
+    expect(
+      container.querySelector(".ant-pagination-options-quick-jumper input"),
+    ).toBeDisabled();
     const next = screen.getByRole("button", { name: "下一页" });
     await user.click(next);
     expect(onPage).not.toHaveBeenCalled();
+  });
+
+  it("按需显示直接跳页，并限制到有效页码", async () => {
+    const user = userEvent.setup();
+    const onPage = vi.fn();
+    const { container, rerender } = render(
+      <Pagination
+        page={1}
+        pageSize={10}
+        total={9130}
+        totalPages={913}
+        onPage={onPage}
+        showQuickJumper
+      />,
+    );
+    const jumper = container.querySelector(
+      ".ant-pagination-options-quick-jumper input",
+    );
+    expect(jumper).toBeVisible();
+    expect(
+      screen.queryByRole("combobox", { name: "每页数量" }),
+    ).not.toBeInTheDocument();
+
+    await user.type(jumper, "456");
+    expect(jumper).toHaveValue("456");
+    fireEvent.keyUp(jumper, { key: "Enter", keyCode: 13 });
+    expect(onPage).toHaveBeenCalledWith(456);
+    rerender(
+      <Pagination
+        page={456}
+        pageSize={10}
+        total={9130}
+        totalPages={913}
+        onPage={onPage}
+        showQuickJumper
+      />,
+    );
+    await user.type(jumper, "9999");
+    fireEvent.keyUp(jumper, { key: "Enter", keyCode: 13 });
+    expect(onPage).toHaveBeenLastCalledWith(913);
+    await user.type(jumper, "abc");
+    expect(jumper).toHaveValue("");
   });
 
   it("放在表单内翻页时不会提交表单", async () => {

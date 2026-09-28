@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithServerState as render } from "./renderWithServerState";
 
@@ -219,6 +226,9 @@ test("语义证据按原因和筛选条件翻页，失败后可重试", async ()
   expect(
     within(evidence).queryByRole("combobox", { name: "每页数量" }),
   ).not.toBeInTheDocument();
+  expect(
+    evidence.querySelector(".ant-pagination-options-quick-jumper input"),
+  ).not.toBeInTheDocument();
   await user.click(within(evidence).getByRole("button", { name: "下一页" }));
   expect(updateRoute).toHaveBeenCalledWith({ recordPage: 2 }, { replace: true });
 
@@ -244,6 +254,81 @@ test("语义证据按原因和筛选条件翻页，失败后可重试", async ()
   );
   await user.click(within(evidence).getByRole("button", { name: "上一页" }));
   expect(updateRoute).toHaveBeenLastCalledWith({ recordPage: 1 }, { replace: true });
+});
+
+test("大量语义证据可直接跳到中间页并按原筛选条件加载", async () => {
+  const user = userEvent.setup();
+  const updateRoute = vi.fn();
+  const route = {
+    dashboardId: "dashboard-1",
+    versionId: "version-1",
+    problem: "FIT_TOO_SMALL",
+    labelGroup: "尺码与合脚",
+    listing: "L001",
+    productName: "",
+    productSku: "",
+    dateFrom: "2026-08-01",
+    dateTo: "2026-08-03",
+    recordPage: 1,
+  };
+  const props = {
+    route,
+    updateRoute,
+    data: {
+      summary: { record_count: 9130 },
+      date_range: {},
+      filter_options: {},
+      category_groups: [],
+      reasons: [{ value: "FIT_TOO_SMALL", label: "偏小", record_count: 9130 }],
+      selected_reason: { value: "FIT_TOO_SMALL", label: "偏小", record_count: 9130 },
+      evidence: { items: [], total: 9130, page: 1, page_size: 10 },
+    },
+    loading: false,
+    analysisContext: "returns",
+    onRetry: vi.fn(),
+    onEvidence: vi.fn(),
+  };
+  dashboardApiMock.analysisDashboardEvidence.mockResolvedValueOnce({
+    items: [
+      {
+        id: "record-4550",
+        comment: "第 456 页证据",
+        classification: { semantic_units: [] },
+      },
+    ],
+    total: 9130,
+    page: 456,
+    page_size: 10,
+  });
+  const view = render(<ReturnReasonInsights {...props} />);
+  const evidence = view.container.querySelector(".return-insight-evidence");
+  const jumper = evidence.querySelector(".ant-pagination-options-quick-jumper input");
+  expect(jumper).toBeVisible();
+  await user.type(jumper, "456");
+  fireEvent.keyUp(jumper, { key: "Enter", keyCode: 13 });
+  expect(updateRoute).toHaveBeenCalledWith({ recordPage: 456 }, { replace: true });
+
+  view.rerender(
+    <ReturnReasonInsights {...props} route={{ ...route, recordPage: 456 }} />,
+  );
+  expect(await within(evidence).findByText("第 456 页证据")).toBeVisible();
+  expect(dashboardApiMock.analysisDashboardEvidence).toHaveBeenLastCalledWith(
+    "dashboard-1",
+    "version-1",
+    expect.objectContaining({
+      problem: "FIT_TOO_SMALL",
+      label_group: "尺码与合脚",
+      listing: "L001",
+      date_from: "2026-08-01",
+      date_to: "2026-08-03",
+      page: 456,
+    }),
+    expect.any(Object),
+  );
+  expect(within(evidence).getByRole("navigation")).toHaveAttribute(
+    "aria-label",
+    "分页，第 456 页，共 913 页",
+  );
 });
 
 test("新看板显示反馈组单位，历史看板保留记录单位", () => {

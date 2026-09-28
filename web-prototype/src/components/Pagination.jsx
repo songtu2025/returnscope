@@ -14,6 +14,7 @@ import { AntdProvider } from "./AntdProvider";
  *   onPageSize?: (pageSize: number) => void,
  *   disabled?: boolean,
  *   showTotal?: boolean,
+ *   showQuickJumper?: boolean,
  * }} props
  */
 export function Pagination({
@@ -25,6 +26,7 @@ export function Pagination({
   onPageSize,
   disabled = false,
   showTotal = true,
+  showQuickJumper = false,
 }) {
   return (
     <AntdProvider>
@@ -38,6 +40,7 @@ export function Pagination({
         disabled={disabled}
         pageSizeOptions={PAGE_SIZES}
         showLessItems
+        showQuickJumper={showQuickJumper}
         showSizeChanger={
           onPageSize ? { "aria-label": "每页数量", showSearch: false } : false
         }

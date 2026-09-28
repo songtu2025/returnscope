@@ -327,6 +327,7 @@ export function ReturnReasonInsightDiagnostic({
                 onPage={onEvidencePage}
                 disabled={evidenceLoading}
                 showTotal={false}
+                showQuickJumper={evidencePageCount > 20}
               />
             )}
           </section>
