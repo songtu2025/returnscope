@@ -68,6 +68,9 @@
 .product-master-page
   .dimension-search
   > .ant-input-affix-wrapper
+  > input.ant-input.ant-input,
+.returns-assets-page
+  .returns-registry-search.ant-input-affix-wrapper
   > input.ant-input.ant-input {
   width: 100%;
   min-width: 0;
@@ -83,6 +86,9 @@
 .product-master-page
   .dimension-search
   > .ant-input-affix-wrapper
+  > input.ant-input:focus-visible,
+.returns-assets-page
+  .returns-registry-search.ant-input-affix-wrapper
   > input.ant-input:focus-visible {
   outline: none;
 }
