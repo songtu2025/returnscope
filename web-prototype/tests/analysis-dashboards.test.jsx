@@ -345,8 +345,9 @@ test("详情组件与数据加载共用固定的页头和正文占位", async ()
 });
 
 test("详情正文读取失败时保留页头和重试入口", async () => {
-  dashboardApiMock.analysisDashboardInsights.mockRejectedValue(
-    new Error("模拟读取失败"),
+  const user = userEvent.setup();
+  dashboardApiMock.analysisDashboardInsights.mockRejectedValueOnce(
+    new Error("网络连接中断，请检查网络后重新加载"),
   );
   window.location.hash =
     "#analysis-dashboards?dashboard=dashboard-default&version=dashboard-version-default";
@@ -355,9 +356,15 @@ test("详情正文读取失败时保留页头和重试入口", async () => {
   expect(
     await screen.findByRole("heading", { name: "用户反馈语义洞察" }),
   ).toBeVisible();
-  expect(await screen.findByRole("alert")).toHaveTextContent("模拟读取失败");
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "网络连接中断，请检查网络后重新加载",
+  );
   expect(screen.getByRole("button", { name: "重新加载" })).toBeVisible();
   expect(screen.queryByText("正在打开分析看板…")).not.toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "重新加载" }));
+  expect(await screen.findByText("有效反馈")).toBeVisible();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
 
 test("搜索条件只在点击筛选后提交并重置到第一页", async () => {

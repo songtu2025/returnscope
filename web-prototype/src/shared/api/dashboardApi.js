@@ -1,5 +1,28 @@
 import { queryString, request } from "./request";
 
+const NETWORK_RETRY_DELAY_MS = 300;
+
+/** @param {string} path @param {RequestInit} [options] */
+async function readDashboard(path, options = {}) {
+  try {
+    return await request(path, options);
+  } catch (error) {
+    if (!(error instanceof TypeError) || options.signal?.aborted) throw error;
+  }
+
+  // 只重试一次未收到 HTTP 响应的只读请求，避免重复提交写操作。
+  await new Promise((resolve) => setTimeout(resolve, NETWORK_RETRY_DELAY_MS));
+  options.signal?.throwIfAborted();
+  try {
+    return await request(path, options);
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error("网络连接中断，请检查网络后重新加载");
+    }
+    throw error;
+  }
+}
+
 /** @typedef {object} DashboardPayload */
 /** @typedef {Record<string, unknown>} DashboardQuery */
 /** @typedef {ReturnType<typeof request>} DashboardRequest */
@@ -52,26 +75,26 @@ export const dashboardApi = {
       options,
     ),
   analysisDashboards: (filters = {}, options = {}) =>
-    request(`/api/analysis-dashboards${queryString(filters)}`, options),
+    readDashboard(`/api/analysis-dashboards${queryString(filters)}`, options),
   analysisDashboard: (dashboardId, versionId = "", options = {}) =>
-    request(
+    readDashboard(
       `/api/analysis-dashboards/${dashboardId}${queryString({ version_id: versionId })}`,
       options,
     ),
   analysisDashboardVersions: (dashboardId, options = {}) =>
-    request(`/api/analysis-dashboards/${dashboardId}/versions`, options),
+    readDashboard(`/api/analysis-dashboards/${dashboardId}/versions`, options),
   analysisDashboardSummary: (dashboardId, versionId, options = {}) =>
-    request(
+    readDashboard(
       `/api/analysis-dashboards/${dashboardId}/versions/${versionId}/summary`,
       options,
     ),
   analysisDashboardSources: (dashboardId, versionId, options = {}) =>
-    request(
+    readDashboard(
       `/api/analysis-dashboards/${dashboardId}/versions/${versionId}/sources`,
       options,
     ),
   analysisDashboardInsights: (dashboardId, versionId, filters = {}, options = {}) =>
-    request(
+    readDashboard(
       `/api/analysis-dashboards/${dashboardId}/versions/${versionId}/insights${queryString(
         filters,
       )}`,
@@ -84,14 +107,14 @@ export const dashboardApi = {
     filters = {},
     options = {},
   ) =>
-    request(
+    readDashboard(
       `/api/analysis-dashboards/${dashboardId}/versions/${versionId}/drilldown${queryString(
         { group_by: groupBy, ...filters },
       )}`,
       options,
     ),
   analysisDashboardRecords: (dashboardId, versionId, filters = {}, options = {}) =>
-    request(
+    readDashboard(
       `/api/analysis-dashboards/${dashboardId}/versions/${versionId}/records${queryString(
         filters,
       )}`,
@@ -112,14 +135,14 @@ export const dashboardApi = {
       options,
     ),
   analysisDashboardInsightReports: (dashboardId, versionId, options = {}) =>
-    request(
+    readDashboard(
       `/api/analysis-dashboards/${dashboardId}/ai-insight-reports${queryString({
         version_id: versionId,
       })}`,
       options,
     ),
   insightReport: (reportId, options = {}) =>
-    request(`/api/ai-insight-reports/${reportId}`, options),
+    readDashboard(`/api/ai-insight-reports/${reportId}`, options),
   retryInsightReport: (reportId, options = {}) =>
     jsonRequest(`/api/ai-insight-reports/${reportId}/retry`, "POST", {}, options),
   setInsightReportIssueDecision: (reportId, issueId, status, options = {}) =>
