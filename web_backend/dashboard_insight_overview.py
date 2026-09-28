@@ -59,33 +59,55 @@ def _collect_semantic_breakdown(
     else:
         semantic_rows = connection.execute(
             f"""
-            WITH semantic_rows AS MATERIALIZED (
-                SELECT r.id, r.result_version_id, r.classification_key,
+            WITH filtered_units AS MATERIALIZED (
+                SELECT r.result_version_id, r.classification_key,
+                       COUNT(*) AS record_count
+                FROM classification_result_records r
+                WHERE {where_sql}
+                GROUP BY r.result_version_id, r.classification_key
+            ),
+            semantic_rows AS MATERIALIZED (
+                SELECT filtered_units.result_version_id,
+                       filtered_units.classification_key,
+                       filtered_units.record_count,
                        json_extract(unit.value, '$.subject') AS subject,
                        json_extract(unit.value, '$.label_code') AS label_code
-                FROM classification_result_records r
+                FROM filtered_units
                 JOIN classification_units u
-                  ON u.result_version_id = r.result_version_id
-                 AND u.classification_key = r.classification_key
+                  ON u.result_version_id = filtered_units.result_version_id
+                 AND u.classification_key = filtered_units.classification_key
                 JOIN json_each(u.classification_json, '$.semantic_units') unit
-                WHERE {where_sql}
+            ),
+            subject_units AS (
+                SELECT result_version_id, classification_key, subject,
+                       MAX(record_count) AS record_count,
+                       SUM(record_count) AS semantic_unit_count
+                FROM semantic_rows
+                WHERE subject IS NOT NULL
+                GROUP BY result_version_id, classification_key, subject
+            ),
+            reason_subject_units AS (
+                SELECT DISTINCT result_version_id, classification_key,
+                       label_code, subject, record_count
+                FROM semantic_rows
             )
             SELECT 'subject' AS kind, NULL AS label_code,
-                   subject AS value, COUNT(DISTINCT id) AS record_count,
-                   COUNT(*) AS semantic_unit_count
-            FROM semantic_rows
-            WHERE subject IS NOT NULL
+                   subject AS value, SUM(record_count) AS record_count,
+                   SUM(semantic_unit_count) AS semantic_unit_count
+            FROM subject_units
             GROUP BY subject
             UNION ALL
-            SELECT 'reason_subject', semantic_rows.label_code,
-                   semantic_rows.subject, COUNT(DISTINCT semantic_rows.id), NULL
-            FROM semantic_rows
+            SELECT 'reason_subject', reason_subject_units.label_code,
+                   reason_subject_units.subject,
+                   SUM(reason_subject_units.record_count), NULL
+            FROM reason_subject_units
             JOIN classification_unit_labels l
-              ON l.result_version_id = semantic_rows.result_version_id
-             AND l.classification_key = semantic_rows.classification_key
+              ON l.result_version_id = reason_subject_units.result_version_id
+             AND l.classification_key = reason_subject_units.classification_key
              AND l.label_kind = 'problem'
-             AND l.label_code = semantic_rows.label_code
-            GROUP BY semantic_rows.label_code, semantic_rows.subject
+             AND l.label_code = reason_subject_units.label_code
+            GROUP BY reason_subject_units.label_code,
+                     reason_subject_units.subject
             """,
             tuple(params),
         ).fetchall()

@@ -742,6 +742,16 @@ def test_dashboard_insights_count_each_semantic_part_once_per_record(
         str(dashboard["version"]["version_id"]),
         problem="FIT_TOO_SMALL_U1",
     )
+    assert insights["subject_breakdown"] == [
+        {
+            "value": "PRODUCT",
+            "label": "商品相关",
+            "record_count": 2,
+            "semantic_unit_count": 6,
+            "percentage": 100.0,
+        }
+    ]
+    assert insights["selected_reason"]["subjects"] == ["PRODUCT"]
     semantic_profile = insights["semantic_profile"]
     assert semantic_profile["record_count"] == 2
     assert {
