@@ -52,7 +52,7 @@ def collect_reason_details(
                          AND selected.label_kind = 'problem'
                          AND selected.label_code = ?
                    ) THEN 1 ELSE 0 END) AS record_count
-            FROM classification_result_records r
+            FROM {scope.records_table} r
             WHERE {where_sql} AND r.return_date IS NOT NULL
             GROUP BY period_start, period_end
             ORDER BY period_start
@@ -84,7 +84,7 @@ def collect_reason_details(
                          AND selected.label_kind = 'problem'
                          AND selected.label_code = ?
                    ) THEN 1 ELSE 0 END) AS record_count
-            FROM classification_result_records r
+            FROM {scope.records_table} r
             WHERE {where_sql}
             GROUP BY value
             HAVING record_count > 0
@@ -130,7 +130,7 @@ def collect_reason_details(
                          AND selected.label_kind = 'problem'
                          AND selected.label_code = ?
                    ) THEN 1 ELSE 0 END) AS record_count
-            FROM classification_result_records r
+            FROM {scope.records_table} r
             WHERE {where_sql}
             GROUP BY value, product_name
             HAVING record_count > 0
@@ -168,7 +168,7 @@ def collect_reason_details(
                    COALESCE(NULLIF(TRIM(other.label_name), ''),
                             other.label_code) AS label,
                    COUNT(r.id) AS record_count
-            FROM classification_result_records r
+            FROM {scope.records_table} r
             JOIN classification_unit_labels selected
               ON selected.result_version_id = r.result_version_id
              AND selected.classification_key = r.classification_key
@@ -212,7 +212,7 @@ def collect_reason_details(
                        json_extract(unit.value, '$.opinion') AS opinion,
                        json_extract(unit.value, '$.subject') AS subject,
                        json_extract(unit.value, '$.evidence') AS evidence
-                FROM classification_result_records r
+                FROM {scope.records_table} r
                 JOIN classification_units u
                   ON u.result_version_id = r.result_version_id
                  AND u.classification_key = r.classification_key
@@ -280,11 +280,19 @@ def collect_reason_details(
             for row in opinion_rows
         ]
         evidence_total = selected_count
+        evidence_source = (
+            "classification_result_records r"
+            if scope.records_table == "classification_result_records"
+            else (
+                f"{scope.records_table} scoped "
+                "JOIN classification_result_records r ON r.id = scoped.id"
+            )
+        )
         evidence_rows = connection.execute(
             f"""
             SELECT r.*, u.processing_status, u.problem_labels_json,
                    u.classification_json
-            FROM classification_result_records r
+            FROM {evidence_source}
             JOIN classification_units u
               ON u.result_version_id = r.result_version_id
              AND u.classification_key = r.classification_key

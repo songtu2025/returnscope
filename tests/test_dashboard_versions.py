@@ -716,6 +716,42 @@ def test_dashboard_insights_reuse_unchanged_feedback_scope(
     assert any("INSERT INTO dashboard_feedback_main" in sql for sql in statements)
 
 
+def test_filtered_insights_keep_full_options_and_scoped_evidence(
+    tmp_path: Path,
+) -> None:
+    context, version, service = _ready_result(tmp_path)
+    with context.database.transaction(immediate=True) as connection:
+        connection.execute(
+            """
+            UPDATE classification_result_records
+            SET product_name = '第二产品'
+            WHERE order_id = 'ORDER-OTHER'
+            """
+        )
+    _, dashboard = _create_dashboard(service, str(version["version_id"]))
+    insights = service.insights(
+        str(dashboard["id"]),
+        str(dashboard["version"]["version_id"]),
+        problem="FIT_TOO_SMALL_U1",
+        product_name="第二产品",
+        date_from="2026-08-03",
+        date_to="2026-08-03",
+    )
+
+    assert insights["summary"]["record_count"] == 2
+    assert insights["total_record_count"] == 1
+    assert set(insights["filter_options"]["product_names"]) == {
+        "产品表权威名称",
+        "第二产品",
+    }
+    assert insights["products"][0]["value"] == "第二产品"
+    assert insights["products"][0]["record_count"] == 1
+    assert insights["evidence"]["total"] == 1
+    assert [item["order_id"] for item in insights["evidence"]["items"]] == [
+        "ORDER-OTHER"
+    ]
+
+
 def test_dashboard_insights_count_each_semantic_part_once_per_record(
     tmp_path: Path,
 ) -> None:

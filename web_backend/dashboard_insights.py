@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from return_semantics.schemas import TaxonomyConfig
@@ -239,6 +239,26 @@ def build_insights(
             if taxonomy and taxonomy.structure_version == 2
             else []
         )
+        reuse_option_records = (
+            scope.option_where == scope.where_sql
+            and scope.option_params == scope.params
+        )
+        connection.execute(
+            f"""
+            CREATE TEMP TABLE dashboard_insight_records AS
+            SELECT r.id, r.result_version_id, r.classification_key,
+                   r.return_date, r.listing, r.product_name, r.product_sku
+            FROM classification_result_records r
+            WHERE {scope.where_sql}
+            """,
+            tuple(scope.params),
+        )
+        scope = replace(
+            scope,
+            where_sql="1=1",
+            params=[],
+            records_table="dashboard_insight_records",
+        )
         matches_summary_scope = not any(
             (
                 options.listing,
@@ -257,6 +277,13 @@ def build_insights(
         selected_reason = overview["selected_reason"]
         details = collect_reason_details(scope, selected_reason, overview, taxonomy)
 
+        option_table = (
+            scope.records_table
+            if reuse_option_records
+            else "classification_result_records"
+        )
+        option_where = "1=1" if reuse_option_records else scope.option_where
+        option_params = [] if reuse_option_records else scope.option_params
         filter_options = {}
         for key, column in (
             ("listings", "r.listing"),
@@ -266,13 +293,13 @@ def build_insights(
             rows = connection.execute(
                 f"""
                             SELECT DISTINCT {column} AS value
-                            FROM classification_result_records r
-                            WHERE {scope.option_where}
+                            FROM {option_table} r
+                            WHERE {option_where}
                               AND {column} IS NOT NULL
                               AND TRIM({column}) <> ''
                             ORDER BY value COLLATE NOCASE ASC
                             """,
-                tuple(scope.option_params),
+                tuple(option_params),
             ).fetchall()
             filter_options[key] = [str(row["value"]) for row in rows]
 

@@ -20,6 +20,7 @@ class InsightQueryScope:
     clean_group: str
     requested_problem: str
     report_mode: bool
+    records_table: str = "classification_result_records"
 
 
 def _collect_semantic_breakdown(
@@ -62,7 +63,7 @@ def _collect_semantic_breakdown(
             WITH filtered_units AS MATERIALIZED (
                 SELECT r.result_version_id, r.classification_key,
                        COUNT(*) AS record_count
-                FROM classification_result_records r
+                FROM {scope.records_table} r
                 WHERE {where_sql}
                 GROUP BY r.result_version_id, r.classification_key
             ),
@@ -185,7 +186,7 @@ def _label_catalog(
                    COALESCE(NULLIF(TRIM(l.label_name), ''), l.label_code)
                        AS label,
                    COUNT(DISTINCT r.id) AS record_count
-            FROM classification_result_records r
+            FROM {scope.records_table} r
             JOIN classification_unit_labels l
               ON l.result_version_id = r.result_version_id
              AND l.classification_key = r.classification_key
@@ -247,7 +248,7 @@ def collect_insight_overview(
     if total_records is None:
         total_records = int(
             connection.execute(
-                f"SELECT COUNT(*) FROM classification_result_records r WHERE {where_sql}",
+                f"SELECT COUNT(*) FROM {scope.records_table} r WHERE {where_sql}",
                 tuple(params),
             ).fetchone()[0]
         )
@@ -255,7 +256,7 @@ def collect_insight_overview(
         connection.execute(
             f"""
             SELECT COUNT(*)
-            FROM classification_result_records r
+            FROM {scope.records_table} r
             WHERE {where_sql}
               AND EXISTS (
                   SELECT 1 FROM classification_unit_labels label
@@ -274,7 +275,7 @@ def collect_insight_overview(
         f"""
         SELECT aligned_group(l.label_group, l.label_code, r.result_version_id) AS value,
                COUNT(DISTINCT r.id) AS record_count
-        FROM classification_result_records r
+        FROM {scope.records_table} r
         JOIN classification_unit_labels l
           ON l.result_version_id = r.result_version_id
          AND l.classification_key = r.classification_key
@@ -302,7 +303,7 @@ def collect_insight_overview(
                        AS label_group,
                    COUNT(r.id) AS record_count,
                    NULL AS primary_record_count
-            FROM classification_result_records r
+            FROM {scope.records_table} r
             JOIN classification_unit_labels l
               ON l.result_version_id = r.result_version_id
              AND l.classification_key = r.classification_key
@@ -326,7 +327,7 @@ def collect_insight_overview(
                      AND primary_label.label_kind = 'primary'
                      AND primary_label.label_code = l.label_code
                ) THEN 1 ELSE 0 END) AS primary_record_count
-        FROM classification_result_records r
+        FROM {scope.records_table} r
         JOIN classification_unit_labels l
           ON l.result_version_id = r.result_version_id
          AND l.classification_key = r.classification_key
@@ -377,7 +378,7 @@ def collect_insight_overview(
         WITH filtered_records AS MATERIALIZED (
             SELECT r.id, r.result_version_id, r.classification_key,
                    r.product_name
-            FROM classification_result_records r
+            FROM {scope.records_table} r
             WHERE {where_sql}
         ),
         top_products AS (
