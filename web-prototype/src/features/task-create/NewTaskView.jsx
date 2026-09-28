@@ -100,11 +100,7 @@ export function NewTaskView({
   } = upload;
   return (
     <div className="standard-page new-task-page">
-      <PageHeading
-        titleRef={headingRef}
-        title="创建分析任务"
-        description="选择用户反馈数据，准备好后开始分析。"
-      />
+      <PageHeading titleRef={headingRef} title="创建分析任务" />
       {loadingSetup && (
         <section className="new-task-loading">
           <InlineLoading label="正在读取数据与模型配置…" />

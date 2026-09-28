@@ -183,11 +183,7 @@ export function TeamPage({
   };
   return (
     <div className="standard-page team-page">
-      <PageHeading
-        eyebrow="账号管理"
-        title="用户与安全"
-        description="管理团队账号、邀请与当前账号凭据。"
-      />
+      <PageHeading eyebrow="账号管理" title="用户与安全" />
       {loadState === "loading" && <InlineLoading label="正在读取用户与安全设置…" />}
       {loadState === "error" && (
         <section role="alert">

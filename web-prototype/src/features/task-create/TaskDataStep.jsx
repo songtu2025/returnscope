@@ -50,7 +50,7 @@ export function TaskDataStep({
         <header className="task-data-section-heading">
           <div>
             <h2>{prepared ? "分析数据" : "选择分析数据"}</h2>
-            <p>{prepared ? scopeLabel : "选择数据来源，确定本次分析范围。"}</p>
+            {prepared && <p>{scopeLabel}</p>}
           </div>
           {prepared && (
             <button

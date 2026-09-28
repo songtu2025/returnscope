@@ -177,7 +177,6 @@ export function SegmentBoard({
           <h3>
             Listing 明细 <span>{queueSegments.length}</span>
           </h3>
-          <p>执行进度与结果质量分别展示，已生成的结果可随时查看。</p>
         </div>
       </div>
       <div className="listing-queue-toolbar">

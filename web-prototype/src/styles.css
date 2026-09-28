@@ -40,24 +40,6 @@
   --desktop-empty-height: 208px;
 }
 
-.page-breadcrumb {
-  width: 100%;
-  max-width: var(--layout-workflow-max);
-  margin: 18px auto -4px;
-  padding: 0 var(--desktop-page-padding);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 13px;
-}
-.page-breadcrumb button {
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: var(--accent-strong);
-  cursor: pointer;
-}
 .legacy-results-notice {
   width: min(100%, 1180px);
   margin: 20px auto -4px;

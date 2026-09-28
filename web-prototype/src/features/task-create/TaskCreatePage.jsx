@@ -101,28 +101,19 @@ export function TaskCreatePage({ route, notify, onNavigate, onChanged, userId })
     [onNavigate, userId],
   );
 
-  return (
-    <>
-      <nav className="page-breadcrumb" aria-label="面包屑">
-        <button onClick={() => onNavigate("analysis-tasks")}>分析任务</button>
-        <span aria-hidden="true">/</span>
-        <span>创建任务</span>
-      </nav>
-      {templateLoading ? (
-        <section className="content-card task-template-loading">
-          <InlineLoading label="正在读取原任务配置…" />
-        </section>
-      ) : (
-        <NewTaskPage
-          key={templateTask?.id ?? "new-task"}
-          onNavigate={navigate}
-          notify={notify}
-          onChanged={onChanged}
-          draft={draft}
-          onDraftChange={(next) => writeTaskDraft(userId, next)}
-          onDraftComplete={() => clearTaskDraft(userId)}
-        />
-      )}
-    </>
+  return templateLoading ? (
+    <section className="content-card task-template-loading">
+      <InlineLoading label="正在读取原任务配置…" />
+    </section>
+  ) : (
+    <NewTaskPage
+      key={templateTask?.id ?? "new-task"}
+      onNavigate={navigate}
+      notify={notify}
+      onChanged={onChanged}
+      draft={draft}
+      onDraftChange={(next) => writeTaskDraft(userId, next)}
+      onDraftComplete={() => clearTaskDraft(userId)}
+    />
   );
 }

@@ -367,7 +367,6 @@ export function DashboardCreateFlow({ route, updateRoute, notify, userId }) {
       <PageHeading
         eyebrow={isVersionCreation ? "创建看板新版本" : "生成不可变看板数据集"}
         title={isVersionCreation ? "基于新分类结果创建版本" : "创建分析看板"}
-        description="流程固定为选择结果、解决 Listing 冲突、确认并生成。"
       />
       <DashboardCreateSteps step={route.step} />
 

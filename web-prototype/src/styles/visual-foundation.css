@@ -39,6 +39,14 @@
   margin-bottom: 18px;
 }
 
+.page-heading-compact {
+  min-height: 0;
+}
+
+.page-heading.page-heading-compact h1 {
+  margin-bottom: 0;
+}
+
 .page-heading > div:first-child {
   min-width: 0;
   max-width: 880px;

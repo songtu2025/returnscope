@@ -273,7 +273,6 @@ export function TaskMonitor({
       <div hidden={showTaskDetail}>
         <PageHeading
           title="分析任务"
-          description="查看分析进展，处理问题，使用已有结果。"
           action={
             <button className="primary-button" onClick={() => onNavigate("new")}>
               <Plus size={18} />

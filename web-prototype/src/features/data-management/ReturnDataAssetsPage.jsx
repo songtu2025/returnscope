@@ -171,7 +171,6 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
       <PageHeading
         eyebrow="数据资产"
         title="用户反馈数据源管理"
-        description="管理可复用的用户反馈数据源和最近导入状态。"
         action={
           <Button
             type="primary"

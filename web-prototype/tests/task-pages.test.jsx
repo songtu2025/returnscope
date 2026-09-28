@@ -50,9 +50,7 @@ test("任务创建页将数据版本写入用户草稿并保留业务归属", ()
     />,
   );
 
-  expect(screen.getByRole("navigation", { name: "面包屑" })).toHaveTextContent(
-    "分析任务/创建任务",
-  );
+  expect(screen.queryByRole("navigation", { name: "面包屑" })).not.toBeInTheDocument();
   expect(newTaskPageProbe.mock.calls.at(-1)[0].draft).toMatchObject({
     dataEntryMode: "existing",
     selectedDataLabel: "当前完整数据",

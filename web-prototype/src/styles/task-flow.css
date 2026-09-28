@@ -2157,7 +2157,6 @@
   font-size: 14px;
 }
 
-.listing-queue-header p,
 .task-secondary-section header p {
   margin: 4px 0 0;
   color: var(--muted);
@@ -2780,6 +2779,9 @@
   min-height: 54px;
   margin-bottom: 16px;
 }
+.new-task-page .page-heading-compact {
+  min-height: 0;
+}
 .new-task-page .task-config-panel {
   box-shadow: none;
 }
@@ -2958,12 +2960,6 @@
 .task-launch-error p {
   margin: 6px 0 0;
   overflow-wrap: anywhere;
-}
-.task-launch-heading p {
-  margin: 9px 0 0;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.6;
 }
 .new-task-page .task-launch-panel .task-title-input {
   gap: 10px;
@@ -3240,10 +3236,6 @@
   margin-left: 6px;
   color: var(--muted);
   font-weight: 400;
-}
-.task-runtime-workspace .listing-queue-header p {
-  font-size: 12px;
-  margin-top: 6px;
 }
 .task-runtime-workspace .listing-queue-toolbar {
   margin: 18px 0;

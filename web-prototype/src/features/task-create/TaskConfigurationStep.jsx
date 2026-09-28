@@ -61,7 +61,6 @@ export function TaskConfigurationStep({
           <h2 id="task-launch-title" ref={headingRef} tabIndex={-1}>
             确认并开始分析
           </h2>
-          <p>为任务命名，确认本次使用的分析模型。</p>
         </header>
         <label className="task-config-choice task-title-input">
           任务名称

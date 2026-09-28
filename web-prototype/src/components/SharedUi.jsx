@@ -10,20 +10,22 @@ import { AntdProvider } from "./AntdProvider";
  * @param {{
  *   eyebrow?: import("react").ReactNode,
  *   title: import("react").ReactNode,
- *   description: import("react").ReactNode,
+ *   description?: import("react").ReactNode,
  *   action?: import("react").ReactNode,
  *   titleRef?: import("react").Ref<HTMLHeadingElement>,
  * }} props
  */
 export function PageHeading({ eyebrow, title, description, action, titleRef }) {
   return (
-    <header className="page-heading">
+    <header
+      className={description ? "page-heading" : "page-heading page-heading-compact"}
+    >
       <div>
         {eyebrow && <p className="eyebrow">{eyebrow}</p>}
         <h1 ref={titleRef} tabIndex={titleRef ? -1 : undefined}>
           {title}
         </h1>
-        <span>{description}</span>
+        {description && <span>{description}</span>}
       </div>
       {action && <div className="heading-action">{action}</div>}
     </header>

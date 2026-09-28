@@ -56,9 +56,6 @@ test("business pages use tiered desktop work widths", () => {
   expect(styles).toMatch(
     /\.narrow-page\s*{[^}]*--page-max-width:\s*var\(--layout-narrow-max\);/s,
   );
-  expect(styles).toMatch(
-    /\.page-breadcrumb\s*{[^}]*width:\s*100%;[^}]*max-width:\s*var\(--layout-workflow-max\);/s,
-  );
   expect(styles).not.toMatch(/--desktop-(?:form-)?page-max-width/);
   expect(styles).not.toMatch(/width:\s*min\(100%,\s*1029px\)/);
   expect(styles).not.toMatch(/max-width:\s*(1220px|1280px|1480px)/);

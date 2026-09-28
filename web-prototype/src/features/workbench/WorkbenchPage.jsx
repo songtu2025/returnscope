@@ -79,7 +79,6 @@ export function WorkbenchPage({ onNavigate }) {
       <PageHeading
         eyebrow="运营首页"
         title="首页"
-        description="集中查看待处理事项、后台任务进度和最近形成的业务产出。"
         action={
           <button className="primary-button" onClick={() => onNavigate("task-create")}>
             <Plus size={18} />
