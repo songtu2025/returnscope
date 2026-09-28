@@ -119,7 +119,7 @@ test("具体原因按十项分页，保持全局排名并在筛选后定位选�
     subjects: index < 8 ? ["PRODUCT"] : [],
   }));
   const props = {
-    route: { labelGroup: "" },
+    route: { labelGroup: "", subject: "", reasonPage: 0 },
     data: {},
     reasons,
     hierarchy: [],
@@ -146,19 +146,96 @@ test("具体原因按十项分页，保持全局排名并在筛选后定位选�
   expect(within(ranking).getByRole("button", { name: /原因26/ })).toHaveClass("active");
 
   await user.click(within(ranking).getByRole("button", { name: "下一页" }));
+  expect(onUpdateRoute).toHaveBeenLastCalledWith({ reasonPage: 4 });
+  view.rerender(
+    <ReturnReasonInsightExplorer
+      {...props}
+      route={{ ...props.route, reasonPage: 4 }}
+    />,
+  );
   expect(
     [...ranking.querySelectorAll(".return-reason-rank")].map(
       (node) => node.textContent,
     ),
   ).toEqual(Array.from({ length: 9 }, (_, index) => String(index + 31)));
   await user.click(within(ranking).getByRole("button", { name: /原因39/ }));
-  expect(onUpdateRoute).toHaveBeenCalledWith({ problem: "R39", recordPage: 1 });
+  expect(onUpdateRoute).toHaveBeenCalledWith({
+    problem: "R39",
+    recordPage: 1,
+    reasonPage: 0,
+  });
 
   await user.click(screen.getByRole("button", { name: /商品相关/ }));
+  expect(onUpdateRoute).toHaveBeenLastCalledWith({
+    subject: "PRODUCT",
+    reasonPage: 0,
+    problem: "R1",
+    recordPage: 1,
+  });
+  view.rerender(
+    <ReturnReasonInsightExplorer
+      {...props}
+      route={{ ...props.route, subject: "PRODUCT", reasonPage: 99 }}
+      selected={reasons[0]}
+    />,
+  );
   expect(within(ranking).getByText("8 项")).toBeVisible();
   expect(ranking.querySelectorAll("ol li")).toHaveLength(8);
   expect(within(ranking).queryByRole("navigation")).not.toBeInTheDocument();
-  expect(onUpdateRoute).toHaveBeenLastCalledWith({ problem: "R1", recordPage: 1 });
+});
+
+test("原因列表的筛选与页码可由链接恢复，翻页不重新请求洞察", async () => {
+  const user = userEvent.setup();
+  const reasons = Array.from({ length: 39 }, (_, index) => ({
+    value: `R${index + 1}`,
+    label: `原因${index + 1}`,
+    record_count: 39 - index,
+    percentage: 1,
+    subjects: index < 8 ? ["PRODUCT"] : [],
+  }));
+  dashboardApiMock.analysisDashboardInsights.mockResolvedValue({
+    summary: { record_count: 39 },
+    date_range: {},
+    filter_options: {},
+    category_groups: [],
+    reasons,
+    selected_reason: reasons[25],
+    subject_breakdown: [
+      { value: "PRODUCT", label: "商品相关", record_count: 8, percentage: 20.5 },
+    ],
+    evidence: { items: [], total: 0 },
+  });
+  window.location.hash =
+    "#analysis-dashboards?dashboard=dashboard-default&version=dashboard-version-default&problem=R26";
+  const view = render(<DashboardHarness />);
+  const ranking = await screen.findByRole("navigation", {
+    name: "分页，第 3 页，共 4 页",
+  });
+  const requestCount = dashboardApiMock.analysisDashboardInsights.mock.calls.length;
+
+  await user.click(within(ranking).getByRole("button", { name: "下一页" }));
+  await waitFor(() => expect(window.location.hash).toContain("reason_page=4"));
+  expect(dashboardApiMock.analysisDashboardInsights).toHaveBeenCalledTimes(
+    requestCount,
+  );
+  view.unmount();
+  render(<DashboardHarness />);
+  expect(
+    await screen.findByRole("navigation", { name: "分页，第 4 页，共 4 页" }),
+  ).toBeVisible();
+  expect(screen.getByRole("button", { name: /原因39/ })).toBeVisible();
+
+  await user.click(screen.getByRole("button", { name: /商品相关/ }));
+  await waitFor(() => {
+    const query = new URLSearchParams(window.location.hash.split("?")[1]);
+    expect(query.get("subject")).toBe("PRODUCT");
+    expect(query.has("reason_page")).toBe(false);
+  });
+  expect(screen.getByText("8 项")).toBeVisible();
+  cleanup();
+  render(<DashboardHarness />);
+  expect(await screen.findByText("8 项")).toBeVisible();
+  expect(screen.getByRole("button", { name: /商品相关/ })).toHaveClass("active");
 });
 
 test("分析场景决定看板与报告用语", () => {

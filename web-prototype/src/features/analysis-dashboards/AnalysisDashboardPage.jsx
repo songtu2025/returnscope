@@ -55,6 +55,7 @@ function routeState(query) {
   );
   const step =
     query.step === "conflicts" || query.step === "confirm" ? query.step : "check";
+  const reasonPage = number("reason_page");
   return {
     dashboardId: query.dashboard || "",
     versionId: query.version || "",
@@ -68,8 +69,10 @@ function routeState(query) {
     page: Math.max(number("page") || 1, 1),
     pageSize: PAGE_SIZES.includes(number("page_size")) ? number("page_size") : 20,
     recordPage: Math.max(number("record_page") || 1, 1),
+    reasonPage: Number.isSafeInteger(reasonPage) && reasonPage > 0 ? reasonPage : 0,
     problem: query.problem || "",
     labelGroup: query.label_group || "",
+    subject: query.subject || "",
     listing: query.listing || "",
     productName: query.product_name || "",
     productSku: query.product_sku || "",
@@ -96,8 +99,10 @@ function writeRoute(route, options) {
       page: route.page > 1 ? route.page : "",
       page_size: route.pageSize !== 20 ? route.pageSize : "",
       record_page: route.recordPage > 1 ? route.recordPage : "",
+      reason_page: route.reasonPage > 0 ? route.reasonPage : "",
       problem: route.problem,
       label_group: route.labelGroup,
+      subject: route.subject,
       listing: route.listing,
       product_name: route.productName,
       product_sku: route.productSku,
@@ -286,6 +291,8 @@ function DashboardList({ route, updateRoute, userId }) {
                       versionId: dashboard.current_version_id || "",
                       tab: "overview",
                       page: 1,
+                      reasonPage: 0,
+                      subject: "",
                     })
                   }
                 />

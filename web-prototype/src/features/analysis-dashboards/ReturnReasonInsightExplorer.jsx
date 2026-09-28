@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { ArrowCounterClockwise } from "@phosphor-icons/react";
 import { Pagination } from "../../components/Pagination";
 import { taxonomyPath } from "../../lib/taxonomyPresentation";
@@ -28,8 +28,9 @@ export function ReturnReasonInsightExplorer({
   onUpdateRoute,
 }) {
   const terms = analysisContextTerms(analysisContext);
-  const [selectedSubject, setSelectedSubject] = useState("");
-  const [reasonPage, setReasonPage] = useState(1);
+  const selectedSubject = subjects.some((subject) => subject.value === route.subject)
+    ? route.subject
+    : "";
   const visibleReasons = useMemo(
     () =>
       selectedSubject
@@ -41,29 +42,29 @@ export function ReturnReasonInsightExplorer({
     1,
     Math.ceil(visibleReasons.length / REASON_PAGE_SIZE),
   );
-  const currentReasonPage = Math.min(reasonPage, reasonPageCount);
+  const selectedIndex = visibleReasons.findIndex(
+    (reason) => reason.value === selected?.value,
+  );
+  const selectedReasonPage =
+    selectedIndex < 0 ? 1 : Math.floor(selectedIndex / REASON_PAGE_SIZE) + 1;
+  const currentReasonPage = Math.min(
+    route.reasonPage || selectedReasonPage,
+    reasonPageCount,
+  );
   const reasonPageStart = (currentReasonPage - 1) * REASON_PAGE_SIZE;
   const topReasonCount = Math.max(
     ...visibleReasons.map((item) => item.record_count),
     1,
   );
 
-  useEffect(() => {
-    const selectedIndex = visibleReasons.findIndex(
-      (reason) => reason.value === selected?.value,
-    );
-    setReasonPage(
-      selectedIndex < 0 ? 1 : Math.floor(selectedIndex / REASON_PAGE_SIZE) + 1,
-    );
-  }, [visibleReasons, selected?.value]);
-
   /** @param {string} subject */
   const chooseSubject = (subject) => {
-    setSelectedSubject(subject);
     const firstReason = subject
       ? reasons.find((reason) => reason.subjects?.includes(subject))
       : reasons[0];
     onUpdateRoute({
+      subject,
+      reasonPage: 0,
       problem:
         selected && (!subject || selected.subjects?.includes(subject))
           ? selected.value
@@ -73,8 +74,13 @@ export function ReturnReasonInsightExplorer({
   };
 
   const resetReasonFilters = () => {
-    setSelectedSubject("");
-    onUpdateRoute({ labelGroup: "", problem: "", recordPage: 1 });
+    onUpdateRoute({
+      subject: "",
+      reasonPage: 0,
+      labelGroup: "",
+      problem: "",
+      recordPage: 1,
+    });
   };
 
   return (
@@ -122,7 +128,12 @@ export function ReturnReasonInsightExplorer({
               key={group || "all"}
               className={route.labelGroup === group ? "active" : ""}
               onClick={() =>
-                onUpdateRoute({ labelGroup: group, problem: "", recordPage: 1 })
+                onUpdateRoute({
+                  labelGroup: group,
+                  problem: "",
+                  recordPage: 1,
+                  reasonPage: 0,
+                })
               }
             >
               {group || "全部"}
@@ -148,7 +159,11 @@ export function ReturnReasonInsightExplorer({
                   <button
                     className={selected?.value === reason.value ? "active" : ""}
                     onClick={() =>
-                      onUpdateRoute({ problem: reason.value, recordPage: 1 })
+                      onUpdateRoute({
+                        problem: reason.value,
+                        recordPage: 1,
+                        reasonPage: 0,
+                      })
                     }
                   >
                     <span className="return-reason-rank">
@@ -193,7 +208,7 @@ export function ReturnReasonInsightExplorer({
             pageSize={REASON_PAGE_SIZE}
             total={visibleReasons.length}
             totalPages={reasonPageCount}
-            onPage={setReasonPage}
+            onPage={(reasonPage) => onUpdateRoute({ reasonPage })}
             showTotal={false}
             simple
           />
@@ -217,7 +232,13 @@ export function ReturnReasonInsightExplorer({
                 <button
                   disabled={!taxonomyLabels.has(node.value)}
                   className={selected?.value === node.value ? "active" : ""}
-                  onClick={() => onUpdateRoute({ problem: node.value, recordPage: 1 })}
+                  onClick={() =>
+                    onUpdateRoute({
+                      problem: node.value,
+                      recordPage: 1,
+                      reasonPage: 0,
+                    })
+                  }
                 >
                   <div>
                     <b>{node.label_path?.join(" → ") || node.label_name}</b>

@@ -13,8 +13,10 @@
  * @property {number} page
  * @property {number} pageSize
  * @property {number} recordPage
+ * @property {number} reasonPage
  * @property {string} problem
  * @property {string} labelGroup
+ * @property {string} subject
  * @property {string} listing
  * @property {string} productName
  * @property {string} productSku

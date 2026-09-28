@@ -137,6 +137,7 @@ export function ReturnReasonInsights({
       ...changes,
       problem: changes.problem ?? route.problem,
       recordPage: 1,
+      reasonPage: 0,
     });
 
   return (

@@ -111,7 +111,7 @@ test("看板展示全部父级去重计数，只有末端进入原因诊断", as
     within(section).getByRole("button", { name: "功能 → 保暖性 → 不保暖 1 条" }),
   );
   expect(updateRoute).toHaveBeenCalledWith(
-    { problem: "COLD", recordPage: 1 },
+    { problem: "COLD", recordPage: 1, reasonPage: 0 },
     { replace: true },
   );
 });
