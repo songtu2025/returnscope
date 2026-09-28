@@ -1186,3 +1186,11 @@ def test_cross_version_group_mapping_deduplicates_records(tmp_path):
     assert len(groups) == 1
     assert groups[0]["value"] == "尺码与适配"
     assert groups[0]["record_count"] == 4
+    companion = next(
+        reason
+        for reason in result["reasons"]
+        if reason["value"] == "FIT_TOO_TIGHT_NARROW"
+    )
+    assert companion["record_count"] == 2
+    assert companion["primary_record_count"] == 0
+    assert companion["companion_only_count"] == 2

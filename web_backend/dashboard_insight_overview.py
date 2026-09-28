@@ -298,11 +298,11 @@ def collect_insight_overview(
                COUNT(r.id) AS record_count,
                SUM(CASE WHEN EXISTS (
                    SELECT 1
-                   FROM json_each(
-                       u.classification_json,
-                       '$.primary_label_codes'
-                   ) primary_label
-                   WHERE primary_label.value = l.label_code
+                   FROM classification_unit_labels primary_label
+                   WHERE primary_label.result_version_id = r.result_version_id
+                     AND primary_label.classification_key = r.classification_key
+                     AND primary_label.label_kind = 'primary'
+                     AND primary_label.label_code = l.label_code
                ) THEN 1 ELSE 0 END) AS primary_record_count
         FROM classification_result_records r
         JOIN classification_unit_labels l
