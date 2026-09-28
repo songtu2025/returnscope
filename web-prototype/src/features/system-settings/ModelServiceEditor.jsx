@@ -106,6 +106,7 @@ export function ModelServiceEditor({
   onShowVersion,
   onCreateDraft,
 }) {
+  const formDisabled = !editing || Boolean(busy);
   return (
     <div
       className={classNames(
@@ -127,6 +128,7 @@ export function ModelServiceEditor({
               key={item.id}
               className={selectedConnectionId === item.id ? "active" : ""}
               onClick={() => onSelectConnection(item.id)}
+              disabled={Boolean(busy)}
             >
               <div>
                 <b>{item.name}</b>
@@ -185,7 +187,7 @@ export function ModelServiceEditor({
               <label>
                 接入名称
                 <Input
-                  disabled={!editing}
+                  disabled={formDisabled}
                   aria-label="接入名称"
                   value={form.name}
                   onChange={(event) =>
@@ -208,7 +210,7 @@ export function ModelServiceEditor({
               <label>
                 协议
                 <select
-                  disabled={!editing}
+                  disabled={formDisabled}
                   value={form.provider}
                   onChange={(event) =>
                     onFormChange({ ...form, provider: event.target.value })
@@ -220,7 +222,7 @@ export function ModelServiceEditor({
               <label>
                 Base URL
                 <input
-                  disabled={!editing}
+                  disabled={formDisabled}
                   aria-label="Base URL"
                   value={form.base_url}
                   onChange={(event) =>
@@ -246,7 +248,7 @@ export function ModelServiceEditor({
                 API 密钥
                 <input
                   type="password"
-                  disabled={!editing}
+                  disabled={formDisabled}
                   aria-label="API 密钥"
                   value={form.api_key}
                   onChange={(event) =>
@@ -306,7 +308,7 @@ export function ModelServiceEditor({
               <label>
                 模型
                 <select
-                  disabled={!editing}
+                  disabled={formDisabled}
                   aria-label="模型"
                   required
                   value={form.primary_model ?? ""}
@@ -345,7 +347,7 @@ export function ModelServiceEditor({
                     <button
                       type="button"
                       disabled={
-                        !editing ||
+                        formDisabled ||
                         !form.primary_model ||
                         !(
                           modelOptions.find(
@@ -370,7 +372,7 @@ export function ModelServiceEditor({
             每分钟请求
             <input
               type="number"
-              disabled={!editing}
+              disabled={formDisabled}
               value={form.requests_per_minute}
               onChange={(event) =>
                 onFormChange({
@@ -384,7 +386,7 @@ export function ModelServiceEditor({
             单任务并发
             <input
               type="number"
-              disabled={!editing}
+              disabled={formDisabled}
               value={form.max_workers}
               onChange={(event) =>
                 onFormChange({
@@ -398,7 +400,7 @@ export function ModelServiceEditor({
             请求超时（秒）
             <input
               type="number"
-              disabled={!editing}
+              disabled={formDisabled}
               value={form.timeout_seconds}
               onChange={(event) =>
                 onFormChange({
@@ -413,7 +415,7 @@ export function ModelServiceEditor({
           <label>
             配置变更原因
             <textarea
-              disabled={!editing}
+              disabled={formDisabled}
               aria-label="配置变更原因"
               value={form.change_note ?? ""}
               onChange={(event) =>
@@ -453,7 +455,11 @@ export function ModelServiceEditor({
           </div>
           {editing ? (
             <>
-              <Button autoInsertSpace={false} onClick={onCancelEdit}>
+              <Button
+                autoInsertSpace={false}
+                onClick={onCancelEdit}
+                disabled={Boolean(busy)}
+              >
                 取消
               </Button>
               <button

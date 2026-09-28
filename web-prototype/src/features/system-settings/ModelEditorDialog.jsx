@@ -33,7 +33,7 @@ export function ModelEditorDialog({
           模型 ID
           <input
             value={modelDraft.model_key}
-            disabled={editorMode === "edit"}
+            disabled={editorMode === "edit" || Boolean(busy)}
             maxLength={120}
             placeholder="例如 deepseek-reasoner"
             onChange={(event) =>
@@ -52,6 +52,7 @@ export function ModelEditorDialog({
           显示名称
           <Input
             value={modelDraft.display_name}
+            disabled={Boolean(busy)}
             maxLength={80}
             placeholder="留空则使用模型 ID"
             onChange={(event) =>
@@ -72,6 +73,7 @@ export function ModelEditorDialog({
                   type="button"
                   className={selected ? "active" : ""}
                   key={effort}
+                  disabled={Boolean(busy)}
                   onClick={() =>
                     onChange({
                       ...modelDraft,

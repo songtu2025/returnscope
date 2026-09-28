@@ -1537,10 +1537,17 @@
   text-align: left;
   cursor: pointer;
 }
-.model-service-more-menu button:hover,
+.model-service-more-menu button:hover:not(:disabled),
 .model-service-more-menu button:focus-visible {
   color: var(--green-dark);
   background: var(--mint-pale);
+}
+.connection-list > button:disabled,
+.config-version-list button:disabled,
+.model-effort-selector button:disabled,
+.model-service-more-menu button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 @media (max-width: 860px) {
   .model-service-runtime {

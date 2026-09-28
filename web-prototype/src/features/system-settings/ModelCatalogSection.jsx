@@ -88,7 +88,7 @@ function ValidationProcess({
                   发布新版本
                 </button>
               )}
-            <button type="button" onClick={onClose}>
+            <button type="button" onClick={onClose} disabled={Boolean(busy)}>
               关闭
             </button>
           </div>
@@ -247,6 +247,7 @@ export function ModelCatalogSection({
             autoInsertSpace={false}
             icon={<Plus size={16} />}
             onClick={() => onOpenModelEditor()}
+            disabled={Boolean(busy)}
           >
             添加模型
           </Button>

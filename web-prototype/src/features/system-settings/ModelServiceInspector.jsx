@@ -71,6 +71,7 @@ export function ModelServiceInspector({
                 key={version.id}
                 className={selectedVersion?.id === version.id ? "active" : ""}
                 onClick={() => onShowVersion(version)}
+                disabled={Boolean(busy)}
               >
                 <b>#{version.version}</b>
                 <span>{version.change_note || "未填写原因"}</span>

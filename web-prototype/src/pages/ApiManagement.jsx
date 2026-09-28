@@ -189,7 +189,7 @@ export function ApiManagement({
         !form.change_note?.trim() ? "请填写配置变更原因。" : "",
       ].filter(Boolean)
     : [];
-  const saveDisabled = busy === "save" || configFormErrors.length > 0;
+  const saveDisabled = Boolean(busy) || configFormErrors.length > 0;
   useEffect(() => {
     if (preserveConfigForm.current) {
       preserveConfigForm.current = false;
@@ -600,7 +600,11 @@ export function ApiManagement({
           description="维护共享接入、模型可用性与运行限制；个人策略与任务选择在各自页面保存。"
           action={
             activePanel ? (
-              <Button autoInsertSpace={false} onClick={closePanel}>
+              <Button
+                autoInsertSpace={false}
+                onClick={closePanel}
+                disabled={Boolean(busy)}
+              >
                 返回服务摘要
               </Button>
             ) : null

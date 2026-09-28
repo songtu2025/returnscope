@@ -81,6 +81,7 @@ export function ModelServiceSummary({
           <select
             value={selectedConnectionId ?? ""}
             onChange={(event) => onSelectConnection(event.target.value)}
+            disabled={Boolean(busy)}
           >
             {connections.map((item) => (
               <option key={item.id} value={item.id}>
@@ -144,6 +145,7 @@ export function ModelServiceSummary({
               type="primary"
               icon={<Plus size={18} />}
               onClick={onOpenNewConnection}
+              disabled={Boolean(busy)}
             >
               新增模型服务
             </Button>
@@ -154,6 +156,7 @@ export function ModelServiceSummary({
               size="small"
               type="link"
               onClick={onEditConnection}
+              disabled={Boolean(busy)}
             >
               编辑连接
             </Button>
@@ -168,14 +171,29 @@ export function ModelServiceSummary({
                 role="menu"
                 aria-label="更多模型服务操作"
               >
-                <button type="button" role="menuitem" onClick={onEditLimits}>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={onEditLimits}
+                  disabled={Boolean(busy)}
+                >
                   请求限制
                 </button>
-                <button type="button" role="menuitem" onClick={onOpenVersions}>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={onOpenVersions}
+                  disabled={Boolean(busy)}
+                >
                   配置版本
                 </button>
                 {activeVersion && (
-                  <button type="button" role="menuitem" onClick={onOpenNewConnection}>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={onOpenNewConnection}
+                    disabled={Boolean(busy)}
+                  >
                     新增模型服务
                   </button>
                 )}
@@ -209,14 +227,14 @@ export function ModelServiceSummary({
               <button
                 className="text-button"
                 onClick={onCancelDiscard}
-                disabled={busy === "discard-draft"}
+                disabled={Boolean(busy)}
               >
                 取消
               </button>
               <button
                 className="danger-button"
                 onClick={onDiscardDraft}
-                disabled={busy === "discard-draft"}
+                disabled={Boolean(busy)}
               >
                 {busy === "discard-draft" ? "放弃中…" : "确认放弃"}
               </button>
@@ -269,7 +287,7 @@ export function ModelServiceSummary({
               icon={<ArrowRight size={15} />}
               iconPosition="end"
               onClick={onOpenModelCatalog}
-              disabled={!selectedConnection}
+              disabled={!selectedConnection || Boolean(busy)}
             >
               管理目录
             </Button>
@@ -310,7 +328,11 @@ export function ModelServiceSummary({
                     验证
                   </button>
                 ) : (
-                  <button className="text-button" onClick={onOpenModelCatalog}>
+                  <button
+                    className="text-button"
+                    onClick={onOpenModelCatalog}
+                    disabled={Boolean(busy)}
+                  >
                     管理
                   </button>
                 )}
