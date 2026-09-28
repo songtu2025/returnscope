@@ -3,6 +3,8 @@ import { EFFORT_LABELS } from "../../constants";
 /** @typedef {import("../../shared/api/systemSettingsContracts").CatalogModel} CatalogModel */
 /** @typedef {import("../../shared/api/systemSettingsContracts").ModelOption} ModelOption */
 /** @typedef {import("../../shared/api/systemSettingsContracts").ModelServiceForm} ModelServiceForm */
+/** @typedef {import("../../shared/api/systemSettingsContracts").ConfigVersion} ConfigVersion */
+/** @typedef {import("../../shared/api/systemSettingsContracts").ModelConnection} ModelConnection */
 /** @typedef {import("../../shared/api/systemSettingsContracts").ConfigDiffKey} ConfigDiffKey */
 
 const EFFORT_LABEL_MAP = /** @type {Record<string, string>} */ (EFFORT_LABELS);
@@ -33,6 +35,44 @@ export const EMPTY_MODEL_SERVICE_FORM = {
   timeout_seconds: 120,
   change_note: "",
 };
+
+/**
+ * @param {ModelConnection} connection
+ * @param {string | null | undefined} selectedVersionId
+ * @param {string | null} focusConfigVersionId
+ * @returns {ConfigVersion | null}
+ */
+export function preferredVersion(connection, selectedVersionId, focusConfigVersionId) {
+  return (
+    connection.versions?.find(
+      (version) => String(version.id) === String(focusConfigVersionId),
+    ) ??
+    connection.versions?.find((version) => version.id === selectedVersionId) ??
+    connection.versions?.find(
+      (version) => version.id !== connection.active_version_id && !version.published_at,
+    ) ??
+    connection.active_version ??
+    connection.versions?.[0] ??
+    null
+  );
+}
+
+/**
+ * @param {ModelConnection | null | undefined} connection
+ * @param {ConfigVersion} version
+ * @param {boolean} [resetChangeNote]
+ * @returns {ModelServiceForm}
+ */
+export function formForVersion(connection, version, resetChangeNote = false) {
+  return {
+    ...EMPTY_MODEL_SERVICE_FORM,
+    ...version,
+    name: connection?.name ?? "",
+    api_key: "",
+    connection_id: connection?.id,
+    ...(resetChangeNote ? { change_note: "" } : {}),
+  };
+}
 
 /** @returns {CatalogModel[]} */
 export function createDefaultModelCatalog() {

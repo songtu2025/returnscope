@@ -13,7 +13,9 @@ import {
   createDefaultModelCatalog,
   createModelOptions,
   EMPTY_MODEL_SERVICE_FORM,
+  formForVersion,
   getBaseUrlError,
+  preferredVersion,
 } from "../features/system-settings/modelServiceConfig";
 
 /** @typedef {import("../shared/api/systemSettingsContracts").ActivePanel} ActivePanel */
@@ -196,30 +198,13 @@ export function ApiManagement({
       return;
     }
     if (!selectedConnection) return;
-    const preserved = selectedConnection?.versions?.find(
-      (version) => version.id === selectedVersion?.id,
+    const value = preferredVersion(
+      selectedConnection,
+      selectedVersion?.id,
+      focusConfigVersionId,
     );
-    const value =
-      selectedConnection?.versions?.find(
-        (version) => String(version.id) === String(focusConfigVersionId),
-      ) ??
-      preserved ??
-      selectedConnection?.versions?.find(
-        (version) =>
-          version.id !== selectedConnection.active_version_id && !version.published_at,
-      ) ??
-      selectedConnection?.active_version ??
-      selectedConnection?.versions?.[0] ??
-      null;
     setSelectedVersion(value);
-    if (value)
-      setForm({
-        ...EMPTY_MODEL_SERVICE_FORM,
-        ...value,
-        name: selectedConnection.name,
-        api_key: "",
-        connection_id: selectedConnection.id,
-      });
+    if (value) setForm(formForVersion(selectedConnection, value));
     setEditing(false);
   }, [
     connections,
@@ -249,13 +234,7 @@ export function ApiManagement({
   const showVersion = (value) => {
     if (!selectedConnection) return;
     setSelectedVersion(value);
-    setForm({
-      ...EMPTY_MODEL_SERVICE_FORM,
-      ...value,
-      name: selectedConnection.name,
-      api_key: "",
-      connection_id: selectedConnection.id,
-    });
+    setForm(formForVersion(selectedConnection, value));
     setEditing(false);
   };
   const openNewConnection = () => {
@@ -282,14 +261,7 @@ export function ApiManagement({
       selectedVersion;
     if (value) {
       setSelectedVersion(value);
-      setForm({
-        ...EMPTY_MODEL_SERVICE_FORM,
-        ...value,
-        name: selectedConnection?.name ?? "",
-        api_key: "",
-        connection_id: selectedConnection?.id,
-        change_note: "",
-      });
+      setForm(formForVersion(selectedConnection, value, true));
     }
     setEditing(true);
     setActivePanel(panel);

@@ -173,3 +173,31 @@ test("保存模型期间锁定编辑弹窗与连接列表", async () => {
   expect(screen.getByRole("textbox", { name: /^模型 ID/ })).toHaveValue("new-model");
   expect(notify).toHaveBeenCalledWith("模型保存失败", "error");
 });
+
+test("保存新草稿后保持选中新版本", async () => {
+  const user = userEvent.setup();
+  const original = connection("A", true);
+  const saved = {
+    ...original.versions[0],
+    id: "A-version-3",
+    version: 3,
+    change_note: "更新验证模型",
+  };
+  apiMock.configs
+    .mockResolvedValueOnce([original])
+    .mockResolvedValueOnce([{ ...original, versions: [saved, ...original.versions] }]);
+  apiMock.createConfig.mockResolvedValue(saved);
+  render(<ApiManagement notify={notify} />);
+
+  await user.click(await screen.findByRole("button", { name: "编辑连接" }));
+  await user.type(
+    screen.getByRole("textbox", { name: "配置变更原因" }),
+    "更新验证模型",
+  );
+  await user.click(screen.getByRole("button", { name: "保存草稿" }));
+
+  expect(await screen.findByText(/配置 #3 ·/)).toBeVisible();
+  expect(screen.getByRole("textbox", { name: "配置变更原因" })).toHaveValue(
+    "更新验证模型",
+  );
+});
