@@ -6,7 +6,11 @@ from typing import Any
 
 from return_semantics.schemas import TaxonomyConfig
 from return_semantics.taxonomy import aligned_label_group
-from web_backend.dashboard_insight_details import collect_reason_details
+from web_backend.dashboard_insight_details import (
+    EVIDENCE_PAGE_SIZE,
+    collect_reason_details,
+    list_reason_evidence,
+)
 from web_backend.dashboard_insight_overview import (
     InsightQueryScope,
     collect_insight_overview,
@@ -19,6 +23,7 @@ from web_backend.dashboard_support import (
     normalize_filters,
     percentage,
     record_where,
+    validate_page,
     version_context,
 )
 from web_backend.database import Database
@@ -71,6 +76,8 @@ def _reason_detail_payload(
         "evidence": {
             "items": details["evidence_items"],
             "total": int(details["evidence_total"]),
+            "page": 1,
+            "page_size": EVIDENCE_PAGE_SIZE,
         },
     }
 
@@ -325,6 +332,28 @@ def build_insights(
         "selected_reason": selected_reason,
         **_reason_detail_payload(details, selected_reason),
     }
+
+
+def build_evidence_page(
+    database: Database,
+    dashboard_id: str,
+    version_id: str,
+    options: InsightOptions,
+    *,
+    page: int = 1,
+) -> dict[str, Any]:
+    validate_page(page, EVIDENCE_PAGE_SIZE)
+    selected_code = (options.problem or "").strip()
+    if not selected_code:
+        raise ValueError("问题原因不能为空")
+    with database.connect() as connection:
+        context = version_context(database, connection, dashboard_id, version_id)
+        if mixed_hierarchy(connection, context["sources"]):
+            raise ValueError("该看板包含不同层级标准版本")
+        prepared = _prepare_scope(database, connection, context, options)
+        return list_reason_evidence(
+            prepared.scope, selected_code, prepared.taxonomy, page=page
+        )
 
 
 def build_report_diagnostics(

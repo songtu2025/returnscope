@@ -17,6 +17,7 @@ from return_semantics.schemas import ProcessingStatus
 from web_backend import dashboard_insights
 from web_backend.classification_standard_service import ClassificationStandardService
 from web_backend.common import json_text
+from web_backend.dashboard_insights import InsightOptions
 from web_backend.dashboard_plan import summarize_sources
 from web_backend.dashboard_service import DashboardConflict, DashboardService
 from web_backend.dashboard_support import version_context
@@ -776,6 +777,86 @@ def test_filtered_insights_keep_full_options_and_scoped_evidence(
     ]
 
 
+def test_reason_evidence_pages_match_insight_count_and_filters(tmp_path: Path) -> None:
+    context, version, service = _ready_result(tmp_path)
+    result_version_id = str(version["version_id"])
+    with context.database.transaction() as connection:
+        template = dict(
+            connection.execute(
+                "SELECT * FROM classification_result_records "
+                "WHERE result_version_id = ? ORDER BY source_row LIMIT 1",
+                (result_version_id,),
+            ).fetchone()
+        )
+        for index in range(11):
+            connection.execute(
+                """
+                INSERT INTO classification_result_records(
+                    id, result_version_id, classification_key,
+                    source_record_id, source_row, return_date, order_id,
+                    store_site, listing, product_name, source_sku,
+                    matched_msku, product_sku, asin, fnsku, category_a,
+                    category_b, reason, comment, product_match_status,
+                    quality_status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                          ?, ?, ?, ?, ?)
+                """,
+                (
+                    f"evidence-record-{index}",
+                    result_version_id,
+                    template["classification_key"],
+                    f"evidence-source-{index}",
+                    100 + index,
+                    "2026-08-03",
+                    f"EVIDENCE-ORDER-{index}",
+                    template["store_site"],
+                    template["listing"],
+                    template["product_name"],
+                    template["source_sku"],
+                    template["matched_msku"],
+                    template["product_sku"],
+                    template["asin"],
+                    template["fnsku"],
+                    template["category_a"],
+                    template["category_b"],
+                    template["reason"],
+                    f"证据 {index}",
+                    template["product_match_status"],
+                    "ready",
+                ),
+            )
+
+    _, dashboard = _create_dashboard(service, result_version_id)
+    dashboard_id = str(dashboard["id"])
+    dashboard_version_id = str(dashboard["version"]["version_id"])
+    filters = {
+        "problem": "FIT_TOO_SMALL_U1",
+        "product_name": template["product_name"],
+        "date_from": "2026-08-03",
+        "date_to": "2026-08-03",
+    }
+    filters["label_group"] = service.insights(
+        dashboard_id, dashboard_version_id, **filters
+    )["selected_reason"]["label_group"]
+    insights = service.insights(dashboard_id, dashboard_version_id, **filters)
+    first = service.evidence_page(
+        dashboard_id, dashboard_version_id, InsightOptions(**filters)
+    )
+    second = service.evidence_page(
+        dashboard_id, dashboard_version_id, InsightOptions(**filters), page=2
+    )
+
+    assert first["total"] == second["total"] == insights["evidence"]["total"]
+    assert first["total"] >= 11
+    assert first["items"] == insights["evidence"]["items"]
+    assert len(first["items"]) == 10
+    assert len(second["items"]) == first["total"] - 10
+    assert not {item["id"] for item in first["items"]} & {
+        item["id"] for item in second["items"]
+    }
+    assert all(item["return_date"] == "2026-08-03" for item in second["items"])
+
+
 def test_dashboard_insights_count_each_semantic_part_once_per_record(
     tmp_path: Path,
 ) -> None:
@@ -1207,6 +1288,14 @@ def test_dashboard_schema_upgrade_and_router_contract(tmp_path: Path) -> None:
     )
     assert result.status_code == 200
     assert result.json()["total"] == 3
+    evidence_path = (
+        f"/api/analysis-dashboards/{dashboard['id']}/versions/"
+        f"{dashboard['version']['version_id']}/evidence"
+    )
+    evidence = client.get(evidence_path, params={"problem": "FIT_TOO_SMALL_U1"})
+    assert evidence.status_code == 200
+    assert evidence.json()["page_size"] == 10
+    assert evidence.json()["total"] == 2
 
     denied = FastAPI()
 
@@ -1215,6 +1304,7 @@ def test_dashboard_schema_upgrade_and_router_contract(tmp_path: Path) -> None:
 
     denied.include_router(create_dashboard_router(service, reject_user))
     assert TestClient(denied).get("/api/analysis-dashboards").status_code == 401
+    assert TestClient(denied).get(evidence_path).status_code == 401
 
 
 def test_cross_version_group_mapping_deduplicates_records(tmp_path):

@@ -7,6 +7,7 @@ from web_backend.api_schemas import (
     DashboardPlanRequest,
     DashboardVersionCreateRequest,
 )
+from web_backend.dashboard_insights import InsightOptions
 from web_backend.dashboard_service import (
     DashboardConflict,
     DashboardNotFound,
@@ -155,6 +156,42 @@ def create_dashboard_router(
                 product_sku=product_sku,
                 date_from=date_from,
                 date_to=date_to,
+            )
+        except DashboardNotFound as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.get(
+        "/api/analysis-dashboards/{dashboard_id}/versions/{version_id}/evidence"
+    )
+    def get_dashboard_evidence(
+        dashboard_id: str,
+        version_id: str,
+        _user: User,
+        problem: str = Query(),
+        page: int = Query(default=1, ge=1),
+        label_group: str | None = Query(default=None),
+        listing: str | None = Query(default=None),
+        product_name: str | None = Query(default=None),
+        product_sku: str | None = Query(default=None),
+        date_from: str | None = Query(default=None),
+        date_to: str | None = Query(default=None),
+    ) -> dict[str, Any]:
+        try:
+            return dashboard_service.evidence_page(
+                dashboard_id,
+                version_id,
+                InsightOptions(
+                    problem=problem,
+                    label_group=label_group,
+                    listing=listing,
+                    product_name=product_name,
+                    product_sku=product_sku,
+                    date_from=date_from,
+                    date_to=date_to,
+                ),
+                page=page,
             )
         except DashboardNotFound as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc

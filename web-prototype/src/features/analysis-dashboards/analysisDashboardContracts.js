@@ -207,7 +207,7 @@
  * @typedef {{value: string, record_count: number}} InsightPart
  * @typedef {{opinion: string, part?: string, record_count: number}} InsightOpinion
  * @typedef {{record_count?: number, coverage?: number, parts?: InsightPart[], opinions?: InsightOpinion[]}} InsightSemanticProfile
- * @typedef {{items: DashboardRecord[], total: number}} InsightEvidence
+ * @typedef {{items: DashboardRecord[], total: number, page?: number, page_size?: number}} InsightEvidence
  * @typedef {{listings?: string[], product_names?: string[], product_skus?: string[]}} InsightFilterOptions
  * @typedef {{date_from?: string, date_to?: string}} InsightDateRange
  * @typedef {Record<string, unknown> & {counting_basis?: "feedback_group" | "source_record", source_count?: number, listing_count?: number, comment_count?: number, record_count?: number, total_comment_count?: number, total_record_count?: number, pending_review_comment_count?: number, pending_review_record_count?: number, excluded_record_count?: number, comment_statuses?: Array<{status?: string, summary_status?: string, comment_count?: number, record_count?: number, count?: number}> | Record<string, number>, semantic_statuses?: Array<{status?: string, summary_status?: string, comment_count?: number, record_count?: number, count?: number}> | Record<string, number>}} InsightSummary

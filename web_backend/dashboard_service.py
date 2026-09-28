@@ -15,6 +15,7 @@ from web_backend.dashboard_common import (
 )
 from web_backend.dashboard_insights import (
     InsightOptions,
+    build_evidence_page,
     build_insights,
     build_report_diagnostics,
 )
@@ -352,6 +353,18 @@ class DashboardService:
                 with self._insights_lock:
                     del self._inflight_insights[key]
         return dict(future.result())
+
+    def evidence_page(
+        self,
+        dashboard_id: str,
+        version_id: str,
+        options: InsightOptions,
+        *,
+        page: int = 1,
+    ) -> dict[str, Any]:
+        return build_evidence_page(
+            self.database, dashboard_id, version_id, options, page=page
+        )
 
     def report_diagnostics(
         self, dashboard_id: str, version_id: str, reason_codes: builtins.list[str]

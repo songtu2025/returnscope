@@ -1,3 +1,6 @@
+import { useEffect, useState } from "react";
+
+import { dashboardApi } from "../../shared/api/dashboardApi";
 import { ReturnReasonInsightDiagnostic } from "./ReturnReasonInsightDiagnostic";
 import { ReturnReasonInsightExplorer } from "./ReturnReasonInsightExplorer";
 import { ReturnReasonInsightSummary } from "./ReturnReasonInsightSummary";
@@ -29,6 +32,91 @@ export function ReturnReasonInsights({
   const coReasons = data.co_reasons ?? [];
   const semanticProfile = data.semantic_profile ?? {};
   const evidence = data.evidence ?? { items: [], total: 0 };
+  const evidencePageNumber = route.recordPage || 1;
+  const [evidencePage, setEvidencePage] = useState(
+    /** @returns {{key: string, data: import("./analysisDashboardContracts").InsightEvidence | null, loading: boolean, error: string}} */
+    () => ({ key: "", data: null, loading: false, error: "" }),
+  );
+  const [evidenceRetry, setEvidenceRetry] = useState(0);
+  const evidenceKey = JSON.stringify([
+    route.dashboardId,
+    route.versionId,
+    selected?.value,
+    route.labelGroup,
+    route.listing,
+    route.productName,
+    route.productSku,
+    route.dateFrom,
+    route.dateTo,
+    evidencePageNumber,
+    evidenceRetry,
+  ]);
+
+  useEffect(() => {
+    if (evidencePageNumber === 1 || !selected?.value) return;
+    const controller = new AbortController();
+    setEvidencePage({ key: evidenceKey, data: null, loading: true, error: "" });
+    dashboardApi
+      .analysisDashboardEvidence(
+        route.dashboardId,
+        route.versionId,
+        {
+          problem: selected.value,
+          label_group: route.labelGroup,
+          listing: route.listing,
+          product_name: route.productName,
+          product_sku: route.productSku,
+          date_from: route.dateFrom,
+          date_to: route.dateTo,
+          page: evidencePageNumber,
+        },
+        { signal: controller.signal },
+      )
+      .then((response) => {
+        if (!controller.signal.aborted) {
+          setEvidencePage({
+            key: evidenceKey,
+            data: response,
+            loading: false,
+            error: "",
+          });
+        }
+      })
+      .catch((requestError) => {
+        if (!controller.signal.aborted) {
+          setEvidencePage({
+            key: evidenceKey,
+            data: null,
+            loading: false,
+            error:
+              requestError instanceof Error
+                ? requestError.message
+                : String(requestError),
+          });
+        }
+      });
+    return () => controller.abort();
+  }, [
+    evidenceKey,
+    evidencePageNumber,
+    route.dashboardId,
+    route.versionId,
+    route.labelGroup,
+    route.listing,
+    route.productName,
+    route.productSku,
+    route.dateFrom,
+    route.dateTo,
+    selected?.value,
+  ]);
+
+  const currentEvidencePage = evidencePage.key === evidenceKey ? evidencePage : null;
+  const visibleEvidence =
+    evidencePageNumber === 1
+      ? evidence
+      : (currentEvidencePage?.data ?? { items: [], total: evidence.total });
+  const evidenceLoading =
+    evidencePageNumber > 1 && (!currentEvidencePage || currentEvidencePage.loading);
   const options = data.filter_options ?? {};
   const dateRange = data.date_range ?? {};
   const subjects = data.subject_breakdown ?? [];
@@ -104,7 +192,12 @@ export function ReturnReasonInsights({
             products={products}
             coReasons={coReasons}
             semanticProfile={semanticProfile}
-            evidence={evidence}
+            evidence={visibleEvidence}
+            evidencePage={evidencePageNumber}
+            evidenceLoading={evidenceLoading}
+            evidenceError={currentEvidencePage?.error || ""}
+            onEvidencePage={(recordPage) => updateRoute({ recordPage })}
+            onEvidenceRetry={() => setEvidenceRetry((value) => value + 1)}
             onUpdateRoute={updateRoute}
             onEvidence={onEvidence}
             analysisContext={analysisContext}

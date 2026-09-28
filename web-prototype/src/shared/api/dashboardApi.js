@@ -52,6 +52,7 @@ function jsonRequest(path, method, payload, options = {}) {
  *   analysisDashboardSummary: (dashboardId: string, versionId: string, options?: RequestInit) => DashboardRequest,
  *   analysisDashboardSources: (dashboardId: string, versionId: string, options?: RequestInit) => DashboardRequest,
  *   analysisDashboardInsights: (dashboardId: string, versionId: string, filters?: DashboardQuery, options?: RequestInit) => DashboardRequest,
+ *   analysisDashboardEvidence: (dashboardId: string, versionId: string, filters?: DashboardQuery, options?: RequestInit) => DashboardRequest,
  *   analysisDashboardDrilldown: (dashboardId: string, versionId: string, groupBy: string, filters?: DashboardQuery, options?: RequestInit) => DashboardRequest,
  *   analysisDashboardRecords: (dashboardId: string, versionId: string, filters?: DashboardQuery, options?: RequestInit) => DashboardRequest,
  *   createInsightReportFromResults: (payload: DashboardPayload, options?: RequestInit) => DashboardRequest,
@@ -96,6 +97,13 @@ export const dashboardApi = {
   analysisDashboardInsights: (dashboardId, versionId, filters = {}, options = {}) =>
     readDashboard(
       `/api/analysis-dashboards/${dashboardId}/versions/${versionId}/insights${queryString(
+        filters,
+      )}`,
+      options,
+    ),
+  analysisDashboardEvidence: (dashboardId, versionId, filters = {}, options = {}) =>
+    readDashboard(
+      `/api/analysis-dashboards/${dashboardId}/versions/${versionId}/evidence${queryString(
         filters,
       )}`,
       options,

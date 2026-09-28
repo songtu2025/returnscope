@@ -26,7 +26,7 @@ import { analysisContextTerms } from "./analysisContextPresentation";
 /** @typedef {import("./analysisDashboardContracts").InsightProduct} InsightProduct */
 /** @typedef {import("./analysisDashboardContracts").InsightReason} InsightReason */
 /** @typedef {import("./analysisDashboardContracts").InsightSemanticProfile} InsightSemanticProfile */
-/** @typedef {{data: DashboardInsights, selected?: InsightReason, products: InsightProduct[], coReasons: InsightReason[], semanticProfile: InsightSemanticProfile, evidence: InsightEvidence, analysisContext: string, onUpdateRoute: (changes: Partial<DashboardRoute>) => void, onEvidence: (record: DashboardRecord, trigger: HTMLElement | null) => void}} ReturnReasonInsightDiagnosticProps */
+/** @typedef {{data: DashboardInsights, selected?: InsightReason, products: InsightProduct[], coReasons: InsightReason[], semanticProfile: InsightSemanticProfile, evidence: InsightEvidence, evidencePage: number, evidenceLoading: boolean, evidenceError: string, analysisContext: string, onUpdateRoute: (changes: Partial<DashboardRoute>) => void, onEvidence: (record: DashboardRecord, trigger: HTMLElement | null) => void, onEvidencePage: (page: number) => void, onEvidenceRetry: () => void}} ReturnReasonInsightDiagnosticProps */
 
 /** @param {ReturnReasonInsightDiagnosticProps} props */
 export function ReturnReasonInsightDiagnostic({
@@ -36,12 +36,19 @@ export function ReturnReasonInsightDiagnostic({
   coReasons,
   semanticProfile,
   evidence,
+  evidencePage,
+  evidenceLoading,
+  evidenceError,
   analysisContext,
   onUpdateRoute,
   onEvidence,
+  onEvidencePage,
+  onEvidenceRetry,
 }) {
   const [showDefinition, setShowDefinition] = useState(false);
   const terms = analysisContextTerms(analysisContext);
+  const evidencePageSize = evidence.page_size || 10;
+  const evidencePageCount = Math.max(1, Math.ceil(evidence.total / evidencePageSize));
 
   return (
     <main className="return-insight-diagnostic">
@@ -259,7 +266,18 @@ export function ReturnReasonInsightDiagnostic({
               </div>
               <b>共 {Number(evidence.total || 0).toLocaleString()} 条</b>
             </header>
-            {evidence.items?.length ? (
+            {evidenceLoading ? (
+              <div className="return-insight-empty" role="status">
+                正在加载语义证据…
+              </div>
+            ) : evidenceError ? (
+              <div className="return-insight-empty" role="alert">
+                <span>证据加载失败：{evidenceError}</span>
+                <button type="button" className="text-button" onClick={onEvidenceRetry}>
+                  重试
+                </button>
+              </div>
+            ) : evidence.items?.length ? (
               <div className="return-insight-evidence-table">
                 <div className="return-insight-evidence-head">
                   <span>原始评论</span>
@@ -298,6 +316,32 @@ export function ReturnReasonInsightDiagnostic({
               </div>
             ) : (
               <div className="return-insight-empty">当前原因没有可展示的评论证据</div>
+            )}
+            {evidence.total > evidencePageSize && (
+              <div
+                className="pagination-bar return-insight-evidence-pagination"
+                aria-label="语义证据分页"
+              >
+                <span>
+                  第 {evidencePage} / {evidencePageCount} 页
+                </span>
+                <div>
+                  <button
+                    type="button"
+                    disabled={evidenceLoading || evidencePage <= 1}
+                    onClick={() => onEvidencePage(evidencePage - 1)}
+                  >
+                    上一页
+                  </button>
+                  <button
+                    type="button"
+                    disabled={evidenceLoading || evidencePage >= evidencePageCount}
+                    onClick={() => onEvidencePage(evidencePage + 1)}
+                  >
+                    下一页
+                  </button>
+                </div>
+              </div>
             )}
           </section>
         </>

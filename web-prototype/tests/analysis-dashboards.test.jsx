@@ -14,6 +14,7 @@ const { dashboardApiMock, resultApiMock } = vi.hoisted(() => ({
     analysisDashboardSummary: vi.fn(),
     analysisDashboardSources: vi.fn(),
     analysisDashboardInsights: vi.fn(),
+    analysisDashboardEvidence: vi.fn(),
     analysisDashboardDrilldown: vi.fn(),
     analysisDashboardRecords: vi.fn(),
     createInsightReportFromResults: vi.fn(),
@@ -158,6 +159,86 @@ test("筛选更新时明确标记旧结果并在失败后保留结果", async ()
   expect(screen.getByText("有效反馈")).toBeVisible();
   await user.click(screen.getByRole("button", { name: "重试" }));
   expect(onRetry).toHaveBeenCalledOnce();
+});
+
+test("语义证据按原因和筛选条件翻页，失败后可重试", async () => {
+  const user = userEvent.setup();
+  const updateRoute = vi.fn();
+  const firstItems = Array.from({ length: 10 }, (_, index) => ({
+    id: `record-${index}`,
+    comment: `第一页证据 ${index}`,
+    classification: { semantic_units: [] },
+  }));
+  const secondItems = [
+    {
+      id: "record-10",
+      comment: "第二页证据",
+      classification: { semantic_units: [] },
+    },
+  ];
+  const data = {
+    summary: { record_count: 11 },
+    date_range: {},
+    filter_options: {},
+    category_groups: [],
+    reasons: [{ value: "FIT_TOO_SMALL", label: "偏小", record_count: 11 }],
+    selected_reason: { value: "FIT_TOO_SMALL", label: "偏小", record_count: 11 },
+    evidence: { items: firstItems, total: 11, page: 1, page_size: 10 },
+  };
+  const route = {
+    dashboardId: "dashboard-1",
+    versionId: "version-1",
+    problem: "FIT_TOO_SMALL",
+    labelGroup: "尺码与合脚",
+    listing: "L001",
+    productName: "",
+    productSku: "",
+    dateFrom: "2026-08-01",
+    dateTo: "2026-08-03",
+    recordPage: 1,
+  };
+  const props = {
+    route,
+    updateRoute,
+    data,
+    loading: false,
+    analysisContext: "returns",
+    onRetry: vi.fn(),
+    onEvidence: vi.fn(),
+  };
+  dashboardApiMock.analysisDashboardEvidence
+    .mockRejectedValueOnce(new Error("网络中断"))
+    .mockResolvedValueOnce({ items: secondItems, total: 11, page: 2, page_size: 10 });
+  const view = render(<ReturnReasonInsights {...props} />);
+  const evidence = view.container.querySelector(".return-insight-evidence");
+
+  expect(evidence.querySelectorAll("article")).toHaveLength(10);
+  expect(within(evidence).getByText("第 1 / 2 页")).toBeVisible();
+  await user.click(within(evidence).getByRole("button", { name: "下一页" }));
+  expect(updateRoute).toHaveBeenCalledWith({ recordPage: 2 }, { replace: true });
+
+  view.rerender(
+    <ReturnReasonInsights {...props} route={{ ...route, recordPage: 2 }} />,
+  );
+  expect(await within(evidence).findByRole("alert")).toHaveTextContent("网络中断");
+  await user.click(within(evidence).getByRole("button", { name: "重试" }));
+  expect(await within(evidence).findByText("第二页证据")).toBeVisible();
+  expect(evidence.querySelectorAll("article")).toHaveLength(1);
+  expect(dashboardApiMock.analysisDashboardEvidence).toHaveBeenLastCalledWith(
+    "dashboard-1",
+    "version-1",
+    expect.objectContaining({
+      problem: "FIT_TOO_SMALL",
+      label_group: "尺码与合脚",
+      listing: "L001",
+      date_from: "2026-08-01",
+      date_to: "2026-08-03",
+      page: 2,
+    }),
+    expect.any(Object),
+  );
+  await user.click(within(evidence).getByRole("button", { name: "上一页" }));
+  expect(updateRoute).toHaveBeenLastCalledWith({ recordPage: 1 }, { replace: true });
 });
 
 test("新看板显示反馈组单位，历史看板保留记录单位", () => {
