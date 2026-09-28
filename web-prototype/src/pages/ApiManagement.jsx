@@ -105,6 +105,7 @@ export function ApiManagement({
   const [modelDraft, setModelDraft] = useState(/** @type {ModelDraft | null} */ (null));
   const [discardConfirmation, setDiscardConfirmation] = useState(false);
   const hasLoadedConnections = useRef(false);
+  const loadGeneration = useRef(0);
   const preserveConfigForm = useRef(false);
   const focusedModelRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   useEffect(() => {
@@ -114,6 +115,7 @@ export function ApiManagement({
   }, [focusConfigVersionId, focusModelId]);
 
   const load = useCallback(async () => {
+    const generation = ++loadGeneration.current;
     const isInitialLoad = !hasLoadedConnections.current;
     if (isInitialLoad) {
       setLoadState("loading");
@@ -121,6 +123,7 @@ export function ApiManagement({
     }
     try {
       const values = await modelServiceApi.configs();
+      if (generation !== loadGeneration.current) return;
       setConnections(values);
       setSelectedConnectionId(
         (current) =>
@@ -133,6 +136,7 @@ export function ApiManagement({
       setLoadState("ready");
       setLoadError("");
     } catch (error) {
+      if (generation !== loadGeneration.current) return;
       if (isInitialLoad) {
         setLoadState("error");
         setLoadError(errorMessage(error));
@@ -154,6 +158,9 @@ export function ApiManagement({
   });
   useEffect(() => {
     load().catch((error) => notify(errorMessage(error), "error"));
+    return () => {
+      loadGeneration.current += 1;
+    };
   }, [load, notify]);
   const selectedConnection = connections.find(
     (item) => item.id === selectedConnectionId,
