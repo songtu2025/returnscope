@@ -64,6 +64,7 @@ def version_context(
     version_id: str,
 ) -> dict[str, Any]:
     version = version_row(connection, dashboard_id, version_id)
+    summary = json_value(version["summary_json"], {})
     source_rows = connection.execute(
         f"""
         SELECT {DASHBOARD_SOURCE_COLUMNS_SQL}
@@ -80,12 +81,12 @@ def version_context(
     return {
         "dataset_version_id": str(version["dataset_version_id"]),
         "filters": json_value(version["filters_json"], {}),
+        "summary": summary,
         "sources": sources,
         "source_ids": [str(source["result_version_id"]) for source in sources],
         "counting_basis": (
             FEEDBACK_GROUP_BASIS
-            if json_value(version["summary_json"], {}).get("counting_basis")
-            == FEEDBACK_GROUP_BASIS
+            if summary.get("counting_basis") == FEEDBACK_GROUP_BASIS
             else "source_record"
         ),
         "analysis_context": aggregate_analysis_context(

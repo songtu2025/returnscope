@@ -14,6 +14,7 @@ from test_classification_result_pool import (
 )
 
 from return_semantics.schemas import ProcessingStatus
+from web_backend import dashboard_insights
 from web_backend.classification_standard_service import ClassificationStandardService
 from web_backend.common import json_text
 from web_backend.dashboard_plan import summarize_sources
@@ -385,6 +386,29 @@ def test_existing_dashboard_version_keeps_source_record_basis(tmp_path: Path) ->
         == 2
     )
     assert service.records(dashboard_id, new_id)["total"] == 3
+
+
+def test_insights_reuse_saved_version_summary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    context, version, service = _ready_result(tmp_path)
+    _plan, dashboard = _create_dashboard(service, str(version["version_id"]))
+    dashboard_id = str(dashboard["id"])
+    version_id = str(dashboard["version"]["version_id"])
+
+    def reject_summary_recalculation(*args, **kwargs):
+        raise AssertionError("洞察请求不应重新计算已保存的来源摘要")
+
+    monkeypatch.setattr(
+        dashboard_insights,
+        "summarize_sources",
+        reject_summary_recalculation,
+        raising=False,
+    )
+    assert (
+        service.insights(dashboard_id, version_id)["summary"]
+        == dashboard["version"]["summary"]
+    )
 
 
 def test_dashboard_keeps_distinct_mskus_and_source_evidence(tmp_path: Path) -> None:

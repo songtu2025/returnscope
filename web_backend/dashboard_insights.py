@@ -11,7 +11,7 @@ from web_backend.dashboard_insight_overview import (
     InsightQueryScope,
     collect_insight_overview,
 )
-from web_backend.dashboard_plan import comment_summary_metrics, summarize_sources
+from web_backend.dashboard_plan import comment_summary_metrics
 from web_backend.dashboard_support import (
     clean_date,
     feedback_group_scope,
@@ -215,15 +215,7 @@ def build_insights(
         prepared = _prepare_scope(database, connection, context, options)
         scope = prepared.scope
         taxonomy = prepared.taxonomy
-        summary = summarize_sources(
-            database,
-            connection,
-            context["source_ids"],
-            context["filters"],
-            context["sources"],
-            include_comment_metrics=False,
-            feedback_groups=context["counting_basis"] == "feedback_group",
-        )
+        summary = dict(context["summary"])
         summary.update(
             comment_summary_metrics(
                 connection,
@@ -259,21 +251,7 @@ def build_insights(
             params=[],
             records_table="dashboard_insight_records",
         )
-        matches_summary_scope = not any(
-            (
-                options.listing,
-                options.product_name,
-                options.product_sku,
-                options.date_from,
-                options.date_to,
-            )
-        )
-        overview = collect_insight_overview(
-            scope,
-            total_record_count=(
-                int(summary["record_count"]) if matches_summary_scope else None
-            ),
-        )
+        overview = collect_insight_overview(scope)
         selected_reason = overview["selected_reason"]
         details = collect_reason_details(scope, selected_reason, overview, taxonomy)
 
