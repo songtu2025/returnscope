@@ -42,8 +42,10 @@ export function ReturnReasonInsightExplorer({
     1,
     Math.ceil(visibleReasons.length / REASON_PAGE_SIZE),
   );
+  const activeReason =
+    visibleReasons.find((reason) => reason.value === route.problem) || selected;
   const selectedIndex = visibleReasons.findIndex(
-    (reason) => reason.value === selected?.value,
+    (reason) => reason.value === activeReason?.value,
   );
   const selectedReasonPage =
     selectedIndex < 0 ? 1 : Math.floor(selectedIndex / REASON_PAGE_SIZE) + 1;
@@ -66,8 +68,8 @@ export function ReturnReasonInsightExplorer({
       subject,
       reasonPage: 0,
       problem:
-        selected && (!subject || selected.subjects?.includes(subject))
-          ? selected.value
+        activeReason && (!subject || activeReason.subjects?.includes(subject))
+          ? activeReason.value
           : firstReason?.value || "",
       recordPage: 1,
     });
@@ -157,7 +159,7 @@ export function ReturnReasonInsightExplorer({
               .map((reason, index) => (
                 <li key={reason.value}>
                   <button
-                    className={selected?.value === reason.value ? "active" : ""}
+                    className={activeReason?.value === reason.value ? "active" : ""}
                     onClick={() =>
                       onUpdateRoute({
                         problem: reason.value,
@@ -231,7 +233,7 @@ export function ReturnReasonInsightExplorer({
               <li key={node.value}>
                 <button
                   disabled={!taxonomyLabels.has(node.value)}
-                  className={selected?.value === node.value ? "active" : ""}
+                  className={activeReason?.value === node.value ? "active" : ""}
                   onClick={() =>
                     onUpdateRoute({
                       problem: node.value,

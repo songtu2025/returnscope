@@ -184,6 +184,69 @@ test("具体原因按十项分页，保持全局排名并在筛选后定位选�
   expect(within(ranking).queryByRole("navigation")).not.toBeInTheDocument();
 });
 
+test("切换原因时立即按链接定位，仍尊重手动页码和无效原因回退", async () => {
+  const user = userEvent.setup();
+  const onUpdateRoute = vi.fn();
+  const reasons = Array.from({ length: 39 }, (_, index) => ({
+    value: `R${index + 1}`,
+    label: `原因${index + 1}`,
+    record_count: 39 - index,
+    percentage: 1,
+    subjects: index >= 37 ? ["PRODUCT"] : [],
+  }));
+  const props = {
+    route: { labelGroup: "", subject: "", reasonPage: 0, problem: "R39" },
+    data: {},
+    reasons,
+    hierarchy: [],
+    taxonomyLabels: new Map(),
+    selected: reasons[25],
+    subjects: [
+      { value: "PRODUCT", label: "商品相关", record_count: 2, percentage: 5.1 },
+    ],
+    groups: [],
+    analysisContext: "returns",
+    onUpdateRoute,
+  };
+  const view = render(<ReturnReasonInsightExplorer {...props} />);
+  const ranking = view.container.querySelector(".return-reason-ranking");
+  expect(
+    within(ranking).getByRole("navigation", { name: "分页，第 4 页，共 4 页" }),
+  ).toBeVisible();
+  expect(within(ranking).getByRole("button", { name: /原因39/ })).toHaveClass("active");
+  await user.click(screen.getByRole("button", { name: /商品相关/ }));
+  expect(onUpdateRoute).toHaveBeenLastCalledWith({
+    subject: "PRODUCT",
+    reasonPage: 0,
+    problem: "R39",
+    recordPage: 1,
+  });
+
+  view.rerender(
+    <ReturnReasonInsightExplorer
+      {...props}
+      route={{ ...props.route, reasonPage: 2 }}
+    />,
+  );
+  expect(
+    within(ranking).getByRole("navigation", { name: "分页，第 2 页，共 4 页" }),
+  ).toBeVisible();
+  expect(
+    within(ranking).queryByRole("button", { name: /原因39/ }),
+  ).not.toBeInTheDocument();
+
+  view.rerender(
+    <ReturnReasonInsightExplorer
+      {...props}
+      route={{ ...props.route, problem: "R404" }}
+    />,
+  );
+  expect(
+    within(ranking).getByRole("navigation", { name: "分页，第 3 页，共 4 页" }),
+  ).toBeVisible();
+  expect(within(ranking).getByRole("button", { name: /原因26/ })).toHaveClass("active");
+});
+
 test("原因列表的筛选与页码可由链接恢复，翻页不重新请求洞察", async () => {
   const user = userEvent.setup();
   const reasons = Array.from({ length: 39 }, (_, index) => ({
