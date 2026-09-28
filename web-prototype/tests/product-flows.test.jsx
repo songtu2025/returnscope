@@ -469,6 +469,56 @@ describe("关键用户流程", () => {
     expect(document.activeElement).toBe(trigger);
   });
 
+  test("全局搜索并行读取资源，筛选后回车进入对应任务", async () => {
+    const user = userEvent.setup();
+    apiMock.me.mockResolvedValue({
+      id: "user-1",
+      email: "admin@example.com",
+      display_name: "管理员",
+    });
+    apiMock.tasks.mockResolvedValue([
+      {
+        id: "task-search-route",
+        title: "搜索目标任务",
+        owner_name: "管理员",
+        status: "running",
+        store: "测试店铺",
+      },
+    ]);
+    apiMock.datasets.mockResolvedValue([
+      {
+        id: "dataset-search-route",
+        kind: "products",
+        name: "产品信息样本",
+        current_version: 1,
+        row_count: 3,
+      },
+    ]);
+
+    render(<App />);
+    expect(await screen.findByRole("heading", { name: "首页" })).toBeVisible();
+    await user.keyboard("{Control>}k{/Control}");
+
+    const dialog = screen.getByRole("dialog", { name: "全局搜索" });
+    expect(apiMock.tasks).toHaveBeenCalledOnce();
+    expect(apiMock.datasets).toHaveBeenCalledOnce();
+    expect(apiMock.reviews).toHaveBeenCalledOnce();
+    expect(
+      await within(dialog).findByRole("button", { name: /搜索目标任务/ }),
+    ).toBeVisible();
+    expect(within(dialog).getByRole("button", { name: /产品信息样本/ })).toBeVisible();
+
+    const input = within(dialog).getByRole("textbox", { name: "全局搜索" });
+    await user.type(input, "搜索目标");
+    expect(
+      within(dialog).queryByRole("button", { name: /产品信息样本/ }),
+    ).not.toBeInTheDocument();
+    await user.keyboard("{Enter}");
+
+    expect(screen.queryByRole("dialog", { name: "全局搜索" })).not.toBeInTheDocument();
+    expect(window.location.hash).toBe("#analysis-tasks?task_id=task-search-route");
+  });
+
   test("浏览器前进后退可以恢复对应页面", async () => {
     apiMock.me.mockResolvedValue({
       id: "user-1",
