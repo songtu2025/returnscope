@@ -10,6 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { Pagination } from "../../components/Pagination";
 import {
   formatDate,
   formatPercent,
@@ -318,30 +319,14 @@ export function ReturnReasonInsightDiagnostic({
               <div className="return-insight-empty">当前原因没有可展示的评论证据</div>
             )}
             {evidence.total > evidencePageSize && (
-              <div
-                className="pagination-bar return-insight-evidence-pagination"
-                aria-label="语义证据分页"
-              >
-                <span>
-                  第 {evidencePage} / {evidencePageCount} 页
-                </span>
-                <div>
-                  <button
-                    type="button"
-                    disabled={evidenceLoading || evidencePage <= 1}
-                    onClick={() => onEvidencePage(evidencePage - 1)}
-                  >
-                    上一页
-                  </button>
-                  <button
-                    type="button"
-                    disabled={evidenceLoading || evidencePage >= evidencePageCount}
-                    onClick={() => onEvidencePage(evidencePage + 1)}
-                  >
-                    下一页
-                  </button>
-                </div>
-              </div>
+              <Pagination
+                page={evidencePage}
+                pageSize={evidencePageSize}
+                total={evidence.total}
+                totalPages={evidencePageCount}
+                onPage={onEvidencePage}
+                disabled={evidenceLoading}
+              />
             )}
           </section>
         </>

@@ -11,10 +11,19 @@ import { AntdProvider } from "./AntdProvider";
  *   total: number,
  *   totalPages: number,
  *   onPage: (page: number) => void,
- *   onPageSize: (pageSize: number) => void,
+ *   onPageSize?: (pageSize: number) => void,
+ *   disabled?: boolean,
  * }} props
  */
-export function Pagination({ page, pageSize, total, totalPages, onPage, onPageSize }) {
+export function Pagination({
+  page,
+  pageSize,
+  total,
+  totalPages,
+  onPage,
+  onPageSize,
+  disabled = false,
+}) {
   return (
     <AntdProvider>
       <AntPagination
@@ -24,9 +33,12 @@ export function Pagination({ page, pageSize, total, totalPages, onPage, onPageSi
         current={page}
         pageSize={pageSize}
         total={total}
+        disabled={disabled}
         pageSizeOptions={PAGE_SIZES}
         showLessItems
-        showSizeChanger={{ "aria-label": "每页数量", showSearch: false }}
+        showSizeChanger={
+          onPageSize ? { "aria-label": "每页数量", showSearch: false } : false
+        }
         showTotal={(value) => `共 ${Number(value || 0).toLocaleString()} 条`}
         itemRender={(_itemPage, type, element) => {
           if (type === "prev") {
@@ -35,6 +47,7 @@ export function Pagination({ page, pageSize, total, totalPages, onPage, onPageSi
                 type="button"
                 className="ant-pagination-item-link"
                 aria-label="上一页"
+                disabled={disabled || page <= 1}
                 tabIndex={-1}
               >
                 <CaretLeft aria-hidden="true" />
@@ -47,6 +60,7 @@ export function Pagination({ page, pageSize, total, totalPages, onPage, onPageSi
                 type="button"
                 className="ant-pagination-item-link"
                 aria-label="下一页"
+                disabled={disabled || page >= totalPages}
                 tabIndex={-1}
               >
                 <CaretRight aria-hidden="true" />
@@ -58,7 +72,9 @@ export function Pagination({ page, pageSize, total, totalPages, onPage, onPageSi
         onChange={(nextPage, nextPageSize) => {
           if (nextPageSize === pageSize) onPage(nextPage);
         }}
-        onShowSizeChange={(_current, nextPageSize) => onPageSize(nextPageSize)}
+        onShowSizeChange={
+          onPageSize ? (_current, nextPageSize) => onPageSize(nextPageSize) : undefined
+        }
       />
     </AntdProvider>
   );

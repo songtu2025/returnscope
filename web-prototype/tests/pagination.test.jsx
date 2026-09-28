@@ -73,6 +73,31 @@ describe("Pagination", () => {
     expect(screen.getByRole("button", { name: "下一页" })).toBeDisabled();
   });
 
+  it("固定页大小时隐藏切换入口，并支持加载禁用态", async () => {
+    const user = userEvent.setup();
+    const onPage = vi.fn();
+    const { container } = render(
+      <Pagination
+        page={1}
+        pageSize={10}
+        total={9130}
+        totalPages={913}
+        onPage={onPage}
+        disabled
+      />,
+    );
+
+    expect(
+      screen.queryByRole("combobox", { name: "每页数量" }),
+    ).not.toBeInTheDocument();
+    expect(container.querySelector(".ant-pagination")).toHaveClass(
+      "ant-pagination-disabled",
+    );
+    const next = screen.getByRole("button", { name: "下一页" });
+    await user.click(next);
+    expect(onPage).not.toHaveBeenCalled();
+  });
+
   it("放在表单内翻页时不会提交表单", async () => {
     const user = userEvent.setup();
     const onPage = vi.fn();

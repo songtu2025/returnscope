@@ -583,11 +583,6 @@
   font-size: 10px;
 }
 
-.return-insight-evidence-pagination {
-  padding: 8px 10px 10px;
-  border-top: 1px solid var(--line);
-}
-
 .return-insight-empty {
   display: grid;
   min-height: 110px;

@@ -213,7 +213,12 @@ test("语义证据按原因和筛选条件翻页，失败后可重试", async ()
   const evidence = view.container.querySelector(".return-insight-evidence");
 
   expect(evidence.querySelectorAll("article")).toHaveLength(10);
-  expect(within(evidence).getByText("第 1 / 2 页")).toBeVisible();
+  expect(
+    within(evidence).getByRole("navigation", { name: "分页，第 1 页，共 2 页" }),
+  ).toBeVisible();
+  expect(
+    within(evidence).queryByRole("combobox", { name: "每页数量" }),
+  ).not.toBeInTheDocument();
   await user.click(within(evidence).getByRole("button", { name: "下一页" }));
   expect(updateRoute).toHaveBeenCalledWith({ recordPage: 2 }, { replace: true });
 
