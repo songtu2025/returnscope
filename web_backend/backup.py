@@ -14,14 +14,16 @@ from secrets import token_hex
 from web_backend.settings import RUNTIME_DIRECTORIES, Settings
 
 BACKUP_KEEP_COUNT = 3
+BACKUP_INTERVAL_SECONDS = 24 * 60 * 60
+
+
+def _backup_dir(settings: Settings) -> Path:
+    return Path(os.getenv("WEBAPP_BACKUP_DIR", settings.data_dir / "backups")).resolve()
 
 
 def create_backup(settings: Settings, backup_dir: Path | None = None) -> Path:
     settings.ensure_directories()
-    backup_dir = (
-        backup_dir
-        or Path(os.getenv("WEBAPP_BACKUP_DIR", settings.data_dir / "backups"))
-    ).resolve()
+    backup_dir = (backup_dir or _backup_dir(settings)).resolve()
     backup_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
     database_snapshot = backup_dir / f"database-{timestamp}.db"
@@ -250,9 +252,7 @@ def restore_backup(settings: Settings, archive_path: Path) -> Path:
 
 
 def prune_backups(settings: Settings) -> None:
-    backup_dir = Path(
-        os.getenv("WEBAPP_BACKUP_DIR", settings.data_dir / "backups")
-    ).resolve()
+    backup_dir = _backup_dir(settings)
     if not backup_dir.exists():
         return
     backups = sorted(
@@ -264,10 +264,23 @@ def prune_backups(settings: Settings) -> None:
         path.unlink()
 
 
+def _backup_due(settings: Settings) -> bool:
+    backup_dir = _backup_dir(settings)
+    latest_modified = max(
+        (path.stat().st_mtime for path in backup_dir.glob("seekway-backup-*.zip")),
+        default=None,
+    )
+    return (
+        latest_modified is None
+        or datetime.now(UTC).timestamp() - latest_modified >= BACKUP_INTERVAL_SECONDS
+    )
+
+
 def main() -> None:
     settings = Settings.from_env()
     parser = argparse.ArgumentParser(description="备份或恢复 Web 运行数据")
     subparsers = parser.add_subparsers(dest="command")
+    subparsers.add_parser("scheduled")
     verify_parser = subparsers.add_parser("verify")
     verify_parser.add_argument("archive", type=Path)
     restore_parser = subparsers.add_parser("restore")
@@ -287,6 +300,8 @@ def main() -> None:
             parser.error("恢复前必须停止应用，并传入 --app-stopped")
         safety_backup = restore_backup(settings, args.archive)
         print(f"恢复完成；恢复前安全备份：{safety_backup}")
+        return
+    if args.command == "scheduled" and not _backup_due(settings):
         return
     path = create_backup(settings)
     prune_backups(settings)

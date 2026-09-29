@@ -78,7 +78,7 @@ services:
     security_opt:
       - no-new-privileges:true
     entrypoint: ["/bin/sh", "-c"]
-    command: ["while true; do python -m web_backend.backup; sleep 86400; done"]
+    command: ["while true; do python -m web_backend.backup scheduled; sleep 3600; done"]
 
   migrate:
     profiles: ["migration"]

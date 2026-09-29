@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import os
 import shutil
 import sqlite3
 import sys
+import time
 import zipfile
 from pathlib import Path
 
@@ -10,6 +12,7 @@ import pytest
 
 import web_backend.backup as backup_module
 from web_backend.backup import (
+    BACKUP_INTERVAL_SECONDS,
     create_backup,
     prune_backups,
     restore_backup,
@@ -46,13 +49,32 @@ def _prepare_scheduled_backup(
     old_names = [
         f"seekway-backup-202609{day:02d}T000000000000Z.zip" for day in range(1, 5)
     ]
+    old_time = time.time() - BACKUP_INTERVAL_SECONDS - 60
     for name in old_names:
-        (backup_dir / name).write_bytes(b"archive")
+        path = backup_dir / name
+        path.write_bytes(b"archive")
+        os.utime(path, (old_time, old_time))
     monkeypatch.setattr(
         backup_module.Settings, "from_env", classmethod(lambda cls: settings)
     )
-    monkeypatch.setattr(sys, "argv", ["backup"])
+    monkeypatch.setattr(sys, "argv", ["backup", "scheduled"])
     return backup_dir, old_names
+
+
+def _prepare_real_backup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[Path, Path]:
+    settings = _settings(tmp_path)
+    settings.ensure_directories()
+    Database(settings.database_path).initialize()
+    backup_dir = tmp_path / "backups"
+    existing = create_backup(settings, backup_dir)
+    monkeypatch.setenv("WEBAPP_BACKUP_DIR", str(backup_dir))
+    monkeypatch.setattr(
+        backup_module.Settings, "from_env", classmethod(lambda cls: settings)
+    )
+    return backup_dir, existing
 
 
 @pytest.mark.parametrize("archive_count", [1, 3, 5])
@@ -96,21 +118,71 @@ def test_scheduled_backup_prunes_after_valid_archive(
         assert archive.testzip() is None
 
 
+def test_scheduled_backup_skips_recent_archive(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backup_dir, existing = _prepare_real_backup(tmp_path, monkeypatch)
+    recent_time = time.time() - BACKUP_INTERVAL_SECONDS + 60
+    os.utime(existing, (recent_time, recent_time))
+    monkeypatch.setattr(sys, "argv", ["backup", "scheduled"])
+
+    backup_module.main()
+    backup_module.main()
+
+    assert list(backup_dir.glob("seekway-backup-*.zip")) == [existing]
+    assert not list(backup_dir.glob("database-*.db"))
+
+
+def test_scheduled_backup_runs_after_interval(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backup_dir, existing = _prepare_real_backup(tmp_path, monkeypatch)
+    old_time = time.time() - BACKUP_INTERVAL_SECONDS - 60
+    os.utime(existing, (old_time, old_time))
+    monkeypatch.setattr(sys, "argv", ["backup", "scheduled"])
+
+    backup_module.main()
+
+    assert len(list(backup_dir.glob("seekway-backup-*.zip"))) == 2
+    assert existing.exists()
+
+
+def test_manual_backup_runs_with_recent_archive(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backup_dir, existing = _prepare_real_backup(tmp_path, monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["backup"])
+
+    backup_module.main()
+
+    assert len(list(backup_dir.glob("seekway-backup-*.zip"))) == 2
+    assert existing.exists()
+
+
 def test_failed_backup_does_not_prune_existing_archives(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     backup_dir, old_names = _prepare_scheduled_backup(tmp_path, monkeypatch)
-    monkeypatch.setattr(backup_module.zipfile.ZipFile, "testzip", lambda self: "app.db")
-
-    with pytest.raises(ValueError, match="备份文件校验失败"):
-        backup_module.main()
+    with monkeypatch.context() as failure_patch:
+        failure_patch.setattr(
+            backup_module.zipfile.ZipFile, "testzip", lambda self: "app.db"
+        )
+        with pytest.raises(ValueError, match="备份文件校验失败"):
+            backup_module.main()
 
     assert (
         sorted(path.name for path in backup_dir.glob("seekway-backup-*.zip"))
         == old_names
     )
     assert not list(backup_dir.glob("database-*.db"))
+
+    backup_module.main()
+
+    assert len(list(backup_dir.glob("seekway-backup-*.zip"))) == 3
 
 
 def test_verify_command_keeps_runtime_unchanged(
