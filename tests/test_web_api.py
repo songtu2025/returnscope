@@ -16,6 +16,7 @@ from return_semantics.data import RETURN_COLUMNS, RETURN_STORE_COLUMN
 from web_backend.app import create_app
 from web_backend.routers.tasks import create_task_router
 from web_backend.settings import Settings
+from web_backend.upgrade_database import initialize_empty_database
 
 
 class FakeResponsesHandler(BaseHTTPRequestHandler):
@@ -1488,6 +1489,9 @@ def test_production_app_starts_with_secure_session(
         smtp_from="no-reply@example.com",
     )
     settings.validate()
+    with pytest.raises(RuntimeError, match="生产数据库不存在"):
+        create_app(start_worker=False, settings_override=settings)
+    initialize_empty_database(settings, app_stopped=True)
     app = create_app(start_worker=False, settings_override=settings)
 
     with TestClient(app, base_url="https://testserver") as client:

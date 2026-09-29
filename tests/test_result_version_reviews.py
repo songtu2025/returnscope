@@ -1584,7 +1584,10 @@ def test_review_schema_migration_rolls_back_atomically_on_index_failure(
     assert {"batch_id", "base_result_version_id"}.issubset(columns)
 
 
-def test_initialize_recovers_orphan_publishing_status(tmp_path: Path) -> None:
+@pytest.mark.parametrize("production", [False, True])
+def test_initialize_recovers_orphan_publishing_status(
+    tmp_path: Path, production: bool
+) -> None:
     context = _seed_result_context(tmp_path)
     with context.database.transaction() as connection:
         connection.execute(
@@ -1595,7 +1598,7 @@ def test_initialize_recovers_orphan_publishing_status(tmp_path: Path) -> None:
             """,
             (context.segment_id,),
         )
-    context.database.initialize()
+    context.database.initialize(production=production)
 
     with context.database.connect() as connection:
         segment = connection.execute(

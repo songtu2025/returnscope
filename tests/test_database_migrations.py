@@ -17,6 +17,21 @@ from web_backend.database_migrations import (
 )
 from web_backend.migrate_result_source_origin import migrate_result_source_origin
 from web_backend.settings import Settings
+from web_backend.upgrade_database import initialize_empty_database, upgrade_database
+
+
+def _settings(tmp_path: Path) -> Settings:
+    return Settings(
+        data_dir=tmp_path,
+        database_path=tmp_path / "app.db",
+        session_days=14,
+        task_workers=1,
+        bootstrap_email="test@example.com",
+        bootstrap_name="测试用户",
+        bootstrap_password="test-password-only",
+        encryption_key="test-key-only",
+        secure_cookies=False,
+    )
 
 
 def test_result_source_origin_migration_keeps_existing_rows(tmp_path: Path) -> None:
@@ -62,20 +77,10 @@ def test_production_requires_explicit_result_origin_migration(tmp_path: Path) ->
             "DELETE FROM app_migrations WHERE migration_id = ?",
             (RESULT_SOURCE_ORIGIN_MIGRATION,),
         )
-    settings = Settings(
-        data_dir=tmp_path,
-        database_path=database_path,
-        session_days=14,
-        task_workers=1,
-        bootstrap_email="test@example.com",
-        bootstrap_name="测试用户",
-        bootstrap_password="test-password-only",
-        encryption_key="test-key-only",
-        secure_cookies=False,
-    )
+    settings = _settings(tmp_path)
 
-    with pytest.raises(RuntimeError, match="尚未完成源明细追溯迁移"):
-        database.initialize(require_result_source_origin=True)
+    with pytest.raises(RuntimeError, match="迁移记录 .* 缺失或校验失败"):
+        database.initialize(production=True)
     with pytest.raises(ValueError, match="必须停止应用"):
         migrate_result_source_origin(settings, app_stopped=False)
     with database.connect() as connection:
@@ -90,7 +95,7 @@ def test_production_requires_explicit_result_origin_migration(tmp_path: Path) ->
     backup_path = migrate_result_source_origin(settings, app_stopped=True)
 
     assert backup_path.is_file()
-    database.initialize(require_result_source_origin=True)
+    database.initialize(production=True)
     with database.connect() as connection:
         assert (
             connection.execute(
@@ -108,6 +113,119 @@ def test_production_requires_explicit_result_origin_migration(tmp_path: Path) ->
                 (RESULT_SOURCE_ORIGIN_MIGRATION,),
             ).fetchone()[0]
             == 0
+        )
+
+
+def test_production_startup_validates_schema_without_modifying_it(
+    tmp_path: Path,
+) -> None:
+    database = Database(tmp_path / "app.db")
+    database.initialize()
+    with database.connect() as connection:
+        before = [
+            tuple(row)
+            for row in connection.execute(
+                "SELECT type, name, sql FROM sqlite_master ORDER BY type, name"
+            )
+        ]
+    database.initialize(production=True)
+    database.initialize(production=True)
+    with database.connect() as connection:
+        after = [
+            tuple(row)
+            for row in connection.execute(
+                "SELECT type, name, sql FROM sqlite_master ORDER BY type, name"
+            )
+        ]
+    assert after == before
+
+
+def test_production_startup_rejects_missing_database_and_index(
+    tmp_path: Path,
+) -> None:
+    database = Database(tmp_path / "app.db")
+    with pytest.raises(RuntimeError, match="生产数据库不存在"):
+        database.initialize(production=True)
+    assert not database.path.exists()
+
+    database.initialize()
+    with database.connect() as connection:
+        connection.execute("DROP INDEX idx_task_segments_status_order")
+    before = database.path.read_bytes()
+    with pytest.raises(RuntimeError, match="缺少索引"):
+        database.initialize(production=True)
+    assert database.path.read_bytes() == before
+
+
+def test_empty_production_database_requires_explicit_initialization(
+    tmp_path: Path,
+) -> None:
+    settings = _settings(tmp_path)
+    database = Database(settings.database_path)
+    with pytest.raises(RuntimeError, match="生产数据库不存在"):
+        database.initialize(production=True)
+    with pytest.raises(ValueError, match="必须停止应用"):
+        initialize_empty_database(settings, app_stopped=False)
+
+    initialize_empty_database(settings, app_stopped=True)
+    database.initialize(production=True)
+    with pytest.raises(FileExistsError, match="已存在"):
+        initialize_empty_database(settings, app_stopped=True)
+
+
+def test_offline_upgrade_restores_missing_schema_and_can_rollback(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "app.db"
+    database = Database(database_path)
+    database.initialize()
+    with database.connect() as connection:
+        connection.execute("DROP INDEX idx_task_segments_status_order")
+    settings = _settings(tmp_path)
+    with pytest.raises(ValueError, match="必须停止应用"):
+        upgrade_database(settings, app_stopped=False)
+    with pytest.raises(RuntimeError, match="缺少索引"):
+        database.validate_production_schema()
+
+    backup_path = upgrade_database(settings, app_stopped=True)
+    assert backup_path.is_file()
+    database.validate_production_schema()
+
+    restore_backup(settings, backup_path)
+    with pytest.raises(RuntimeError, match="缺少索引"):
+        database.validate_production_schema()
+
+
+def test_offline_upgrade_failure_keeps_verified_backup_for_rollback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    database_path = tmp_path / "app.db"
+    database = Database(database_path)
+    database.initialize()
+    settings = _settings(tmp_path)
+
+    def fail_after_partial_change(self: Database) -> None:
+        with self.connect() as connection:
+            connection.execute("CREATE TABLE partial_upgrade_marker (id TEXT)")
+        raise RuntimeError("模拟中途失败")
+
+    monkeypatch.setattr(Database, "upgrade_schema", fail_after_partial_change)
+    with pytest.raises(RuntimeError, match="保持停服，使用备份恢复"):
+        upgrade_database(settings, app_stopped=True)
+    backup_path = next((tmp_path / "backups").glob("seekway-backup-*.zip"))
+    assert backup_path.is_file()
+    with database.connect() as connection:
+        assert connection.execute(
+            "SELECT name FROM sqlite_master WHERE name = 'partial_upgrade_marker'"
+        ).fetchone()
+
+    restore_backup(settings, backup_path)
+    with database.connect() as connection:
+        assert (
+            connection.execute(
+                "SELECT name FROM sqlite_master WHERE name = 'partial_upgrade_marker'"
+            ).fetchone()
+            is None
         )
 
 
