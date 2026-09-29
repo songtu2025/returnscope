@@ -814,6 +814,15 @@ def test_filtered_insights_keep_full_options_and_scoped_evidence(
         date_from="2026-08-03",
         date_to="2026-08-03",
     )
+    detail = service.insights(
+        str(dashboard["id"]),
+        str(dashboard["version"]["version_id"]),
+        problem="FIT_TOO_SMALL_U1",
+        product_name="第二产品",
+        date_from="2026-08-03",
+        date_to="2026-08-03",
+        part="reason",
+    )
 
     assert insights["summary"]["record_count"] == 2
     assert insights["total_record_count"] == 1
@@ -827,6 +836,20 @@ def test_filtered_insights_keep_full_options_and_scoped_evidence(
     assert [item["order_id"] for item in insights["evidence"]["items"]] == [
         "ORDER-OTHER"
     ]
+    assert detail["selected_reason"]["value"] == insights["selected_reason"]["value"]
+    assert (
+        detail["selected_reason"]["record_count"]
+        == insights["selected_reason"]["record_count"]
+    )
+    for key in (
+        "trend",
+        "products",
+        "variants",
+        "co_reasons",
+        "semantic_profile",
+        "evidence",
+    ):
+        assert detail[key] == insights[key]
 
 
 def test_reason_evidence_pages_match_insight_count_and_filters(tmp_path: Path) -> None:

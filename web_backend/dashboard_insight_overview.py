@@ -221,7 +221,9 @@ def _label_catalog(
     return label_names, label_counts
 
 
-def _reason_rows(scope: InsightQueryScope) -> list[sqlite3.Row]:
+def _reason_rows(
+    scope: InsightQueryScope, *, include_primary: bool = True
+) -> list[sqlite3.Row]:
     where_sql = scope.where_sql
     clean_group = scope.clean_group
     report_mode = scope.report_mode
@@ -232,7 +234,14 @@ def _reason_rows(scope: InsightQueryScope) -> list[sqlite3.Row]:
             " AND aligned_group(l.label_group, l.label_code, r.result_version_id) = ?"
         )
         reason_params.append(clean_group)
-    if report_mode:
+    if report_mode or not include_primary:
+        units_join = (
+            ""
+            if report_mode
+            else """JOIN classification_units u
+              ON u.result_version_id = r.result_version_id
+             AND u.classification_key = r.classification_key"""
+        )
         reason_sql = f"""
             SELECT l.label_code AS value,
                    COALESCE(NULLIF(TRIM(l.label_name), ''), l.label_code)
@@ -247,6 +256,7 @@ def _reason_rows(scope: InsightQueryScope) -> list[sqlite3.Row]:
               ON l.result_version_id = r.result_version_id
              AND l.classification_key = r.classification_key
              AND l.label_kind = 'problem'
+            {units_join}
             WHERE {where_sql}{reason_group_filter}
             GROUP BY l.label_code, l.label_name, label_group
             ORDER BY record_count DESC, label COLLATE NOCASE ASC
@@ -288,7 +298,7 @@ def collect_reason_context(scope: InsightQueryScope) -> dict[str, Any]:
             tuple(scope.params),
         ).fetchone()[0]
     )
-    reason_rows = _reason_rows(scope)
+    reason_rows = _reason_rows(scope, include_primary=False)
     _, label_counts = _label_catalog(scope, reason_rows)
     selected = next(
         (row for row in reason_rows if row["value"] == scope.requested_problem),

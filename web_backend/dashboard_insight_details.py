@@ -120,6 +120,25 @@ def collect_reason_details(
     evidence_total = 0
     if selected_reason:
         selected_code = str(selected_reason["value"])
+        connection.execute(
+            "CREATE TEMP TABLE IF NOT EXISTS dashboard_insight_selected_records "
+            "(id TEXT PRIMARY KEY)"
+        )
+        connection.execute("DELETE FROM dashboard_insight_selected_records")
+        connection.execute(
+            f"""
+            INSERT INTO dashboard_insight_selected_records(id)
+            SELECT DISTINCT r.id
+            FROM {scope.records_table} r
+            JOIN classification_unit_labels selected
+              ON selected.result_version_id = r.result_version_id
+             AND selected.classification_key = r.classification_key
+             AND selected.label_kind = 'problem'
+             AND selected.label_code = ?
+            WHERE {where_sql}
+            """,
+            (selected_code, *params),
+        )
         trend_rows = connection.execute(
             f"""
             SELECT date(
@@ -134,19 +153,16 @@ def collect_reason_details(
                        '+6 days'
                    ) AS period_end,
                    COUNT(r.id) AS total_record_count,
-                   SUM(CASE WHEN EXISTS (
-                       SELECT 1 FROM classification_unit_labels selected
-                       WHERE selected.result_version_id = r.result_version_id
-                         AND selected.classification_key = r.classification_key
-                         AND selected.label_kind = 'problem'
-                         AND selected.label_code = ?
-                   ) THEN 1 ELSE 0 END) AS record_count
+                   SUM(CASE WHEN matched.id IS NOT NULL
+                            THEN 1 ELSE 0 END) AS record_count
             FROM {scope.records_table} r
+            LEFT JOIN dashboard_insight_selected_records matched
+              ON matched.id = r.id
             WHERE {where_sql} AND r.return_date IS NOT NULL
             GROUP BY period_start, period_end
             ORDER BY period_start
             """,
-            (selected_code, *params),
+            tuple(params),
         ).fetchall()
         trend = [
             {
@@ -166,21 +182,18 @@ def collect_reason_details(
             SELECT COALESCE(NULLIF(TRIM(r.product_name), ''), '未提供产品')
                        AS value,
                    COUNT(r.id) AS total_record_count,
-                   SUM(CASE WHEN EXISTS (
-                       SELECT 1 FROM classification_unit_labels selected
-                       WHERE selected.result_version_id = r.result_version_id
-                         AND selected.classification_key = r.classification_key
-                         AND selected.label_kind = 'problem'
-                         AND selected.label_code = ?
-                   ) THEN 1 ELSE 0 END) AS record_count
+                   SUM(CASE WHEN matched.id IS NOT NULL
+                            THEN 1 ELSE 0 END) AS record_count
             FROM {scope.records_table} r
+            LEFT JOIN dashboard_insight_selected_records matched
+              ON matched.id = r.id
             WHERE {where_sql}
             GROUP BY value
             HAVING record_count > 0
             ORDER BY record_count DESC, value COLLATE NOCASE ASC
             LIMIT 8
             """,
-            (selected_code, *params),
+            tuple(params),
         ).fetchall()
         selected_count = int(selected_reason["record_count"])
         products = [
@@ -212,21 +225,18 @@ def collect_reason_details(
                    COALESCE(NULLIF(TRIM(r.product_name), ''), '未提供产品')
                        AS product_name,
                    COUNT(r.id) AS total_record_count,
-                   SUM(CASE WHEN EXISTS (
-                       SELECT 1 FROM classification_unit_labels selected
-                       WHERE selected.result_version_id = r.result_version_id
-                         AND selected.classification_key = r.classification_key
-                         AND selected.label_kind = 'problem'
-                         AND selected.label_code = ?
-                   ) THEN 1 ELSE 0 END) AS record_count
+                   SUM(CASE WHEN matched.id IS NOT NULL
+                            THEN 1 ELSE 0 END) AS record_count
             FROM {scope.records_table} r
+            LEFT JOIN dashboard_insight_selected_records matched
+              ON matched.id = r.id
             WHERE {where_sql}
             GROUP BY value, product_name
             HAVING record_count > 0
             ORDER BY record_count DESC, value COLLATE NOCASE ASC
             LIMIT 12
             """,
-            (selected_code, *params),
+            tuple(params),
         ).fetchall()
         variants = [
             {
@@ -258,11 +268,8 @@ def collect_reason_details(
                             other.label_code) AS label,
                    COUNT(r.id) AS record_count
             FROM {scope.records_table} r
-            JOIN classification_unit_labels selected
-              ON selected.result_version_id = r.result_version_id
-             AND selected.classification_key = r.classification_key
-             AND selected.label_kind = 'problem'
-             AND selected.label_code = ?
+            JOIN dashboard_insight_selected_records selected
+              ON selected.id = r.id
             JOIN classification_unit_labels other
               ON other.result_version_id = r.result_version_id
              AND other.classification_key = r.classification_key
@@ -273,7 +280,7 @@ def collect_reason_details(
             ORDER BY record_count DESC, label COLLATE NOCASE ASC
             LIMIT 6
             """,
-            (selected_code, selected_code, *params),
+            (selected_code, *params),
         ).fetchall()
         co_reasons = [
             {
@@ -305,6 +312,11 @@ def collect_reason_details(
                 JOIN classification_units u
                   ON u.result_version_id = r.result_version_id
                  AND u.classification_key = r.classification_key
+                JOIN classification_unit_labels selected
+                  ON selected.result_version_id = r.result_version_id
+                 AND selected.classification_key = r.classification_key
+                 AND selected.label_kind = 'problem'
+                 AND selected.label_code = ?
                 JOIN json_each(u.classification_json, '$.semantic_units') unit
                 WHERE {where_sql}
                   AND json_extract(unit.value, '$.label_code') = ?
@@ -337,7 +349,7 @@ def collect_reason_details(
             SELECT 'opinion', opinion, subject, part, record_count, evidence
             FROM opinion_counts
             """,
-            (*params, selected_code),
+            (selected_code, *params, selected_code),
         ).fetchall()
         semantic_record_count = int(semantic_rows[0]["record_count"])
         part_rows = sorted(
