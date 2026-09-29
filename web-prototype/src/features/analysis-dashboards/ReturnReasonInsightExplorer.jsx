@@ -144,7 +144,9 @@ export function ReturnReasonInsightExplorer({
         </nav>
       </section>
 
-      <section className="return-reason-ranking">
+      <section
+        className={`return-reason-ranking${visibleReasons.length > REASON_PAGE_SIZE ? " is-paginated" : ""}`}
+      >
         <header>
           <div>
             <h3>{terms.reasonHeading}</h3>

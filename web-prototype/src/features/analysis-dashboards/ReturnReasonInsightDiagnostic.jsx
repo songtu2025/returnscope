@@ -259,7 +259,10 @@ export function ReturnReasonInsightDiagnostic({
             </div>
           </section>
 
-          <section className="return-insight-card return-insight-evidence">
+          <section
+            className={`return-insight-card return-insight-evidence${evidence.total > evidencePageSize ? " is-paginated" : ""}`}
+            aria-busy={evidenceLoading}
+          >
             <header>
               <div>
                 <h3>语义证据</h3>

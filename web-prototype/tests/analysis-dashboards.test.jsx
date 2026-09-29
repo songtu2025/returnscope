@@ -134,6 +134,7 @@ test("具体原因按十项分页，保持全局排名并在筛选后定位选�
   };
   const view = render(<ReturnReasonInsightExplorer {...props} />);
   const ranking = view.container.querySelector(".return-reason-ranking");
+  expect(ranking).toHaveClass("is-paginated");
   expect(within(ranking).getByText("39 项")).toBeVisible();
   expect(
     within(ranking).getByRole("navigation", { name: "分页，第 3 页，共 4 页" }),
@@ -158,6 +159,7 @@ test("具体原因按十项分页，保持全局排名并在筛选后定位选�
       (node) => node.textContent,
     ),
   ).toEqual(Array.from({ length: 9 }, (_, index) => String(index + 31)));
+  expect(ranking).toHaveClass("is-paginated");
   await user.click(within(ranking).getByRole("button", { name: /原因39/ }));
   expect(onUpdateRoute).toHaveBeenCalledWith({
     problem: "R39",
@@ -414,6 +416,8 @@ test("语义证据按原因和筛选条件翻页，失败后可重试", async ()
   const evidence = view.container.querySelector(".return-insight-evidence");
 
   expect(evidence.querySelectorAll("article")).toHaveLength(10);
+  expect(evidence).toHaveClass("is-paginated");
+  expect(evidence).toHaveAttribute("aria-busy", "false");
   expect(
     within(evidence).getByRole("navigation", { name: "分页，第 1 页，共 2 页" }),
   ).toBeVisible();
@@ -429,7 +433,9 @@ test("语义证据按原因和筛选条件翻页，失败后可重试", async ()
   view.rerender(
     <ReturnReasonInsights {...props} route={{ ...route, recordPage: 2 }} />,
   );
+  expect(evidence).toHaveAttribute("aria-busy", "true");
   expect(await within(evidence).findByRole("alert")).toHaveTextContent("网络中断");
+  expect(evidence).toHaveAttribute("aria-busy", "false");
   await user.click(within(evidence).getByRole("button", { name: "重试" }));
   expect(await within(evidence).findByText("第二页证据")).toBeVisible();
   expect(evidence.querySelectorAll("article")).toHaveLength(1);
