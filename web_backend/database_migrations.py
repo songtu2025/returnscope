@@ -5,6 +5,7 @@ import secrets
 import sqlite3
 from pathlib import Path
 
+from web_backend.database_schema import SCHEMA
 from web_backend.database_table_rebuilds import DatabaseTableRebuilds
 
 CLASSIFICATION_UNIT_RERUN_MIGRATION = "20260919_classification_unit_rerun_state"
@@ -165,6 +166,45 @@ def repair_missing_empty_checkpoint_references(
 
 
 class DatabaseMigrations(DatabaseTableRebuilds):
+    def apply_startup_migrations(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        migrate_result_source_origin: bool,
+    ) -> None:
+        """按既有顺序更新数据库结构和历史数据。"""
+        connection.executescript(SCHEMA)
+        self._migrate_auth_action_tokens(connection)
+        self._migrate_email_change_tokens(connection)
+        self._migrate_user_columns(connection)
+        self._migrate_dataset_columns(connection)
+        self._migrate_api_config_version_columns(connection)
+        self._migrate_task_segment_columns(connection)
+        repair_missing_empty_checkpoint_references(connection)
+        self._migrate_result_version_columns(connection)
+        self._migrate_classification_result_columns(connection)
+        self._migrate_validation_run_columns(connection)
+        self._migrate_review_records(connection)
+        self._repair_draft_review_batches(connection)
+        self._migrate_excluded_quality_status(connection)
+        self._migrate_classification_unit_rerun_state(connection)
+        if migrate_result_source_origin:
+            self._migrate_result_source_origin(connection)
+        connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_review_records_batch
+            ON review_records(batch_id, updated_at DESC, id)
+            """
+        )
+        self._migrate_task_columns(connection)
+        self._migrate_ai_insight_reports(connection)
+        connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_task_segments_status_order
+            ON task_segments(status, execution_order, created_at)
+            """
+        )
+
     @staticmethod
     def _migrate_auth_action_tokens(connection: sqlite3.Connection) -> None:
         migration = connection.execute(
@@ -427,100 +467,6 @@ class DatabaseMigrations(DatabaseTableRebuilds):
             ON tasks(archived_at, created_at DESC)
             """
         )
-
-    @staticmethod
-    def _recover_interrupted_result_publishing(
-        connection: sqlite3.Connection,
-    ) -> None:
-        connection.execute(
-            """
-            UPDATE classification_result_versions
-            SET publish_status = 'failed'
-            WHERE publish_status = 'publishing'
-            """
-        )
-        connection.execute(
-            """
-            UPDATE task_segments
-            SET result_publish_status = 'failed',
-                result_publish_error = COALESCE(
-                    result_publish_error,
-                    '服务重启时发现结果发布未完成，请重试发布'
-                )
-            WHERE result_publish_status = 'publishing'
-              AND NOT EXISTS (
-                  SELECT 1 FROM classification_result_versions v
-                  WHERE v.source_segment_id = task_segments.id
-                    AND v.publish_status = 'published'
-              )
-            """
-        )
-
-    @staticmethod
-    def _migrate_api_models(connection: sqlite3.Connection) -> None:
-        model_rows = connection.execute(
-            """
-            SELECT connection_id, primary_model AS model_key,
-                   validation_status, validation_message, validated_at,
-                   created_by, created_at
-            FROM api_config_versions
-            UNION ALL
-            SELECT connection_id, cheap_model AS model_key,
-                   validation_status, validation_message, validated_at,
-                   created_by, created_at
-            FROM api_config_versions
-            WHERE cheap_model IS NOT NULL
-            UNION ALL
-            SELECT connection_id, secondary_model AS model_key,
-                   validation_status, validation_message, validated_at,
-                   created_by, created_at
-            FROM api_config_versions
-            WHERE secondary_model IS NOT NULL
-            ORDER BY created_at
-            """
-        ).fetchall()
-        for row in model_rows:
-            model_id = f"model_{secrets.token_hex(8)}"
-            connection.execute(
-                """
-                INSERT INTO api_models(
-                    id, connection_id, model_key, display_name,
-                    supported_efforts_json, active, validation_status,
-                    validation_message, validated_at, created_by,
-                    created_at, updated_by, updated_at
-                ) VALUES (?, ?, ?, ?, '["low","medium","high"]', 1,
-                          ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(connection_id, model_key) DO UPDATE SET
-                    validation_status = CASE
-                        WHEN excluded.validation_status = 'validated'
-                        THEN 'validated'
-                        ELSE api_models.validation_status
-                    END,
-                    validation_message = CASE
-                        WHEN excluded.validation_status = 'validated'
-                        THEN excluded.validation_message
-                        ELSE api_models.validation_message
-                    END,
-                    validated_at = CASE
-                        WHEN excluded.validation_status = 'validated'
-                        THEN excluded.validated_at
-                        ELSE api_models.validated_at
-                    END
-                """,
-                (
-                    model_id,
-                    row["connection_id"],
-                    row["model_key"],
-                    row["model_key"],
-                    row["validation_status"],
-                    row["validation_message"],
-                    row["validated_at"],
-                    row["created_by"],
-                    row["created_at"],
-                    row["created_by"],
-                    row["created_at"],
-                ),
-            )
 
     @staticmethod
     def _migrate_ai_insight_reports(connection: sqlite3.Connection) -> None:

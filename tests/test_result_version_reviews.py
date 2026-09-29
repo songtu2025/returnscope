@@ -1608,3 +1608,32 @@ def test_initialize_recovers_orphan_publishing_status(tmp_path: Path) -> None:
     assert segment["status"] == "completed"
     assert segment["result_publish_status"] == "failed"
     assert "重试发布" in segment["result_publish_error"]
+
+
+def test_initialize_skips_publishing_recovery_after_migration_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    context = _seed_result_context(tmp_path)
+    with context.database.transaction() as connection:
+        connection.execute(
+            "UPDATE task_segments SET result_publish_status = 'publishing' WHERE id = ?",
+            (context.segment_id,),
+        )
+
+    def fail_migration(_connection: sqlite3.Connection) -> None:
+        raise RuntimeError("模拟迁移失败")
+
+    monkeypatch.setattr(
+        type(context.database),
+        "_migrate_ai_insight_reports",
+        staticmethod(fail_migration),
+    )
+    with pytest.raises(RuntimeError, match="模拟迁移失败"):
+        context.database.initialize()
+
+    with context.database.connect() as connection:
+        status = connection.execute(
+            "SELECT result_publish_status FROM task_segments WHERE id = ?",
+            (context.segment_id,),
+        ).fetchone()[0]
+    assert status == "publishing"

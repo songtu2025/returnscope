@@ -251,6 +251,29 @@ def test_create_version_creates_connection_models_version_and_audit(
     }
 
 
+def test_initialize_restores_legacy_models_without_duplicates(tmp_path: Path) -> None:
+    database = _database(tmp_path)
+    result = _create_version(ConfigService(database, _secret_box()))
+    with database.transaction() as connection:
+        connection.execute(
+            "DELETE FROM api_models WHERE connection_id = ?",
+            (result["connection_id"],),
+        )
+
+    database.initialize()
+    database.initialize()
+
+    with database.connect() as connection:
+        model_keys = [
+            row["model_key"]
+            for row in connection.execute(
+                "SELECT model_key FROM api_models WHERE connection_id = ? ORDER BY model_key",
+                (result["connection_id"],),
+            ).fetchall()
+        ]
+    assert model_keys == ["cheap-model", "primary-model"]
+
+
 def test_existing_connection_inherits_ciphertext_and_increments_version(
     tmp_path: Path,
 ) -> None:
