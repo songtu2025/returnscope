@@ -4,7 +4,9 @@ from typing import Annotated, Any, Callable
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 
-from web_backend.api_schemas import ClassificationStandardCreateRequest
+from web_backend.api_contracts.classification_standards import (
+    ClassificationStandardCreateRequest,
+)
 from web_backend.classification_standard_contracts import (
     ClassificationStandardNotFound,
 )

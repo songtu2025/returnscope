@@ -2,7 +2,7 @@ from typing import Annotated, Any, Callable
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
-from web_backend.api_schemas import (
+from web_backend.api_contracts.classification_standards import (
     ClassificationStandardSampleValidationRequest,
     ClassificationStandardValidationApprovalRequest,
 )

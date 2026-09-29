@@ -3,7 +3,7 @@ from typing import Annotated, Any, Callable, NoReturn
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
-from web_backend.api_schemas import (
+from web_backend.api_contracts.accounts import (
     AuthTokenRequest,
     EmailChangeRequest,
     InvitationCreateRequest,

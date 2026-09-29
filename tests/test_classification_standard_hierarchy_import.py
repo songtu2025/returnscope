@@ -15,7 +15,9 @@ from test_classification_standards import _service
 
 from return_semantics.schemas import TaxonomyConfig
 from return_semantics.taxonomy_hierarchy import label_path
-from web_backend.api_schemas import ClassificationStandardDraftContentRequest
+from web_backend.api_contracts.classification_standards import (
+    ClassificationStandardDraftContentRequest,
+)
 from web_backend.classification_standard_excel import preview_excel
 from web_backend.classification_standard_service import (
     ClassificationStandardNotFound,

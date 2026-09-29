@@ -6,7 +6,7 @@ from typing import Annotated, Any, AsyncIterator, Callable
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
-from web_backend.api_schemas import (
+from web_backend.api_contracts.models import (
     ConfigVersionRequest,
     ModelDefinitionRequest,
     ModelUpdateRequest,

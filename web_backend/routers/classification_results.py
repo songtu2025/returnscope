@@ -4,7 +4,7 @@ from typing import Any, Callable
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
-from web_backend.api_schemas import (
+from web_backend.api_contracts.classification_results import (
     ClassificationResultDrilldownResponse,
     ClassificationResultGroupsResponse,
     ClassificationResultListResponse,

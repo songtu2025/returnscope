@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import FileResponse, Response, StreamingResponse
 
 from web_backend.analysis_service import AnalysisFilters, AnalysisService
-from web_backend.api_schemas import (
+from web_backend.api_contracts.tasks import (
     TaskActionRequest,
     TaskArchiveRequest,
     TaskCreateRequest,

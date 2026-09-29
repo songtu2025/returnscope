@@ -13,7 +13,9 @@ from test_return_import_flow import _return_row
 from return_semantics.data import RETURN_STORE_COLUMN, SOURCE_ORIGIN_COLUMN
 from web_backend import dataset_service as dataset_module
 from web_backend import mysql_return_service as mysql_module
-from web_backend.api_schemas import MySQLReturnImportRequest
+from web_backend.api_contracts.datasets import (
+    MySQLReturnImportRequest,
+)
 from web_backend.dataset_service import DatasetService
 from web_backend.mysql_return_service import FIELD_LABELS, MySQLReturnService
 from web_backend.routers.datasets import create_dataset_router

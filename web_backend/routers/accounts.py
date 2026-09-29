@@ -2,7 +2,7 @@ from typing import Annotated, Any, Callable
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 
-from web_backend.api_schemas import (
+from web_backend.api_contracts.accounts import (
     LoginRequest,
     PasswordChangeRequest,
     UserCreateRequest,

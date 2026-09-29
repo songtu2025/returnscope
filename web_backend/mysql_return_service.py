@@ -17,7 +17,9 @@ from return_semantics.data import (
     RETURN_STORE_COLUMN,
     SOURCE_ORIGIN_COLUMN,
 )
-from web_backend.api_schemas import MySQLReturnImportRequest
+from web_backend.api_contracts.datasets import (
+    MySQLReturnImportRequest,
+)
 from web_backend.common import add_audit, new_id, utc_now
 from web_backend.dataset_service import DatasetService
 from web_backend.settings import Settings

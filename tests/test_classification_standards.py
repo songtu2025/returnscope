@@ -122,7 +122,9 @@ def test_standard_list_and_detail_share_catalog_fields(tmp_path: Path) -> None:
 
 
 def test_draft_roundtrip_preserves_new_label_claim_bindings(tmp_path: Path) -> None:
-    from web_backend.api_schemas import ClassificationStandardDraftUpdateRequest
+    from web_backend.api_contracts.classification_standards import (
+        ClassificationStandardDraftUpdateRequest,
+    )
 
     service = _service(tmp_path)
     standard = next(

@@ -2,7 +2,7 @@ from typing import Annotated, Any, Callable
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from web_backend.api_schemas import (
+from web_backend.api_contracts.reviews import (
     ReviewBatchCreateRequest,
     ReviewBatchPublishRequest,
     ReviewBatchRecordBulkUpdateRequest,
