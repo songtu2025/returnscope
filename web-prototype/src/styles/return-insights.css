@@ -91,10 +91,13 @@
 .return-insight-refresh-body {
   display: grid;
   gap: 10px;
+}
+
+.return-insight-refresh-body > :not(.return-insight-filters) {
   transition: opacity 160ms ease;
 }
 
-.return-insight-refresh-body.is-loading {
+.return-insight-refresh-body.is-loading > :not(.return-insight-filters) {
   opacity: 0.58;
   pointer-events: none;
 }

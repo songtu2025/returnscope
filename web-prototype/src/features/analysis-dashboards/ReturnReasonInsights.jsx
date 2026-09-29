@@ -151,7 +151,7 @@ export function ReturnReasonInsights({
     >
       {loading && (
         <div className="return-insight-refresh-status" role="status" aria-live="polite">
-          正在更新筛选结果…
+          正在更新筛选结果，当前显示上一次结果…
         </div>
       )}
       {!loading && error && (
@@ -171,7 +171,6 @@ export function ReturnReasonInsights({
           includedCount={includedCount}
           pendingCount={pendingCount}
           statusCounts={statusCounts}
-          loading={loading}
           analysisContext={analysisContext}
           onUpdateFilters={updateFilters}
         />

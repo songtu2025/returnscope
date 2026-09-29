@@ -79,6 +79,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
       loading: true,
       error: "",
       data: null,
+      overviewScope: "",
       detailLoading: false,
       detailError: "",
     }),
@@ -211,6 +212,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
         loading: false,
         error: "",
         data: null,
+        overviewScope: "",
         detailLoading: false,
         detailError: "",
       });
@@ -231,6 +233,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
       filters.date_from,
       filters.date_to,
     ]);
+    const overviewScope = JSON.stringify([route.dashboardId, route.versionId]);
     const cachedOverview =
       overviewCacheRef.current.key === scopeKey ? overviewCacheRef.current.data : null;
     if (route.tab === "overview" && cachedOverview) {
@@ -243,15 +246,20 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
         detailLoading: Boolean(selected),
         detailError: "",
         data: { ...cachedOverview, selected_reason: selected },
+        overviewScope,
       });
     } else {
-      setContent({
+      setContent((current) => ({
         loading: true,
         error: "",
-        data: null,
+        data:
+          route.tab === "overview" && current.overviewScope === overviewScope
+            ? current.data
+            : null,
+        overviewScope: route.tab === "overview" ? overviewScope : "",
         detailLoading: false,
         detailError: "",
-      });
+      }));
     }
     try {
       if (route.tab === "source") {
@@ -265,6 +273,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
             loading: false,
             error: "",
             data,
+            overviewScope: "",
             detailLoading: false,
             detailError: "",
           });
@@ -291,6 +300,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
           detailLoading: Boolean(selected),
           detailError: "",
           data: { ...overview, selected_reason: selected },
+          overviewScope,
         });
       }
       const selected =
@@ -301,6 +311,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
           loading: false,
           error: "",
           data: overview,
+          overviewScope,
           detailLoading: false,
           detailError: "",
         });
@@ -319,6 +330,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
           detailLoading: false,
           detailError: "",
           data: { ...overview, ...detail, selected_reason: selected },
+          overviewScope,
         });
       }
     } catch (error) {

@@ -147,7 +147,7 @@
  *
  * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultRecordResponse} DashboardRecord
  * @typedef {DashboardInsights | DashboardSource[]} DashboardContentData
- * @typedef {{loading: boolean, error: string, data: DashboardContentData | null, detailLoading: boolean, detailError: string}} DashboardContentState
+ * @typedef {{loading: boolean, error: string, data: DashboardContentData | null, overviewScope: string, detailLoading: boolean, detailError: string}} DashboardContentState
  * @typedef {{loading: boolean, error: string, items: InsightReport[]}} DashboardReportState
  * @typedef {{issueId: string, loading: boolean, error: string}} DashboardDecisionState
  * @typedef {{modelId: string, effort: string}} InsightGenerationForm

@@ -16,7 +16,7 @@ import { analysisContextTerms } from "./analysisContextPresentation";
 /** @typedef {import("./analysisDashboardContracts").DashboardRoute} DashboardRoute */
 /** @typedef {import("./analysisDashboardContracts").InsightDateRange} InsightDateRange */
 /** @typedef {import("./analysisDashboardContracts").InsightFilterOptions} InsightFilterOptions */
-/** @typedef {{route: DashboardRoute, data: DashboardInsights, dateRange: InsightDateRange, options: InsightFilterOptions, includedCount: number, pendingCount: number, statusCounts: Record<string, number> | null, loading: boolean, analysisContext: string, onUpdateFilters: (changes: Partial<DashboardRoute>) => void}} ReturnReasonInsightSummaryProps */
+/** @typedef {{route: DashboardRoute, data: DashboardInsights, dateRange: InsightDateRange, options: InsightFilterOptions, includedCount: number, pendingCount: number, statusCounts: Record<string, number> | null, analysisContext: string, onUpdateFilters: (changes: Partial<DashboardRoute>) => void}} ReturnReasonInsightSummaryProps */
 
 /** @param {ReturnReasonInsightSummaryProps} props */
 export function ReturnReasonInsightSummary({
@@ -27,7 +27,6 @@ export function ReturnReasonInsightSummary({
   includedCount,
   pendingCount,
   statusCounts,
-  loading,
   analysisContext,
   onUpdateFilters,
 }) {
@@ -44,7 +43,6 @@ export function ReturnReasonInsightSummary({
             <input
               aria-label="开始日期"
               type="date"
-              disabled={loading}
               value={route.dateFrom || dateRange.date_from || ""}
               min={dateRange.date_from || undefined}
               max={route.dateTo || dateRange.date_to || undefined}
@@ -56,7 +54,6 @@ export function ReturnReasonInsightSummary({
             <input
               aria-label="结束日期"
               type="date"
-              disabled={loading}
               value={route.dateTo || dateRange.date_to || ""}
               min={route.dateFrom || dateRange.date_from || undefined}
               max={dateRange.date_to || undefined}
@@ -71,7 +68,6 @@ export function ReturnReasonInsightSummary({
           value={route.listing}
           values={options.listings}
           allLabel="全部 Listing"
-          disabled={loading}
           onChange={(listing) =>
             onUpdateFilters({
               listing,
@@ -86,7 +82,6 @@ export function ReturnReasonInsightSummary({
           value={route.productName}
           values={options.product_names}
           allLabel="全部产品"
-          disabled={loading}
           onChange={(productName) =>
             onUpdateFilters({ productName, productSku: "", problem: "" })
           }
@@ -96,7 +91,6 @@ export function ReturnReasonInsightSummary({
           value={route.productSku}
           values={options.product_skus}
           allLabel="全部 SKU"
-          disabled={loading}
           onChange={(productSku) => onUpdateFilters({ productSku, problem: "" })}
         />
       </section>
@@ -151,16 +145,12 @@ export function ReturnReasonInsightSummary({
   );
 }
 
-/** @param {{label: string, value: string, values?: string[], allLabel: string, disabled: boolean, onChange: (value: string) => void}} props */
-function InsightSelect({ label, value, values, allLabel, disabled, onChange }) {
+/** @param {{label: string, value: string, values?: string[], allLabel: string, onChange: (value: string) => void}} props */
+function InsightSelect({ label, value, values, allLabel, onChange }) {
   return (
     <label className="return-insight-select">
       <span>{label}</span>
-      <select
-        value={value}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
-      >
+      <select value={value} onChange={(event) => onChange(event.target.value)}>
         <option value="">{allLabel}</option>
         {filterOptions(values).map((item) => (
           <option key={item} value={item}>

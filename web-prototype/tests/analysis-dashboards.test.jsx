@@ -353,8 +353,13 @@ test("筛选更新时明确标记旧结果并在失败后保留结果", async ()
 
   const region = screen.getByRole("region", { name: "语义洞察结果" });
   expect(region).toHaveAttribute("aria-busy", "true");
-  expect(screen.getByRole("status")).toHaveTextContent("正在更新筛选结果");
-  expect(screen.getByRole("combobox", { name: "Listing" })).toBeDisabled();
+  expect(screen.getByRole("status")).toHaveTextContent("当前显示上一次结果");
+  expect(screen.getByRole("combobox", { name: "Listing" })).toBeEnabled();
+  await user.selectOptions(screen.getByRole("combobox", { name: "Listing" }), "L002");
+  expect(props.updateRoute).toHaveBeenCalledWith(
+    expect.objectContaining({ listing: "L002", recordPage: 1 }),
+    { replace: true },
+  );
 
   view.rerender(<ReturnReasonInsights {...props} loading={false} error="请求超时" />);
   expect(region).toHaveAttribute("aria-busy", "false");
@@ -794,6 +799,94 @@ test("切换具体原因仅请求明细，保留总览并显示局部加载状�
   await waitFor(() =>
     expect(screen.queryByText("正在加载原因详情…")).not.toBeInTheDocument(),
   );
+});
+
+test("连续调整筛选时保留旧结果，并只应用最后一次请求", async () => {
+  const user = userEvent.setup();
+  /** @type {(value: unknown) => void} */
+  let resolveSecond;
+  /** @type {(value: unknown) => void} */
+  let resolveThird;
+  const insights = (count) => ({
+    summary: { record_count: count },
+    date_range: {},
+    filter_options: { listings: ["L001", "L002", "L003"] },
+    category_groups: [],
+    reasons: [],
+  });
+  dashboardApiMock.analysisDashboardInsights.mockImplementation(
+    (_dashboardId, _versionId, filters) => {
+      if (filters.listing === "L002") {
+        return new Promise((resolve) => (resolveSecond = resolve));
+      }
+      if (filters.listing === "L003") {
+        return new Promise((resolve) => (resolveThird = resolve));
+      }
+      return Promise.resolve(insights(10));
+    },
+  );
+  window.location.hash =
+    "#analysis-dashboards?dashboard=dashboard-default&version=dashboard-version-default";
+  const view = render(<DashboardHarness />);
+  expect(await screen.findByText("10 条")).toBeVisible();
+
+  await user.selectOptions(screen.getByRole("combobox", { name: "Listing" }), "L002");
+  await waitFor(() => expect(resolveSecond).toBeTypeOf("function"));
+  expect(screen.getByRole("status")).toHaveTextContent("当前显示上一次结果");
+  expect(screen.getByText("10 条")).toBeVisible();
+  expect(screen.getByRole("combobox", { name: "Listing" })).toBeEnabled();
+  expect(view.container.querySelector(".dashboard-detail-loading-body")).toBeNull();
+
+  await user.selectOptions(screen.getByRole("combobox", { name: "Listing" }), "L003");
+  await waitFor(() => expect(resolveThird).toBeTypeOf("function"));
+  await act(async () => resolveThird(insights(3)));
+  expect(await screen.findByText("3 条")).toBeVisible();
+  expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  await act(async () => resolveSecond(insights(5)));
+  expect(screen.getByText("3 条")).toBeVisible();
+});
+
+test("筛选失败保留旧结果并可重试，切换版本不混用旧结果", async () => {
+  const user = userEvent.setup();
+  /** @type {(value: unknown) => void} */
+  let resolveNewVersion;
+  const insights = (count) => ({
+    summary: { record_count: count },
+    date_range: {},
+    filter_options: { listings: ["L001", "L002"] },
+    category_groups: [],
+    reasons: [],
+  });
+  let secondAttempts = 0;
+  dashboardApiMock.analysisDashboardInsights.mockImplementation(
+    (_dashboardId, versionId, filters) => {
+      if (versionId === "dashboard-version-2") {
+        return new Promise((resolve) => (resolveNewVersion = resolve));
+      }
+      if (filters.listing === "L002" && secondAttempts++ === 0) {
+        return Promise.reject(new Error("请求超时"));
+      }
+      return Promise.resolve(insights(filters.listing === "L002" ? 5 : 10));
+    },
+  );
+  window.location.hash =
+    "#analysis-dashboards?dashboard=dashboard-default&version=dashboard-version-default";
+  const view = render(<DashboardHarness />);
+  expect(await screen.findByText("10 条")).toBeVisible();
+
+  await user.selectOptions(screen.getByRole("combobox", { name: "Listing" }), "L002");
+  expect(await screen.findByRole("alert")).toHaveTextContent("当前显示上一次结果");
+  expect(screen.getByText("10 条")).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "重试" }));
+  expect(await screen.findByText("5 条")).toBeVisible();
+
+  window.location.hash =
+    "#analysis-dashboards?dashboard=dashboard-default&version=dashboard-version-2";
+  await waitFor(() => expect(resolveNewVersion).toBeTypeOf("function"));
+  expect(view.container.querySelector(".dashboard-detail-loading-body")).toBeTruthy();
+  expect(screen.queryByText("5 条")).not.toBeInTheDocument();
+  await act(async () => resolveNewVersion(insights(2)));
+  expect(await screen.findByText("2 条")).toBeVisible();
 });
 
 test("搜索条件只在点击筛选后提交并重置到第一页", async () => {
