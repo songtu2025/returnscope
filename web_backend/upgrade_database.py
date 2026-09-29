@@ -53,10 +53,20 @@ def main() -> None:
     parser.add_argument(
         "--app-stopped", action="store_true", help="确认应用和定时备份服务已停止"
     )
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--check-only",
+        action="store_true",
+        help="只读检查运行数据库是否可供当前版本启动",
+    )
+    mode.add_argument(
         "--initialize-empty", action="store_true", help="仅供全新部署初始化空数据库"
     )
     args = parser.parse_args()
+    if args.check_only:
+        Database(Settings.from_env().database_path).validate_production_schema()
+        print("数据库结构检查通过")
+        return
     if not args.app_stopped:
         parser.error("升级前必须停止应用和定时备份服务，并传入 --app-stopped")
     settings = Settings.from_env()

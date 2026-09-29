@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import sys
 from pathlib import Path
 
 import pytest
@@ -17,7 +18,13 @@ from web_backend.database_migrations import (
 )
 from web_backend.migrate_result_source_origin import migrate_result_source_origin
 from web_backend.settings import Settings
-from web_backend.upgrade_database import initialize_empty_database, upgrade_database
+from web_backend.upgrade_database import (
+    initialize_empty_database,
+    upgrade_database,
+)
+from web_backend.upgrade_database import (
+    main as upgrade_database_main,
+)
 
 
 def _settings(tmp_path: Path) -> Settings:
@@ -157,6 +164,27 @@ def test_production_startup_rejects_missing_database_and_index(
     assert database.path.read_bytes() == before
 
 
+def test_upgrade_check_only_reads_database_without_backup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = _settings(tmp_path)
+    database = Database(settings.database_path)
+    database.initialize()
+    monkeypatch.setattr(Settings, "from_env", classmethod(lambda cls: settings))
+    monkeypatch.setattr(sys, "argv", ["upgrade_database", "--check-only"])
+
+    before = settings.database_path.read_bytes()
+    upgrade_database_main()
+    assert settings.database_path.read_bytes() == before
+    assert not (tmp_path / "backups").exists()
+
+    with database.connect() as connection:
+        connection.execute("DROP INDEX idx_task_segments_status_order")
+    with pytest.raises(RuntimeError, match="缺少索引"):
+        upgrade_database_main()
+    assert not (tmp_path / "backups").exists()
+
+
 def test_empty_production_database_requires_explicit_initialization(
     tmp_path: Path,
 ) -> None:
@@ -189,11 +217,11 @@ def test_offline_upgrade_restores_missing_schema_and_can_rollback(
 
     backup_path = upgrade_database(settings, app_stopped=True)
     assert backup_path.is_file()
-    database.validate_production_schema()
+    database.initialize(production=True)
 
     restore_backup(settings, backup_path)
     with pytest.raises(RuntimeError, match="缺少索引"):
-        database.validate_production_schema()
+        database.initialize(production=True)
 
 
 def test_offline_upgrade_failure_keeps_verified_backup_for_rollback(

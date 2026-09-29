@@ -148,22 +148,31 @@ def check_release(commit: str) -> None:
         check_container(service, expected_image_id, tag)
 
 
-def deploy(commit: str) -> None:
-    env_lines()
-    reference = f"{IMAGE_NAME}:{commit}"
-    print(f"构建提交 {commit} 的镜像", flush=True)
-    run_command(
-        "docker",
-        "build",
-        "--label",
-        f"{REVISION_LABEL}={commit}",
-        "-t",
-        reference,
-        ".",
-    )
-    image_id(commit)
-    write_tag(commit)
-    print("更新 app 和 backup 容器", flush=True)
+def check_candidate_database(commit: str) -> None:
+    """用候选镜像只读检查现有数据库，不启动依赖容器。"""
+    try:
+        run_command(
+            "docker",
+            "compose",
+            *COMPOSE_FILES,
+            "run",
+            "--rm",
+            "--no-deps",
+            "--entrypoint",
+            "python",
+            "backup",
+            "-m",
+            "web_backend.upgrade_database",
+            "--check-only",
+            tag=commit,
+        )
+    except RuntimeError as error:
+        raise RuntimeError(
+            "候选镜像数据库预检未通过；发布标签和现有容器未切换，请检查后停服升级"
+        ) from error
+
+
+def start_services(tag: str) -> None:
     run_command(
         "docker",
         "compose",
@@ -176,9 +185,45 @@ def deploy(commit: str) -> None:
         "120",
         "app",
         "backup",
-        tag=commit,
+        tag=tag,
     )
-    check_release(commit)
+
+
+def deploy(commit: str) -> None:
+    _content, _lines, tag_positions = env_lines()
+    previous_tag = (configured_tag() or None) if tag_positions else None
+    reference = f"{IMAGE_NAME}:{commit}"
+    print(f"构建提交 {commit} 的镜像", flush=True)
+    run_command(
+        "docker",
+        "build",
+        "--label",
+        f"{REVISION_LABEL}={commit}",
+        "-t",
+        reference,
+        ".",
+    )
+    image_id(commit)
+    check_candidate_database(commit)
+    write_tag(commit)
+    print("更新 app 和 backup 容器", flush=True)
+    try:
+        start_services(commit)
+        check_release(commit)
+    except (OSError, RuntimeError) as error:
+        if previous_tag is None:
+            raise RuntimeError("新版本启动失败，当前没有可恢复的旧版本") from error
+        if previous_tag == commit:
+            raise
+        write_tag(previous_tag)
+        try:
+            start_services(previous_tag)
+            check_release(previous_tag)
+        except (OSError, RuntimeError) as rollback_error:
+            raise RuntimeError(
+                "新版本启动失败，旧版本恢复也未通过检查，请立即核对容器状态"
+            ) from rollback_error
+        raise RuntimeError("新版本启动失败，已恢复旧版本") from error
 
 
 def main() -> int:
