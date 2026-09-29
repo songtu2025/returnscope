@@ -141,6 +141,17 @@ def _prepare_staging(source_archive: Path, staging: Path) -> None:
     _validate_staged_database(staging / "app.db")
 
 
+def verify_backup(archive_path: Path) -> None:
+    source_archive = archive_path.resolve()
+    if not source_archive.is_file():
+        raise ValueError("备份文件不存在")
+    with tempfile.TemporaryDirectory(
+        prefix=".backup-verify-",
+        dir=source_archive.parent,
+    ) as temporary:
+        _prepare_staging(source_archive, Path(temporary))
+
+
 def _move_current_state(context: _RestoreContext) -> None:
     if context.database_path.exists():
         context.old_database = (
@@ -257,6 +268,8 @@ def main() -> None:
     settings = Settings.from_env()
     parser = argparse.ArgumentParser(description="备份或恢复 Web 运行数据")
     subparsers = parser.add_subparsers(dest="command")
+    verify_parser = subparsers.add_parser("verify")
+    verify_parser.add_argument("archive", type=Path)
     restore_parser = subparsers.add_parser("restore")
     restore_parser.add_argument("archive", type=Path)
     restore_parser.add_argument(
@@ -265,6 +278,10 @@ def main() -> None:
         help="确认 Web 应用和备份容器已停止",
     )
     args = parser.parse_args()
+    if args.command == "verify":
+        verify_backup(args.archive)
+        print(f"备份验证通过：{args.archive}")
+        return
     if args.command == "restore":
         if not args.app_stopped:
             parser.error("恢复前必须停止应用，并传入 --app-stopped")

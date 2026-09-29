@@ -9,7 +9,12 @@ from pathlib import Path
 import pytest
 
 import web_backend.backup as backup_module
-from web_backend.backup import create_backup, prune_backups, restore_backup
+from web_backend.backup import (
+    create_backup,
+    prune_backups,
+    restore_backup,
+    verify_backup,
+)
 from web_backend.database import Database
 from web_backend.settings import Settings
 
@@ -106,6 +111,49 @@ def test_failed_backup_does_not_prune_existing_archives(
         == old_names
     )
     assert not list(backup_dir.glob("database-*.db"))
+
+
+def test_verify_command_keeps_runtime_unchanged(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    settings = _settings(tmp_path)
+    settings.ensure_directories()
+    database = Database(settings.database_path)
+    database.initialize()
+    upload = settings.data_dir / "uploads" / "sample.csv"
+    upload.write_text("sku,comment\n1,test\n", encoding="utf-8")
+    backup_dir = tmp_path / "backups"
+    backup = create_backup(settings, backup_dir)
+    database_before = settings.database_path.read_bytes()
+    monkeypatch.setattr(
+        backup_module.Settings, "from_env", classmethod(lambda cls: settings)
+    )
+    monkeypatch.setattr(sys, "argv", ["backup", "verify", str(backup)])
+
+    backup_module.main()
+
+    assert "备份验证通过" in capsys.readouterr().out
+    assert upload.read_text(encoding="utf-8") == "sku,comment\n1,test\n"
+    assert settings.database_path.read_bytes() == database_before
+    with database.connect() as connection:
+        assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    assert not list(backup_dir.glob(".backup-verify-*"))
+    assert list(backup_dir.glob("seekway-backup-*.zip")) == [backup]
+
+
+def test_verify_backup_rejects_corrupt_database_and_cleans_staging(
+    tmp_path: Path,
+) -> None:
+    backup = tmp_path / "invalid.zip"
+    with zipfile.ZipFile(backup, mode="w") as archive:
+        archive.writestr("app.db", b"not a sqlite database")
+
+    with pytest.raises(sqlite3.DatabaseError):
+        verify_backup(backup)
+
+    assert not list(tmp_path.glob(".backup-verify-*"))
 
 
 def test_backup_contains_database_and_immutable_files(
