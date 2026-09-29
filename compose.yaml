@@ -69,7 +69,6 @@ services:
       WEBAPP_DATA_DIR: /app/runtime
       WEBAPP_DATABASE_PATH: /app/runtime/app.db
       WEBAPP_BACKUP_DIR: /app/backups
-      WEBAPP_BACKUP_RETENTION_DAYS: ${WEBAPP_BACKUP_RETENTION_DAYS:-14}
     volumes:
       - app_data:/app/runtime
       - backup_data:/app/backups

@@ -7,11 +7,13 @@ import sqlite3
 import tempfile
 import zipfile
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from secrets import token_hex
 
 from web_backend.settings import RUNTIME_DIRECTORIES, Settings
+
+BACKUP_KEEP_COUNT = 3
 
 
 def create_backup(settings: Settings, backup_dir: Path | None = None) -> Path:
@@ -33,24 +35,33 @@ def create_backup(settings: Settings, backup_dir: Path | None = None) -> Path:
         destination.close()
         source.close()
 
-    with zipfile.ZipFile(
-        archive_path,
-        mode="w",
-        compression=zipfile.ZIP_DEFLATED,
-        compresslevel=6,
-    ) as archive:
-        archive.write(database_snapshot, "app.db")
-        for directory_name in RUNTIME_DIRECTORIES:
-            directory = settings.data_dir / directory_name
-            if not directory.exists():
-                continue
-            for path in directory.rglob("*"):
-                if path.is_file():
-                    archive.write(
-                        path,
-                        path.relative_to(settings.data_dir).as_posix(),
-                    )
-    database_snapshot.unlink(missing_ok=True)
+    try:
+        with zipfile.ZipFile(
+            archive_path,
+            mode="w",
+            compression=zipfile.ZIP_DEFLATED,
+            compresslevel=6,
+        ) as archive:
+            archive.write(database_snapshot, "app.db")
+            for directory_name in RUNTIME_DIRECTORIES:
+                directory = settings.data_dir / directory_name
+                if not directory.exists():
+                    continue
+                for path in directory.rglob("*"):
+                    if path.is_file():
+                        archive.write(
+                            path,
+                            path.relative_to(settings.data_dir).as_posix(),
+                        )
+        with zipfile.ZipFile(archive_path) as archive:
+            _validate_archive(archive)
+            if archive.testzip() is not None:
+                raise ValueError("备份文件校验失败")
+    except Exception:
+        archive_path.unlink(missing_ok=True)
+        raise
+    finally:
+        database_snapshot.unlink(missing_ok=True)
     return archive_path
 
 
@@ -227,17 +238,19 @@ def restore_backup(settings: Settings, archive_path: Path) -> Path:
     return safety_backup
 
 
-def remove_expired_backups(settings: Settings, retention_days: int) -> None:
-    cutoff = datetime.now(UTC) - timedelta(days=retention_days)
+def prune_backups(settings: Settings) -> None:
     backup_dir = Path(
         os.getenv("WEBAPP_BACKUP_DIR", settings.data_dir / "backups")
     ).resolve()
     if not backup_dir.exists():
         return
-    for path in backup_dir.glob("seekway-backup-*.zip"):
-        modified = datetime.fromtimestamp(path.stat().st_mtime, UTC)
-        if modified < cutoff:
-            path.unlink()
+    backups = sorted(
+        backup_dir.glob("seekway-backup-*.zip"),
+        key=lambda path: path.name,
+        reverse=True,
+    )
+    for path in backups[BACKUP_KEEP_COUNT:]:
+        path.unlink()
 
 
 def main() -> None:
@@ -258,9 +271,8 @@ def main() -> None:
         safety_backup = restore_backup(settings, args.archive)
         print(f"恢复完成；恢复前安全备份：{safety_backup}")
         return
-    retention_days = int(os.getenv("WEBAPP_BACKUP_RETENTION_DAYS", "14"))
     path = create_backup(settings)
-    remove_expired_backups(settings, retention_days)
+    prune_backups(settings)
     print(path)
 
 

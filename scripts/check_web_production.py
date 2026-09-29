@@ -74,7 +74,6 @@ def validate_environment(values: dict[str, str]) -> list[str]:
     integer_rules = (
         ("WEBAPP_SESSION_DAYS", 1),
         ("WEBAPP_TASK_WORKERS", 15),
-        ("WEBAPP_BACKUP_RETENTION_DAYS", 1),
     )
     for key, minimum in integer_rules:
         try:

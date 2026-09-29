@@ -20,7 +20,6 @@ def valid_environment() -> dict[str, str]:
         "WEBAPP_ENCRYPTION_KEY": Fernet.generate_key().decode("ascii"),
         "WEBAPP_SESSION_DAYS": "14",
         "WEBAPP_TASK_WORKERS": "15",
-        "WEBAPP_BACKUP_RETENTION_DAYS": "14",
     }
 
 

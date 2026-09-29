@@ -39,7 +39,6 @@ def main() -> None:
         "WEBAPP_ENCRYPTION_KEY": encryption_key,
         "WEBAPP_SESSION_DAYS": "14",
         "WEBAPP_TASK_WORKERS": "15",
-        "WEBAPP_BACKUP_RETENTION_DAYS": "14",
     }
     output.write_text(
         "\n".join(f"{key}={value}" for key, value in values.items()) + "\n",

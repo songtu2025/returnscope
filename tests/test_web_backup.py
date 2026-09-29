@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import shutil
 import sqlite3
+import sys
 import zipfile
 from pathlib import Path
 
 import pytest
 
-from web_backend.backup import create_backup, restore_backup
+import web_backend.backup as backup_module
+from web_backend.backup import create_backup, prune_backups, restore_backup
 from web_backend.database import Database
 from web_backend.settings import Settings
 
@@ -24,6 +26,86 @@ def _settings(tmp_path: Path) -> Settings:
         encryption_key="",
         secure_cookies=False,
     )
+
+
+def _prepare_scheduled_backup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[Path, list[str]]:
+    settings = _settings(tmp_path)
+    settings.ensure_directories()
+    Database(settings.database_path).initialize()
+    backup_dir = tmp_path / "backups"
+    backup_dir.mkdir()
+    monkeypatch.setenv("WEBAPP_BACKUP_DIR", str(backup_dir))
+    old_names = [
+        f"seekway-backup-202609{day:02d}T000000000000Z.zip" for day in range(1, 5)
+    ]
+    for name in old_names:
+        (backup_dir / name).write_bytes(b"archive")
+    monkeypatch.setattr(
+        backup_module.Settings, "from_env", classmethod(lambda cls: settings)
+    )
+    monkeypatch.setattr(sys, "argv", ["backup"])
+    return backup_dir, old_names
+
+
+@pytest.mark.parametrize("archive_count", [1, 3, 5])
+def test_prune_backups_keeps_latest_three(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    archive_count: int,
+) -> None:
+    backup_dir = tmp_path / "backups"
+    backup_dir.mkdir()
+    monkeypatch.setenv("WEBAPP_BACKUP_DIR", str(backup_dir))
+    names = [
+        f"seekway-backup-202609{day:02d}T000000000000Z.zip"
+        for day in range(1, archive_count + 1)
+    ]
+    for name in names:
+        (backup_dir / name).write_bytes(b"archive")
+    (backup_dir / "manual-backup.zip").write_bytes(b"manual")
+
+    prune_backups(_settings(tmp_path))
+
+    assert (
+        sorted(path.name for path in backup_dir.glob("seekway-backup-*.zip"))
+        == names[-3:]
+    )
+    assert (backup_dir / "manual-backup.zip").exists()
+
+
+def test_scheduled_backup_prunes_after_valid_archive(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backup_dir, old_names = _prepare_scheduled_backup(tmp_path, monkeypatch)
+
+    backup_module.main()
+
+    remaining = sorted(path.name for path in backup_dir.glob("seekway-backup-*.zip"))
+    assert len(remaining) == 3
+    assert remaining[:2] == old_names[-2:]
+    with zipfile.ZipFile(backup_dir / remaining[-1]) as archive:
+        assert archive.testzip() is None
+
+
+def test_failed_backup_does_not_prune_existing_archives(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backup_dir, old_names = _prepare_scheduled_backup(tmp_path, monkeypatch)
+    monkeypatch.setattr(backup_module.zipfile.ZipFile, "testzip", lambda self: "app.db")
+
+    with pytest.raises(ValueError, match="备份文件校验失败"):
+        backup_module.main()
+
+    assert (
+        sorted(path.name for path in backup_dir.glob("seekway-backup-*.zip"))
+        == old_names
+    )
+    assert not list(backup_dir.glob("database-*.db"))
 
 
 def test_backup_contains_database_and_immutable_files(
