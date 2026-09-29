@@ -10,13 +10,15 @@ import { commentStatusCounts, orderGroups } from "./returnReasonInsightPresentat
 /** @typedef {import("./analysisDashboardContracts").DashboardRecord} DashboardRecord */
 /** @typedef {import("./analysisDashboardContracts").DashboardRoute} DashboardRoute */
 /** @typedef {import("./analysisDashboardContracts").UpdateDashboardRoute} UpdateDashboardRoute */
-/** @param {{route: DashboardRoute, updateRoute: UpdateDashboardRoute, data: DashboardInsights, loading: boolean, error?: string, analysisContext: string, onRetry: () => void | Promise<void>, onEvidence: (record: DashboardRecord, trigger: HTMLElement | null) => void}} props */
+/** @param {{route: DashboardRoute, updateRoute: UpdateDashboardRoute, data: DashboardInsights, loading: boolean, error?: string, detailLoading?: boolean, detailError?: string, analysisContext: string, onRetry: () => void | Promise<void>, onEvidence: (record: DashboardRecord, trigger: HTMLElement | null) => void}} props */
 export function ReturnReasonInsights({
   route,
   updateRoute: replaceRoute,
   data,
   loading,
   error,
+  detailLoading = false,
+  detailError = "",
   analysisContext,
   onRetry,
   onEvidence,
@@ -197,6 +199,9 @@ export function ReturnReasonInsights({
             evidencePage={evidencePageNumber}
             evidenceLoading={evidenceLoading}
             evidenceError={currentEvidencePage?.error || ""}
+            detailLoading={detailLoading}
+            detailError={detailError}
+            onDetailRetry={onRetry}
             onEvidencePage={(recordPage) => updateRoute({ recordPage })}
             onEvidenceRetry={() => setEvidenceRetry((value) => value + 1)}
             onUpdateRoute={updateRoute}

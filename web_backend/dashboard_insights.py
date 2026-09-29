@@ -14,6 +14,7 @@ from web_backend.dashboard_insight_details import (
 from web_backend.dashboard_insight_overview import (
     InsightQueryScope,
     collect_insight_overview,
+    collect_reason_context,
 )
 from web_backend.dashboard_plan import comment_summary_metrics
 from web_backend.dashboard_support import (
@@ -204,7 +205,11 @@ def build_insights(
     dashboard_id: str,
     version_id: str,
     options: InsightOptions,
+    *,
+    part: str = "full",
 ) -> dict[str, Any]:
+    if part not in {"full", "overview", "reason"}:
+        raise ValueError("不支持的洞察数据部分")
     with database.connect() as connection:
         # 仅本次洞察查询扩大页面缓存，连接关闭后释放。
         connection.execute(f"PRAGMA cache_size = -{INSIGHT_PAGE_CACHE_KIB}")
@@ -223,21 +228,36 @@ def build_insights(
         scope = prepared.scope
         taxonomy = prepared.taxonomy
         summary = dict(context["summary"])
-        summary.update(
-            comment_summary_metrics(
-                connection,
-                prepared.ungrouped_where,
-                prepared.ungrouped_params,
-                prepared.comment_where,
-                prepared.comment_params,
-                feedback_groups=context["counting_basis"] == "feedback_group",
+        if part != "reason":
+            if any(
+                (
+                    options.listing,
+                    options.product_name,
+                    options.product_sku,
+                    options.date_from,
+                    options.date_to,
+                )
+            ) or not {
+                "comment_count",
+                "total_comment_count",
+                "pending_review_comment_count",
+                "comment_statuses",
+            }.issubset(summary):
+                summary.update(
+                    comment_summary_metrics(
+                        connection,
+                        prepared.ungrouped_where,
+                        prepared.ungrouped_params,
+                        prepared.comment_where,
+                        prepared.comment_params,
+                        feedback_groups=context["counting_basis"] == "feedback_group",
+                    )
+                )
+            hierarchy_problems = (
+                hierarchy_counts(connection, taxonomy, scope.where_sql, scope.params)
+                if taxonomy and taxonomy.structure_version == 2
+                else []
             )
-        )
-        hierarchy_problems = (
-            hierarchy_counts(connection, taxonomy, scope.where_sql, scope.params)
-            if taxonomy and taxonomy.structure_version == 2
-            else []
-        )
         reuse_option_records = (
             scope.option_where == scope.where_sql
             and scope.option_params == scope.params
@@ -258,9 +278,23 @@ def build_insights(
             params=[],
             records_table="dashboard_insight_records",
         )
+        if part == "reason":
+            reason_context = collect_reason_context(scope)
+            reason_selected = reason_context["selected_reason"]
+            reason_details = collect_reason_details(
+                scope, reason_selected, reason_context, taxonomy
+            )
+            return {
+                "selected_reason": reason_selected,
+                **_reason_detail_payload(reason_details, reason_selected),
+            }
         overview = collect_insight_overview(scope)
         selected_reason = overview["selected_reason"]
-        details = collect_reason_details(scope, selected_reason, overview, taxonomy)
+        details = (
+            collect_reason_details(scope, selected_reason, overview, taxonomy)
+            if part == "full"
+            else None
+        )
 
         option_table = (
             scope.records_table
@@ -330,7 +364,7 @@ def build_insights(
         "reasons": reasons,
         "product_reason_matrix": product_reason_matrix,
         "selected_reason": selected_reason,
-        **_reason_detail_payload(details, selected_reason),
+        **(_reason_detail_payload(details, selected_reason) if details else {}),
     }
 
 

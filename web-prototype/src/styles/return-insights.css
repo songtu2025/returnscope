@@ -925,6 +925,21 @@
   background: #fff;
 }
 
+.return-diagnostic-pending {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 640px;
+  color: #52675b;
+}
+
+.return-insight-diagnostic.is-detail-pending > .return-diagnostic-definition,
+.return-insight-diagnostic.is-detail-pending > .return-diagnostic-overview,
+.return-insight-diagnostic.is-detail-pending > .return-insight-card {
+  display: none;
+}
+
 .return-diagnostic-header {
   gap: 14px;
   padding-bottom: 11px;

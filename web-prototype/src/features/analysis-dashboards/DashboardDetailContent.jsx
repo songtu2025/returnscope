@@ -101,6 +101,8 @@ export function DashboardDetailContent({
           }
           loading={content.loading}
           error={content.error}
+          detailLoading={content.detailLoading}
+          detailError={content.detailError}
           onRetry={onReloadContent}
           onEvidence={onEvidence}
           analysisContext={analysisContext}

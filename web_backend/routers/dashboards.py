@@ -144,6 +144,7 @@ def create_dashboard_router(
         product_sku: str | None = Query(default=None),
         date_from: str | None = Query(default=None),
         date_to: str | None = Query(default=None),
+        part: str = Query(default="full", pattern="^(full|overview|reason)$"),
     ) -> dict[str, Any]:
         try:
             return dashboard_service.insights(
@@ -156,6 +157,7 @@ def create_dashboard_router(
                 product_sku=product_sku,
                 date_from=date_from,
                 date_to=date_to,
+                part=part,
             )
         except DashboardNotFound as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc

@@ -27,7 +27,7 @@ import { analysisContextTerms } from "./analysisContextPresentation";
 /** @typedef {import("./analysisDashboardContracts").InsightProduct} InsightProduct */
 /** @typedef {import("./analysisDashboardContracts").InsightReason} InsightReason */
 /** @typedef {import("./analysisDashboardContracts").InsightSemanticProfile} InsightSemanticProfile */
-/** @typedef {{data: DashboardInsights, selected?: InsightReason, products: InsightProduct[], coReasons: InsightReason[], semanticProfile: InsightSemanticProfile, evidence: InsightEvidence, evidencePage: number, evidenceLoading: boolean, evidenceError: string, analysisContext: string, onUpdateRoute: (changes: Partial<DashboardRoute>) => void, onEvidence: (record: DashboardRecord, trigger: HTMLElement | null) => void, onEvidencePage: (page: number) => void, onEvidenceRetry: () => void}} ReturnReasonInsightDiagnosticProps */
+/** @typedef {{data: DashboardInsights, selected?: InsightReason, products: InsightProduct[], coReasons: InsightReason[], semanticProfile: InsightSemanticProfile, evidence: InsightEvidence, evidencePage: number, evidenceLoading: boolean, evidenceError: string, detailLoading?: boolean, detailError?: string, onDetailRetry?: () => void | Promise<void>, analysisContext: string, onUpdateRoute: (changes: Partial<DashboardRoute>) => void, onEvidence: (record: DashboardRecord, trigger: HTMLElement | null) => void, onEvidencePage: (page: number) => void, onEvidenceRetry: () => void}} ReturnReasonInsightDiagnosticProps */
 
 /** @param {ReturnReasonInsightDiagnosticProps} props */
 export function ReturnReasonInsightDiagnostic({
@@ -40,6 +40,9 @@ export function ReturnReasonInsightDiagnostic({
   evidencePage,
   evidenceLoading,
   evidenceError,
+  detailLoading = false,
+  detailError = "",
+  onDetailRetry,
   analysisContext,
   onUpdateRoute,
   onEvidence,
@@ -52,7 +55,10 @@ export function ReturnReasonInsightDiagnostic({
   const evidencePageCount = Math.max(1, Math.ceil(evidence.total / evidencePageSize));
 
   return (
-    <main className="return-insight-diagnostic">
+    <main
+      className={`return-insight-diagnostic${detailLoading || detailError ? " is-detail-pending" : ""}`}
+      aria-busy={detailLoading}
+    >
       {selected ? (
         <>
           <header className="return-diagnostic-header">
@@ -90,6 +96,22 @@ export function ReturnReasonInsightDiagnostic({
                 统计包含该问题标签的去重评论；核心原因率表示该标签进入评论的
                 primary_label_codes，不等同于唯一责任归因。
               </span>
+            </div>
+          )}
+
+          {(detailLoading || detailError) && (
+            <div
+              className="return-diagnostic-pending"
+              role={detailError ? "alert" : "status"}
+            >
+              <span>
+                {detailError ? `原因详情加载失败：${detailError}` : "正在加载原因详情…"}
+              </span>
+              {detailError && onDetailRetry && (
+                <button type="button" className="text-button" onClick={onDetailRetry}>
+                  重试
+                </button>
+              )}
             </div>
           )}
 

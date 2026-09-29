@@ -53,7 +53,7 @@ class DashboardService:
         self.database = database
         self._insights_lock = Lock()
         self._inflight_insights: dict[
-            tuple[str, str, InsightOptions], Future[dict[str, Any]]
+            tuple[str, str, InsightOptions, str], Future[dict[str, Any]]
         ] = {}
 
     def preflight(
@@ -324,6 +324,7 @@ class DashboardService:
         date_from: str | None = None,
         date_to: str | None = None,
         report_mode: bool = False,
+        part: str = "full",
     ) -> dict[str, Any]:
         options = InsightOptions(
             problem=problem,
@@ -335,7 +336,7 @@ class DashboardService:
             date_to=date_to,
             report_mode=report_mode,
         )
-        key = (dashboard_id, version_id, options)
+        key = (dashboard_id, version_id, options, part)
         with self._insights_lock:
             future = self._inflight_insights.get(key)
             leader = future is None
@@ -344,9 +345,15 @@ class DashboardService:
                 self._inflight_insights[key] = future
         if leader:
             try:
-                future.set_result(
-                    build_insights(self.database, dashboard_id, version_id, options)
-                )
+                if part == "full":
+                    result = build_insights(
+                        self.database, dashboard_id, version_id, options
+                    )
+                else:
+                    result = build_insights(
+                        self.database, dashboard_id, version_id, options, part=part
+                    )
+                future.set_result(result)
             except BaseException as exc:
                 future.set_exception(exc)
             finally:

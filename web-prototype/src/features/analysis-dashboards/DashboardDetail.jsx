@@ -34,7 +34,6 @@ import {
 /** @typedef {import("./analysisDashboardContracts").ReportDecision} ReportDecision */
 /** @typedef {import("./analysisDashboardContracts").InsightReport} InsightReport */
 /** @typedef {import("./analysisDashboardContracts").InsightModel} InsightModel */
-/** @typedef {import("./analysisDashboardContracts").DashboardContentData} DashboardContentData */
 /** @typedef {import("./analysisDashboardContracts").DashboardContentState} DashboardContentState */
 /** @typedef {import("./analysisDashboardContracts").DashboardRecord} DashboardRecord */
 /** @typedef {import("./analysisDashboardContracts").DashboardRoute} DashboardDetailRoute */
@@ -80,6 +79,8 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
       loading: true,
       error: "",
       data: null,
+      detailLoading: false,
+      detailError: "",
     }),
   );
   const [reports, setReports] = useState(
@@ -119,6 +120,8 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
   const contentGenerationRef = useRef(0);
   /** @type {import("react").RefObject<AbortController | null>} */
   const contentControllerRef = useRef(null);
+  /** @type {import("react").RefObject<{key: string, data: import("./analysisDashboardContracts").DashboardInsights | null}>} */
+  const overviewCacheRef = useRef({ key: "", data: null });
   const reportGenerationRef = useRef(0);
   /** @type {import("react").RefObject<AbortController | null>} */
   const reportControllerRef = useRef(null);
@@ -204,7 +207,13 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
   );
   const loadContent = useCallback(async () => {
     if (!route.versionId || route.tab === "history" || route.tab === "report") {
-      setContent({ loading: false, error: "", data: null });
+      setContent({
+        loading: false,
+        error: "",
+        data: null,
+        detailLoading: false,
+        detailError: "",
+      });
       return;
     }
     const generation = contentGenerationRef.current + 1;
@@ -212,41 +221,116 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
     contentControllerRef.current?.abort();
     const controller = new AbortController();
     contentControllerRef.current = controller;
-    setContent((current) => ({ ...current, loading: true, error: "" }));
+    const scopeKey = JSON.stringify([
+      route.dashboardId,
+      route.versionId,
+      filters.label_group,
+      filters.listing,
+      filters.product_name,
+      filters.product_sku,
+      filters.date_from,
+      filters.date_to,
+    ]);
+    const cachedOverview =
+      overviewCacheRef.current.key === scopeKey ? overviewCacheRef.current.data : null;
+    if (route.tab === "overview" && cachedOverview) {
+      const selected =
+        cachedOverview.reasons?.find((reason) => reason.value === filters.problem) ??
+        cachedOverview.reasons?.[0];
+      setContent({
+        loading: false,
+        error: "",
+        detailLoading: Boolean(selected),
+        detailError: "",
+        data: { ...cachedOverview, selected_reason: selected },
+      });
+    } else {
+      setContent({
+        loading: true,
+        error: "",
+        data: null,
+        detailLoading: false,
+        detailError: "",
+      });
+    }
     try {
-      /** @type {DashboardContentData} */
-      let data;
       if (route.tab === "source") {
-        data = /** @type {DashboardContentData} */ (
-          await dashboardApi.analysisDashboardSources(
-            route.dashboardId,
-            route.versionId,
-            { signal: controller.signal },
-          )
+        const data = await dashboardApi.analysisDashboardSources(
+          route.dashboardId,
+          route.versionId,
+          { signal: controller.signal },
         );
-      } else {
-        data = /** @type {DashboardContentData} */ (
-          await dashboardApi.analysisDashboardInsights(
-            route.dashboardId,
-            route.versionId,
-            filters,
-            { signal: controller.signal },
-          )
-        );
+        if (contentGenerationRef.current === generation) {
+          setContent({
+            loading: false,
+            error: "",
+            data,
+            detailLoading: false,
+            detailError: "",
+          });
+        }
+        return;
       }
+      let overview = cachedOverview;
+      if (!overview) {
+        overview = await dashboardApi.analysisDashboardInsights(
+          route.dashboardId,
+          route.versionId,
+          { ...filters, problem: "", part: "overview" },
+          { signal: controller.signal },
+        );
+        if (!overview) throw new Error("看板总览为空");
+        if (contentGenerationRef.current !== generation) return;
+        overviewCacheRef.current = { key: scopeKey, data: overview };
+        const selected =
+          overview.reasons?.find((reason) => reason.value === filters.problem) ??
+          overview.reasons?.[0];
+        setContent({
+          loading: false,
+          error: "",
+          detailLoading: Boolean(selected),
+          detailError: "",
+          data: { ...overview, selected_reason: selected },
+        });
+      }
+      const selected =
+        overview.reasons?.find((reason) => reason.value === filters.problem) ??
+        overview.reasons?.[0];
+      if (!selected) {
+        setContent({
+          loading: false,
+          error: "",
+          data: overview,
+          detailLoading: false,
+          detailError: "",
+        });
+        return;
+      }
+      const detail = await dashboardApi.analysisDashboardInsights(
+        route.dashboardId,
+        route.versionId,
+        { ...filters, problem: selected.value, part: "reason" },
+        { signal: controller.signal },
+      );
       if (contentGenerationRef.current === generation) {
-        setContent({ loading: false, error: "", data });
+        setContent({
+          loading: false,
+          error: "",
+          detailLoading: false,
+          detailError: "",
+          data: { ...overview, ...detail, selected_reason: selected },
+        });
       }
     } catch (error) {
       if (
         contentGenerationRef.current === generation &&
         errorName(error) !== "AbortError"
       ) {
-        setContent((current) => ({
-          ...current,
-          loading: false,
-          error: errorMessage(error),
-        }));
+        setContent((current) =>
+          current.detailLoading
+            ? { ...current, detailLoading: false, detailError: errorMessage(error) }
+            : { ...current, loading: false, error: errorMessage(error) },
+        );
       }
     }
   }, [filters, route.dashboardId, route.tab, route.versionId]);

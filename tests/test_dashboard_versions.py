@@ -732,13 +732,65 @@ def test_dashboard_insights_reuse_unchanged_feedback_scope(
             "SELECT r.result_version_id, u.classification_json" in sql
             for sql in statements
         )
-        == 1
+        == 0
     )
 
     statements.clear()
     filtered = service.insights(dashboard_id, version_id, product_name="不存在的产品")
     assert filtered["total_record_count"] == 0
     assert any("INSERT INTO dashboard_feedback_main" in sql for sql in statements)
+
+
+def test_dashboard_insights_parts_match_full_result(tmp_path: Path) -> None:
+    _, version, service = _ready_result(tmp_path)
+    _, dashboard = _create_dashboard(service, str(version["version_id"]))
+    dashboard_id = str(dashboard["id"])
+    version_id = str(dashboard["version"]["version_id"])
+    full = service.insights(dashboard_id, version_id)
+    overview = service.insights(dashboard_id, version_id, part="overview")
+    assert overview == {
+        key: value
+        for key, value in full.items()
+        if key
+        not in {
+            "trend",
+            "products",
+            "variants",
+            "co_reasons",
+            "semantic_profile",
+            "evidence",
+        }
+    }
+    for selected in full["reasons"][:2]:
+        selected_full = service.insights(
+            dashboard_id, version_id, problem=selected["value"]
+        )
+        detail = service.insights(
+            dashboard_id, version_id, problem=selected["value"], part="reason"
+        )
+        for key in (
+            "trend",
+            "products",
+            "variants",
+            "co_reasons",
+            "semantic_profile",
+            "evidence",
+        ):
+            assert detail[key] == selected_full[key]
+        assert detail["selected_reason"]["value"] == selected["value"]
+        assert "summary" not in detail
+    if full["reasons"]:
+        group = full["reasons"][0]["label_group"]
+        grouped = service.insights(dashboard_id, version_id, label_group=group)
+        grouped_detail = service.insights(
+            dashboard_id,
+            version_id,
+            label_group=group,
+            problem=grouped["selected_reason"]["value"],
+            part="reason",
+        )
+        assert grouped_detail["co_reasons"] == grouped["co_reasons"]
+        assert grouped_detail["products"] == grouped["products"]
 
 
 def test_filtered_insights_keep_full_options_and_scoped_evidence(

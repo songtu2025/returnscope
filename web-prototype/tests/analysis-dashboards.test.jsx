@@ -738,6 +738,64 @@ test("详情正文读取失败时保留页头和重试入口", async () => {
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
 
+test("切换具体原因仅请求明细，保留总览并显示局部加载状态", async () => {
+  const user = userEvent.setup();
+  const reasons = [
+    { value: "R1", label: "原因一", record_count: 8, percentage: 80 },
+    { value: "R2", label: "原因二", record_count: 2, percentage: 20 },
+  ];
+  /** @type {(value: unknown) => void} */
+  let resolveSecondReason;
+  dashboardApiMock.analysisDashboardInsights.mockImplementation(
+    (_dashboardId, _versionId, filters) => {
+      if (filters.part === "overview") {
+        return Promise.resolve({
+          summary: { record_count: 10 },
+          date_range: {},
+          filter_options: {},
+          category_groups: [],
+          reasons,
+          selected_reason: reasons[0],
+        });
+      }
+      if (filters.problem === "R2") {
+        return new Promise((resolve) => {
+          resolveSecondReason = resolve;
+        });
+      }
+      return Promise.resolve({
+        trend: [],
+        products: [],
+        co_reasons: [],
+        evidence: { items: [], total: 0 },
+      });
+    },
+  );
+  window.location.hash =
+    "#analysis-dashboards?dashboard=dashboard-default&version=dashboard-version-default";
+  render(<DashboardHarness />);
+  await screen.findByRole("button", { name: /原因二/ });
+  await user.click(screen.getByRole("button", { name: /原因二/ }));
+  expect(await screen.findByText("正在加载原因详情…")).toBeVisible();
+  expect(screen.getByText("有效反馈")).toBeVisible();
+  expect(
+    dashboardApiMock.analysisDashboardInsights.mock.calls.filter(
+      ([, , filters]) => filters.part === "overview",
+    ),
+  ).toHaveLength(1);
+  await act(async () =>
+    resolveSecondReason({
+      trend: [],
+      products: [],
+      co_reasons: [],
+      evidence: { items: [], total: 0 },
+    }),
+  );
+  await waitFor(() =>
+    expect(screen.queryByText("正在加载原因详情…")).not.toBeInTheDocument(),
+  );
+});
+
 test("搜索条件只在点击筛选后提交并重置到第一页", async () => {
   const user = userEvent.setup();
   window.location.hash = "#analysis-dashboards?q=旧关键词&page=3";

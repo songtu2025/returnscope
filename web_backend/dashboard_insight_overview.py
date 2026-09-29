@@ -221,6 +221,93 @@ def _label_catalog(
     return label_names, label_counts
 
 
+def _reason_rows(scope: InsightQueryScope) -> list[sqlite3.Row]:
+    where_sql = scope.where_sql
+    clean_group = scope.clean_group
+    report_mode = scope.report_mode
+    reason_group_filter = ""
+    reason_params = list(scope.params)
+    if clean_group:
+        reason_group_filter = (
+            " AND aligned_group(l.label_group, l.label_code, r.result_version_id) = ?"
+        )
+        reason_params.append(clean_group)
+    if report_mode:
+        reason_sql = f"""
+            SELECT l.label_code AS value,
+                   COALESCE(NULLIF(TRIM(l.label_name), ''), l.label_code)
+                       AS label,
+                   l.label_name AS raw_label_name,
+                   aligned_group(l.label_group, l.label_code, r.result_version_id)
+                       AS label_group,
+                   COUNT(r.id) AS record_count,
+                   NULL AS primary_record_count
+            FROM {scope.records_table} r
+            JOIN classification_unit_labels l
+              ON l.result_version_id = r.result_version_id
+             AND l.classification_key = r.classification_key
+             AND l.label_kind = 'problem'
+            WHERE {where_sql}{reason_group_filter}
+            GROUP BY l.label_code, l.label_name, label_group
+            ORDER BY record_count DESC, label COLLATE NOCASE ASC
+        """
+    else:
+        reason_sql = f"""
+        SELECT l.label_code AS value,
+               COALESCE(NULLIF(TRIM(l.label_name), ''), l.label_code) AS label,
+               l.label_name AS raw_label_name,
+               aligned_group(l.label_group, l.label_code, r.result_version_id) AS label_group,
+               COUNT(r.id) AS record_count,
+               SUM(CASE WHEN EXISTS (
+                   SELECT 1
+                   FROM classification_unit_labels primary_label
+                   WHERE primary_label.result_version_id = r.result_version_id
+                     AND primary_label.classification_key = r.classification_key
+                     AND primary_label.label_kind = 'primary'
+                     AND primary_label.label_code = l.label_code
+               ) THEN 1 ELSE 0 END) AS primary_record_count
+        FROM {scope.records_table} r
+        JOIN classification_unit_labels l
+          ON l.result_version_id = r.result_version_id
+         AND l.classification_key = r.classification_key
+         AND l.label_kind = 'problem'
+        JOIN classification_units u
+          ON u.result_version_id = r.result_version_id
+         AND u.classification_key = r.classification_key
+        WHERE {where_sql}{reason_group_filter}
+        GROUP BY l.label_code, l.label_name, label_group
+        ORDER BY record_count DESC, label COLLATE NOCASE ASC
+        """
+    return scope.connection.execute(reason_sql, tuple(reason_params)).fetchall()
+
+
+def collect_reason_context(scope: InsightQueryScope) -> dict[str, Any]:
+    total_records = int(
+        scope.connection.execute(
+            f"SELECT COUNT(*) FROM {scope.records_table} r WHERE {scope.where_sql}",
+            tuple(scope.params),
+        ).fetchone()[0]
+    )
+    reason_rows = _reason_rows(scope)
+    _, label_counts = _label_catalog(scope, reason_rows)
+    selected = next(
+        (row for row in reason_rows if row["value"] == scope.requested_problem),
+        reason_rows[0] if reason_rows else None,
+    )
+    return {
+        "total_records": total_records,
+        "label_counts": label_counts,
+        "selected_reason": (
+            {
+                "value": str(selected["value"]),
+                "record_count": int(selected["record_count"]),
+            }
+            if selected
+            else None
+        ),
+    }
+
+
 def collect_insight_overview(
     scope: InsightQueryScope, *, total_record_count: int | None = None
 ) -> dict[str, Any]:
@@ -229,7 +316,6 @@ def collect_insight_overview(
     params = scope.params
     option_where = scope.option_where
     option_params = scope.option_params
-    clean_group = scope.clean_group
     requested_problem = scope.requested_problem
     report_mode = scope.report_mode
 
@@ -286,63 +372,7 @@ def collect_insight_overview(
         """,
         tuple(params),
     ).fetchall()
-    reason_group_filter = ""
-    reason_params = list(params)
-    if clean_group:
-        reason_group_filter = (
-            " AND aligned_group(l.label_group, l.label_code, r.result_version_id) = ?"
-        )
-        reason_params.append(clean_group)
-    if report_mode:
-        reason_sql = f"""
-            SELECT l.label_code AS value,
-                   COALESCE(NULLIF(TRIM(l.label_name), ''), l.label_code)
-                       AS label,
-                   l.label_name AS raw_label_name,
-                   aligned_group(l.label_group, l.label_code, r.result_version_id)
-                       AS label_group,
-                   COUNT(r.id) AS record_count,
-                   NULL AS primary_record_count
-            FROM {scope.records_table} r
-            JOIN classification_unit_labels l
-              ON l.result_version_id = r.result_version_id
-             AND l.classification_key = r.classification_key
-             AND l.label_kind = 'problem'
-            WHERE {where_sql}{reason_group_filter}
-            GROUP BY l.label_code, l.label_name, label_group
-            ORDER BY record_count DESC, label COLLATE NOCASE ASC
-        """
-    else:
-        reason_sql = f"""
-        SELECT l.label_code AS value,
-               COALESCE(NULLIF(TRIM(l.label_name), ''), l.label_code) AS label,
-               l.label_name AS raw_label_name,
-               aligned_group(l.label_group, l.label_code, r.result_version_id) AS label_group,
-               COUNT(r.id) AS record_count,
-               SUM(CASE WHEN EXISTS (
-                   SELECT 1
-                   FROM classification_unit_labels primary_label
-                   WHERE primary_label.result_version_id = r.result_version_id
-                     AND primary_label.classification_key = r.classification_key
-                     AND primary_label.label_kind = 'primary'
-                     AND primary_label.label_code = l.label_code
-               ) THEN 1 ELSE 0 END) AS primary_record_count
-        FROM {scope.records_table} r
-        JOIN classification_unit_labels l
-          ON l.result_version_id = r.result_version_id
-         AND l.classification_key = r.classification_key
-         AND l.label_kind = 'problem'
-        JOIN classification_units u
-          ON u.result_version_id = r.result_version_id
-         AND u.classification_key = r.classification_key
-        WHERE {where_sql}{reason_group_filter}
-        GROUP BY l.label_code, l.label_name, label_group
-        ORDER BY record_count DESC, label COLLATE NOCASE ASC
-        """
-    reason_rows = connection.execute(
-        reason_sql,
-        tuple(reason_params),
-    ).fetchall()
+    reason_rows = _reason_rows(scope)
     label_names, label_counts = _label_catalog(scope, reason_rows)
     reasons = [
         {
