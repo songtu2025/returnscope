@@ -14,6 +14,7 @@ import web_backend.backup as backup_module
 from web_backend.backup import (
     BACKUP_INTERVAL_SECONDS,
     create_backup,
+    drill_restore,
     prune_backups,
     restore_backup,
     verify_backup,
@@ -226,6 +227,63 @@ def test_verify_backup_rejects_corrupt_database_and_cleans_staging(
         verify_backup(backup)
 
     assert not list(tmp_path.glob(".backup-verify-*"))
+
+
+def test_drill_command_restores_in_isolated_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    settings = _settings(tmp_path)
+    settings.ensure_directories()
+    database = Database(settings.database_path)
+    database.initialize()
+    with database.transaction(immediate=True) as connection:
+        connection.execute(
+            """
+            INSERT INTO users(id, email, display_name, password_hash, created_at)
+            VALUES ('user-1', 'user@example.com', '测试用户', 'hash', '2026-01-01')
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO sessions(id, user_id, token_hash, expires_at, created_at)
+            VALUES ('session-1', 'user-1', 'token', '2099-01-01', '2026-01-01')
+            """
+        )
+    upload = settings.data_dir / "uploads" / "sample.csv"
+    upload.write_text("sku,comment\n1,test\n", encoding="utf-8")
+    backup_dir = tmp_path / "backups"
+    backup = create_backup(settings, backup_dir)
+    archive_before = backup.read_bytes()
+    database_before = settings.database_path.read_bytes()
+    monkeypatch.setenv("WEBAPP_BACKUP_DIR", str(backup_dir))
+    monkeypatch.setattr(
+        backup_module.Settings, "from_env", classmethod(lambda cls: settings)
+    )
+    monkeypatch.setattr(sys, "argv", ["backup", "drill", str(backup)])
+
+    backup_module.main()
+
+    assert "恢复演练通过" in capsys.readouterr().out
+    assert backup.read_bytes() == archive_before
+    assert settings.database_path.read_bytes() == database_before
+    assert upload.read_text(encoding="utf-8") == "sku,comment\n1,test\n"
+    assert list(backup_dir.iterdir()) == [backup]
+
+
+def test_drill_failure_cleans_isolated_directory(tmp_path: Path) -> None:
+    backup_dir = tmp_path / "backups"
+    backup_dir.mkdir()
+    invalid_backup = backup_dir / "invalid.zip"
+    with zipfile.ZipFile(invalid_backup, mode="w") as archive:
+        archive.writestr("app.db", b"not a sqlite database")
+
+    with pytest.raises(sqlite3.DatabaseError):
+        drill_restore(_settings(tmp_path), invalid_backup)
+
+    assert list(backup_dir.iterdir()) == [invalid_backup]
+    assert not (tmp_path / "runtime").exists()
 
 
 def test_backup_contains_database_and_immutable_files(

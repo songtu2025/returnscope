@@ -6,7 +6,7 @@ import shutil
 import sqlite3
 import tempfile
 import zipfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from secrets import token_hex
@@ -226,13 +226,17 @@ def _replace_runtime_state(context: _RestoreContext) -> None:
         _cleanup_restored_state(context)
 
 
-def restore_backup(settings: Settings, archive_path: Path) -> Path:
+def restore_backup(
+    settings: Settings,
+    archive_path: Path,
+    safety_backup_dir: Path | None = None,
+) -> Path:
     data_root, database_path, source_archive = _resolve_restore_paths(
         settings,
         archive_path,
     )
 
-    safety_backup = create_backup(settings)
+    safety_backup = create_backup(settings, safety_backup_dir)
     restore_token = token_hex(6)
     with tempfile.TemporaryDirectory(
         prefix="restore-",
@@ -249,6 +253,46 @@ def restore_backup(settings: Settings, archive_path: Path) -> Path:
         )
         _replace_runtime_state(context)
     return safety_backup
+
+
+def drill_restore(settings: Settings, archive_path: Path) -> None:
+    source_archive = archive_path.resolve()
+    if not source_archive.is_file():
+        raise ValueError("备份文件不存在")
+    with tempfile.TemporaryDirectory(
+        prefix=".restore-drill-",
+        dir=source_archive.parent,
+    ) as temporary:
+        drill_root = Path(temporary)
+        drill_runtime = drill_root / "runtime"
+        drill_settings = replace(
+            settings,
+            data_dir=drill_runtime,
+            database_path=drill_runtime / "app.db",
+        )
+        drill_settings.ensure_directories()
+        sqlite3.connect(drill_settings.database_path).close()
+        restore_backup(drill_settings, source_archive, drill_root / "safety-backups")
+        _validate_staged_database(drill_settings.database_path)
+        connection = sqlite3.connect(drill_settings.database_path)
+        try:
+            sessions = connection.execute("SELECT COUNT(*) FROM sessions").fetchone()
+        finally:
+            connection.close()
+        if sessions != (0,):
+            raise ValueError("恢复演练后会话未清除")
+        with zipfile.ZipFile(source_archive) as archive:
+            for member in archive.infolist():
+                if member.is_dir() or member.filename == "app.db":
+                    continue
+                restored_file = drill_runtime.joinpath(
+                    *PurePosixPath(member.filename).parts
+                )
+                if (
+                    not restored_file.is_file()
+                    or restored_file.stat().st_size != member.file_size
+                ):
+                    raise ValueError("恢复演练后运行文件不完整")
 
 
 def prune_backups(settings: Settings) -> None:
@@ -283,6 +327,8 @@ def main() -> None:
     subparsers.add_parser("scheduled")
     verify_parser = subparsers.add_parser("verify")
     verify_parser.add_argument("archive", type=Path)
+    drill_parser = subparsers.add_parser("drill")
+    drill_parser.add_argument("archive", type=Path)
     restore_parser = subparsers.add_parser("restore")
     restore_parser.add_argument("archive", type=Path)
     restore_parser.add_argument(
@@ -294,6 +340,10 @@ def main() -> None:
     if args.command == "verify":
         verify_backup(args.archive)
         print(f"备份验证通过：{args.archive}")
+        return
+    if args.command == "drill":
+        drill_restore(settings, args.archive)
+        print(f"恢复演练通过：{args.archive}")
         return
     if args.command == "restore":
         if not args.app_stopped:
