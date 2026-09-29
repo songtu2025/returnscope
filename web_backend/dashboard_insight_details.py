@@ -312,11 +312,8 @@ def collect_reason_details(
                 JOIN classification_units u
                   ON u.result_version_id = r.result_version_id
                  AND u.classification_key = r.classification_key
-                JOIN classification_unit_labels selected
-                  ON selected.result_version_id = r.result_version_id
-                 AND selected.classification_key = r.classification_key
-                 AND selected.label_kind = 'problem'
-                 AND selected.label_code = ?
+                JOIN dashboard_insight_selected_records selected
+                  ON selected.id = r.id
                 JOIN json_each(u.classification_json, '$.semantic_units') unit
                 WHERE {where_sql}
                   AND json_extract(unit.value, '$.label_code') = ?
@@ -349,7 +346,7 @@ def collect_reason_details(
             SELECT 'opinion', opinion, subject, part, record_count, evidence
             FROM opinion_counts
             """,
-            (selected_code, *params, selected_code),
+            (*params, selected_code),
         ).fetchall()
         semantic_record_count = int(semantic_rows[0]["record_count"])
         part_rows = sorted(
