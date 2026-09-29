@@ -257,6 +257,97 @@ def test_offline_upgrade_failure_keeps_verified_backup_for_rollback(
         )
 
 
+def test_offline_upgrade_rolls_back_migration_changes_on_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = _settings(tmp_path)
+    database = Database(settings.database_path)
+    database.initialize()
+    with database.connect() as connection:
+        connection.execute("CREATE TABLE migration_test_state (value TEXT NOT NULL)")
+        connection.execute("INSERT INTO migration_test_state VALUES ('before')")
+        connection.execute("DROP INDEX idx_task_segments_status_order")
+
+    def snapshot() -> tuple[list[tuple[object, ...]], list[tuple[object, ...]], str]:
+        with database.connect() as connection:
+            schema = [
+                tuple(row)
+                for row in connection.execute(
+                    "SELECT type, name, sql FROM sqlite_master ORDER BY type, name"
+                )
+            ]
+            migrations = [
+                tuple(row)
+                for row in connection.execute(
+                    "SELECT migration_id, checksum, status FROM app_migrations "
+                    "ORDER BY migration_id"
+                )
+            ]
+            value = connection.execute(
+                "SELECT value FROM migration_test_state"
+            ).fetchone()[0]
+            return schema, migrations, value
+
+    before = snapshot()
+
+    def fail_after_changes(connection: sqlite3.Connection) -> None:
+        connection.execute("CREATE TABLE partial_upgrade_marker (id TEXT)")
+        connection.execute("UPDATE migration_test_state SET value = 'changed'")
+        connection.execute(
+            "INSERT INTO app_migrations(migration_id, checksum, status, applied_at) "
+            "VALUES ('test_partial_upgrade', 'test', 'applied', '2026-01-01')"
+        )
+        raise RuntimeError("模拟迁移中途失败")
+
+    with monkeypatch.context() as failure:
+        failure.setattr(
+            Database, "_migrate_dataset_columns", staticmethod(fail_after_changes)
+        )
+        with pytest.raises(RuntimeError, match="保持停服，使用备份恢复"):
+            upgrade_database(settings, app_stopped=True)
+
+    assert next((tmp_path / "backups").glob("seekway-backup-*.zip")).is_file()
+    assert snapshot() == before
+
+    upgrade_database(settings, app_stopped=True)
+    database.validate_production_schema()
+    upgraded = snapshot()
+    upgrade_database(settings, app_stopped=True)
+    assert snapshot() == upgraded
+
+
+def test_upgrade_rejects_foreign_key_violation_without_partial_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    database = Database(tmp_path / "app.db")
+    database.initialize()
+    with database.connect() as connection:
+        connection.execute("DROP INDEX idx_task_segments_status_order")
+
+    def insert_invalid_session(connection: sqlite3.Connection) -> None:
+        connection.execute(
+            "INSERT INTO sessions(id, user_id, token_hash, expires_at, created_at) "
+            "VALUES ('session-1', 'missing-user', 'token-1', '2026-01-01', '2026-01-01')"
+        )
+
+    with monkeypatch.context() as failure:
+        failure.setattr(
+            Database, "_migrate_dataset_columns", staticmethod(insert_invalid_session)
+        )
+        with pytest.raises(RuntimeError, match="外键完整性检查失败"):
+            database.upgrade_schema()
+
+    with database.connect() as connection:
+        assert connection.execute("SELECT COUNT(*) FROM sessions").fetchone()[0] == 0
+        assert (
+            connection.execute(
+                "SELECT name FROM sqlite_master "
+                "WHERE name = 'idx_task_segments_status_order'"
+            ).fetchone()
+            is None
+        )
+
+
 def test_classification_unit_rerun_migration_backfills_and_indexes(
     tmp_path: Path,
 ) -> None:

@@ -124,8 +124,12 @@ class Database(DatabaseMigrations):
         """供停服升级命令复用既有迁移和历史模型同步。"""
         with self.connect() as connection:
             connection.execute("PRAGMA journal_mode = WAL")
+            # 表重建需要在事务开始前关闭外键，提交前统一检查。
+            connection.execute("PRAGMA foreign_keys = OFF")
             self.apply_startup_migrations(connection, migrate_result_source_origin=True)
             sync_api_models(connection)
+            if connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
+                raise RuntimeError("数据库外键完整性检查失败")
             connection.execute("PRAGMA optimize")
 
     def initialize(self, *, production: bool = False) -> None:

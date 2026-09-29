@@ -172,8 +172,8 @@ class DatabaseMigrations(DatabaseTableRebuilds):
         *,
         migrate_result_source_origin: bool,
     ) -> None:
-        """按既有顺序更新数据库结构和历史数据。"""
-        connection.executescript(SCHEMA)
+        """开启事务，按既有顺序更新结构和历史数据，由调用方结束事务。"""
+        connection.executescript("BEGIN IMMEDIATE;\n" + SCHEMA)
         self._migrate_auth_action_tokens(connection)
         self._migrate_email_change_tokens(connection)
         self._migrate_user_columns(connection)
