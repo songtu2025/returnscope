@@ -396,7 +396,7 @@ export function Sidebar({ page, system, onNavigate }) {
   return (
     <aside className="sidebar">
       <div className="brand">
-        <img src="/assets/brand-mark.png" alt="" />
+        <img src="/assets/brand-mark-160.png" alt="" />
         <div>
           <strong>用户语义分析</strong>
           <span>智能体工作台</span>

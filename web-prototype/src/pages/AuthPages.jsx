@@ -36,7 +36,7 @@ function AuthShell({ children }) {
     <div className="login-page">
       <section className="login-story">
         <div className="brand-lockup">
-          <img src="/assets/brand-mark.png" alt="" />
+          <img src="/assets/brand-mark-160.png" alt="" />
           <span>Seekway Intelligence</span>
         </div>
         <div className="login-story-content">
