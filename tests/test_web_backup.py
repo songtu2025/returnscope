@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import sqlite3
+import subprocess
 import sys
 import time
 import zipfile
@@ -284,6 +285,56 @@ def test_drill_failure_cleans_isolated_directory(tmp_path: Path) -> None:
 
     assert list(backup_dir.iterdir()) == [invalid_backup]
     assert not (tmp_path / "runtime").exists()
+
+
+def test_drill_command_checks_restored_application(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    settings = _settings(tmp_path)
+    settings.ensure_directories()
+    Database(settings.database_path).initialize()
+    backup_dir = tmp_path / "backups"
+    backup = create_backup(settings, backup_dir)
+    database_before = settings.database_path.read_bytes()
+    monkeypatch.setattr(
+        backup_module.Settings, "from_env", classmethod(lambda cls: settings)
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["backup", "drill", str(backup), "--check-app"],
+    )
+
+    backup_module.main()
+
+    assert "恢复与应用演练通过" in capsys.readouterr().out
+    assert settings.database_path.read_bytes() == database_before
+    assert list(backup_dir.iterdir()) == [backup]
+
+
+def test_drill_application_failure_cleans_isolated_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = _settings(tmp_path)
+    settings.ensure_directories()
+    Database(settings.database_path).initialize()
+    backup_dir = tmp_path / "backups"
+    backup = create_backup(settings, backup_dir)
+    monkeypatch.setattr(
+        backup_module.subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args[0], 1, "", "模拟应用检查失败"
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="恢复后的应用检查失败"):
+        drill_restore(settings, backup, check_app=True)
+
+    assert list(backup_dir.iterdir()) == [backup]
 
 
 def test_backup_contains_database_and_immutable_files(

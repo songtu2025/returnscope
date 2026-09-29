@@ -4,6 +4,8 @@ import argparse
 import os
 import shutil
 import sqlite3
+import subprocess
+import sys
 import tempfile
 import zipfile
 from dataclasses import dataclass, field, replace
@@ -255,7 +257,12 @@ def restore_backup(
     return safety_backup
 
 
-def drill_restore(settings: Settings, archive_path: Path) -> None:
+def drill_restore(
+    settings: Settings,
+    archive_path: Path,
+    *,
+    check_app: bool = False,
+) -> None:
     source_archive = archive_path.resolve()
     if not source_archive.is_file():
         raise ValueError("备份文件不存在")
@@ -293,6 +300,30 @@ def drill_restore(settings: Settings, archive_path: Path) -> None:
                     or restored_file.stat().st_size != member.file_size
                 ):
                     raise ValueError("恢复演练后运行文件不完整")
+        if check_app:
+            environment = os.environ.copy()
+            environment.update(
+                {
+                    "WEBAPP_DATA_DIR": str(drill_runtime),
+                    "WEBAPP_DATABASE_PATH": str(drill_settings.database_path),
+                    "WEBAPP_PRODUCTION": "false",
+                    "WEBAPP_SECURE_COOKIES": "false",
+                    "WEBAPP_MAIL_PROVIDER": "console",
+                    "WEBAPP_SMTP_USE_TLS": "false",
+                    "WEBAPP_SMTP_USE_SSL": "false",
+                    "WEBAPP_ENCRYPTION_KEY": "",
+                }
+            )
+            completed = subprocess.run(
+                [sys.executable, "-m", "web_backend.restore_app_smoke"],
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=180,
+            )
+            if completed.returncode != 0:
+                raise RuntimeError("恢复后的应用检查失败")
 
 
 def prune_backups(settings: Settings) -> None:
@@ -329,6 +360,7 @@ def main() -> None:
     verify_parser.add_argument("archive", type=Path)
     drill_parser = subparsers.add_parser("drill")
     drill_parser.add_argument("archive", type=Path)
+    drill_parser.add_argument("--check-app", action="store_true")
     restore_parser = subparsers.add_parser("restore")
     restore_parser.add_argument("archive", type=Path)
     restore_parser.add_argument(
@@ -342,8 +374,9 @@ def main() -> None:
         print(f"备份验证通过：{args.archive}")
         return
     if args.command == "drill":
-        drill_restore(settings, args.archive)
-        print(f"恢复演练通过：{args.archive}")
+        drill_restore(settings, args.archive, check_app=args.check_app)
+        label = "恢复与应用演练" if args.check_app else "恢复演练"
+        print(f"{label}通过：{args.archive}")
         return
     if args.command == "restore":
         if not args.app_stopped:
