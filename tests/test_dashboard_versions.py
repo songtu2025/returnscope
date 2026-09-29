@@ -747,6 +747,10 @@ def test_dashboard_insights_parts_match_full_result(tmp_path: Path) -> None:
     dashboard_id = str(dashboard["id"])
     version_id = str(dashboard["version"]["version_id"])
     full = service.insights(dashboard_id, version_id)
+    assert [(row["period_start"], row["period_end"]) for row in full["trend"]] == [
+        ("2026-07-27", "2026-08-02"),
+        ("2026-08-03", "2026-08-09"),
+    ]
     overview = service.insights(dashboard_id, version_id, part="overview")
     assert overview == {
         key: value

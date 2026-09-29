@@ -141,17 +141,8 @@ def collect_reason_details(
         )
         trend_rows = connection.execute(
             f"""
-            SELECT date(
-                       r.return_date,
-                       '-' || ((CAST(strftime('%w', r.return_date) AS INTEGER)
-                       + 6) % 7) || ' days'
-                   ) AS period_start,
-                   date(
-                       r.return_date,
-                       '-' || ((CAST(strftime('%w', r.return_date) AS INTEGER)
-                       + 6) % 7) || ' days',
-                       '+6 days'
-                   ) AS period_end,
+            SELECT date(r.return_date, 'weekday 0', '-6 days') AS period_start,
+                   date(r.return_date, 'weekday 0') AS period_end,
                    COUNT(r.id) AS total_record_count,
                    SUM(CASE WHEN matched.id IS NOT NULL
                             THEN 1 ELSE 0 END) AS record_count
