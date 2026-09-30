@@ -302,27 +302,52 @@ def collect_reason_details(
             for row in co_reason_rows
         ]
         with timed_stage("insight_semantics"):
+            # 同一分类结果只解析一次，用临时表避免 CTE 展开后按反馈重复计算。
+            connection.execute(
+                "DROP TABLE IF EXISTS temp.dashboard_insight_reason_semantics"
+            )
+            connection.execute(
+                f"""
+                CREATE TEMP TABLE dashboard_insight_reason_semantics AS
+                WITH selected_units AS MATERIALIZED (
+                    SELECT DISTINCT r.result_version_id, r.classification_key
+                    FROM {scope.records_table} r
+                    JOIN dashboard_insight_selected_records selected
+                      ON selected.id = r.id
+                    WHERE {where_sql}
+                )
+                SELECT u.result_version_id, u.classification_key,
+                       COALESCE(
+                           NULLIF(json_extract(unit.value, '$.part'), ''),
+                           'UNSPECIFIED'
+                       ) AS part,
+                       json_extract(unit.value, '$.opinion') AS opinion,
+                       json_extract(unit.value, '$.subject') AS subject,
+                       json_extract(unit.value, '$.evidence') AS evidence
+                FROM selected_units selected
+                JOIN classification_units u
+                  ON u.result_version_id = selected.result_version_id
+                 AND u.classification_key = selected.classification_key
+                JOIN json_each(u.classification_json, '$.semantic_units') unit
+                WHERE json_extract(unit.value, '$.label_code') = ?
+                  {"AND json_extract(unit.value, '$.subject') = ?" if scope.clean_subject else ""}
+                """,
+                (*params, selected_code, scope.clean_subject)
+                if scope.clean_subject
+                else (*params, selected_code),
+            )
             semantic_rows = connection.execute(
                 f"""
                 WITH matched AS MATERIALIZED (
-                    SELECT r.id AS record_id,
-                           COALESCE(
-                               NULLIF(json_extract(unit.value, '$.part'), ''),
-                               'UNSPECIFIED'
-                           ) AS part,
-                           json_extract(unit.value, '$.opinion') AS opinion,
-                           json_extract(unit.value, '$.subject') AS subject,
-                           json_extract(unit.value, '$.evidence') AS evidence
+                    SELECT r.id AS record_id, unit.part, unit.opinion,
+                           unit.subject, unit.evidence
                     FROM {scope.records_table} r
-                    JOIN classification_units u
-                      ON u.result_version_id = r.result_version_id
-                     AND u.classification_key = r.classification_key
                     JOIN dashboard_insight_selected_records selected
                       ON selected.id = r.id
-                    JOIN json_each(u.classification_json, '$.semantic_units') unit
+                    JOIN dashboard_insight_reason_semantics unit
+                      ON unit.result_version_id = r.result_version_id
+                     AND unit.classification_key = r.classification_key
                     WHERE {where_sql}
-                      AND json_extract(unit.value, '$.label_code') = ?
-                      {"AND json_extract(unit.value, '$.subject') = ?" if scope.clean_subject else ""}
                 ),
                 part_counts AS (
                     SELECT part AS value, COUNT(DISTINCT record_id) AS record_count
@@ -352,9 +377,7 @@ def collect_reason_details(
                 SELECT 'opinion', opinion, subject, part, record_count, evidence
                 FROM opinion_counts
                 """,
-                (*params, selected_code, scope.clean_subject)
-                if scope.clean_subject
-                else (*params, selected_code),
+                tuple(params),
             ).fetchall()
         semantic_record_count = int(semantic_rows[0]["record_count"])
         part_rows = sorted(
