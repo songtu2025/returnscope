@@ -32,9 +32,9 @@ def _table_columns(
 
 def _index_keys(
     connection: sqlite3.Connection, index: str
-) -> tuple[tuple[int, str | None, int, str | None], ...]:
+) -> tuple[tuple[str | None, int, str | None], ...]:
     return tuple(
-        (row["cid"], row["name"], row["desc"], row["coll"])
+        (row["name"], row["desc"], row["coll"])
         for row in connection.execute(f'PRAGMA index_xinfo("{index}")')
         if row["key"]
     )
@@ -60,7 +60,7 @@ def _validate_table_columns(
 @cache
 def _required_schema() -> tuple[
     dict[str, dict[str, tuple[str, int]]],
-    dict[str, tuple[tuple[int, str | None, int, str | None], ...]],
+    dict[str, tuple[tuple[str | None, int, str | None], ...]],
     dict[str, str],
 ]:
     """从当前迁移结果生成生产数据库的只读校验基准。"""

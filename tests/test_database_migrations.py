@@ -190,6 +190,34 @@ def test_production_startup_rejects_changed_column_definition(
     assert database.path.read_bytes() == before
 
 
+def test_production_accepts_historical_column_order_with_same_index_keys(
+    tmp_path: Path,
+) -> None:
+    database = Database(tmp_path / "app.db")
+    database.initialize()
+    with database.connect() as connection:
+        schema = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE name = 'api_validation_events'"
+        ).fetchone()[0]
+        index_sql = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE name = 'idx_api_validation_events_run'"
+        ).fetchone()[0]
+        original = (
+            "run_id TEXT NOT NULL REFERENCES api_validation_runs(id) ON DELETE CASCADE,\n"
+            "    event_type TEXT NOT NULL,"
+        )
+        changed = (
+            "event_type TEXT NOT NULL,\n"
+            "    run_id TEXT NOT NULL REFERENCES api_validation_runs(id) ON DELETE CASCADE,"
+        )
+        assert original in schema
+        connection.execute("DROP TABLE api_validation_events")
+        connection.execute(schema.replace(original, changed))
+        connection.execute(index_sql)
+
+    database.validate_production_schema()
+
+
 def test_upgrade_check_only_reads_database_without_backup(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
