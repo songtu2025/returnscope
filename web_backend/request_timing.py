@@ -2,12 +2,34 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Any
 
 from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 performance_logger = logging.getLogger("uvicorn.error.performance")
+_request_timings: ContextVar[dict[str, float] | None] = ContextVar(
+    "request_timings", default=None
+)
+
+
+@contextmanager
+def timed_stage(name: str) -> Iterator[None]:
+    """阶段计时只记录名称与耗时；父阶段包含子阶段，不应相加。"""
+    started = time.perf_counter()
+    try:
+        yield
+    finally:
+        duration_ms = (time.perf_counter() - started) * 1000
+        timings = _request_timings.get()
+        if timings is not None:
+            timings[name] = timings.get(name, 0.0) + duration_ms
+        performance_logger.info(
+            "request_stage stage=%s duration_ms=%.2f", name, duration_ms
+        )
 
 
 class RequestTimingMiddleware:
@@ -25,6 +47,8 @@ class RequestTimingMiddleware:
             return
 
         started = time.perf_counter()
+        # 同步路由复制上下文，但共享当前请求的字典；不同请求各自独立。
+        token = _request_timings.set({})
         response_started = False
 
         async def send_with_timing(message: Message) -> None:
@@ -34,7 +58,13 @@ class RequestTimingMiddleware:
                 duration_ms = (time.perf_counter() - started) * 1000
                 MutableHeaders(scope=message).append(
                     "Server-Timing",
-                    f"app;dur={duration_ms:.2f}",
+                    ", ".join(
+                        [f"app;dur={duration_ms:.2f}"]
+                        + [
+                            f"{name};dur={duration:.2f}"
+                            for name, duration in (_request_timings.get() or {}).items()
+                        ]
+                    ),
                 )
                 self._log_request(scope, int(message["status"]), duration_ms)
             await send(message)
@@ -52,6 +82,8 @@ class RequestTimingMiddleware:
                     duration_ms,
                 )
             raise
+        finally:
+            _request_timings.reset(token)
 
     @staticmethod
     def _route_path(scope: Scope) -> str:

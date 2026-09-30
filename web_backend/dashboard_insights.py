@@ -30,6 +30,7 @@ from web_backend.dashboard_support import (
     version_context,
 )
 from web_backend.database import Database
+from web_backend.request_timing import timed_stage
 from web_backend.result_hierarchy import hierarchy_counts, result_taxonomy
 
 INSIGHT_PAGE_CACHE_KIB = 64 * 1024
@@ -88,6 +89,7 @@ def _reason_detail_payload(
     }
 
 
+@timed_stage("insight_scope")
 def _prepare_scope(
     database: Database,
     connection: sqlite3.Connection,
@@ -180,26 +182,7 @@ def _prepare_scope(
     if clean_subject:
         if clean_subject not in {item.value for item in SubjectCode}:
             raise ValueError("问题对象不合法")
-        connection.execute(
-            "CREATE TEMP TABLE dashboard_insight_subject_labels "
-            "(id TEXT NOT NULL, label_code TEXT NOT NULL, "
-            "PRIMARY KEY (id, label_code))"
-        )
-        connection.execute(
-            f"""
-            INSERT OR IGNORE INTO dashboard_insight_subject_labels
-            SELECT r.id, json_extract(unit.value, '$.label_code')
-            FROM classification_result_records r
-            JOIN classification_units u
-              ON u.result_version_id = r.result_version_id
-             AND u.classification_key = r.classification_key
-            JOIN json_each(u.classification_json, '$.semantic_units') unit
-            WHERE {where_sql}
-              AND json_extract(unit.value, '$.subject') = ?
-              AND json_extract(unit.value, '$.label_code') IS NOT NULL
-            """,
-            (*params, clean_subject),
-        )
+        _prepare_subject_labels(connection, where_sql, params, clean_subject)
         where_sql += " AND r.id IN (SELECT id FROM dashboard_insight_subject_labels)"
     unit_rollup = (
         options.report_mode
@@ -235,6 +218,49 @@ def _prepare_scope(
     )
 
 
+@timed_stage("insight_subject")
+def _prepare_subject_labels(
+    connection: sqlite3.Connection, where_sql: str, params: list[Any], subject: str
+) -> None:
+    # 同一分类单元只解析一次 JSON，再映射回范围内的反馈记录。
+    connection.execute(
+        f"""
+        CREATE TEMP TABLE dashboard_insight_subject_units AS
+        WITH scoped_units AS MATERIALIZED (
+            SELECT DISTINCT r.result_version_id, r.classification_key
+            FROM classification_result_records r WHERE {where_sql}
+        )
+        SELECT scoped_units.result_version_id, scoped_units.classification_key,
+               json_extract(unit.value, '$.label_code') AS label_code
+        FROM scoped_units
+        JOIN classification_units u
+          ON u.result_version_id = scoped_units.result_version_id
+         AND u.classification_key = scoped_units.classification_key
+        JOIN json_each(u.classification_json, '$.semantic_units') unit
+        WHERE json_extract(unit.value, '$.subject') = ?
+          AND json_extract(unit.value, '$.label_code') IS NOT NULL
+        """,
+        (*params, subject),
+    )
+    connection.execute(
+        "CREATE TEMP TABLE dashboard_insight_subject_labels "
+        "(id TEXT NOT NULL, label_code TEXT NOT NULL, PRIMARY KEY (id, label_code))"
+    )
+    connection.execute(
+        f"""
+        INSERT OR IGNORE INTO dashboard_insight_subject_labels
+        SELECT r.id, unit.label_code
+        FROM classification_result_records r
+        JOIN dashboard_insight_subject_units unit
+          ON unit.result_version_id = r.result_version_id
+         AND unit.classification_key = r.classification_key
+        WHERE {where_sql}
+        """,
+        tuple(params),
+    )
+
+
+@timed_stage("insight_build")
 def build_insights(
     database: Database,
     dashboard_id: str,
@@ -313,16 +339,17 @@ def build_insights(
             scope.option_where == scope.where_sql
             and scope.option_params == scope.params
         )
-        connection.execute(
-            f"""
+        with timed_stage("insight_records"):
+            connection.execute(
+                f"""
             CREATE TEMP TABLE dashboard_insight_records AS
             SELECT r.id, r.result_version_id, r.classification_key,
                    r.return_date, r.listing, r.product_name, r.product_sku
             FROM classification_result_records r
             WHERE {scope.where_sql}
             """,
-            tuple(scope.params),
-        )
+                tuple(scope.params),
+            )
         scope = replace(
             scope,
             where_sql="1=1",

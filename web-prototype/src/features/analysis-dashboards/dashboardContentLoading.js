@@ -103,7 +103,7 @@ export async function loadDashboardContent({
     overview = await dashboardApi.analysisDashboardInsights(
       route.dashboardId,
       route.versionId,
-      { ...filters, problem: "", part: "overview" },
+      { ...filters, part: "full" },
       { signal },
     );
     if (!overview) throw new Error("看板总览为空");
@@ -120,6 +120,8 @@ export async function loadDashboardContent({
   }
   const selected = selectedInsightReason(overview, filters.problem);
   if (!selected) return { data: overview };
+  // 首次或基础范围变化时，完整响应已经包含当前原因详情。
+  if (!cachedOverview) return { data: { ...overview, selected_reason: selected } };
   const detail = await dashboardApi.analysisDashboardInsights(
     route.dashboardId,
     route.versionId,

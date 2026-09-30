@@ -8,10 +8,12 @@ from web_backend.dashboard_insight_overview import (
     subject_label_filter,
 )
 from web_backend.dashboard_support import percentage, serialize_record
+from web_backend.request_timing import timed_stage
 
 EVIDENCE_PAGE_SIZE = 10
 
 
+@timed_stage("insight_evidence")
 def list_reason_evidence(
     scope: InsightQueryScope,
     selected_code: str,
@@ -101,6 +103,7 @@ def list_reason_evidence(
     }
 
 
+@timed_stage("insight_reason_details")
 def collect_reason_details(
     scope: InsightQueryScope,
     selected_reason: dict[str, Any] | None,
@@ -144,22 +147,23 @@ def collect_reason_details(
             """,
             (selected_code, *params),
         )
-        trend_rows = connection.execute(
-            f"""
-            SELECT date(r.return_date, 'weekday 0', '-6 days') AS period_start,
-                   date(r.return_date, 'weekday 0') AS period_end,
-                   COUNT(r.id) AS total_record_count,
-                   SUM(CASE WHEN matched.id IS NOT NULL
-                            THEN 1 ELSE 0 END) AS record_count
-            FROM {scope.records_table} r
-            LEFT JOIN dashboard_insight_selected_records matched
-              ON matched.id = r.id
-            WHERE {where_sql} AND r.return_date IS NOT NULL
-            GROUP BY period_start, period_end
-            ORDER BY period_start
-            """,
-            tuple(params),
-        ).fetchall()
+        with timed_stage("insight_trend"):
+            trend_rows = connection.execute(
+                f"""
+                SELECT date(r.return_date, 'weekday 0', '-6 days') AS period_start,
+                       date(r.return_date, 'weekday 0') AS period_end,
+                       COUNT(r.id) AS total_record_count,
+                       SUM(CASE WHEN matched.id IS NOT NULL
+                                THEN 1 ELSE 0 END) AS record_count
+                FROM {scope.records_table} r
+                LEFT JOIN dashboard_insight_selected_records matched
+                  ON matched.id = r.id
+                WHERE {where_sql} AND r.return_date IS NOT NULL
+                GROUP BY period_start, period_end
+                ORDER BY period_start
+                """,
+                tuple(params),
+            ).fetchall()
         trend = [
             {
                 **dict(row),
@@ -173,24 +177,25 @@ def collect_reason_details(
             }
             for row in trend_rows
         ]
-        product_rows = connection.execute(
-            f"""
-            SELECT COALESCE(NULLIF(TRIM(r.product_name), ''), '未提供产品')
-                       AS value,
-                   COUNT(r.id) AS total_record_count,
-                   SUM(CASE WHEN matched.id IS NOT NULL
-                            THEN 1 ELSE 0 END) AS record_count
-            FROM {scope.records_table} r
-            LEFT JOIN dashboard_insight_selected_records matched
-              ON matched.id = r.id
-            WHERE {where_sql}
-            GROUP BY value
-            HAVING record_count > 0
-            ORDER BY record_count DESC, value COLLATE NOCASE ASC
-            LIMIT 8
-            """,
-            tuple(params),
-        ).fetchall()
+        with timed_stage("insight_products"):
+            product_rows = connection.execute(
+                f"""
+                SELECT COALESCE(NULLIF(TRIM(r.product_name), ''), '未提供产品')
+                           AS value,
+                       COUNT(r.id) AS total_record_count,
+                       SUM(CASE WHEN matched.id IS NOT NULL
+                                THEN 1 ELSE 0 END) AS record_count
+                FROM {scope.records_table} r
+                LEFT JOIN dashboard_insight_selected_records matched
+                  ON matched.id = r.id
+                WHERE {where_sql}
+                GROUP BY value
+                HAVING record_count > 0
+                ORDER BY record_count DESC, value COLLATE NOCASE ASC
+                LIMIT 8
+                """,
+                tuple(params),
+            ).fetchall()
         selected_count = int(selected_reason["record_count"])
         products = [
             {
@@ -214,26 +219,27 @@ def collect_reason_details(
             }
             for row in product_rows
         ]
-        variant_rows = connection.execute(
-            f"""
-            SELECT COALESCE(NULLIF(TRIM(r.product_sku), ''), '未提供 SKU')
-                       AS value,
-                   COALESCE(NULLIF(TRIM(r.product_name), ''), '未提供产品')
-                       AS product_name,
-                   COUNT(r.id) AS total_record_count,
-                   SUM(CASE WHEN matched.id IS NOT NULL
-                            THEN 1 ELSE 0 END) AS record_count
-            FROM {scope.records_table} r
-            LEFT JOIN dashboard_insight_selected_records matched
-              ON matched.id = r.id
-            WHERE {where_sql}
-            GROUP BY value, product_name
-            HAVING record_count > 0
-            ORDER BY record_count DESC, value COLLATE NOCASE ASC
-            LIMIT 12
-            """,
-            tuple(params),
-        ).fetchall()
+        with timed_stage("insight_variants"):
+            variant_rows = connection.execute(
+                f"""
+                SELECT COALESCE(NULLIF(TRIM(r.product_sku), ''), '未提供 SKU')
+                           AS value,
+                       COALESCE(NULLIF(TRIM(r.product_name), ''), '未提供产品')
+                           AS product_name,
+                       COUNT(r.id) AS total_record_count,
+                       SUM(CASE WHEN matched.id IS NOT NULL
+                                THEN 1 ELSE 0 END) AS record_count
+                FROM {scope.records_table} r
+                LEFT JOIN dashboard_insight_selected_records matched
+                  ON matched.id = r.id
+                WHERE {where_sql}
+                GROUP BY value, product_name
+                HAVING record_count > 0
+                ORDER BY record_count DESC, value COLLATE NOCASE ASC
+                LIMIT 12
+                """,
+                tuple(params),
+            ).fetchall()
         variants = [
             {
                 "value": str(row["value"]),
@@ -257,28 +263,29 @@ def collect_reason_details(
             }
             for row in variant_rows
         ]
-        co_reason_rows = connection.execute(
-            f"""
-            SELECT other.label_code AS value,
-                   COALESCE(NULLIF(TRIM(other.label_name), ''),
-                            other.label_code) AS label,
-                   COUNT(r.id) AS record_count
-            FROM {scope.records_table} r
-            JOIN dashboard_insight_selected_records selected
-              ON selected.id = r.id
-            JOIN classification_unit_labels other
-              ON other.result_version_id = r.result_version_id
-             AND other.classification_key = r.classification_key
-             AND other.label_kind = 'problem'
-             AND other.label_code <> ?
-             {subject_label_filter(scope, "r", "other")}
-            WHERE {where_sql}
-            GROUP BY other.label_code, other.label_name
-            ORDER BY record_count DESC, label COLLATE NOCASE ASC
-            LIMIT 6
-            """,
-            (selected_code, *params),
-        ).fetchall()
+        with timed_stage("insight_co_reasons"):
+            co_reason_rows = connection.execute(
+                f"""
+                SELECT other.label_code AS value,
+                       COALESCE(NULLIF(TRIM(other.label_name), ''),
+                                other.label_code) AS label,
+                       COUNT(r.id) AS record_count
+                FROM {scope.records_table} r
+                JOIN dashboard_insight_selected_records selected
+                  ON selected.id = r.id
+                JOIN classification_unit_labels other
+                  ON other.result_version_id = r.result_version_id
+                 AND other.classification_key = r.classification_key
+                 AND other.label_kind = 'problem'
+                 AND other.label_code <> ?
+                 {subject_label_filter(scope, "r", "other")}
+                WHERE {where_sql}
+                GROUP BY other.label_code, other.label_name
+                ORDER BY record_count DESC, label COLLATE NOCASE ASC
+                LIMIT 6
+                """,
+                (selected_code, *params),
+            ).fetchall()
         co_reasons = [
             {
                 **dict(row),
@@ -294,60 +301,61 @@ def collect_reason_details(
             }
             for row in co_reason_rows
         ]
-        semantic_rows = connection.execute(
-            f"""
-            WITH matched AS MATERIALIZED (
-                SELECT r.id AS record_id,
-                       COALESCE(
-                           NULLIF(json_extract(unit.value, '$.part'), ''),
-                           'UNSPECIFIED'
-                       ) AS part,
-                       json_extract(unit.value, '$.opinion') AS opinion,
-                       json_extract(unit.value, '$.subject') AS subject,
-                       json_extract(unit.value, '$.evidence') AS evidence
-                FROM {scope.records_table} r
-                JOIN classification_units u
-                  ON u.result_version_id = r.result_version_id
-                 AND u.classification_key = r.classification_key
-                JOIN dashboard_insight_selected_records selected
-                  ON selected.id = r.id
-                JOIN json_each(u.classification_json, '$.semantic_units') unit
-                WHERE {where_sql}
-                  AND json_extract(unit.value, '$.label_code') = ?
-                  {"AND json_extract(unit.value, '$.subject') = ?" if scope.clean_subject else ""}
-            ),
-            part_counts AS (
-                SELECT part AS value, COUNT(DISTINCT record_id) AS record_count
+        with timed_stage("insight_semantics"):
+            semantic_rows = connection.execute(
+                f"""
+                WITH matched AS MATERIALIZED (
+                    SELECT r.id AS record_id,
+                           COALESCE(
+                               NULLIF(json_extract(unit.value, '$.part'), ''),
+                               'UNSPECIFIED'
+                           ) AS part,
+                           json_extract(unit.value, '$.opinion') AS opinion,
+                           json_extract(unit.value, '$.subject') AS subject,
+                           json_extract(unit.value, '$.evidence') AS evidence
+                    FROM {scope.records_table} r
+                    JOIN classification_units u
+                      ON u.result_version_id = r.result_version_id
+                     AND u.classification_key = r.classification_key
+                    JOIN dashboard_insight_selected_records selected
+                      ON selected.id = r.id
+                    JOIN json_each(u.classification_json, '$.semantic_units') unit
+                    WHERE {where_sql}
+                      AND json_extract(unit.value, '$.label_code') = ?
+                      {"AND json_extract(unit.value, '$.subject') = ?" if scope.clean_subject else ""}
+                ),
+                part_counts AS (
+                    SELECT part AS value, COUNT(DISTINCT record_id) AS record_count
+                    FROM matched
+                    GROUP BY part
+                    ORDER BY record_count DESC, value ASC
+                    LIMIT 6
+                ),
+                opinion_counts AS (
+                    SELECT opinion, subject, part,
+                           COUNT(DISTINCT record_id) AS record_count,
+                           MAX(evidence) AS evidence
+                    FROM matched
+                    WHERE NULLIF(opinion, '') IS NOT NULL
+                    GROUP BY opinion, subject, part
+                    ORDER BY record_count DESC, opinion ASC
+                    LIMIT 4
+                )
+                SELECT 'total' AS kind, NULL AS value, NULL AS subject,
+                       NULL AS part, COUNT(DISTINCT record_id) AS record_count,
+                       NULL AS evidence
                 FROM matched
-                GROUP BY part
-                ORDER BY record_count DESC, value ASC
-                LIMIT 6
-            ),
-            opinion_counts AS (
-                SELECT opinion, subject, part,
-                       COUNT(DISTINCT record_id) AS record_count,
-                       MAX(evidence) AS evidence
-                FROM matched
-                WHERE NULLIF(opinion, '') IS NOT NULL
-                GROUP BY opinion, subject, part
-                ORDER BY record_count DESC, opinion ASC
-                LIMIT 4
-            )
-            SELECT 'total' AS kind, NULL AS value, NULL AS subject,
-                   NULL AS part, COUNT(DISTINCT record_id) AS record_count,
-                   NULL AS evidence
-            FROM matched
-            UNION ALL
-            SELECT 'part', value, NULL, NULL, record_count, NULL
-            FROM part_counts
-            UNION ALL
-            SELECT 'opinion', opinion, subject, part, record_count, evidence
-            FROM opinion_counts
-            """,
-            (*params, selected_code, scope.clean_subject)
-            if scope.clean_subject
-            else (*params, selected_code),
-        ).fetchall()
+                UNION ALL
+                SELECT 'part', value, NULL, NULL, record_count, NULL
+                FROM part_counts
+                UNION ALL
+                SELECT 'opinion', opinion, subject, part, record_count, evidence
+                FROM opinion_counts
+                """,
+                (*params, selected_code, scope.clean_subject)
+                if scope.clean_subject
+                else (*params, selected_code),
+            ).fetchall()
         semantic_record_count = int(semantic_rows[0]["record_count"])
         part_rows = sorted(
             (row for row in semantic_rows if row["kind"] == "part"),

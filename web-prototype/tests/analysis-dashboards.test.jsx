@@ -760,7 +760,7 @@ test("切换问题对象清除原类别和原因，只用新范围选择诊断",
   expect(dashboardApiMock.analysisDashboardInsights).toHaveBeenCalledWith(
     "dashboard-default",
     "dashboard-version-default",
-    expect.objectContaining({ subject: "UNKNOWN", label_group: "", part: "overview" }),
+    expect.objectContaining({ subject: "UNKNOWN", label_group: "", part: "full" }),
     expect.any(Object),
   );
 });
@@ -812,7 +812,7 @@ test("旧链接的失效类别在当前范围查询成功后校正，保留有�
   }
   expect(
     dashboardApiMock.analysisDashboardInsights.mock.calls.map((call) => call[2].part),
-  ).toEqual(["overview", "overview", "reason"]);
+  ).toEqual(["full", "full"]);
 });
 
 test.each(["有效类别", "真实空范围", "请求失败"])(
@@ -958,7 +958,7 @@ test("切换具体原因仅请求明细，失败和重试期间保留旧诊断",
   let rejectSecondReason;
   dashboardApiMock.analysisDashboardInsights.mockImplementation(
     (_dashboardId, _versionId, filters) => {
-      if (filters.part === "overview") {
+      if (filters.part === "full") {
         return Promise.resolve({
           summary: { record_count: 10 },
           date_range: {},
@@ -994,7 +994,7 @@ test("切换具体原因仅请求明细，失败和重试期间保留旧诊断",
   expect(screen.getByText("有效反馈")).toBeVisible();
   expect(
     dashboardApiMock.analysisDashboardInsights.mock.calls.filter(
-      ([, , filters]) => filters.part === "overview",
+      ([, , filters]) => filters.part === "full",
     ),
   ).toHaveLength(1);
   await act(async () => rejectSecondReason(new Error("请求超时")));
@@ -1023,23 +1023,18 @@ test("切换具体原因仅请求明细，失败和重试期间保留旧诊断",
   expect(screen.getByRole("heading", { name: "原因二" })).toBeVisible();
 });
 
-test("筛选总览与原因详情到齐后才同步更新可见结果", async () => {
+test("完整筛选响应到齐后才同步更新可见结果", async () => {
   const user = userEvent.setup();
   const oldReason = { value: "R1", label: "原因一", record_count: 8, percentage: 80 };
   const newReason = { value: "R2", label: "原因二", record_count: 4, percentage: 100 };
   /** @type {(value: unknown) => void} */
-  let resolveOverview;
-  /** @type {(value: unknown) => void} */
-  let resolveDetail;
+  let resolveScope;
   dashboardApiMock.analysisDashboardInsights.mockImplementation(
     (_dashboardId, _versionId, filters) => {
       if (filters.listing === "L002") {
-        return new Promise((resolve) => {
-          if (filters.part === "overview") resolveOverview = resolve;
-          else resolveDetail = resolve;
-        });
+        return new Promise((resolve) => (resolveScope = resolve));
       }
-      if (filters.part === "overview") {
+      if (filters.part === "full") {
         return Promise.resolve({
           summary: { record_count: 10 },
           date_range: {},
@@ -1061,34 +1056,34 @@ test("筛选总览与原因详情到齐后才同步更新可见结果", async ()
   expect(await screen.findByRole("heading", { name: "原因一" })).toBeVisible();
 
   await user.selectOptions(screen.getByRole("combobox", { name: "Listing" }), "L002");
-  await waitFor(() => expect(resolveOverview).toBeTypeOf("function"));
+  await waitFor(() => expect(resolveScope).toBeTypeOf("function"));
   expect(screen.getByRole("status")).toHaveTextContent("当前显示上一次结果");
   expect(view.container.querySelector(".return-insight-workbench")).toHaveAttribute(
     "inert",
   );
   expect(screen.getByRole("heading", { name: "原因一" })).toBeVisible();
+  expect(screen.getByText("10 条")).toBeVisible();
+  expect(screen.queryByText("4 条")).not.toBeInTheDocument();
   await act(async () =>
-    resolveOverview({
+    resolveScope({
       summary: { record_count: 4 },
       date_range: {},
       filter_options: { listings: ["L002"] },
       category_groups: [],
       reasons: [newReason],
+      trend: [],
+      products: [],
+      evidence: { items: [], total: 0 },
     }),
-  );
-  await waitFor(() => expect(resolveDetail).toBeTypeOf("function"));
-  expect(screen.getByRole("heading", { name: "原因一" })).toBeVisible();
-  expect(screen.getByText("10 条")).toBeVisible();
-  expect(screen.queryByText("4 条")).not.toBeInTheDocument();
-
-  await act(async () =>
-    resolveDetail({ trend: [], products: [], evidence: { items: [], total: 0 } }),
   );
   expect(await screen.findByRole("heading", { name: "原因二" })).toBeVisible();
   expect(
     within(view.container.querySelector(".return-insight-trust")).getByText("4 条"),
   ).toBeVisible();
   expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  expect(
+    dashboardApiMock.analysisDashboardInsights.mock.calls.map((call) => call[2].part),
+  ).toEqual(["full", "full"]);
 });
 
 test.each(["范围", "原因"])(
@@ -1101,20 +1096,18 @@ test.each(["范围", "原因"])(
     const overview = { reasons, category_groups: [], summary: { record_count: 50 } };
     const evidence = { items: [], total: 30, page: 1, page_size: 10 };
     /** @type {(value: unknown) => void} */
-    let resolveOverview;
-    /** @type {(value: unknown) => void} */
     let resolveDetail;
     /** @type {(value: unknown) => void} */
     let resolveOldEvidence;
     dashboardApiMock.analysisDashboardInsights.mockImplementation(
       (_dashboardId, _versionId, filters) => {
-        if (filters.listing === "L002" && filters.part === "overview") {
-          return new Promise((resolve) => (resolveOverview = resolve));
+        if (filters.listing === "L002" && filters.part === "full") {
+          return new Promise((resolve) => (resolveDetail = resolve));
         }
         if (filters.problem === "R2" && filters.part === "reason") {
           return new Promise((resolve) => (resolveDetail = resolve));
         }
-        return Promise.resolve(filters.part === "overview" ? overview : { evidence });
+        return Promise.resolve({ ...overview, evidence });
       },
     );
     dashboardApiMock.analysisDashboardEvidence
@@ -1138,16 +1131,11 @@ test.each(["范围", "原因"])(
     const listing = change === "范围" ? "L002" : "L001";
     window.location.hash = `${link}&listing=${listing}&problem=R2&record_page=3`;
 
-    if (change === "范围") {
-      await waitFor(() => expect(resolveOverview).toBeTypeOf("function"));
-      expect(dashboardApiMock.analysisDashboardEvidence).toHaveBeenCalledTimes(1);
-      await act(async () => resolveOverview(overview));
-    }
     await waitFor(() => expect(resolveDetail).toBeTypeOf("function"));
     expect(oldSignal.aborted).toBe(true);
     expect(screen.getByRole("heading", { name: "原因一" })).toBeVisible();
     expect(dashboardApiMock.analysisDashboardEvidence).toHaveBeenCalledTimes(1);
-    await act(async () => resolveDetail({ evidence }));
+    await act(async () => resolveDetail({ ...overview, evidence }));
     expect(await screen.findByText("新结果第三页证据")).toBeVisible();
     expect(screen.getByRole("heading", { name: "原因二" })).toBeVisible();
     expect(dashboardApiMock.analysisDashboardEvidence).toHaveBeenCalledTimes(2);
@@ -1180,7 +1168,7 @@ test.each(["范围", "原因"])(
     );
     expect(
       dashboardApiMock.analysisDashboardInsights.mock.calls.filter(
-        ([, , filters]) => filters.part === "overview",
+        ([, , filters]) => filters.part === "full",
       ),
     ).toHaveLength(change === "范围" ? 2 : 1);
   },

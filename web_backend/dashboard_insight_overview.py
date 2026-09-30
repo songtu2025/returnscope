@@ -6,6 +6,7 @@ from typing import Any
 
 from web_backend.dashboard_common import SUBJECT_LABELS
 from web_backend.dashboard_support import percentage
+from web_backend.request_timing import timed_stage
 
 
 @dataclass(frozen=True)
@@ -315,6 +316,7 @@ def _reason_rows(
     return scope.connection.execute(reason_sql, tuple(reason_params)).fetchall()
 
 
+@timed_stage("insight_reason_context")
 def collect_reason_context(scope: InsightQueryScope) -> dict[str, Any]:
     total_records = int(
         scope.connection.execute(
@@ -360,6 +362,7 @@ def collect_label_counts(scope: InsightQueryScope) -> tuple[int, int]:
     return int(row[0]), int(row[1])
 
 
+@timed_stage("insight_overview")
 def collect_insight_overview(
     scope: InsightQueryScope, *, total_record_count: int | None = None
 ) -> dict[str, Any]:

@@ -1091,8 +1091,10 @@ def test_subject_scope_counts_only_matching_reason_units(
         )
 
 
+@pytest.mark.parametrize("subject", ["", "PRODUCT"])
 def test_dashboard_insights_count_each_semantic_part_once_per_record(
     tmp_path: Path,
+    subject: str,
 ) -> None:
     context, version, service = _ready_result(tmp_path)
     _, dashboard = _create_dashboard(service, str(version["version_id"]))
@@ -1116,6 +1118,7 @@ def test_dashboard_insights_count_each_semantic_part_once_per_record(
         str(dashboard["id"]),
         str(dashboard["version"]["version_id"]),
         problem="FIT_TOO_SMALL_U1",
+        subject=subject,
     )
     assert insights["subject_breakdown"] == [
         {
