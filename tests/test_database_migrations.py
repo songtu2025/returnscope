@@ -164,6 +164,32 @@ def test_production_startup_rejects_missing_database_and_index(
     assert database.path.read_bytes() == before
 
 
+@pytest.mark.parametrize(
+    ("original", "changed"),
+    [
+        ("revision INTEGER NOT NULL", "revision TEXT NOT NULL"),
+        ("id TEXT PRIMARY KEY", "id TEXT"),
+    ],
+)
+def test_production_startup_rejects_changed_column_definition(
+    tmp_path: Path, original: str, changed: str
+) -> None:
+    database = Database(tmp_path / "app.db")
+    database.initialize()
+    with database.connect() as connection:
+        schema = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE name = 'review_revisions'"
+        ).fetchone()[0]
+        assert original in schema
+        connection.execute("DROP TABLE review_revisions")
+        connection.execute(schema.replace(original, changed))
+
+    before = database.path.read_bytes()
+    with pytest.raises(RuntimeError, match="字段 .* 定义不一致"):
+        database.validate_production_schema()
+    assert database.path.read_bytes() == before
+
+
 def test_upgrade_check_only_reads_database_without_backup(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -182,6 +208,27 @@ def test_upgrade_check_only_reads_database_without_backup(
         connection.execute("DROP INDEX idx_task_segments_status_order")
     with pytest.raises(RuntimeError, match="缺少索引"):
         upgrade_database_main()
+    assert not (tmp_path / "backups").exists()
+
+
+def test_upgrade_check_only_rejects_changed_index_definition(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = _settings(tmp_path)
+    database = Database(settings.database_path)
+    database.initialize()
+    monkeypatch.setattr(Settings, "from_env", classmethod(lambda cls: settings))
+    monkeypatch.setattr(sys, "argv", ["upgrade_database", "--check-only"])
+    with database.connect() as connection:
+        connection.execute("DROP INDEX idx_task_segments_status_order")
+        connection.execute(
+            "CREATE INDEX idx_task_segments_status_order ON task_segments(task_id)"
+        )
+
+    before = settings.database_path.read_bytes()
+    with pytest.raises(RuntimeError, match="索引 .* 定义不一致"):
+        upgrade_database_main()
+    assert settings.database_path.read_bytes() == before
     assert not (tmp_path / "backups").exists()
 
 

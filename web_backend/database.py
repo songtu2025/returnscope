@@ -21,8 +21,48 @@ class ClosingConnection(sqlite3.Connection):
             self.close()
 
 
+def _table_columns(
+    connection: sqlite3.Connection, table: str
+) -> dict[str, tuple[str, int]]:
+    return {
+        row["name"]: (row["type"].upper(), row["pk"])
+        for row in connection.execute(f'PRAGMA table_info("{table}")')
+    }
+
+
+def _index_keys(
+    connection: sqlite3.Connection, index: str
+) -> tuple[tuple[int, str | None, int, str | None], ...]:
+    return tuple(
+        (row["cid"], row["name"], row["desc"], row["coll"])
+        for row in connection.execute(f'PRAGMA index_xinfo("{index}")')
+        if row["key"]
+    )
+
+
+def _validate_table_columns(
+    connection: sqlite3.Connection,
+    table: str,
+    required_columns: dict[str, tuple[str, int]],
+) -> None:
+    actual_columns = _table_columns(connection, table)
+    if missing := required_columns.keys() - actual_columns.keys():
+        raise RuntimeError(
+            f"生产数据库表 {table} 缺少字段 {min(missing)}，请停服执行数据库升级"
+        )
+    for column, definition in required_columns.items():
+        if actual_columns[column] != definition:
+            raise RuntimeError(
+                f"生产数据库表 {table} 字段 {column} 定义不一致，请停服检查数据库结构"
+            )
+
+
 @cache
-def _required_schema() -> tuple[dict[str, set[str]], set[str], dict[str, str]]:
+def _required_schema() -> tuple[
+    dict[str, dict[str, tuple[str, int]]],
+    dict[str, tuple[tuple[int, str | None, int, str | None], ...]],
+    dict[str, str],
+]:
     """从当前迁移结果生成生产数据库的只读校验基准。"""
     with closing(sqlite3.connect(":memory:")) as reference:
         reference.row_factory = sqlite3.Row
@@ -31,16 +71,13 @@ def _required_schema() -> tuple[dict[str, set[str]], set[str], dict[str, str]]:
             reference, migrate_result_source_origin=True
         )
         tables = {
-            row["name"]: {
-                column["name"]
-                for column in reference.execute(f'PRAGMA table_info("{row["name"]}")')
-            }
+            row["name"]: _table_columns(reference, row["name"])
             for row in reference.execute(
                 "SELECT name FROM sqlite_master WHERE type = 'table'"
             )
         }
         indexes = {
-            row["name"]
+            row["name"]: _index_keys(reference, row["name"])
             for row in reference.execute(
                 "SELECT name FROM sqlite_master WHERE type = 'index' "
                 "AND name NOT LIKE 'sqlite_autoindex_%'"
@@ -93,19 +130,15 @@ class Database(DatabaseMigrations):
                     raise RuntimeError(
                         f"生产数据库缺少表 {table}，请停服执行数据库升级"
                     )
-                actual_columns = {
-                    row["name"]
-                    for row in connection.execute(f'PRAGMA table_info("{table}")')
-                }
-                if missing := required_columns - actual_columns:
-                    raise RuntimeError(
-                        f"生产数据库表 {table} 缺少字段 {min(missing)}，"
-                        "请停服执行数据库升级"
-                    )
-            for index in required_indexes:
+                _validate_table_columns(connection, table, required_columns)
+            for index, required_keys in required_indexes.items():
                 if ("index", index) not in actual_objects:
                     raise RuntimeError(
                         f"生产数据库缺少索引 {index}，请停服执行数据库升级"
+                    )
+                if _index_keys(connection, index) != required_keys:
+                    raise RuntimeError(
+                        f"生产数据库索引 {index} 定义不一致，请停服检查数据库结构"
                     )
             migrations = {
                 row["migration_id"]: (row["checksum"], row["status"])
