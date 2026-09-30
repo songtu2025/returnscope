@@ -8,6 +8,13 @@ import { navigateHash } from "../../app/hashRouter";
 import { api } from "../../api";
 import { dashboardApi } from "../../shared/api/dashboardApi";
 import { dashboardVersionNumber } from "./dashboardFields";
+import {
+  completedDashboardContent,
+  dashboardContentContext,
+  failedDashboardContent,
+  loadDashboardContent,
+  pendingDashboardContent,
+} from "./dashboardContentLoading";
 import { createDashboardSelection } from "./dashboardSelectionStorage";
 import { DashboardDetailContent } from "./DashboardDetailContent";
 import { DashboardDetailEvidenceDrawer } from "./DashboardDetailEvidenceDrawer";
@@ -76,13 +83,8 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
   );
   const [content, setContent] = useState(
     /** @returns {DashboardContentState} */ () => ({
+      ...completedDashboardContent(null),
       loading: true,
-      error: "",
-      data: null,
-      overviewScope: "",
-      scopeKey: "",
-      detailLoading: false,
-      detailError: "",
     }),
   );
   const [reports, setReports] = useState(
@@ -210,16 +212,8 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
     ],
   );
   const loadContent = useCallback(async () => {
-    if (!route.versionId || route.tab === "history" || route.tab === "report") {
-      setContent({
-        loading: false,
-        error: "",
-        data: null,
-        overviewScope: "",
-        scopeKey: "",
-        detailLoading: false,
-        detailError: "",
-      });
+    if (!route.versionId || ["history", "report"].includes(route.tab)) {
+      setContent(completedDashboardContent(null));
       return;
     }
     const generation = contentGenerationRef.current + 1;
@@ -227,124 +221,42 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
     contentControllerRef.current?.abort();
     const controller = new AbortController();
     contentControllerRef.current = controller;
-    const scopeKey = JSON.stringify([
-      route.dashboardId,
-      route.versionId,
-      filters.label_group,
-      filters.subject,
-      filters.listing,
-      filters.product_name,
-      filters.product_sku,
-      filters.date_from,
-      filters.date_to,
-    ]);
-    const overviewScope = JSON.stringify([route.dashboardId, route.versionId]);
+    const contentRoute = {
+      dashboardId: route.dashboardId,
+      versionId: route.versionId,
+      tab: route.tab,
+    };
+    const context = dashboardContentContext(contentRoute, filters);
     const cachedOverview =
-      overviewCacheRef.current.key === scopeKey ? overviewCacheRef.current.data : null;
-    setContent((current) => {
-      const keepPrevious =
-        route.tab === "overview" && current.overviewScope === overviewScope;
-      const reasonOnly =
-        keepPrevious &&
-        Boolean(current.data) &&
-        Boolean(cachedOverview) &&
-        current.scopeKey === scopeKey;
-      return {
-        loading: !reasonOnly,
-        error: "",
-        data: keepPrevious ? current.data : null,
-        overviewScope: route.tab === "overview" ? overviewScope : "",
-        scopeKey: keepPrevious ? current.scopeKey : "",
-        detailLoading: reasonOnly,
-        detailError: "",
-      };
-    });
+      overviewCacheRef.current.key === context.scopeKey
+        ? overviewCacheRef.current.data
+        : null;
+    setContent((current) => pendingDashboardContent(current, context, cachedOverview));
     try {
-      if (route.tab === "source") {
-        const data = await dashboardApi.analysisDashboardSources(
-          route.dashboardId,
-          route.versionId,
-          { signal: controller.signal },
-        );
-        if (contentGenerationRef.current === generation) {
-          setContent({
-            loading: false,
-            error: "",
-            data,
-            overviewScope: "",
-            scopeKey: "",
-            detailLoading: false,
-            detailError: "",
-          });
-        }
-        return;
-      }
-      let overview = cachedOverview;
-      if (!overview) {
-        overview = await dashboardApi.analysisDashboardInsights(
-          route.dashboardId,
-          route.versionId,
-          { ...filters, problem: "", part: "overview" },
-          { signal: controller.signal },
-        );
-        if (!overview) throw new Error("看板总览为空");
-        if (contentGenerationRef.current !== generation) return;
-        overviewCacheRef.current = { key: scopeKey, data: overview };
-      }
-      // 只根据当前范围成功返回的类别校正旧链接，不使用加载中的旧结果。
-      if (
-        filters.label_group &&
-        overview.category_groups?.length &&
-        !overview.category_groups.includes(filters.label_group)
-      ) {
+      const result = await loadDashboardContent({
+        route: contentRoute,
+        filters,
+        cachedOverview,
+        signal: controller.signal,
+        onOverview: (overview) => {
+          overviewCacheRef.current = { key: context.scopeKey, data: overview };
+        },
+      });
+      if (contentGenerationRef.current !== generation) return;
+      if ("resetCategory" in result) {
         updateRoute(
           { labelGroup: "", problem: "", recordPage: 1, reasonPage: 0 },
           { replace: true },
         );
         return;
       }
-      const selected =
-        overview.reasons?.find((reason) => reason.value === filters.problem) ??
-        overview.reasons?.[0];
-      if (!selected) {
-        setContent({
-          loading: false,
-          error: "",
-          data: overview,
-          overviewScope,
-          scopeKey,
-          detailLoading: false,
-          detailError: "",
-        });
-        return;
-      }
-      const detail = await dashboardApi.analysisDashboardInsights(
-        route.dashboardId,
-        route.versionId,
-        { ...filters, problem: selected.value, part: "reason" },
-        { signal: controller.signal },
-      );
-      if (contentGenerationRef.current === generation) {
-        setContent({
-          loading: false,
-          error: "",
-          detailLoading: false,
-          detailError: "",
-          data: { ...overview, ...detail, selected_reason: selected },
-          overviewScope,
-          scopeKey,
-        });
-      }
+      setContent(completedDashboardContent(result.data, context));
     } catch (error) {
       if (
         contentGenerationRef.current === generation &&
         errorName(error) !== "AbortError"
       ) {
-        setContent((current) =>
-          current.detailLoading
-            ? { ...current, detailLoading: false, detailError: errorMessage(error) }
-            : { ...current, loading: false, error: errorMessage(error) },
-        );
+        setContent((current) => failedDashboardContent(current, errorMessage(error)));
       }
     }
   }, [filters, route.dashboardId, route.tab, route.versionId, updateRoute]);

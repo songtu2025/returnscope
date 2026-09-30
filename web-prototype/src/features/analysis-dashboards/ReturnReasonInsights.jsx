@@ -10,7 +10,7 @@ import { commentStatusCounts, orderGroups } from "./returnReasonInsightPresentat
 /** @typedef {import("./analysisDashboardContracts").DashboardRecord} DashboardRecord */
 /** @typedef {import("./analysisDashboardContracts").DashboardRoute} DashboardRoute */
 /** @typedef {import("./analysisDashboardContracts").UpdateDashboardRoute} UpdateDashboardRoute */
-/** @param {{route: DashboardRoute, updateRoute: UpdateDashboardRoute, data: DashboardInsights, loading: boolean, error?: string, detailLoading?: boolean, detailError?: string, analysisContext: string, onRetry: () => void | Promise<void>, onEvidence: (record: DashboardRecord, trigger: HTMLElement | null) => void}} props */
+/** @param {{route: DashboardRoute, updateRoute: UpdateDashboardRoute, data: DashboardInsights, loading: boolean, error?: string, detailLoading?: boolean, detailError?: string, evidenceReady?: boolean, analysisContext: string, onRetry: () => void | Promise<void>, onEvidence: (record: DashboardRecord, trigger: HTMLElement | null) => void}} props */
 export function ReturnReasonInsights({
   route,
   updateRoute: replaceRoute,
@@ -19,6 +19,7 @@ export function ReturnReasonInsights({
   error,
   detailLoading = false,
   detailError = "",
+  evidenceReady = true,
   analysisContext,
   onRetry,
   onEvidence,
@@ -56,7 +57,7 @@ export function ReturnReasonInsights({
   ]);
 
   useEffect(() => {
-    if (evidencePageNumber === 1 || !selected?.value) return;
+    if (!evidenceReady || evidencePageNumber === 1 || !selected?.value) return;
     const controller = new AbortController();
     setEvidencePage({ key: evidenceKey, data: null, loading: true, error: "" });
     dashboardApi
@@ -101,6 +102,7 @@ export function ReturnReasonInsights({
       });
     return () => controller.abort();
   }, [
+    evidenceReady,
     evidenceKey,
     evidencePageNumber,
     route.dashboardId,

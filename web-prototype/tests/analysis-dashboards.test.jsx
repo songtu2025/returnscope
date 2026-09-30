@@ -1091,6 +1091,101 @@ test("筛选总览与原因详情到齐后才同步更新可见结果", async ()
   expect(screen.queryByRole("status")).not.toBeInTheDocument();
 });
 
+test.each(["范围", "原因"])(
+  "切换%s时暂停证据分页，结果到齐后只请求同范围原因，丢弃旧证据",
+  async (change) => {
+    const reasons = [
+      { value: "R1", label: "原因一", record_count: 30, percentage: 60 },
+      { value: "R2", label: "原因二", record_count: 20, percentage: 40 },
+    ];
+    const overview = { reasons, category_groups: [], summary: { record_count: 50 } };
+    const evidence = { items: [], total: 30, page: 1, page_size: 10 };
+    /** @type {(value: unknown) => void} */
+    let resolveOverview;
+    /** @type {(value: unknown) => void} */
+    let resolveDetail;
+    /** @type {(value: unknown) => void} */
+    let resolveOldEvidence;
+    dashboardApiMock.analysisDashboardInsights.mockImplementation(
+      (_dashboardId, _versionId, filters) => {
+        if (filters.listing === "L002" && filters.part === "overview") {
+          return new Promise((resolve) => (resolveOverview = resolve));
+        }
+        if (filters.problem === "R2" && filters.part === "reason") {
+          return new Promise((resolve) => (resolveDetail = resolve));
+        }
+        return Promise.resolve(filters.part === "overview" ? overview : { evidence });
+      },
+    );
+    dashboardApiMock.analysisDashboardEvidence
+      .mockImplementationOnce(
+        () => new Promise((resolve) => (resolveOldEvidence = resolve)),
+      )
+      .mockResolvedValue({
+        items: [{ id: "new-evidence", comment: "新结果第三页证据" }],
+        total: 30,
+        page: 3,
+        page_size: 10,
+      });
+    const link =
+      "#analysis-dashboards?dashboard=dashboard-default&version=dashboard-version-default";
+    window.location.hash = `${link}&listing=L001&problem=R1&record_page=2`;
+    render(<DashboardHarness />);
+    expect(await screen.findByRole("heading", { name: "原因一" })).toBeVisible();
+    await waitFor(() => expect(resolveOldEvidence).toBeTypeOf("function"));
+    const oldSignal =
+      dashboardApiMock.analysisDashboardEvidence.mock.calls[0][3].signal;
+    const listing = change === "范围" ? "L002" : "L001";
+    window.location.hash = `${link}&listing=${listing}&problem=R2&record_page=3`;
+
+    if (change === "范围") {
+      await waitFor(() => expect(resolveOverview).toBeTypeOf("function"));
+      expect(dashboardApiMock.analysisDashboardEvidence).toHaveBeenCalledTimes(1);
+      await act(async () => resolveOverview(overview));
+    }
+    await waitFor(() => expect(resolveDetail).toBeTypeOf("function"));
+    expect(oldSignal.aborted).toBe(true);
+    expect(screen.getByRole("heading", { name: "原因一" })).toBeVisible();
+    expect(dashboardApiMock.analysisDashboardEvidence).toHaveBeenCalledTimes(1);
+    await act(async () => resolveDetail({ evidence }));
+    expect(await screen.findByText("新结果第三页证据")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "原因二" })).toBeVisible();
+    expect(dashboardApiMock.analysisDashboardEvidence).toHaveBeenCalledTimes(2);
+    expect(dashboardApiMock.analysisDashboardEvidence).toHaveBeenLastCalledWith(
+      "dashboard-default",
+      "dashboard-version-default",
+      expect.objectContaining({ listing, problem: "R2", page: 3 }),
+      expect.any(Object),
+    );
+    const requestCount = dashboardApiMock.analysisDashboardInsights.mock.calls.length;
+    await act(async () =>
+      resolveOldEvidence({
+        items: [{ id: "old-evidence", comment: "晚到的旧证据" }],
+        total: 30,
+        page: 2,
+      }),
+    );
+    expect(screen.queryByText("晚到的旧证据")).not.toBeInTheDocument();
+    expect(screen.getByText("新结果第三页证据")).toBeVisible();
+    const user = userEvent.setup();
+    const evidenceSection = screen
+      .getByRole("heading", { name: "语义证据" })
+      .closest("section");
+    await user.click(within(evidenceSection).getByRole("button", { name: "上一页" }));
+    await waitFor(() =>
+      expect(dashboardApiMock.analysisDashboardEvidence).toHaveBeenCalledTimes(3),
+    );
+    expect(dashboardApiMock.analysisDashboardInsights).toHaveBeenCalledTimes(
+      requestCount,
+    );
+    expect(
+      dashboardApiMock.analysisDashboardInsights.mock.calls.filter(
+        ([, , filters]) => filters.part === "overview",
+      ),
+    ).toHaveLength(change === "范围" ? 2 : 1);
+  },
+);
+
 test("连续调整筛选时保留旧结果，并只应用最后一次请求", async () => {
   const user = userEvent.setup();
   /** @type {(value: unknown) => void} */

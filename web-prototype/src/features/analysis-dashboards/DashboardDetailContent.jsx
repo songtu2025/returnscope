@@ -10,6 +10,7 @@ import {
 import { AiInsightReport } from "./AiInsightReport";
 import { ReturnReasonInsights } from "./ReturnReasonInsights";
 import { asItems, dashboardVersionId } from "./DashboardDetailHelpers";
+import { dashboardEvidenceReady } from "./dashboardContentLoading";
 import { DashboardDetailLoadingBody } from "./DashboardDetailStateViews";
 
 /** @typedef {import("./analysisDashboardContracts").Dashboard} Dashboard */
@@ -103,6 +104,7 @@ export function DashboardDetailContent({
           error={content.error}
           detailLoading={content.detailLoading}
           detailError={content.detailError}
+          evidenceReady={dashboardEvidenceReady(content, route)}
           onRetry={onReloadContent}
           onEvidence={onEvidence}
           analysisContext={analysisContext}
