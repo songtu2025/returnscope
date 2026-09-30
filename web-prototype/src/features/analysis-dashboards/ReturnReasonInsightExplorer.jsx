@@ -10,7 +10,7 @@ import { analysisContextTerms } from "./analysisContextPresentation";
 /** @typedef {import("./analysisDashboardContracts").DashboardRoute} DashboardRoute */
 /** @typedef {import("./analysisDashboardContracts").InsightHierarchyNode} InsightHierarchyNode */
 /** @typedef {import("./analysisDashboardContracts").InsightReason} InsightReason */
-/** @typedef {{route: DashboardRoute, data: DashboardInsights, reasons: InsightReason[], hierarchy: InsightHierarchyNode[], taxonomyLabels: Map<string, ReviewLabel>, selected?: InsightReason, subjects: InsightReason[], groups: string[], analysisContext: string, onUpdateRoute: (changes: Partial<DashboardRoute>) => void}} ReturnReasonInsightExplorerProps */
+/** @typedef {{route: DashboardRoute, data: DashboardInsights, reasons: InsightReason[], hierarchy: InsightHierarchyNode[], taxonomyLabels: Map<string, ReviewLabel>, selected?: InsightReason, subjects: InsightReason[], groups: string[], pendingReason?: string, reasonStatus?: string, analysisContext: string, onUpdateRoute: (changes: Partial<DashboardRoute>) => void}} ReturnReasonInsightExplorerProps */
 
 const REASON_PAGE_SIZE = 10;
 
@@ -24,6 +24,8 @@ export function ReturnReasonInsightExplorer({
   selected,
   subjects,
   groups,
+  pendingReason = "",
+  reasonStatus = "更新中",
   analysisContext,
   onUpdateRoute,
 }) {
@@ -42,10 +44,13 @@ export function ReturnReasonInsightExplorer({
     1,
     Math.ceil(visibleReasons.length / REASON_PAGE_SIZE),
   );
-  const activeReason =
-    visibleReasons.find((reason) => reason.value === route.problem) || selected;
+  const activeReason = pendingReason
+    ? selected
+    : visibleReasons.find((reason) => reason.value === route.problem) || selected;
+  const pageReason =
+    visibleReasons.find((reason) => reason.value === pendingReason) || activeReason;
   const selectedIndex = visibleReasons.findIndex(
-    (reason) => reason.value === activeReason?.value,
+    (reason) => reason.value === pageReason?.value,
   );
   const selectedReasonPage =
     selectedIndex < 0 ? 1 : Math.floor(selectedIndex / REASON_PAGE_SIZE) + 1;
@@ -161,7 +166,17 @@ export function ReturnReasonInsightExplorer({
               .map((reason, index) => (
                 <li key={reason.value}>
                   <button
-                    className={activeReason?.value === reason.value ? "active" : ""}
+                    className={[
+                      activeReason?.value === reason.value ? "active" : "",
+                      pendingReason === reason.value ? "is-pending" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    aria-label={
+                      pendingReason === reason.value
+                        ? `${reason.label}，${reasonStatus}`
+                        : undefined
+                    }
                     onClick={() =>
                       onUpdateRoute({
                         problem: reason.value,
@@ -196,8 +211,9 @@ export function ReturnReasonInsightExplorer({
                       </i>
                     </div>
                     <strong>
-                      {Number(reason.record_count).toLocaleString()} ·{" "}
-                      {formatPercent(reason.percentage)}
+                      {pendingReason === reason.value
+                        ? reasonStatus
+                        : `${Number(reason.record_count).toLocaleString()} · ${formatPercent(reason.percentage)}`}
                     </strong>
                   </button>
                 </li>

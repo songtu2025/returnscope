@@ -80,6 +80,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
       error: "",
       data: null,
       overviewScope: "",
+      scopeKey: "",
       detailLoading: false,
       detailError: "",
     }),
@@ -213,6 +214,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
         error: "",
         data: null,
         overviewScope: "",
+        scopeKey: "",
         detailLoading: false,
         detailError: "",
       });
@@ -236,31 +238,24 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
     const overviewScope = JSON.stringify([route.dashboardId, route.versionId]);
     const cachedOverview =
       overviewCacheRef.current.key === scopeKey ? overviewCacheRef.current.data : null;
-    if (route.tab === "overview" && cachedOverview) {
-      const selected =
-        cachedOverview.reasons?.find((reason) => reason.value === filters.problem) ??
-        cachedOverview.reasons?.[0];
-      setContent({
-        loading: false,
+    setContent((current) => {
+      const keepPrevious =
+        route.tab === "overview" && current.overviewScope === overviewScope;
+      const reasonOnly =
+        keepPrevious &&
+        Boolean(current.data) &&
+        Boolean(cachedOverview) &&
+        current.scopeKey === scopeKey;
+      return {
+        loading: !reasonOnly,
         error: "",
-        detailLoading: Boolean(selected),
-        detailError: "",
-        data: { ...cachedOverview, selected_reason: selected },
-        overviewScope,
-      });
-    } else {
-      setContent((current) => ({
-        loading: true,
-        error: "",
-        data:
-          route.tab === "overview" && current.overviewScope === overviewScope
-            ? current.data
-            : null,
+        data: keepPrevious ? current.data : null,
         overviewScope: route.tab === "overview" ? overviewScope : "",
-        detailLoading: false,
+        scopeKey: keepPrevious ? current.scopeKey : "",
+        detailLoading: reasonOnly,
         detailError: "",
-      }));
-    }
+      };
+    });
     try {
       if (route.tab === "source") {
         const data = await dashboardApi.analysisDashboardSources(
@@ -274,6 +269,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
             error: "",
             data,
             overviewScope: "",
+            scopeKey: "",
             detailLoading: false,
             detailError: "",
           });
@@ -291,17 +287,6 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
         if (!overview) throw new Error("看板总览为空");
         if (contentGenerationRef.current !== generation) return;
         overviewCacheRef.current = { key: scopeKey, data: overview };
-        const selected =
-          overview.reasons?.find((reason) => reason.value === filters.problem) ??
-          overview.reasons?.[0];
-        setContent({
-          loading: false,
-          error: "",
-          detailLoading: Boolean(selected),
-          detailError: "",
-          data: { ...overview, selected_reason: selected },
-          overviewScope,
-        });
       }
       const selected =
         overview.reasons?.find((reason) => reason.value === filters.problem) ??
@@ -312,6 +297,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
           error: "",
           data: overview,
           overviewScope,
+          scopeKey,
           detailLoading: false,
           detailError: "",
         });
@@ -331,6 +317,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
           detailError: "",
           data: { ...overview, ...detail, selected_reason: selected },
           overviewScope,
+          scopeKey,
         });
       }
     } catch (error) {

@@ -93,36 +93,6 @@
   gap: 10px;
 }
 
-.return-insight-refresh-body > :not(.return-insight-filters) {
-  transition: opacity 160ms ease;
-}
-
-.return-insight-refresh-body.is-loading > :not(.return-insight-filters) {
-  opacity: 0.58;
-  pointer-events: none;
-}
-
-.return-insight-refresh-status,
-.return-insight-refresh-error {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 34px;
-  padding: 6px 12px;
-  border: 1px solid #cfe2d8;
-  border-radius: 8px;
-  background: #f1f8f5;
-  color: #1d6b50;
-  font-size: 13px;
-}
-
-.return-insight-refresh-error {
-  border-color: #ead8bb;
-  background: #fff8ec;
-  color: #8a5c16;
-}
-
 .return-insight-filters {
   display: grid;
   grid-template-columns:
@@ -659,6 +629,19 @@
   color: #3e5148;
 }
 
+.return-insight-trust .return-insight-refresh-message {
+  color: #0d5d47;
+  font-size: 11px;
+}
+
+.return-insight-trust .return-insight-refresh-message[role="alert"] {
+  color: #8a5c16;
+}
+
+.return-insight-refresh-message .text-button {
+  margin-left: 8px;
+}
+
 .return-insight-workbench {
   display: grid;
   grid-template-columns: 338px minmax(0, 1fr);
@@ -901,6 +884,10 @@
   box-shadow: inset 3px 0 #166f56;
 }
 
+.return-insight-explorer .return-reason-ranking li button.is-pending strong {
+  color: #0d5d47;
+}
+
 .return-insight-explorer .return-reason-ranking li button > div {
   display: grid;
   gap: 5px;
@@ -928,21 +915,6 @@
   background: #fff;
 }
 
-.return-diagnostic-pending {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  min-height: 640px;
-  color: #52675b;
-}
-
-.return-insight-diagnostic.is-detail-pending > .return-diagnostic-definition,
-.return-insight-diagnostic.is-detail-pending > .return-diagnostic-overview,
-.return-insight-diagnostic.is-detail-pending > .return-insight-card {
-  display: none;
-}
-
 .return-diagnostic-header {
   gap: 14px;
   padding-bottom: 11px;
@@ -952,6 +924,19 @@
 .return-diagnostic-title p {
   color: #7a8780;
   font-size: 9px;
+}
+
+.return-diagnostic-title p[role] {
+  color: #0d5d47;
+  font-size: 11px;
+}
+
+.return-diagnostic-title p[role="alert"] {
+  color: #8a5c16;
+}
+
+.return-diagnostic-title p .text-button {
+  margin-left: 6px;
 }
 
 .return-diagnostic-title h2 {

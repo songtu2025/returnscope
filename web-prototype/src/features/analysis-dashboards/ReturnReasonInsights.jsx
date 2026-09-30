@@ -147,22 +147,9 @@ export function ReturnReasonInsights({
       className="return-insight-content"
       role="region"
       aria-label="语义洞察结果"
-      aria-busy={loading}
+      aria-busy={loading || detailLoading}
     >
-      {loading && (
-        <div className="return-insight-refresh-status" role="status" aria-live="polite">
-          正在更新筛选结果，当前显示上一次结果…
-        </div>
-      )}
-      {!loading && error && (
-        <div className="return-insight-refresh-error" role="alert">
-          <span>更新失败，当前显示上一次结果。</span>
-          <button type="button" className="text-button" onClick={onRetry}>
-            重试
-          </button>
-        </div>
-      )}
-      <div className={`return-insight-refresh-body ${loading ? "is-loading" : ""}`}>
+      <div className="return-insight-refresh-body">
         <ReturnReasonInsightSummary
           route={route}
           data={data}
@@ -172,10 +159,13 @@ export function ReturnReasonInsights({
           pendingCount={pendingCount}
           statusCounts={statusCounts}
           analysisContext={analysisContext}
+          loading={loading}
+          error={error}
+          onRetry={onRetry}
           onUpdateFilters={updateFilters}
         />
 
-        <div className="return-insight-workbench">
+        <div className="return-insight-workbench" inert={loading}>
           <ReturnReasonInsightExplorer
             route={route}
             data={data}
@@ -185,6 +175,8 @@ export function ReturnReasonInsights({
             selected={selected}
             subjects={subjects}
             groups={groups}
+            pendingReason={detailLoading || detailError ? route.problem : ""}
+            reasonStatus={detailError ? "更新失败" : "更新中"}
             onUpdateRoute={updateRoute}
             analysisContext={analysisContext}
           />

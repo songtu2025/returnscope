@@ -55,17 +55,33 @@ export function ReturnReasonInsightDiagnostic({
   const evidencePageCount = Math.max(1, Math.ceil(evidence.total / evidencePageSize));
 
   return (
-    <main
-      className={`return-insight-diagnostic${detailLoading || detailError ? " is-detail-pending" : ""}`}
-      aria-busy={detailLoading}
-    >
+    <main className="return-insight-diagnostic" aria-busy={detailLoading}>
       {selected ? (
         <>
           <header className="return-diagnostic-header">
             <div className="return-diagnostic-title">
               <span>2</span>
               <div>
-                <p>原因诊断</p>
+                <p role={detailLoading ? "status" : detailError ? "alert" : undefined}>
+                  {detailError ? (
+                    <>
+                      原因详情更新失败 · 显示上次结果
+                      {onDetailRetry && (
+                        <button
+                          type="button"
+                          className="text-button"
+                          onClick={onDetailRetry}
+                        >
+                          重试
+                        </button>
+                      )}
+                    </>
+                  ) : detailLoading ? (
+                    "原因详情更新中 · 显示上次结果"
+                  ) : (
+                    "原因诊断"
+                  )}
+                </p>
                 <h2>{selected.label}</h2>
               </div>
             </div>
@@ -96,22 +112,6 @@ export function ReturnReasonInsightDiagnostic({
                 统计包含该问题标签的去重评论；核心原因率表示该标签进入评论的
                 primary_label_codes，不等同于唯一责任归因。
               </span>
-            </div>
-          )}
-
-          {(detailLoading || detailError) && (
-            <div
-              className="return-diagnostic-pending"
-              role={detailError ? "alert" : "status"}
-            >
-              <span>
-                {detailError ? `原因详情加载失败：${detailError}` : "正在加载原因详情…"}
-              </span>
-              {detailError && onDetailRetry && (
-                <button type="button" className="text-button" onClick={onDetailRetry}>
-                  重试
-                </button>
-              )}
             </div>
           )}
 

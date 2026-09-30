@@ -247,6 +247,18 @@ test("切换原因时立即按链接定位，仍尊重手动页码和无效原�
     within(ranking).getByRole("navigation", { name: "分页，第 3 页，共 4 页" }),
   ).toBeVisible();
   expect(within(ranking).getByRole("button", { name: /原因26/ })).toHaveClass("active");
+
+  view.rerender(
+    <ReturnReasonInsightExplorer
+      {...props}
+      pendingReason="R39"
+      route={{ ...props.route, reasonPage: 0 }}
+    />,
+  );
+  expect(
+    within(ranking).getByRole("navigation", { name: "分页，第 4 页，共 4 页" }),
+  ).toBeVisible();
+  expect(within(ranking).getByRole("button", { name: "原因39，更新中" })).toBeVisible();
 });
 
 test("原因列表的筛选与页码可由链接恢复，翻页不重新请求洞察", async () => {
@@ -743,7 +755,7 @@ test("详情正文读取失败时保留页头和重试入口", async () => {
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
 
-test("切换具体原因仅请求明细，保留总览并显示局部加载状态", async () => {
+test("切换具体原因仅请求明细，失败和重试期间保留旧诊断", async () => {
   const user = userEvent.setup();
   const reasons = [
     { value: "R1", label: "原因一", record_count: 8, percentage: 80 },
@@ -751,6 +763,8 @@ test("切换具体原因仅请求明细，保留总览并显示局部加载状�
   ];
   /** @type {(value: unknown) => void} */
   let resolveSecondReason;
+  /** @type {(reason: Error) => void} */
+  let rejectSecondReason;
   dashboardApiMock.analysisDashboardInsights.mockImplementation(
     (_dashboardId, _versionId, filters) => {
       if (filters.part === "overview") {
@@ -764,8 +778,9 @@ test("切换具体原因仅请求明细，保留总览并显示局部加载状�
         });
       }
       if (filters.problem === "R2") {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
           resolveSecondReason = resolve;
+          rejectSecondReason = reject;
         });
       }
       return Promise.resolve({
@@ -780,14 +795,29 @@ test("切换具体原因仅请求明细，保留总览并显示局部加载状�
     "#analysis-dashboards?dashboard=dashboard-default&version=dashboard-version-default";
   render(<DashboardHarness />);
   await screen.findByRole("button", { name: /原因二/ });
+  expect(screen.getByRole("heading", { name: "原因一" })).toBeVisible();
   await user.click(screen.getByRole("button", { name: /原因二/ }));
-  expect(await screen.findByText("正在加载原因详情…")).toBeVisible();
+  expect(await screen.findByText("原因详情更新中 · 显示上次结果")).toBeVisible();
+  expect(screen.getByRole("heading", { name: "原因一" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "原因二，更新中" })).toBeVisible();
   expect(screen.getByText("有效反馈")).toBeVisible();
   expect(
     dashboardApiMock.analysisDashboardInsights.mock.calls.filter(
       ([, , filters]) => filters.part === "overview",
     ),
   ).toHaveLength(1);
+  await act(async () => rejectSecondReason(new Error("请求超时")));
+  expect(screen.getByRole("alert")).toHaveTextContent("原因详情更新失败");
+  expect(screen.getByRole("heading", { name: "原因一" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "原因二，更新失败" })).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "重试" }));
+  await waitFor(() =>
+    expect(
+      dashboardApiMock.analysisDashboardInsights.mock.calls.filter(
+        ([, , filters]) => filters.problem === "R2" && filters.part === "reason",
+      ),
+    ).toHaveLength(2),
+  );
   await act(async () =>
     resolveSecondReason({
       trend: [],
@@ -797,8 +827,77 @@ test("切换具体原因仅请求明细，保留总览并显示局部加载状�
     }),
   );
   await waitFor(() =>
-    expect(screen.queryByText("正在加载原因详情…")).not.toBeInTheDocument(),
+    expect(screen.queryByText("原因详情更新中 · 显示上次结果")).not.toBeInTheDocument(),
   );
+  expect(screen.getByRole("heading", { name: "原因二" })).toBeVisible();
+});
+
+test("筛选总览与原因详情到齐后才同步更新可见结果", async () => {
+  const user = userEvent.setup();
+  const oldReason = { value: "R1", label: "原因一", record_count: 8, percentage: 80 };
+  const newReason = { value: "R2", label: "原因二", record_count: 4, percentage: 100 };
+  /** @type {(value: unknown) => void} */
+  let resolveOverview;
+  /** @type {(value: unknown) => void} */
+  let resolveDetail;
+  dashboardApiMock.analysisDashboardInsights.mockImplementation(
+    (_dashboardId, _versionId, filters) => {
+      if (filters.listing === "L002") {
+        return new Promise((resolve) => {
+          if (filters.part === "overview") resolveOverview = resolve;
+          else resolveDetail = resolve;
+        });
+      }
+      if (filters.part === "overview") {
+        return Promise.resolve({
+          summary: { record_count: 10 },
+          date_range: {},
+          filter_options: { listings: ["L002"] },
+          category_groups: [],
+          reasons: [oldReason],
+        });
+      }
+      return Promise.resolve({
+        trend: [],
+        products: [],
+        evidence: { items: [], total: 0 },
+      });
+    },
+  );
+  window.location.hash =
+    "#analysis-dashboards?dashboard=dashboard-default&version=dashboard-version-default";
+  const view = render(<DashboardHarness />);
+  expect(await screen.findByRole("heading", { name: "原因一" })).toBeVisible();
+
+  await user.selectOptions(screen.getByRole("combobox", { name: "Listing" }), "L002");
+  await waitFor(() => expect(resolveOverview).toBeTypeOf("function"));
+  expect(screen.getByRole("status")).toHaveTextContent("当前显示上一次结果");
+  expect(view.container.querySelector(".return-insight-workbench")).toHaveAttribute(
+    "inert",
+  );
+  expect(screen.getByRole("heading", { name: "原因一" })).toBeVisible();
+  await act(async () =>
+    resolveOverview({
+      summary: { record_count: 4 },
+      date_range: {},
+      filter_options: { listings: ["L002"] },
+      category_groups: [],
+      reasons: [newReason],
+    }),
+  );
+  await waitFor(() => expect(resolveDetail).toBeTypeOf("function"));
+  expect(screen.getByRole("heading", { name: "原因一" })).toBeVisible();
+  expect(screen.getByText("10 条")).toBeVisible();
+  expect(screen.queryByText("4 条")).not.toBeInTheDocument();
+
+  await act(async () =>
+    resolveDetail({ trend: [], products: [], evidence: { items: [], total: 0 } }),
+  );
+  expect(await screen.findByRole("heading", { name: "原因二" })).toBeVisible();
+  expect(
+    within(view.container.querySelector(".return-insight-trust")).getByText("4 条"),
+  ).toBeVisible();
+  expect(screen.queryByRole("status")).not.toBeInTheDocument();
 });
 
 test("连续调整筛选时保留旧结果，并只应用最后一次请求", async () => {
