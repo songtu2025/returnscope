@@ -190,6 +190,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
   const filters = useMemo(
     () => ({
       problem: route.problem,
+      subject: route.subject,
       label_group: route.labelGroup,
       listing: route.listing,
       product_name: route.productName,
@@ -203,6 +204,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
       route.labelGroup,
       route.listing,
       route.problem,
+      route.subject,
       route.productName,
       route.productSku,
     ],
@@ -229,6 +231,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
       route.dashboardId,
       route.versionId,
       filters.label_group,
+      filters.subject,
       filters.listing,
       filters.product_name,
       filters.product_sku,

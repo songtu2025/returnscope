@@ -936,6 +936,119 @@ def test_reason_evidence_pages_match_insight_count_and_filters(tmp_path: Path) -
     assert all(item["return_date"] == "2026-08-03" for item in second["items"])
 
 
+def test_subject_scope_counts_only_matching_reason_units(tmp_path: Path) -> None:
+    context, version, service = _ready_result(tmp_path)
+    version_id = str(version["version_id"])
+    with context.database.transaction(immediate=True) as connection:
+        row = connection.execute(
+            "SELECT id, result_version_id, classification_key, classification_json "
+            "FROM classification_units WHERE result_version_id = ? LIMIT 1",
+            (version_id,),
+        ).fetchone()
+        classification = json.loads(row["classification_json"])
+        semantic = classification["semantic_units"][0]
+        connection.execute(
+            """
+            INSERT INTO classification_units(
+                id, result_version_id, classification_key, reason, comment,
+                classification_json, problem_labels_json, system_rerun_required,
+                processing_status, quality_status, record_count, model_name,
+                prompt_version, taxonomy_version
+            )
+            SELECT ?, result_version_id, ?, reason, comment, classification_json,
+                   problem_labels_json, system_rerun_required, processing_status,
+                   quality_status, 1, model_name, prompt_version, taxonomy_version
+            FROM classification_units WHERE id = ?
+            """,
+            ("product-only-unit", "PRODUCT_ONLY", row["id"]),
+        )
+        connection.execute(
+            """
+            INSERT INTO classification_unit_labels(
+                result_version_id, classification_key, label_kind,
+                label_code, label_name, label_group
+            )
+            SELECT result_version_id, ?, label_kind, label_code, label_name, label_group
+            FROM classification_unit_labels
+            WHERE result_version_id = ? AND classification_key = ?
+            """,
+            ("PRODUCT_ONLY", row["result_version_id"], row["classification_key"]),
+        )
+        connection.execute(
+            """
+            UPDATE classification_result_records
+            SET classification_key = 'PRODUCT_ONLY'
+            WHERE id = (
+                SELECT id FROM classification_result_records
+                WHERE result_version_id = ?
+                ORDER BY source_row DESC LIMIT 1
+            )
+            """,
+            (version_id,),
+        )
+        classification["semantic_units"].append(
+            {
+                **semantic,
+                "subject": "UNKNOWN",
+                "label_code": "QUALITY_GENERAL",
+                "opinion": "对象未明确的质量反馈",
+            }
+        )
+        connection.execute(
+            "UPDATE classification_units SET classification_json = ? WHERE id = ?",
+            (json_text(classification), row["id"]),
+        )
+        connection.execute(
+            """
+            INSERT INTO classification_unit_labels(
+                result_version_id, classification_key, label_kind,
+                label_code, label_name, label_group
+            ) VALUES (?, ?, 'problem', 'QUALITY_GENERAL', '整体质量', '质量')
+            """,
+            (row["result_version_id"], row["classification_key"]),
+        )
+    _, dashboard = _create_dashboard(service, version_id)
+    dashboard_id = str(dashboard["id"])
+    dashboard_version_id = str(dashboard["version"]["version_id"])
+
+    unknown = service.insights(dashboard_id, dashboard_version_id, subject="UNKNOWN")
+    assert unknown["total_record_count"] == 1
+    assert (
+        unknown["subject_breakdown"]
+        == service.insights(dashboard_id, dashboard_version_id, part="overview")[
+            "subject_breakdown"
+        ]
+    )
+    assert [
+        (reason["value"], reason["record_count"]) for reason in unknown["reasons"]
+    ] == [("QUALITY_GENERAL", 1)]
+    assert unknown["selected_reason"]["record_count"] == 1
+    assert unknown["semantic_profile"]["record_count"] == 1
+    assert unknown["evidence"]["total"] == 1
+    assert (
+        service.evidence_page(
+            dashboard_id,
+            dashboard_version_id,
+            InsightOptions(problem="QUALITY_GENERAL", subject="UNKNOWN"),
+        )["total"]
+        == 1
+    )
+    assert (
+        service.insights(
+            dashboard_id,
+            dashboard_version_id,
+            subject="UNKNOWN",
+            label_group="尺码与适配",
+            part="overview",
+        )["reasons"]
+        == []
+    )
+    with pytest.raises(ValueError, match="问题对象不合法"):
+        service.insights(
+            dashboard_id, dashboard_version_id, subject="INVALID", part="overview"
+        )
+
+
 def test_dashboard_insights_count_each_semantic_part_once_per_record(
     tmp_path: Path,
 ) -> None:
@@ -1375,6 +1488,23 @@ def test_dashboard_schema_upgrade_and_router_contract(tmp_path: Path) -> None:
     assert evidence.status_code == 200
     assert evidence.json()["page_size"] == 10
     assert evidence.json()["total"] == 2
+    insight_path = evidence_path.replace("/evidence", "/insights")
+    scoped = client.get(insight_path, params={"subject": "PRODUCT", "part": "overview"})
+    assert scoped.status_code == 200
+    assert scoped.json()["reasons"][0]["record_count"] == 2
+    assert (
+        client.get(
+            evidence_path,
+            params={"problem": "FIT_TOO_SMALL_U1", "subject": "UNKNOWN"},
+        ).json()["total"]
+        == 0
+    )
+    assert (
+        client.get(
+            insight_path, params={"subject": "INVALID", "part": "overview"}
+        ).status_code
+        == 400
+    )
 
     denied = FastAPI()
 

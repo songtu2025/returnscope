@@ -122,7 +122,11 @@ export function ReturnReasonInsightExplorer({
             <i aria-hidden="true">
               <span style={{ width: `${Math.min(subject.percentage, 100)}%` }} />
             </i>
-            <strong>{formatPercent(subject.percentage)}</strong>
+            <strong>
+              {subject.record_count > 0 && subject.percentage === 0
+                ? "<0.1%"
+                : formatPercent(subject.percentage)}
+            </strong>
           </button>
         ))}
       </section>
@@ -155,7 +159,11 @@ export function ReturnReasonInsightExplorer({
         <header>
           <div>
             <h3>{terms.reasonHeading}</h3>
-            <p>按有效评论排序</p>
+            <p>
+              {selectedSubject
+                ? `对象：${subjects.find((subject) => subject.value === selectedSubject)?.label} · ${route.labelGroup || "全部类别"}`
+                : "按有效评论排序"}
+            </p>
           </div>
           <span>{visibleReasons.length} 项</span>
         </header>

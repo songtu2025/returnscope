@@ -3,7 +3,10 @@ from __future__ import annotations
 from typing import Any, cast
 
 from return_semantics.schemas import TaxonomyConfig
-from web_backend.dashboard_insight_overview import InsightQueryScope
+from web_backend.dashboard_insight_overview import (
+    InsightQueryScope,
+    subject_label_filter,
+)
 from web_backend.dashboard_support import percentage, serialize_record
 
 EVIDENCE_PAGE_SIZE = 10
@@ -44,6 +47,7 @@ def list_reason_evidence(
                 AND selected.classification_key = r.classification_key
                 AND selected.label_kind = 'problem'
                 AND selected.label_code = ?
+                {subject_label_filter(scope, "r", "selected")}
                 {group_condition}
           )
     """
@@ -135,6 +139,7 @@ def collect_reason_details(
              AND selected.classification_key = r.classification_key
              AND selected.label_kind = 'problem'
              AND selected.label_code = ?
+             {subject_label_filter(scope, "r", "selected")}
             WHERE {where_sql}
             """,
             (selected_code, *params),
@@ -266,6 +271,7 @@ def collect_reason_details(
              AND other.classification_key = r.classification_key
              AND other.label_kind = 'problem'
              AND other.label_code <> ?
+             {subject_label_filter(scope, "r", "other")}
             WHERE {where_sql}
             GROUP BY other.label_code, other.label_name
             ORDER BY record_count DESC, label COLLATE NOCASE ASC
@@ -308,6 +314,7 @@ def collect_reason_details(
                 JOIN json_each(u.classification_json, '$.semantic_units') unit
                 WHERE {where_sql}
                   AND json_extract(unit.value, '$.label_code') = ?
+                  {"AND json_extract(unit.value, '$.subject') = ?" if scope.clean_subject else ""}
             ),
             part_counts AS (
                 SELECT part AS value, COUNT(DISTINCT record_id) AS record_count
@@ -337,7 +344,9 @@ def collect_reason_details(
             SELECT 'opinion', opinion, subject, part, record_count, evidence
             FROM opinion_counts
             """,
-            (*params, selected_code),
+            (*params, selected_code, scope.clean_subject)
+            if scope.clean_subject
+            else (*params, selected_code),
         ).fetchall()
         semantic_record_count = int(semantic_rows[0]["record_count"])
         part_rows = sorted(

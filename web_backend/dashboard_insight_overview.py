@@ -18,9 +18,20 @@ class InsightQueryScope:
     option_params: list[Any]
     unit_rollup: bool
     clean_group: str
+    clean_subject: str
     requested_problem: str
     report_mode: bool
     records_table: str = "classification_result_records"
+
+
+def subject_label_filter(scope: InsightQueryScope, record: str, label: str) -> str:
+    if not scope.clean_subject:
+        return ""
+    return (
+        " AND EXISTS (SELECT 1 FROM dashboard_insight_subject_labels subject_label"
+        f" WHERE subject_label.id = {record}.id"
+        f" AND subject_label.label_code = {label}.label_code)"
+    )
 
 
 def _collect_semantic_breakdown(
@@ -171,6 +182,16 @@ def _collect_semantic_breakdown(
     return subject_breakdown, reason_subjects
 
 
+def collect_subject_breakdown(scope: InsightQueryScope) -> list[dict[str, Any]]:
+    total_records = int(
+        scope.connection.execute(
+            f"SELECT COUNT(*) FROM {scope.records_table} r WHERE {scope.where_sql}",
+            tuple(scope.params),
+        ).fetchone()[0]
+    )
+    return _collect_semantic_breakdown(scope, total_records)[0]
+
+
 def _label_catalog(
     scope: InsightQueryScope, reason_rows: list[sqlite3.Row]
 ) -> tuple[dict[str, str], dict[str, int]]:
@@ -191,6 +212,7 @@ def _label_catalog(
               ON l.result_version_id = r.result_version_id
              AND l.classification_key = r.classification_key
              AND l.label_kind = 'problem'
+             {subject_label_filter(scope, "r", "l")}
             WHERE {where_sql}
             GROUP BY l.label_code, l.label_name
             """,
@@ -256,6 +278,7 @@ def _reason_rows(
               ON l.result_version_id = r.result_version_id
              AND l.classification_key = r.classification_key
              AND l.label_kind = 'problem'
+             {subject_label_filter(scope, "r", "l")}
             {units_join}
             WHERE {where_sql}{reason_group_filter}
             GROUP BY l.label_code, l.label_name, label_group
@@ -281,6 +304,7 @@ def _reason_rows(
           ON l.result_version_id = r.result_version_id
          AND l.classification_key = r.classification_key
          AND l.label_kind = 'problem'
+         {subject_label_filter(scope, "r", "l")}
         JOIN classification_units u
           ON u.result_version_id = r.result_version_id
          AND u.classification_key = r.classification_key
@@ -359,6 +383,7 @@ def collect_insight_overview(
                   WHERE label.result_version_id = r.result_version_id
                     AND label.classification_key = r.classification_key
                     AND label.label_kind = 'problem'
+                    {subject_label_filter(scope, "r", "label")}
               )
             """,
             tuple(params),
@@ -376,6 +401,7 @@ def collect_insight_overview(
           ON l.result_version_id = r.result_version_id
          AND l.classification_key = r.classification_key
          AND l.label_kind = 'problem'
+         {subject_label_filter(scope, "r", "l")}
         WHERE {where_sql}
         GROUP BY value
         ORDER BY record_count DESC, MIN(l.rowid)
@@ -442,6 +468,7 @@ def collect_insight_overview(
           ON l.result_version_id = filtered_records.result_version_id
          AND l.classification_key = filtered_records.classification_key
          AND l.label_kind = 'problem'
+         {subject_label_filter(scope, "filtered_records", "l")}
         GROUP BY top_products.value, top_products.total_record_count,
                  l.label_code
         ORDER BY top_products.total_record_count DESC,

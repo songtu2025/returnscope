@@ -317,6 +317,7 @@ class DashboardService:
         version_id: str,
         *,
         problem: str | None = None,
+        subject: str | None = None,
         label_group: str | None = None,
         listing: str | None = None,
         product_name: str | None = None,
@@ -328,6 +329,7 @@ class DashboardService:
     ) -> dict[str, Any]:
         options = InsightOptions(
             problem=problem,
+            subject=subject,
             label_group=label_group,
             listing=listing,
             product_name=product_name,

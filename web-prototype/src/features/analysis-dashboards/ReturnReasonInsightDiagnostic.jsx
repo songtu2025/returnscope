@@ -27,12 +27,13 @@ import { analysisContextTerms } from "./analysisContextPresentation";
 /** @typedef {import("./analysisDashboardContracts").InsightProduct} InsightProduct */
 /** @typedef {import("./analysisDashboardContracts").InsightReason} InsightReason */
 /** @typedef {import("./analysisDashboardContracts").InsightSemanticProfile} InsightSemanticProfile */
-/** @typedef {{data: DashboardInsights, selected?: InsightReason, products: InsightProduct[], coReasons: InsightReason[], semanticProfile: InsightSemanticProfile, evidence: InsightEvidence, evidencePage: number, evidenceLoading: boolean, evidenceError: string, detailLoading?: boolean, detailError?: string, onDetailRetry?: () => void | Promise<void>, analysisContext: string, onUpdateRoute: (changes: Partial<DashboardRoute>) => void, onEvidence: (record: DashboardRecord, trigger: HTMLElement | null) => void, onEvidencePage: (page: number) => void, onEvidenceRetry: () => void}} ReturnReasonInsightDiagnosticProps */
+/** @typedef {{data: DashboardInsights, selected?: InsightReason, subjectLabel?: string, products: InsightProduct[], coReasons: InsightReason[], semanticProfile: InsightSemanticProfile, evidence: InsightEvidence, evidencePage: number, evidenceLoading: boolean, evidenceError: string, detailLoading?: boolean, detailError?: string, onDetailRetry?: () => void | Promise<void>, analysisContext: string, onUpdateRoute: (changes: Partial<DashboardRoute>) => void, onEvidence: (record: DashboardRecord, trigger: HTMLElement | null) => void, onEvidencePage: (page: number) => void, onEvidenceRetry: () => void}} ReturnReasonInsightDiagnosticProps */
 
 /** @param {ReturnReasonInsightDiagnosticProps} props */
 export function ReturnReasonInsightDiagnostic({
   data,
   selected,
+  subjectLabel = "",
   products,
   coReasons,
   semanticProfile,
@@ -78,6 +79,8 @@ export function ReturnReasonInsightDiagnostic({
                     </>
                   ) : detailLoading ? (
                     "原因详情更新中 · 显示上次结果"
+                  ) : subjectLabel ? (
+                    `原因诊断 · ${subjectLabel}`
                   ) : (
                     "原因诊断"
                   )}
@@ -129,7 +132,7 @@ export function ReturnReasonInsightDiagnostic({
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart
                       data={data.trend}
-                      margin={{ top: 14, right: 8, bottom: 4, left: 0 }}
+                      margin={{ top: 14, right: 8, bottom: 4, left: 8 }}
                     >
                       <CartesianGrid stroke="#e7ece9" vertical={false} />
                       <XAxis
@@ -146,7 +149,7 @@ export function ReturnReasonInsightDiagnostic({
                         tick={{ fill: "#738079", fontSize: 10 }}
                         tickLine={false}
                         axisLine={false}
-                        width={34}
+                        width={48}
                       />
                       <YAxis yAxisId="volume" orientation="right" hide />
                       <Tooltip

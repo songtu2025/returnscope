@@ -186,6 +186,46 @@ test("具体原因按十项分页，保持全局排名并在筛选后定位选�
   expect(within(ranking).queryByRole("navigation")).not.toBeInTheDocument();
 });
 
+test("问题对象显示实际范围和极小占比", () => {
+  const reason = {
+    value: "SIZE_GUIDANCE_CONFUSING",
+    label: "尺码选择或尺码表问题",
+    record_count: 1,
+    percentage: 11.1,
+    subjects: ["UNKNOWN"],
+  };
+  render(
+    <ReturnReasonInsightExplorer
+      route={{
+        subject: "UNKNOWN",
+        labelGroup: "",
+        problem: reason.value,
+        reasonPage: 0,
+      }}
+      data={{}}
+      reasons={[reason]}
+      hierarchy={[]}
+      taxonomyLabels={new Map()}
+      selected={reason}
+      subjects={[
+        {
+          value: "UNKNOWN",
+          label: "对象未明确",
+          record_count: 9,
+          percentage: 0,
+        },
+      ]}
+      groups={[]}
+      analysisContext="returns"
+      onUpdateRoute={vi.fn()}
+    />,
+  );
+  expect(screen.getByText("9 条评论")).toBeVisible();
+  expect(screen.getByText("<0.1%")).toBeVisible();
+  expect(screen.getByText("对象：对象未明确 · 全部类别")).toBeVisible();
+  expect(screen.getByText(/1 · 11.1%/)).toBeVisible();
+});
+
 test("切换原因时立即按链接定位，仍尊重手动页码和无效原因回退", async () => {
   const user = userEvent.setup();
   const onUpdateRoute = vi.fn();

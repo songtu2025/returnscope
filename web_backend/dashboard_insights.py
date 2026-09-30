@@ -4,7 +4,7 @@ import sqlite3
 from dataclasses import dataclass, replace
 from typing import Any
 
-from return_semantics.schemas import TaxonomyConfig
+from return_semantics.schemas import SubjectCode, TaxonomyConfig
 from return_semantics.taxonomy import aligned_label_group
 from web_backend.dashboard_insight_details import (
     EVIDENCE_PAGE_SIZE,
@@ -15,6 +15,7 @@ from web_backend.dashboard_insight_overview import (
     InsightQueryScope,
     collect_insight_overview,
     collect_reason_context,
+    collect_subject_breakdown,
 )
 from web_backend.dashboard_plan import comment_summary_metrics
 from web_backend.dashboard_support import (
@@ -36,6 +37,7 @@ INSIGHT_PAGE_CACHE_KIB = 64 * 1024
 @dataclass(frozen=True)
 class InsightOptions:
     problem: str | None = None
+    subject: str | None = None
     label_group: str | None = None
     listing: str | None = None
     product_name: str | None = None
@@ -54,6 +56,8 @@ class PreparedInsightScope:
     ungrouped_params: list[Any]
     comment_where: str
     comment_params: list[Any]
+    facet_where: str
+    facet_params: list[Any]
 
 
 def _reason_detail_payload(
@@ -170,8 +174,35 @@ def _prepare_scope(
             where_sql, params = feedback_group_scope(
                 connection, where_sql, params, name="main"
             )
+    facet_where, facet_params = where_sql, params.copy()
+    clean_subject = (options.subject or "").strip()
+    if clean_subject:
+        if clean_subject not in {item.value for item in SubjectCode}:
+            raise ValueError("问题对象不合法")
+        connection.execute(
+            "CREATE TEMP TABLE dashboard_insight_subject_labels "
+            "(id TEXT NOT NULL, label_code TEXT NOT NULL, "
+            "PRIMARY KEY (id, label_code))"
+        )
+        connection.execute(
+            f"""
+            INSERT OR IGNORE INTO dashboard_insight_subject_labels
+            SELECT r.id, json_extract(unit.value, '$.label_code')
+            FROM classification_result_records r
+            JOIN classification_units u
+              ON u.result_version_id = r.result_version_id
+             AND u.classification_key = r.classification_key
+            JOIN json_each(u.classification_json, '$.semantic_units') unit
+            WHERE {where_sql}
+              AND json_extract(unit.value, '$.subject') = ?
+              AND json_extract(unit.value, '$.label_code') IS NOT NULL
+            """,
+            (*params, clean_subject),
+        )
+        where_sql += " AND r.id IN (SELECT id FROM dashboard_insight_subject_labels)"
     unit_rollup = (
         options.report_mode
+        and not clean_subject
         and not runtime_filters
         and not clean_date_from
         and not clean_date_to
@@ -188,6 +219,7 @@ def _prepare_scope(
             option_params=option_params,
             unit_rollup=unit_rollup,
             clean_group=(options.label_group or "").strip(),
+            clean_subject=clean_subject,
             requested_problem=(options.problem or "").strip(),
             report_mode=options.report_mode,
         ),
@@ -197,6 +229,8 @@ def _prepare_scope(
         ungrouped_params=ungrouped_params,
         comment_where=comment_scope_where,
         comment_params=comment_scope_params,
+        facet_where=facet_where,
+        facet_params=facet_params,
     )
 
 
@@ -227,6 +261,18 @@ def build_insights(
         prepared = _prepare_scope(database, connection, context, options)
         scope = prepared.scope
         taxonomy = prepared.taxonomy
+        facet_subjects = (
+            collect_subject_breakdown(
+                replace(
+                    scope,
+                    where_sql=prepared.facet_where,
+                    params=prepared.facet_params,
+                    clean_subject="",
+                )
+            )
+            if scope.clean_subject and part != "reason"
+            else None
+        )
         summary = dict(context["summary"])
         if part != "reason":
             if any(
@@ -289,6 +335,8 @@ def build_insights(
                 **_reason_detail_payload(reason_details, reason_selected),
             }
         overview = collect_insight_overview(scope)
+        if facet_subjects is not None:
+            overview["subject_breakdown"] = facet_subjects
         selected_reason = overview["selected_reason"]
         details = (
             collect_reason_details(scope, selected_reason, overview, taxonomy)

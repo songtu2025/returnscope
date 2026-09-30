@@ -44,6 +44,7 @@ export function ReturnReasonInsights({
     route.dashboardId,
     route.versionId,
     selected?.value,
+    route.subject,
     route.labelGroup,
     route.listing,
     route.productName,
@@ -64,6 +65,7 @@ export function ReturnReasonInsights({
         route.versionId,
         {
           problem: selected.value,
+          subject: route.subject,
           label_group: route.labelGroup,
           listing: route.listing,
           product_name: route.productName,
@@ -103,6 +105,7 @@ export function ReturnReasonInsights({
     evidencePageNumber,
     route.dashboardId,
     route.versionId,
+    route.subject,
     route.labelGroup,
     route.listing,
     route.productName,
@@ -183,6 +186,11 @@ export function ReturnReasonInsights({
           <ReturnReasonInsightDiagnostic
             data={data}
             selected={selected}
+            subjectLabel={
+              route.subject
+                ? subjects.find((subject) => subject.value === route.subject)?.label
+                : ""
+            }
             products={products}
             coReasons={coReasons}
             semanticProfile={semanticProfile}

@@ -34,6 +34,7 @@ SUBJECT_LABELS = {
     "ORDER": "订单相关",
     "DELIVERY": "配送相关",
     "SERVICE": "服务相关",
+    "UNKNOWN": "对象未明确",
 }
 TEXT_ENCODING_ANOMALY = re.compile(
     r"(?:[A-Za-z][\u4e00-\u9fff]|[\u4e00-\u9fff][A-Za-z]|\ufffd)"
