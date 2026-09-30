@@ -421,6 +421,31 @@ test("筛选更新时明确标记旧结果并在失败后保留结果", async ()
   expect(onRetry).toHaveBeenCalledOnce();
 });
 
+test.each([
+  [50, "50.0%"],
+  [0, "0.0%"],
+  [undefined, "100.0%"],
+])("顶部优先展示基础范围覆盖率 %s，保留旧接口回退", (coverage, expected) => {
+  render(
+    <ReturnReasonInsights
+      route={{ recordPage: 1, subject: "UNKNOWN", labelGroup: "质量" }}
+      updateRoute={vi.fn()}
+      data={{
+        summary: { comment_count: 2, label_coverage: coverage },
+        label_coverage: 100,
+        total_record_count: 1,
+      }}
+      loading={false}
+      analysisContext="returns"
+      onRetry={vi.fn()}
+      onEvidence={vi.fn()}
+    />,
+  );
+  const trust = screen.getByRole("region", { name: "数据可信度" });
+  expect(within(trust).getByText(expected)).toBeVisible();
+  expect(within(trust).getByText("2 条")).toBeVisible();
+});
+
 test("语义证据按原因和筛选条件翻页，失败后可重试", async () => {
   const user = userEvent.setup();
   const updateRoute = vi.fn();

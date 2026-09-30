@@ -109,7 +109,7 @@ export function ReturnReasonInsightSummary({
         <div>
           <TrendUp size={18} />
           <span>问题标签覆盖</span>
-          <b>{formatPercent(data.label_coverage)}</b>
+          <b>{formatPercent(data.summary?.label_coverage ?? data.label_coverage)}</b>
         </div>
         <div className={pendingCount ? "warning" : ""}>
           <WarningCircle size={18} />

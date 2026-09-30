@@ -823,6 +823,9 @@
 }
 
 .return-insight-explorer .return-reason-ranking {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   margin-top: 15px;
   overflow: visible;
   border: 0;
@@ -853,12 +856,6 @@
   display: grid;
   min-height: 0;
   padding: 0;
-}
-
-.return-insight-explorer .return-reason-ranking.is-paginated {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
 }
 
 .return-insight-explorer .return-reason-ranking.is-paginated ol {
@@ -910,6 +907,8 @@
 }
 
 .return-insight-diagnostic {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   padding: 14px;
   background: #fff;
@@ -1221,20 +1220,19 @@
 }
 
 .return-insight-diagnostic .return-insight-evidence {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   margin-top: 10px;
   border-radius: 8px;
   box-shadow: none;
 }
 
-.return-insight-diagnostic .return-insight-evidence.is-paginated {
-  display: flex;
-  flex-direction: column;
-}
-
-.return-insight-evidence.is-paginated > .return-insight-evidence-table,
-.return-insight-evidence.is-paginated > .return-insight-empty {
+.return-insight-evidence > .return-insight-evidence-table,
+.return-insight-evidence > .return-insight-empty {
   flex: 1;
-  min-height: 512px;
+  /* 预留十行、表头与横向滚动条的空间，加载和末页保持同高。 */
+  min-height: 528px;
 }
 
 .return-insight-evidence.is-paginated > .result-pagination {
@@ -1295,5 +1293,6 @@
 }
 
 .return-diagnostic-empty {
+  flex: 1;
   min-height: 500px;
 }

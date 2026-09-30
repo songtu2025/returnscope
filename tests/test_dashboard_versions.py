@@ -406,10 +406,10 @@ def test_insights_reuse_saved_version_summary(
         reject_summary_recalculation,
         raising=False,
     )
-    assert (
-        service.insights(dashboard_id, version_id)["summary"]
-        == dashboard["version"]["summary"]
-    )
+    assert service.insights(dashboard_id, version_id)["summary"] == {
+        **dashboard["version"]["summary"],
+        "label_coverage": 100.0,
+    }
 
 
 def test_dashboard_keeps_distinct_mskus_and_source_evidence(tmp_path: Path) -> None:
@@ -936,7 +936,10 @@ def test_reason_evidence_pages_match_insight_count_and_filters(tmp_path: Path) -
     assert all(item["return_date"] == "2026-08-03" for item in second["items"])
 
 
-def test_subject_scope_counts_only_matching_reason_units(tmp_path: Path) -> None:
+@pytest.mark.parametrize("product_labeled", [True, False])
+def test_subject_scope_counts_only_matching_reason_units(
+    tmp_path: Path, product_labeled: bool
+) -> None:
     context, version, service = _ready_result(tmp_path)
     version_id = str(version["version_id"])
     with context.database.transaction(immediate=True) as connection:
@@ -986,6 +989,17 @@ def test_subject_scope_counts_only_matching_reason_units(tmp_path: Path) -> None
             """,
             (version_id,),
         )
+        if not product_labeled:
+            connection.execute(
+                "DELETE FROM classification_unit_labels "
+                "WHERE result_version_id = ? AND classification_key = 'PRODUCT_ONLY'",
+                (version_id,),
+            )
+            connection.execute(
+                "UPDATE classification_units SET classification_json = ?, "
+                "problem_labels_json = '[]' WHERE id = 'product-only-unit'",
+                (json_text({**classification, "semantic_units": []}),),
+            )
         classification["semantic_units"].append(
             {
                 **semantic,
@@ -1012,6 +1026,34 @@ def test_subject_scope_counts_only_matching_reason_units(tmp_path: Path) -> None
     dashboard_version_id = str(dashboard["version"]["version_id"])
 
     unknown = service.insights(dashboard_id, dashboard_version_id, subject="UNKNOWN")
+    base = service.insights(dashboard_id, dashboard_version_id, part="overview")
+    assert base["summary"]["label_coverage"] == (100.0 if product_labeled else 50.0)
+    assert unknown["summary"] == base["summary"]
+    assert unknown["label_coverage"] == 100.0
+    narrowed = service.insights(
+        dashboard_id,
+        dashboard_version_id,
+        subject="UNKNOWN",
+        listing="L1",
+        product_name="产品表权威名称",
+        product_sku="PRODUCT-SKU-1",
+        date_from="2026-08-01",
+        date_to="2026-08-02",
+        part="overview",
+    )
+    assert narrowed["summary"]["label_coverage"] == 100.0
+    assert narrowed["summary"]["comment_count"] == 1
+    assert (
+        service.insights(
+            dashboard_id,
+            dashboard_version_id,
+            subject="UNKNOWN",
+            label_group="质量",
+            problem="QUALITY_GENERAL",
+            part="overview",
+        )["summary"]
+        == base["summary"]
+    )
     assert unknown["total_record_count"] == 1
     assert (
         unknown["subject_breakdown"]

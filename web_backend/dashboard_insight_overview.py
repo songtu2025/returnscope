@@ -342,6 +342,24 @@ def collect_reason_context(scope: InsightQueryScope) -> dict[str, Any]:
     }
 
 
+def collect_label_counts(scope: InsightQueryScope) -> tuple[int, int]:
+    row = scope.connection.execute(
+        f"""
+        SELECT COUNT(*), COALESCE(SUM(EXISTS (
+            SELECT 1 FROM classification_unit_labels label
+            WHERE label.result_version_id = r.result_version_id
+              AND label.classification_key = r.classification_key
+              AND label.label_kind = 'problem'
+              {subject_label_filter(scope, "r", "label")}
+        )), 0)
+        FROM {scope.records_table} r
+        WHERE {scope.where_sql}
+        """,
+        tuple(scope.params),
+    ).fetchone()
+    return int(row[0]), int(row[1])
+
+
 def collect_insight_overview(
     scope: InsightQueryScope, *, total_record_count: int | None = None
 ) -> dict[str, Any]:
@@ -364,31 +382,9 @@ def collect_insight_overview(
             tuple(option_params),
         ).fetchone()
     )
-    total_records = total_record_count
-    if total_records is None:
-        total_records = int(
-            connection.execute(
-                f"SELECT COUNT(*) FROM {scope.records_table} r WHERE {where_sql}",
-                tuple(params),
-            ).fetchone()[0]
-        )
-    labeled_record_count = int(
-        connection.execute(
-            f"""
-            SELECT COUNT(*)
-            FROM {scope.records_table} r
-            WHERE {where_sql}
-              AND EXISTS (
-                  SELECT 1 FROM classification_unit_labels label
-                  WHERE label.result_version_id = r.result_version_id
-                    AND label.classification_key = r.classification_key
-                    AND label.label_kind = 'problem'
-                    {subject_label_filter(scope, "r", "label")}
-              )
-            """,
-            tuple(params),
-        ).fetchone()[0]
-    )
+    total_records, labeled_record_count = collect_label_counts(scope)
+    if total_record_count is not None:
+        total_records = total_record_count
     subject_breakdown, reason_subjects = _collect_semantic_breakdown(
         scope, total_records
     )

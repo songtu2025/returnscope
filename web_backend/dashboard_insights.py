@@ -14,6 +14,7 @@ from web_backend.dashboard_insight_details import (
 from web_backend.dashboard_insight_overview import (
     InsightQueryScope,
     collect_insight_overview,
+    collect_label_counts,
     collect_reason_context,
     collect_subject_breakdown,
 )
@@ -261,15 +262,19 @@ def build_insights(
         prepared = _prepare_scope(database, connection, context, options)
         scope = prepared.scope
         taxonomy = prepared.taxonomy
+        base_scope = replace(
+            scope,
+            where_sql=prepared.facet_where,
+            params=prepared.facet_params,
+            clean_subject="",
+        )
         facet_subjects = (
-            collect_subject_breakdown(
-                replace(
-                    scope,
-                    where_sql=prepared.facet_where,
-                    params=prepared.facet_params,
-                    clean_subject="",
-                )
-            )
+            collect_subject_breakdown(base_scope)
+            if scope.clean_subject and part != "reason"
+            else None
+        )
+        base_label_counts = (
+            collect_label_counts(base_scope)
             if scope.clean_subject and part != "reason"
             else None
         )
@@ -335,6 +340,12 @@ def build_insights(
                 **_reason_detail_payload(reason_details, reason_selected),
             }
         overview = collect_insight_overview(scope)
+        # 顶部指标统一使用基础范围，对象和原因筛选只影响下方诊断。
+        base_total, base_labeled = base_label_counts or (
+            overview["total_records"],
+            overview["labeled_record_count"],
+        )
+        summary["label_coverage"] = percentage(base_labeled, base_total)
         if facet_subjects is not None:
             overview["subject_breakdown"] = facet_subjects
         selected_reason = overview["selected_reason"]
