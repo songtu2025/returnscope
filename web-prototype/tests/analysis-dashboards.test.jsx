@@ -170,8 +170,9 @@ test("具体原因按十项分页，保持全局排名并在筛选后定位选�
   await user.click(screen.getByRole("button", { name: /商品相关/ }));
   expect(onUpdateRoute).toHaveBeenLastCalledWith({
     subject: "PRODUCT",
+    labelGroup: "",
     reasonPage: 0,
-    problem: "R1",
+    problem: "",
     recordPage: 1,
   });
   view.rerender(
@@ -259,8 +260,9 @@ test("切换原因时立即按链接定位，仍尊重手动页码和无效原�
   await user.click(screen.getByRole("button", { name: /商品相关/ }));
   expect(onUpdateRoute).toHaveBeenLastCalledWith({
     subject: "PRODUCT",
+    labelGroup: "",
     reasonPage: 0,
-    problem: "R39",
+    problem: "",
     recordPage: 1,
   });
 
@@ -716,6 +718,130 @@ beforeEach(() => {
 });
 
 afterEach(() => cleanup());
+
+test("切换问题对象清除原类别和原因，只用新范围选择诊断", async () => {
+  const user = userEvent.setup();
+  const oldReason = {
+    value: "UNCOMFORTABLE",
+    label: "不舒适",
+    record_count: 8,
+    subjects: ["PRODUCT"],
+  };
+  const newReason = {
+    value: "OTHER_NOT_AS_EXPECTED",
+    label: "实物与描述或预期不符",
+    record_count: 1,
+    subjects: ["UNKNOWN"],
+  };
+  dashboardApiMock.analysisDashboardInsights.mockImplementation(
+    (_dashboardId, _versionId, filters) =>
+      Promise.resolve({
+        summary: { record_count: 9 },
+        category_groups: filters.subject === "UNKNOWN" ? ["其他原因"] : ["体感"],
+        subject_breakdown: [
+          { value: "PRODUCT", label: "商品相关", record_count: 8, percentage: 89 },
+          { value: "UNKNOWN", label: "对象未明确", record_count: 1, percentage: 11 },
+        ],
+        reasons: [filters.subject === "UNKNOWN" ? newReason : oldReason],
+        evidence: { items: [], total: 0 },
+      }),
+  );
+  window.location.hash =
+    "#analysis-dashboards?dashboard=dashboard-default&version=dashboard-version-default&subject=PRODUCT&label_group=体感&problem=UNCOMFORTABLE";
+  render(<DashboardHarness />);
+  expect(await screen.findByRole("heading", { name: "不舒适" })).toBeVisible();
+  await user.click(screen.getByRole("button", { name: /对象未明确/ }));
+  expect(
+    await screen.findByRole("heading", { name: "实物与描述或预期不符" }),
+  ).toBeVisible();
+  expect(window.location.hash).toContain("subject=UNKNOWN");
+  expect(window.location.hash).not.toContain("label_group=");
+  expect(window.location.hash).not.toContain("problem=");
+  expect(dashboardApiMock.analysisDashboardInsights).toHaveBeenCalledWith(
+    "dashboard-default",
+    "dashboard-version-default",
+    expect.objectContaining({ subject: "UNKNOWN", label_group: "", part: "overview" }),
+    expect.any(Object),
+  );
+});
+
+test("旧链接的失效类别在当前范围查询成功后校正，保留有效范围", async () => {
+  const reason = {
+    value: "R1",
+    label: "未知对象原因",
+    record_count: 1,
+    subjects: ["UNKNOWN"],
+  };
+  const data = {
+    category_groups: ["质量"],
+    subject_breakdown: [
+      { value: "UNKNOWN", label: "对象未明确", record_count: 1, percentage: 100 },
+    ],
+    reasons: [reason],
+    evidence: { items: [], total: 0 },
+  };
+  let resolveOverview;
+  dashboardApiMock.analysisDashboardInsights.mockImplementationOnce(
+    () => new Promise((resolve) => (resolveOverview = resolve)),
+  );
+  dashboardApiMock.analysisDashboardInsights.mockResolvedValue(data);
+  window.location.hash =
+    "#analysis-dashboards?dashboard=dashboard-default&version=dashboard-version-default&subject=UNKNOWN&label_group=体感&problem=OLD&listing=L001&date_from=2026-08-01&date_to=2026-08-03&report=report-1&issue=issue-1&record_page=3&reason_page=2";
+  render(<DashboardHarness />);
+  await waitFor(() => expect(resolveOverview).toBeTypeOf("function"));
+  expect(
+    new URLSearchParams(window.location.hash.split("?")[1]).get("label_group"),
+  ).toBe("体感");
+  expect(dashboardApiMock.analysisDashboardInsights).toHaveBeenCalledTimes(1);
+  await act(async () => resolveOverview({ ...data, reasons: [] }));
+  expect(await screen.findByRole("heading", { name: "未知对象原因" })).toBeVisible();
+  const query = new URLSearchParams(window.location.hash.split("?")[1]);
+  expect(query.has("label_group")).toBe(false);
+  expect(query.has("problem")).toBe(false);
+  expect(query.has("record_page")).toBe(false);
+  expect(query.has("reason_page")).toBe(false);
+  for (const [key, value] of Object.entries({
+    subject: "UNKNOWN",
+    listing: "L001",
+    date_from: "2026-08-01",
+    date_to: "2026-08-03",
+    report: "report-1",
+    issue: "issue-1",
+  })) {
+    expect(query.get(key)).toBe(value);
+  }
+  expect(
+    dashboardApiMock.analysisDashboardInsights.mock.calls.map((call) => call[2].part),
+  ).toEqual(["overview", "overview", "reason"]);
+});
+
+test.each(["有效类别", "真实空范围", "请求失败"])(
+  "%s不会自动清除类别筛选",
+  async (state) => {
+    if (state === "请求失败") {
+      dashboardApiMock.analysisDashboardInsights.mockRejectedValue(
+        new Error("读取失败"),
+      );
+    } else {
+      dashboardApiMock.analysisDashboardInsights.mockResolvedValue({
+        category_groups: state === "有效类别" ? ["体感"] : [],
+        reasons: [],
+      });
+    }
+    window.location.hash =
+      "#analysis-dashboards?dashboard=dashboard-default&version=dashboard-version-default&subject=UNKNOWN&label_group=体感";
+    render(<DashboardHarness />);
+    expect(
+      await screen.findByText(
+        state === "请求失败" ? "看板数据读取失败" : "当前对象下没有匹配原因",
+      ),
+    ).toBeVisible();
+    expect(
+      new URLSearchParams(window.location.hash.split("?")[1]).get("label_group"),
+    ).toBe("体感");
+    expect(dashboardApiMock.analysisDashboardInsights).toHaveBeenCalledTimes(1);
+  },
+);
 
 test("空态只保留一个选择分类结果入口", async () => {
   render(

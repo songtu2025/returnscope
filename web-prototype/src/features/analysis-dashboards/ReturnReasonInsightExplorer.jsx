@@ -66,16 +66,11 @@ export function ReturnReasonInsightExplorer({
 
   /** @param {string} subject */
   const chooseSubject = (subject) => {
-    const firstReason = subject
-      ? reasons.find((reason) => reason.subjects?.includes(subject))
-      : reasons[0];
     onUpdateRoute({
       subject,
+      labelGroup: "",
       reasonPage: 0,
-      problem:
-        activeReason && (!subject || activeReason.subjects?.includes(subject))
-          ? activeReason.value
-          : firstReason?.value || "",
+      problem: "",
       recordPage: 1,
     });
   };

@@ -291,6 +291,18 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
         if (contentGenerationRef.current !== generation) return;
         overviewCacheRef.current = { key: scopeKey, data: overview };
       }
+      // 只根据当前范围成功返回的类别校正旧链接，不使用加载中的旧结果。
+      if (
+        filters.label_group &&
+        overview.category_groups?.length &&
+        !overview.category_groups.includes(filters.label_group)
+      ) {
+        updateRoute(
+          { labelGroup: "", problem: "", recordPage: 1, reasonPage: 0 },
+          { replace: true },
+        );
+        return;
+      }
       const selected =
         overview.reasons?.find((reason) => reason.value === filters.problem) ??
         overview.reasons?.[0];
@@ -335,7 +347,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
         );
       }
     }
-  }, [filters, route.dashboardId, route.tab, route.versionId]);
+  }, [filters, route.dashboardId, route.tab, route.versionId, updateRoute]);
 
   useEffect(() => {
     setSelectedRecord(null);
