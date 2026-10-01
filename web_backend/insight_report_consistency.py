@@ -50,6 +50,25 @@ def _report_consistency(
         for item in analysis.get("reasons", [])
         if item.get("value")
     }
+    diagnostics, issues = _diagnostic_consistency(analysis, reasons)
+    issues.extend(
+        _information_consistency(
+            content,
+            reasons,
+            diagnostics,
+            require_information_diagnostics=require_information_diagnostics,
+        )
+    )
+    return {
+        "status": "blocked" if issues else "passed",
+        "issues": list(dict.fromkeys(issues)),
+    }
+
+
+def _diagnostic_consistency(
+    analysis: dict[str, Any],
+    reasons: dict[str, dict[str, Any]],
+) -> tuple[dict[str, dict[str, Any]], list[str]]:
     diagnostics: dict[str, dict[str, Any]] = {}
     issues: list[str] = []
 
@@ -84,6 +103,17 @@ def _report_consistency(
         ):
             issues.append(f"诊断原因 {code} 的占比与分类结果不一致")
 
+    return diagnostics, issues
+
+
+def _information_consistency(
+    content: dict[str, Any],
+    reasons: dict[str, dict[str, Any]],
+    diagnostics: dict[str, dict[str, Any]],
+    *,
+    require_information_diagnostics: bool,
+) -> list[str]:
+    issues: list[str] = []
     for finding in content.get("findings", []):
         if finding.get("kind") != "information":
             continue
@@ -101,7 +131,4 @@ def _report_consistency(
         if require_information_diagnostics and code not in diagnostics:
             issues.append(f"信息诊断原因 {code} 缺少语义诊断数据")
 
-    return {
-        "status": "blocked" if issues else "passed",
-        "issues": list(dict.fromkeys(issues)),
-    }
+    return issues
