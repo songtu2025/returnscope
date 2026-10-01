@@ -404,14 +404,20 @@ class ReviewBatchEditingMixin:
         if row["workflow_status"] != "pending":
             raise ReviewBatchConflict("只能处理待处理的复核记录")
         before = json_value(str(row["classification_json"]), {})
-        self._validate_semantic_review_details(
-            result_version_id=result_version_id,
-            classification=before,
-            comment=str(row["comment"]),
-            semantic_item_reviews=semantic_item_reviews,
-            added_semantic_items=added_semantic_items,
-            coverage_status=coverage_status,
-        )
+        if coverage_status not in {None, "complete", "has_omission"}:
+            raise ValueError("语义覆盖状态不合法")
+        # 空列表仍表示显式核验，只有三个字段全为 None 才跳过详情校验。
+        if any(
+            value is not None
+            for value in (semantic_item_reviews, added_semantic_items, coverage_status)
+        ):
+            self._validate_semantic_review_details(
+                result_version_id=result_version_id,
+                classification=before,
+                comment=str(row["comment"]),
+                semantic_item_reviews=semantic_item_reviews,
+                added_semantic_items=added_semantic_items,
+            )
         after = (
             before
             if action == "exclude"
@@ -479,17 +485,7 @@ class ReviewBatchEditingMixin:
         comment: str,
         semantic_item_reviews: list[dict[str, Any]] | None,
         added_semantic_items: list[dict[str, Any]] | None,
-        coverage_status: str | None,
     ) -> None:
-        if (
-            semantic_item_reviews is None
-            and added_semantic_items is None
-            and coverage_status is None
-        ):
-            return
-        if coverage_status not in {None, "complete", "has_omission"}:
-            raise ValueError("语义覆盖状态不合法")
-
         taxonomy = self.standard_service.taxonomy_config_for_result_version(
             result_version_id
         )
@@ -513,7 +509,20 @@ class ReviewBatchEditingMixin:
             for index, _fragment in enumerate(unexplained_fragments)
         )
         valid_label_codes = {label.code for label in taxonomy.labels}
+        self._validate_semantic_item_reviews(
+            semantic_item_reviews, item_by_id, valid_item_ids, valid_label_codes
+        )
+        self._validate_added_semantic_items(
+            added_semantic_items, comment, valid_label_codes
+        )
 
+    @staticmethod
+    def _validate_semantic_item_reviews(
+        semantic_item_reviews: list[dict[str, Any]] | None,
+        item_by_id: dict[str, dict[str, object]],
+        valid_item_ids: set[str],
+        valid_label_codes: set[str],
+    ) -> None:
         for review in semantic_item_reviews or []:
             item_id = str(review.get("semantic_item_id") or "").strip()
             if item_id not in valid_item_ids:
@@ -529,6 +538,12 @@ class ReviewBatchEditingMixin:
                 if label_code not in valid_label_codes:
                     raise ValueError("选择的语义标签不存在")
 
+    def _validate_added_semantic_items(
+        self,
+        added_semantic_items: list[dict[str, Any]] | None,
+        comment: str,
+        valid_label_codes: set[str],
+    ) -> None:
         for added in added_semantic_items or []:
             label_code = str(added.get("label_code") or "").strip()
             if label_code not in valid_label_codes:
