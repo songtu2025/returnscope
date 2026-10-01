@@ -302,7 +302,7 @@ def collect_reason_details(
             for row in co_reason_rows
         ]
         with timed_stage("insight_semantics"):
-            # 同一分类结果只解析一次，用临时表避免 CTE 展开后按反馈重复计算。
+            # 同一分类结果只解析一次，保留当前筛选范围的反馈权重。
             connection.execute(
                 "DROP TABLE IF EXISTS temp.dashboard_insight_reason_semantics"
             )
@@ -310,13 +310,15 @@ def collect_reason_details(
                 f"""
                 CREATE TEMP TABLE dashboard_insight_reason_semantics AS
                 WITH selected_units AS MATERIALIZED (
-                    SELECT DISTINCT r.result_version_id, r.classification_key
+                    SELECT r.result_version_id, r.classification_key,
+                           COUNT(*) AS record_count
                     FROM {scope.records_table} r
                     JOIN dashboard_insight_selected_records selected
                       ON selected.id = r.id
                     WHERE {where_sql}
+                    GROUP BY r.result_version_id, r.classification_key
                 )
-                SELECT u.result_version_id, u.classification_key,
+                SELECT u.result_version_id, u.classification_key, selected.record_count,
                        COALESCE(
                            NULLIF(json_extract(unit.value, '$.part'), ''),
                            'UNSPECIFIED'
@@ -337,39 +339,46 @@ def collect_reason_details(
                 else (*params, selected_code),
             )
             semantic_rows = connection.execute(
-                f"""
+                """
                 WITH matched AS MATERIALIZED (
-                    SELECT r.id AS record_id, unit.part, unit.opinion,
-                           unit.subject, unit.evidence
-                    FROM {scope.records_table} r
-                    JOIN dashboard_insight_selected_records selected
-                      ON selected.id = r.id
-                    JOIN dashboard_insight_reason_semantics unit
-                      ON unit.result_version_id = r.result_version_id
-                     AND unit.classification_key = r.classification_key
-                    WHERE {where_sql}
+                    SELECT result_version_id, classification_key, part, opinion, subject,
+                           MAX(record_count) AS record_count, MAX(evidence) AS evidence
+                    FROM dashboard_insight_reason_semantics
+                    GROUP BY result_version_id, classification_key, part, opinion, subject
+                ),
+                part_units AS (
+                    SELECT result_version_id, classification_key, part,
+                           MAX(record_count) AS record_count
+                    FROM matched
+                    GROUP BY result_version_id, classification_key, part
                 ),
                 part_counts AS (
-                    SELECT part AS value, COUNT(DISTINCT record_id) AS record_count
-                    FROM matched
+                    SELECT part AS value, SUM(record_count) AS record_count
+                    FROM part_units
                     GROUP BY part
                     ORDER BY record_count DESC, value ASC
                     LIMIT 6
                 ),
                 opinion_counts AS (
                     SELECT opinion, subject, part,
-                           COUNT(DISTINCT record_id) AS record_count,
+                           SUM(record_count) AS record_count,
                            MAX(evidence) AS evidence
                     FROM matched
                     WHERE NULLIF(opinion, '') IS NOT NULL
                     GROUP BY opinion, subject, part
                     ORDER BY record_count DESC, opinion ASC
                     LIMIT 4
+                ),
+                matched_units AS (
+                    SELECT result_version_id, classification_key,
+                           MAX(record_count) AS record_count
+                    FROM matched
+                    GROUP BY result_version_id, classification_key
                 )
                 SELECT 'total' AS kind, NULL AS value, NULL AS subject,
-                       NULL AS part, COUNT(DISTINCT record_id) AS record_count,
+                       NULL AS part, COALESCE(SUM(record_count), 0) AS record_count,
                        NULL AS evidence
-                FROM matched
+                FROM matched_units
                 UNION ALL
                 SELECT 'part', value, NULL, NULL, record_count, NULL
                 FROM part_counts
@@ -377,7 +386,6 @@ def collect_reason_details(
                 SELECT 'opinion', opinion, subject, part, record_count, evidence
                 FROM opinion_counts
                 """,
-                tuple(params),
             ).fetchall()
         semantic_record_count = int(semantic_rows[0]["record_count"])
         part_rows = sorted(

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from contextlib import closing
+from dataclasses import replace
 
 import pytest
 
@@ -32,6 +33,7 @@ def test_semantics_keep_record_scope_and_separate_result_versions(
             [
                 ("PRODUCT", "WHOLE_SHOE", "tight", "a"),
                 ("PRODUCT", "WHOLE_SHOE", "tight", "z"),
+                ("PRODUCT", "WHOLE_SHOE", "narrow", "n"),
                 ("UNKNOWN", "", "maybe", "u"),
             ],
         ),
@@ -139,6 +141,14 @@ def test_semantics_keep_record_scope_and_separate_result_versions(
             {"value": "FIT", "record_count": count},
             {"total_records": len(records), "label_counts": {"FIT": count}},
         )
+        empty = collect_reason_details(
+            replace(scope, where_sql="1=1", params=[], clean_subject=""),
+            {"value": "OTHER", "record_count": 1},
+            {"total_records": len(records), "label_counts": {"FIT": count, "OTHER": 1}},
+        )
+        assert empty["semantic_record_count"] == 0
+        assert empty["semantic_parts"] == empty["semantic_opinions"] == []
+        assert empty["evidence_total"] == 1
 
     expected_parts = {}
     expected_opinions = set()
@@ -147,6 +157,7 @@ def test_semantics_keep_record_scope_and_separate_result_versions(
         expected_opinions.update(
             {
                 ("tight", "WHOLE_SHOE", first_count, "z"),
+                ("narrow", "WHOLE_SHOE", first_count, "n"),
                 ("large", "TOE_BOX", second_count, "b"),
             }
         )
@@ -155,7 +166,7 @@ def test_semantics_keep_record_scope_and_separate_result_versions(
         expected_opinions.add(("maybe", "UNSPECIFIED", first_count, "u"))
     assert result["semantic_record_count"] == count
     # 意见解析次数由语义单元数量决定，不能随反馈记录或聚合查询倍增。
-    assert opinion_reads <= 4
+    assert opinion_reads <= 5
     assert {
         item["value"]: item["record_count"] for item in result["semantic_parts"]
     } == expected_parts
