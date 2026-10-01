@@ -560,6 +560,7 @@ export function DashboardDetail({ route, updateRoute, notify, userId }) {
 
       <DashboardDetailContent
         route={route}
+        showDataInfo={showDataInfo}
         updateRoute={updateRoute}
         content={content}
         reports={reports}

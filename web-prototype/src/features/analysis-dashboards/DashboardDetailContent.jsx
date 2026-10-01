@@ -27,6 +27,7 @@ import { DashboardDetailLoadingBody } from "./DashboardDetailStateViews";
 /**
  * @typedef {Object} DashboardDetailContentProps
  * @property {DashboardRoute} route
+ * @property {boolean} showDataInfo
  * @property {UpdateDashboardRoute} updateRoute
  * @property {DashboardContentState} content
  * @property {DashboardReportState} reports
@@ -54,6 +55,7 @@ import { DashboardDetailLoadingBody } from "./DashboardDetailStateViews";
 /** @param {DashboardDetailContentProps} props */
 export function DashboardDetailContent({
   route,
+  showDataInfo,
   updateRoute,
   content,
   reports,
@@ -94,6 +96,7 @@ export function DashboardDetailContent({
       {route.tab === "overview" && content.data && (
         <ReturnReasonInsights
           route={route}
+          showDataInfo={showDataInfo}
           updateRoute={updateRoute}
           data={
             /** @type {import("./analysisDashboardContracts").DashboardInsights} */ (

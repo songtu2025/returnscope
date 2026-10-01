@@ -30,7 +30,8 @@ def subject_label_filter(scope: InsightQueryScope, record: str, label: str) -> s
         return ""
     return (
         " AND EXISTS (SELECT 1 FROM dashboard_insight_subject_labels subject_label"
-        f" WHERE subject_label.id = {record}.id"
+        f" WHERE subject_label.result_version_id = {record}.result_version_id"
+        f" AND subject_label.classification_key = {record}.classification_key"
         f" AND subject_label.label_code = {label}.label_code)"
     )
 
@@ -430,11 +431,10 @@ def collect_insight_overview(
     if total_record_count is not None:
         total_records = total_record_count
     # 只在首屏汇总中按分类单元加权，明细与翻页仍使用原反馈范围。
-    # 同单元的对象标签相同，代表记录 id 仅用于已有对象标签匹配。
     connection.execute(
         f"""
         CREATE TEMP TABLE dashboard_insight_weighted_units AS
-        SELECT MIN(r.id) AS id, r.result_version_id, r.classification_key,
+        SELECT r.result_version_id, r.classification_key,
                COUNT(*) AS record_count
         FROM {scope.records_table} r
         WHERE {where_sql}

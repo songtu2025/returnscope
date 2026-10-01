@@ -70,7 +70,8 @@ def test_semantics_keep_record_scope_and_separate_result_versions(
                 label_code TEXT, label_name TEXT
             );
             CREATE TEMP TABLE dashboard_insight_subject_labels (
-                id TEXT, label_code TEXT, PRIMARY KEY (id, label_code)
+                result_version_id TEXT, classification_key TEXT, label_code TEXT,
+                PRIMARY KEY (result_version_id, classification_key, label_code)
             );
         """)
         connection.executemany(
@@ -103,15 +104,11 @@ def test_semantics_keep_record_scope_and_separate_result_versions(
                 "INSERT INTO classification_unit_labels VALUES (?, ?, 'problem', ?, '原因')",
                 (version, key, "FIT" if semantics else "OTHER"),
             )
-            connection.executemany(
-                "INSERT INTO dashboard_insight_subject_labels VALUES (?, 'FIT')",
-                [
-                    (record[0],)
-                    for record in records
-                    if record[1:3] == (version, key)
-                    and any(owner == subject for owner, *_ in semantics)
-                ],
-            )
+            if any(owner == subject for owner, *_ in semantics):
+                connection.execute(
+                    "INSERT INTO dashboard_insight_subject_labels VALUES (?, ?, 'FIT')",
+                    (version, key),
+                )
         scope = InsightQueryScope(
             connection=connection,
             context={},

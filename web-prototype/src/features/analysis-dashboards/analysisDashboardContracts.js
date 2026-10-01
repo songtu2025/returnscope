@@ -203,7 +203,7 @@
  * @property {string[]} evidence_ids
  * @typedef {{report_type?: "problem_decision", title?: string, issues?: DecisionReportIssue[], caveats?: string[]}} InsightDecisionReportContent
  *
- * @typedef {{value: string, label: string, record_count: number, percentage: number, primary_rate?: number, subjects?: string[], lift?: number}} InsightReason
+ * @typedef {{value: string, label: string, record_count: number, percentage: number, primary_rate?: number, subjects?: string[], lift?: number, baseline_record_count?: number}} InsightReason
  * @typedef {InsightReason & {label_path?: string[], label_name?: string}} InsightHierarchyNode
  * @typedef {{value: string, record_count: number, total_record_count: number, product_reason_rate: number, lift: number}} InsightProduct
  * @typedef {{value: string, record_count: number}} InsightPart
@@ -230,6 +230,7 @@
  * @property {InsightReason[]} [subject_breakdown]
  * @property {string[]} [category_groups]
  * @property {number} [total_comment_count]
+ * @property {number} [total_record_count]
  * @property {number} [label_coverage]
  * @property {string} [group_alignment]
  * @property {Array<Record<string, unknown>>} [trend]

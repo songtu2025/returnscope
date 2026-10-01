@@ -740,13 +740,34 @@ def test_dashboard_insights_reuse_unchanged_feedback_scope(
     assert filtered["total_record_count"] == 0
     assert any("INSERT INTO dashboard_feedback_main" in sql for sql in statements)
 
+    statements.clear()
+    detail = service.insights(
+        dashboard_id, version_id, product_name="不存在的产品", part="reason"
+    )
+    assert detail["evidence"]["total"] == 0
+    assert not any("INSERT INTO dashboard_feedback_main" in sql for sql in statements)
+    assert (
+        sum("INSERT INTO dashboard_feedback_options" in sql for sql in statements) == 1
+    )
+
 
 def test_dashboard_insights_parts_match_full_result(tmp_path: Path) -> None:
-    _, version, service = _ready_result(tmp_path)
+    context, version, service = _ready_result(tmp_path)
+    with context.database.transaction() as connection:
+        connection.execute(
+            """
+            INSERT INTO classification_unit_labels
+                (result_version_id, classification_key, label_kind,
+                 label_code, label_name, label_group)
+            VALUES (?, ?, 'problem', 'TEST_BASELINE', '材料廉价', '质量')
+            """,
+            (version["version_id"], context.key),
+        )
     _, dashboard = _create_dashboard(service, str(version["version_id"]))
     dashboard_id = str(dashboard["id"])
     version_id = str(dashboard["version"]["version_id"])
     full = service.insights(dashboard_id, version_id)
+    assert full["co_reasons"][0]["baseline_record_count"] == 2
     assert [(row["period_start"], row["period_end"]) for row in full["trend"]] == [
         ("2026-07-27", "2026-08-02"),
         ("2026-08-03", "2026-08-09"),
@@ -781,6 +802,19 @@ def test_dashboard_insights_parts_match_full_result(tmp_path: Path) -> None:
             "evidence",
         ):
             assert detail[key] == selected_full[key]
+        baseline_counts = {
+            item["value"]: item["record_count"] for item in full["reasons"]
+        }
+        for companion in detail["co_reasons"]:
+            assert (
+                companion["baseline_record_count"]
+                == baseline_counts[companion["value"]]
+            )
+            assert companion["lift"] == round(
+                (companion["record_count"] / selected["record_count"])
+                / (companion["baseline_record_count"] / full["total_record_count"]),
+                2,
+            )
         assert detail["selected_reason"]["value"] == selected["value"]
         assert "summary" not in detail
     if full["reasons"]:
@@ -794,6 +828,7 @@ def test_dashboard_insights_parts_match_full_result(tmp_path: Path) -> None:
             part="reason",
         )
         assert grouped_detail["co_reasons"] == grouped["co_reasons"]
+        assert grouped_detail["co_reasons"][0]["baseline_record_count"] == 2
         assert grouped_detail["products"] == grouped["products"]
 
 

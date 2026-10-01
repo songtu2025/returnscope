@@ -10,6 +10,7 @@ from web_backend.dashboard_insight_overview import (
     _collect_semantic_breakdown,
     prepare_scope_semantics,
 )
+from web_backend.dashboard_insights import _prepare_subject_labels
 
 
 def test_shared_semantics_keep_scope_weights_and_version_keys() -> None:
@@ -118,3 +119,49 @@ def test_shared_semantics_keep_scope_weights_and_version_keys() -> None:
             == narrowed_reasons
             == {"FIT": ["PRODUCT"], "LARGE": ["PRODUCT"], "OTHER": ["UNKNOWN"]}
         )
+
+
+def test_subject_labels_keep_unit_keys_without_expanding_feedback() -> None:
+    with closing(sqlite3.connect(":memory:")) as connection:
+        connection.row_factory = sqlite3.Row
+        connection.executescript("""
+            CREATE TABLE classification_result_records (
+                result_version_id TEXT, classification_key TEXT, listing TEXT
+            );
+            CREATE TABLE classification_units (
+                result_version_id TEXT, classification_key TEXT, classification_json TEXT,
+                PRIMARY KEY (result_version_id, classification_key)
+            );
+        """)
+        connection.executemany(
+            "INSERT INTO classification_result_records VALUES (?, 'shared', ?)",
+            [("v1", "L1")] * 20 + [("v2", "L1")] * 10 + [("v3", "L2")],
+        )
+        for version, semantics in [
+            ("v1", [("PRODUCT", "FIT")]),
+            ("v2", [("PRODUCT", "OTHER"), ("UNKNOWN", "FIT")]),
+            ("v3", [("PRODUCT", "OUTSIDE")]),
+        ]:
+            connection.execute(
+                "INSERT INTO classification_units VALUES (?, 'shared', ?)",
+                (
+                    version,
+                    json.dumps(
+                        {
+                            "semantic_units": [
+                                {"subject": subject, "label_code": code}
+                                for subject, code in semantics
+                            ]
+                            * 2
+                        }
+                    ),
+                ),
+            )
+        _prepare_subject_labels(connection, "r.listing = ?", ["L1"], "PRODUCT")
+        rows = connection.execute(
+            "SELECT * FROM dashboard_insight_subject_labels ORDER BY result_version_id"
+        ).fetchall()
+        assert [tuple(row) for row in rows] == [
+            ("v1", "shared", "FIT"),
+            ("v2", "shared", "OTHER"),
+        ]

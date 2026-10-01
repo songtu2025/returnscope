@@ -4,18 +4,20 @@ import { dashboardApi } from "../../shared/api/dashboardApi";
 import { ReturnReasonInsightDiagnostic } from "./ReturnReasonInsightDiagnostic";
 import { ReturnReasonInsightExplorer } from "./ReturnReasonInsightExplorer";
 import { ReturnReasonInsightSummary } from "./ReturnReasonInsightSummary";
+import { ReturnReasonInsightBaseline } from "./ReturnReasonInsightBaseline";
 import { commentStatusCounts, orderGroups } from "./returnReasonInsightPresentation";
 
 /** @typedef {import("./analysisDashboardContracts").DashboardInsights} DashboardInsights */
 /** @typedef {import("./analysisDashboardContracts").DashboardRecord} DashboardRecord */
 /** @typedef {import("./analysisDashboardContracts").DashboardRoute} DashboardRoute */
 /** @typedef {import("./analysisDashboardContracts").UpdateDashboardRoute} UpdateDashboardRoute */
-/** @param {{route: DashboardRoute, updateRoute: UpdateDashboardRoute, data: DashboardInsights, loading: boolean, error?: string, detailLoading?: boolean, detailError?: string, evidenceReady?: boolean, analysisContext: string, onRetry: () => void | Promise<void>, onEvidence: (record: DashboardRecord, trigger: HTMLElement | null) => void}} props */
+/** @param {{route: DashboardRoute, updateRoute: UpdateDashboardRoute, data: DashboardInsights, loading: boolean, showDataInfo?: boolean, error?: string, detailLoading?: boolean, detailError?: string, evidenceReady?: boolean, analysisContext: string, onRetry: () => void | Promise<void>, onEvidence: (record: DashboardRecord, trigger: HTMLElement | null) => void}} props */
 export function ReturnReasonInsights({
   route,
   updateRoute: replaceRoute,
   data,
   loading,
+  showDataInfo = false,
   error,
   detailLoading = false,
   detailError = "",
@@ -169,6 +171,17 @@ export function ReturnReasonInsights({
           onRetry={onRetry}
           onUpdateFilters={updateFilters}
         />
+
+        {showDataInfo && (
+          <ReturnReasonInsightBaseline
+            route={route}
+            data={data}
+            loading={
+              loading || detailLoading || (!evidenceReady && !error && !detailError)
+            }
+            error={error || detailError}
+          />
+        )}
 
         <div className="return-insight-workbench" inert={loading}>
           <ReturnReasonInsightExplorer

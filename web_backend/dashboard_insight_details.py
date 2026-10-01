@@ -291,6 +291,7 @@ def collect_reason_details(
                 **dict(row),
                 "record_count": int(row["record_count"]),
                 "percentage": percentage(int(row["record_count"]), selected_count),
+                "baseline_record_count": label_counts.get(str(row["value"]), 0),
                 "lift": round(
                     (int(row["record_count"]) / selected_count)
                     / (label_counts.get(str(row["value"]), 0) / total_records),

@@ -96,6 +96,8 @@ def _prepare_scope(
     connection: sqlite3.Connection,
     context: dict[str, Any],
     options: InsightOptions,
+    *,
+    include_options: bool = True,
 ) -> PreparedInsightScope:
     clean_date_from = clean_date(options.date_from)
     clean_date_to = clean_date(options.date_to)
@@ -145,12 +147,6 @@ def _prepare_scope(
     where_sql, params = record_where(
         database, context["source_ids"], context["filters"], runtime_filters
     )
-    if clean_date_from:
-        where_sql += " AND date(r.return_date) >= date(?)"
-        params.append(clean_date_from)
-    if clean_date_to:
-        where_sql += " AND date(r.return_date) <= date(?)"
-        params.append(clean_date_to)
     comment_scope_filters = {
         key: value
         for key, value in context["filters"].items()
@@ -159,32 +155,33 @@ def _prepare_scope(
     comment_scope_where, comment_scope_params = record_where(
         database, context["source_ids"], comment_scope_filters, runtime_filters
     )
-    if clean_date_from:
-        comment_scope_where += " AND date(r.return_date) >= date(?)"
-        comment_scope_params.append(clean_date_from)
-    if clean_date_to:
-        comment_scope_where += " AND date(r.return_date) <= date(?)"
-        comment_scope_params.append(clean_date_to)
+    for operator, value in ((">=", clean_date_from), ("<=", clean_date_to)):
+        if value:
+            date_filter = f" AND date(r.return_date) {operator} date(?)"
+            where_sql += date_filter
+            params.append(value)
+            comment_scope_where += date_filter
+            comment_scope_params.append(value)
     ungrouped_where = where_sql
     ungrouped_params = params
     if context["counting_basis"] == "feedback_group":
-        same_group_scope = option_where == where_sql and option_params == params
-        option_where, option_params = feedback_group_scope(
-            connection, option_where, option_params, name="options"
+        (option_where, option_params), (where_sql, params) = _prepare_feedback_scopes(
+            connection,
+            (option_where, option_params),
+            (where_sql, params),
+            include_options,
         )
-        if same_group_scope:
-            where_sql, params = option_where, option_params
-        else:
-            where_sql, params = feedback_group_scope(
-                connection, where_sql, params, name="main"
-            )
     facet_where, facet_params = where_sql, params.copy()
     clean_subject = (options.subject or "").strip()
     if clean_subject:
         if clean_subject not in {item.value for item in SubjectCode}:
             raise ValueError("问题对象不合法")
         _prepare_subject_labels(connection, where_sql, params, clean_subject)
-        where_sql += " AND r.id IN (SELECT id FROM dashboard_insight_subject_labels)"
+        where_sql += (
+            " AND EXISTS (SELECT 1 FROM dashboard_insight_subject_labels subject_label"
+            " WHERE subject_label.result_version_id = r.result_version_id"
+            " AND subject_label.classification_key = r.classification_key)"
+        )
     unit_rollup = (
         options.report_mode
         and not clean_subject
@@ -219,6 +216,25 @@ def _prepare_scope(
     )
 
 
+@timed_stage("insight_feedback_groups")
+def _prepare_feedback_scopes(
+    connection: sqlite3.Connection,
+    option_scope: tuple[str, list[Any]],
+    current_scope: tuple[str, list[Any]],
+    include_options: bool,
+) -> tuple[tuple[str, list[Any]], tuple[str, list[Any]]]:
+    """全屏准备选项与当前范围，详情和翻页只准备当前反馈范围。"""
+    if not include_options:
+        option_scope = current_scope
+    grouped_options = feedback_group_scope(connection, *option_scope, name="options")
+    grouped_current = (
+        grouped_options
+        if option_scope == current_scope
+        else feedback_group_scope(connection, *current_scope, name="main")
+    )
+    return grouped_options, grouped_current
+
+
 @timed_stage("insight_subject")
 def _prepare_subject_labels(
     connection: sqlite3.Connection, where_sql: str, params: list[Any], subject: str
@@ -226,20 +242,18 @@ def _prepare_subject_labels(
     prepare_scope_semantics(connection, where_sql, params)
     connection.execute(
         "CREATE TEMP TABLE dashboard_insight_subject_labels "
-        "(id TEXT NOT NULL, label_code TEXT NOT NULL, PRIMARY KEY (id, label_code))"
+        "(result_version_id TEXT NOT NULL, classification_key TEXT NOT NULL, "
+        "label_code TEXT NOT NULL, "
+        "PRIMARY KEY (result_version_id, classification_key, label_code))"
     )
     connection.execute(
-        f"""
+        """
         INSERT OR IGNORE INTO dashboard_insight_subject_labels
-        SELECT r.id, unit.label_code
-        FROM classification_result_records r
-        JOIN dashboard_insight_scope_semantics unit
-          ON unit.result_version_id = r.result_version_id
-         AND unit.classification_key = r.classification_key
-        WHERE {where_sql}
-          AND unit.subject = ? AND unit.label_code IS NOT NULL
+        SELECT result_version_id, classification_key, label_code
+        FROM dashboard_insight_scope_semantics
+        WHERE subject = ? AND label_code IS NOT NULL
         """,
-        (*params, subject),
+        (subject,),
     )
 
 
@@ -268,7 +282,9 @@ def build_insights(
                 "reasons": [],
                 "hierarchy_problems": [],
             }
-        prepared = _prepare_scope(database, connection, context, options)
+        prepared = _prepare_scope(
+            database, connection, context, options, include_options=part != "reason"
+        )
         scope = prepared.scope
         taxonomy = prepared.taxonomy
         base_scope = replace(
@@ -453,7 +469,9 @@ def build_evidence_page(
         context = version_context(database, connection, dashboard_id, version_id)
         if mixed_hierarchy(connection, context["sources"]):
             raise ValueError("该看板包含不同层级标准版本")
-        prepared = _prepare_scope(database, connection, context, options)
+        prepared = _prepare_scope(
+            database, connection, context, options, include_options=False
+        )
         return list_reason_evidence(
             prepared.scope, selected_code, prepared.taxonomy, page=page
         )
