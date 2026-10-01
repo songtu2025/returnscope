@@ -24,6 +24,18 @@ def create_review_router(
     current_user: Callable[..., dict[str, Any]],
 ) -> APIRouter:
     router = APIRouter()
+    _register_review_records(router, review_service, current_user)
+    _register_review_batches(router, review_service, current_user)
+    _register_review_batch_changes(router, review_service, current_user)
+    _register_review_reference_routes(router, review_service, database, current_user)
+    return router
+
+
+def _register_review_records(
+    router: APIRouter,
+    review_service: ReviewService,
+    current_user: Callable[..., dict[str, Any]],
+) -> None:
     User = Annotated[dict[str, Any], Depends(current_user)]
 
     @router.get("/api/reviews")
@@ -57,6 +69,14 @@ def create_review_router(
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _register_review_batches(
+    router: APIRouter,
+    review_service: ReviewService,
+    current_user: Callable[..., dict[str, Any]],
+) -> None:
+    User = Annotated[dict[str, Any], Depends(current_user)]
 
     @router.post(
         "/api/classification-results/{version_id}/review-batches",
@@ -132,6 +152,14 @@ def create_review_router(
             )
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+def _register_review_batch_changes(
+    router: APIRouter,
+    review_service: ReviewService,
+    current_user: Callable[..., dict[str, Any]],
+) -> None:
+    User = Annotated[dict[str, Any], Depends(current_user)]
 
     @router.patch("/api/review-batches/{batch_id}/records/{review_id}")
     def update_review_batch_record(
@@ -220,6 +248,15 @@ def create_review_router(
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+
+def _register_review_reference_routes(
+    router: APIRouter,
+    review_service: ReviewService,
+    database: Database,
+    current_user: Callable[..., dict[str, Any]],
+) -> None:
+    User = Annotated[dict[str, Any], Depends(current_user)]
+
     @router.get("/api/taxonomy")
     def taxonomy(_user: User) -> dict[str, Any]:
         config = review_service.standard_service.combined_taxonomy()
@@ -228,5 +265,3 @@ def create_review_router(
     @router.get("/api/audit/{entity_type}/{entity_id}")
     def audit(entity_type: str, entity_id: str, _user: User) -> list[dict[str, Any]]:
         return list_audit(database, entity_type, entity_id)
-
-    return router
