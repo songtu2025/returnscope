@@ -20,6 +20,17 @@ def create_insight_report_router(
     current_user: Callable[..., dict[str, Any]],
 ) -> APIRouter:
     router = APIRouter()
+    _register_report_creation(router, service, current_user)
+    _register_report_queries(router, service, current_user)
+    _register_report_actions(router, service, current_user)
+    return router
+
+
+def _register_report_creation(
+    router: APIRouter,
+    service: InsightReportService,
+    current_user: Callable[..., dict[str, Any]],
+) -> None:
     User = Annotated[dict[str, Any], Depends(current_user)]
 
     @router.post("/api/ai-insight-reports/from-results", status_code=201)
@@ -62,6 +73,14 @@ def create_insight_report_router(
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+
+def _register_report_queries(
+    router: APIRouter,
+    service: InsightReportService,
+    current_user: Callable[..., dict[str, Any]],
+) -> None:
+    User = Annotated[dict[str, Any], Depends(current_user)]
+
     @router.get("/api/analysis-dashboards/{dashboard_id}/ai-insight-reports")
     def list_reports(
         dashboard_id: str,
@@ -79,6 +98,14 @@ def create_insight_report_router(
             return service.get(report_id)
         except InsightReportNotFound as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+def _register_report_actions(
+    router: APIRouter,
+    service: InsightReportService,
+    current_user: Callable[..., dict[str, Any]],
+) -> None:
+    User = Annotated[dict[str, Any], Depends(current_user)]
 
     @router.post("/api/ai-insight-reports/{report_id}/retry")
     def retry_report(report_id: str, user: User) -> dict[str, Any]:
@@ -109,5 +136,3 @@ def create_insight_report_router(
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    return router
