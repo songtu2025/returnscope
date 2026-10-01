@@ -48,8 +48,23 @@ def create_dataset_router(
     current_user: Callable[..., dict[str, Any]],
 ) -> APIRouter:
     router = APIRouter()
-    User = Annotated[dict[str, Any], Depends(current_user)]
     mysql_service = MySQLReturnService(dataset_service, settings)
+    _register_mysql_import_routes(router, mysql_service, current_user)
+    _register_dataset_version_queries(router, dataset_service, current_user)
+    _register_dataset_storage_routes(router, dataset_service, current_user)
+    _register_return_import_routes(router, dataset_service, settings, current_user)
+    _register_dataset_read_routes(router, dataset_service, current_user)
+    _register_dataset_upload_routes(router, dataset_service, settings, current_user)
+    _register_product_data_routes(router, dataset_service, current_user)
+    return router
+
+
+def _register_mysql_import_routes(
+    router: APIRouter,
+    mysql_service: MySQLReturnService,
+    current_user: Callable[..., dict[str, Any]],
+) -> None:
+    User = Annotated[dict[str, Any], Depends(current_user)]
 
     @router.get("/api/mysql-return-imports/schema")
     def mysql_return_schema(
@@ -81,6 +96,14 @@ def create_dataset_router(
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _register_dataset_version_queries(
+    router: APIRouter,
+    dataset_service: DatasetService,
+    current_user: Callable[..., dict[str, Any]],
+) -> None:
+    User = Annotated[dict[str, Any], Depends(current_user)]
 
     @router.get("/api/datasets")
     def list_datasets(
@@ -124,6 +147,14 @@ def create_dataset_router(
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+
+def _register_dataset_storage_routes(
+    router: APIRouter,
+    dataset_service: DatasetService,
+    current_user: Callable[..., dict[str, Any]],
+) -> None:
+    User = Annotated[dict[str, Any], Depends(current_user)]
+
     @router.get("/api/dataset-storage")
     def dataset_storage_summary(
         _user: User,
@@ -156,6 +187,15 @@ def create_dataset_router(
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _register_return_import_routes(
+    router: APIRouter,
+    dataset_service: DatasetService,
+    settings: Settings,
+    current_user: Callable[..., dict[str, Any]],
+) -> None:
+    User = Annotated[dict[str, Any], Depends(current_user)]
 
     @router.post("/api/return-imports/inspect")
     async def inspect_return_import(
@@ -201,6 +241,14 @@ def create_dataset_router(
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+
+def _register_dataset_read_routes(
+    router: APIRouter,
+    dataset_service: DatasetService,
+    current_user: Callable[..., dict[str, Any]],
+) -> None:
+    User = Annotated[dict[str, Any], Depends(current_user)]
+
     @router.get("/api/datasets/{dataset_id}")
     def get_dataset(
         dataset_id: str,
@@ -234,6 +282,15 @@ def create_dataset_router(
             filename=str(item["original_name"]),
             media_type=str(item["content_type"]),
         )
+
+
+def _register_dataset_upload_routes(
+    router: APIRouter,
+    dataset_service: DatasetService,
+    settings: Settings,
+    current_user: Callable[..., dict[str, Any]],
+) -> None:
+    User = Annotated[dict[str, Any], Depends(current_user)]
 
     @router.post("/api/datasets", status_code=201)
     async def create_dataset(
@@ -290,6 +347,14 @@ def create_dataset_router(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         finally:
             temp_path.unlink(missing_ok=True)
+
+
+def _register_product_data_routes(
+    router: APIRouter,
+    dataset_service: DatasetService,
+    current_user: Callable[..., dict[str, Any]],
+) -> None:
+    User = Annotated[dict[str, Any], Depends(current_user)]
 
     @router.get("/api/datasets/{dataset_id}/rows")
     def preview_dataset_rows(
@@ -351,5 +416,3 @@ def create_dataset_router(
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    return router
