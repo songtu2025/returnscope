@@ -1145,7 +1145,7 @@ def test_real_web_task_flow(tmp_path: Path) -> None:
                     },
                 )
                 assert created.status_code == 201
-            over_limit = client.post(
+            additional_user = client.post(
                 "/api/users",
                 json={
                     "email": "user5@example.com",
@@ -1153,7 +1153,7 @@ def test_real_web_task_flow(tmp_path: Path) -> None:
                     "password": "user-5-password-123",
                 },
             )
-            assert over_limit.status_code == 409
+            assert additional_user.status_code == 201
             assert client.post("/api/auth/logout").status_code == 204
             assert (
                 client.post(

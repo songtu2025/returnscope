@@ -251,14 +251,6 @@ def create_account_router(
         user_id = new_id("user")
         try:
             with database.transaction(immediate=True) as connection:
-                active_count = connection.execute(
-                    "SELECT COUNT(*) AS count FROM users WHERE active = 1"
-                ).fetchone()
-                if int(active_count["count"]) >= 5:
-                    raise HTTPException(
-                        status_code=409,
-                        detail="最多可启用 5 个团队账号",
-                    )
                 connection.execute(
                     """
                     INSERT INTO users(
@@ -325,15 +317,6 @@ def create_account_router(
                 )
             if before_active == payload.active:
                 raise HTTPException(status_code=400, detail="账号状态没有变化")
-            if payload.active and not before_active:
-                active_count = connection.execute(
-                    "SELECT COUNT(*) AS count FROM users WHERE active = 1"
-                ).fetchone()
-                if int(active_count["count"]) >= 5:
-                    raise HTTPException(
-                        status_code=409,
-                        detail="最多可启用 5 个团队账号",
-                    )
             connection.execute(
                 "UPDATE users SET active = ? WHERE id = ?",
                 (int(payload.active), user_id),
