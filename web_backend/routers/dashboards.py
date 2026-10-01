@@ -20,6 +20,18 @@ def create_dashboard_router(
     current_user: Callable[..., dict[str, Any]],
 ) -> APIRouter:
     router = APIRouter()
+    _register_dashboard_creation(router, dashboard_service, current_user)
+    _register_dashboard_queries(router, dashboard_service, current_user)
+    _register_dashboard_analysis(router, dashboard_service, current_user)
+    _register_dashboard_evidence(router, dashboard_service, current_user)
+    return router
+
+
+def _register_dashboard_creation(
+    router: APIRouter,
+    dashboard_service: DashboardService,
+    current_user: Callable[..., dict[str, Any]],
+) -> None:
     User = Annotated[dict[str, Any], Depends(current_user)]
 
     @router.post("/api/dashboard-plans/preflight")
@@ -69,6 +81,14 @@ def create_dashboard_router(
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+
+def _register_dashboard_queries(
+    router: APIRouter,
+    dashboard_service: DashboardService,
+    current_user: Callable[..., dict[str, Any]],
+) -> None:
+    User = Annotated[dict[str, Any], Depends(current_user)]
+
     @router.get("/api/analysis-dashboards")
     def list_dashboards(
         _user: User,
@@ -107,6 +127,14 @@ def create_dashboard_router(
             return dashboard_service.versions(dashboard_id)
         except DashboardNotFound as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+def _register_dashboard_analysis(
+    router: APIRouter,
+    dashboard_service: DashboardService,
+    current_user: Callable[..., dict[str, Any]],
+) -> None:
+    User = Annotated[dict[str, Any], Depends(current_user)]
 
     @router.get("/api/analysis-dashboards/{dashboard_id}/versions/{version_id}/summary")
     def get_dashboard_summary(
@@ -165,6 +193,14 @@ def create_dashboard_router(
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _register_dashboard_evidence(
+    router: APIRouter,
+    dashboard_service: DashboardService,
+    current_user: Callable[..., dict[str, Any]],
+) -> None:
+    User = Annotated[dict[str, Any], Depends(current_user)]
 
     @router.get(
         "/api/analysis-dashboards/{dashboard_id}/versions/{version_id}/evidence"
@@ -271,5 +307,3 @@ def create_dashboard_router(
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    return router
