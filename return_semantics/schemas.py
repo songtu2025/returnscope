@@ -501,16 +501,25 @@ class TaxonomyConfig(StrictModel):
 
     @model_validator(mode="after")
     def validate_rule_labels(self) -> "TaxonomyConfig":
+        # 校验顺序决定多个错误并存时的第一条提示，拆分后仍保持原顺序。
+        self._validate_label_structure()
+        label_codes = {label.code for label in self.labels}
+        self._validate_rule_references(label_codes)
+        self._validate_dimension_contracts(label_codes)
+        if any(
+            len(set(codes)) < 2
+            for codes in self.validation_rules.conflicting_label_sets
+        ):
+            raise ValueError("冲突标签组至少需要两个不同标签")
+        return self
+
+    def _validate_label_structure(self) -> None:
         if self.structure_version == 2:
-            from return_semantics.taxonomy_hierarchy import (
-                label_path_codes,
-                validate_hierarchy,
-            )
+            from return_semantics.taxonomy_hierarchy import validate_hierarchy
 
             validate_hierarchy(self)
         elif self.categories or any(label.parent_code for label in self.labels):
             raise ValueError("层级标签必须使用 structure_version=2")
-        label_codes = {label.code for label in self.labels}
         groups = self.validation_rules.allowed_groups
         if (
             self.structure_version == 1
@@ -518,6 +527,8 @@ class TaxonomyConfig(StrictModel):
             and any(label.group not in groups for label in self.labels)
         ):
             raise ValueError("标签分组必须来自标准规定的业务分组")
+
+    def _validate_rule_references(self, label_codes: set[str]) -> None:
         rule_codes = {
             code
             for codes in self.validation_rules.opposite_reason_labels.values()
@@ -545,6 +556,10 @@ class TaxonomyConfig(StrictModel):
         unknown_codes = sorted(rule_codes.difference(label_codes))
         if unknown_codes:
             raise ValueError(f"校验规则引用了未知标签: {unknown_codes}")
+
+    def _validate_dimension_contracts(self, label_codes: set[str]) -> None:
+        from return_semantics.taxonomy_hierarchy import label_path_codes
+
         contracts = self.validation_rules.dimension_contracts
         decision_parent_codes = [contract.parent_code for contract in contracts]
         category_codes = {category.code for category in self.categories}
@@ -556,24 +571,7 @@ class TaxonomyConfig(StrictModel):
         if len(decision_parent_codes) != len(set(decision_parent_codes)):
             raise ValueError("同一分类只能配置一条维度裁决契约")
         for contract in contracts:
-            if len(contract.verdict_label_codes) != len(
-                set(contract.verdict_label_codes)
-            ):
-                raise ValueError("维度裁决契约的结论标签不能重复")
-            if len(contract.scope_fields) != len(set(contract.scope_fields)):
-                raise ValueError("维度裁决契约的作用域字段不能重复")
-            invalid_verdicts = [
-                code for code in contract.verdict_label_codes if code not in label_codes
-            ]
-            if invalid_verdicts:
-                raise ValueError(f"维度裁决契约引用了未知标签: {invalid_verdicts}")
-            outside_parent = [
-                code
-                for code in contract.verdict_label_codes
-                if contract.parent_code not in label_path_codes(self, code)[:-1]
-            ]
-            if outside_parent:
-                raise ValueError(f"维度结论标签不属于配置父级: {outside_parent}")
+            self._validate_dimension_contract(contract, label_codes)
         for label in self.labels:
             matching_contracts = [
                 contract.parent_code
@@ -582,12 +580,28 @@ class TaxonomyConfig(StrictModel):
             ]
             if len(matching_contracts) > 1:
                 raise ValueError(f"维度裁决契约不能重叠管理同一标签: {label.code}")
-        if any(
-            len(set(codes)) < 2
-            for codes in self.validation_rules.conflicting_label_sets
-        ):
-            raise ValueError("冲突标签组至少需要两个不同标签")
-        return self
+
+    def _validate_dimension_contract(
+        self, contract: DimensionContract, label_codes: set[str]
+    ) -> None:
+        from return_semantics.taxonomy_hierarchy import label_path_codes
+
+        if len(contract.verdict_label_codes) != len(set(contract.verdict_label_codes)):
+            raise ValueError("维度裁决契约的结论标签不能重复")
+        if len(contract.scope_fields) != len(set(contract.scope_fields)):
+            raise ValueError("维度裁决契约的作用域字段不能重复")
+        invalid_verdicts = [
+            code for code in contract.verdict_label_codes if code not in label_codes
+        ]
+        if invalid_verdicts:
+            raise ValueError(f"维度裁决契约引用了未知标签: {invalid_verdicts}")
+        outside_parent = [
+            code
+            for code in contract.verdict_label_codes
+            if contract.parent_code not in label_path_codes(self, code)[:-1]
+        ]
+        if outside_parent:
+            raise ValueError(f"维度结论标签不属于配置父级: {outside_parent}")
 
 
 class ClaimDefinition(StrictModel):
