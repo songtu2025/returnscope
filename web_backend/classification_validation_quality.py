@@ -458,18 +458,9 @@ def quality_gate(summary: dict, policy: dict | None = None) -> dict:
             f"非歧义参考样本 {sample_count} 条，至少需要 {policy['min_reference_samples']} 条"
         )
     total = evaluation.get("total_sample_count", summary.get("sample_size", 0))
-    for dimension in policy.get("require_scope_dimensions", []):
-        count = evaluation.get("scope_sample_counts", {}).get(dimension, 0)
-        if count != total or not total:
-            blocking.append(
-                f"{SCOPE_FIELDS[dimension][0]}参考未完整评估：{count}/{total} 条；旧表缺列不代表零错误"
-            )
-    for dimension in policy.get("warn_incomplete_scope_dimensions", []):
-        count = evaluation.get("scope_sample_counts", {}).get(dimension, 0)
-        if count != total or not total:
-            warnings.append(
-                f"{SCOPE_FIELDS[dimension][0]}参考未完整评估：{count}/{total} 条；请在人工审批时核对"
-            )
+    scope_blocking, scope_warnings = _scope_quality_issues(evaluation, policy, total)
+    blocking.extend(scope_blocking)
+    warnings.extend(scope_warnings)
     coverage = sample_count / total * 100 if total else 0
     denominator = max(
         values.get("expected_instances", 0), values.get("actual_instances", 0)
@@ -480,17 +471,11 @@ def quality_gate(summary: dict, policy: dict | None = None) -> dict:
         else (100 if sample_count else 0)
     )
     duplicate_rate = values.get("duplicate_samples", 0) / max(1, sample_count) * 100
-    for actual, limit, message, minimum in (
-        (coverage, policy["min_reference_coverage"], "非歧义参考覆盖率", True),
-        (match_rate, policy["min_instance_match_rate"], "实例标签匹配率", True),
-        (duplicate_rate, policy["max_duplicate_rate"], "重复事实样本率", False),
-    ):
-        if (actual < limit) if minimum else (actual > limit):
-            blocking.append(
-                f"{message} {actual:.2f}%，要求{'至少' if minimum else '不超过'} {limit}%"
-            )
-        elif (minimum and actual < 100) or (not minimum and actual > 0):
-            warnings.append(f"{message} {actual:.2f}%，请人工复核")
+    rate_blocking, rate_warnings = _rate_quality_issues(
+        coverage, match_rate, duplicate_rate, policy
+    )
+    blocking.extend(rate_blocking)
+    warnings.extend(rate_warnings)
     if (
         policy.get("require_fact_states")
         and evaluation.get("fact_state_sample_count", 0) != total
@@ -515,6 +500,52 @@ def quality_gate(summary: dict, policy: dict | None = None) -> dict:
         "instance_match_rate": match_rate,
         "duplicate_rate": duplicate_rate,
     }
+
+
+def _scope_quality_issues(
+    evaluation: dict,
+    policy: dict,
+    total: int,
+) -> tuple[list[str], list[str]]:
+    """按策略检查参考维度完整性，缺列或零样本不能视为已评估。"""
+    blocking = []
+    warnings = []
+    for dimension in policy.get("require_scope_dimensions", []):
+        count = evaluation.get("scope_sample_counts", {}).get(dimension, 0)
+        if count != total or not total:
+            blocking.append(
+                f"{SCOPE_FIELDS[dimension][0]}参考未完整评估：{count}/{total} 条；旧表缺列不代表零错误"
+            )
+    for dimension in policy.get("warn_incomplete_scope_dimensions", []):
+        count = evaluation.get("scope_sample_counts", {}).get(dimension, 0)
+        if count != total or not total:
+            warnings.append(
+                f"{SCOPE_FIELDS[dimension][0]}参考未完整评估：{count}/{total} 条；请在人工审批时核对"
+            )
+    return blocking, warnings
+
+
+def _rate_quality_issues(
+    coverage: float,
+    match_rate: float,
+    duplicate_rate: float,
+    policy: dict,
+) -> tuple[list[str], list[str]]:
+    """按未四舍五入的比例判定，展示时才保留两位小数。"""
+    blocking = []
+    warnings = []
+    for actual, limit, message, minimum in (
+        (coverage, policy["min_reference_coverage"], "非歧义参考覆盖率", True),
+        (match_rate, policy["min_instance_match_rate"], "实例标签匹配率", True),
+        (duplicate_rate, policy["max_duplicate_rate"], "重复事实样本率", False),
+    ):
+        if (actual < limit) if minimum else (actual > limit):
+            blocking.append(
+                f"{message} {actual:.2f}%，要求{'至少' if minimum else '不超过'} {limit}%"
+            )
+        elif (minimum and actual < 100) or (not minimum and actual > 0):
+            warnings.append(f"{message} {actual:.2f}%，请人工复核")
+    return blocking, warnings
 
 
 def publication_quality_gate(
