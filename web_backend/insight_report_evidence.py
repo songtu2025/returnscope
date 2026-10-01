@@ -12,13 +12,45 @@ from web_backend.insight_report_diagnostics import (
     _product_mapping_check,
 )
 from web_backend.insight_report_legacy_blueprint import _build_blueprint
-from web_backend.insight_report_profiles import resolve_insight_report_profile
+from web_backend.insight_report_profiles import (
+    InsightReportProfile,
+    resolve_insight_report_profile,
+)
 
 
 def _build_evidence(
     analysis: dict[str, Any],
     *,
     prompt_version: str = V5_PROMPT_VERSION,
+) -> dict[str, Any]:
+    profile = resolve_insight_report_profile(list(analysis.get("sources", [])))
+    product_mapping = _product_mapping_check(
+        analysis.get("summary", {}),
+        list(analysis.get("filter_options", {}).get("listings", [])),
+    )
+    report_analysis = _prepare_report_analysis(analysis, product_mapping, profile)
+    evidence = {
+        "source": _build_source(analysis, product_mapping, profile),
+        "catalog": _build_catalog(
+            report_analysis,
+            product_mapping,
+            profile,
+            analysis_context=analysis.get("analysis_context", "returns"),
+        ),
+        "analysis": report_analysis,
+    }
+    evidence["blueprint"] = (
+        _build_decision_blueprint(evidence)
+        if prompt_version == PROMPT_VERSION
+        else _build_blueprint(evidence)
+    )
+    return evidence
+
+
+def _prepare_report_analysis(
+    analysis: dict[str, Any],
+    product_mapping: dict[str, Any],
+    profile: InsightReportProfile,
 ) -> dict[str, Any]:
     summary = analysis.get("summary", {})
     groups = list(analysis.get("label_group_breakdown", []))[:12]
@@ -29,23 +61,12 @@ def _build_evidence(
     issue_cases = list(analysis.get("issue_cases", []))[:12]
     review_bias = analysis.get("review_bias", {})
     text_quality = analysis.get("text_quality", {})
-    listings = list(analysis.get("filter_options", {}).get("listings", []))
-    product_names = list(analysis.get("filter_options", {}).get("product_names", []))
-    sources = list(analysis.get("sources", []))
-    is_returns = analysis.get("analysis_context", "returns") == "returns"
-    analyzed_record_label = "已分析退货" if is_returns else "已分析反馈"
-    profile = resolve_insight_report_profile(sources)
-    product_mapping = _product_mapping_check(
-        summary,
-        listings,
-    )
     mapping_trusted = product_mapping.get("status") != "needs_review"
     text_trusted = text_quality.get("status") != "needs_review"
-    product_level_trusted = mapping_trusted
-    safe_products = products if product_level_trusted else []
+    safe_products = products if mapping_trusted else []
     safe_diagnostics = deepcopy(diagnostics)
-    safe_issue_cases = deepcopy(issue_cases) if product_level_trusted else []
-    if not product_level_trusted:
+    safe_issue_cases = deepcopy(issue_cases) if mapping_trusted else []
+    if not mapping_trusted:
         safe_diagnostics = [
             {
                 **diagnostic,
@@ -67,7 +88,58 @@ def _build_evidence(
             _filter_diagnostic_text(diagnostic) for diagnostic in safe_diagnostics
         ]
         safe_issue_cases = [_filter_issue_case_text(case) for case in safe_issue_cases]
-    catalog: dict[str, dict[str, Any]] = {
+    business_issues = _build_business_issues(
+        safe_diagnostics,
+        safe_issue_cases,
+        profile=profile,
+    )
+    samples = _representative_samples(safe_diagnostics)
+    return {
+        "summary": summary,
+        "label_group_breakdown": groups,
+        "reasons": reasons,
+        "subject_breakdown": subjects,
+        "product_reason_matrix": safe_products,
+        "diagnostics": safe_diagnostics,
+        "issue_cases": safe_issue_cases,
+        "business_issues": business_issues,
+        "review_bias": review_bias,
+        "text_quality": text_quality,
+        "report_profile": profile.snapshot(),
+        "samples": samples,
+    }
+
+
+def _representative_samples(
+    diagnostics: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    samples: list[dict[str, Any]] = []
+    seen_samples: set[str] = set()
+    for diagnostic in diagnostics:
+        code = str(diagnostic.get("reason_code") or "unknown")
+        for index, sample in enumerate(diagnostic.get("samples", []), 1):
+            text = str(sample.get("comment") or sample.get("reason") or "").strip()
+            if text and text not in seen_samples and len(samples) < 8:
+                samples.append(
+                    {
+                        **sample,
+                        "reason_code": code,
+                        "evidence_id": f"diagnostic.{code}.sample.{index}",
+                    }
+                )
+                seen_samples.add(text)
+    return samples
+
+
+def _scope_catalog(
+    analysis: dict[str, Any],
+    product_mapping: dict[str, Any],
+    profile: InsightReportProfile,
+) -> dict[str, dict[str, Any]]:
+    summary = analysis["summary"]
+    review_bias = analysis["review_bias"]
+    text_quality = analysis["text_quality"]
+    return {
         "scope": {
             "label": "分析范围",
             "value": (
@@ -97,6 +169,47 @@ def _build_evidence(
             "data": profile.snapshot(),
         },
     }
+
+
+def _build_catalog(
+    analysis: dict[str, Any],
+    product_mapping: dict[str, Any],
+    profile: InsightReportProfile,
+    *,
+    analysis_context: str,
+) -> dict[str, dict[str, Any]]:
+    catalog = _scope_catalog(analysis, product_mapping, profile)
+    _add_breakdown_evidence(catalog, analysis, analysis_context=analysis_context)
+    # 证据编号和插入顺序会进入提示词及报告引用，分组顺序必须保持一致。
+    for case in analysis["issue_cases"]:
+        catalog.update(_issue_case_evidence(case))
+    for diagnostic in analysis["diagnostics"]:
+        catalog.update(_diagnostic_evidence(diagnostic))
+    for issue in analysis["business_issues"]:
+        catalog[issue["id"]] = {
+            "label": str(issue.get("label") or "业务问题"),
+            "value": (
+                f"{int(issue.get('record_count') or 0)} 条 · "
+                f"{float(issue.get('percentage') or 0):.1f}%"
+            ),
+            "data": issue,
+        }
+    return catalog
+
+
+def _add_breakdown_evidence(
+    catalog: dict[str, dict[str, Any]],
+    analysis: dict[str, Any],
+    *,
+    analysis_context: str,
+) -> None:
+    groups = analysis["label_group_breakdown"]
+    reasons = analysis["reasons"]
+    subjects = analysis["subject_breakdown"]
+    safe_products = analysis["product_reason_matrix"]
+    analyzed_record_label = (
+        "已分析退货" if analysis_context == "returns" else "已分析反馈"
+    )
     for index, group in enumerate(groups, 1):
         catalog[f"group.{index}"] = {
             "label": str(group.get("value") or "其他原因"),
@@ -135,121 +248,122 @@ def _build_evidence(
             ),
             "data": product,
         }
-    for case in safe_issue_cases:
-        case_id = str(case.get("id") or "")
-        if not case_id:
-            continue
-        catalog[case_id] = {
-            "label": (
-                f"{case.get('label') or case.get('reason_code')} · "
-                f"{case.get('product_sku') or '未提供 SKU'}"
-            ),
-            "value": (
-                f"{int(case.get('record_count') or 0)} / "
-                f"{int(case.get('total_record_count') or 0)} 条，"
-                f"变体内 {float(case.get('issue_rate') or 0):.1f}%，"
-                f"整体 {float(case.get('overall_rate') or 0):.1f}%，"
-                f"{float(case.get('lift') or 0):.2f}×"
-            ),
-            "data": case,
+
+
+def _issue_case_evidence(case: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    case_id = str(case.get("id") or "")
+    if not case_id:
+        return {}
+    catalog: dict[str, dict[str, Any]] = {}
+    catalog[case_id] = {
+        "label": (
+            f"{case.get('label') or case.get('reason_code')} · "
+            f"{case.get('product_sku') or '未提供 SKU'}"
+        ),
+        "value": (
+            f"{int(case.get('record_count') or 0)} / "
+            f"{int(case.get('total_record_count') or 0)} 条，"
+            f"变体内 {float(case.get('issue_rate') or 0):.1f}%，"
+            f"整体 {float(case.get('overall_rate') or 0):.1f}%，"
+            f"{float(case.get('lift') or 0):.2f}×"
+        ),
+        "data": case,
+    }
+    if case.get("trend"):
+        catalog[f"{case_id}.trend"] = {
+            "label": f"{case.get('product_sku') or '商品变体'}问题趋势",
+            "value": f"{len(case.get('trend', []))} 个周度数据点",
+            "data": case.get("trend", []),
         }
-        if case.get("trend"):
-            catalog[f"{case_id}.trend"] = {
-                "label": f"{case.get('product_sku') or '商品变体'}问题趋势",
-                "value": f"{len(case.get('trend', []))} 个周度数据点",
-                "data": case.get("trend", []),
-            }
-        for index, opinion in enumerate(
-            case.get("semantic_profile", {}).get("opinions", []),
-            1,
-        ):
-            catalog[f"{case_id}.opinion.{index}"] = {
-                "label": str(opinion.get("opinion") or f"高频表述 {index}"),
-                "value": f"{int(opinion.get('record_count') or 0)} 条",
-                "data": opinion,
-            }
-        for index, sample in enumerate(case.get("samples", []), 1):
-            text = str(sample.get("comment") or sample.get("reason") or "").strip()
-            catalog[f"{case_id}.sample.{index}"] = {
-                "label": str(case.get("product_sku") or "原始评论"),
-                "value": text[:160] or "未提供评论",
-                "data": sample,
-            }
-    samples: list[dict[str, Any]] = []
-    seen_samples: set[str] = set()
-    for diagnostic in safe_diagnostics:
-        code = str(diagnostic.get("reason_code") or "unknown")
-        trend_summary = diagnostic.get("trend_summary", {})
-        if trend_summary.get("status") == "available":
-            catalog[f"diagnostic.{code}.trend"] = {
-                "label": f"{diagnostic.get('selected_reason', {}).get('label') or code}趋势",
-                "value": (
-                    f"最早 {trend_summary.get('window_weeks')} 个完整周 "
-                    f"{float(trend_summary.get('early_rate') or 0):.1f}% → "
-                    f"最近 {trend_summary.get('window_weeks')} 个完整周 "
-                    f"{float(trend_summary.get('recent_rate') or 0):.1f}%（"
-                    f"{float(trend_summary.get('delta_percentage_points') or 0):+.1f}pp）"
-                ),
-                "data": trend_summary,
-            }
-        for index, hotspot in enumerate(diagnostic.get("hotspots", []), 1):
-            catalog[f"diagnostic.{code}.hotspot.{index}"] = {
-                "label": str(hotspot.get("value") or f"商品 {index}"),
-                "value": (
-                    f"{int(hotspot.get('record_count') or 0)} / "
-                    f"{int(hotspot.get('total_record_count') or 0)} 条，"
-                    f"商品内 {float(hotspot.get('product_reason_rate') or 0):.1f}%，"
-                    f"整体 {float(hotspot.get('overall_reason_rate') or 0):.1f}%，"
-                    f"{float(hotspot.get('lift') or 0):.2f}×"
-                ),
-                "data": hotspot,
-            }
-        for index, variant in enumerate(diagnostic.get("variants", []), 1):
-            catalog[f"diagnostic.{code}.variant.{index}"] = {
-                "label": str(variant.get("value") or f"商品变体 {index}"),
-                "value": (
-                    f"{int(variant.get('record_count') or 0)} / "
-                    f"{int(variant.get('total_record_count') or 0)} 条，"
-                    f"变体内 {float(variant.get('product_reason_rate') or 0):.1f}%，"
-                    f"整体 {float(variant.get('overall_reason_rate') or 0):.1f}%，"
-                    f"{float(variant.get('lift') or 0):.2f}×"
-                ),
-                "data": variant,
-            }
-        opinions = diagnostic.get("semantic_profile", {}).get("opinions", [])
-        for index, opinion in enumerate(opinions, 1):
-            catalog[f"diagnostic.{code}.opinion.{index}"] = {
-                "label": str(opinion.get("opinion") or f"高频表述 {index}"),
-                "value": f"{int(opinion.get('record_count') or 0)} 条",
-                "data": opinion,
-            }
-        for index, sample in enumerate(diagnostic.get("samples", []), 1):
-            text = str(sample.get("comment") or sample.get("reason") or "").strip()
-            sample_id = f"diagnostic.{code}.sample.{index}"
-            catalog[sample_id] = {
-                "label": str(sample.get("product_name") or "原始评论"),
-                "value": text[:160] or "未提供评论",
-                "data": sample,
-            }
-            if text and text not in seen_samples and len(samples) < 8:
-                samples.append(
-                    {**sample, "reason_code": code, "evidence_id": sample_id}
-                )
-                seen_samples.add(text)
-    business_issues = _build_business_issues(
-        safe_diagnostics,
-        safe_issue_cases,
-        profile=profile,
-    )
-    for issue in business_issues:
-        catalog[issue["id"]] = {
-            "label": str(issue.get("label") or "业务问题"),
-            "value": (
-                f"{int(issue.get('record_count') or 0)} 条 · "
-                f"{float(issue.get('percentage') or 0):.1f}%"
-            ),
-            "data": issue,
+    for index, opinion in enumerate(
+        case.get("semantic_profile", {}).get("opinions", []),
+        1,
+    ):
+        catalog[f"{case_id}.opinion.{index}"] = {
+            "label": str(opinion.get("opinion") or f"高频表述 {index}"),
+            "value": f"{int(opinion.get('record_count') or 0)} 条",
+            "data": opinion,
         }
+    for index, sample in enumerate(case.get("samples", []), 1):
+        text = str(sample.get("comment") or sample.get("reason") or "").strip()
+        catalog[f"{case_id}.sample.{index}"] = {
+            "label": str(case.get("product_sku") or "原始评论"),
+            "value": text[:160] or "未提供评论",
+            "data": sample,
+        }
+    return catalog
+
+
+def _diagnostic_evidence(diagnostic: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    catalog: dict[str, dict[str, Any]] = {}
+    code = str(diagnostic.get("reason_code") or "unknown")
+    trend_summary = diagnostic.get("trend_summary", {})
+    if trend_summary.get("status") == "available":
+        catalog[f"diagnostic.{code}.trend"] = {
+            "label": f"{diagnostic.get('selected_reason', {}).get('label') or code}趋势",
+            "value": (
+                f"最早 {trend_summary.get('window_weeks')} 个完整周 "
+                f"{float(trend_summary.get('early_rate') or 0):.1f}% → "
+                f"最近 {trend_summary.get('window_weeks')} 个完整周 "
+                f"{float(trend_summary.get('recent_rate') or 0):.1f}%（"
+                f"{float(trend_summary.get('delta_percentage_points') or 0):+.1f}pp）"
+            ),
+            "data": trend_summary,
+        }
+    for index, hotspot in enumerate(diagnostic.get("hotspots", []), 1):
+        catalog[f"diagnostic.{code}.hotspot.{index}"] = {
+            "label": str(hotspot.get("value") or f"商品 {index}"),
+            "value": (
+                f"{int(hotspot.get('record_count') or 0)} / "
+                f"{int(hotspot.get('total_record_count') or 0)} 条，"
+                f"商品内 {float(hotspot.get('product_reason_rate') or 0):.1f}%，"
+                f"整体 {float(hotspot.get('overall_reason_rate') or 0):.1f}%，"
+                f"{float(hotspot.get('lift') or 0):.2f}×"
+            ),
+            "data": hotspot,
+        }
+    for index, variant in enumerate(diagnostic.get("variants", []), 1):
+        catalog[f"diagnostic.{code}.variant.{index}"] = {
+            "label": str(variant.get("value") or f"商品变体 {index}"),
+            "value": (
+                f"{int(variant.get('record_count') or 0)} / "
+                f"{int(variant.get('total_record_count') or 0)} 条，"
+                f"变体内 {float(variant.get('product_reason_rate') or 0):.1f}%，"
+                f"整体 {float(variant.get('overall_reason_rate') or 0):.1f}%，"
+                f"{float(variant.get('lift') or 0):.2f}×"
+            ),
+            "data": variant,
+        }
+    opinions = diagnostic.get("semantic_profile", {}).get("opinions", [])
+    for index, opinion in enumerate(opinions, 1):
+        catalog[f"diagnostic.{code}.opinion.{index}"] = {
+            "label": str(opinion.get("opinion") or f"高频表述 {index}"),
+            "value": f"{int(opinion.get('record_count') or 0)} 条",
+            "data": opinion,
+        }
+    for index, sample in enumerate(diagnostic.get("samples", []), 1):
+        text = str(sample.get("comment") or sample.get("reason") or "").strip()
+        sample_id = f"diagnostic.{code}.sample.{index}"
+        catalog[sample_id] = {
+            "label": str(sample.get("product_name") or "原始评论"),
+            "value": text[:160] or "未提供评论",
+            "data": sample,
+        }
+    return catalog
+
+
+def _build_source(
+    analysis: dict[str, Any],
+    product_mapping: dict[str, Any],
+    profile: InsightReportProfile,
+) -> dict[str, Any]:
+    summary = analysis.get("summary", {})
+    text_quality = analysis.get("text_quality", {})
+    listings = list(analysis.get("filter_options", {}).get("listings", []))
+    product_names = list(analysis.get("filter_options", {}).get("product_names", []))
+    sources = list(analysis.get("sources", []))
+    mapping_trusted = product_mapping.get("status") != "needs_review"
+    text_trusted = text_quality.get("status") != "needs_review"
     total_record_count = int(
         summary.get("total_record_count") or summary.get("record_count") or 0
     )
@@ -280,64 +394,37 @@ def _build_evidence(
         quality_issue_codes.append("text_quality")
     if not mapping_trusted:
         quality_issue_codes.append("product_mapping")
-    evidence = {
-        "source": {
-            "dashboard_id": analysis.get("dashboard_id"),
-            "dashboard_version_id": analysis.get("version_id"),
-            "analysis_context": analysis.get("analysis_context", "returns"),
-            "date_range": analysis.get("date_range", {}),
-            "label_coverage": analysis.get("label_coverage", 0),
-            "listings": listings,
-            "product_count": len(product_names),
-            "total_record_count": total_record_count,
-            "included_record_count": int(summary.get("record_count") or 0),
-            "pending_review_record_count": pending_review_count,
-            "coverage_rate": coverage_rate,
-            "product_mapping": product_mapping,
-            "text_quality": text_quality,
-            "clean_comment_record_count": clean_comment_count,
-            "clean_comment_rate": clean_comment_rate,
-            "quality_issue_codes": quality_issue_codes,
-            "report_status": "provisional" if quality_issue_codes else "final",
-            "agent_keys": sorted(
-                {
-                    str(source.get("agent_key"))
-                    for source in sources
-                    if source.get("agent_key")
-                }
-            ),
-            "taxonomy_versions": sorted(
-                {
-                    str(
-                        source.get("taxonomy_version")
-                        or source.get("taxonomy_version_id")
-                    )
-                    for source in sources
-                    if source.get("taxonomy_version")
-                    or source.get("taxonomy_version_id")
-                }
-            ),
-            "report_profile": profile.snapshot(),
-        },
-        "catalog": catalog,
-        "analysis": {
-            "summary": summary,
-            "label_group_breakdown": groups,
-            "reasons": reasons,
-            "subject_breakdown": subjects,
-            "product_reason_matrix": safe_products,
-            "diagnostics": safe_diagnostics,
-            "issue_cases": safe_issue_cases,
-            "business_issues": business_issues,
-            "review_bias": review_bias,
-            "text_quality": text_quality,
-            "report_profile": profile.snapshot(),
-            "samples": samples,
-        },
+    return {
+        "dashboard_id": analysis.get("dashboard_id"),
+        "dashboard_version_id": analysis.get("version_id"),
+        "analysis_context": analysis.get("analysis_context", "returns"),
+        "date_range": analysis.get("date_range", {}),
+        "label_coverage": analysis.get("label_coverage", 0),
+        "listings": listings,
+        "product_count": len(product_names),
+        "total_record_count": total_record_count,
+        "included_record_count": int(summary.get("record_count") or 0),
+        "pending_review_record_count": pending_review_count,
+        "coverage_rate": coverage_rate,
+        "product_mapping": product_mapping,
+        "text_quality": text_quality,
+        "clean_comment_record_count": clean_comment_count,
+        "clean_comment_rate": clean_comment_rate,
+        "quality_issue_codes": quality_issue_codes,
+        "report_status": "provisional" if quality_issue_codes else "final",
+        "agent_keys": sorted(
+            {
+                str(source.get("agent_key"))
+                for source in sources
+                if source.get("agent_key")
+            }
+        ),
+        "taxonomy_versions": sorted(
+            {
+                str(source.get("taxonomy_version") or source.get("taxonomy_version_id"))
+                for source in sources
+                if source.get("taxonomy_version") or source.get("taxonomy_version_id")
+            }
+        ),
+        "report_profile": profile.snapshot(),
     }
-    evidence["blueprint"] = (
-        _build_decision_blueprint(evidence)
-        if prompt_version == PROMPT_VERSION
-        else _build_blueprint(evidence)
-    )
-    return evidence
