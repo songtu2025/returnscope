@@ -564,6 +564,17 @@ class AuditLogService:
         source = context.get((entity_type, entity_id))
         if source is None:
             return None
+        target = AuditLogService._analysis_target(entity_type, entity_id, source)
+        if target is not None:
+            return target
+        return AuditLogService._configuration_target(entity_type, entity_id, source)
+
+    @staticmethod
+    def _analysis_target(
+        entity_type: str,
+        entity_id: str,
+        source: dict[str, Any],
+    ) -> dict[str, Any] | None:
         if entity_type == "task":
             return {"route": "tasks", "task_id": entity_id}
         if entity_type == "task_segment":
@@ -596,6 +607,22 @@ class AuditLogService:
                 "dataset_id": entity_id,
                 "view": source["kind"],
             }
+        if entity_type == "analysis_dashboard":
+            target = {
+                "route": "analysis-dashboards",
+                "dashboard_id": entity_id,
+            }
+            if source["current_version_id"]:
+                target["version_id"] = source["current_version_id"]
+            return target
+        return None
+
+    @staticmethod
+    def _configuration_target(
+        entity_type: str,
+        entity_id: str,
+        source: dict[str, Any],
+    ) -> dict[str, Any] | None:
         if entity_type == "api_connection":
             return {
                 "route": "api",
@@ -622,14 +649,6 @@ class AuditLogService:
                 "tab": "users",
                 "user_id": entity_id,
             }
-        if entity_type == "analysis_dashboard":
-            target = {
-                "route": "analysis-dashboards",
-                "dashboard_id": entity_id,
-            }
-            if source["current_version_id"]:
-                target["version_id"] = source["current_version_id"]
-            return target
         return None
 
     @staticmethod
