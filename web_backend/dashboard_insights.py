@@ -17,6 +17,7 @@ from web_backend.dashboard_insight_overview import (
     collect_label_counts,
     collect_reason_context,
     collect_subject_breakdown,
+    prepare_scope_semantics,
 )
 from web_backend.dashboard_plan import comment_summary_metrics
 from web_backend.dashboard_support import (
@@ -222,26 +223,7 @@ def _prepare_scope(
 def _prepare_subject_labels(
     connection: sqlite3.Connection, where_sql: str, params: list[Any], subject: str
 ) -> None:
-    # 同一分类单元只解析一次 JSON，再映射回范围内的反馈记录。
-    connection.execute(
-        f"""
-        CREATE TEMP TABLE dashboard_insight_subject_units AS
-        WITH scoped_units AS MATERIALIZED (
-            SELECT DISTINCT r.result_version_id, r.classification_key
-            FROM classification_result_records r WHERE {where_sql}
-        )
-        SELECT scoped_units.result_version_id, scoped_units.classification_key,
-               json_extract(unit.value, '$.label_code') AS label_code
-        FROM scoped_units
-        JOIN classification_units u
-          ON u.result_version_id = scoped_units.result_version_id
-         AND u.classification_key = scoped_units.classification_key
-        JOIN json_each(u.classification_json, '$.semantic_units') unit
-        WHERE json_extract(unit.value, '$.subject') = ?
-          AND json_extract(unit.value, '$.label_code') IS NOT NULL
-        """,
-        (*params, subject),
-    )
+    prepare_scope_semantics(connection, where_sql, params)
     connection.execute(
         "CREATE TEMP TABLE dashboard_insight_subject_labels "
         "(id TEXT NOT NULL, label_code TEXT NOT NULL, PRIMARY KEY (id, label_code))"
@@ -251,12 +233,13 @@ def _prepare_subject_labels(
         INSERT OR IGNORE INTO dashboard_insight_subject_labels
         SELECT r.id, unit.label_code
         FROM classification_result_records r
-        JOIN dashboard_insight_subject_units unit
+        JOIN dashboard_insight_scope_semantics unit
           ON unit.result_version_id = r.result_version_id
          AND unit.classification_key = r.classification_key
         WHERE {where_sql}
+          AND unit.subject = ? AND unit.label_code IS NOT NULL
         """,
-        tuple(params),
+        (*params, subject),
     )
 
 

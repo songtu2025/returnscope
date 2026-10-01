@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from web_backend.dashboard_common import SUBJECT_LABELS
@@ -32,6 +32,39 @@ def subject_label_filter(scope: InsightQueryScope, record: str, label: str) -> s
         " AND EXISTS (SELECT 1 FROM dashboard_insight_subject_labels subject_label"
         f" WHERE subject_label.id = {record}.id"
         f" AND subject_label.label_code = {label}.label_code)"
+    )
+
+
+@timed_stage("insight_semantic_scope")
+def prepare_scope_semantics(
+    connection: sqlite3.Connection,
+    where_sql: str,
+    params: list[Any],
+    *,
+    records_table: str = "classification_result_records",
+) -> None:
+    """先准备基础范围的解析结果，当前连接内的对象子范围共用，权重另算。"""
+    connection.execute(
+        f"""
+        CREATE TEMP TABLE IF NOT EXISTS dashboard_insight_scope_semantics AS
+        WITH scoped_units AS MATERIALIZED (
+            SELECT DISTINCT r.result_version_id, r.classification_key
+            FROM {records_table} r WHERE {where_sql}
+        )
+        SELECT scoped_units.result_version_id, scoped_units.classification_key,
+               json_extract(unit.value, '$.subject') AS subject,
+               json_extract(unit.value, '$.label_code') AS label_code
+        FROM scoped_units
+        JOIN classification_units u
+          ON u.result_version_id = scoped_units.result_version_id
+         AND u.classification_key = scoped_units.classification_key
+        JOIN json_each(u.classification_json, '$.semantic_units') unit
+        """,
+        tuple(params),
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS temp.idx_insight_scope_semantics_unit "
+        "ON dashboard_insight_scope_semantics(result_version_id, classification_key)"
     )
 
 
@@ -70,11 +103,19 @@ def _collect_semantic_breakdown(
             tuple(context["source_ids"]),
         ).fetchall()
     else:
+        prepare_scope_semantics(
+            connection, where_sql, params, records_table=scope.records_table
+        )
+        record_count = (
+            "SUM(r.record_count)"
+            if scope.records_table == "dashboard_insight_weighted_units"
+            else "COUNT(*)"
+        )
         semantic_rows = connection.execute(
             f"""
             WITH filtered_units AS MATERIALIZED (
                 SELECT r.result_version_id, r.classification_key,
-                       COUNT(*) AS record_count
+                       {record_count} AS record_count
                 FROM {scope.records_table} r
                 WHERE {where_sql}
                 GROUP BY r.result_version_id, r.classification_key
@@ -83,13 +124,11 @@ def _collect_semantic_breakdown(
                 SELECT filtered_units.result_version_id,
                        filtered_units.classification_key,
                        filtered_units.record_count,
-                       json_extract(unit.value, '$.subject') AS subject,
-                       json_extract(unit.value, '$.label_code') AS label_code
+                       unit.subject, unit.label_code
                 FROM filtered_units
-                JOIN classification_units u
-                  ON u.result_version_id = filtered_units.result_version_id
-                 AND u.classification_key = filtered_units.classification_key
-                JOIN json_each(u.classification_json, '$.semantic_units') unit
+                JOIN dashboard_insight_scope_semantics unit
+                  ON unit.result_version_id = filtered_units.result_version_id
+                 AND unit.classification_key = filtered_units.classification_key
             ),
             subject_units AS (
                 SELECT result_version_id, classification_key, subject,
@@ -245,13 +284,15 @@ def _label_catalog(
 
 
 def _reason_rows(
-    scope: InsightQueryScope, *, include_primary: bool = True
+    scope: InsightQueryScope, *, include_primary: bool = True, weighted: bool = False
 ) -> list[sqlite3.Row]:
     where_sql = scope.where_sql
     clean_group = scope.clean_group
     report_mode = scope.report_mode
     reason_group_filter = ""
     reason_params = list(scope.params)
+    record_count = "SUM(r.record_count)" if weighted else "COUNT(r.id)"
+    primary_weight = "r.record_count" if weighted else "1"
     if clean_group:
         reason_group_filter = (
             " AND aligned_group(l.label_group, l.label_code, r.result_version_id) = ?"
@@ -272,7 +313,7 @@ def _reason_rows(
                    l.label_name AS raw_label_name,
                    aligned_group(l.label_group, l.label_code, r.result_version_id)
                        AS label_group,
-                   COUNT(r.id) AS record_count,
+                   {record_count} AS record_count,
                    NULL AS primary_record_count
             FROM {scope.records_table} r
             JOIN classification_unit_labels l
@@ -291,7 +332,7 @@ def _reason_rows(
                COALESCE(NULLIF(TRIM(l.label_name), ''), l.label_code) AS label,
                l.label_name AS raw_label_name,
                aligned_group(l.label_group, l.label_code, r.result_version_id) AS label_group,
-               COUNT(r.id) AS record_count,
+               {record_count} AS record_count,
                SUM(CASE WHEN EXISTS (
                    SELECT 1
                    FROM classification_unit_labels primary_label
@@ -299,7 +340,7 @@ def _reason_rows(
                      AND primary_label.classification_key = r.classification_key
                      AND primary_label.label_kind = 'primary'
                      AND primary_label.label_code = l.label_code
-               ) THEN 1 ELSE 0 END) AS primary_record_count
+               ) THEN {primary_weight} ELSE 0 END) AS primary_record_count
         FROM {scope.records_table} r
         JOIN classification_unit_labels l
           ON l.result_version_id = r.result_version_id
@@ -388,26 +429,48 @@ def collect_insight_overview(
     total_records, labeled_record_count = collect_label_counts(scope)
     if total_record_count is not None:
         total_records = total_record_count
+    # 只在首屏汇总中按分类单元加权，明细与翻页仍使用原反馈范围。
+    # 同单元的对象标签相同，代表记录 id 仅用于已有对象标签匹配。
+    connection.execute(
+        f"""
+        CREATE TEMP TABLE dashboard_insight_weighted_units AS
+        SELECT MIN(r.id) AS id, r.result_version_id, r.classification_key,
+               COUNT(*) AS record_count
+        FROM {scope.records_table} r
+        WHERE {where_sql}
+        GROUP BY r.result_version_id, r.classification_key
+        """,
+        tuple(params),
+    )
+    weighted_scope = replace(
+        scope,
+        records_table="dashboard_insight_weighted_units",
+        where_sql="1=1",
+        params=[],
+    )
     subject_breakdown, reason_subjects = _collect_semantic_breakdown(
-        scope, total_records
+        weighted_scope, total_records
     )
     group_rows = connection.execute(
         f"""
-        SELECT aligned_group(l.label_group, l.label_code, r.result_version_id) AS value,
-               COUNT(DISTINCT r.id) AS record_count
-        FROM {scope.records_table} r
-        JOIN classification_unit_labels l
-          ON l.result_version_id = r.result_version_id
-         AND l.classification_key = r.classification_key
-         AND l.label_kind = 'problem'
-         {subject_label_filter(scope, "r", "l")}
-        WHERE {where_sql}
+        WITH unit_groups AS (
+            SELECT aligned_group(l.label_group, l.label_code, r.result_version_id) AS value,
+                   MAX(r.record_count) AS record_count, MIN(l.rowid) AS label_order
+            FROM dashboard_insight_weighted_units r
+            JOIN classification_unit_labels l
+              ON l.result_version_id = r.result_version_id
+             AND l.classification_key = r.classification_key
+             AND l.label_kind = 'problem'
+             {subject_label_filter(scope, "r", "l")}
+            GROUP BY r.result_version_id, r.classification_key, value
+        )
+        SELECT value, SUM(record_count) AS record_count
+        FROM unit_groups
         GROUP BY value
-        ORDER BY record_count DESC, MIN(l.rowid)
+        ORDER BY record_count DESC, MIN(label_order)
         """,
-        tuple(params),
     ).fetchall()
-    reason_rows = _reason_rows(scope)
+    reason_rows = _reason_rows(weighted_scope, weighted=True)
     label_names, label_counts = _label_catalog(scope, reason_rows)
     reasons = [
         {
