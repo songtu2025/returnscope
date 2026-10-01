@@ -308,6 +308,7 @@ def test_backfill_cli_outputs_json_and_requires_preview_hash(tmp_path: Path) -> 
         "WEBAPP_DATA_DIR": str(tmp_path),
         "WEBAPP_DATABASE_PATH": str(context.database.path),
         "WEBAPP_PRODUCTION": "false",
+        "PYTHONIOENCODING": "utf-8",
     }
     script = Path("scripts/backfill_legacy_classification_results.py")
     preview_run = subprocess.run(
@@ -316,6 +317,7 @@ def test_backfill_cli_outputs_json_and_requires_preview_hash(tmp_path: Path) -> 
         env=environment,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
     )
     assert preview_run.returncode == 0
@@ -329,6 +331,7 @@ def test_backfill_cli_outputs_json_and_requires_preview_hash(tmp_path: Path) -> 
         env=environment,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
     )
     assert missing_hash.returncode == 2
@@ -346,6 +349,7 @@ def test_backfill_cli_outputs_json_and_requires_preview_hash(tmp_path: Path) -> 
         env=environment,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
     )
     assert apply_run.returncode == 0

@@ -650,10 +650,16 @@ test("刷新恢复产品名称下钻且切换产品不会混入其他订单", as
   const closeButton = within(drawer).getByRole("button", {
     name: "关闭证据抽屉",
   });
+  const semanticSummary = drawer.querySelector(".semantic-conclusion-item > summary");
+  expect(semanticSummary).not.toBeNull();
   expect(closeButton).toHaveFocus();
   await user.tab();
+  expect(semanticSummary).toHaveFocus();
+  await user.tab({ shift: true });
   expect(closeButton).toHaveFocus();
   await user.tab({ shift: true });
+  expect(semanticSummary).toHaveFocus();
+  await user.tab();
   expect(closeButton).toHaveFocus();
   expect(within(drawer).getByText("产品表第二名称")).toBeVisible();
   expect(within(drawer).getAllByText("SOURCE-MSKU-1")).toHaveLength(2);

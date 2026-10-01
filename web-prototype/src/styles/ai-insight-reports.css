@@ -2833,10 +2833,6 @@
 }
 
 @media print {
-  .ai-report-chapters {
-    display: none !important;
-  }
-
   .ai-report-attempt-history {
     display: none;
   }

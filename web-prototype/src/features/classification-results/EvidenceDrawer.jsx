@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react";
 import { X } from "@phosphor-icons/react";
 
+import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { resultLabelText } from "../../lib/taxonomyPresentation";
 import { SemanticResultPanel } from "./SemanticResultPanel";
 
@@ -20,58 +20,17 @@ export function EvidenceDrawer({ group, analysisContext, onClose, returnFocusRef
   const record = group.record;
   const isUserFeedback = analysisContext === "user_feedback";
   const classification = record.classification ?? {};
-  const drawerRef = useRef(/** @type {HTMLElement | null} */ (null));
-  const closeButtonRef = useRef(/** @type {HTMLButtonElement | null} */ (null));
-
-  useEffect(() => {
-    const drawer = drawerRef.current;
-    if (!drawer) return undefined;
-    const returnFocus = returnFocusRef.current;
-    /** @param {KeyboardEvent} event */
-    const handleKey = (event) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const focusable = /** @type {HTMLElement[]} */ (
-        Array.from(
-          drawer.querySelectorAll(
-            'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-          ),
-        )
-      );
-      if (focusable.length === 0) {
-        event.preventDefault();
-        return;
-      }
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    closeButtonRef.current?.focus();
-    drawer.addEventListener("keydown", handleKey);
-    return () => {
-      drawer.removeEventListener("keydown", handleKey);
-      returnFocus?.focus();
-    };
-  }, [onClose, returnFocusRef]);
+  const { dialogRef } = useDialogFocus({ open: true, onClose, returnFocusRef });
 
   return (
     <div className="evidence-drawer-layer" role="presentation" onMouseDown={onClose}>
       <aside
-        ref={drawerRef}
+        ref={dialogRef}
         className="evidence-drawer"
         role="dialog"
         aria-modal="true"
         aria-labelledby="evidence-drawer-title"
+        tabIndex={-1}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header>
@@ -80,7 +39,7 @@ export function EvidenceDrawer({ group, analysisContext, onClose, returnFocusRef
             <h2>{record.order_id || record.source_record_id}</h2>
           </div>
           <button
-            ref={closeButtonRef}
+            data-dialog-initial-focus
             className="icon-button"
             aria-label="关闭证据抽屉"
             onClick={onClose}

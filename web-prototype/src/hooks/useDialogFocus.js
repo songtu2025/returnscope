@@ -52,8 +52,8 @@ function constrainDialogFocus(event, dialog) {
   }
 }
 
-/** @param {{open: boolean, onClose: () => void}} options */
-export function useDialogFocus({ open, onClose }) {
+/** @param {{open: boolean, onClose: () => void, returnFocusRef?: {current: HTMLElement | null}}} options */
+export function useDialogFocus({ open, onClose, returnFocusRef }) {
   const dialogRef = useRef(/** @type {HTMLElement | null} */ (null));
   const closeRef = useRef(onClose);
 
@@ -63,7 +63,7 @@ export function useDialogFocus({ open, onClose }) {
 
   useEffect(() => {
     if (!open) return undefined;
-    const previousFocus = document.activeElement;
+    const previousFocus = returnFocusRef?.current ?? document.activeElement;
     const dialog = dialogRef.current;
     const initialFocus =
       dialog?.querySelector("[data-dialog-initial-focus]") ??
@@ -87,7 +87,7 @@ export function useDialogFocus({ open, onClose }) {
         previousFocus.focus();
       }
     };
-  }, [open]);
+  }, [open, returnFocusRef]);
 
   return {
     dialogRef,
