@@ -303,7 +303,7 @@ def collect_reason_details(
             for row in co_reason_rows
         ]
         with timed_stage("insight_semantics"):
-            # 同一分类结果只解析一次，保留当前筛选范围的反馈权重。
+            # 复用发布时的语义明细，保留当前筛选范围的反馈权重。
             connection.execute(
                 "DROP TABLE IF EXISTS temp.dashboard_insight_reason_semantics"
             )
@@ -319,21 +319,18 @@ def collect_reason_details(
                     WHERE {where_sql}
                     GROUP BY r.result_version_id, r.classification_key
                 )
-                SELECT u.result_version_id, u.classification_key, selected.record_count,
+                SELECT unit.result_version_id, unit.classification_key, selected.record_count,
                        COALESCE(
-                           NULLIF(json_extract(unit.value, '$.part'), ''),
+                           NULLIF(unit.part, ''),
                            'UNSPECIFIED'
                        ) AS part,
-                       json_extract(unit.value, '$.opinion') AS opinion,
-                       json_extract(unit.value, '$.subject') AS subject,
-                       json_extract(unit.value, '$.evidence') AS evidence
+                       unit.opinion, unit.subject, unit.evidence
                 FROM selected_units selected
-                JOIN classification_units u
-                  ON u.result_version_id = selected.result_version_id
-                 AND u.classification_key = selected.classification_key
-                JOIN json_each(u.classification_json, '$.semantic_units') unit
-                WHERE json_extract(unit.value, '$.label_code') = ?
-                  {"AND json_extract(unit.value, '$.subject') = ?" if scope.clean_subject else ""}
+                JOIN classification_unit_semantics unit
+                  ON unit.result_version_id = selected.result_version_id
+                 AND unit.classification_key = selected.classification_key
+                WHERE unit.label_code = ?
+                  {"AND unit.subject = ?" if scope.clean_subject else ""}
                 """,
                 (*params, selected_code, scope.clean_subject)
                 if scope.clean_subject

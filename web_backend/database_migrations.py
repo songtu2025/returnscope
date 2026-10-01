@@ -5,6 +5,7 @@ import secrets
 import sqlite3
 from pathlib import Path
 
+from web_backend.classification_unit_semantics import migrate_unit_semantics
 from web_backend.database_schema import SCHEMA
 from web_backend.database_table_rebuilds import DatabaseTableRebuilds
 
@@ -188,6 +189,7 @@ class DatabaseMigrations(DatabaseTableRebuilds):
         self._repair_draft_review_batches(connection)
         self._migrate_excluded_quality_status(connection)
         self._migrate_classification_unit_rerun_state(connection)
+        migrate_unit_semantics(connection)
         if migrate_result_source_origin:
             self._migrate_result_source_origin(connection)
         connection.execute(

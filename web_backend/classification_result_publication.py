@@ -12,6 +12,7 @@ from web_backend.classification_result_payload import (
     _nullable_text,
     _prepare_classification_payload,
 )
+from web_backend.classification_unit_semantics import refresh_unit_semantics
 from web_backend.common import json_text, new_id
 from web_backend.database import Database
 from web_backend.security import utc_now
@@ -287,6 +288,8 @@ class _ClassificationResultPublication:
                 for value in labels
             ],
         )
+
+        refresh_unit_semantics(connection, version_id)
 
     @staticmethod
     def _insert_records(

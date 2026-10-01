@@ -44,7 +44,7 @@ def prepare_scope_semantics(
     *,
     records_table: str = "classification_result_records",
 ) -> None:
-    """先准备基础范围的解析结果，当前连接内的对象子范围共用，权重另算。"""
+    """先准备基础范围的语义明细，当前连接内的对象子范围共用，权重另算。"""
     connection.execute(
         f"""
         CREATE TEMP TABLE IF NOT EXISTS dashboard_insight_scope_semantics AS
@@ -53,13 +53,11 @@ def prepare_scope_semantics(
             FROM {records_table} r WHERE {where_sql}
         )
         SELECT scoped_units.result_version_id, scoped_units.classification_key,
-               json_extract(unit.value, '$.subject') AS subject,
-               json_extract(unit.value, '$.label_code') AS label_code
+               unit.subject, unit.label_code
         FROM scoped_units
-        JOIN classification_units u
-          ON u.result_version_id = scoped_units.result_version_id
-         AND u.classification_key = scoped_units.classification_key
-        JOIN json_each(u.classification_json, '$.semantic_units') unit
+        JOIN classification_unit_semantics unit
+          ON unit.result_version_id = scoped_units.result_version_id
+         AND unit.classification_key = scoped_units.classification_key
         """,
         tuple(params),
     )

@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-SCHEMA = """
+from web_backend.classification_unit_semantics import SEMANTIC_SCHEMA
+
+SCHEMA = (
+    SEMANTIC_SCHEMA
+    + """
 CREATE TABLE IF NOT EXISTS app_migrations (
     migration_id TEXT PRIMARY KEY,
     checksum TEXT NOT NULL,
@@ -746,3 +750,4 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 CREATE INDEX IF NOT EXISTS idx_audit_entity
 ON audit_logs(entity_type, entity_id, created_at DESC);
 """
+)

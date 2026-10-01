@@ -5,6 +5,10 @@ import sqlite3
 from contextlib import closing
 from dataclasses import replace
 
+from web_backend.classification_unit_semantics import (
+    SEMANTIC_SCHEMA,
+    refresh_unit_semantics,
+)
 from web_backend.dashboard_insight_overview import (
     InsightQueryScope,
     _collect_semantic_breakdown,
@@ -68,6 +72,9 @@ def test_shared_semantics_keep_scope_weights_and_version_keys() -> None:
                     ),
                 ),
             )
+        connection.execute(SEMANTIC_SCHEMA)
+        refresh_unit_semantics(connection)
+        reads = 0
         scope = InsightQueryScope(
             connection=connection,
             context={},
@@ -97,7 +104,7 @@ def test_shared_semantics_keep_scope_weights_and_version_keys() -> None:
             replace(scope, records_table="dashboard_insight_weighted_units"), 4
         )
         assert (weighted, weighted_reasons) == (base, base_reasons)
-        assert reads == parsed_reads == 8
+        assert reads == parsed_reads == 0
         assert {
             item["value"]: (
                 item["record_count"],
@@ -157,6 +164,8 @@ def test_subject_labels_keep_unit_keys_without_expanding_feedback() -> None:
                     ),
                 ),
             )
+        connection.execute(SEMANTIC_SCHEMA)
+        refresh_unit_semantics(connection)
         _prepare_subject_labels(connection, "r.listing = ?", ["L1"], "PRODUCT")
         rows = connection.execute(
             "SELECT * FROM dashboard_insight_subject_labels ORDER BY result_version_id"

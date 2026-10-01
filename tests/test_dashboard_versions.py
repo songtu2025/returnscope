@@ -16,6 +16,7 @@ from test_classification_result_pool import (
 from return_semantics.schemas import ProcessingStatus
 from web_backend import dashboard_insights
 from web_backend.classification_standard_service import ClassificationStandardService
+from web_backend.classification_unit_semantics import refresh_unit_semantics
 from web_backend.common import json_text
 from web_backend.dashboard_insights import InsightOptions
 from web_backend.dashboard_plan import summarize_sources
@@ -582,6 +583,7 @@ def test_legacy_comment_status_matches_dashboard_and_record_views(
             "WHERE result_version_id = ?",
             (json_text(legacy), version_id),
         )
+        refresh_unit_semantics(connection, version_id)
 
     plan, dashboard = _create_dashboard(service, version_id)
     dashboard_id = str(dashboard["id"])
@@ -1056,6 +1058,7 @@ def test_subject_scope_counts_only_matching_reason_units(
             """,
             (row["result_version_id"], row["classification_key"]),
         )
+        refresh_unit_semantics(connection, version_id)
     _, dashboard = _create_dashboard(service, version_id)
     dashboard_id = str(dashboard["id"])
     dashboard_version_id = str(dashboard["version"]["version_id"])
@@ -1149,6 +1152,7 @@ def test_dashboard_insights_count_each_semantic_part_once_per_record(
             (json_text(classification), row["id"]),
         )
 
+        refresh_unit_semantics(connection, str(version["version_id"]))
     insights = service.insights(
         str(dashboard["id"]),
         str(dashboard["version"]["version_id"]),

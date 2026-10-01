@@ -8,6 +8,10 @@ from dataclasses import replace
 import pytest
 
 from web_backend import dashboard_insight_details
+from web_backend.classification_unit_semantics import (
+    SEMANTIC_SCHEMA,
+    refresh_unit_semantics,
+)
 from web_backend.dashboard_insight_details import collect_reason_details
 from web_backend.dashboard_insight_overview import InsightQueryScope
 
@@ -109,6 +113,9 @@ def test_semantics_keep_record_scope_and_separate_result_versions(
                     "INSERT INTO dashboard_insight_subject_labels VALUES (?, ?, 'FIT')",
                     (version, key),
                 )
+        connection.execute(SEMANTIC_SCHEMA)
+        refresh_unit_semantics(connection)
+        opinion_reads = 0
         scope = InsightQueryScope(
             connection=connection,
             context={},
@@ -162,8 +169,8 @@ def test_semantics_keep_record_scope_and_separate_result_versions(
         expected_parts["UNSPECIFIED"] = first_count
         expected_opinions.add(("maybe", "UNSPECIFIED", first_count, "u"))
     assert result["semantic_record_count"] == count
-    # 意见解析次数由语义单元数量决定，不能随反馈记录或聚合查询倍增。
-    assert opinion_reads <= 5
+    # 洞察查询直接读取已发布的明细，不再解析意见 JSON。
+    assert opinion_reads == 0
     assert {
         item["value"]: item["record_count"] for item in result["semantic_parts"]
     } == expected_parts
