@@ -117,24 +117,7 @@ class ModelProbe:
                 http_status = int(getattr(response, "status", 200))
                 raw_body = response.read().decode("utf-8")
         except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="replace")[:300]
-            category = "http_error"
-            suggestion = "请检查接入地址和上游服务状态"
-            if exc.code in {401, 403}:
-                category = "authentication"
-                suggestion = "请检查 API 密钥是否正确且具备模型访问权限"
-            elif exc.code == 404:
-                category = "model_not_found"
-                suggestion = "请检查 Base URL 和模型 ID 是否正确"
-            elif exc.code == 429:
-                category = "rate_limited"
-                suggestion = "请检查配额或稍后重新验证"
-            raise ModelValidationError(
-                f"{model} 测试失败：HTTP {exc.code} {body}",
-                category,
-                suggestion,
-                exc.code,
-            ) from exc
+            raise _http_validation_error(model, exc) from exc
         except urllib.error.URLError as exc:
             if isinstance(exc.reason, (TimeoutError, socket.timeout)):
                 raise ModelValidationError(
@@ -159,26 +142,61 @@ class ModelProbe:
                 f"已收到 HTTP {http_status}，正在检查响应结构",
                 {"http_status": http_status},
             )
-        try:
-            result = json.loads(raw_body)
-        except json.JSONDecodeError as exc:
-            raise ModelValidationError(
-                f"{model} 返回的内容不是有效 JSON",
-                "response_format",
-                "请确认接口兼容 Responses API 响应格式",
-                http_status,
-            ) from exc
-        output_text = _extract_output_text(result)
-        if not output_text:
-            raise ModelValidationError(
-                f"{model} 返回内容为空",
-                "empty_response",
-                "请确认模型能够返回 output_text 内容",
-                http_status,
-            )
+        result, output_text = _parse_test_response(raw_body, model, http_status)
         return {
             "http_status": http_status,
             "duration_ms": round((time.monotonic() - started) * 1000),
             "response_model": str(result.get("model") or model),
             "output_chars": len(output_text),
         }
+
+
+def _http_validation_error(
+    model: str,
+    error: urllib.error.HTTPError,
+) -> ModelValidationError:
+    """保留上游错误摘要，并区分可供用户处理的 HTTP 失败原因。"""
+    body = error.read().decode("utf-8", errors="replace")[:300]
+    category = "http_error"
+    suggestion = "请检查接入地址和上游服务状态"
+    if error.code in {401, 403}:
+        category = "authentication"
+        suggestion = "请检查 API 密钥是否正确且具备模型访问权限"
+    elif error.code == 404:
+        category = "model_not_found"
+        suggestion = "请检查 Base URL 和模型 ID 是否正确"
+    elif error.code == 429:
+        category = "rate_limited"
+        suggestion = "请检查配额或稍后重新验证"
+    return ModelValidationError(
+        f"{model} 测试失败：HTTP {error.code} {body}",
+        category,
+        suggestion,
+        error.code,
+    )
+
+
+def _parse_test_response(
+    raw_body: str,
+    model: str,
+    http_status: int,
+) -> tuple[dict[str, Any], str]:
+    """按现有响应契约解析文本，区分无效 JSON 与空响应。"""
+    try:
+        result = json.loads(raw_body)
+    except json.JSONDecodeError as exc:
+        raise ModelValidationError(
+            f"{model} 返回的内容不是有效 JSON",
+            "response_format",
+            "请确认接口兼容 Responses API 响应格式",
+            http_status,
+        ) from exc
+    output_text = _extract_output_text(result)
+    if not output_text:
+        raise ModelValidationError(
+            f"{model} 返回内容为空",
+            "empty_response",
+            "请确认模型能够返回 output_text 内容",
+            http_status,
+        )
+    return result, output_text
