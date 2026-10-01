@@ -44,38 +44,7 @@ def _evaluate_live_quality_v6(
                 "evidence_ids": ["text_quality", "scope"],
             }
         )
-        analysis["diagnostics"] = [
-            _filter_diagnostic_text(item) for item in analysis.get("diagnostics", [])
-        ]
-        analysis["issue_cases"] = [
-            _filter_issue_case_text(item) for item in analysis.get("issue_cases", [])
-        ]
-        analysis["business_issues"] = [
-            _filter_business_issue_text(item)
-            for item in analysis.get("business_issues", [])
-        ]
-        analysis["samples"] = []
-        for evidence_id, item in catalog.items():
-            if not any(marker in evidence_id for marker in (".sample.", ".opinion.")):
-                continue
-            data = item.get("data", {})
-            if _has_text_anomaly(
-                data.get("opinion"),
-                data.get("evidence"),
-                data.get("comment"),
-                data.get("reason"),
-            ):
-                item["value"] = "文本质量未通过，原始文本证据暂不可用"
-                item["data"] = {}
-        for issue in safe_content.get("issues", []):
-            issue["known"] = [
-                value
-                for value in issue.get("known", [])
-                if not str(value).startswith("高频反馈为")
-            ]
-            issue["evidence_explanation"] = (
-                "评论文本质量未通过，当前仅保留结构化指标用于定位，不能据此判断原因。"
-            )
+        _sanitize_untrusted_text(safe_content, analysis, catalog)
 
     if product_mapping.get("status") == "needs_review":
         quality_issues.append(
@@ -105,6 +74,75 @@ def _evaluate_live_quality_v6(
         safe_content,
         safe_evidence,
     )
+    readiness, gate_status = _quality_readiness(consistency, quality_issues)
+
+    if readiness["status"] != "verification_ready":
+        for issue in safe_content.get("issues", []):
+            issue["readiness"] = readiness
+    source["quality_issue_codes"] = [item["code"] for item in quality_issues]
+    source["report_status"] = "provisional" if quality_issues else "final"
+    quality_gate = DecisionReportQualityGate.model_validate(
+        {
+            "status": gate_status,
+            "issues": quality_issues,
+            "text_quality": text_quality,
+            "product_mapping": product_mapping,
+            "consistency": consistency,
+            "decision_readiness": readiness,
+        }
+    ).model_dump()
+    return {
+        "content": safe_content,
+        "evidence": safe_evidence,
+        "quality_gate": quality_gate,
+    }
+
+
+def _sanitize_untrusted_text(
+    content: dict[str, Any],
+    analysis: dict[str, Any],
+    catalog: dict[str, Any],
+) -> None:
+    """过滤报告副本中的文本，保留异常证据条目以维持证据引用。"""
+    analysis["diagnostics"] = [
+        _filter_diagnostic_text(item) for item in analysis.get("diagnostics", [])
+    ]
+    analysis["issue_cases"] = [
+        _filter_issue_case_text(item) for item in analysis.get("issue_cases", [])
+    ]
+    analysis["business_issues"] = [
+        _filter_business_issue_text(item)
+        for item in analysis.get("business_issues", [])
+    ]
+    analysis["samples"] = []
+    for evidence_id, item in catalog.items():
+        if not any(marker in evidence_id for marker in (".sample.", ".opinion.")):
+            continue
+        data = item.get("data", {})
+        if _has_text_anomaly(
+            data.get("opinion"),
+            data.get("evidence"),
+            data.get("comment"),
+            data.get("reason"),
+        ):
+            item["value"] = "文本质量未通过，原始文本证据暂不可用"
+            item["data"] = {}
+    for issue in content.get("issues", []):
+        issue["known"] = [
+            value
+            for value in issue.get("known", [])
+            if not str(value).startswith("高频反馈为")
+        ]
+        issue["evidence_explanation"] = (
+            "评论文本质量未通过，当前仅保留结构化指标用于定位，不能据此判断原因。"
+        )
+
+
+def _quality_readiness(
+    consistency: dict[str, Any],
+    quality_issues: list[dict[str, Any]],
+) -> tuple[dict[str, str], str]:
+    """一致性错误优先阻断报告，其余质量问题仅限制报告用途。"""
     if consistency["status"] == "blocked":
         quality_issues.insert(
             0,
@@ -136,23 +174,4 @@ def _evaluate_live_quality_v6(
         }
         gate_status = "passed"
 
-    if readiness["status"] != "verification_ready":
-        for issue in safe_content.get("issues", []):
-            issue["readiness"] = readiness
-    source["quality_issue_codes"] = [item["code"] for item in quality_issues]
-    source["report_status"] = "provisional" if quality_issues else "final"
-    quality_gate = DecisionReportQualityGate.model_validate(
-        {
-            "status": gate_status,
-            "issues": quality_issues,
-            "text_quality": text_quality,
-            "product_mapping": product_mapping,
-            "consistency": consistency,
-            "decision_readiness": readiness,
-        }
-    ).model_dump()
-    return {
-        "content": safe_content,
-        "evidence": safe_evidence,
-        "quality_gate": quality_gate,
-    }
+    return readiness, gate_status
