@@ -568,3 +568,54 @@ def test_invalid_review_requests_do_not_reach_service_or_database(
     assert response.status_code == 422
     assert response.json()["detail"][0]["loc"] == location
     assert service.mock_calls == database.mock_calls == audit.mock_calls == []
+
+
+@pytest.mark.parametrize("field", ["semantic_item_reviews", "added_semantic_items"])
+@pytest.mark.parametrize("sentiment", ["POSITIVE", "NEGATIVE", "NEUTRAL", None])
+def test_optional_sentiment_is_forwarded_without_changing_legacy_payload(
+    harness: tuple[TestClient, Mock, Mock, Mock],
+    field: str,
+    sentiment: str | None,
+) -> None:
+    client, service, _, _ = harness
+    service.update_batch_record.return_value = {"revision": 6}
+    item = _sentiment_item(field)
+    response = client.patch(
+        CASES_BY_METHOD["update_batch_record"].path,
+        json={**RECORD_BODY, field: [{**item, "sentiment": sentiment}]},
+    )
+    assert response.status_code == 200
+    expected = {**item, **({"sentiment": sentiment} if sentiment is not None else {})}
+    assert service.update_batch_record.call_args.kwargs[field] == [expected]
+
+
+@pytest.mark.parametrize("field", ["semantic_item_reviews", "added_semantic_items"])
+@pytest.mark.parametrize("sentiment", ["positive", "", 123])
+def test_invalid_sentiment_is_rejected_before_service_or_database(
+    harness: tuple[TestClient, Mock, Mock, Mock], field: str, sentiment: Any
+) -> None:
+    client, service, database, audit = harness
+    response = client.patch(
+        CASES_BY_METHOD["update_batch_record"].path,
+        json={
+            **RECORD_BODY,
+            field: [{**_sentiment_item(field), "sentiment": sentiment}],
+        },
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["body", field, 0, "sentiment"]
+    assert service.mock_calls == database.mock_calls == audit.mock_calls == []
+
+
+def _sentiment_item(field: str) -> dict[str, Any]:
+    if field == "semantic_item_reviews":
+        return {
+            "semantic_item_id": "item-1",
+            "action": "change_label",
+            "label_code": "FIT_TOO_SMALL_U1",
+        }
+    return {
+        "evidence_text": "合成证据",
+        "opinion": "合成观点",
+        "label_code": "FIT_TOO_SMALL_U1",
+    }

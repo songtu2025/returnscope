@@ -354,10 +354,7 @@ def _projection_context(lifecycle):
     return record, json.loads(row[0]), taxonomy
 
 
-@pytest.mark.parametrize("operation", ["remove", "no_tag_needed", "add", "unknown"])
-def test_item_operations_reach_published_results_dashboard_and_report(
-    lifecycle, operation
-):
+def _prepare_item_operation(lifecycle, operation):
     record, classification, taxonomy = _projection_context(lifecycle)
     details = {}
     if operation == "unknown":
@@ -415,6 +412,14 @@ def test_item_operations_reach_published_results_dashboard_and_report(
                 "action": operation,
             }
         ]
+    return record, details, taxonomy
+
+
+@pytest.mark.parametrize("operation", ["remove", "no_tag_needed", "add", "unknown"])
+def test_item_operations_reach_published_results_dashboard_and_report(
+    lifecycle, operation
+):
+    record, details, taxonomy = _prepare_item_operation(lifecycle, operation)
     base_id = lifecycle.base["version_id"]
     before = lifecycle.results.records(base_id)
     lifecycle.reviews.update_batch_record(
