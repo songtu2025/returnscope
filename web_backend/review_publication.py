@@ -16,6 +16,7 @@ from web_backend.review_contracts import (
     _CompletedReviewChanges,
     _DerivedResultContent,
 )
+from web_backend.review_label_corrections import apply_semantic_label_corrections
 from web_backend.security import utc_now
 
 HUMAN_REVIEW_CLASSIFICATION_FIELDS = (
@@ -158,9 +159,8 @@ class ReviewPublicationMixin:
         if pending_count:
             raise ReviewBatchConflict(f"复核批次仍有 {pending_count} 条记录未完成")
         revisions = {
-            str(row["classification_key"]): json_value(
-                row["classification_json"],
-                {},
+            str(row["classification_key"]): apply_semantic_label_corrections(
+                json_value(row["classification_json"], {}),
             )
             for row in connection.execute(
                 """

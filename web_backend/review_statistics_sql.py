@@ -17,6 +17,13 @@ COALESCE((
             IS NOT json_extract(revision.after_json, '$.positive_label_codes')
           OR json_extract(revision.before_json, '$.primary_label_codes')
             IS NOT json_extract(revision.after_json, '$.primary_label_codes')
+          OR EXISTS (
+              SELECT 1 FROM classification_units published_unit
+              WHERE published_unit.result_version_id = v.id
+                AND published_unit.classification_key = review.classification_key
+                AND json_extract(published_unit.classification_json, '$.semantic_units')
+                  IS NOT json_extract(revision.before_json, '$.semantic_units')
+          )
       )
 ), 0)
 """

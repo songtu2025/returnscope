@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from types import SimpleNamespace
 
 import pytest
@@ -8,8 +9,10 @@ import test_insight_reports
 from test_insight_reports import _complete_report
 from test_result_version_reviews import _publish_review_required
 
+from return_semantics.semantic_review import build_semantic_review_view
 from web_backend.classification_result_service import ClassificationResultService
 from web_backend.dashboard_service import DashboardConflict
+from web_backend.review_label_corrections import apply_semantic_label_corrections
 from web_backend.review_service import (
     ReviewBatchConflict,
     ReviewService,
@@ -42,15 +45,29 @@ def lifecycle(tmp_path, monkeypatch):
     )
 
 
-def _publish_correction(lifecycle):
+def _publish_correction(lifecycle, item_adjustment=False):
     review = lifecycle.reviews.batch_records(lifecycle.batch["id"])["items"][0]
+    details = {}
+    if item_adjustment:
+        item = review["classification"]["semantic_review"]["semantic_items"][0]
+        details = {
+            "action": "confirm",
+            "semantic_item_reviews": [
+                {
+                    "semantic_item_id": item["item_id"],
+                    "action": "change_label",
+                    "label_code": "FIT_TOO_LARGE_U1",
+                }
+            ],
+        }
     lifecycle.reviews.update_batch_record(
         batch_id=lifecycle.batch["id"],
         review_id=review["id"],
         expected_revision=review["revision"],
         actor_id="user-1",
-        label_code="FIT_TOO_LARGE_U1",
+        label_code=None if item_adjustment else "FIT_TOO_LARGE_U1",
         note="人工确认偏大，验证更正后的下游证据",
+        **details,
     )
     return lifecycle.reviews.publish_batch(
         lifecycle.batch["id"],
@@ -92,8 +109,10 @@ def _assert_report_source(report, dashboard, result_id):
     ] == [result_id]
 
 
+@pytest.mark.parametrize("item_adjustment", (False, True))
 def test_review_publication_reaches_dashboard_and_report_without_snapshot_drift(
     lifecycle,
+    item_adjustment,
 ):
     old_version = lifecycle.dashboard["version"]
     base_id = str(lifecycle.base["version_id"])
@@ -106,13 +125,16 @@ def test_review_publication_reaches_dashboard_and_report_without_snapshot_drift(
         "issue.scope.coverage"
     ]
 
-    derived = _publish_correction(lifecycle)
+    derived = _publish_correction(lifecycle, item_adjustment)
     current = _advance_dashboard(lifecycle, derived)
     report = _complete_report(current, lifecycle.reports)
     _assert_report_source(report, current, derived["version_id"])
     assert derived["version"] == current["version"]["version"] == 2
     assert derived["parent_version_id"] == base_id
     assert derived["source_review_batch_id"] == lifecycle.batch["id"]
+    assert derived["changed_unit_count"] == 1
+    assert derived["inherited_unit_count"] == 0
+    assert current["version"]["summary"]["review_changed_unit_count"] == 1
     assert current["version"]["summary"]["record_count"] == 2
     assert (
         current["version"]["source_snapshot"][0]["result_version_id"]
@@ -169,6 +191,52 @@ def _assert_publication_audits(lifecycle, derived, dashboard, report):
     assert review["result_version_id"] == derived["version_id"]
     assert board["version_id"] == dashboard["version"]["version_id"]
     assert generation["dashboard_version_id"] == board["version_id"]
+
+
+@pytest.mark.parametrize("fact_ids", ([], ["F1"], ["F1", "F2"]))
+def test_item_label_correction_preserves_other_facts_and_audit(lifecycle, fact_ids):
+    record = lifecycle.reviews.batch_records(lifecycle.batch["id"])["items"][0]
+    classification = deepcopy(record["classification"])
+    unit = classification["semantic_units"][0]
+    unit.update(fact_id=fact_ids[0] if fact_ids else None, fact_ids=fact_ids)
+    classification["semantic_units"].append(
+        {**unit, "opinion": "第二个独立观点", "fact_id": None, "fact_ids": []}
+    )
+    classification["fact_mappings"] = [
+        {"fact_id": fact_id, "label_codes": [unit["label_code"]]}
+        for fact_id in fact_ids
+    ]
+    item_id = build_semantic_review_view({"semantic_units": [unit]}, "")[
+        "semantic_items"
+    ][0]["item_id"]
+    classification["human_semantic_reviews"] = [
+        {
+            "semantic_item_id": item_id,
+            "action": "change_label",
+            "label_code": "FIT_TOO_LARGE_U1",
+            "assessed_by": "user-1",
+        }
+    ]
+    before = deepcopy(classification)
+    corrected = apply_semantic_label_corrections(classification)
+    assert classification == before
+    assert corrected["human_semantic_reviews"] == before["human_semantic_reviews"]
+    assert corrected["semantic_units"][0]["label_code"] == "FIT_TOO_LARGE_U1"
+    assert corrected["semantic_units"][-1] == before["semantic_units"][-1]
+    assert set(corrected["problem_label_codes"]) == {
+        "FIT_TOO_SMALL_U1",
+        "FIT_TOO_LARGE_U1",
+    }
+    assert corrected["positive_label_codes"] == []
+    assert set(corrected["comment_summary"]["negative_label_codes"]) == set(
+        corrected["problem_label_codes"]
+    )
+    if fact_ids:
+        assert corrected["fact_mappings"][0]["label_codes"] == ["FIT_TOO_LARGE_U1"]
+    if len(fact_ids) == 2:
+        assert corrected["semantic_units"][1]["fact_ids"] == ["F2"]
+        assert corrected["semantic_units"][1]["label_code"] == "FIT_TOO_SMALL_U1"
+        assert corrected["fact_mappings"][1] == before["fact_mappings"][1]
 
 
 @pytest.mark.parametrize("conflict", ("pending", "stale_revision"))
