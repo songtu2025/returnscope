@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from return_semantics.fact_classification import (
     _append_suppressed_fallback_outcomes,
     _complete_fact_outcomes,
@@ -33,6 +35,15 @@ from return_semantics.schemas import (
     TaxonomyConfig,
 )
 from return_semantics.semantic_guardrails import apply_fallback_precedence
+
+
+@dataclass(frozen=True, kw_only=True)
+class _DimensionDecisionContext:
+    contracts: dict[str, DimensionContract]
+    facts_by_id: dict[str, ExtractedFact]
+    mappings_by_id: dict[str, FactMapping]
+    taxonomy: TaxonomyConfig
+    comment: str
 
 
 def _decision_unit(
@@ -106,12 +117,13 @@ def _decision_unit(
 def _compile_one_dimension_decision(
     decision: DimensionDecision,
     *,
-    contracts: dict[str, DimensionContract],
-    facts_by_id: dict[str, ExtractedFact],
-    mappings_by_id: dict[str, FactMapping],
-    taxonomy: TaxonomyConfig,
-    comment: str,
+    context: _DimensionDecisionContext,
 ) -> tuple[tuple, list[str], SemanticUnit]:
+    contracts = context.contracts
+    facts_by_id = context.facts_by_id
+    mappings_by_id = context.mappings_by_id
+    taxonomy = context.taxonomy
+    comment = context.comment
     contract = contracts.get(decision.parent_code)
     if contract is None:
         raise ValueError(f"维度结论引用了未配置父级: {decision.parent_code}")
@@ -147,13 +159,13 @@ def _compile_one_dimension_decision(
 def _recover_unique_dimension_candidate(
     decision: DimensionDecision,
     *,
-    contracts: dict[str, DimensionContract],
-    facts_by_id: dict[str, ExtractedFact],
-    mappings_by_id: dict[str, FactMapping],
-    taxonomy: TaxonomyConfig,
-    comment: str,
+    context: _DimensionDecisionContext,
 ) -> tuple[DimensionDecision, tuple, list[str], SemanticUnit] | None:
     """忽略误列为支持项的无标签证据，保留唯一明确维度候选。"""
+    contracts = context.contracts
+    facts_by_id = context.facts_by_id
+    mappings_by_id = context.mappings_by_id
+    taxonomy = context.taxonomy
     all_fact_ids = [*decision.supporting_fact_ids, *decision.context_fact_ids]
     if any(fact_id not in facts_by_id for fact_id in all_fact_ids):
         return None
@@ -203,11 +215,7 @@ def _recover_unique_dimension_candidate(
     )
     scope_key, referenced_ids, unit = _compile_one_dimension_decision(
         recovered,
-        contracts=contracts,
-        facts_by_id=facts_by_id,
-        mappings_by_id=mappings_by_id,
-        taxonomy=taxonomy,
-        comment=comment,
+        context=context,
     )
     return recovered, scope_key, referenced_ids, unit
 
@@ -215,21 +223,13 @@ def _recover_unique_dimension_candidate(
 def _compile_or_recover_dimension_decision(
     decision: DimensionDecision,
     *,
-    contracts: dict[str, DimensionContract],
-    facts_by_id: dict[str, ExtractedFact],
-    mappings_by_id: dict[str, FactMapping],
-    taxonomy: TaxonomyConfig,
-    comment: str,
+    context: _DimensionDecisionContext,
     recover_invalid_decisions: bool,
 ) -> tuple[tuple[DimensionDecision, tuple, list[str], SemanticUnit] | None, str | None]:
     try:
         scope_key, all_fact_ids, unit = _compile_one_dimension_decision(
             decision,
-            contracts=contracts,
-            facts_by_id=facts_by_id,
-            mappings_by_id=mappings_by_id,
-            taxonomy=taxonomy,
-            comment=comment,
+            context=context,
         )
     except ValueError as exc:
         if not recover_invalid_decisions:
@@ -237,11 +237,7 @@ def _compile_or_recover_dimension_decision(
         try:
             recovered = _recover_unique_dimension_candidate(
                 decision,
-                contracts=contracts,
-                facts_by_id=facts_by_id,
-                mappings_by_id=mappings_by_id,
-                taxonomy=taxonomy,
-                comment=comment,
+                context=context,
             )
         except ValueError:
             recovered = None
@@ -252,11 +248,7 @@ def _compile_or_recover_dimension_decision(
 def _collect_dimension_decisions(
     decisions: FactDecisions,
     *,
-    contracts: dict[str, DimensionContract],
-    facts_by_id: dict[str, ExtractedFact],
-    mappings_by_id: dict[str, FactMapping],
-    taxonomy: TaxonomyConfig,
-    comment: str,
+    context: _DimensionDecisionContext,
     recover_invalid_decisions: bool,
 ) -> tuple[
     list[DimensionDecision],
@@ -264,6 +256,7 @@ def _collect_dimension_decisions(
     dict[tuple, set[str]],
     dict[str, str],
 ]:
+    mappings_by_id = context.mappings_by_id
     seen_scopes: set[tuple] = set()
     referenced_by_scope: dict[tuple, set[str]] = {}
     decision_units: list[SemanticUnit] = []
@@ -272,11 +265,7 @@ def _collect_dimension_decisions(
     for decision in decisions.decisions:
         compiled, recovery_reason = _compile_or_recover_dimension_decision(
             decision,
-            contracts=contracts,
-            facts_by_id=facts_by_id,
-            mappings_by_id=mappings_by_id,
-            taxonomy=taxonomy,
-            comment=comment,
+            context=context,
             recover_invalid_decisions=recover_invalid_decisions,
         )
         if compiled is None:
@@ -384,9 +373,11 @@ def _finalize_dimension_decisions(
     accepted_decisions: list[DimensionDecision],
     decision_units: list[SemanticUnit],
     managed_by_label: dict[str, DimensionContract],
-    taxonomy: TaxonomyConfig,
-    comment: str,
+    *,
+    context: _DimensionDecisionContext,
 ) -> None:
+    taxonomy = context.taxonomy
+    comment = context.comment
     explained_context_fact_ids = {
         fact_id
         for decision in accepted_decisions
@@ -460,13 +451,16 @@ def compile_dimension_decisions(
         for contract in contracts.values()
         for code in _contract_label_codes(taxonomy, contract)
     }
-    accepted, units, referenced, downgraded = _collect_dimension_decisions(
-        decisions,
+    context = _DimensionDecisionContext(
         contracts=contracts,
         facts_by_id=facts_by_id,
         mappings_by_id=mappings_by_id,
         taxonomy=taxonomy,
         comment=comment,
+    )
+    accepted, units, referenced, downgraded = _collect_dimension_decisions(
+        decisions,
+        context=context,
         recover_invalid_decisions=recover_invalid_decisions,
     )
     omitted = _omitted_managed_fact_ids(
@@ -489,7 +483,6 @@ def compile_dimension_decisions(
         accepted,
         units,
         managed_by_label,
-        taxonomy,
-        comment,
+        context=context,
     )
     return result
