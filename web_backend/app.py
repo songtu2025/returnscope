@@ -1,5 +1,6 @@
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import asynccontextmanager
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from typing import Annotated, Any, AsyncIterator
 
@@ -142,6 +143,84 @@ def _create_database(settings: Settings) -> Database:
     return database
 
 
+def _create_validation_executor(config_service: ConfigService) -> ThreadPoolExecutor:
+    config_service.recover_validation_runs()
+    return ThreadPoolExecutor(
+        max_workers=2,
+        thread_name_prefix="model-validation",
+    )
+
+
+def _create_task_service(
+    database: Database,
+    standard_service: ClassificationStandardService,
+    runner: AgentRunner,
+) -> TaskService:
+    task_plan_service = TaskPlanService(
+        database,
+        standard_service=standard_service,
+    )
+    return TaskService(
+        database,
+        plan_service=task_plan_service,
+        result_publisher=runner.retry_result_publish,
+    )
+
+
+def _create_lifespan(
+    start_worker: bool,
+    worker: TaskWorker,
+    insight_report_worker: InsightReportWorker,
+    standard_validation_worker: ClassificationStandardValidationWorker,
+    validation_executor: ThreadPoolExecutor,
+) -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        if start_worker:
+            worker.start()
+            insight_report_worker.start()
+            standard_validation_worker.start()
+        yield
+        if start_worker:
+            worker.stop()
+            insight_report_worker.stop()
+            standard_validation_worker.stop()
+        validation_executor.shutdown(wait=False, cancel_futures=True)
+
+    return lifespan
+
+
+def _create_current_user(
+    session_service: SessionService,
+) -> Callable[..., dict[str, Any]]:
+    def current_user(
+        session_token: Annotated[str | None, Cookie(alias=SESSION_COOKIE)] = None,
+    ) -> dict[str, Any]:
+        user = session_service.resolve(session_token)
+        if user is None:
+            raise HTTPException(status_code=401, detail="请先登录")
+        return user
+
+    return current_user
+
+
+def _mount_frontend(app: FastAPI) -> None:
+    static_dir = PROJECT_ROOT / "web-prototype" / "dist" / "client"
+    if static_dir.exists():
+
+        @app.get("/index.html", response_class=HTMLResponse)
+        @app.get("/", response_class=HTMLResponse)
+        def frontend_index(request: Request) -> HTMLResponse:
+            html = (static_dir / "index.html").read_text(encoding="utf-8")
+            origin = str(request.base_url).rstrip("/")
+            return HTMLResponse(
+                html.replace("__SITE_ORIGIN__", origin),
+                headers={"Cache-Control": "no-cache"},
+            )
+
+        app.mount("/", StaticFiles(directory=static_dir, html=True), name="web")
+
+
 def create_app(
     start_worker: bool = True,
     settings_override: Settings | None = None,
@@ -155,11 +234,7 @@ def create_app(
     dataset_service = DatasetService(database, settings)
     config_service = ConfigService(database, secret_box)
     model_preference_service = ModelPreferenceService(database)
-    config_service.recover_validation_runs()
-    validation_executor = ThreadPoolExecutor(
-        max_workers=2,
-        thread_name_prefix="model-validation",
-    )
+    validation_executor = _create_validation_executor(config_service)
     analysis_service = AnalysisService(database)
     result_service = ClassificationResultService(database)
     standard_service = ClassificationStandardService(database)
@@ -180,15 +255,7 @@ def create_app(
         result_service,
         standard_service,
     )
-    task_plan_service = TaskPlanService(
-        database,
-        standard_service=standard_service,
-    )
-    task_service = TaskService(
-        database,
-        plan_service=task_plan_service,
-        result_publisher=runner.retry_result_publish,
-    )
+    task_service = _create_task_service(database, standard_service, runner)
     worker = TaskWorker(database, runner, settings.task_workers)
     insight_report_worker = InsightReportWorker(insight_report_service)
     standard_validation_service = ClassificationStandardValidationService(
@@ -200,19 +267,13 @@ def create_app(
         standard_validation_service
     )
 
-    @asynccontextmanager
-    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-        if start_worker:
-            worker.start()
-            insight_report_worker.start()
-            standard_validation_worker.start()
-        yield
-        if start_worker:
-            worker.stop()
-            insight_report_worker.stop()
-            standard_validation_worker.stop()
-        validation_executor.shutdown(wait=False, cancel_futures=True)
-
+    lifespan = _create_lifespan(
+        start_worker,
+        worker,
+        insight_report_worker,
+        standard_validation_worker,
+        validation_executor,
+    )
     app = FastAPI(
         title="用户语义分析智能体",
         version="1.0.0",
@@ -222,14 +283,7 @@ def create_app(
     )
     app.add_middleware(RequestTimingMiddleware)
 
-    def current_user(
-        session_token: Annotated[str | None, Cookie(alias=SESSION_COOKIE)] = None,
-    ) -> dict[str, Any]:
-        user = auth_runtime.session_service.resolve(session_token)
-        if user is None:
-            raise HTTPException(status_code=401, detail="请先登录")
-        return user
-
+    current_user = _create_current_user(auth_runtime.session_service)
     app.include_router(
         create_account_router(
             database=database,
@@ -323,20 +377,7 @@ def create_app(
         )
     )
 
-    static_dir = PROJECT_ROOT / "web-prototype" / "dist" / "client"
-    if static_dir.exists():
-
-        @app.get("/index.html", response_class=HTMLResponse)
-        @app.get("/", response_class=HTMLResponse)
-        def frontend_index(request: Request) -> HTMLResponse:
-            html = (static_dir / "index.html").read_text(encoding="utf-8")
-            origin = str(request.base_url).rstrip("/")
-            return HTMLResponse(
-                html.replace("__SITE_ORIGIN__", origin),
-                headers={"Cache-Control": "no-cache"},
-            )
-
-        app.mount("/", StaticFiles(directory=static_dir, html=True), name="web")
+    _mount_frontend(app)
 
     app.state.settings = settings
     app.state.database = database
