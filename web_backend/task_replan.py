@@ -8,6 +8,7 @@ from web_backend.common import json_text, json_value
 from web_backend.database import Database
 from web_backend.security import utc_now
 from web_backend.task_contracts import TaskPlanConflict, _ReplanSegmentSyncContext
+from web_backend.task_creation import _SegmentInsertContext
 from web_backend.task_plan_service import TaskPlanService
 from web_backend.task_state import summarize_task_status
 
@@ -304,6 +305,12 @@ class TaskReplanMixin:
             (int(value["execution_order"]) for value in context.preserved.values()),
             default=0,
         )
+        insert_context = _SegmentInsertContext(
+            task_id=task_id,
+            unresolved_policy=context.unresolved_policy,
+            has_blocked=has_blocked,
+            created_at=context.now,
+        )
         for planned_segment_key, segment in context.planned_segments.items():
             remaining_keys = [
                 key
@@ -318,20 +325,19 @@ class TaskReplanMixin:
             next_execution_order += 1
             self._insert_segment(
                 connection,
-                task_id=task_id,
-                segment=segment,
-                segment_key=segment_key,
+                segment={
+                    **segment,
+                    "segment_key": segment_key,
+                    "record_count": int(
+                        sum(context.record_counts.get(key, 0) for key in remaining_keys)
+                    ),
+                    "unique_comments": len(remaining_keys),
+                    "variants": self._variants_for_keys(
+                        context.prepared.dataset,
+                        remaining_keys,
+                    ),
+                },
                 classification_keys=remaining_keys,
-                record_count=int(
-                    sum(context.record_counts.get(key, 0) for key in remaining_keys)
-                ),
-                unique_comments=len(remaining_keys),
-                variants=self._variants_for_keys(
-                    context.prepared.dataset,
-                    remaining_keys,
-                ),
                 execution_order=next_execution_order,
-                unresolved_policy=context.unresolved_policy,
-                has_blocked=has_blocked,
-                created_at=context.now,
+                context=insert_context,
             )

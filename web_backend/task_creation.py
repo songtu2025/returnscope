@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from return_semantics.data import ReturnDataset
@@ -9,6 +10,14 @@ from web_backend.database import Database
 from web_backend.security import utc_now
 from web_backend.task_contracts import SEGMENT_USER_LIMIT, TaskPlanConflict
 from web_backend.task_plan_service import TaskPlanService
+
+
+@dataclass(frozen=True, kw_only=True)
+class _SegmentInsertContext:
+    task_id: str
+    unresolved_policy: str
+    has_blocked: bool
+    created_at: str
 
 
 class TaskCreationMixin:
@@ -131,6 +140,12 @@ class TaskCreationMixin:
                     now if initial_status == "completed" else None,
                 ),
             )
+            insert_context = _SegmentInsertContext(
+                task_id=task_id,
+                unresolved_policy=policy,
+                has_blocked=has_blocked,
+                created_at=now,
+            )
             for segment in sorted(
                 planned_segments,
                 key=lambda value: order_by_key[str(value["segment_key"])],
@@ -138,17 +153,15 @@ class TaskCreationMixin:
                 segment_key = str(segment["segment_key"])
                 self._insert_segment(
                     connection,
-                    task_id=task_id,
-                    segment=segment,
-                    segment_key=segment_key,
+                    segment={
+                        **segment,
+                        "segment_key": segment_key,
+                        "record_count": int(segment["record_count"]),
+                        "unique_comments": int(segment["unique_comments"]),
+                    },
                     classification_keys=keys_by_segment[segment_key],
-                    record_count=int(segment["record_count"]),
-                    unique_comments=int(segment["unique_comments"]),
-                    variants=segment["variants"],
                     execution_order=order_by_key[segment_key],
-                    unresolved_policy=policy,
-                    has_blocked=has_blocked,
-                    created_at=now,
+                    context=insert_context,
                 )
             connection.execute(
                 """
@@ -251,17 +264,10 @@ class TaskCreationMixin:
         cls,
         connection: Any,
         *,
-        task_id: str,
         segment: dict[str, Any],
-        segment_key: str,
         classification_keys: list[str],
-        record_count: int,
-        unique_comments: int,
-        variants: list[dict[str, Any]],
         execution_order: int,
-        unresolved_policy: str,
-        has_blocked: bool,
-        created_at: str,
+        context: _SegmentInsertContext,
     ) -> None:
         connection.execute(
             """
@@ -277,8 +283,8 @@ class TaskCreationMixin:
             """,
             (
                 new_id("segment"),
-                task_id,
-                segment_key,
+                context.task_id,
+                segment["segment_key"],
                 segment["agent_key"],
                 segment["agent_family"],
                 segment["logic_version"],
@@ -290,16 +296,16 @@ class TaskCreationMixin:
                 json_text(segment.get("scope", {})),
                 cls._segment_status(
                     segment,
-                    unresolved_policy,
-                    has_blocked,
+                    context.unresolved_policy,
+                    context.has_blocked,
                 ),
-                record_count,
-                unique_comments,
-                unique_comments,
-                json_text(variants),
+                segment["record_count"],
+                segment["unique_comments"],
+                segment["unique_comments"],
+                json_text(segment["variants"]),
                 json_text(classification_keys),
                 execution_order,
-                created_at,
+                context.created_at,
             ),
         )
 
