@@ -24,31 +24,29 @@ class SegmentOutcomesMixin:
 
     def _complete_segment(
         self,
-        task_id: str,
-        segment_id: str,
-        status: str,
-        progress_total: int,
-        model_calls: int,
-        cache_hits: int,
-        checkpoint_path: Path,
-        result_version: int,
+        context: _SegmentRunContext,
         dataset: ReturnDataset,
         results: dict[str, ValidatedClassification],
         taxonomy: TaxonomyConfig,
-        model_failures: int = 0,
+        result_version: int,
     ) -> None:
+        model_calls, cache_hits, model_failures = context.runtime_totals()
         self.result_service.publish_v1(
-            task_id=task_id,
-            segment_id=segment_id,
+            task_id=context.task_id,
+            segment_id=context.segment_id,
             dataset=dataset,
             results=results,
             taxonomy=taxonomy,
-            segment_status=status,
-            progress_total=progress_total,
+            segment_status=(
+                "completed_with_errors"
+                if self._results_have_quality_errors(results)
+                else "completed"
+            ),
+            progress_total=len(results),
             model_calls=model_calls,
             cache_hits=cache_hits,
             model_failures=model_failures,
-            checkpoint_path=str(checkpoint_path),
+            checkpoint_path=str(context.checkpoint_path),
             legacy_result_version=result_version,
         )
 

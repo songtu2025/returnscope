@@ -524,19 +524,21 @@ def test_agent_runner_completion_publishes_result_reference(tmp_path: Path) -> N
     service = ClassificationResultService(context.database)
     runner = AgentRunner(
         context.database,
-        SimpleNamespace(),
+        SimpleNamespace(data_dir=tmp_path),
         SimpleNamespace(),
         service,
     )
 
+    run_context = runner._segment_run_context(
+        context.task_id,
+        context.segment_id,
+        runner._load_task(context.task_id),
+        runner._load_segment(context.segment_id),
+    )
+    run_context.base_model_calls = 1
+    run_context.checkpoint_path = tmp_path / "checkpoint.json"
     runner._complete_segment(
-        task_id=context.task_id,
-        segment_id=context.segment_id,
-        status="completed",
-        progress_total=1,
-        model_calls=1,
-        cache_hits=0,
-        checkpoint_path=tmp_path / "checkpoint.json",
+        context=run_context,
         result_version=1,
         dataset=context.dataset,
         results=context.results,

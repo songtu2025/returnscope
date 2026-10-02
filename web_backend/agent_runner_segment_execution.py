@@ -58,7 +58,6 @@ class SegmentExecutionMixin:
     _export_legacy_segment_result: Callable[..., None]
     _load_checkpoint: Callable[..., dict[str, ValidatedClassification]]
     _refresh_parent: Callable[..., None]
-    _results_have_quality_errors: Callable[..., bool]
     _subset_dataset: Callable[..., ReturnDataset]
     _write_checkpoint: Callable[..., None]
 
@@ -196,20 +195,8 @@ class SegmentExecutionMixin:
             / "segments"
             / f"{context.segment_id}-analysis-v{result_version}.xlsx"
         )
-        model_calls, cache_hits, model_failures = context.runtime_totals()
         self._complete_segment(
-            task_id=context.task_id,
-            segment_id=context.segment_id,
-            status=(
-                "completed_with_errors"
-                if self._results_have_quality_errors(results)
-                else "completed"
-            ),
-            progress_total=len(all_keys),
-            model_calls=model_calls,
-            cache_hits=cache_hits,
-            model_failures=model_failures,
-            checkpoint_path=context.checkpoint_path,
+            context=context,
             result_version=result_version,
             dataset=segment_dataset,
             results=results,
