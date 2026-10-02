@@ -3,7 +3,7 @@ from __future__ import annotations
 import builtins
 import hashlib
 import json
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import Any, Callable
 
 from return_semantics.model_client import Sub2APIClient
@@ -53,6 +53,13 @@ class InsightReportNotFound(ValueError):
 
 class InsightReportConflict(ValueError):
     pass
+
+
+@dataclass(frozen=True, kw_only=True)
+class _ReportCreationTarget:
+    dashboard_id: str
+    dashboard_version_id: str
+    parent_job_id: str | None = None
 
 
 class InsightReportService:
@@ -107,8 +114,10 @@ class InsightReportService:
             actor_id=actor_id,
         )
         report = self._create_report(
-            dashboard_id=str(dashboard["id"]),
-            dashboard_version_id=str(dashboard["version"]["version_id"]),
+            target=_ReportCreationTarget(
+                dashboard_id=str(dashboard["id"]),
+                dashboard_version_id=str(dashboard["version"]["version_id"]),
+            ),
             model=model,
             reasoning_effort=reasoning_effort,
             actor_id=actor_id,
@@ -127,8 +136,10 @@ class InsightReportService:
         self.dashboard_service.get(dashboard_id, dashboard_version_id)
         model = self._resolve_model(model_id, reasoning_effort)
         return self._create_report(
-            dashboard_id=dashboard_id,
-            dashboard_version_id=dashboard_version_id,
+            target=_ReportCreationTarget(
+                dashboard_id=dashboard_id,
+                dashboard_version_id=dashboard_version_id,
+            ),
             model=model,
             reasoning_effort=reasoning_effort,
             actor_id=actor_id,
@@ -294,8 +305,11 @@ class InsightReportService:
         if source["status"] != "failed":
             raise InsightReportConflict("只有生成失败的尝试可以重试")
         retried = self._create_report(
-            dashboard_id=str(source["dashboard_id"]),
-            dashboard_version_id=str(source["dashboard_version_id"]),
+            target=_ReportCreationTarget(
+                dashboard_id=str(source["dashboard_id"]),
+                dashboard_version_id=str(source["dashboard_version_id"]),
+                parent_job_id=report_id,
+            ),
             model={
                 "id": source["model_id"],
                 "model_key": source["model_key"],
@@ -303,7 +317,6 @@ class InsightReportService:
             },
             reasoning_effort=str(source["reasoning_effort"]),
             actor_id=actor_id,
-            parent_job_id=report_id,
         )
         with self.database.transaction(immediate=True) as connection:
             connection.execute(
@@ -536,13 +549,14 @@ class InsightReportService:
     def _create_report(
         self,
         *,
-        dashboard_id: str,
-        dashboard_version_id: str,
+        target: _ReportCreationTarget,
         model: dict[str, Any],
         reasoning_effort: str,
         actor_id: str,
-        parent_job_id: str | None = None,
     ) -> dict[str, Any]:
+        dashboard_id = target.dashboard_id
+        dashboard_version_id = target.dashboard_version_id
+        parent_job_id = target.parent_job_id
         report_id = new_id("insight_report")
         now = utc_now()
         with self.database.transaction(immediate=True) as connection:
