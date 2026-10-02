@@ -8,6 +8,7 @@ from return_semantics.analysis_context import analysis_context_from_snapshot
 from return_semantics.data import ReturnDataset
 from return_semantics.schemas import ValidatedClassification
 from return_semantics.semantic_review import requires_system_rerun
+from web_backend.classification_result_publication import SegmentPublicationState
 from web_backend.classification_result_service import (
     ClassificationResultService,
     ResultPublicationError,
@@ -41,18 +42,20 @@ class ResultPublicationMixin:
                 raise ValueError("Listing 分类结果没有进入发布重试状态")
             prepared = self._prepare_completed_result(task, segment)
             return self.result_service.publish_v1(
-                task_id=task_id,
-                segment_id=segment_id,
                 dataset=prepared["dataset"],
                 results=prepared["results"],
                 taxonomy=prepared["taxonomy"],
-                segment_status=str(segment["status"]),
-                progress_total=int(prepared["classification_key_count"]),
-                model_calls=int(segment["model_calls"] or 0),
-                cache_hits=int(segment["cache_hits"] or 0),
-                checkpoint_path=str(prepared["checkpoint_path"]),
-                legacy_result_version=int(segment["result_version"] or 0) + 1,
-                model_failures=int(segment["model_failures"] or 0),
+                segment_state=SegmentPublicationState(
+                    task_id=task_id,
+                    segment_id=segment_id,
+                    segment_status=str(segment["status"]),
+                    progress_total=int(prepared["classification_key_count"]),
+                    model_calls=int(segment["model_calls"] or 0),
+                    cache_hits=int(segment["cache_hits"] or 0),
+                    checkpoint_path=str(prepared["checkpoint_path"]),
+                    legacy_result_version=int(segment["result_version"] or 0) + 1,
+                    model_failures=int(segment["model_failures"] or 0),
+                ),
             )
         except ResultPublicationError as exc:
             current = self._load_segment(segment_id)

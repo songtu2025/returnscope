@@ -1280,7 +1280,7 @@ def test_run_segment_restores_checkpoint_when_result_publish_fails(
     _install_fake_runner(monkeypatch, calls)
 
     def fail_result_publish(**kwargs) -> None:
-        Path(str(kwargs["checkpoint_path"])).unlink()
+        Path(str(kwargs["segment_state"].checkpoint_path)).unlink()
         raise ResultPublicationError("模拟结果发布失败")
 
     monkeypatch.setattr(

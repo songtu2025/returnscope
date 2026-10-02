@@ -263,7 +263,7 @@ def test_apply_failure_does_not_block_later_segment(
     original_publish = runner.result_service.publish_v1
 
     def fail_first(**kwargs):
-        if kwargs["segment_id"] == context.segment_id:
+        if kwargs["segment_state"].segment_id == context.segment_id:
             raise ResultPublicationError("模拟单片段发布失败")
         return original_publish(**kwargs)
 

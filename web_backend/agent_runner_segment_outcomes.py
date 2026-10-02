@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Callable
 from return_semantics.data import ReturnDataset
 from return_semantics.pipeline import PipelineRun
 from return_semantics.schemas import TaxonomyConfig, ValidatedClassification
+from web_backend.classification_result_publication import SegmentPublicationState
 from web_backend.classification_result_service import ClassificationResultService
 from web_backend.common import json_text
 from web_backend.database import Database
@@ -32,22 +33,22 @@ class SegmentOutcomesMixin:
     ) -> None:
         model_calls, cache_hits, model_failures = context.runtime_totals()
         self.result_service.publish_v1(
-            task_id=context.task_id,
-            segment_id=context.segment_id,
             dataset=dataset,
             results=results,
             taxonomy=taxonomy,
-            segment_status=(
-                "completed_with_errors"
+            segment_state=SegmentPublicationState(
+                task_id=context.task_id,
+                segment_id=context.segment_id,
+                segment_status="completed_with_errors"
                 if self._results_have_quality_errors(results)
-                else "completed"
+                else "completed",
+                progress_total=len(results),
+                model_calls=model_calls,
+                cache_hits=cache_hits,
+                model_failures=model_failures,
+                checkpoint_path=str(context.checkpoint_path),
+                legacy_result_version=result_version,
             ),
-            progress_total=len(results),
-            model_calls=model_calls,
-            cache_hits=cache_hits,
-            model_failures=model_failures,
-            checkpoint_path=str(context.checkpoint_path),
-            legacy_result_version=result_version,
         )
 
     def _save_partial_checkpoint(

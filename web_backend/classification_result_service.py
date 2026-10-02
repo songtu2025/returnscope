@@ -88,18 +88,10 @@ class ClassificationResultService(
     def publish_v1(
         self,
         *,
-        task_id: str,
-        segment_id: str,
         dataset: ReturnDataset,
         results: dict[str, ValidatedClassification],
         taxonomy: TaxonomyConfig,
-        segment_status: str,
-        progress_total: int,
-        model_calls: int,
-        cache_hits: int,
-        checkpoint_path: str,
-        legacy_result_version: int,
-        model_failures: int = 0,
+        segment_state: _publication.SegmentPublicationState,
     ) -> dict[str, Any]:
         prepared = self._prepare_publication(dataset, results, taxonomy)
         now = utc_now()
@@ -112,11 +104,11 @@ class ClassificationResultService(
                            owner_id, store, listing
                     FROM tasks WHERE id = ?
                     """,
-                    (task_id,),
+                    (segment_state.task_id,),
                 ).fetchone()
                 segment = connection.execute(
                     "SELECT * FROM task_segments WHERE id = ? AND task_id = ?",
-                    (segment_id, task_id),
+                    (segment_state.segment_id, segment_state.task_id),
                 ).fetchone()
                 if task is None or segment is None:
                     raise ValueError("任务或 Listing 片段不存在")
@@ -144,7 +136,7 @@ class ClassificationResultService(
                         SET result_publish_error = ?, revision = revision + 1
                         WHERE id = ?
                         """,
-                        (conflict, segment_id),
+                        (conflict, segment_state.segment_id),
                     )
                     connection.execute(
                         """
@@ -155,11 +147,11 @@ class ClassificationResultService(
                                   ?, ?, ?)
                         """,
                         (
-                            task_id,
+                            segment_state.task_id,
                             conflict,
                             json_text(
                                 {
-                                    "segment_id": segment_id,
+                                    "segment_id": segment_state.segment_id,
                                     "existing_content_hash": latest_version[
                                         "content_hash"
                                     ],
@@ -207,8 +199,8 @@ class ClassificationResultService(
                             """,
                             (
                                 result_id,
-                                task_id,
-                                segment_id,
+                                segment_state.task_id,
+                                segment_state.segment_id,
                                 task["dataset_version_id"],
                                 task["product_version_id"],
                                 prepared["store_site"] or task["store"],
@@ -236,7 +228,7 @@ class ClassificationResultService(
                         (
                             version_id,
                             result_id,
-                            segment_id,
+                            segment_state.segment_id,
                             version_no,
                             content_hash,
                             quality_status,
@@ -291,21 +283,21 @@ class ClassificationResultService(
                         WHERE id = ? AND task_id = ?
                         """,
                         (
-                            segment_status,
-                            progress_total,
-                            progress_total,
-                            model_calls,
-                            cache_hits,
-                            model_failures,
-                            checkpoint_path,
-                            legacy_result_version,
+                            segment_state.segment_status,
+                            segment_state.progress_total,
+                            segment_state.progress_total,
+                            segment_state.model_calls,
+                            segment_state.cache_hits,
+                            segment_state.model_failures,
+                            segment_state.checkpoint_path,
+                            segment_state.legacy_result_version,
                             version_id,
                             quality_status,
                             now,
                             now,
                             now,
-                            segment_id,
-                            task_id,
+                            segment_state.segment_id,
+                            segment_state.task_id,
                         ),
                     )
                     connection.execute(
@@ -317,11 +309,11 @@ class ClassificationResultService(
                                   'Listing 分类结果已发布', ?, ?)
                         """,
                         (
-                            task_id,
+                            segment_state.task_id,
                             json_text(
                                 {
-                                    "segment_id": segment_id,
-                                    "status": segment_status,
+                                    "segment_id": segment_state.segment_id,
+                                    "status": segment_state.segment_status,
                                     "result_version_id": version_id,
                                     "result_version": version_no,
                                     "parent_version_id": (
@@ -340,7 +332,9 @@ class ClassificationResultService(
         except ResultPublicationConflict:
             raise
         except Exception as exc:
-            self.mark_publish_failed(task_id, segment_id, str(exc))
+            self.mark_publish_failed(
+                segment_state.task_id, segment_state.segment_id, str(exc)
+            )
             raise ResultPublicationError(str(exc)) from exc
-        version_id = self._published_version_id(segment_id)
+        version_id = self._published_version_id(segment_state.segment_id)
         return self.get(version_id)

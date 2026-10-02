@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
 from typing import Any
 
 from return_semantics.data import ReturnDataset
@@ -28,6 +29,21 @@ class ResultPublicationError(RuntimeError):
 
 class ResultPublicationConflict(ResultPublicationError):
     pass
+
+
+@dataclass(frozen=True, kw_only=True)
+class SegmentPublicationState:
+    """保存一次发布需写回的片段状态，与分类结果内容分开传递。"""
+
+    task_id: str
+    segment_id: str
+    segment_status: str
+    progress_total: int
+    model_calls: int
+    cache_hits: int
+    checkpoint_path: str
+    legacy_result_version: int
+    model_failures: int = 0
 
 
 class _ClassificationResultPublication:

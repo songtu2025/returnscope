@@ -21,6 +21,7 @@ from return_semantics.schemas import (
 from return_semantics.task_plan import build_category_execution_plan
 from web_backend.agent_runner import AgentRunner, _SegmentRunContext
 from web_backend.analysis_service import AnalysisService
+from web_backend.classification_result_publication import SegmentPublicationState
 from web_backend.classification_result_service import (
     ClassificationResultService,
     ResultPublicationConflict,
@@ -255,17 +256,19 @@ def _seed_result_context(tmp_path: Path) -> SimpleNamespace:
 
 def _publish(context: SimpleNamespace) -> dict[str, object]:
     return ClassificationResultService(context.database).publish_v1(
-        task_id=context.task_id,
-        segment_id=context.segment_id,
         dataset=context.dataset,
         results=context.results,
         taxonomy=context.taxonomy,
-        segment_status="completed",
-        progress_total=1,
-        model_calls=1,
-        cache_hits=0,
-        checkpoint_path="checkpoint.json",
-        legacy_result_version=1,
+        segment_state=SegmentPublicationState(
+            task_id=context.task_id,
+            segment_id=context.segment_id,
+            segment_status="completed",
+            progress_total=1,
+            model_calls=1,
+            cache_hits=0,
+            checkpoint_path="checkpoint.json",
+            legacy_result_version=1,
+        ),
     )
 
 
@@ -670,17 +673,19 @@ def test_system_failure_retry_publishes_new_version_without_overwrite(
         }
     )
     first = service.publish_v1(
-        task_id=context.task_id,
-        segment_id=context.segment_id,
         dataset=context.dataset,
         results={context.key: system_failure},
         taxonomy=context.taxonomy,
-        segment_status="completed_with_errors",
-        progress_total=1,
-        model_calls=1,
-        cache_hits=0,
-        checkpoint_path="checkpoint.json",
-        legacy_result_version=1,
+        segment_state=SegmentPublicationState(
+            task_id=context.task_id,
+            segment_id=context.segment_id,
+            segment_status="completed_with_errors",
+            progress_total=1,
+            model_calls=1,
+            cache_hits=0,
+            checkpoint_path="checkpoint.json",
+            legacy_result_version=1,
+        ),
     )
     assert first["quality_status"] == "unusable"
     with context.database.connect() as connection:
@@ -727,34 +732,38 @@ def test_system_failure_retry_publishes_new_version_without_overwrite(
         )
 
     second = service.publish_v1(
-        task_id=context.task_id,
-        segment_id=context.segment_id,
         dataset=context.dataset,
         results=context.results,
         taxonomy=context.taxonomy,
-        segment_status="completed",
-        progress_total=1,
-        model_calls=2,
-        cache_hits=0,
-        checkpoint_path="checkpoint.json",
-        legacy_result_version=2,
+        segment_state=SegmentPublicationState(
+            task_id=context.task_id,
+            segment_id=context.segment_id,
+            segment_status="completed",
+            progress_total=1,
+            model_calls=2,
+            cache_hits=0,
+            checkpoint_path="checkpoint.json",
+            legacy_result_version=2,
+        ),
     )
 
     assert second["version"] == 2
     assert second["parent_version_id"] == first["version_id"]
     assert second["quality_status"] == "ready"
     repeated = service.publish_v1(
-        task_id=context.task_id,
-        segment_id=context.segment_id,
         dataset=context.dataset,
         results=context.results,
         taxonomy=context.taxonomy,
-        segment_status="completed",
-        progress_total=1,
-        model_calls=2,
-        cache_hits=0,
-        checkpoint_path="checkpoint.json",
-        legacy_result_version=2,
+        segment_state=SegmentPublicationState(
+            task_id=context.task_id,
+            segment_id=context.segment_id,
+            segment_status="completed",
+            progress_total=1,
+            model_calls=2,
+            cache_hits=0,
+            checkpoint_path="checkpoint.json",
+            legacy_result_version=2,
+        ),
     )
     assert repeated["version_id"] == second["version_id"]
     with context.database.connect() as connection:
@@ -786,17 +795,19 @@ def test_published_business_review_segment_cannot_retry(tmp_path: Path) -> None:
         }
     )
     version = ClassificationResultService(context.database).publish_v1(
-        task_id=context.task_id,
-        segment_id=context.segment_id,
         dataset=context.dataset,
         results={context.key: business_review},
         taxonomy=context.taxonomy,
-        segment_status="completed_with_errors",
-        progress_total=1,
-        model_calls=1,
-        cache_hits=0,
-        checkpoint_path="checkpoint.json",
-        legacy_result_version=1,
+        segment_state=SegmentPublicationState(
+            task_id=context.task_id,
+            segment_id=context.segment_id,
+            segment_status="completed_with_errors",
+            progress_total=1,
+            model_calls=1,
+            cache_hits=0,
+            checkpoint_path="checkpoint.json",
+            legacy_result_version=1,
+        ),
     )
     assert version["quality_status"] == "review_required"
     task_service = TaskService(context.database)
@@ -831,17 +842,19 @@ def test_publication_failure_rolls_back_all_result_data(
     monkeypatch.setattr(service, "_insert_records", fail_insert)
     with pytest.raises(ResultPublicationError):
         service.publish_v1(
-            task_id=context.task_id,
-            segment_id=context.segment_id,
             dataset=context.dataset,
             results=context.results,
             taxonomy=context.taxonomy,
-            segment_status="completed",
-            progress_total=1,
-            model_calls=1,
-            cache_hits=0,
-            checkpoint_path="checkpoint.json",
-            legacy_result_version=1,
+            segment_state=SegmentPublicationState(
+                task_id=context.task_id,
+                segment_id=context.segment_id,
+                segment_status="completed",
+                progress_total=1,
+                model_calls=1,
+                cache_hits=0,
+                checkpoint_path="checkpoint.json",
+                legacy_result_version=1,
+            ),
         )
 
     with context.database.connect() as connection:
