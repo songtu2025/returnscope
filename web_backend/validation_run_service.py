@@ -18,6 +18,13 @@ class _ValidationRunContext:
     config: dict[str, Any]
 
 
+@dataclass(frozen=True, kw_only=True)
+class _ValidationItemEvent:
+    event_type: str
+    message: str
+    data: dict[str, Any] | None = None
+
+
 class ValidationRunService:
     def __init__(
         self,
@@ -248,8 +255,10 @@ class ValidationRunService:
                 "message": "正在检查模型与连接配置",
                 "started_at": utc_now(),
             },
-            "model_started",
-            "正在检查模型与连接配置",
+            _ValidationItemEvent(
+                event_type="model_started",
+                message="正在检查模型与连接配置",
+            ),
         )
 
         def on_stage(
@@ -262,9 +271,7 @@ class ValidationRunService:
                 run_id,
                 item_index,
                 {"stage": stage, "message": message, **data},
-                "stage",
-                message,
-                data,
+                _ValidationItemEvent(event_type="stage", message=message, data=data),
             )
 
         started = time.monotonic()
@@ -299,14 +306,16 @@ class ValidationRunService:
                     "suggestion": error.suggestion,
                     "completed_at": utc_now(),
                 },
-                "model_failed",
-                str(error),
-                {
-                    "duration_ms": duration_ms,
-                    "http_status": error.http_status,
-                    "error_category": error.category,
-                    "suggestion": error.suggestion,
-                },
+                _ValidationItemEvent(
+                    event_type="model_failed",
+                    message=str(error),
+                    data={
+                        "duration_ms": duration_ms,
+                        "http_status": error.http_status,
+                        "error_category": error.category,
+                        "suggestion": error.suggestion,
+                    },
+                ),
             )
             return error
         model = self.model_catalog.get(str(item["model_id"]))
@@ -333,9 +342,11 @@ class ValidationRunService:
                 "response_model": report["response_model"],
                 "completed_at": utc_now(),
             },
-            "model_passed",
-            "模型响应与结构检查通过",
-            report,
+            _ValidationItemEvent(
+                event_type="model_passed",
+                message="模型响应与结构检查通过",
+                data=report,
+            ),
         )
         return None
 
@@ -502,10 +513,11 @@ class ValidationRunService:
         run_id: str,
         index: int,
         changes: dict[str, Any],
-        event_type: str,
-        message: str,
-        data: dict[str, Any] | None = None,
+        event: _ValidationItemEvent,
     ) -> None:
+        event_type = event.event_type
+        message = event.message
+        data = event.data
         now = utc_now()
         with self.database.transaction(immediate=True) as connection:
             row = connection.execute(
