@@ -4,6 +4,7 @@ import hashlib
 import re
 from collections import Counter
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any, cast
 
 from return_semantics.schemas import ProcessingStatus, TaxonomyConfig
@@ -182,18 +183,28 @@ def _evidence_source(sources: list[str]) -> str:
     return "TITLE_AND_BODY"
 
 
+@dataclass(frozen=True, kw_only=True)
+class _ReviewEvidence:
+    prefix: str
+    fact_id: str
+    texts: list[str]
+    sources: list[str]
+    opinion: str
+
+
 def _item(
     *,
-    prefix: str,
-    fact_id: str,
-    evidence: list[str],
-    sources: list[str],
-    opinion: str,
+    review_evidence: _ReviewEvidence,
     label_code: str,
     disposition: str,
     reason: str,
     taxonomy: TaxonomyConfig | None,
 ) -> dict[str, object]:
+    prefix = review_evidence.prefix
+    fact_id = review_evidence.fact_id
+    evidence = review_evidence.texts
+    sources = review_evidence.sources
+    opinion = review_evidence.opinion
     evidence_text = " | ".join(dict.fromkeys(evidence))
     item: dict[str, object] = {
         "item_id": _stable_item_id(
@@ -376,13 +387,15 @@ def _analysis_failure_item(
         repr((reason, diagnostic)).encode("utf-8")
     ).hexdigest()[:8]
     item = _item(
-        prefix=(
-            f"analysis-failure:{diagnostic['diagnostic_code']}:{diagnostic_digest}"
+        review_evidence=_ReviewEvidence(
+            prefix=(
+                f"analysis-failure:{diagnostic['diagnostic_code']}:{diagnostic_digest}"
+            ),
+            fact_id="",
+            texts=[evidence_text or "系统运行记录"],
+            sources=["SYSTEM"],
+            opinion=str(diagnostic["diagnostic_title"]),
         ),
-        fact_id="",
-        evidence=[evidence_text or "系统运行记录"],
-        sources=["SYSTEM"],
-        opinion=str(diagnostic["diagnostic_title"]),
         label_code="",
         disposition=ANALYSIS_FAILURE,
         reason=reason,
@@ -431,11 +444,13 @@ def _fact_review_items(
         )
         items.append(
             _item(
-                prefix="fact",
-                fact_id=fact_id,
-                evidence=evidence,
-                sources=sources,
-                opinion=opinion,
+                review_evidence=_ReviewEvidence(
+                    prefix="fact",
+                    fact_id=fact_id,
+                    texts=evidence,
+                    sources=sources,
+                    opinion=opinion,
+                ),
                 label_code=label_code,
                 disposition=_review_disposition(raw_disposition, label_code),
                 reason=reason,
@@ -459,11 +474,13 @@ def _unhandled_unit_items(
         label_code = _text(_get(unit, "label_code"))
         items.append(
             _item(
-                prefix="semantic",
-                fact_id=fact_id,
-                evidence=evidence,
-                sources=sources,
-                opinion=_text(_get(unit, "opinion")),
+                review_evidence=_ReviewEvidence(
+                    prefix="semantic",
+                    fact_id=fact_id,
+                    texts=evidence,
+                    sources=sources,
+                    opinion=_text(_get(unit, "opinion")),
+                ),
                 label_code=label_code,
                 disposition=MAPPED,
                 reason=_text(_get(unit, "decision_reason")),
@@ -486,11 +503,13 @@ def _unhandled_unknown_items(
         evidence, sources = _fallback_evidence(unknown)
         items.append(
             _item(
-                prefix="unknown",
-                fact_id=fact_id,
-                evidence=evidence,
-                sources=sources,
-                opinion=_text(_get(unknown, "opinion")),
+                review_evidence=_ReviewEvidence(
+                    prefix="unknown",
+                    fact_id=fact_id,
+                    texts=evidence,
+                    sources=sources,
+                    opinion=_text(_get(unknown, "opinion")),
+                ),
                 label_code="",
                 disposition=_review_disposition(_get(unknown, "disposition"), ""),
                 reason=_text(_get(unknown, "reason")),
