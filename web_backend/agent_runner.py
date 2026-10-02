@@ -122,47 +122,16 @@ class AgentRunner(
             self._execute_segment(context)
         except PipelineCancelled:
             outcome = "interrupted"
-            self._finish_interrupted_segment(
-                task_id,
-                segment_id,
-                context.existing_results,
-                context.latest_run,
-                context.checkpoint_path,
-                *context.runtime_totals(),
-            )
+            self._finish_interrupted_segment(context)
         except ModelServiceUnavailable as exc:
             outcome = "model_service_paused"
-            self._finish_model_service_paused(
-                task_id,
-                segment_id,
-                str(exc),
-                context.existing_results,
-                context.latest_run,
-                context.checkpoint_path,
-                *context.runtime_totals(),
-            )
+            self._finish_model_service_paused(context, str(exc))
         except ResultPublicationError as exc:
             outcome = "result_publish_failed"
-            self._finish_result_publish_failed_segment(
-                task_id,
-                segment_id,
-                str(exc),
-                context.latest_run,
-                context.checkpoint_path,
-                context.existing_results,
-                *context.runtime_totals(),
-            )
+            self._finish_result_publish_failed_segment(context, str(exc))
         except Exception as exc:
             outcome = "failed"
-            self._finish_failed_segment(
-                task_id,
-                segment_id,
-                str(exc),
-                context.latest_run,
-                context.checkpoint_path,
-                context.existing_results,
-                *context.runtime_totals(),
-            )
+            self._finish_failed_segment(context, str(exc))
         finally:
             performance_logger.info(
                 "segment_performance task_id=%s segment_id=%s outcome=%s total_ms=%.2f",

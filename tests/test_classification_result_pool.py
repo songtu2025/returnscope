@@ -19,7 +19,7 @@ from return_semantics.schemas import (
     ValidatedClassification,
 )
 from return_semantics.task_plan import build_category_execution_plan
-from web_backend.agent_runner import AgentRunner
+from web_backend.agent_runner import AgentRunner, _SegmentRunContext
 from web_backend.analysis_service import AnalysisService
 from web_backend.classification_result_service import (
     ClassificationResultService,
@@ -291,15 +291,19 @@ def test_model_service_failures_pause_task_with_live_metrics(tmp_path: Path) -> 
     )
 
     runner._finish_model_service_paused(
-        context.task_id,
-        context.segment_id,
+        _SegmentRunContext(
+            task_id=context.task_id,
+            segment_id=context.segment_id,
+            task={},
+            segment={},
+            checkpoint_path=tmp_path / "checkpoint.json",
+            existing_results={},
+            base_model_calls=0,
+            base_cache_hits=0,
+            base_model_failures=0,
+            latest_run=run,
+        ),
         "模型服务连续失败 5 次",
-        {},
-        run,
-        tmp_path / "checkpoint.json",
-        0,
-        0,
-        5,
     )
 
     with context.database.connect() as connection:

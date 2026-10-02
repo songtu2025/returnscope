@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from return_semantics.data import ReturnDataset
 from return_semantics.pipeline import PipelineRun
@@ -10,6 +10,9 @@ from web_backend.classification_result_service import ClassificationResultServic
 from web_backend.common import json_text
 from web_backend.database import Database
 from web_backend.security import utc_now
+
+if TYPE_CHECKING:
+    from web_backend.agent_runner_segment_execution import _SegmentRunContext
 
 
 class SegmentOutcomesMixin:
@@ -66,19 +69,15 @@ class SegmentOutcomesMixin:
 
     def _finish_interrupted_segment(
         self,
-        task_id: str,
-        segment_id: str,
-        existing_results: dict[str, ValidatedClassification],
-        latest_run: PipelineRun | None,
-        checkpoint_path: Path,
-        model_calls: int,
-        cache_hits: int,
-        model_failures: int,
+        context: _SegmentRunContext,
     ) -> None:
+        task_id = context.task_id
+        segment_id = context.segment_id
+        model_calls, cache_hits, model_failures = context.runtime_totals()
         partial_results, checkpoint_reference = self._save_partial_checkpoint(
-            checkpoint_path,
-            existing_results,
-            latest_run,
+            context.checkpoint_path,
+            context.existing_results,
+            context.latest_run,
         )
         now = utc_now()
         with self.database.transaction(immediate=True) as connection:
@@ -146,20 +145,16 @@ class SegmentOutcomesMixin:
 
     def _finish_model_service_paused(
         self,
-        task_id: str,
-        segment_id: str,
+        context: _SegmentRunContext,
         error: str,
-        existing_results: dict[str, ValidatedClassification],
-        latest_run: PipelineRun | None,
-        checkpoint_path: Path,
-        model_calls: int,
-        cache_hits: int,
-        model_failures: int,
     ) -> None:
+        task_id = context.task_id
+        segment_id = context.segment_id
+        model_calls, cache_hits, model_failures = context.runtime_totals()
         partial_results, checkpoint_reference = self._save_partial_checkpoint(
-            checkpoint_path,
-            existing_results,
-            latest_run,
+            context.checkpoint_path,
+            context.existing_results,
+            context.latest_run,
         )
         now = utc_now()
         message = "模型服务连续失败，任务已自动暂停；请检查连接后继续执行"
@@ -236,20 +231,16 @@ class SegmentOutcomesMixin:
 
     def _finish_failed_segment(
         self,
-        task_id: str,
-        segment_id: str,
+        context: _SegmentRunContext,
         error: str,
-        latest_run: PipelineRun | None,
-        checkpoint_path: Path,
-        existing_results: dict[str, ValidatedClassification],
-        model_calls: int,
-        cache_hits: int,
-        model_failures: int,
     ) -> None:
+        task_id = context.task_id
+        segment_id = context.segment_id
+        model_calls, cache_hits, model_failures = context.runtime_totals()
         partial_results, checkpoint_reference = self._save_partial_checkpoint(
-            checkpoint_path,
-            existing_results,
-            latest_run,
+            context.checkpoint_path,
+            context.existing_results,
+            context.latest_run,
         )
         now = utc_now()
         with self.database.transaction(immediate=True) as connection:
@@ -292,20 +283,16 @@ class SegmentOutcomesMixin:
 
     def _finish_result_publish_failed_segment(
         self,
-        task_id: str,
-        segment_id: str,
+        context: _SegmentRunContext,
         error: str,
-        latest_run: PipelineRun | None,
-        checkpoint_path: Path,
-        existing_results: dict[str, ValidatedClassification],
-        model_calls: int,
-        cache_hits: int,
-        model_failures: int,
     ) -> None:
+        task_id = context.task_id
+        segment_id = context.segment_id
+        model_calls, cache_hits, model_failures = context.runtime_totals()
         results, checkpoint_reference = self._save_partial_checkpoint(
-            checkpoint_path,
-            existing_results,
-            latest_run,
+            context.checkpoint_path,
+            context.existing_results,
+            context.latest_run,
         )
         status = (
             "completed_with_errors"
