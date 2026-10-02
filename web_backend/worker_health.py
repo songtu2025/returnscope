@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import threading
-from collections.abc import Callable
 from typing import Protocol
 
 from web_backend.security import utc_now
@@ -55,12 +54,13 @@ class WorkerHealthMixin:
 def run_service_worker_loop(
     *,
     stop: StopEvent,
-    claim_next: Callable[[], str | None],
-    run: Callable[[str], None],
+    service: WorkerService,
     health: WorkerHealthState,
     logger: logging.Logger,
     error_message: str,
 ) -> None:
+    claim_next = service.claim_next
+    run = service.run
     while not stop.is_set():
         try:
             item_id = claim_next()
@@ -109,8 +109,7 @@ class ServiceWorker(WorkerHealthMixin):
     def _loop(self) -> None:
         run_service_worker_loop(
             stop=self._stop,
-            claim_next=self.service.claim_next,
-            run=self.service.run,
+            service=self.service,
             health=self._health,
             logger=self.worker_logger,
             error_message=self.error_message,
