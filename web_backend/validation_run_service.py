@@ -25,6 +25,14 @@ class _ValidationItemEvent:
     data: dict[str, Any] | None = None
 
 
+@dataclass(frozen=True, kw_only=True)
+class _ValidationTarget:
+    kind: str
+    target_id: str
+    connection_id: str
+    config_version_id: str
+
+
 class ValidationRunService:
     def __init__(
         self,
@@ -51,10 +59,12 @@ class ValidationRunService:
         if config is None:
             raise ValueError("API 配置不存在")
         return self._create_validation_run(
-            kind="model",
-            target_id=model_id,
-            connection_id=str(model["connection_id"]),
-            config_version_id=version_id,
+            target=_ValidationTarget(
+                kind="model",
+                target_id=model_id,
+                connection_id=str(model["connection_id"]),
+                config_version_id=version_id,
+            ),
             actor_id=actor_id,
             config=config,
             items=[
@@ -108,10 +118,12 @@ class ValidationRunService:
             items.append(item)
             by_key[str(model_key)] = item
         return self._create_validation_run(
-            kind="config",
-            target_id=version_id,
-            connection_id=str(config["connection_id"]),
-            config_version_id=version_id,
+            target=_ValidationTarget(
+                kind="config",
+                target_id=version_id,
+                connection_id=str(config["connection_id"]),
+                config_version_id=version_id,
+            ),
             actor_id=actor_id,
             config=config,
             items=items,
@@ -419,14 +431,15 @@ class ValidationRunService:
 
     def _create_validation_run(
         self,
-        kind: str,
-        target_id: str,
-        connection_id: str,
-        config_version_id: str,
+        target: _ValidationTarget,
         actor_id: str,
         config: dict[str, Any],
         items: list[dict[str, Any]],
     ) -> dict[str, Any]:
+        kind = target.kind
+        target_id = target.target_id
+        connection_id = target.connection_id
+        config_version_id = target.config_version_id
         now = utc_now()
         run_id = new_id("validation")
         with self.database.transaction(immediate=True) as connection:

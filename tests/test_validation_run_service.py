@@ -10,7 +10,7 @@ import pytest
 
 from web_backend.database import Database
 from web_backend.model_probe import ModelValidationError
-from web_backend.validation_run_service import ValidationRunService
+from web_backend.validation_run_service import ValidationRunService, _ValidationTarget
 
 ACTOR_ID = "user-1"
 CONNECTION_ID = "connection-1"
@@ -187,10 +187,12 @@ def _create_run(
     ]
     target_id = CONFIG_VERSION_ID if kind == "config" else str(items[0]["model_id"])
     return harness.service._create_validation_run(
-        kind=kind,
-        target_id=target_id,
-        connection_id=CONNECTION_ID,
-        config_version_id=CONFIG_VERSION_ID,
+        target=_ValidationTarget(
+            kind=kind,
+            target_id=target_id,
+            connection_id=CONNECTION_ID,
+            config_version_id=CONFIG_VERSION_ID,
+        ),
         actor_id=ACTOR_ID,
         config=harness.config,
         items=items,
