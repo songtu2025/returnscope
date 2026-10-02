@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from return_semantics import prompt
+from return_semantics.analysis_context import RETURNS_CONTEXT
 from return_semantics.fact_pipeline import (
     EvidenceLabelAdjudication,
     EvidenceLabelAdjudications,
@@ -17,7 +18,12 @@ from return_semantics.model_client import (
     JsonModelCallResult,
     ModelCallResult,
 )
-from return_semantics.pipeline import _call_with_cache, build_cache_key
+from return_semantics.pipeline import (
+    _call_with_cache,
+    _PipelineContext,
+    _RowContext,
+    build_cache_key,
+)
 from return_semantics.schemas import (
     ExtractedFact,
     FactMapping,
@@ -714,17 +720,21 @@ def test_two_calls_map_only_selected_branch_and_cache(fact_taxonomy, tmp_path):
         ]
     )
     kwargs = dict(
-        comment="warm",
+        row=_RowContext("test", "warm", "", "test", [], False, "test"),
+        context=_PipelineContext(
+            taxonomy=fact_taxonomy,
+            claims=ListingClaimsConfig(version="none", claims=[]),
+            client=client,
+            cache=JsonlCache(tmp_path / "cache.jsonl"),
+            force=False,
+            secondary_model=None,
+            should_cancel=None,
+            model_policy_version="test",
+            secondary_is_fallback=False,
+            analysis_context=RETURNS_CONTEXT,
+        ),
         model_name="test",
         thinking=False,
-        messages=[],
-        taxonomy=fact_taxonomy,
-        claims=ListingClaimsConfig(version="none", claims=[]),
-        client=client,
-        cache=JsonlCache(tmp_path / "cache.jsonl"),
-        force=False,
-        classification_scope="test",
-        model_policy_version="test",
     )
     result, cached = _call_with_cache(**kwargs)
     again, cached_again = _call_with_cache(**kwargs)
@@ -790,17 +800,21 @@ def test_system_rerun_cache_entry_is_ignored_and_replaced(fact_taxonomy, tmp_pat
         ]
     )
     kwargs = dict(
-        comment="warm",
+        row=_RowContext("test", "warm", "", "test", [], False, "test"),
+        context=_PipelineContext(
+            taxonomy=fact_taxonomy,
+            claims=claims,
+            client=client,
+            cache=cache,
+            force=False,
+            secondary_model=None,
+            should_cancel=None,
+            model_policy_version="test",
+            secondary_is_fallback=False,
+            analysis_context=RETURNS_CONTEXT,
+        ),
         model_name="test",
         thinking=False,
-        messages=[],
-        taxonomy=fact_taxonomy,
-        claims=claims,
-        client=client,
-        cache=cache,
-        force=False,
-        classification_scope="test",
-        model_policy_version="test",
     )
 
     result, cached = _call_with_cache(**kwargs)

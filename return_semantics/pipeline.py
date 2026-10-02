@@ -191,19 +191,21 @@ def build_cache_key(
 
 
 def _call_with_cache(
-    comment: str,
+    row: _RowContext,
+    context: _PipelineContext,
     model_name: str,
     thinking: bool,
-    messages: list[dict[str, str]],
-    taxonomy: TaxonomyConfig,
-    claims: ListingClaimsConfig,
-    client: ModelClient,
-    cache: JsonlCache,
-    force: bool,
-    classification_scope: str,
-    model_policy_version: str,
-    should_cancel: Callable[[], bool] | None = None,
 ) -> tuple[ModelCallResult, bool]:
+    comment = row.comment
+    messages = row.messages
+    classification_scope = row.classification_scope
+    taxonomy = context.taxonomy
+    claims = context.claims
+    client = context.client
+    cache = context.cache
+    force = context.force
+    model_policy_version = context.model_policy_version
+    should_cancel = context.should_cancel
     if thinking:
         reasoning_effort = getattr(
             client.settings,
@@ -514,18 +516,10 @@ class _CommentClassifier:
         self.tracker.raise_if_service_paused()
         try:
             call_result, cache_hit = _call_with_cache(
-                comment=row.comment,
+                row=row,
+                context=self.context,
                 model_name=model_name,
                 thinking=thinking,
-                messages=row.messages,
-                taxonomy=self.context.taxonomy,
-                claims=self.context.claims,
-                client=self.context.client,
-                cache=self.context.cache,
-                force=self.context.force,
-                classification_scope=row.classification_scope,
-                model_policy_version=self.context.model_policy_version,
-                should_cancel=self.context.should_cancel,
             )
         except PipelineCancelled:
             raise
