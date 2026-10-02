@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Annotated, Any, Callable
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
@@ -53,6 +54,27 @@ def _email(value: str) -> str:
     return email
 
 
+@dataclass(frozen=True)
+class _LoginSecurity:
+    account_limiter: LoginAttemptLimiter
+    address_limiter: LoginAttemptLimiter
+    dummy_password_hash: str
+
+
+@dataclass(frozen=True)
+class _MonitoringDependencies:
+    task_service: TaskService
+    worker: TaskWorker
+    insight_report_worker: InsightReportWorker
+    standard_validation_worker: ClassificationStandardValidationWorker
+    start_worker: bool
+
+
+def _require_account_admin(user: dict[str, Any]) -> None:
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="仅系统管理员可管理团队账号")
+
+
 def create_account_router(
     database: Database,
     settings: Settings,
@@ -68,11 +90,37 @@ def create_account_router(
     current_user: Callable[..., dict[str, Any]],
 ) -> APIRouter:
     router = APIRouter()
-    User = Annotated[dict[str, Any], Depends(current_user)]
+    login_security = _LoginSecurity(
+        account_limiter=account_login_limiter,
+        address_limiter=address_login_limiter,
+        dummy_password_hash=dummy_password_hash,
+    )
+    monitoring = _MonitoringDependencies(
+        task_service=task_service,
+        worker=worker,
+        insight_report_worker=insight_report_worker,
+        standard_validation_worker=standard_validation_worker,
+        start_worker=start_worker,
+    )
+    _register_health_route(router, database, monitoring)
+    _register_login_route(router, database, settings, session_service, login_security)
+    _register_session_routes(router, session_service, current_user)
+    _register_password_route(router, database, settings, current_user)
+    _register_team_routes(router, database, current_user)
+    _register_user_status_route(router, database, current_user)
+    _register_system_status_route(router, database, settings, monitoring, current_user)
+    return router
 
-    def require_admin(user: dict[str, Any]) -> None:
-        if not user.get("is_admin"):
-            raise HTTPException(status_code=403, detail="仅系统管理员可管理团队账号")
+
+def _register_health_route(
+    router: APIRouter,
+    database: Database,
+    monitoring: _MonitoringDependencies,
+) -> None:
+    worker = monitoring.worker
+    insight_report_worker = monitoring.insight_report_worker
+    standard_validation_worker = monitoring.standard_validation_worker
+    start_worker = monitoring.start_worker
 
     @router.get("/api/health")
     def health() -> dict[str, Any]:
@@ -104,6 +152,18 @@ def create_account_router(
         if worker_status == "unavailable":
             raise HTTPException(status_code=503, detail=payload)
         return payload
+
+
+def _register_login_route(
+    router: APIRouter,
+    database: Database,
+    settings: Settings,
+    session_service: SessionService,
+    security: _LoginSecurity,
+) -> None:
+    account_login_limiter = security.account_limiter
+    address_login_limiter = security.address_limiter
+    dummy_password_hash = security.dummy_password_hash
 
     @router.post("/api/auth/login")
     def login(
@@ -164,6 +224,14 @@ def create_account_router(
             "is_admin": bool(row["is_admin"]),
         }
 
+
+def _register_session_routes(
+    router: APIRouter,
+    session_service: SessionService,
+    current_user: Callable[..., dict[str, Any]],
+) -> None:
+    User = Annotated[dict[str, Any], Depends(current_user)]
+
     @router.post("/api/auth/logout", status_code=204)
     def logout(
         response: Response,
@@ -177,6 +245,15 @@ def create_account_router(
     @router.get("/api/auth/me")
     def me(user: User) -> dict[str, Any]:
         return user
+
+
+def _register_password_route(
+    router: APIRouter,
+    database: Database,
+    settings: Settings,
+    current_user: Callable[..., dict[str, Any]],
+) -> None:
+    User = Annotated[dict[str, Any], Depends(current_user)]
 
     @router.post("/api/auth/password", status_code=204)
     def change_password(
@@ -223,9 +300,17 @@ def create_account_router(
         response.status_code = 204
         return response
 
+
+def _register_team_routes(
+    router: APIRouter,
+    database: Database,
+    current_user: Callable[..., dict[str, Any]],
+) -> None:
+    User = Annotated[dict[str, Any], Depends(current_user)]
+
     @router.get("/api/users")
     def users(user: User) -> list[dict[str, Any]]:
-        require_admin(user)
+        _require_account_admin(user)
         with database.connect() as connection:
             rows = connection.execute(
                 """
@@ -242,7 +327,7 @@ def create_account_router(
 
     @router.post("/api/users", status_code=201)
     def create_user(payload: UserCreateRequest, actor: User) -> dict[str, Any]:
-        require_admin(actor)
+        _require_account_admin(actor)
         try:
             email = _email(payload.email)
             password_hash = hash_password(payload.password)
@@ -287,13 +372,21 @@ def create_account_router(
             "created_by": actor["id"],
         }
 
+
+def _register_user_status_route(
+    router: APIRouter,
+    database: Database,
+    current_user: Callable[..., dict[str, Any]],
+) -> None:
+    User = Annotated[dict[str, Any], Depends(current_user)]
+
     @router.patch("/api/users/{user_id}")
     def update_user_status(
         user_id: str,
         payload: UserStatusRequest,
         actor: User,
     ) -> dict[str, Any]:
-        require_admin(actor)
+        _require_account_admin(actor)
         if user_id == actor["id"] and not payload.active:
             raise HTTPException(status_code=400, detail="不能停用自己的账号")
         clean_note = payload.note.strip()
@@ -340,6 +433,19 @@ def create_account_router(
             **dict(target),
             "active": int(payload.active),
         }
+
+
+def _register_system_status_route(
+    router: APIRouter,
+    database: Database,
+    settings: Settings,
+    monitoring: _MonitoringDependencies,
+    current_user: Callable[..., dict[str, Any]],
+) -> None:
+    User = Annotated[dict[str, Any], Depends(current_user)]
+    task_service = monitoring.task_service
+    worker = monitoring.worker
+    start_worker = monitoring.start_worker
 
     @router.get("/api/system/status")
     def system_status(user: User) -> dict[str, Any]:
@@ -388,5 +494,3 @@ def create_account_router(
             ),
             "warnings": warnings,
         }
-
-    return router
