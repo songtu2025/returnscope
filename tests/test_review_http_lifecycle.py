@@ -164,7 +164,17 @@ def _published_snapshot(client: TestClient, ids: dict[str, str]) -> dict[str, An
     return {key: _request(client, "GET", path) for key, path in paths.items()}
 
 
-@pytest.mark.parametrize("operation", ["remove", "no_tag_needed", "add", "unknown"])
+@pytest.mark.parametrize(
+    "operation",
+    [
+        "remove",
+        "no_tag_needed",
+        "add",
+        "unknown",
+        "diagnostic_change",
+        "diagnostic_no_tag",
+    ],
+)
 def test_item_operations_survive_http_publication_and_app_restart(
     http_lifecycle: SimpleNamespace, operation: str
 ) -> None:
@@ -204,7 +214,7 @@ def _assert_published_scope(
         {"FIT_TOO_SMALL_U1", "FIT_TOO_LARGE_U1"}
         if operation == "add"
         else {"FIT_TOO_LARGE_U1"}
-        if operation == "unknown"
+        if operation in {"unknown", "diagnostic_change"}
         else set()
     )
     classification = snapshot["records"]["items"][0]["classification"]

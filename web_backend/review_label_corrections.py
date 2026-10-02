@@ -47,6 +47,7 @@ class _ReviewProjection:
     ) -> None:
         self.result = deepcopy(classification)
         self.taxonomy = taxonomy
+        self.comment = comment
         self.labels = {label.code: label for label in taxonomy.labels}
         view = build_semantic_review_view(classification, comment, taxonomy)
         self.items = {
@@ -223,7 +224,17 @@ class _ReviewProjection:
             item = self.items.get(item_id)
             if item is not None:
                 fact = facts.get(item.get("fact_id"), {})
-                self._decide({**fact, **item}, item_id, "unknown_semantics")
+                original = {**fact, **item}
+                if (
+                    original.get("evidence_source") == "SYSTEM"
+                    and self.reviews[item_id]["action"] != "remove"
+                ):
+                    evidence = str(original.get("evidence_text") or "")
+                    if not evidence or evidence not in self.comment:
+                        raise ValueError("诊断项缺少可核对的原文证据，请从原文补录观点")
+                    # 系统诊断描述检查结果；人工结论使用核对过的评论原文。
+                    original.update(evidence_source="COMMENT", opinion=evidence)
+                self._decide(original, item_id, "unknown_semantics")
 
     def _project_added(self) -> None:
         for index, added in enumerate(

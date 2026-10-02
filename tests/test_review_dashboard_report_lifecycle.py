@@ -357,7 +357,7 @@ def _projection_context(lifecycle):
 def _prepare_item_operation(lifecycle, operation):
     record, classification, taxonomy = _projection_context(lifecycle)
     details = {}
-    if operation == "unknown":
+    if operation in {"unknown", "diagnostic_change", "diagnostic_no_tag"}:
         unit = classification["semantic_units"][0]
         classification.update(
             semantic_units=[],
@@ -372,6 +372,18 @@ def _prepare_item_operation(lifecycle, operation):
                 }
             ],
         )
+        if operation.startswith("diagnostic"):
+            classification.update(
+                unknown_semantics=[],
+                review_reasons=[],
+                review_diagnostics=[
+                    {
+                        "code": "LABEL_RULE_REVIEW_REQUIRED",
+                        "evidence_text": unit["evidence"],
+                        "detail": "合成标签规则要求人工判断",
+                    }
+                ],
+            )
         with lifecycle.database.transaction() as connection:
             for table, predicate, identity in [
                 ("review_records", "id = ?", record["id"]),
@@ -390,7 +402,11 @@ def _prepare_item_operation(lifecycle, operation):
                 "semantic_item_id": build_semantic_review_view(
                     classification, record["comment"]
                 )["semantic_items"][0]["item_id"],
-                "action": "change_label",
+                "action": (
+                    "no_tag_needed"
+                    if operation == "diagnostic_no_tag"
+                    else "change_label"
+                ),
                 "label_code": "FIT_TOO_LARGE_U1",
             }
         ]
@@ -415,7 +431,17 @@ def _prepare_item_operation(lifecycle, operation):
     return record, details, taxonomy
 
 
-@pytest.mark.parametrize("operation", ["remove", "no_tag_needed", "add", "unknown"])
+@pytest.mark.parametrize(
+    "operation",
+    [
+        "remove",
+        "no_tag_needed",
+        "add",
+        "unknown",
+        "diagnostic_change",
+        "diagnostic_no_tag",
+    ],
+)
 def test_item_operations_reach_published_results_dashboard_and_report(
     lifecycle, operation
 ):
@@ -446,7 +472,7 @@ def test_item_operations_reach_published_results_dashboard_and_report(
         {"FIT_TOO_SMALL_U1", "FIT_TOO_LARGE_U1"}
         if operation == "add"
         else {"FIT_TOO_LARGE_U1"}
-        if operation == "unknown"
+        if operation in {"unknown", "diagnostic_change"}
         else set()
     )
     assert published["comment_summary"]["status"] == (
@@ -463,8 +489,14 @@ def test_item_operations_reach_published_results_dashboard_and_report(
         ]
         == []
     )
-    if operation == "no_tag_needed":
+    if operation in {"no_tag_needed", "diagnostic_no_tag"}:
         assert published["unknown_semantics"][0]["disposition"] == "EXPECTED_ABSTENTION"
+    if operation.startswith("diagnostic"):
+        projected = (
+            published["semantic_units"] if codes else published["unknown_semantics"]
+        )[0]
+        assert projected["evidence_source"] == "COMMENT"
+        assert projected["opinion"] == record["comment"]
     assert derived["changed_unit_count"] == 1
     with pytest.raises(ReviewBatchConflict, match="发布"):
         lifecycle.reviews.publish_batch(
@@ -484,6 +516,30 @@ def test_item_operations_reach_published_results_dashboard_and_report(
         if key.startswith("reason.")
     }
     assert reason_ids == codes
+
+
+@pytest.mark.parametrize("action", ["change_label", "no_tag_needed"])
+@pytest.mark.parametrize("evidence", ["", "原文中不存在的合成诊断证据"])
+def test_diagnostic_projection_requires_original_comment_evidence(
+    lifecycle, action, evidence
+):
+    _prepare_item_operation(lifecycle, "diagnostic_change")
+    record, classification, taxonomy = _projection_context(lifecycle)
+    classification["review_diagnostics"][0]["evidence_text"] = evidence
+    item = build_semantic_review_view(classification, record["comment"])[
+        "semantic_items"
+    ][0]
+    classification["human_semantic_reviews"] = [
+        {
+            "semantic_item_id": item["item_id"],
+            "action": action,
+            "label_code": "FIT_TOO_LARGE_U1",
+        }
+    ]
+    before = deepcopy(classification)
+    with pytest.raises(ValueError, match="原文证据"):
+        apply_semantic_review_changes(classification, taxonomy, record["comment"])
+    assert classification == before
 
 
 @pytest.mark.parametrize("action", ["remove", "no_tag_needed"])
