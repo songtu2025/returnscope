@@ -12,7 +12,7 @@ from test_result_version_reviews import _publish_review_required
 from return_semantics.semantic_review import build_semantic_review_view
 from web_backend.classification_result_service import ClassificationResultService
 from web_backend.dashboard_service import DashboardConflict
-from web_backend.review_label_corrections import apply_semantic_label_corrections
+from web_backend.review_label_corrections import apply_semantic_review_changes
 from web_backend.review_service import (
     ReviewBatchConflict,
     ReviewService,
@@ -218,9 +218,17 @@ def test_item_label_correction_preserves_other_facts_and_audit(lifecycle, fact_i
         }
     ]
     before = deepcopy(classification)
-    corrected = apply_semantic_label_corrections(classification)
+    taxonomy = lifecycle.reviews.standard_service.taxonomy_config_for_result_version(
+        lifecycle.base["version_id"]
+    )
+    corrected = apply_semantic_review_changes(classification, taxonomy)
     assert classification == before
-    assert corrected["human_semantic_reviews"] == before["human_semantic_reviews"]
+    assert (
+        corrected["human_semantic_reviews"][0].items()
+        >= before["human_semantic_reviews"][0].items()
+    )
+    assert corrected["human_semantic_reviews"][0]["applied"] is True
+    assert apply_semantic_review_changes(corrected, taxonomy) == corrected
     assert corrected["semantic_units"][0]["label_code"] == "FIT_TOO_LARGE_U1"
     assert corrected["semantic_units"][-1] == before["semantic_units"][-1]
     assert set(corrected["problem_label_codes"]) == {
@@ -331,3 +339,317 @@ def test_failed_report_retry_uses_original_scope_after_review_publication(
             (failed["id"],),
         ).fetchone()
     assert json.loads(audit["after_json"]) == {"new_job_id": retried["id"]}
+
+
+def _projection_context(lifecycle):
+    record = lifecycle.reviews.batch_records(lifecycle.batch["id"])["items"][0]
+    with lifecycle.database.connect() as connection:
+        row = connection.execute(
+            "SELECT classification_json FROM review_records WHERE id = ?",
+            (record["id"],),
+        ).fetchone()
+    taxonomy = lifecycle.reviews.standard_service.taxonomy_config_for_result_version(
+        lifecycle.base["version_id"]
+    )
+    return record, json.loads(row[0]), taxonomy
+
+
+@pytest.mark.parametrize("operation", ["remove", "no_tag_needed", "add", "unknown"])
+def test_item_operations_reach_published_results_dashboard_and_report(
+    lifecycle, operation
+):
+    record, classification, taxonomy = _projection_context(lifecycle)
+    details = {}
+    if operation == "unknown":
+        unit = classification["semantic_units"][0]
+        classification.update(
+            semantic_units=[],
+            primary_label_codes=[],
+            problem_label_codes=[],
+            unknown_semantics=[
+                {
+                    "opinion": unit["opinion"],
+                    "evidence": unit["evidence"],
+                    "reason": "合成未知项",
+                    "disposition": "TAXONOMY_GAP",
+                }
+            ],
+        )
+        with lifecycle.database.transaction() as connection:
+            for table, predicate, identity in [
+                ("review_records", "id = ?", record["id"]),
+                (
+                    "classification_units",
+                    "result_version_id = ?",
+                    lifecycle.base["version_id"],
+                ),
+            ]:
+                connection.execute(
+                    f"UPDATE {table} SET classification_json = ? WHERE {predicate}",
+                    (json.dumps(classification), identity),
+                )
+        details["semantic_item_reviews"] = [
+            {
+                "semantic_item_id": build_semantic_review_view(
+                    classification, record["comment"]
+                )["semantic_items"][0]["item_id"],
+                "action": "change_label",
+                "label_code": "FIT_TOO_LARGE_U1",
+            }
+        ]
+    elif operation == "add":
+        details["added_semantic_items"] = [
+            {
+                "item_id": "manual-1",
+                "evidence_text": record["comment"],
+                "opinion": "合成补录观点",
+                "label_code": "FIT_TOO_LARGE_U1",
+            }
+        ]
+    else:
+        details["semantic_item_reviews"] = [
+            {
+                "semantic_item_id": record["classification"]["semantic_review"][
+                    "semantic_items"
+                ][0]["item_id"],
+                "action": operation,
+            }
+        ]
+    base_id = lifecycle.base["version_id"]
+    before = lifecycle.results.records(base_id)
+    lifecycle.reviews.update_batch_record(
+        lifecycle.batch["id"],
+        record["id"],
+        record["revision"],
+        "user-1",
+        None,
+        "合成逐项处置",
+        action="confirm",
+        **details,
+    )
+    derived = lifecycle.reviews.publish_batch(
+        lifecycle.batch["id"],
+        lifecycle.reviews.get_batch(lifecycle.batch["id"])["revision"],
+        "user-1",
+        "发布合成处置",
+    )
+    published = lifecycle.results.records(derived["version_id"])["items"][0][
+        "classification"
+    ]
+    codes = {unit["label_code"] for unit in published["semantic_units"]}
+    assert codes == (
+        {"FIT_TOO_SMALL_U1", "FIT_TOO_LARGE_U1"}
+        if operation == "add"
+        else {"FIT_TOO_LARGE_U1"}
+        if operation == "unknown"
+        else set()
+    )
+    assert published["comment_summary"]["status"] == (
+        "NEGATIVE" if codes else "NO_CONFIRMED"
+    )
+    assert lifecycle.results.records(base_id) == before
+    assert (
+        apply_semantic_review_changes(published, taxonomy, record["comment"])
+        == published
+    )
+    assert (
+        build_semantic_review_view(published, record["comment"])[
+            "unexplained_fragments"
+        ]
+        == []
+    )
+    if operation == "no_tag_needed":
+        assert published["unknown_semantics"][0]["disposition"] == "EXPECTED_ABSTENTION"
+    assert derived["changed_unit_count"] == 1
+    with pytest.raises(ReviewBatchConflict, match="发布"):
+        lifecycle.reviews.publish_batch(
+            lifecycle.batch["id"],
+            lifecycle.reviews.get_batch(lifecycle.batch["id"])["revision"],
+            "user-1",
+            "重复发布",
+        )
+    current = _advance_dashboard(lifecycle, derived)
+    assert current["version"]["summary"]["record_count"] == 2
+    assert current["version"]["summary"]["review_changed_unit_count"] == 1
+    report = _complete_report(current, lifecycle.reports)
+    _assert_report_source(report, current, derived["version_id"])
+    reason_ids = {
+        key.removeprefix("reason.")
+        for key in report["evidence"]["catalog"]
+        if key.startswith("reason.")
+    }
+    assert reason_ids == codes
+
+
+@pytest.mark.parametrize("action", ["remove", "no_tag_needed"])
+def test_partial_merged_fact_disposal_preserves_other_fact(lifecycle, action):
+    record, classification, taxonomy = _projection_context(lifecycle)
+    from return_semantics.schemas import ExtractedFact
+
+    unit = classification["semantic_units"][0]
+    unit.update(fact_id="F1", fact_ids=["F1", "F2"])
+    classification["extracted_facts"] = [
+        ExtractedFact.model_validate(
+            {
+                **{
+                    key: value
+                    for key, value in unit.items()
+                    if key in ExtractedFact.model_fields
+                },
+                "fact_id": fact_id,
+                "evidence_spans": [{"text": unit["evidence"], "source": "COMMENT"}],
+            }
+        ).model_dump(mode="json")
+        for fact_id in ("F1", "F2")
+    ]
+    classification["fact_mappings"] = [
+        {"fact_id": fact_id, "label_codes": [unit["label_code"]]}
+        for fact_id in ("F1", "F2")
+    ]
+    classification["human_semantic_reviews"] = [
+        {"semantic_item_id": "fact:F1", "action": action}
+    ]
+    projected = apply_semantic_review_changes(
+        classification, taxonomy, record["comment"]
+    )
+    assert projected["semantic_units"][0]["fact_ids"] == ["F2"]
+    assert projected["problem_label_codes"] == [unit["label_code"]]
+    assert {fact["fact_id"] for fact in projected["extracted_facts"]} == (
+        {"F2"} if action == "remove" else {"F1", "F2"}
+    )
+    assert projected["fact_mappings"][-1] == classification["fact_mappings"][-1]
+    if action == "no_tag_needed":
+        assert projected["fact_mappings"][0]["disposition"] == "EXPECTED_ABSTENTION"
+        assert projected["unknown_semantics"][0]["fact_id"] == "F1"
+
+
+def test_mixed_disposal_and_positive_addition_recalculate_summary(lifecycle):
+    record, classification, taxonomy = _projection_context(lifecycle)
+    positive = next(
+        label for label in taxonomy.labels if "POSITIVE" in label.allowed_sentiments
+    )
+    item_id = build_semantic_review_view(classification, record["comment"])[
+        "semantic_items"
+    ][0]["item_id"]
+    classification["human_semantic_reviews"] = [
+        {"semantic_item_id": item_id, "action": "remove"}
+    ]
+    classification["human_added_semantic_items"] = [
+        {
+            "evidence_text": record["comment"],
+            "opinion": "合成正面补录",
+            "label_code": positive.code,
+            "sentiment": "POSITIVE",
+        }
+    ]
+    projected = apply_semantic_review_changes(
+        classification, taxonomy, record["comment"]
+    )
+    assert projected["problem_label_codes"] == []
+    assert projected["positive_label_codes"] == [positive.code]
+    assert projected["comment_summary"]["status"] == "POSITIVE"
+    assert (
+        len(build_semantic_review_view(projected, record["comment"])["semantic_items"])
+        == 1
+    )
+    projected["human_added_semantic_items"] = [
+        {
+            "item_id": "manual-1",
+            "evidence_text": record["comment"],
+            "opinion": "下一次合成补录",
+            "label_code": "FIT_TOO_LARGE_U1",
+        }
+    ]
+    next_result = apply_semantic_review_changes(projected, taxonomy, record["comment"])
+    assert len(next_result["semantic_units"]) == 2
+    assert next_result["comment_summary"]["status"] == "MIXED"
+    assert len({unit["fact_id"] for unit in next_result["semantic_units"]}) == 2
+
+
+def test_ambiguous_addition_requires_valid_direction_without_partial_write(lifecycle):
+    record, _classification, taxonomy = _projection_context(lifecycle)
+    label = next(
+        label for label in taxonomy.labels if len(label.allowed_sentiments) > 1
+    )
+    added = {
+        "evidence_text": record["comment"],
+        "opinion": "合成待定方向",
+        "label_code": label.code,
+    }
+    with pytest.raises(ValueError, match="选择评价方向"):
+        lifecycle.reviews.update_batch_record(
+            lifecycle.batch["id"],
+            record["id"],
+            record["revision"],
+            "user-1",
+            None,
+            "缺少方向",
+            action="confirm",
+            added_semantic_items=[added],
+        )
+    assert lifecycle.reviews.get(record["id"])["revision"] == record["revision"]
+    with lifecycle.database.connect() as connection:
+        assert (
+            connection.execute("SELECT COUNT(*) FROM review_revisions").fetchone()[0]
+            == 0
+        )
+    updated = lifecycle.reviews.update_batch_record(
+        lifecycle.batch["id"],
+        record["id"],
+        record["revision"],
+        "user-1",
+        None,
+        "明确评价方向",
+        action="confirm",
+        added_semantic_items=[{**added, "sentiment": str(label.allowed_sentiments[0])}],
+    )
+    assert updated["revision"] == record["revision"] + 1
+
+
+def test_same_label_review_does_not_split_merged_unit(lifecycle):
+    record, classification, taxonomy = _projection_context(lifecycle)
+    classification["semantic_units"][0].update(fact_id="F1", fact_ids=["F1", "F2"])
+    classification["human_semantic_reviews"] = [
+        {
+            "semantic_item_id": "fact:F1",
+            "action": "change_label",
+            "label_code": classification["semantic_units"][0]["label_code"],
+        }
+    ]
+    projected = apply_semantic_review_changes(
+        classification, taxonomy, record["comment"]
+    )
+    assert projected["semantic_units"] == classification["semantic_units"]
+
+
+def test_whole_label_change_and_addition_both_survive_publication(lifecycle):
+    record, _classification, _taxonomy = _projection_context(lifecycle)
+    lifecycle.reviews.update_batch_record(
+        lifecycle.batch["id"],
+        record["id"],
+        record["revision"],
+        "user-1",
+        "FIT_TOO_LARGE_U1",
+        "合成整条更正并补录",
+        action="modify",
+        added_semantic_items=[
+            {
+                "evidence_text": record["comment"],
+                "opinion": "另一个合成观点",
+                "label_code": "FIT_TOO_SMALL_U1",
+            }
+        ],
+    )
+    derived = lifecycle.reviews.publish_batch(
+        lifecycle.batch["id"],
+        lifecycle.reviews.get_batch(lifecycle.batch["id"])["revision"],
+        "user-1",
+        "发布合成混合操作",
+    )
+    units = lifecycle.results.records(derived["version_id"])["items"][0][
+        "classification"
+    ]["semantic_units"]
+    assert [unit["label_code"] for unit in units] == [
+        "FIT_TOO_LARGE_U1",
+        "FIT_TOO_SMALL_U1",
+    ]

@@ -457,6 +457,8 @@ def _fact_review_items(
                 taxonomy=taxonomy,
             )
         )
+        if _get(fact, "sentiment"):
+            items[-1]["sentiment"] = _enum_value(_get(fact, "sentiment"))
     return items, handled_units, handled_unknowns
 
 
@@ -487,6 +489,8 @@ def _unhandled_unit_items(
                 taxonomy=taxonomy,
             )
         )
+        if _get(unit, "sentiment"):
+            items[-1]["sentiment"] = _enum_value(_get(unit, "sentiment"))
     return items
 
 
@@ -617,6 +621,12 @@ def build_semantic_review_view(
     )
     items.extend(_analysis_failure_items(result, status, taxonomy))
     coverage_evidence = _coverage_evidence(items)
+    # 已删除的错误提取仅保留审计证据，不重新作为漏抽片段出现。
+    coverage_evidence.extend(
+        _text(_get(review, "evidence_text"))
+        for review in _list(result, "human_semantic_reviews")
+        if _get(review, "applied") and _get(review, "action") == "remove"
+    )
     unexplained = (
         [] if facts else _unexplained_fragments(source_text, coverage_evidence)
     )

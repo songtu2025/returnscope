@@ -99,6 +99,7 @@ function normalizeItem(item, index, fallbackDisposition = "") {
     businessReviewRequired:
       item.business_review_required ?? item.businessReviewRequired,
     manual: Boolean(item.manual),
+    sentiment: item.sentiment || "",
   };
 }
 
@@ -248,20 +249,24 @@ export function semanticReviewLedger(record) {
 
   const reviews = new Map(
     (classification.human_semantic_reviews ?? []).map((review) => [
-      review.semantic_item_id,
+      review.applied ? review.result_item_id : review.semantic_item_id,
       review,
     ]),
   );
   const reviewedItems = items.map((item) => ({
     ...item,
     review: reviews.get(item.id) ?? null,
+    manual: (classification.human_added_semantic_items ?? []).some(
+      (added) => added.applied && added.result_item_id === item.id,
+    ),
+    applied: true,
   }));
-  const added = (classification.human_added_semantic_items ?? []).map(
-    (item, index) => ({
+  const added = (classification.human_added_semantic_items ?? [])
+    .filter((item) => !item.applied)
+    .map((item, index) => ({
       ...normalizeItem({ ...item, manual: true }, items.length + index, "MAPPED"),
       review: null,
-    }),
-  );
+    }));
   const sorted = [...reviewedItems, ...added].sort(
     (left, right) => priority(left) - priority(right),
   );

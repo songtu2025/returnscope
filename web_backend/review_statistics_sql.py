@@ -21,8 +21,12 @@ COALESCE((
               SELECT 1 FROM classification_units published_unit
               WHERE published_unit.result_version_id = v.id
                 AND published_unit.classification_key = review.classification_key
-                AND json_extract(published_unit.classification_json, '$.semantic_units')
-                  IS NOT json_extract(revision.before_json, '$.semantic_units')
+                AND (
+                    json_extract(published_unit.classification_json, '$.semantic_units')
+                      IS NOT json_extract(revision.before_json, '$.semantic_units')
+                    OR json_extract(published_unit.classification_json, '$.unknown_semantics')
+                      IS NOT json_extract(revision.before_json, '$.unknown_semantics')
+                )
           )
       )
 ), 0)

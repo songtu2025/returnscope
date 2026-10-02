@@ -36,6 +36,41 @@ const ACTION_LABELS = {
 };
 
 /** @type {Record<string, string>} */
+const SENTIMENT_LABELS = { POSITIVE: "正向", NEGATIVE: "负向", NEUTRAL: "中性" };
+
+/** @param {string} code @param {ReviewLabel[]} labels @param {string} [selected] */
+function selectedSentiment(code, labels, selected = "") {
+  const allowed = labels.find((label) => label.code === code)?.allowed_sentiments ?? [];
+  return selected || (allowed.length === 1 ? allowed[0] : "");
+}
+
+/** @param {{code: string, labels: ReviewLabel[], value: string, onChange: (value: string) => void, name: string, known?: string}} props */
+function SentimentField({ code, labels, value, onChange, name, known }) {
+  if (!code) return null;
+  const allowed = labels.find((label) => label.code === code)?.allowed_sentiments ?? [];
+  const selected = selectedSentiment(code, labels, known || value);
+  return (
+    <label>
+      评价方向
+      {known || allowed.length === 1 ? (
+        <span>{SENTIMENT_LABELS[selected]}（沿用原结果或标签规则）</span>
+      ) : (
+        <Select
+          aria-label={name}
+          value={selected || undefined}
+          onChange={onChange}
+          placeholder="请选择评价方向"
+          options={allowed.map((sentiment) => ({
+            value: sentiment,
+            label: SENTIMENT_LABELS[sentiment],
+          }))}
+        />
+      )}
+    </label>
+  );
+}
+
+/** @type {Record<string, string>} */
 const DIAGNOSTIC_DOMAIN_LABELS = {
   SEMANTIC_ANALYSIS_QUALITY: "语义分析差异",
   TECHNICAL_CONFIGURATION: "配置异常",
@@ -78,6 +113,7 @@ function manualItem(item, index) {
     diagnosticAction: "",
     businessReviewRequired: true,
     manual: true,
+    sentiment: item.sentiment || "",
   };
 }
 
@@ -151,6 +187,7 @@ function ReviewLedgerItem({ item, labels, editable, review, onReview, onReset })
     action: /** @type {SemanticReviewAction} */ (review?.action || "change_label"),
     label_code: review?.label_code || item.labelCode || "",
     note: review?.note || "",
+    sentiment: review?.sentiment || "",
   }));
   const effective = effectiveReviewItem(item, review);
   const removed = item.businessReviewRequired !== false && review?.action === "remove";
@@ -165,6 +202,11 @@ function ReviewLedgerItem({ item, labels, editable, review, onReview, onReset })
       action: draft.action,
       label_code: draft.action === "change_label" ? draft.label_code : null,
       note: draft.note.trim() || null,
+      ...(draft.action === "change_label" && !item.sentiment
+        ? {
+            sentiment: selectedSentiment(draft.label_code, labels, draft.sentiment),
+          }
+        : {}),
     });
     setEditing(false);
   };
@@ -206,6 +248,7 @@ function ReviewLedgerItem({ item, labels, editable, review, onReview, onReset })
                   action: review?.action || "change_label",
                   label_code: review?.label_code || item.labelCode || "",
                   note: review?.note || "",
+                  sentiment: review?.sentiment || "",
                 });
                 setEditing((current) => !current);
               }}
@@ -245,7 +288,9 @@ function ReviewLedgerItem({ item, labels, editable, review, onReview, onReset })
                 showSearch
                 optionFilterProp="label"
                 value={draft.label_code}
-                onChange={(label_code) => setDraft({ ...draft, label_code })}
+                onChange={(label_code) =>
+                  setDraft({ ...draft, label_code, sentiment: "" })
+                }
                 options={[
                   { value: "", label: "请选择分类标签" },
                   ...labels.map((label) => ({
@@ -255,6 +300,16 @@ function ReviewLedgerItem({ item, labels, editable, review, onReview, onReset })
                 ]}
               />
             </label>
+          )}
+          {draft.action === "change_label" && (
+            <SentimentField
+              code={draft.label_code}
+              labels={labels}
+              value={draft.sentiment}
+              known={item.sentiment}
+              name={`观点评价方向：${item.opinion}`}
+              onChange={(sentiment) => setDraft({ ...draft, sentiment })}
+            />
           )}
           <label>
             本项说明（可选）
@@ -267,7 +322,15 @@ function ReviewLedgerItem({ item, labels, editable, review, onReview, onReset })
             <Button onClick={() => setEditing(false)}>取消</Button>
             <Button
               type="primary"
-              disabled={draft.action === "change_label" && !draft.label_code}
+              disabled={
+                draft.action === "change_label" &&
+                (!draft.label_code ||
+                  !selectedSentiment(
+                    draft.label_code,
+                    labels,
+                    item.sentiment || draft.sentiment,
+                  ))
+              }
               onClick={saveDraft}
             >
               保存本项调整
@@ -297,10 +360,14 @@ export function SemanticReviewLedger({
     evidence_text: "",
     opinion: "",
     label_code: "",
+    sentiment: "",
   });
   const reviews = itemReviews ?? [];
   const manualItems = (addedItems ?? []).map(manualItem);
-  const items = [...ledger.items.filter((item) => !item.manual), ...manualItems];
+  const items = [
+    ...ledger.items.filter((item) => !item.manual || item.applied),
+    ...manualItems,
+  ];
   const systemItems = items.filter((item) =>
     ["ANALYSIS_FAILURE", "MODEL_ERROR"].includes(item.disposition),
   );
@@ -340,9 +407,10 @@ export function SemanticReviewLedger({
       opinion: draft.opinion.trim(),
       label_code: draft.label_code,
       note: "人工补充的遗漏观点",
+      sentiment: selectedSentiment(draft.label_code, labels, draft.sentiment),
     };
     onAddedItems([...addedItems, next]);
-    setDraft({ evidence_text: "", opinion: "", label_code: "" });
+    setDraft({ evidence_text: "", opinion: "", label_code: "", sentiment: "" });
     setAdding(false);
   };
 
@@ -359,7 +427,7 @@ export function SemanticReviewLedger({
           !["ANALYSIS_FAILURE", "MODEL_ERROR"].includes(item.disposition) &&
           item.businessReviewRequired !== false
         }
-        review={review}
+        review={review ?? (!editable ? (item.review ?? undefined) : undefined)}
         onReview={(next) => onItemReviews(upsert(reviews, next))}
         onReset={() =>
           onItemReviews(
@@ -479,7 +547,9 @@ export function SemanticReviewLedger({
               showSearch
               optionFilterProp="label"
               value={draft.label_code}
-              onChange={(label_code) => setDraft({ ...draft, label_code })}
+              onChange={(label_code) =>
+                setDraft({ ...draft, label_code, sentiment: "" })
+              }
               options={[
                 { value: "", label: "请选择分类标签" },
                 ...labels.map((label) => ({
@@ -489,6 +559,13 @@ export function SemanticReviewLedger({
               ]}
             />
           </label>
+          <SentimentField
+            code={draft.label_code}
+            labels={labels}
+            value={draft.sentiment}
+            name="补充观点的评价方向"
+            onChange={(sentiment) => setDraft({ ...draft, sentiment })}
+          />
           <div>
             <Button onClick={() => setAdding(false)}>取消</Button>
             <Button
@@ -496,7 +573,8 @@ export function SemanticReviewLedger({
               disabled={
                 !draft.evidence_text.trim() ||
                 !draft.opinion.trim() ||
-                !draft.label_code
+                !draft.label_code ||
+                !selectedSentiment(draft.label_code, labels, draft.sentiment)
               }
               onClick={addItem}
             >

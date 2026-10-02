@@ -20,6 +20,7 @@ class SemanticItemReviewRequest(BaseModel):
     action: Literal["change_label", "remove", "no_tag_needed"]
     label_code: str | None = Field(default=None, max_length=100)
     note: str | None = Field(default=None, max_length=500)
+    sentiment: Literal["POSITIVE", "NEGATIVE", "NEUTRAL"] | None = None
 
     @model_validator(mode="after")
     def require_changed_label(self) -> "SemanticItemReviewRequest":
@@ -36,6 +37,7 @@ class AddedSemanticItemRequest(BaseModel):
     opinion: str = Field(min_length=1, max_length=2000)
     label_code: str = Field(min_length=1, max_length=100)
     note: str | None = Field(default=None, max_length=500)
+    sentiment: Literal["POSITIVE", "NEGATIVE", "NEUTRAL"] | None = None
 
 
 class ReviewBatchRecordUpdateRequest(BaseModel):

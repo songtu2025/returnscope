@@ -41,23 +41,29 @@ function itemId(item) {
 
 /** @param {ClassificationData | undefined} classification @returns {SemanticItemReview[]} */
 function semanticItemReviewDrafts(classification) {
-  return (classification?.human_semantic_reviews ?? []).map((item) => ({
-    semantic_item_id: item.semantic_item_id,
-    action: item.action,
-    label_code: item.label_code ?? null,
-    note: item.note ?? null,
-  }));
+  return (classification?.human_semantic_reviews ?? [])
+    .filter((item) => !item.applied)
+    .map((item) => ({
+      semantic_item_id: item.semantic_item_id,
+      action: item.action,
+      label_code: item.label_code ?? null,
+      note: item.note ?? null,
+      ...(item.sentiment ? { sentiment: item.sentiment } : {}),
+    }));
 }
 
 /** @param {ClassificationData | undefined} classification @returns {AddedSemanticItem[]} */
 function addedSemanticItemDrafts(classification) {
-  return (classification?.human_added_semantic_items ?? []).map((item) => ({
-    item_id: item.item_id,
-    evidence_text: item.evidence_text,
-    opinion: item.opinion,
-    label_code: item.label_code,
-    note: item.note ?? null,
-  }));
+  return (classification?.human_added_semantic_items ?? [])
+    .filter((item) => !item.applied)
+    .map((item) => ({
+      item_id: item.item_id,
+      evidence_text: item.evidence_text,
+      opinion: item.opinion,
+      label_code: item.label_code,
+      note: item.note ?? null,
+      ...(item.sentiment ? { sentiment: item.sentiment } : {}),
+    }));
 }
 
 /** @param {unknown} error @returns {ReviewRequestError} */

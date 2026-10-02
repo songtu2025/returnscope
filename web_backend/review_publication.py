@@ -4,7 +4,7 @@ from builtins import list as builtin_list
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from return_semantics.schemas import ValidatedClassification
+from return_semantics.schemas import TaxonomyConfig, ValidatedClassification
 from web_backend.classification_result_service import ClassificationResultService
 from web_backend.classification_standard_service import ClassificationStandardService
 from web_backend.common import json_text, json_value, new_id
@@ -16,7 +16,7 @@ from web_backend.review_contracts import (
     _CompletedReviewChanges,
     _DerivedResultContent,
 )
-from web_backend.review_label_corrections import apply_semantic_label_corrections
+from web_backend.review_label_corrections import apply_semantic_review_changes
 from web_backend.security import utc_now
 
 HUMAN_REVIEW_CLASSIFICATION_FIELDS = (
@@ -65,6 +65,7 @@ class ReviewPublicationMixin:
                 changes = self._load_completed_review_changes(
                     connection,
                     request.batch_id,
+                    taxonomy,
                 )
                 content = self._build_derived_result_content(
                     connection,
@@ -137,6 +138,7 @@ class ReviewPublicationMixin:
     def _load_completed_review_changes(
         connection: Any,
         batch_id: str,
+        taxonomy: TaxonomyConfig,
     ) -> _CompletedReviewChanges:
         review_count = int(
             connection.execute(
@@ -159,12 +161,14 @@ class ReviewPublicationMixin:
         if pending_count:
             raise ReviewBatchConflict(f"复核批次仍有 {pending_count} 条记录未完成")
         revisions = {
-            str(row["classification_key"]): apply_semantic_label_corrections(
+            str(row["classification_key"]): apply_semantic_review_changes(
                 json_value(row["classification_json"], {}),
+                taxonomy,
+                str(row["comment"]),
             )
             for row in connection.execute(
                 """
-                SELECT classification_key, classification_json
+                SELECT classification_key, classification_json, comment
                 FROM review_records
                 WHERE batch_id = ? AND workflow_status = 'resolved'
                 """,

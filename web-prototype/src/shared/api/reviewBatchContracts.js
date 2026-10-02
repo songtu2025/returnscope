@@ -87,6 +87,9 @@
  * @property {SemanticReviewAction} action
  * @property {string | null} [label_code]
  * @property {string | null} [note]
+ * @property {string | null} [sentiment]
+ * @property {boolean} [applied]
+ * @property {string} [result_item_id]
  *
  * @typedef {Object} AddedSemanticItem
  * @property {string} [item_id]
@@ -94,12 +97,16 @@
  * @property {string} opinion
  * @property {string} label_code
  * @property {string | null} [note]
+ * @property {string | null} [sentiment]
+ * @property {boolean} [applied]
+ * @property {string} [result_item_id]
  *
  * @typedef {SemanticItemReview & {assessed_by?: string, assessed_at?: string}} PersistedSemanticItemReview
  * @typedef {AddedSemanticItem & {assessed_by?: string, assessed_at?: string}} PersistedAddedSemanticItem
  * @typedef {{status?: CoverageStatus, assessed_by?: string, assessed_at?: string}} CoverageReview
  *
  * @typedef {Object} SemanticReviewSourceItem
+ * @property {string | null} [sentiment]
  * @property {string} [semantic_item_id]
  * @property {string} [item_id]
  * @property {string} [fact_id]
@@ -147,6 +154,8 @@
  * @property {boolean} [manual]
  *
  * @typedef {Object} SemanticReviewLedgerItem
+ * @property {string} [sentiment]
+ * @property {boolean} [applied]
  * @property {string} id
  * @property {string} evidence
  * @property {string} evidenceSource

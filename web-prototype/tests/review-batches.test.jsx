@@ -130,8 +130,8 @@ beforeEach(() => {
   Object.values(reviewBatchApiMock).forEach((mock) => mock.mockReset());
   reviewBatchApiMock.reviewTaxonomy.mockResolvedValue({
     labels: [
-      { code: "FIT_TOO_SMALL", name: "偏小" },
-      { code: "FIT_TOO_LARGE", name: "偏大" },
+      { code: "FIT_TOO_SMALL", name: "偏小", allowed_sentiments: ["NEGATIVE"] },
+      { code: "FIT_TOO_LARGE", name: "偏大", allowed_sentiments: ["NEGATIVE"] },
     ],
   });
 });
@@ -665,6 +665,7 @@ test("逐项调整和补充遗漏观点随整条确认提交", async () => {
             opinion: "个人尺寸体验",
             label_code: "FIT_TOO_LARGE",
             note: "人工补充的遗漏观点",
+            sentiment: "NEGATIVE",
           },
         ],
         coverage_status: "has_omission",

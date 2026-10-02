@@ -15,6 +15,10 @@ from web_backend.classification_standard_service import ClassificationStandardSe
 from web_backend.common import json_text, json_value, new_id
 from web_backend.database import Database
 from web_backend.review_contracts import ReviewBatchConflict, RevisionConflict
+from web_backend.review_label_corrections import (
+    apply_semantic_review_changes,
+    project_review_labels,
+)
 from web_backend.security import utc_now
 
 
@@ -418,18 +422,8 @@ class ReviewBatchEditingMixin:
                 semantic_item_reviews=semantic_item_reviews,
                 added_semantic_items=added_semantic_items,
             )
-        after = (
-            before
-            if action == "exclude"
-            else self._apply_resolution(
-                before,
-                str(row["comment"]),
-                label_code if action == "modify" else None,
-                result_version_id,
-            )
-        )
         after = self._apply_human_review_details(
-            after,
+            before,
             actor_id=actor_id,
             assessed_at=now,
             review_assessment=review_assessment,
@@ -437,6 +431,13 @@ class ReviewBatchEditingMixin:
             added_semantic_items=added_semantic_items,
             coverage_status=coverage_status,
         )
+        if action != "exclude":
+            after = self._resolve_batch_classification(
+                after,
+                str(row["comment"]),
+                result_version_id,
+                label_code if action == "modify" else None,
+            )
         next_revision = expected_revision + 1
         workflow_status = "excluded" if action == "exclude" else "resolved"
         connection.execute(
@@ -476,6 +477,62 @@ class ReviewBatchEditingMixin:
             ),
         )
         return before, after
+
+    def _resolve_batch_classification(
+        self,
+        classification: dict[str, Any],
+        comment: str,
+        result_version_id: str,
+        label_code: str | None,
+    ) -> dict[str, Any]:
+        pending = [
+            item
+            for field in ("human_semantic_reviews", "human_added_semantic_items")
+            for item in classification.get(field, [])
+            if not item.get("applied")
+        ]
+        if not pending:
+            return self._apply_resolution(
+                classification, comment, label_code, result_version_id
+            )
+        classification = self._apply_untargeted_label(
+            classification, comment, label_code, result_version_id
+        )
+        taxonomy = self.standard_service.taxonomy_config_for_result_version(
+            result_version_id
+        )
+        projected = apply_semantic_review_changes(classification, taxonomy, comment)
+        self._validate_reviewed_classification(projected)
+        # 草稿保留原项身份，发布时再应用处置，避免编辑记录和正式结果重复投影。
+        return {**classification, "status": "MANUAL_RESOLVED", "review_reasons": []}
+
+    def _apply_untargeted_label(
+        self,
+        classification: dict[str, Any],
+        comment: str,
+        label_code: str | None,
+        result_version_id: str,
+    ) -> dict[str, Any]:
+        units = classification.get("semantic_units", [])
+        if not label_code or not units:
+            return classification
+        view = build_semantic_review_view({"semantic_units": units[:1]}, "")
+        first_ids = {
+            str(item["item_id"])
+            for item in cast(list[dict[str, Any]], view["semantic_items"])
+        }
+        first_ids.update(f"fact:{fact_id}" for fact_id in units[0].get("fact_ids", []))
+        # 明确的逐项处置优先；整条选择继续作用于未被调整的首项。
+        if any(
+            item["semantic_item_id"] in first_ids and not item.get("applied")
+            for item in classification.get("human_semantic_reviews", [])
+        ):
+            return classification
+        updated = self._apply_resolution(
+            classification, comment, label_code, result_version_id
+        )
+        updated["unknown_semantics"] = classification.get("unknown_semantics", [])
+        return updated
 
     def _validate_semantic_review_details(
         self,
@@ -663,32 +720,4 @@ class ReviewBatchEditingMixin:
         self._validate_reviewed_classification(updated)
         return updated
 
-    @staticmethod
-    def _project_review_labels(
-        units: list[dict[str, Any]],
-        previous_problem_codes: list[str],
-        previous_label: str,
-        selected: str,
-    ) -> tuple[list[str], list[str], list[str]]:
-        neutral_problem_codes = set(previous_problem_codes)
-        if previous_label in neutral_problem_codes:
-            neutral_problem_codes.remove(previous_label)
-            neutral_problem_codes.add(selected)
-        problem_codes: list[str] = []
-        positive_codes: list[str] = []
-        negative_codes: list[str] = []
-        for unit in units:
-            code = str(unit.get("label_code", ""))
-            sentiment = str(unit.get("sentiment", ""))
-            if sentiment == "POSITIVE":
-                positive_codes.append(code)
-            elif sentiment == "NEGATIVE":
-                problem_codes.append(code)
-                negative_codes.append(code)
-            elif code in neutral_problem_codes:
-                problem_codes.append(code)
-        return (
-            list(dict.fromkeys(problem_codes)),
-            list(dict.fromkeys(positive_codes)),
-            list(dict.fromkeys(negative_codes)),
-        )
+    _project_review_labels = staticmethod(project_review_labels)
