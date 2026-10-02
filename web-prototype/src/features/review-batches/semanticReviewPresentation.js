@@ -45,6 +45,13 @@ export const REVIEW_DISPOSITION_LABELS = {
 /** @param {SemanticReviewSourceItem} item @param {string} [fallback] */
 function normalizeDisposition(item, fallback = "") {
   const explicit = String(item.disposition || item.status || fallback).toUpperCase();
+  // 业务诊断进入待判断清单；旧诊断没有明确标记时仍按系统异常展示。
+  if (
+    (item.business_review_required ?? item.businessReviewRequired) === true &&
+    ["ANALYSIS_FAILURE", "MODEL_ERROR"].includes(explicit)
+  ) {
+    return "UNKNOWN";
+  }
   if (explicit) return explicit;
   return item.label_code || item.labelCode ? "MAPPED" : "UNKNOWN";
 }
@@ -214,6 +221,27 @@ export function dispositionTone(disposition) {
   return "mapped";
 }
 
+/** @param {SemanticReviewLedgerItem} item @param {string} sourceText */
+export function reviewDiagnosticPresentation(item, sourceText) {
+  return {
+    opinionHeading: item.manual
+      ? "人工补充观点"
+      : item.evidenceSource === "SYSTEM"
+        ? "诊断提示"
+        : "提取观点",
+    suggestedAction:
+      item.businessReviewRequired === true
+        ? "请根据原文确认业务观点和标签；缺少证据时从原文补录。"
+        : "请联系管理员检查并重新运行。",
+    missingEvidence:
+      item.businessReviewRequired === true &&
+      item.evidenceSource === "SYSTEM" &&
+      (!item.evidence ||
+        item.evidence === "无文本证据" ||
+        !sourceText.includes(item.evidence)),
+  };
+}
+
 /** @param {SemanticReviewLedgerItem} item @param {SemanticItemReview | null | undefined} review @returns {SemanticReviewLedgerItem} */
 export function effectiveReviewItem(item, review) {
   if (
@@ -231,7 +259,7 @@ export function effectiveReviewItem(item, review) {
       disposition: "MAPPED",
     };
   }
-  if (review.action === "no_tag_needed") {
+  if (["no_tag_needed", "remove"].includes(review.action)) {
     return { ...item, labelCode: "", labelPath: [], disposition: "NO_TAG_NEEDED" };
   }
   return item;

@@ -15,6 +15,7 @@ import {
   dispositionTone,
   effectiveReviewItem,
   REVIEW_DISPOSITION_LABELS,
+  reviewDiagnosticPresentation,
   semanticReviewLedger,
 } from "./semanticReviewPresentation";
 
@@ -133,8 +134,8 @@ function nextManualId(items) {
   return `manual-${index}`;
 }
 
-/** @param {{item: SemanticReviewLedgerItem}} props */
-function DiagnosticDetails({ item }) {
+/** @param {{item: SemanticReviewLedgerItem, suggestedAction: string}} props */
+function DiagnosticDetails({ item, suggestedAction }) {
   const systemFailure = ["ANALYSIS_FAILURE", "MODEL_ERROR"].includes(item.disposition);
   if (
     !systemFailure &&
@@ -174,30 +175,22 @@ function DiagnosticDetails({ item }) {
       </dl>
       <p>
         <b>处理建议</b>
-        <span>{item.diagnosticAction || "请联系管理员检查并重新运行。"}</span>
+        <span>{item.diagnosticAction || suggestedAction}</span>
       </p>
     </div>
   );
 }
 
-/** @param {{item: SemanticReviewLedgerItem, labels: ReviewLabel[], editable: boolean, review?: SemanticItemReview, onReview: (review: SemanticItemReview) => void, onReset: () => void}} props */
-function ReviewLedgerItem({ item, labels, editable, review, onReview, onReset }) {
-  const [editing, setEditing] = useState(false);
+/** @param {{item: SemanticReviewLedgerItem, labels: ReviewLabel[], review?: SemanticItemReview, missingEvidence: boolean, onSave: (review: SemanticItemReview) => void, onCancel: () => void}} props */
+function ReviewItemEditor({ item, labels, review, missingEvidence, onSave, onCancel }) {
   const [draft, setDraft] = useState(() => ({
     action: /** @type {SemanticReviewAction} */ (review?.action || "change_label"),
     label_code: review?.label_code || item.labelCode || "",
     note: review?.note || "",
     sentiment: review?.sentiment || "",
   }));
-  const effective = effectiveReviewItem(item, review);
-  const removed = item.businessReviewRequired !== false && review?.action === "remove";
-  const tone = removed ? "informational" : dispositionTone(effective.disposition);
-  const statusLabel = removed
-    ? "已标记删除"
-    : REVIEW_DISPOSITION_LABELS[effective.disposition] || effective.disposition;
-
   const saveDraft = () => {
-    onReview({
+    onSave({
       semantic_item_id: item.id,
       action: draft.action,
       label_code: draft.action === "change_label" ? draft.label_code : null,
@@ -208,8 +201,99 @@ function ReviewLedgerItem({ item, labels, editable, review, onReview, onReset })
           }
         : {}),
     });
-    setEditing(false);
   };
+
+  return (
+    <div className="semantic-review-item-editor">
+      <label>
+        调整方式
+        <Select
+          aria-label={`调整方式：${item.opinion}`}
+          value={draft.action}
+          onChange={(action) => setDraft({ ...draft, action })}
+          options={Object.entries(ACTION_LABELS).map(([value, label]) => ({
+            value,
+            label,
+          }))}
+        />
+      </label>
+      {draft.action === "change_label" && (
+        <label>
+          修改为
+          <Select
+            aria-label={`修改观点标签：${item.opinion}`}
+            showSearch
+            optionFilterProp="label"
+            value={draft.label_code}
+            onChange={(label_code) => setDraft({ ...draft, label_code, sentiment: "" })}
+            options={[
+              { value: "", label: "请选择分类标签" },
+              ...labels.map((label) => ({
+                value: label.code,
+                label: `${labelText(label)} · ${label.code}`,
+              })),
+            ]}
+          />
+        </label>
+      )}
+      {draft.action === "change_label" && (
+        <SentimentField
+          code={draft.label_code}
+          labels={labels}
+          value={draft.sentiment}
+          known={item.sentiment}
+          name={`观点评价方向：${item.opinion}`}
+          onChange={(sentiment) => setDraft({ ...draft, sentiment })}
+        />
+      )}
+      <label>
+        本项说明（可选）
+        <Input
+          value={draft.note}
+          onChange={(event) => setDraft({ ...draft, note: event.target.value })}
+        />
+      </label>
+      <div>
+        <Button onClick={onCancel}>取消</Button>
+        <Button
+          type="primary"
+          disabled={
+            (missingEvidence && draft.action !== "remove") ||
+            (draft.action === "change_label" &&
+              (!draft.label_code ||
+                !selectedSentiment(
+                  draft.label_code,
+                  labels,
+                  item.sentiment || draft.sentiment,
+                )))
+          }
+          onClick={saveDraft}
+        >
+          保存本项调整
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** @param {{item: SemanticReviewLedgerItem, sourceText: string, labels: ReviewLabel[], editable: boolean, review?: SemanticItemReview, onReview: (review: SemanticItemReview) => void, onReset: () => void}} props */
+function ReviewLedgerItem({
+  item,
+  sourceText,
+  labels,
+  editable,
+  review,
+  onReview,
+  onReset,
+}) {
+  const [editing, setEditing] = useState(false);
+  const effective = effectiveReviewItem(item, review);
+  const removed = review?.action === "remove" && effective !== item;
+  const tone = removed ? "informational" : dispositionTone(effective.disposition);
+  const statusLabel = removed
+    ? "已标记删除"
+    : REVIEW_DISPOSITION_LABELS[effective.disposition] || effective.disposition;
+  const diagnostic = reviewDiagnosticPresentation(item, sourceText);
 
   return (
     <article
@@ -220,7 +304,7 @@ function ReviewLedgerItem({ item, labels, editable, review, onReview, onReset })
         <blockquote>“{item.evidence}”</blockquote>
       </div>
       <div className="semantic-review-opinion">
-        <span>{item.manual ? "人工补充观点" : "提取观点"}</span>
+        <span>{diagnostic.opinionHeading}</span>
         <p>{item.opinion}</p>
         {item.reason && <small>{item.reason}</small>}
       </div>
@@ -244,12 +328,6 @@ function ReviewLedgerItem({ item, labels, editable, review, onReview, onReset })
               size="small"
               icon={<PencilSimple size={15} />}
               onClick={() => {
-                setDraft({
-                  action: review?.action || "change_label",
-                  label_code: review?.label_code || item.labelCode || "",
-                  note: review?.note || "",
-                  sentiment: review?.sentiment || "",
-                });
                 setEditing((current) => !current);
               }}
             >
@@ -264,79 +342,25 @@ function ReviewLedgerItem({ item, labels, editable, review, onReview, onReset })
         )}
       </div>
 
-      <DiagnosticDetails item={item} />
+      <DiagnosticDetails item={item} suggestedAction={diagnostic.suggestedAction} />
+      {diagnostic.missingEvidence && (
+        <p role="note">
+          此诊断项缺少可核对的原文证据，请使用“补充遗漏观点”；如需移除错误诊断，选择“删除错误提取”。
+        </p>
+      )}
 
       {editing && (
-        <div className="semantic-review-item-editor">
-          <label>
-            调整方式
-            <Select
-              aria-label={`调整方式：${item.opinion}`}
-              value={draft.action}
-              onChange={(action) => setDraft({ ...draft, action })}
-              options={Object.entries(ACTION_LABELS).map(([value, label]) => ({
-                value,
-                label,
-              }))}
-            />
-          </label>
-          {draft.action === "change_label" && (
-            <label>
-              修改为
-              <Select
-                aria-label={`修改观点标签：${item.opinion}`}
-                showSearch
-                optionFilterProp="label"
-                value={draft.label_code}
-                onChange={(label_code) =>
-                  setDraft({ ...draft, label_code, sentiment: "" })
-                }
-                options={[
-                  { value: "", label: "请选择分类标签" },
-                  ...labels.map((label) => ({
-                    value: label.code,
-                    label: `${labelText(label)} · ${label.code}`,
-                  })),
-                ]}
-              />
-            </label>
-          )}
-          {draft.action === "change_label" && (
-            <SentimentField
-              code={draft.label_code}
-              labels={labels}
-              value={draft.sentiment}
-              known={item.sentiment}
-              name={`观点评价方向：${item.opinion}`}
-              onChange={(sentiment) => setDraft({ ...draft, sentiment })}
-            />
-          )}
-          <label>
-            本项说明（可选）
-            <Input
-              value={draft.note}
-              onChange={(event) => setDraft({ ...draft, note: event.target.value })}
-            />
-          </label>
-          <div>
-            <Button onClick={() => setEditing(false)}>取消</Button>
-            <Button
-              type="primary"
-              disabled={
-                draft.action === "change_label" &&
-                (!draft.label_code ||
-                  !selectedSentiment(
-                    draft.label_code,
-                    labels,
-                    item.sentiment || draft.sentiment,
-                  ))
-              }
-              onClick={saveDraft}
-            >
-              保存本项调整
-            </Button>
-          </div>
-        </div>
+        <ReviewItemEditor
+          item={item}
+          labels={labels}
+          review={review}
+          missingEvidence={diagnostic.missingEvidence}
+          onSave={(next) => {
+            onReview(next);
+            setEditing(false);
+          }}
+          onCancel={() => setEditing(false)}
+        />
       )}
     </article>
   );
@@ -374,15 +398,13 @@ export function SemanticReviewLedger({
   const businessItems = items.filter(
     (item) => !["ANALYSIS_FAILURE", "MODEL_ERROR"].includes(item.disposition),
   );
+  /** @param {SemanticReviewLedgerItem} item */
+  const reviewFor = (item) =>
+    reviews.find((candidate) => candidate.semantic_item_id === item.id) ??
+    (!editable ? (item.review ?? undefined) : undefined);
   const summary = items.reduce(
     (counts, item) => {
-      const review = reviews.find(
-        (candidate) => candidate.semantic_item_id === item.id,
-      );
-      if (item.businessReviewRequired !== false && review?.action === "remove") {
-        counts.informational += 1;
-        return counts;
-      }
+      const review = reviewFor(item);
       const effective = effectiveReviewItem(item, review);
       const tone = dispositionTone(effective.disposition);
       if (tone === "failure") counts.failures += 1;
@@ -416,18 +438,19 @@ export function SemanticReviewLedger({
 
   /** @param {SemanticReviewLedgerItem} item */
   const renderItem = (item) => {
-    const review = reviews.find((candidate) => candidate.semantic_item_id === item.id);
+    const review = reviewFor(item);
     return (
       <ReviewLedgerItem
         key={item.id}
         item={item}
+        sourceText={record.comment || ""}
         labels={labels}
         editable={
           editable &&
           !["ANALYSIS_FAILURE", "MODEL_ERROR"].includes(item.disposition) &&
           item.businessReviewRequired !== false
         }
-        review={review ?? (!editable ? (item.review ?? undefined) : undefined)}
+        review={review}
         onReview={(next) => onItemReviews(upsert(reviews, next))}
         onReset={() =>
           onItemReviews(

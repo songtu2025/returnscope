@@ -28,6 +28,145 @@ function ledgerProps(record = {}) {
   };
 }
 
+function diagnosticRecord(businessReviewRequired = true, evidence = "鞋子非常舒服") {
+  return {
+    comment: "鞋子非常舒服，尺码也合适。",
+    classification: {
+      semantic_review: {
+        semantic_items: [
+          {
+            item_id: "diagnostic-1",
+            evidence_text: evidence,
+            evidence_source: "SYSTEM",
+            opinion: "标签规则要求人工复核",
+            disposition: "ANALYSIS_FAILURE",
+            business_review_required: businessReviewRequired,
+            diagnostic_title: "标签规则要求人工复核",
+            diagnostic_domain: "SEMANTIC_ANALYSIS_QUALITY",
+          },
+        ],
+      },
+    },
+  };
+}
+
+test.each(["ANALYSIS_FAILURE", "MODEL_ERROR"])(
+  "明确业务诊断 %s 进入待判断分组并可编辑",
+  (disposition) => {
+    const record = diagnosticRecord();
+    record.classification.semantic_review.semantic_items[0].disposition = disposition;
+    const data = semanticReviewLedger(record);
+    expect(data.summary).toEqual({
+      mapped: 0,
+      informational: 0,
+      needsReview: 1,
+      failures: 0,
+    });
+    render(<SemanticReviewLedger {...ledgerProps(record)} />);
+    const group = screen.getByRole("region", { name: "待人工判断" });
+    expect(within(group).getByRole("button", { name: "调整" })).toBeEnabled();
+    expect(screen.getByText("待判断 1")).toBeVisible();
+    expect(screen.getByText("系统异常 0")).toBeVisible();
+    expect(screen.queryByText("已锁定编辑")).toBeNull();
+    expect(screen.queryByText("系统处理失败")).toBeNull();
+    expect(screen.getByText("诊断提示")).toBeVisible();
+  },
+);
+
+test.each([
+  [false, "change_label"],
+  [false, "no_tag_needed"],
+  [false, "remove"],
+  ["legacy", "change_label"],
+  ["legacy", "no_tag_needed"],
+  ["legacy", "remove"],
+])("技术诊断或旧诊断 %s 的 %s 修改不生效且保持锁定", (flag, action) => {
+  const record = diagnosticRecord(false);
+  if (flag === "legacy")
+    delete record.classification.semantic_review.semantic_items[0]
+      .business_review_required;
+  render(
+    <SemanticReviewLedger
+      {...ledgerProps(record)}
+      itemReviews={[
+        {
+          semantic_item_id: "diagnostic-1",
+          action,
+          label_code: "EXPERIENCE",
+          sentiment: "POSITIVE",
+        },
+      ]}
+    />,
+  );
+  const group = screen.getByRole("region", { name: "系统异常" });
+  expect(within(group).getByText("已锁定编辑")).toBeVisible();
+  expect(within(group).queryByRole("button", { name: "调整" })).toBeNull();
+  expect(within(group).getByText("系统处理失败")).toBeVisible();
+  expect(screen.getByText("系统异常 1")).toBeVisible();
+});
+
+test.each(["change_label", "no_tag_needed", "remove"])(
+  "业务诊断 %s 调整、计数、撤销和重新打开一致",
+  async (action) => {
+    const record = diagnosticRecord();
+    const props = ledgerProps(record);
+    const view = render(<SemanticReviewLedger {...props} />);
+    await userEvent.click(screen.getByRole("button", { name: "调整" }));
+    if (action === "change_label") {
+      await select("修改观点标签：标签规则要求人工复核", "使用体验 · EXPERIENCE");
+      expect(screen.getByRole("button", { name: "保存本项调整" })).toBeDisabled();
+      await select("观点评价方向：标签规则要求人工复核", "正向");
+    } else {
+      await select(
+        "调整方式：标签规则要求人工复核",
+        action === "remove" ? "删除错误提取" : "标记为无需归类",
+      );
+    }
+    await userEvent.click(screen.getByRole("button", { name: "保存本项调整" }));
+    const reviews = props.onItemReviews.mock.calls[0][0];
+    expect(reviews[0]).toMatchObject({ semantic_item_id: "diagnostic-1", action });
+    if (action === "change_label") expect(reviews[0].sentiment).toBe("POSITIVE");
+    view.rerender(<SemanticReviewLedger {...props} itemReviews={reviews} />);
+    const countLabel = action === "change_label" ? "已归类 1" : "无需归类 1";
+    expect(screen.getByText(countLabel)).toBeVisible();
+    expect(screen.getByText("待判断 0")).toBeVisible();
+    expect(screen.getByText("系统异常 0")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "撤销调整" }));
+    expect(props.onItemReviews).toHaveBeenLastCalledWith([]);
+    view.rerender(<SemanticReviewLedger {...props} itemReviews={[]} />);
+    expect(screen.getByText("待判断 1")).toBeVisible();
+    const saved = {
+      ...record,
+      classification: { ...record.classification, human_semantic_reviews: reviews },
+    };
+    view.rerender(<SemanticReviewLedger {...ledgerProps(saved)} editable={false} />);
+    expect(screen.getByText(countLabel)).toBeVisible();
+    expect(screen.getByText("待判断 0")).toBeVisible();
+    expect(screen.queryByRole("button", { name: /调整/ })).toBeNull();
+    expect(screen.getByText(/人工调整：/)).toBeVisible();
+  },
+);
+
+test.each(["", "不属于原文的证据"])(
+  "缺少可核对原文 %s 时提示补录并只允许移除错误诊断",
+  async (evidence) => {
+    const props = ledgerProps(diagnosticRecord(true, evidence));
+    render(<SemanticReviewLedger {...props} />);
+    expect(screen.getByRole("note")).toHaveTextContent("补充遗漏观点");
+    await userEvent.click(screen.getByRole("button", { name: "调整" }));
+    await select("修改观点标签：标签规则要求人工复核", "使用体验 · EXPERIENCE");
+    await select("观点评价方向：标签规则要求人工复核", "正向");
+    expect(screen.getByRole("button", { name: "保存本项调整" })).toBeDisabled();
+    await select("调整方式：标签规则要求人工复核", "标记为无需归类");
+    expect(screen.getByRole("button", { name: "保存本项调整" })).toBeDisabled();
+    await select("调整方式：标签规则要求人工复核", "删除错误提取");
+    await userEvent.click(screen.getByRole("button", { name: "保存本项调整" }));
+    expect(props.onItemReviews).toHaveBeenCalledWith([
+      expect.objectContaining({ action: "remove" }),
+    ]);
+  },
+);
+
 async function select(label, option) {
   const input = screen.getByRole("combobox", { name: label });
   fireEvent.mouseDown(
