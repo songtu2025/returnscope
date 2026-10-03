@@ -14,7 +14,7 @@ from test_validation_run_service import (
 )
 
 from web_backend.config_service import ConfigService
-from web_backend.validation_run_service import _ValidationTarget
+from web_backend.model_services.validation_records import _ValidationTarget
 
 
 @pytest.mark.parametrize("kind", ("model", "config"))

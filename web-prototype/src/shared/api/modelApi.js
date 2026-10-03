@@ -4,23 +4,26 @@ import { API_BASE, request } from "./request";
 /** @typedef {ReturnType<typeof request>} ModelRequest */
 /** @typedef {import("./systemSettingsContracts").ModelConnection} ModelConnection */
 /** @typedef {import("./systemSettingsContracts").ModelPreference} ModelPreference */
+/** @typedef {import("./systemSettingsContracts").ConfigVersion} ConfigVersion */
+/** @typedef {import("./systemSettingsContracts").CatalogModel} CatalogModel */
+/** @typedef {import("./systemSettingsContracts").ValidationRun} ValidationRun */
 
 /**
  * @type {{
  *   configs: () => Promise<ModelConnection[]>,
  *   modelPreference: () => Promise<ModelPreference | null>,
  *   saveModelPreference: (payload: ModelPayload) => Promise<ModelPreference>,
- *   createConfig: (payload: ModelPayload) => ModelRequest,
+ *   createConfig: (payload: ModelPayload) => Promise<ConfigVersion>,
  *   discardConfig: (id: string) => ModelRequest,
- *   createModel: (connectionId: string, payload: ModelPayload) => ModelRequest,
- *   discoverModels: (connectionId: string) => ModelRequest,
- *   updateModel: (id: string, payload: ModelPayload) => ModelRequest,
+ *   createModel: (connectionId: string, payload: ModelPayload) => Promise<CatalogModel>,
+ *   discoverModels: (connectionId: string) => Promise<{count: number}>,
+ *   updateModel: (id: string, payload: ModelPayload) => Promise<CatalogModel>,
  *   validateModel: (id: string, effort?: string | null) => ModelRequest,
- *   startModelValidation: (id: string, effort?: string | null) => ModelRequest,
+ *   startModelValidation: (id: string, effort?: string | null) => Promise<ValidationRun>,
  *   validateConfig: (id: string) => ModelRequest,
- *   startConfigValidation: (id: string) => ModelRequest,
- *   activeValidation: (connectionId: string) => ModelRequest,
- *   validationRun: (id: string) => ModelRequest,
+ *   startConfigValidation: (id: string) => Promise<ValidationRun>,
+ *   activeValidation: (connectionId: string) => Promise<ValidationRun | null>,
+ *   validationRun: (id: string) => Promise<ValidationRun>,
  *   validationEventUrl: (id: string) => string,
  *   publishConfig: (id: string) => ModelRequest
  * }}

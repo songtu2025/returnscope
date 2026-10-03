@@ -91,6 +91,7 @@ vi.mock("../src/api", () => ({
   api: apiMock,
   ApiError: class ApiError extends Error {},
 }));
+vi.mock("../src/shared/api/modelApi", () => ({ modelApi: apiMock }));
 vi.mock("../src/shared/api/taskApi", () => ({
   taskApi: { tasks: apiMock.tasks },
 }));
@@ -101,10 +102,10 @@ vi.mock("../src/shared/api/resultApi", () => ({
 import { App, Sidebar } from "../src/App";
 import { useHashRoute } from "../src/app/hashRouter";
 import { AuthPages } from "../src/pages/AuthPages";
-import { ApiManagement } from "../src/pages/ApiManagement";
+import { ModelServicePage } from "../src/features/system-settings/ModelServicePage";
 import { ModelPreferencePage } from "../src/features/system-settings/ModelPreferencePage";
 import { SystemSettingsPage } from "../src/features/system-settings/SystemSettingsPage";
-import { DataManagement } from "../src/pages/DataManagement";
+import { ProductMasterWorkspace } from "../src/features/data-management/ProductMasterWorkspace";
 import { ReviewCenter } from "../src/pages/ReviewCenter";
 import { ResultsPage } from "../src/pages/ResultsPage";
 import { TeamPage } from "../src/pages/TeamPage";
@@ -1470,7 +1471,7 @@ describe("关键用户流程", () => {
     apiMock.dataset.mockResolvedValue(productDataset);
 
     render(
-      <DataManagement
+      <ProductMasterWorkspace
         notify={vi.fn()}
         onNavigate={vi.fn()}
         focus={{
@@ -1518,7 +1519,9 @@ describe("关键用户流程", () => {
       facets: { stores: [], categories: [] },
     });
 
-    render(<DataManagement notify={vi.fn()} onNavigate={vi.fn()} focus={null} />);
+    render(
+      <ProductMasterWorkspace notify={vi.fn()} onNavigate={vi.fn()} focus={null} />,
+    );
 
     const input = await screen.findByRole("textbox", { name: "搜索产品信息" });
     expect(screen.getByRole("button", { name: "搜索" })).toHaveAttribute(
@@ -1581,7 +1584,7 @@ describe("关键用户流程", () => {
     });
 
     render(
-      <DataManagement
+      <ProductMasterWorkspace
         notify={vi.fn()}
         onNavigate={vi.fn()}
         focus={{
@@ -2856,7 +2859,7 @@ describe("关键用户流程", () => {
     apiMock.createDataset.mockResolvedValue({ id: "dataset-1" });
 
     const { container } = render(
-      <DataManagement notify={vi.fn()} onNavigate={vi.fn()} focus={null} />,
+      <ProductMasterWorkspace notify={vi.fn()} onNavigate={vi.fn()} focus={null} />,
     );
 
     await user.click(await screen.findByRole("button", { name: "导入产品信息" }));
@@ -2965,229 +2968,6 @@ describe("关键用户流程", () => {
     expect(await screen.findByText("指定历史复核记录")).toBeVisible();
     expect(screen.getByRole("button", { name: "已处理" })).toHaveClass("active");
     expect(apiMock.review).toHaveBeenCalledWith("review-2");
-  });
-
-  test("用户可以从模型列表启动真实验证", async () => {
-    const user = userEvent.setup();
-    const version = {
-      id: "cfg-1",
-      connection_id: "conn-1",
-      version: 1,
-      base_url: "https://api.example.com/v1",
-      primary_model: "gpt-main",
-      primary_effort: "medium",
-      cheap_model: null,
-      cheap_effort: "low",
-      secondary_model: null,
-      secondary_effort: "high",
-      requests_per_minute: 60,
-      max_workers: 4,
-      timeout_seconds: 120,
-      cheap_audit_percent: 5,
-      validation_status: "validated",
-      validation_message: "验证通过",
-      change_note: "初始配置",
-      creator_name: "管理员",
-      created_at: "2026-08-10T08:00:00Z",
-      validated_at: "2026-08-10T08:00:00Z",
-    };
-    apiMock.configs.mockResolvedValue([
-      {
-        id: "conn-1",
-        name: "生产线路",
-        provider: "responses-compatible",
-        active_version_id: "cfg-1",
-        active_version: version,
-        versions: [version],
-        models: [
-          {
-            id: "model-1",
-            connection_id: "conn-1",
-            model_key: "gpt-main",
-            display_name: "主分析模型",
-            supported_efforts: ["medium"],
-            active: true,
-            validation_status: "validated",
-            validation_message: "验证通过",
-          },
-        ],
-      },
-    ]);
-    apiMock.startModelValidation.mockResolvedValue({
-      id: "validation-1",
-      kind: "model",
-      target_id: "model-1",
-      status: "queued",
-      stage: "queued",
-      total_count: 1,
-      completed_count: 0,
-      created_at: "2026-08-10T08:00:00Z",
-      endpoint: "https://api.example.com/v1/responses",
-      timeout_seconds: 120,
-      created_by_name: "管理员",
-      items: [
-        {
-          model_id: "model-1",
-          model_key: "gpt-main",
-          display_name: "主分析模型",
-          role: "单模型验证",
-          effort: "medium",
-          status: "pending",
-          message: "等待验证",
-          started_at: null,
-          duration_ms: null,
-          http_status: null,
-        },
-      ],
-    });
-
-    render(<ApiManagement notify={vi.fn()} />);
-
-    expect(screen.getByRole("heading", { name: "模型服务" })).toBeVisible();
-    expect(
-      screen.queryByRole("heading", { name: "智能体模型策略" }),
-    ).not.toBeInTheDocument();
-    await user.click(await screen.findByRole("button", { name: /管理目录/ }));
-    expect(screen.getByRole("heading", { name: "可用模型" })).toBeVisible();
-    expect(screen.getAllByRole("button", { name: "添加模型" })).toHaveLength(1);
-    expect(screen.queryByText("连接信息")).not.toBeInTheDocument();
-    expect((await screen.findAllByText("gpt-main"))[0]).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "验证" }));
-
-    await waitFor(() =>
-      expect(apiMock.startModelValidation).toHaveBeenCalledWith("model-1"),
-    );
-    expect((await screen.findAllByText("单模型验证"))[0]).toBeVisible();
-  });
-
-  test("模型服务仅保留接入方同步后的可用模型", async () => {
-    const user = userEvent.setup();
-    const version = {
-      id: "cfg-1",
-      connection_id: "conn-1",
-      version: 1,
-      base_url: "https://api.example.com/v1",
-      primary_model: "provider-model",
-      primary_effort: "medium",
-      validation_status: "validated",
-    };
-    const connection = (models) => [
-      {
-        id: "conn-1",
-        name: "生产线路",
-        provider: "responses-compatible",
-        active_version_id: "cfg-1",
-        active_version: version,
-        versions: [version],
-        models,
-      },
-    ];
-    apiMock.configs
-      .mockResolvedValueOnce(
-        connection([
-          {
-            id: "model-old",
-            model_key: "gpt-5.6",
-            display_name: "gpt-5.6",
-            supported_efforts: ["medium"],
-            active: true,
-            validation_status: "validated",
-          },
-        ]),
-      )
-      .mockResolvedValueOnce(
-        connection([
-          {
-            id: "model-old",
-            model_key: "gpt-5.6",
-            display_name: "gpt-5.6",
-            supported_efforts: ["medium"],
-            active: false,
-            validation_status: "validated",
-          },
-          {
-            id: "model-provider",
-            model_key: "provider-model",
-            display_name: "provider-model",
-            supported_efforts: ["medium"],
-            active: true,
-            validation_status: "draft",
-          },
-        ]),
-      );
-    apiMock.discoverModels.mockResolvedValue({ count: 1 });
-
-    render(<ApiManagement notify={vi.fn()} />);
-
-    await user.click(await screen.findByRole("button", { name: "同步目录" }));
-    await waitFor(() => expect(apiMock.discoverModels).toHaveBeenCalledWith("conn-1"));
-    expect(await screen.findByText("provider-model")).toBeVisible();
-    expect(screen.queryByText("gpt-5.6")).not.toBeInTheDocument();
-  });
-
-  test("模型服务加载完成前不显示未创建状态", async () => {
-    let resolveConfigs;
-    apiMock.configs.mockReturnValue(
-      new Promise((resolve) => {
-        resolveConfigs = resolve;
-      }),
-    );
-
-    render(<ApiManagement notify={vi.fn()} />);
-
-    expect(screen.getByText("正在读取模型服务…")).toBeVisible();
-    expect(screen.queryByText("尚未创建模型服务")).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "新增模型服务" }),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByText("0 个可用模型")).not.toBeInTheDocument();
-
-    await act(async () => {
-      resolveConfigs([
-        {
-          id: "conn-1",
-          name: "sub2api",
-          provider: "responses-compatible",
-          active_version_id: "cfg-1",
-          active_version: {
-            id: "cfg-1",
-            version: 4,
-            base_url: "https://api.example.com/v1",
-            validation_status: "validated",
-          },
-          versions: [],
-          models: [],
-        },
-      ]);
-    });
-
-    expect(await screen.findByRole("heading", { name: "sub2api" })).toBeVisible();
-    expect(screen.queryByText("正在读取模型服务…")).not.toBeInTheDocument();
-  });
-
-  test("模型服务只有读取成功后才显示真实空状态", async () => {
-    apiMock.configs.mockResolvedValue([]);
-
-    render(<ApiManagement notify={vi.fn()} />);
-
-    expect(await screen.findByText("尚未创建模型服务")).toBeVisible();
-    expect(screen.getByRole("button", { name: "新增模型服务" })).toBeVisible();
-    expect(screen.queryByText("正在读取模型服务…")).not.toBeInTheDocument();
-  });
-
-  test("模型服务读取失败时显示重试且不伪装为空状态", async () => {
-    const user = userEvent.setup();
-    apiMock.configs
-      .mockRejectedValueOnce(new Error("模型服务暂时不可用"))
-      .mockResolvedValueOnce([]);
-
-    render(<ApiManagement notify={vi.fn()} />);
-
-    expect(await screen.findByRole("alert")).toHaveTextContent("模型服务暂时不可用");
-    expect(screen.queryByText("尚未创建模型服务")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "重新加载" }));
-    expect(await screen.findByText("尚未创建模型服务")).toBeVisible();
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   test("用户设置首屏使用用户与安全标题", async () => {
@@ -3567,128 +3347,6 @@ describe("关键用户流程", () => {
     expect(screen.getByRole("button", { name: "模型服务" })).toHaveClass("active");
   });
 
-  test("模型服务编辑态说明保存禁用原因并就近校验地址", async () => {
-    const user = userEvent.setup();
-    render(<ApiManagement notify={vi.fn()} />);
-
-    await user.click(await screen.findByRole("button", { name: "新增模型服务" }));
-
-    const availableModelsHeading = screen.getByRole("heading", { name: "可用模型" });
-    expect(availableModelsHeading).toBeVisible();
-    expect(availableModelsHeading.closest(".model-service-editor")).toHaveClass(
-      "is-new-connection",
-    );
-    await user.click(screen.getByRole("button", { name: "添加模型" }));
-    await user.type(
-      screen.getByPlaceholderText("例如 deepseek-reasoner"),
-      "provider-model",
-    );
-    await user.click(screen.getByRole("button", { name: "保存模型" }));
-    expect(screen.getAllByText("provider-model")[0]).toBeVisible();
-    await user.selectOptions(screen.getByLabelText("模型"), "provider-model");
-
-    const saveButton = screen.getByRole("button", { name: "保存草稿" });
-    const baseUrlInput = screen.getByLabelText("Base URL");
-    expect(saveButton).toBeDisabled();
-    expect(screen.getAllByText("请填写接入名称。").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("请填写 API 密钥。").length).toBeGreaterThan(0);
-    expect(screen.queryByText("请选择验证模型。")).not.toBeInTheDocument();
-    expect(screen.getAllByText("请填写配置变更原因。").length).toBeGreaterThan(0);
-    expect(baseUrlInput).toHaveAttribute("aria-invalid", "true");
-    expect(baseUrlInput).toHaveAttribute(
-      "aria-describedby",
-      "model-service-base-url-error",
-    );
-
-    await user.type(baseUrlInput, "http://api.example.com");
-    expect(screen.getByText("非本地 API 必须使用 HTTPS。")).toBeVisible();
-
-    await user.clear(baseUrlInput);
-    await user.type(baseUrlInput, "https://api.example.com/v1");
-    expect(screen.queryByText("非本地 API 必须使用 HTTPS。")).not.toBeInTheDocument();
-    expect(baseUrlInput).toHaveAttribute("aria-invalid", "false");
-
-    await user.type(screen.getByLabelText("配置变更原因"), "新增生产接入");
-    expect(screen.getByRole("status")).toHaveTextContent("请填写接入名称。");
-    await user.type(screen.getByLabelText("接入名称"), "生产模型服务");
-    expect(screen.getByRole("status")).toHaveTextContent("请填写 API 密钥。");
-    await user.type(screen.getByLabelText("API 密钥"), "test-api-key");
-    expect(saveButton).toBeEnabled();
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
-  });
-
-  test("模型服务通用控件保留可访问名称和受控输入", async () => {
-    const user = userEvent.setup();
-    render(<ApiManagement notify={vi.fn()} />);
-
-    await user.click(await screen.findByRole("button", { name: "新增模型服务" }));
-    const connectionName = screen.getByRole("textbox", { name: "接入名称" });
-    await user.type(connectionName, "生产线路");
-    expect(connectionName).toHaveValue("生产线路");
-    expect(screen.getByRole("button", { name: "取消", exact: true })).toBeVisible();
-
-    await user.click(screen.getByRole("button", { name: "添加模型" }));
-    const dialog = screen.getByRole("dialog", { name: "添加模型" });
-    const displayName = within(dialog).getByRole("textbox", { name: "显示名称" });
-    await user.type(displayName, "主分析模型");
-    expect(displayName).toHaveValue("主分析模型");
-    expect(
-      within(dialog).getByRole("button", { name: "取消", exact: true }),
-    ).toBeVisible();
-  });
-
-  test("模型服务摘要展示未发布草稿并保留按需编辑入口", async () => {
-    const user = userEvent.setup();
-    const activeVersion = {
-      id: "cfg-1",
-      connection_id: "conn-1",
-      version: 1,
-      base_url: "https://api.example.com/v1",
-      primary_model: "gpt-main",
-      primary_effort: "medium",
-      cheap_model: "gpt-cheap",
-      cheap_effort: "low",
-      secondary_model: "gpt-review",
-      secondary_effort: "high",
-      validation_status: "validated",
-      validated_at: "2026-08-10T08:00:00Z",
-      published_at: "2026-08-10T08:10:00Z",
-    };
-    const draftVersion = {
-      ...activeVersion,
-      id: "cfg-2",
-      version: 2,
-      validation_status: "failed",
-      validation_message: "验证失败",
-      change_note: "调整风险复核模型",
-      published_at: null,
-    };
-    apiMock.configs.mockResolvedValue([
-      {
-        id: "conn-1",
-        name: "生产模型服务",
-        provider: "responses-compatible",
-        active_version_id: "cfg-1",
-        active_version: activeVersion,
-        versions: [draftVersion, activeVersion],
-        models: [],
-      },
-    ]);
-
-    render(<ApiManagement notify={vi.fn()} />);
-
-    expect(await screen.findByText("草稿 #2 · 验证失败")).toBeVisible();
-    expect(screen.getByText(/当前运行 #1 不受影响/)).toBeVisible();
-    expect(screen.getByRole("button", { name: "继续处理" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "验证服务" })).toBeVisible();
-    expect(screen.queryByDisplayValue(/sk-/)).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "继续处理" }));
-    expect(screen.getByRole("heading", { name: "连接信息" })).toBeVisible();
-    expect(screen.getByLabelText("API 密钥")).toHaveValue("");
-    expect(screen.getByRole("button", { name: "取消" })).toBeVisible();
-  });
-
   test("已有连接可替换停用的共享验证模型且不修改个人偏好", async () => {
     const user = userEvent.setup();
     const activeVersion = {
@@ -3735,7 +3393,7 @@ describe("关键用户流程", () => {
     render(
       <>
         <style>{systemSettingsStyles}</style>
-        <ApiManagement notify={vi.fn()} />
+        <ModelServicePage notify={vi.fn()} />
       </>,
     );
 
@@ -3803,7 +3461,7 @@ describe("关键用户流程", () => {
     ]);
     apiMock.publishConfig.mockResolvedValue(draftVersion);
 
-    render(<ApiManagement notify={vi.fn()} />);
+    render(<ModelServicePage notify={vi.fn()} />);
 
     expect(await screen.findByText("草稿 #2 · 可发布")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "发布版本" }));
@@ -3867,7 +3525,7 @@ describe("关键用户流程", () => {
     ]);
 
     const { container } = render(
-      <ApiManagement
+      <ModelServicePage
         notify={vi.fn()}
         focusConnectionId="conn-1"
         focusConfigVersionId="version-2"

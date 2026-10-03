@@ -1,4 +1,4 @@
-import { ApiManagement } from "../../pages/ApiManagement";
+import { ModelServicePage } from "./ModelServicePage";
 import { TeamPage } from "../../pages/TeamPage";
 import "../../styles/operations.css";
 import "../../styles/system-settings.css";
@@ -7,6 +7,7 @@ import { AuditLogPage } from "./AuditLogPage";
 import { ModelPreferencePage } from "./ModelPreferencePage";
 
 /** @typedef {{query: {tab?: string, connection_id?: string, config_version_id?: string, model_id?: string, action?: string, user_id?: string, actor_id?: string, entity_type?: string, entity_id?: string, date_from?: string, date_to?: string, page?: string | number}}} SettingsRoute */
+
 /** @param {{route: SettingsRoute, notify: (message: string, tone?: string) => void, currentUser?: {is_admin?: boolean} | null}} props */
 export function SystemSettingsPage({ route, notify, currentUser }) {
   const requestedTab = route.query.tab;
@@ -62,7 +63,7 @@ export function SystemSettingsPage({ route, notify, currentUser }) {
       {tab === "model-preference" ? (
         <ModelPreferencePage notify={notify} />
       ) : tab === "service" ? (
-        <ApiManagement
+        <ModelServicePage
           notify={notify}
           focusConnectionId={route.query.connection_id || null}
           focusConfigVersionId={route.query.config_version_id || null}

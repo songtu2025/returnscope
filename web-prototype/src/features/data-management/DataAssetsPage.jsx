@@ -1,17 +1,17 @@
 import { useEffect, useMemo } from "react";
 import "../../styles/operations.css";
 import "../../styles/product-info.css";
-
 import { navigateHash } from "../../app/hashRouter";
 import { AntdProvider } from "../../components/AntdProvider";
-import { DataManagement } from "../../pages/DataManagement";
+import { ProductMasterWorkspace } from "./ProductMasterWorkspace";
 import { readTaskDraft, updateTaskDraft } from "../task-create/taskDraftStorage";
 import { ImportRulesPage } from "./ImportRulesPage";
 import { ReturnDataAssetsPage } from "./ReturnDataAssetsPage";
 
-/** @typedef {import("../../app/navigation").Navigate} Navigate */
-/** @typedef {import("../task-create/taskCreateContracts").TaskRepairContext} TaskRepairContext */
+/** @typedef {import("./productMasterContracts").Navigate} Navigate */
+/** @typedef {import("./productMasterContracts").TaskRepairContext} TaskRepairContext */
 /** @typedef {{query: {view?: string, dataset?: string, return_to?: string, tab?: string, reference_version?: string, reference_page?: string | number}}} DataAssetsRoute */
+
 /**
  * @param {{route: DataAssetsRoute, notify: (message: string, tone?: string) => void, onNavigate: Navigate, userId: string}} props
  */
@@ -60,7 +60,7 @@ export function DataAssetsPage({ route, notify, onNavigate, userId }) {
 
   return (
     <AntdProvider>
-      <DataManagement
+      <ProductMasterWorkspace
         notify={notify}
         onNavigate={onNavigate}
         focus={focus}

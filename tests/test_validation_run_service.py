@@ -10,7 +10,8 @@ import pytest
 
 from web_backend.database import Database
 from web_backend.model_probe import ModelValidationError
-from web_backend.validation_run_service import ValidationRunService, _ValidationTarget
+from web_backend.model_services.validation_records import _ValidationTarget
+from web_backend.validation_run_service import ValidationRunService
 
 ACTOR_ID = "user-1"
 CONNECTION_ID = "connection-1"

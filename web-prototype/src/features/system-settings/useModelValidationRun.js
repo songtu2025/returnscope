@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { modelApi as api } from "../../shared/api/modelApi";
 
-import { api } from "../../api";
-
-/** @typedef {import("../../shared/api/systemSettingsContracts").ValidationRun} ValidationRun */
-/** @typedef {import("../../shared/api/systemSettingsContracts").ValidationEvent} ValidationEvent */
+/** @typedef {import("./modelServiceViewContracts").ValidationRun} ValidationRun */
+/** @typedef {import("./modelServiceViewContracts").ValidationEvent} ValidationEvent */
 
 const ACTIVE_STATUSES = ["queued", "running"];
 const FINISHED_STATUSES = ["passed", "failed"];

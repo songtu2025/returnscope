@@ -1,5 +1,4 @@
 import { useState } from "react";
-
 import { api } from "../../api";
 import { importNotification, importSelectionLabel } from "./newTaskPolicy";
 
@@ -7,7 +6,8 @@ import { importNotification, importSelectionLabel } from "./newTaskPolicy";
 /** @typedef {import("./taskCreateContracts").ReturnImportResult} ReturnImportResult */
 /** @typedef {import("./taskCreateContracts").TaskDraft} TaskDraft */
 /** @typedef {import("./taskCreateContracts").TaskForm} TaskForm */
-/** @typedef {import("./MysqlReturnImportForm").MysqlReturnFormState} MysqlReturnFormState */
+/** @typedef {import("./mysqlReturnContracts").MysqlReturnFormState} MysqlReturnFormState */
+
 /**
  * @param {{draft?: TaskDraft | null, focusAfterPreparationRef: import("react").MutableRefObject<boolean>, invalidatePreflight: () => void, notify: (message: string, type?: "success" | "error") => void, onChanged: () => void | Promise<unknown>, setForm: import("react").Dispatch<import("react").SetStateAction<TaskForm>>, setPrepared: import("react").Dispatch<import("react").SetStateAction<boolean>>, setVersions: import("react").Dispatch<import("react").SetStateAction<DataVersion[]>>}} options
  */

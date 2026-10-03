@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from test_validation_run_service import _build_harness, _create_run
 
-from web_backend.validation_run_service import _ValidationItemEvent
+from web_backend.model_services.validation_events import _ValidationItemEvent
 
 
 @pytest.mark.parametrize("index", (0, 1))

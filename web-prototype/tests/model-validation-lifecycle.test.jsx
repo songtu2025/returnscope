@@ -9,7 +9,7 @@ const { apiMock } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("../src/api", () => ({ api: apiMock }));
+vi.mock("../src/shared/api/modelApi", () => ({ modelApi: apiMock }));
 
 import { useModelValidationRun } from "../src/features/system-settings/useModelValidationRun";
 

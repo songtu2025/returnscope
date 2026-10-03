@@ -14,9 +14,9 @@ const { apiMock } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("../src/api", () => ({ api: apiMock }));
+vi.mock("../src/shared/api/modelApi", () => ({ modelApi: apiMock }));
 
-import { ApiManagement } from "../src/pages/ApiManagement";
+import { ModelServicePage } from "../src/features/system-settings/ModelServicePage";
 
 function deferred() {
   let resolve;
@@ -77,7 +77,7 @@ test.each(["success", "failure"])("保存草稿 %s 后恢复连接切换", async
   const user = userEvent.setup();
   const pending = deferred();
   apiMock.createConfig.mockReturnValue(pending.promise);
-  render(<ApiManagement notify={notify} />);
+  render(<ModelServicePage notify={notify} />);
 
   await user.click(await screen.findByRole("button", { name: "编辑连接" }));
   await user.type(
@@ -126,7 +126,7 @@ test.each([
   const pending = deferred();
   apiMock.configs.mockResolvedValue([connection("A", true), connection("B")]);
   apiMock[apiMethod].mockReturnValue(pending.promise);
-  render(<ApiManagement notify={notify} />);
+  render(<ModelServicePage notify={notify} />);
 
   const selector = await screen.findByRole("combobox", { name: "模型服务" });
   if (action === "确认放弃") {
@@ -154,7 +154,7 @@ test("保存模型期间锁定编辑弹窗与连接列表", async () => {
   const user = userEvent.setup();
   const pending = deferred();
   apiMock.createModel.mockReturnValue(pending.promise);
-  render(<ApiManagement notify={notify} />);
+  render(<ModelServicePage notify={notify} />);
 
   await user.click(await screen.findByRole("button", { name: "管理目录" }));
   await user.click(screen.getByRole("button", { name: "添加模型" }));
@@ -187,7 +187,7 @@ test("保存新草稿后保持选中新版本", async () => {
     .mockResolvedValueOnce([original])
     .mockResolvedValueOnce([{ ...original, versions: [saved, ...original.versions] }]);
   apiMock.createConfig.mockResolvedValue(saved);
-  render(<ApiManagement notify={notify} />);
+  render(<ModelServicePage notify={notify} />);
 
   await user.click(await screen.findByRole("button", { name: "编辑连接" }));
   await user.type(

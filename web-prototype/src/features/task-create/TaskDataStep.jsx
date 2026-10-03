@@ -3,10 +3,10 @@ import { Database, FileArrowUp, FolderOpen, UploadSimple } from "@phosphor-icons
 import { MysqlReturnImportForm } from "./MysqlReturnImportForm";
 
 /** @typedef {import("./taskCreateContracts").DataVersion} DataVersion */
-/** @typedef {import("./taskCreateContracts").MysqlFormState} MysqlFormState */
+/** @typedef {import("./mysqlReturnContracts").MysqlFormState} MysqlFormState */
 /** @typedef {import("./taskCreateContracts").TaskForm} TaskForm */
-/** @typedef {import("./MysqlReturnImportForm").MysqlImportResult} MysqlImportResult */
-/** @typedef {import("./MysqlReturnImportForm").MysqlReturnFormState} MysqlReturnFormState */
+/** @typedef {import("./mysqlReturnContracts").MysqlImportResult} MysqlImportResult */
+/** @typedef {import("./mysqlReturnContracts").MysqlReturnFormState} MysqlReturnFormState */
 /** @typedef {readonly ["mysql" | "upload" | "existing", string, import("react").ElementType]} DataEntryOption */
 
 /** @type {readonly DataEntryOption[]} */

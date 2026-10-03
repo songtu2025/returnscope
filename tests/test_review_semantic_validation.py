@@ -8,9 +8,10 @@ from unittest.mock import Mock
 import pytest
 from test_result_version_reviews import _publish_review_required
 
-from web_backend import review_batch_editing as editing_module
 from web_backend.database import Database
 from web_backend.review_batch_editing import ReviewBatchEditingMixin
+from web_backend.review_batches import record_editing as editing_module
+from web_backend.review_batches import semantic_validation as validation_module
 from web_backend.review_service import ReviewService
 
 NOW = "2026-10-01T00:00:00+00:00"
@@ -69,7 +70,7 @@ def _run_update(
 @pytest.fixture
 def validation_context(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     context = _validation_context()
-    monkeypatch.setattr(editing_module, "build_semantic_review_view", context.view)
+    monkeypatch.setattr(validation_module, "build_semantic_review_view", context.view)
     monkeypatch.setattr(editing_module, "new_id", lambda _prefix: "revision-fixed")
     return context
 

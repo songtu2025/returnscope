@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 from test_classification_result_pool import _seed_result_context
 
 import web_backend.dataset_service as dataset_service_module
+import web_backend.datasets.preview as dataset_preview_module
 from return_semantics.data import (
     PRODUCT_COLUMNS,
     RETURN_COLUMNS,
@@ -464,14 +465,14 @@ def test_return_preview_reads_only_requested_prefix(
         [_return_row(f"O-{index}", "偏小") for index in range(20)],
     )
     created = _create_managed_returns(service, source)
-    original = dataset_service_module.read_return_file
+    original = dataset_preview_module.read_return_file
     observed: list[int | None] = []
 
     def tracking_read(path, usecols=None, nrows=None):
         observed.append(nrows)
         return original(path, usecols=usecols, nrows=nrows)
 
-    monkeypatch.setattr(dataset_service_module, "read_return_file", tracking_read)
+    monkeypatch.setattr(dataset_preview_module, "read_return_file", tracking_read)
     preview = service.preview_rows(str(created["id"]), offset=5, limit=2)
 
     assert observed == [7]

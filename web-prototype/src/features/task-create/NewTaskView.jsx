@@ -1,6 +1,5 @@
 import { WarningCircle } from "@phosphor-icons/react";
 import Button from "antd/es/button";
-
 import { InlineLoading, PageHeading } from "../../components/SharedUi";
 import { SetupBlock } from "./NewTaskActions";
 import { ReturnImportDialog } from "./ReturnImportDialog";
@@ -8,17 +7,16 @@ import { TaskConfigurationStep } from "./TaskConfigurationStep";
 import { TaskDataStep } from "./TaskDataStep";
 import { TaskPlanReviewStep } from "./TaskPlanReviewStep";
 
-/** @typedef {import("./taskCreateContracts").ApiConnection} ApiConnection */
 /** @typedef {import("./taskCreateContracts").AvailableModel} AvailableModel */
 /** @typedef {import("./taskCreateContracts").DataVersion} DataVersion */
-/** @typedef {import("./taskCreateContracts").MysqlFormState} MysqlFormState */
+/** @typedef {import("./mysqlReturnContracts").MysqlFormState} MysqlFormState */
 /** @typedef {import("./taskCreateContracts").PublishedConfig} PublishedConfig */
 /** @typedef {import("./taskCreateContracts").ReturnImportResult} ReturnImportResult */
 /** @typedef {import("./taskCreateContracts").TaskForm} TaskForm */
 /** @typedef {import("./taskCreateContracts").TaskModelPolicy} TaskModelPolicy */
 /** @typedef {import("./taskCreateContracts").TaskPlanViewState} TaskPlanViewState */
 /** @typedef {import("./taskCreateContracts").TaskPreflightState} TaskPreflightState */
-/** @typedef {import("./MysqlReturnImportForm").MysqlReturnFormState} MysqlReturnFormState */
+/** @typedef {import("./mysqlReturnContracts").MysqlReturnFormState} MysqlReturnFormState */
 /** @typedef {import("../task-planning/taskPlanContracts").TaskDataQuality} TaskDataQuality */
 /** @typedef {import("../task-planning/taskPlanContracts").TaskPlanCounts} TaskPlanCounts */
 /**

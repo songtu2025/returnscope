@@ -7,8 +7,8 @@ from time import sleep
 
 import pytest
 
-from web_backend import dashboard_service
 from web_backend.dashboard_service import DashboardService
+from web_backend.dashboards import analysis as dashboard_analysis
 from web_backend.database import Database
 
 
@@ -29,7 +29,7 @@ def test_parallel_identical_insights_share_one_calculation(
         assert release.wait(10)
         return {"problem": options.problem}
 
-    monkeypatch.setattr(dashboard_service, "build_insights", fake_build_insights)
+    monkeypatch.setattr(dashboard_analysis, "build_insights", fake_build_insights)
 
     def request(problem: str | None):
         barrier.wait(timeout=10)
@@ -68,7 +68,7 @@ def test_failed_insight_calculation_can_be_retried(
         assert release.wait(10)
         raise ValueError("查询失败")
 
-    monkeypatch.setattr(dashboard_service, "build_insights", fail)
+    monkeypatch.setattr(dashboard_analysis, "build_insights", fail)
 
     def request():
         barrier.wait(timeout=10)

@@ -78,7 +78,7 @@
  * @property {boolean} [resumePreflight]
  * @property {"existing" | "upload" | "mysql"} [dataEntryMode]
  * @property {string} [selectedDataLabel]
- * @property {Partial<import("./MysqlReturnImportForm").MysqlReturnFormState>} [mysqlDraft]
+ * @property {Partial<import("./mysqlReturnContracts").MysqlReturnFormState>} [mysqlDraft]
  * @property {Partial<TaskForm>} [form]
  * @property {TaskRepairContext | null} [repairContext]
  *

@@ -45,7 +45,7 @@ import { ImportRulesPage } from "../src/features/data-management/ImportRulesPage
 import { ReturnDataAssetsPage } from "../src/features/data-management/ReturnDataAssetsPage";
 import { ReturnImportDialog } from "../src/features/task-create/ReturnImportDialog";
 import { DatasetUploadDialog } from "../src/components/DatasetUploadDialog";
-import { DatasetReferences } from "../src/pages/DataManagement";
+import { DatasetReferences } from "../src/features/data-management/DatasetReferences";
 import { renderWithServerState as render } from "./renderWithServerState";
 
 beforeEach(() => {

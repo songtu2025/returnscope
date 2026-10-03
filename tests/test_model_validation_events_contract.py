@@ -57,7 +57,9 @@ def test_validation_events_advance_cursor_and_keep_alive_before_completion(
     harness: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     sleep = AsyncMock()
-    monkeypatch.setattr("web_backend.routers.models.asyncio.sleep", sleep)
+    monkeypatch.setattr(
+        "web_backend.routers.model_validation_routes.asyncio.sleep", sleep
+    )
     first = {"id": 7, "message": "合成首条事件"}
     second = {"id": 8, "message": "合成末条事件"}
     harness.service.get_validation_run.side_effect = [
@@ -91,7 +93,9 @@ def test_validation_events_keep_existing_poll_limit_without_false_close(
     run: dict[str, str] | None,
 ) -> None:
     sleep = AsyncMock()
-    monkeypatch.setattr("web_backend.routers.models.asyncio.sleep", sleep)
+    monkeypatch.setattr(
+        "web_backend.routers.model_validation_routes.asyncio.sleep", sleep
+    )
     harness.service.get_validation_run.side_effect = [{"status": "running"}] + [
         run
     ] * 900
