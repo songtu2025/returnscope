@@ -866,9 +866,11 @@ def test_publish_batch_rejects_stale_revision_and_pending_records(
         )
 
 
+@pytest.mark.parametrize("failure_point", ["records", "audit"])
 def test_publish_batch_rolls_back_failed_derived_version(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    failure_point: str,
 ) -> None:
     context, base = _publish_review_required(tmp_path)
     base_id = str(base["version_id"])
@@ -886,11 +888,25 @@ def test_publish_batch_rolls_back_failed_derived_version(
     )
     current_batch = review_service.get_batch(batch["id"])
 
-    def fail_insert_records(*_args: object, **_kwargs: object) -> None:
-        raise RuntimeError("模拟派生记录写入失败")
+    original_base = result_service.get(base_id)
+    if failure_point == "records":
+        target = result_service
+        method_name = "_insert_records"
+        message = "模拟派生记录写入失败"
+    else:
+        target = review_service
+        method_name = "_insert_audit"
+        message = "模拟发布审计写入后失败"
+    original_write = getattr(target, method_name)
 
-    monkeypatch.setattr(result_service, "_insert_records", fail_insert_records)
-    with pytest.raises(RuntimeError, match="模拟派生记录写入失败"):
+    def fail_publication_write(*args: object, **kwargs: object) -> None:
+        # 审计场景先完成实际写入，再验证事务能撤销发布末尾的全部变更。
+        if failure_point == "audit":
+            original_write(*args, **kwargs)
+        raise RuntimeError(message)
+
+    monkeypatch.setattr(target, method_name, fail_publication_write)
+    with pytest.raises(RuntimeError, match=message):
         review_service.publish_batch(
             batch["id"],
             current_batch["revision"],
@@ -903,6 +919,7 @@ def test_publish_batch_rolls_back_failed_derived_version(
     assert rolled_back_batch["revision"] == current_batch["revision"]
     assert rolled_back_batch["published_version_id"] is None
     assert rolled_back_batch["published_at"] is None
+    assert result_service.get(base_id) == original_base
     with context.database.connect() as connection:
         assert (
             connection.execute(
@@ -914,13 +931,27 @@ def test_publish_batch_rolls_back_failed_derived_version(
             ).fetchone()[0]
             == 0
         )
+        for table in (
+            "classification_units",
+            "classification_unit_labels",
+            "classification_unit_semantics",
+            "classification_result_records",
+        ):
+            assert (
+                connection.execute(
+                    f"SELECT COUNT(*) FROM {table} WHERE result_version_id != ?",
+                    (base_id,),
+                ).fetchone()[0]
+                == 0
+            )
         assert (
             connection.execute(
                 """
-                SELECT COUNT(*) FROM classification_units
-                WHERE result_version_id != ?
+                SELECT COUNT(*) FROM task_events
+                WHERE event_type = 'review_batch_published'
+                  AND json_extract(data_json, '$.batch_id') = ?
                 """,
-                (base_id,),
+                (batch["id"],),
             ).fetchone()[0]
             == 0
         )
