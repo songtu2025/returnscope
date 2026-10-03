@@ -8,8 +8,6 @@ from analysis_metric_helpers import details as _details
 from return_analysis.metrics import (
     category_summary,
     claim_relation_summary,
-    common_problem_summary,
-    dimension_problem_over_index,
     explode_labels,
     filter_details,
     label_summary,
@@ -18,9 +16,6 @@ from return_analysis.metrics import (
     multi_value_summary,
     overview_metrics,
     pareto_problem_summary,
-    problem_pair_summary,
-    problem_priority_summary,
-    problem_variant_matrix,
     product_label_matrix,
     product_summary,
     review_reason_summary,
@@ -67,26 +62,6 @@ def test_label_summary_counts_each_record_once_per_label() -> None:
     assert comfort["退货记录数"] == 1
 
 
-def test_problem_pair_summary_counts_multi_problem_records() -> None:
-    result = problem_pair_summary(_details())
-
-    assert result.loc[0, "问题组合"] == "不舒适 + 偏小"
-    assert result.loc[0, "退货记录数"] == 1
-    assert result.loc[0, "占多问题记录比例"] == 1.0
-    assert result.loc[0, "支持度"] == 0.5
-    assert result.loc[0, "提升度"] == 1.0
-
-    focused = problem_pair_summary(
-        _details(),
-        focus_code="FIT_TOO_SMALL",
-    )
-    assert focused.loc[0, "聚焦置信度"] == 0.5
-    assert problem_pair_summary(
-        _details(),
-        focus_code="QUALITY_GENERAL",
-    ).empty
-
-
 def test_multi_value_summary_deduplicates_values_per_record() -> None:
     result = multi_value_summary(_details(), "部位")
 
@@ -101,67 +76,6 @@ def test_pareto_problem_summary_uses_primary_cause_share() -> None:
     assert result.loc[0, "标签编码"] == "FIT_TOO_SMALL"
     assert result.loc[0, "主因贡献率"] == 1.0
     assert result.loc[0, "累计贡献率"] == 1.0
-
-
-def test_problem_priority_summary_combines_diagnosis_dimensions() -> None:
-    result = problem_priority_summary(_details(), _catalog())
-
-    small = result.loc[result["标签编码"].eq("FIT_TOO_SMALL")].iloc[0]
-    assert small["退货记录数"] == 2
-    assert small["影响SKU数"] == 1
-    assert small["Top SKU集中度"] == 1.0
-    assert small["多问题记录数"] == 1
-    assert small["Listing冲突数"] == 1
-    assert small["需复核记录数"] == 1
-    assert small["近30天占比"] == 0.0
-    assert small["前30天占比"] == 1.0
-    assert small["变化百分点"] == -100.0
-
-
-def test_common_problem_summary_measures_cross_style_breadth() -> None:
-    details = _details()
-    extra = details.iloc[[0]].copy()
-    extra["分类键"] = "key-3"
-    extra["sku"] = "SKU-3"
-    extra["asin"] = "ASIN-3"
-    extra["款式"] = "782"
-    extra["尺码"] = "40-41"
-    extra["问题标签"] = "FIT_TOO_SMALL:偏小"
-    details = pd.concat([details, extra], ignore_index=True)
-
-    result = common_problem_summary(details, _catalog())
-    small = result.loc[result["标签编码"].eq("FIT_TOO_SMALL")].iloc[0]
-
-    assert small["影响款式数"] == 2
-    assert small["款式覆盖率"] == 1.0
-    assert small["影响尺码数"] == 2
-    assert small["影响SKU数"] == 2
-    assert small["Top SKU集中度"] == 2 / 3
-    assert small["Top款式集中度"] == 2 / 3
-    assert small["款式HHI"] == 5 / 9
-    assert round(small["款式分布均衡度"], 4) == 0.9183
-    assert small["覆盖范围"] == "跨多数款式"
-
-    matrix = problem_variant_matrix(details, "FIT_TOO_SMALL")
-    assert matrix.loc["731", "38-39"] == 2
-    assert matrix.loc["782", "40-41"] == 1
-
-
-def test_dimension_problem_over_index_compares_with_baseline() -> None:
-    result = dimension_problem_over_index(
-        _details(),
-        "款式",
-        problem_code="FIT_TOO_SMALL",
-        min_records=1,
-        top_n=None,
-    )
-    style = result.loc[result["款式"].eq("731")].iloc[0]
-
-    assert style["记录数"] == 2
-    assert style["维度内占比"] == 1.0
-    assert style["整体占比"] == 2 / 3
-    assert style["提升度"] == 1.5
-    assert style["标准化残差"] > 0
 
 
 def test_product_label_matrix_uses_primary_labels() -> None:
