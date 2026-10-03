@@ -1,10 +1,16 @@
 from datetime import date
 
 import pandas as pd
+import pytest
+from analysis_metric_helpers import catalog as _catalog
+from analysis_metric_helpers import details as _details
 
 from return_analysis.metrics import (
+    category_summary,
+    claim_relation_summary,
     common_problem_summary,
     dimension_problem_over_index,
+    explode_labels,
     filter_details,
     label_summary,
     listing_problem_summary,
@@ -16,91 +22,14 @@ from return_analysis.metrics import (
     problem_priority_summary,
     problem_variant_matrix,
     product_label_matrix,
+    product_summary,
     review_reason_summary,
     size_direction_summary,
     specific_part_summary,
+    split_values,
+    status_summary,
+    trend_summary,
 )
-
-
-def _details() -> pd.DataFrame:
-    return pd.DataFrame(
-        [
-            {
-                "分类键": "key-1",
-                "return_date": pd.Timestamp("2026-07-01", tz="UTC"),
-                "sku": "SKU-1",
-                "asin": "ASIN-1",
-                "品类A": "水鞋",
-                "品类B": "薄底水鞋",
-                "Listing": "SK001",
-                "款式": "731",
-                "尺码": "38-39",
-                "Amazon原因": "TOO_SMALL",
-                "问题标签": "FIT_TOO_SMALL:偏小 | COMFORT_GENERAL:不舒适",
-                "主因标签": "FIT_TOO_SMALL:偏小",
-                "部位": "TOE | TOE | WHOLE_SHOE",
-                "Listing承诺关系": "NONE",
-                "处理状态": "AUTO_APPROVED",
-                "复核原因": "",
-                "has_text": True,
-            },
-            {
-                "分类键": "key-2",
-                "return_date": pd.Timestamp("2026-07-02", tz="UTC"),
-                "sku": "SKU-1",
-                "asin": "ASIN-1",
-                "品类A": "水鞋",
-                "品类B": "薄底水鞋",
-                "Listing": "SK001",
-                "款式": "731",
-                "尺码": "38-39",
-                "Amazon原因": "TOO_SMALL",
-                "问题标签": "FIT_TOO_SMALL:偏小",
-                "主因标签": "FIT_TOO_SMALL:偏小",
-                "部位": "TOE",
-                "Listing承诺关系": "CONTRADICTS",
-                "处理状态": "MANUAL_REVIEW",
-                "复核原因": "Amazon 原因与评论方向冲突",
-                "has_text": True,
-            },
-            {
-                "分类键": "",
-                "return_date": pd.Timestamp("2026-08-01", tz="UTC"),
-                "sku": "SKU-2",
-                "asin": "ASIN-2",
-                "品类A": "水鞋",
-                "品类B": "厚底水鞋",
-                "Listing": "SK002",
-                "款式": "782",
-                "尺码": "40-41",
-                "Amazon原因": "UNWANTED",
-                "问题标签": "",
-                "主因标签": "",
-                "部位": "",
-                "Listing承诺关系": "",
-                "处理状态": "NO_TEXT_EVIDENCE",
-                "复核原因": "",
-                "has_text": False,
-            },
-        ]
-    )
-
-
-def _catalog() -> pd.DataFrame:
-    return pd.DataFrame(
-        [
-            {
-                "标签编码": "FIT_TOO_SMALL",
-                "标签名称": "偏小",
-                "一级分类": "尺码与合脚",
-            },
-            {
-                "标签编码": "COMFORT_GENERAL",
-                "标签名称": "不舒适",
-                "一级分类": "体感",
-            },
-        ]
-    )
 
 
 def test_overview_metrics_uses_return_record_grain() -> None:
@@ -300,3 +229,53 @@ def test_listing_quality_summary_exposes_evidence_coverage() -> None:
     assert sk001["标签覆盖率"] == 1.0
     assert sk001["需复核率"] == 0.5
     assert sk002["无文本率"] == 1.0
+
+
+@pytest.mark.parametrize("value", [None, pd.NA, float("nan"), "", " | "])
+def test_split_values_ignores_missing_values(value: object) -> None:
+    assert split_values(value) == []
+
+
+def test_explode_labels_deduplicates_codes_within_each_record() -> None:
+    frame = _details()
+    frame.loc[0, "问题标签"] += " | FIT_TOO_SMALL:偏小"
+    result = explode_labels(frame, "问题标签", keep_columns=["sku"])
+    assert len(result) == 3
+    assert result["_record_id"].tolist() == [0, 0, 1]
+
+
+def test_status_summary_preserves_unknown_names_and_empty_columns() -> None:
+    frame = _details()
+    frame.loc[0, "处理状态"] = "OTHER"
+    result = status_summary(frame)
+    assert result.loc[result["处理状态"].eq("OTHER"), "状态名称"].iloc[0] == "OTHER"
+    assert status_summary(frame.iloc[:0]).columns.tolist() == result.columns.tolist()
+
+
+def test_category_summary_uses_all_records_as_denominator() -> None:
+    frame = _details()
+    frame.loc[2, "Amazon原因"] = ""
+    result = category_summary(frame, "Amazon原因")
+    assert result["Amazon原因"].tolist() == ["TOO_SMALL"]
+    assert result["占退货记录比例"].tolist() == [2 / 3]
+
+
+@pytest.mark.parametrize("frequency", ["week", "month"])
+def test_trend_summary_excludes_missing_dates(frequency: str) -> None:
+    frame = _details()
+    frame.loc[2, "return_date"] = pd.NaT
+    result = trend_summary(frame, frequency)
+    totals = result.groupby("统计类型")["退货记录数"].sum().to_dict()
+    assert totals == {"退货记录": 2, "有评论": 2, "需复核": 1}
+
+
+def test_product_summary_handles_products_without_text() -> None:
+    result = product_summary(_details(), "sku").set_index("sku")
+    assert result.loc["SKU-1", "首要问题"] == "偏小"
+    assert result.loc["SKU-2", "文本覆盖率"] == 0
+    assert result.loc["SKU-2", "复核占比"] == 0
+
+
+def test_claim_relation_summary_excludes_none_and_blank() -> None:
+    result = claim_relation_summary(_details())
+    assert result.to_dict("records") == [{"承诺关系": "CONTRADICTS", "退货记录数": 1}]
