@@ -1,11 +1,17 @@
 from copy import deepcopy
+from pathlib import Path
 from typing import Any
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from insight_report_helpers import legacy_evidence
+from test_insight_reports import _report_payload, _service_context
 
+from web_backend.insight_report_contracts import V5_PROMPT_VERSION
 from web_backend.insight_report_legacy_blueprint import _build_blueprint
 from web_backend.insight_report_service import InsightReportService
+from web_backend.routers.insight_reports import create_insight_report_router
 
 
 @pytest.mark.parametrize("context", ["returns", "user_feedback"])
@@ -73,3 +79,57 @@ def test_legacy_report_preserves_invalid_pending_result(pending: Any) -> None:
             "无待审核记录"
             in _build_blueprint(evidence)["executive_summary"][2]["statement"]
         )
+
+
+@pytest.mark.parametrize("model_failed", [False, True])
+def test_legacy_report_api_generation_and_retry(
+    tmp_path: Path, model_failed: bool
+) -> None:
+    context, dashboard, service, _ = _service_context(
+        tmp_path,
+        client_payload=_report_payload(),
+        client_error="合成模型失败" if model_failed else None,
+    )
+    app = FastAPI()
+    app.include_router(create_insight_report_router(service, lambda: {"id": "user-1"}))
+    with TestClient(app) as client:
+        response = client.post(
+            f"/api/analysis-dashboards/{dashboard['id']}/versions/"
+            f"{dashboard['version']['version_id']}/ai-insight-reports",
+            json={"model_id": "model-1", "reasoning_effort": "high"},
+        )
+        assert response.status_code == 201
+        report_id = response.json()["id"]
+        # 在隔离数据库模拟既有 V5 排队任务，模型请求由现有替身处理。
+        with context.database.transaction() as connection:
+            connection.execute(
+                "UPDATE ai_insight_reports SET prompt_version=? WHERE id=?",
+                (V5_PROMPT_VERSION, report_id),
+            )
+        assert service.claim_next() == report_id
+        service.run(report_id)
+        result = client.get(f"/api/ai-insight-reports/{report_id}")
+        assert result.status_code == 200
+        payload = result.json()
+        assert payload["prompt_version"] == V5_PROMPT_VERSION
+        if model_failed:
+            assert payload["status"] == "failed"
+            assert payload["version_no"] is None
+            retried = client.post(f"/api/ai-insight-reports/{report_id}/retry")
+            assert retried.status_code == 200
+            assert retried.json()["id"] != report_id
+            assert retried.json()["status"] == "queued"
+            assert retried.json()["attempt_no"] == 2
+            assert service.get(report_id)["status"] == "failed"
+        else:
+            assert payload["status"] == "completed"
+            assert payload["content"]["title"] == "L1 退货问题诊断报告"
+            summaries = payload["content"]["executive_summary"]
+            assert [item["title"] for item in summaries] == [
+                "最明确的问题分化",
+                "优先验证对象",
+                "结论可信边界",
+            ]
+            assert summaries[2]["evidence_ids"] == ["scope", "review_bias"]
+            assert all("id" not in item for item in summaries)
+            assert "issues" not in payload["content"]
