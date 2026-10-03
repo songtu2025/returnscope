@@ -10,7 +10,7 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
-from httpx import Response
+from httpx2 import Response
 
 from web_backend.analysis_service import AnalysisService
 from web_backend.classification_result_service import ResultPublicationError
