@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from web_backend.classification_result_queries import system_rerun_counts
 from web_backend.database import Database
@@ -11,7 +11,15 @@ from web_backend.task_contracts import SEGMENT_USER_LIMIT, WAITING_SEGMENT_STATU
 class TaskDetailQueriesMixin:
     database: Database
     _serialize: Callable[[dict[str, Any]], dict[str, Any]]
-    _serialize_segment: Callable[..., dict[str, Any]]
+
+    if TYPE_CHECKING:
+
+        @classmethod
+        def _serialize_segment(
+            cls,
+            item: dict[str, Any],
+            system_failure_count: int = 0,
+        ) -> dict[str, Any]: ...
 
     def get(self, task_id: str) -> dict[str, Any] | None:
         with self.database.connect() as connection:
