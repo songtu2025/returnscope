@@ -3569,7 +3569,7 @@ describe("关键用户流程", () => {
     const target = (await screen.findByText("复核员")).closest("tr");
     expect(target).toHaveClass("is-targeted");
     expect(target).toHaveAttribute("aria-current", "true");
-    expect(scrollProbe).toHaveBeenCalled();
+    await waitFor(() => expect(scrollProbe).toHaveBeenCalled());
     scrollProbe.mockRestore();
   });
 
