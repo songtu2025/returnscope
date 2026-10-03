@@ -212,3 +212,41 @@ def _prepare_subject_labels(
         """,
         (subject,),
     )
+
+
+@timed_stage("insight_filter_options")
+def _collect_filter_options(
+    scope: InsightQueryScope, reuse_option_records: bool
+) -> dict[str, list[str]]:
+    columns = {
+        "listings": "r.listing",
+        "product_names": "r.product_name",
+        "product_skus": "r.product_sku",
+    }
+    table = (
+        scope.records_table if reuse_option_records else "classification_result_records"
+    )
+    where_sql = "1=1" if reuse_option_records else scope.option_where
+    params = [] if reuse_option_records else scope.option_params
+    materialization = "NOT MATERIALIZED" if reuse_option_records else "MATERIALIZED"
+    queries = [
+        f"SELECT DISTINCT '{key}' AS kind, {column} AS value "
+        f"FROM option_records r WHERE {column} IS NOT NULL AND TRIM({column}) <> ''"
+        for key, column in columns.items()
+    ]
+    # 原表只读取一次；已有临时范围则直接复用，保留去重和 SQLite 排序口径。
+    rows = scope.connection.execute(
+        f"""
+        WITH option_records AS {materialization} (
+            SELECT r.listing, r.product_name, r.product_sku
+            FROM {table} r WHERE {where_sql}
+        )
+        {" UNION ALL ".join(queries)}
+        ORDER BY kind, value COLLATE NOCASE ASC
+        """,
+        tuple(params),
+    ).fetchall()
+    options: dict[str, list[str]] = {key: [] for key in columns}
+    for row in rows:
+        options[str(row["kind"])].append(str(row["value"]))
+    return options

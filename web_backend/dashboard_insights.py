@@ -5,11 +5,11 @@ from typing import Any
 
 from web_backend.dashboard_insight_details import (
     EVIDENCE_PAGE_SIZE,
+    _reason_detail_payload,
     collect_reason_details,
     list_reason_evidence,
 )
 from web_backend.dashboard_insight_overview import (
-    InsightQueryScope,
     collect_insight_overview,
     collect_label_counts,
     collect_reason_context,
@@ -19,6 +19,7 @@ from web_backend.dashboard_insight_preparation import (
     InsightOptions as InsightOptions,
 )
 from web_backend.dashboard_insight_preparation import (
+    _collect_filter_options,
     _prepare_scope,
 )
 from web_backend.dashboard_insight_preparation import (
@@ -36,71 +37,6 @@ from web_backend.request_timing import timed_stage
 from web_backend.result_hierarchy import hierarchy_counts
 
 INSIGHT_PAGE_CACHE_KIB = 64 * 1024
-
-
-def _reason_detail_payload(
-    details: dict[str, Any], selected_reason: dict[str, Any] | None
-) -> dict[str, Any]:
-    semantic_record_count = int(details["semantic_record_count"])
-    return {
-        "trend": details["trend"],
-        "products": details["products"],
-        "variants": details["variants"],
-        "co_reasons": details["co_reasons"],
-        "semantic_profile": {
-            "record_count": semantic_record_count,
-            "coverage": percentage(
-                semantic_record_count,
-                int(selected_reason["record_count"]) if selected_reason else 0,
-            ),
-            "parts": details["semantic_parts"],
-            "opinions": details["semantic_opinions"],
-        },
-        "evidence": {
-            "items": details["evidence_items"],
-            "total": int(details["evidence_total"]),
-            "page": 1,
-            "page_size": EVIDENCE_PAGE_SIZE,
-        },
-    }
-
-
-@timed_stage("insight_filter_options")
-def _collect_filter_options(
-    scope: InsightQueryScope, reuse_option_records: bool
-) -> dict[str, list[str]]:
-    columns = {
-        "listings": "r.listing",
-        "product_names": "r.product_name",
-        "product_skus": "r.product_sku",
-    }
-    table = (
-        scope.records_table if reuse_option_records else "classification_result_records"
-    )
-    where_sql = "1=1" if reuse_option_records else scope.option_where
-    params = [] if reuse_option_records else scope.option_params
-    materialization = "NOT MATERIALIZED" if reuse_option_records else "MATERIALIZED"
-    queries = [
-        f"SELECT DISTINCT '{key}' AS kind, {column} AS value "
-        f"FROM option_records r WHERE {column} IS NOT NULL AND TRIM({column}) <> ''"
-        for key, column in columns.items()
-    ]
-    # 原表只读取一次；已有临时范围则直接复用，保留去重和 SQLite 排序口径。
-    rows = scope.connection.execute(
-        f"""
-        WITH option_records AS {materialization} (
-            SELECT r.listing, r.product_name, r.product_sku
-            FROM {table} r WHERE {where_sql}
-        )
-        {" UNION ALL ".join(queries)}
-        ORDER BY kind, value COLLATE NOCASE ASC
-        """,
-        tuple(params),
-    ).fetchall()
-    options: dict[str, list[str]] = {key: [] for key in columns}
-    for row in rows:
-        options[str(row["kind"])].append(str(row["value"]))
-    return options
 
 
 @timed_stage("insight_build")

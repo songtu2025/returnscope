@@ -239,3 +239,30 @@ def collect_reason_details(
         "evidence_items": evidence_items,
         "evidence_total": evidence_total,
     }
+
+
+def _reason_detail_payload(
+    details: dict[str, Any], selected_reason: dict[str, Any] | None
+) -> dict[str, Any]:
+    semantic_record_count = int(details["semantic_record_count"])
+    return {
+        "trend": details["trend"],
+        "products": details["products"],
+        "variants": details["variants"],
+        "co_reasons": details["co_reasons"],
+        "semantic_profile": {
+            "record_count": semantic_record_count,
+            "coverage": percentage(
+                semantic_record_count,
+                int(selected_reason["record_count"]) if selected_reason else 0,
+            ),
+            "parts": details["semantic_parts"],
+            "opinions": details["semantic_opinions"],
+        },
+        "evidence": {
+            "items": details["evidence_items"],
+            "total": int(details["evidence_total"]),
+            "page": 1,
+            "page_size": EVIDENCE_PAGE_SIZE,
+        },
+    }
