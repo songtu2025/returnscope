@@ -205,7 +205,7 @@ def test_checkpoint_failure_stops_publication(runtime, monkeypatch) -> None:
 def test_legacy_export_failure_keeps_published_result(runtime, monkeypatch) -> None:
     runtime.context.latest_run = _latest_run(runtime.seed.results)
     monkeypatch.setattr(
-        "web_backend.agent_runner.export_results",
+        "web_backend.task_execution.legacy_export.export_results",
         Mock(side_effect=OSError("模拟导出失败")),
     )
     runtime.refresh_parent = Mock()

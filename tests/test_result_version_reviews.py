@@ -686,7 +686,7 @@ def test_review_batch_publishes_immutable_complete_v2_without_model(
         raise AssertionError("发布复核版本不得调用模型或旧任务重建")
 
     monkeypatch.setattr(
-        "web_backend.agent_runner.classify_comments",
+        "web_backend.task_execution.classification.classify_comments",
         forbidden,
     )
     monkeypatch.setattr(review_service, "_rebuild_result", forbidden)

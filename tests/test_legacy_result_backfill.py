@@ -78,7 +78,9 @@ def test_preview_and_apply_publish_legacy_v1_without_model_and_are_idempotent(
     def forbidden(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("历史结果回填不得调用模型")
 
-    monkeypatch.setattr("web_backend.agent_runner.classify_comments", forbidden)
+    monkeypatch.setattr(
+        "web_backend.task_execution.classification.classify_comments", forbidden
+    )
     preview = service.preview()
     assert preview["counts"] == {
         "ready": 1,

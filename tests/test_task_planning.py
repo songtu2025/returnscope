@@ -306,15 +306,15 @@ def _install_fake_runner(
         output_path.touch()
 
     monkeypatch.setattr(
-        "web_backend.agent_runner.classify_comments",
+        "web_backend.task_execution.classification.classify_comments",
         fake_classify_comments,
     )
     monkeypatch.setattr(
-        "web_backend.agent_runner.Sub2APIClient",
+        "web_backend.task_execution.model_runtime.Sub2APIClient",
         lambda *_args, **_kwargs: object(),
     )
     monkeypatch.setattr(
-        "web_backend.agent_runner.export_results",
+        "web_backend.task_execution.legacy_export.export_results",
         fake_export_results,
     )
 
@@ -1099,13 +1099,16 @@ def test_run_ready_completes_ready_segment_with_unknown_excluded(
         output_path.touch()
 
     monkeypatch.setattr(
-        "web_backend.agent_runner.classify_comments",
+        "web_backend.task_execution.classification.classify_comments",
         fake_classify_comments,
     )
     monkeypatch.setattr(
-        "web_backend.agent_runner.Sub2APIClient", lambda *_a, **_k: object()
+        "web_backend.task_execution.model_runtime.Sub2APIClient",
+        lambda *_a, **_k: object(),
     )
-    monkeypatch.setattr("web_backend.agent_runner.export_results", fake_export_results)
+    monkeypatch.setattr(
+        "web_backend.task_execution.legacy_export.export_results", fake_export_results
+    )
     settings = _settings(tmp_path)
     settings.ensure_directories()
     runner = AgentRunner(database, settings, _FakeConfigService())
@@ -1169,7 +1172,7 @@ def test_run_segment_resumes_from_saved_checkpoint(
         raise PipelineCancelled("测试中断")
 
     monkeypatch.setattr(
-        "web_backend.agent_runner.classify_comments",
+        "web_backend.task_execution.classification.classify_comments",
         interrupt_after_checkpoint,
     )
     _run_task_segments(database, runner, str(task["id"]), limit=1)
@@ -1204,7 +1207,7 @@ def test_run_segment_ignores_segment_that_is_not_running(
         raise AssertionError("非运行中片段不得调用模型")
 
     monkeypatch.setattr(
-        "web_backend.agent_runner.classify_comments",
+        "web_backend.task_execution.classification.classify_comments",
         forbidden_model_call,
     )
     settings = _settings(tmp_path)
@@ -1248,7 +1251,7 @@ def test_run_segment_pauses_batch_when_model_service_degrades(
         raise ModelServiceUnavailable("模型服务连续失败", 5)
 
     monkeypatch.setattr(
-        "web_backend.agent_runner.classify_comments",
+        "web_backend.task_execution.classification.classify_comments",
         fail_model_service,
     )
     _run_task_segments(database, runner, str(task["id"]), limit=1)

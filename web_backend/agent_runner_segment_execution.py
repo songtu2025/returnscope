@@ -2,56 +2,27 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass, is_dataclass, replace
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from return_semantics.analysis_context import analysis_context_from_snapshot
-from return_semantics.capabilities import CategoryCapability
 from return_semantics.category_pipeline import CategorySegmentRuntime
 from return_semantics.data import ReturnDataset
 from return_semantics.pipeline import PipelineRun
 from return_semantics.schemas import TaxonomyConfig, ValidatedClassification
 from return_semantics.semantic_review import requires_system_rerun
-from web_backend.classification_standard_service import ClassificationStandardService
-from web_backend.common import json_text, json_value
-from web_backend.config_service import ConfigService
-from web_backend.database import Database
+from web_backend.common import json_value
 from web_backend.dataset_cache import load_cached_dataset
-from web_backend.security import utc_now
 from web_backend.settings import Settings
+from web_backend.task_execution.contracts import _SegmentRunContext
+from web_backend.task_execution.segment_configuration import SegmentConfigurationMixin
+from web_backend.task_execution.segment_state import SegmentStateMixin
 
 performance_logger = logging.getLogger("uvicorn.error.performance")
 
 
-@dataclass
-class _SegmentRunContext:
-    task_id: str
-    segment_id: str
-    task: dict[str, Any]
-    segment: dict[str, Any]
-    checkpoint_path: Path
-    existing_results: dict[str, ValidatedClassification]
-    base_model_calls: int
-    base_cache_hits: int
-    base_model_failures: int
-    latest_run: PipelineRun | None = None
-
-    def runtime_totals(self) -> tuple[int, int, int]:
-        run = self.latest_run
-        return (
-            self.base_model_calls + (run.model_calls if run else 0),
-            self.base_cache_hits + (run.cache_hits if run else 0),
-            self.base_model_failures + (run.model_failures if run else 0),
-        )
-
-
-class SegmentExecutionMixin:
-    database: Database
-    settings: Settings
-    config_service: ConfigService
-    standard_service: ClassificationStandardService
-    capability_registry: Any
+class SegmentExecutionMixin(SegmentStateMixin, SegmentConfigurationMixin):
     _build_segment_runtime: Callable[..., CategorySegmentRuntime]
     _classify_segment: Callable[..., PipelineRun]
     _complete_segment: Callable[..., None]
@@ -60,6 +31,7 @@ class SegmentExecutionMixin:
     _refresh_parent: Callable[..., None]
     _subset_dataset: Callable[..., ReturnDataset]
     _write_checkpoint: Callable[..., None]
+    settings: Settings
 
     def _segment_run_context(
         self,
@@ -210,238 +182,3 @@ class SegmentExecutionMixin:
             taxonomy,
         )
         self._refresh_parent(context.task_id, dataset)
-
-    def _snapshot_model_settings(
-        self,
-        task: dict[str, Any],
-        snapshot: dict[str, Any],
-    ) -> Any:
-        model_settings = self.config_service.build_model_settings(
-            str(task["config_version_id"])
-        )
-        snapshot_config = snapshot.get("config", {})
-        if snapshot_config.get("primary_model") and is_dataclass(model_settings):
-            return replace(
-                model_settings,
-                model=str(snapshot_config["primary_model"]),
-                reasoning_effort=str(
-                    snapshot_config.get(
-                        "primary_effort",
-                        model_settings.reasoning_effort,
-                    )
-                ),
-                cheap_model=snapshot_config.get("cheap_model"),
-                cheap_reasoning_effort=str(
-                    snapshot_config.get(
-                        "cheap_effort",
-                        model_settings.cheap_reasoning_effort,
-                    )
-                ),
-                cheap_model_audit_percent=int(
-                    snapshot_config.get(
-                        "cheap_audit_percent",
-                        model_settings.cheap_model_audit_percent,
-                    )
-                ),
-                secondary_model=snapshot_config.get("secondary_model"),
-                secondary_reasoning_effort=str(
-                    snapshot_config.get(
-                        "secondary_effort",
-                        model_settings.secondary_reasoning_effort,
-                    )
-                ),
-            )
-        return model_settings
-
-    def _load_segment(self, segment_id: str) -> dict[str, Any] | None:
-        with self.database.connect() as connection:
-            row = connection.execute(
-                "SELECT * FROM task_segments WHERE id = ?",
-                (segment_id,),
-            ).fetchone()
-        return dict(row) if row else None
-
-    def _segment_should_stop(self, task_id: str, segment_id: str) -> bool:
-        with self.database.connect() as connection:
-            row = connection.execute(
-                """
-                SELECT s.requested_action, t.cancel_requested, t.pause_requested
-                FROM task_segments s
-                JOIN tasks t ON t.id = s.task_id
-                WHERE s.id = ? AND s.task_id = ?
-                """,
-                (segment_id, task_id),
-            ).fetchone()
-        return bool(
-            row
-            and (
-                row["requested_action"]
-                or row["cancel_requested"]
-                or row["pause_requested"]
-            )
-        )
-
-    def _update_segment_progress(
-        self,
-        task_id: str,
-        segment_id: str,
-        current: int,
-        total: int,
-    ) -> None:
-        now = utc_now()
-        with self.database.transaction() as connection:
-            connection.execute(
-                """
-                UPDATE task_segments
-                SET progress_current = ?, progress_total = ?, heartbeat_at = ?
-                WHERE id = ? AND status = 'running'
-                """,
-                (current, total, now, segment_id),
-            )
-            totals = connection.execute(
-                """
-                SELECT COALESCE(SUM(progress_current), 0) AS current,
-                       COALESCE(SUM(progress_total), 0) AS total
-                FROM task_segments
-                WHERE task_id = ? AND agent_key != 'unknown'
-                """,
-                (task_id,),
-            ).fetchone()
-            task_current = int(totals["current"])
-            task_total = int(totals["total"])
-            percent = round(task_current / task_total * 100, 2) if task_total else 0
-            connection.execute(
-                """
-                UPDATE tasks
-                SET progress_current = ?, progress_total = ?,
-                    progress_percent = ?, heartbeat_at = ?
-                WHERE id = ?
-                """,
-                (task_current, task_total, percent, now, task_id),
-            )
-            connection.execute(
-                """
-                INSERT INTO task_events(
-                    task_id, event_type, stage, message,
-                    progress_current, progress_total, data_json, created_at
-                ) VALUES (?, 'segment_progress', '语义分析', ?, ?, ?, ?, ?)
-                """,
-                (
-                    task_id,
-                    f"Listing 已完成 {current}/{total} 组评论",
-                    task_current,
-                    task_total,
-                    json_text({"segment_id": segment_id}),
-                    now,
-                ),
-            )
-
-    def _update_segment_runtime_metrics(
-        self,
-        segment_id: str,
-        model_calls: int,
-        cache_hits: int,
-        model_failures: int,
-    ) -> None:
-        with self.database.transaction() as connection:
-            connection.execute(
-                """
-                UPDATE task_segments
-                SET model_calls = MAX(model_calls, ?),
-                    cache_hits = MAX(cache_hits, ?),
-                    model_failures = MAX(model_failures, ?)
-                WHERE id = ? AND status = 'running'
-                """,
-                (model_calls, cache_hits, model_failures, segment_id),
-            )
-
-    def _record_model_degraded(
-        self,
-        task_id: str,
-        segment_id: str,
-        error: str,
-        consecutive_failures: int,
-    ) -> None:
-        now = utc_now()
-        message = (
-            f"模型服务已连续失败 {consecutive_failures} 次，正在重试；"
-            "达到 5 次将自动暂停"
-        )
-        with self.database.transaction(immediate=True) as connection:
-            connection.execute(
-                """
-                UPDATE task_segments
-                SET error = ?, heartbeat_at = ?, revision = revision + 1
-                WHERE id = ? AND task_id = ? AND status = 'running'
-                """,
-                (message, now, segment_id, task_id),
-            )
-            connection.execute(
-                """
-                UPDATE tasks
-                SET stage = '模型服务异常', message = ?, heartbeat_at = ?,
-                    revision = revision + 1
-                WHERE id = ?
-                """,
-                (message, now, task_id),
-            )
-            connection.execute(
-                """
-                INSERT INTO task_events(
-                    task_id, event_type, stage, message, data_json, created_at
-                ) VALUES (?, 'model_service_degraded', '模型服务异常', ?, ?, ?)
-                """,
-                (
-                    task_id,
-                    message,
-                    json_text(
-                        {
-                            "segment_id": segment_id,
-                            "consecutive_failures": consecutive_failures,
-                            "error": error[:500],
-                        }
-                    ),
-                    now,
-                ),
-            )
-
-    def _capability_for_segment(
-        self,
-        segment: dict[str, Any],
-    ) -> CategoryCapability:
-        standard_version_id = str(segment.get("standard_version_id") or "")
-        if standard_version_id:
-            return self.standard_service.capability_for_version(standard_version_id)
-        agent_key = str(segment["agent_key"])
-        capability = next(
-            (
-                item
-                for item in self.capability_registry.capabilities
-                if item.key == agent_key
-            ),
-            None,
-        )
-        if capability is None:
-            raise ValueError(f"品类能力不存在: {agent_key}")
-        return capability
-
-    def _taxonomy_for_segment(
-        self,
-        segment: dict[str, Any],
-        capability: CategoryCapability,
-    ) -> TaxonomyConfig:
-        standard_version_id = str(segment.get("standard_version_id") or "")
-        if standard_version_id:
-            return self.standard_service.taxonomy_for_version(standard_version_id)
-        return self.capability_registry.load_taxonomy(capability)
-
-    def _load_segments(self, task_id: str) -> list[dict[str, Any]]:
-        with self.database.connect() as connection:
-            rows = connection.execute(
-                """
-                SELECT * FROM task_segments
-                WHERE task_id = ? ORDER BY execution_order, segment_key
-                """,
-                (task_id,),
-            ).fetchall()
-        return [dict(row) for row in rows]

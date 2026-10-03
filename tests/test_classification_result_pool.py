@@ -1199,7 +1199,7 @@ def test_retry_result_publish_uses_checkpoint_without_model_call(
         raise AssertionError("结果发布重试不得调用模型")
 
     monkeypatch.setattr(
-        "web_backend.agent_runner.classify_comments",
+        "web_backend.task_execution.classification.classify_comments",
         forbidden_model_call,
     )
     runner = AgentRunner(

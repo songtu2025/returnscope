@@ -85,7 +85,8 @@ def runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     for module in (
         "web_backend.agent_runner_segment_outcomes",
         "web_backend.agent_runner_parent_result",
-        "web_backend.agent_runner",
+        "web_backend.task_execution.failure_outcomes",
+        "web_backend.task_execution.legacy_export",
     ):
         monkeypatch.setattr(f"{module}.utc_now", lambda: NOW)
     return SimpleNamespace(
