@@ -201,6 +201,18 @@ def test_review_batch_records_aggregate_business_fields_and_filter_without_n_plu
     )
     assert combined.status_code == 200
     assert combined.json()["total"] == 1
+    # 业务筛选决定入选记录，聚合仍包含该记录关联的全部来源。
+    combined_item = combined.json()["items"][0]
+    for field in (
+        "record_count",
+        "order_ids",
+        "product_names",
+        "listings",
+        "source_skus",
+        "matched_mskus",
+        "product_skus",
+    ):
+        assert combined_item[field] == item[field]
     assert (
         client.get(
             f"/api/review-batches/{batch['id']}/records",
