@@ -90,13 +90,13 @@ Windows PowerShell、Linux 和 CI 使用相同入口：
 python scripts/quality.py check
 ```
 
-`check` 是阻断检查，覆盖 Ruff、敏感信息扫描（当前待提交文件与 Git 全历史对象）、pytest、Python 死代码检查，以及前端格式、ESLint、重复代码、死代码、循环依赖、测试和生产构建。
+`check` 是阻断检查，覆盖 Ruff、敏感信息扫描（当前待提交文件与 Git 全历史对象）、pytest、Mypy、Python 死代码检查，以及前端 API 类型同步、类型错误预算、格式、ESLint、重复代码、死代码、循环依赖、测试和生产构建。
 
 ```bash
 python scripts/quality.py audit
 ```
 
-`audit` 用于盘点现有 Python 类型、圈复杂度、分支数、参数数量、语句数、前端类型与未使用导出等历史债务。当前审计仍有未清理项，命令可能以非零状态退出；CI 将其作为非阻断审计运行，不得将其报告为已通过。
+`audit` 用于盘点现有 Python 圈复杂度、分支数、参数数量、语句数、前端完整类型检查与未使用导出等历史债务。当前审计仍有未清理项，命令可能以非零状态退出；CI 将其作为非阻断审计运行，不得将其报告为已通过。
 
 ## 生产部署
 
@@ -111,8 +111,15 @@ docker compose ps
 
 ## SEEKWAY 规范基线
 
-- 版本：V1.8.1
-- 来源提交：`181397ca1510db153f77695e820dcf1907062bb4`
-- 接入日期：2026-09-09
+- 版本：V2.0.0（2026-10-03 发布，按项目差异合并）。
+- 接入来源：[SEEKWAY Codex 开发规范 v2.0.0](https://github.com/songtu2025/seekway-codex-standards/tree/v2.0.0)。
+- 来源提交：`0b1e78cea7b20d103b2f0713b83e0aacf9607d4b`。
+- 接入日期：2026-09-09；升级日期：2026-10-03。
+- 版本控制：Git；规范升级与代码治理一并纳入版本管理。
+- 加载验证：当前会话已加载根目录 `AGENTS.md`；升级后的新任务加载验证待执行。
 
-本项目保留既有差异：前端继续使用 JavaScript/JSX、自定义 CSS、Phosphor Icons 和 Recharts；持久化继续使用 SQLite 与自定义迁移；部署继续使用 Docker Compose 和 Caddy。不迁移 Ant Design、TypeScript、SQLAlchemy、Alembic 或 Nginx。
+升级后在本项目根目录新建 Codex 任务并发送：`请列出本任务实际加载的 AGENTS.md 路径，并概括关键规则，不要修改文件。` 从 `web-prototype` 工作目录发起时，还应核对该目录的 `AGENTS.md`。
+
+本项目保留既有差异：前端继续使用 JavaScript/JSX、自定义 CSS、Phosphor Icons 和 Recharts；持久化继续使用 SQLite 与自定义迁移；部署继续使用 Docker Compose 和 Caddy。Ant Design 仅用于已经确认的模块与控件范围，不自动扩大使用范围，也不迁移 TypeScript、SQLAlchemy、Alembic 或 Nginx。界面专项规范和现有主题保持项目约束，规范升级不复制登录页或公司默认主题。
+
+本次合并代码规模、测试归类、API 契约和数据权威来源等适用规则；保留现有技术与部署差异。界面设计探索专项未接入，本次代码整理不新增界面设计规则或文档。
