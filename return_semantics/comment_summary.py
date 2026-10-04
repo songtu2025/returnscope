@@ -68,21 +68,7 @@ def _relation_for_pair(
         relation_type = SemanticRelationType.MULTI_PRODUCT
         reason = "同一主题针对不同规格"
     elif left.sentiment != right.sentiment:
-        events_differ = left.event_ref != right.event_ref
-        operations_differ = (
-            left.operation.strip().casefold() != right.operation.strip().casefold()
-        )
-        conditions_differ = (
-            left.condition.strip().casefold() != right.condition.strip().casefold()
-        )
-        references_differ = left.reference_basis != right.reference_basis
-        if (
-            events_differ
-            or operations_differ
-            or left.part != right.part
-            or conditions_differ
-            or references_differ
-        ):
+        if _scopes_differ(left, right):
             relation_type = SemanticRelationType.MIXED
             reason = "同一主题在不同事件、操作、部位或条件下表现不同"
         else:
@@ -104,6 +90,33 @@ def compile_comment_semantics(
     labels: dict[str, LabelDefinition],
 ) -> tuple[list[SemanticRelation], CommentSummary]:
     """把已确认原子事实编译为评论级关系和摘要。"""
+    relations = _compile_relations(units, taxonomy, labels)
+    return relations, _comment_summary(units, relations)
+
+
+def _scopes_differ(left: SemanticUnit, right: SemanticUnit) -> bool:
+    events_differ = left.event_ref != right.event_ref
+    operations_differ = (
+        left.operation.strip().casefold() != right.operation.strip().casefold()
+    )
+    conditions_differ = (
+        left.condition.strip().casefold() != right.condition.strip().casefold()
+    )
+    references_differ = left.reference_basis != right.reference_basis
+    return (
+        events_differ
+        or operations_differ
+        or left.part != right.part
+        or conditions_differ
+        or references_differ
+    )
+
+
+def _compile_relations(
+    units: list[SemanticUnit],
+    taxonomy: TaxonomyConfig,
+    labels: dict[str, LabelDefinition],
+) -> list[SemanticRelation]:
     indexed_units = list(enumerate(units, start=1))
     relations: list[SemanticRelation] = []
     seen_relations: set[str] = set()
@@ -123,6 +136,12 @@ def compile_comment_semantics(
             relations.append(relation)
             seen_relations.add(signature)
 
+    return relations
+
+
+def _comment_summary(
+    units: list[SemanticUnit], relations: list[SemanticRelation]
+) -> CommentSummary:
     positive_codes = _unique(
         unit.label_code for unit in units if unit.sentiment == SentimentCode.POSITIVE
     )
@@ -152,4 +171,4 @@ def compile_comment_semantics(
         positive_label_codes=positive_codes,
         negative_label_codes=negative_codes,
     )
-    return relations, summary
+    return summary
