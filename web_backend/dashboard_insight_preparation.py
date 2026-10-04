@@ -56,10 +56,7 @@ def _prepare_scope(
     *,
     include_options: bool = True,
 ) -> PreparedInsightScope:
-    clean_date_from = clean_date(options.date_from)
-    clean_date_to = clean_date(options.date_to)
-    if clean_date_from and clean_date_to and clean_date_from > clean_date_to:
-        raise ValueError("开始日期不能晚于结束日期")
+    clean_date_from, clean_date_to = _clean_date_range(options)
     runtime_filters = normalize_filters(
         {
             "listing": options.listing,
@@ -67,58 +64,11 @@ def _prepare_scope(
             "product_sku": options.product_sku,
         }
     )
-    taxonomy = (
-        result_taxonomy(connection, context["source_ids"][0])
-        if context["source_ids"]
-        else None
+    taxonomy, mixed_versions = _prepare_taxonomy_alignment(connection, context)
+    (option_where, option_params), (where_sql, params), comment_scope = _record_scopes(
+        database, context, runtime_filters, (clean_date_from, clean_date_to)
     )
-    source_taxonomies = {
-        source["result_version_id"]: source for source in context["sources"]
-    }
-    mixed_versions = (
-        len(
-            {
-                (source["agent_key"], source["taxonomy_version"])
-                for source in context["sources"]
-            }
-        )
-        > 1
-    )
-
-    def group_for_result(group, code, result_id):
-        source = source_taxonomies.get(result_id, {})
-        original = group or "其他原因"
-        if not mixed_versions or (taxonomy and taxonomy.structure_version == 2):
-            return original
-        return aligned_label_group(
-            source.get("agent_key", ""),
-            source.get("taxonomy_version", ""),
-            code,
-            original,
-        )
-
-    connection.create_function("aligned_group", 3, group_for_result)
-    option_where, option_params = record_where(
-        database, context["source_ids"], context["filters"]
-    )
-    where_sql, params = record_where(
-        database, context["source_ids"], context["filters"], runtime_filters
-    )
-    comment_scope_filters = {
-        key: value
-        for key, value in context["filters"].items()
-        if key != "quality_status"
-    }
-    comment_scope_where, comment_scope_params = record_where(
-        database, context["source_ids"], comment_scope_filters, runtime_filters
-    )
-    for operator, value in ((">=", clean_date_from), ("<=", clean_date_to)):
-        if value:
-            date_filter = f" AND date(r.return_date) {operator} date(?)"
-            where_sql += date_filter
-            params.append(value)
-            comment_scope_where += date_filter
-            comment_scope_params.append(value)
+    comment_scope_where, comment_scope_params = comment_scope
     ungrouped_where = where_sql
     ungrouped_params = params
     if context["counting_basis"] == "feedback_group":
@@ -129,16 +79,7 @@ def _prepare_scope(
             include_options,
         )
     facet_where, facet_params = where_sql, params.copy()
-    clean_subject = (options.subject or "").strip()
-    if clean_subject:
-        if clean_subject not in {item.value for item in SubjectCode}:
-            raise ValueError("问题对象不合法")
-        _prepare_subject_labels(connection, where_sql, params, clean_subject)
-        where_sql += (
-            " AND EXISTS (SELECT 1 FROM dashboard_insight_subject_labels subject_label"
-            " WHERE subject_label.result_version_id = r.result_version_id"
-            " AND subject_label.classification_key = r.classification_key)"
-        )
+    clean_subject, where_sql = _subject_scope(connection, where_sql, params, options)
     unit_rollup = (
         options.report_mode
         and not clean_subject
@@ -250,3 +191,102 @@ def _collect_filter_options(
     for row in rows:
         options[str(row["kind"])].append(str(row["value"]))
     return options
+
+
+def _clean_date_range(options: InsightOptions) -> tuple[str | None, str | None]:
+    clean_date_from = clean_date(options.date_from)
+    clean_date_to = clean_date(options.date_to)
+    if clean_date_from and clean_date_to and clean_date_from > clean_date_to:
+        raise ValueError("开始日期不能晚于结束日期")
+    return clean_date_from, clean_date_to
+
+
+def _prepare_taxonomy_alignment(
+    connection: sqlite3.Connection, context: dict[str, Any]
+) -> tuple[TaxonomyConfig | None, bool]:
+    taxonomy = (
+        result_taxonomy(connection, context["source_ids"][0])
+        if context["source_ids"]
+        else None
+    )
+    source_taxonomies = {
+        source["result_version_id"]: source for source in context["sources"]
+    }
+    mixed_versions = (
+        len(
+            {
+                (source["agent_key"], source["taxonomy_version"])
+                for source in context["sources"]
+            }
+        )
+        > 1
+    )
+
+    def group_for_result(group, code, result_id):
+        source = source_taxonomies.get(result_id, {})
+        original = group or "其他原因"
+        if not mixed_versions or (taxonomy and taxonomy.structure_version == 2):
+            return original
+        return aligned_label_group(
+            source.get("agent_key", ""),
+            source.get("taxonomy_version", ""),
+            code,
+            original,
+        )
+
+    connection.create_function("aligned_group", 3, group_for_result)
+    return taxonomy, mixed_versions
+
+
+def _record_scopes(
+    database: Database,
+    context: dict[str, Any],
+    runtime_filters: dict[str, list[str]],
+    date_range: tuple[str | None, str | None],
+) -> tuple[tuple[str, list[Any]], tuple[str, list[Any]], tuple[str, list[Any]]]:
+    clean_date_from, clean_date_to = date_range
+    option_where, option_params = record_where(
+        database, context["source_ids"], context["filters"]
+    )
+    where_sql, params = record_where(
+        database, context["source_ids"], context["filters"], runtime_filters
+    )
+    comment_scope_filters = {
+        key: value
+        for key, value in context["filters"].items()
+        if key != "quality_status"
+    }
+    comment_scope_where, comment_scope_params = record_where(
+        database, context["source_ids"], comment_scope_filters, runtime_filters
+    )
+    for operator, value in ((">=", clean_date_from), ("<=", clean_date_to)):
+        if value:
+            date_filter = f" AND date(r.return_date) {operator} date(?)"
+            where_sql += date_filter
+            params.append(value)
+            comment_scope_where += date_filter
+            comment_scope_params.append(value)
+    return (
+        (option_where, option_params),
+        (where_sql, params),
+        (comment_scope_where, comment_scope_params),
+    )
+
+
+def _subject_scope(
+    connection: sqlite3.Connection,
+    where_sql: str,
+    params: list[Any],
+    options: InsightOptions,
+) -> tuple[str, str]:
+    clean_subject = (options.subject or "").strip()
+    if clean_subject:
+        if clean_subject not in {item.value for item in SubjectCode}:
+            raise ValueError("问题对象不合法")
+        _prepare_subject_labels(connection, where_sql, params, clean_subject)
+        where_sql += (
+            " AND EXISTS (SELECT 1 FROM dashboard_insight_subject_labels subject_label"
+            " WHERE subject_label.result_version_id = r.result_version_id"
+            " AND subject_label.classification_key = r.classification_key)"
+        )
+    return clean_subject, where_sql
