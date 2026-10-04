@@ -16,6 +16,38 @@ from web_backend.dashboard_support import (
 from web_backend.database import Database
 from web_backend.result_hierarchy import enrich_record
 
+_RECORDS_SQL = """
+SELECT r.*, u.processing_status, u.problem_labels_json,
+       u.classification_json, standard.snapshot_json AS hierarchy_snapshot_json
+FROM classification_result_records r
+JOIN classification_units u
+  ON u.result_version_id = r.result_version_id
+ AND u.classification_key = r.classification_key
+JOIN classification_result_versions result_version ON result_version.id = r.result_version_id
+JOIN classification_results result ON result.id = result_version.result_id
+LEFT JOIN classification_standard_versions standard ON standard.id = result.standard_version_id
+WHERE {where_sql}
+ORDER BY r.store_site ASC, r.listing ASC,
+         r.source_row ASC, r.id ASC
+LIMIT ? OFFSET ?
+"""
+
+_DRILLDOWN_SCOPE_SQL = """
+FROM classification_result_records r
+{join_sql}
+WHERE {where_sql}
+GROUP BY {group_columns}
+"""
+
+_DRILLDOWN_ROWS_SQL = """
+SELECT {value_columns}, COUNT(r.id) AS record_count,
+       COUNT(DISTINCT r.result_version_id || ':' ||
+             r.classification_key) AS unit_count
+{base_sql}
+ORDER BY record_count DESC, value COLLATE NOCASE ASC, value ASC
+LIMIT ? OFFSET ?
+"""
+
 
 def list_records(
     database: Database,
@@ -44,21 +76,7 @@ def list_records(
             ).fetchone()[0]
         )
         rows = connection.execute(
-            f"""
-            SELECT r.*, u.processing_status, u.problem_labels_json,
-                   u.classification_json, standard.snapshot_json AS hierarchy_snapshot_json
-            FROM classification_result_records r
-            JOIN classification_units u
-              ON u.result_version_id = r.result_version_id
-             AND u.classification_key = r.classification_key
-            JOIN classification_result_versions result_version ON result_version.id = r.result_version_id
-            JOIN classification_results result ON result.id = result_version.result_id
-            LEFT JOIN classification_standard_versions standard ON standard.id = result.standard_version_id
-            WHERE {where_sql}
-            ORDER BY r.store_site ASC, r.listing ASC,
-                     r.source_row ASC, r.id ASC
-            LIMIT ? OFFSET ?
-            """,
+            _RECORDS_SQL.format(where_sql=where_sql),
             (*params, page_size, (page - 1) * page_size),
         ).fetchall()
     items = []
@@ -105,29 +123,7 @@ def build_drilldown(
             where_sql, params = feedback_group_scope(
                 connection, where_sql, params, name="main"
             )
-        if group_by == "problem":
-            join_sql = """
-                JOIN classification_unit_labels l
-                  ON l.result_version_id = r.result_version_id
-                 AND l.classification_key = r.classification_key
-                 AND l.label_kind = 'problem'
-            """
-            group_columns = "l.label_code, l.label_name, l.label_group"
-            value_columns = (
-                "l.label_code AS value, l.label_name AS label_name, "
-                "l.label_group AS label_group"
-            )
-        else:
-            join_sql = ""
-            column = GROUP_COLUMNS[group_by]
-            group_columns = column
-            value_columns = f"{column} AS value"
-        base_sql = f"""
-            FROM classification_result_records r
-            {join_sql}
-            WHERE {where_sql}
-            GROUP BY {group_columns}
-        """
+        base_sql, value_columns = _drilldown_sql(group_by, where_sql)
         total = int(
             connection.execute(
                 f"SELECT COUNT(*) FROM (SELECT 1 {base_sql})",
@@ -135,14 +131,7 @@ def build_drilldown(
             ).fetchone()[0]
         )
         rows = connection.execute(
-            f"""
-            SELECT {value_columns}, COUNT(r.id) AS record_count,
-                   COUNT(DISTINCT r.result_version_id || ':' ||
-                         r.classification_key) AS unit_count
-            {base_sql}
-            ORDER BY record_count DESC, value COLLATE NOCASE ASC, value ASC
-            LIMIT ? OFFSET ?
-            """,
+            _DRILLDOWN_ROWS_SQL.format(value_columns=value_columns, base_sql=base_sql),
             (*params, page_size, (page - 1) * page_size),
         ).fetchall()
     return {
@@ -152,3 +141,27 @@ def build_drilldown(
         "page": page,
         "page_size": page_size,
     }
+
+
+def _drilldown_sql(group_by: str, where_sql: str) -> tuple[str, str]:
+    if group_by == "problem":
+        join_sql = """
+            JOIN classification_unit_labels l
+              ON l.result_version_id = r.result_version_id
+             AND l.classification_key = r.classification_key
+             AND l.label_kind = 'problem'
+        """
+        group_columns = "l.label_code, l.label_name, l.label_group"
+        value_columns = (
+            "l.label_code AS value, l.label_name AS label_name, "
+            "l.label_group AS label_group"
+        )
+    else:
+        join_sql = ""
+        column = GROUP_COLUMNS[group_by]
+        group_columns = column
+        value_columns = f"{column} AS value"
+    base_sql = _DRILLDOWN_SCOPE_SQL.format(
+        join_sql=join_sql, where_sql=where_sql, group_columns=group_columns
+    )
+    return base_sql, value_columns

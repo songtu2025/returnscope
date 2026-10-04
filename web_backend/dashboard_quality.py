@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from typing import Any
 
 from web_backend.common import json_value
@@ -12,6 +13,36 @@ from web_backend.dashboard_support import (
     version_row,
 )
 from web_backend.database import Database
+
+_REVIEW_COUNTS_SQL = """
+SELECT COUNT(*) AS total_record_count,
+       SUM(CASE WHEN r.quality_status NOT IN ('ready', 'excluded')
+                THEN 1 ELSE 0 END) AS pending_record_count
+FROM classification_result_records r
+WHERE {where_sql}
+"""
+
+_REVIEW_PRODUCTS_SQL = """
+SELECT COALESCE(NULLIF(TRIM(r.product_name), ''), '未匹配商品')
+           AS value,
+       COUNT(*) AS total_record_count,
+       SUM(CASE WHEN r.quality_status NOT IN ('ready', 'excluded')
+                THEN 1 ELSE 0 END) AS pending_record_count
+FROM classification_result_records r
+WHERE {where_sql}
+GROUP BY value
+HAVING COUNT(*) >= 10 AND pending_record_count >= 5
+ORDER BY pending_record_count DESC, value COLLATE NOCASE ASC
+LIMIT 10
+"""
+
+_TEXT_QUALITY_SQL = """
+SELECT r.comment
+FROM classification_result_records r
+WHERE {where_sql}
+  AND r.comment IS NOT NULL
+  AND TRIM(r.comment) <> ''
+"""
 
 
 def build_summary(
@@ -32,28 +63,9 @@ def build_review_bias(
 ) -> dict[str, Any]:
     with database.connect() as connection:
         context = version_context(database, connection, dashboard_id, version_id)
-        scope_filters = {
-            key: value
-            for key, value in context["filters"].items()
-            if key != "quality_status"
-        }
-        where_sql, params = record_where(
-            database,
-            context["source_ids"],
-            scope_filters,
-        )
-        if context["counting_basis"] == "feedback_group":
-            where_sql, params = feedback_group_scope(
-                connection, where_sql, params, name="main"
-            )
+        where_sql, params = _pending_review_scope(database, connection, context)
         overall = connection.execute(
-            f"""
-            SELECT COUNT(*) AS total_record_count,
-                   SUM(CASE WHEN r.quality_status NOT IN ('ready', 'excluded')
-                            THEN 1 ELSE 0 END) AS pending_record_count
-            FROM classification_result_records r
-            WHERE {where_sql}
-            """,
+            _REVIEW_COUNTS_SQL.format(where_sql=where_sql),
             tuple(params),
         ).fetchone()
         total = int(overall["total_record_count"] or 0)
@@ -68,40 +80,11 @@ def build_review_bias(
                 "note": "当前范围没有待审核记录，无需评估选择偏差。",
             }
         rows = connection.execute(
-            f"""
-            SELECT COALESCE(NULLIF(TRIM(r.product_name), ''), '未匹配商品')
-                       AS value,
-                   COUNT(*) AS total_record_count,
-                   SUM(CASE WHEN r.quality_status NOT IN ('ready', 'excluded')
-                            THEN 1 ELSE 0 END) AS pending_record_count
-            FROM classification_result_records r
-            WHERE {where_sql}
-            GROUP BY value
-            HAVING COUNT(*) >= 10 AND pending_record_count >= 5
-            ORDER BY pending_record_count DESC, value COLLATE NOCASE ASC
-            LIMIT 10
-            """,
+            _REVIEW_PRODUCTS_SQL.format(where_sql=where_sql),
             tuple(params),
         ).fetchall()
     overall_rate = percentage(pending, total)
-    concentrated = []
-    for row in rows:
-        product_total = int(row["total_record_count"] or 0)
-        product_pending = int(row["pending_record_count"] or 0)
-        product_rate = percentage(product_pending, product_total)
-        if product_rate >= overall_rate + 10:
-            concentrated.append(
-                {
-                    "value": str(row["value"]),
-                    "total_record_count": product_total,
-                    "pending_record_count": product_pending,
-                    "pending_rate": product_rate,
-                    "difference_percentage_points": round(
-                        product_rate - overall_rate,
-                        2,
-                    ),
-                }
-            )
+    concentrated = _concentrated_products(rows, overall_rate)
     return {
         "status": "concentrated" if concentrated else "not_detected",
         "total_record_count": total,
@@ -127,13 +110,7 @@ def build_text_quality(
             context["filters"],
         )
         rows = connection.execute(
-            f"""
-            SELECT r.comment
-            FROM classification_result_records r
-            WHERE {where_sql}
-              AND r.comment IS NOT NULL
-              AND TRIM(r.comment) <> ''
-            """,
+            _TEXT_QUALITY_SQL.format(where_sql=where_sql),
             tuple(params),
         ).fetchall()
     comments = [str(row["comment"]) for row in rows]
@@ -163,3 +140,49 @@ def list_sources(
     with database.connect() as connection:
         context = version_context(database, connection, dashboard_id, version_id)
     return context["sources"]
+
+
+def _concentrated_products(
+    rows: list[sqlite3.Row], overall_rate: float
+) -> list[dict[str, Any]]:
+    concentrated = []
+    for row in rows:
+        product_total = int(row["total_record_count"] or 0)
+        product_pending = int(row["pending_record_count"] or 0)
+        product_rate = percentage(product_pending, product_total)
+        if product_rate >= overall_rate + 10:
+            concentrated.append(
+                {
+                    "value": str(row["value"]),
+                    "total_record_count": product_total,
+                    "pending_record_count": product_pending,
+                    "pending_rate": product_rate,
+                    "difference_percentage_points": round(
+                        product_rate - overall_rate,
+                        2,
+                    ),
+                }
+            )
+    return concentrated
+
+
+def _pending_review_scope(
+    database: Database,
+    connection: sqlite3.Connection,
+    context: dict[str, Any],
+) -> tuple[str, list[Any]]:
+    scope_filters = {
+        key: value
+        for key, value in context["filters"].items()
+        if key != "quality_status"
+    }
+    where_sql, params = record_where(
+        database,
+        context["source_ids"],
+        scope_filters,
+    )
+    if context["counting_basis"] == "feedback_group":
+        where_sql, params = feedback_group_scope(
+            connection, where_sql, params, name="main"
+        )
+    return where_sql, params
