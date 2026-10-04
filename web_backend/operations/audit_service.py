@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
@@ -11,6 +12,15 @@ from web_backend.operations.audit_targets import (
     _target,
     _target_context,
 )
+
+_AUDIT_ROWS_SQL = """
+                SELECT a.*, u.display_name AS actor_name
+                FROM audit_logs a
+                LEFT JOIN users u ON u.id = a.actor_id
+                WHERE {where_sql}
+                ORDER BY a.created_at DESC, a.id ASC
+                LIMIT ? OFFSET ?
+                """
 
 
 class AuditLogService:
@@ -29,14 +39,45 @@ class AuditLogService:
         page: int = 1,
         page_size: int = 50,
     ) -> dict[str, Any]:
+        where_sql, params = self._query_filters(
+            (
+                ("a.actor_id", actor_id),
+                ("a.entity_type", entity_type),
+                ("a.entity_id", entity_id),
+                ("a.action", action),
+            ),
+            date_from,
+            date_to,
+        )
+        with self.database.connect() as connection:
+            total = int(
+                connection.execute(
+                    f"SELECT COUNT(*) FROM audit_logs a WHERE {where_sql}",
+                    tuple(params),
+                ).fetchone()[0]
+            )
+            rows = connection.execute(
+                _AUDIT_ROWS_SQL.format(where_sql=where_sql),
+                (*params, page_size, (page - 1) * page_size),
+            ).fetchall()
+            target_context = self._target_context(connection, rows)
+        items = self._serialize_rows(rows, target_context)
+        return {
+            "items": items,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+
+    def _query_filters(
+        self,
+        filters: tuple[tuple[str, str | None], ...],
+        date_from: str | None,
+        date_to: str | None,
+    ) -> tuple[str, builtins.list[Any]]:
         where = ["1 = 1"]
         params: list[Any] = []
-        for column, value in (
-            ("a.actor_id", actor_id),
-            ("a.entity_type", entity_type),
-            ("a.entity_id", entity_id),
-            ("a.action", action),
-        ):
+        for column, value in filters:
             if value:
                 where.append(f"{column} = ?")
                 params.append(value)
@@ -48,26 +89,13 @@ class AuditLogService:
             normalized_to, inclusive = self._date_boundary(date_to, is_end=True)
             where.append("a.created_at <= ?" if inclusive else "a.created_at < ?")
             params.append(normalized_to)
-        where_sql = " AND ".join(where)
-        with self.database.connect() as connection:
-            total = int(
-                connection.execute(
-                    f"SELECT COUNT(*) FROM audit_logs a WHERE {where_sql}",
-                    tuple(params),
-                ).fetchone()[0]
-            )
-            rows = connection.execute(
-                f"""
-                SELECT a.*, u.display_name AS actor_name
-                FROM audit_logs a
-                LEFT JOIN users u ON u.id = a.actor_id
-                WHERE {where_sql}
-                ORDER BY a.created_at DESC, a.id ASC
-                LIMIT ? OFFSET ?
-                """,
-                (*params, page_size, (page - 1) * page_size),
-            ).fetchall()
-            target_context = self._target_context(connection, rows)
+        return " AND ".join(where), params
+
+    def _serialize_rows(
+        self,
+        rows: builtins.list[Any],
+        target_context: dict[tuple[str, str], dict[str, Any]],
+    ) -> builtins.list[dict[str, Any]]:
         items = []
         for row in rows:
             item = dict(row)
@@ -79,12 +107,7 @@ class AuditLogService:
                 target_context,
             )
             items.append(item)
-        return {
-            "items": items,
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-        }
+        return items
 
     _target_context = staticmethod(_target_context)
     _target = staticmethod(_target)
