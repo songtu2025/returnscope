@@ -82,3 +82,55 @@ def test_failed_import_cleans_temporary_file_and_creates_no_dataset(source, prob
         service.import_returns(payload, "user-1")
     assert len(service.datasets.list("returns")) == before
     assert not list((service.settings.data_dir / "tmp").glob("mysql_*.csv"))
+
+
+def test_preview_keeps_bounded_queries_and_hides_source_origin(source):
+    service, cursor, _, payload = source
+    row = {**_return_row("O-1", "偏小"), SOURCE_ORIGIN_COLUMN: "12345"}
+    cursor.fetchall.side_effect = [cursor.fetchall.return_value, [row]]
+    cursor.fetchone.return_value = {"total": 2, "missing_store_rows": 1}
+    preview = service.preview(payload)
+    data_queries = [
+        call.args
+        for call in cursor.execute.call_args_list
+        if "FROM `sale_return_order`" in call.args[0]
+    ]
+    assert len(data_queries) == 2
+    assert data_queries[0][1][-1] == service.settings.mysql_max_rows + 1
+    assert data_queries[1][0].endswith(" LIMIT %s")
+    assert data_queries[1][1][-1] == 20
+    assert preview["missing_store_rows"] == 1
+    assert preview["rows"] == [_return_row("O-1", "偏小")]
+
+
+def test_stream_failure_removes_partial_snapshot_before_dataset_import(source):
+    import pymysql
+
+    from web_backend.mysql_return_service import MySQLSourceError
+
+    service, cursor, _, payload = source
+
+    def rows():
+        yield _return_row("MYSQL-1", "偏小")
+        raise pymysql.OperationalError(2013, "合成连接中断")
+
+    cursor.__iter__.return_value = rows()
+    before = len(service.datasets.list("returns"))
+    with pytest.raises(MySQLSourceError, match="2013"):
+        service.import_returns(payload, "user-1")
+    assert len(service.datasets.list("returns")) == before
+    assert not list((service.settings.data_dir / "tmp").glob("mysql_*.csv"))
+
+
+def test_dataset_import_failure_still_removes_temporary_snapshot(source, monkeypatch):
+    service, cursor, _, payload = source
+    cursor.__iter__.return_value = iter([_return_row("MYSQL-1", "偏小")])
+    importer = MagicMock(side_effect=ValueError("合成导入失败"))
+    monkeypatch.setattr(service.datasets, "import_returns", importer)
+    before = len(service.datasets.list("returns"))
+    with pytest.raises(ValueError, match="合成导入失败"):
+        service.import_returns(payload, "user-1")
+    importer.assert_called_once()
+    assert not importer.call_args.kwargs["source_path"].exists()
+    assert len(service.datasets.list("returns")) == before
+    assert not list((service.settings.data_dir / "tmp").glob("mysql_*.csv"))
