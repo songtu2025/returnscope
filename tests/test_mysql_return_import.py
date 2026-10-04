@@ -1,5 +1,4 @@
 from dataclasses import replace
-from datetime import date
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -7,7 +6,7 @@ import pymysql
 import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
-from test_classification_result_pool import _seed_result_context
+from mysql_return_helpers import source as source
 from test_return_import_flow import _return_row
 
 from return_semantics.data import RETURN_STORE_COLUMN, SOURCE_ORIGIN_COLUMN
@@ -16,45 +15,9 @@ from web_backend import mysql_return_service as mysql_module
 from web_backend.api_contracts.datasets import (
     MySQLReturnImportRequest,
 )
-from web_backend.dataset_service import DatasetService
-from web_backend.mysql_return_service import FIELD_LABELS, MySQLReturnService
+from web_backend.mysql_return_service import FIELD_LABELS
 from web_backend.routers.datasets import create_dataset_router
 from web_backend.settings import Settings
-
-
-@pytest.fixture
-def source(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    context = _seed_result_context(tmp_path)
-    settings = Settings(
-        data_dir=tmp_path,
-        database_path=tmp_path / "app.db",
-        session_days=14,
-        task_workers=1,
-        bootstrap_email="test@example.com",
-        bootstrap_name="测试",
-        bootstrap_password="测试密码",
-        encryption_key="",
-        secure_cookies=False,
-        mysql_user="reader",
-        mysql_password="不应出现在接口中",
-        mysql_max_rows=2,
-    )
-    datasets = DatasetService(context.database, settings)
-    service = MySQLReturnService(datasets, settings)
-    connection = MagicMock()
-    connection.__enter__.return_value = connection
-    cursor = MagicMock()
-    cursor.__enter__.return_value = cursor
-    connection.cursor.return_value = cursor
-    cursor.fetchall.return_value = [
-        {"name": key.replace("-", "_"), "type": "varchar"} for key in FIELD_LABELS
-    ]
-    connect = MagicMock(return_value=connection)
-    monkeypatch.setattr(pymysql, "connect", connect)
-    payload = MySQLReturnImportRequest(
-        mapping={key: key.replace("-", "_") for key in FIELD_LABELS}
-    )
-    return service, cursor, connect, payload
 
 
 def test_schema_suggests_mapping_without_exposing_credentials(source):
@@ -160,57 +123,6 @@ def test_sale_return_schema_joins_real_comments_and_store_names(source):
     assert "markets.market_id = source.market_id" in all_query
     assert "markets.jijia_account_id = source.jijia_account_id" in all_query
     assert "其他店铺:CA" in all_values[0]
-
-
-def test_filters_are_parameters_and_end_date_includes_whole_day(source):
-    service, cursor, connect, payload = source
-    payload.sku = "SKU' OR 1=1 --"
-    payload.date_from = date(2026, 8, 1)
-    payload.date_to = date(2026, 8, 31)
-    query, values = service._query(connect.return_value, payload)
-    assert payload.sku not in query
-    assert "`return_date` >= %s" in query
-    assert "`return_date` < %s" in query
-    assert values == [date(2026, 8, 1), date(2026, 9, 1), payload.sku]
-    assert "sale_return_order" in query
-    assert cursor.execute.call_args.args[1] == (
-        "jijia_sync_isolated_20260827",
-        "sale_return_order",
-    )
-
-
-@pytest.mark.parametrize(
-    "problem", ["unknown_column", "missing_comment", "missing_store", "reversed_dates"]
-)
-def test_invalid_mapping_and_filters_never_query_return_rows(source, problem):
-    service, cursor, _, payload = source
-    if problem == "unknown_column":
-        payload.mapping["sku"] = "sku`; DROP TABLE sale_return_order; --"
-    elif problem == "missing_comment":
-        payload.mapping.pop("customer-comments")
-    elif problem == "missing_store":
-        payload.mapping.pop(RETURN_STORE_COLUMN)
-    else:
-        payload.date_from = date(2026, 9, 2)
-        payload.date_to = date(2026, 9, 1)
-    with pytest.raises(ValueError):
-        service.preview(payload)
-    assert not any(
-        "FROM `sale_return_order`" in call.args[0]
-        for call in cursor.execute.call_args_list
-    )
-
-
-def test_fixed_store_and_optional_fields_are_bound_values(source):
-    service, _, connect, payload = source
-    payload.mapping[RETURN_STORE_COLUMN] = ""
-    payload.mapping["fnsku"] = ""
-    payload.default_store = "测试店铺:US"
-    payload.store = "测试店铺:US"
-    query, values = service._query(connect.return_value, payload)
-    assert "%s AS `店铺/站点`" in query
-    assert "%s AS `fnsku`" in query
-    assert values == ["", "测试店铺:US", "测试店铺:US", "测试店铺:US"]
 
 
 def test_preview_reports_over_limit_without_creating_dataset(source):
@@ -350,26 +262,3 @@ def test_metadata_cache_expires_and_can_be_refreshed(source, monkeypatch):
     assert cursor.fetchall.call_count == first + 1
     service.schema(refresh=True)
     assert cursor.fetchall.call_count == first + 2
-
-
-def test_same_store_across_accounts_keeps_paired_ids(source, monkeypatch):
-    service, _, connection, payload = source
-    columns = [{"name": value} for value in payload.mapping.values()]
-    columns.append({"name": "market_store"})
-    mappings = [
-        {"jijia_account_id": 1, "market_id": 10, "store": "同名:US"},
-        {"jijia_account_id": 2, "market_id": 20, "store": "同名:US"},
-    ]
-    monkeypatch.setattr(
-        service,
-        "_metadata_rows",
-        lambda _conn, key: columns if key == "columns" else mappings,
-    )
-    payload.mapping[RETURN_STORE_COLUMN] = "market_store"
-    payload.store = "同名:US"
-    sql, values = service._query(connection.return_value, payload, count_only=True)
-    assert sql.count("source.jijia_account_id = %s AND source.market_id = %s") == 2
-    assert values == ["同名:US", 1, 10, 2, 20]
-    payload.store = "不存在的店铺"
-    sql, _ = service._query(connection.return_value, payload, count_only=True)
-    assert "0 = 1" in sql
