@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from typing import Any
 
 from return_semantics.schemas import TaxonomyConfig
@@ -23,6 +24,35 @@ def list_reason_evidence(
     total: int | None = None,
 ) -> dict[str, Any]:
     connection = scope.connection
+    query, params = _evidence_scope_query(scope, selected_code)
+    if total is None:
+        total = int(
+            connection.execute(f"SELECT COUNT(*) {query}", params).fetchone()[0]
+        )
+    rows = connection.execute(
+        f"""
+        SELECT r.*, u.processing_status, u.problem_labels_json,
+               u.classification_json
+        {query}
+        ORDER BY datetime(r.return_date) DESC,
+                 r.source_row DESC, r.id ASC
+        LIMIT ? OFFSET ?
+        """,
+        (*params, EVIDENCE_PAGE_SIZE, (page - 1) * EVIDENCE_PAGE_SIZE),
+    ).fetchall()
+    items = [serialize_record(dict(row), taxonomy) for row in rows]
+    _apply_problem_names(connection, items)
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": EVIDENCE_PAGE_SIZE,
+    }
+
+
+def _evidence_scope_query(
+    scope: InsightQueryScope, selected_code: str
+) -> tuple[str, tuple[Any, ...]]:
     source = (
         "classification_result_records r"
         if scope.records_table == "classification_result_records"
@@ -56,22 +86,12 @@ def list_reason_evidence(
     params = (*scope.params, selected_code)
     if scope.clean_group:
         params += (scope.clean_group,)
-    if total is None:
-        total = int(
-            connection.execute(f"SELECT COUNT(*) {query}", params).fetchone()[0]
-        )
-    rows = connection.execute(
-        f"""
-        SELECT r.*, u.processing_status, u.problem_labels_json,
-               u.classification_json
-        {query}
-        ORDER BY datetime(r.return_date) DESC,
-                 r.source_row DESC, r.id ASC
-        LIMIT ? OFFSET ?
-        """,
-        (*params, EVIDENCE_PAGE_SIZE, (page - 1) * EVIDENCE_PAGE_SIZE),
-    ).fetchall()
-    items = [serialize_record(dict(row), taxonomy) for row in rows]
+    return query, params
+
+
+def _apply_problem_names(
+    connection: sqlite3.Connection, items: list[dict[str, Any]]
+) -> None:
     label_names: dict[str, str] = {}
     if items:
         placeholders = ",".join("?" for _ in items)
@@ -95,9 +115,3 @@ def list_reason_evidence(
         item["problem_labels"] = [
             label_names.get(str(label), str(label)) for label in item["problem_labels"]
         ]
-    return {
-        "items": items,
-        "total": total,
-        "page": page,
-        "page_size": EVIDENCE_PAGE_SIZE,
-    }
