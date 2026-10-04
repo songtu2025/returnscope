@@ -7,13 +7,10 @@ from typing import Any
 
 from return_semantics.data import ReturnDataset
 from return_semantics.schemas import TaxonomyConfig, ValidatedClassification
-from return_semantics.semantic_review import requires_system_rerun
-from web_backend.classification_result_payload import (
-    _classification_quality,
-    _nullable_text,
-    _prepare_classification_payload,
+from web_backend.classification_results.publication_preparation import (
+    prepare_publication,
 )
-from web_backend.classification_unit_semantics import refresh_unit_semantics
+from web_backend.classification_results.publication_units import insert_units
 from web_backend.common import json_text, new_id
 from web_backend.database import Database
 from web_backend.security import utc_now
@@ -123,104 +120,7 @@ class _ClassificationResultPublication:
         results: dict[str, ValidatedClassification],
         taxonomy: TaxonomyConfig,
     ) -> dict[str, Any]:
-        label_map = {label.code: label for label in taxonomy.labels}
-        comments = dataset.unique_comments.set_index("classification_key")
-        units: list[dict[str, Any]] = []
-        labels: list[dict[str, Any]] = []
-        quality_by_key: dict[str, str] = {}
-        for key in sorted(results):
-            result = results[key]
-            source = comments.loc[key]
-            processing_status = result.status.value
-            classification = _prepare_classification_payload(
-                result.model_dump(mode="json"),
-                taxonomy,
-                processing_status,
-                include_api_fields=False,
-            )
-            quality_status = _classification_quality(
-                result,
-                str(classification["semantic_disposition"]),
-                source_text=str(source.get("comment_normalized") or ""),
-                taxonomy=taxonomy,
-            )
-            classification.pop("semantic_disposition", None)
-            for semantic_unit in classification.get("semantic_units", []):
-                semantic_unit.pop("label_code_path", None)
-                semantic_unit.pop("label_path", None)
-            quality_by_key[key] = quality_status
-            units.append(
-                {
-                    "classification_key": key,
-                    "reason": _nullable_text(source.get("reason")),
-                    "comment": _nullable_text(source.get("comment_normalized")),
-                    "classification": classification,
-                    "problem_labels": list(result.problem_label_codes),
-                    "processing_status": processing_status,
-                    "quality_status": quality_status,
-                    "record_count": int(source.get("record_count", 0)),
-                    "model_name": result.model_name,
-                    "prompt_version": result.prompt_version,
-                    "taxonomy_version": result.taxonomy_version,
-                }
-            )
-            for kind, codes in (
-                ("problem", result.problem_label_codes),
-                ("positive", result.positive_label_codes),
-                ("primary", result.primary_label_codes),
-            ):
-                for code in sorted(set(codes)):
-                    label = label_map.get(code)
-                    labels.append(
-                        {
-                            "classification_key": key,
-                            "label_kind": kind,
-                            "label_code": code,
-                            "label_name": label.name if label else None,
-                            "label_group": label.group if label else None,
-                        }
-                    )
-
-        selected = dataset.records.loc[
-            dataset.records["classification_key"].isin(results)
-        ].copy()
-        records: list[dict[str, Any]] = []
-        for row in selected.sort_values("source_row").to_dict(orient="records"):
-            classification_key = str(row["classification_key"])
-            records.append(
-                {
-                    "classification_key": classification_key,
-                    "source_row": int(row["source_row"]),
-                    "source_origin_id": _nullable_text(row.get("source-origin-id")),
-                    "return_date": _nullable_text(row.get("return-date")),
-                    "order_id": _nullable_text(row.get("order-id")),
-                    "store_site": _nullable_text(row.get("store")),
-                    "listing": _nullable_text(row.get("listing")),
-                    "product_name": _nullable_text(row.get("product_name")),
-                    "source_sku": _nullable_text(row.get("source_sku")),
-                    "matched_msku": _nullable_text(row.get("matched_msku")),
-                    "product_sku": _nullable_text(row.get("product_sku")),
-                    "asin": _nullable_text(row.get("asin")),
-                    "fnsku": _nullable_text(row.get("fnsku")),
-                    "category_a": _nullable_text(row.get("category_a")),
-                    "category_b": _nullable_text(row.get("category_b")),
-                    "reason": _nullable_text(row.get("reason")),
-                    "comment": _nullable_text(row.get("comment_raw")),
-                    "product_match_status": str(
-                        row.get("product_match_status") or "unmatched"
-                    ),
-                    "quality_status": quality_by_key[classification_key],
-                }
-            )
-        scopes = {(value["store_site"], value["listing"]) for value in records}
-        store_site, listing = next(iter(scopes)) if len(scopes) == 1 else (None, None)
-        return {
-            "units": units,
-            "labels": labels,
-            "records": records,
-            "store_site": store_site,
-            "listing": listing,
-        }
+        return prepare_publication(dataset, results, taxonomy)
 
     @staticmethod
     def _content_hash(
@@ -250,62 +150,7 @@ class _ClassificationResultPublication:
         units: list[dict[str, Any]],
         labels: list[dict[str, Any]],
     ) -> None:
-        connection.executemany(
-            """
-            INSERT INTO classification_units(
-                id, result_version_id, classification_key, reason, comment,
-                classification_json, problem_labels_json,
-                system_rerun_required, processing_status, quality_status, record_count,
-                model_name, prompt_version, taxonomy_version
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            [
-                (
-                    new_id("classification_unit"),
-                    version_id,
-                    value["classification_key"],
-                    value["reason"],
-                    value["comment"],
-                    json_text(value["classification"]),
-                    json_text(value["problem_labels"]),
-                    int(
-                        requires_system_rerun(
-                            value["classification"],
-                            str(value["comment"] or ""),
-                            processing_status=str(value["processing_status"] or ""),
-                        )
-                    ),
-                    value["processing_status"],
-                    value["quality_status"],
-                    value["record_count"],
-                    value["model_name"],
-                    value["prompt_version"],
-                    value["taxonomy_version"],
-                )
-                for value in units
-            ],
-        )
-        connection.executemany(
-            """
-            INSERT INTO classification_unit_labels(
-                result_version_id, classification_key, label_kind,
-                label_code, label_name, label_group
-            ) VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            [
-                (
-                    version_id,
-                    value["classification_key"],
-                    value["label_kind"],
-                    value["label_code"],
-                    value["label_name"],
-                    value["label_group"],
-                )
-                for value in labels
-            ],
-        )
-
-        refresh_unit_semantics(connection, version_id)
+        insert_units(connection, version_id, units, labels)
 
     @staticmethod
     def _insert_records(
