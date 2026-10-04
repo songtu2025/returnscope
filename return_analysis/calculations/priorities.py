@@ -27,24 +27,7 @@ def problem_priority_summary(
     label_catalog: pd.DataFrame,
     comparison_days: int = 30,
 ) -> pd.DataFrame:
-    work = frame.reset_index(drop=True).copy()
-    work["_multi_problem"] = work["问题标签"].map(
-        lambda value: len(label_codes(value)) > 1
-    )
-    work["_listing_conflict"] = work["Listing承诺关系"].map(
-        lambda value: "CONTRADICTS" in split_values(value)
-    )
-    work["_needs_review"] = work["处理状态"].isin(REVIEW_STATUSES)
-    labels = explode_labels(
-        work,
-        "问题标签",
-        keep_columns=[
-            "sku",
-            "_multi_problem",
-            "_listing_conflict",
-            "_needs_review",
-        ],
-    )
+    work, labels = _priority_labels(frame)
     if labels.empty:
         return pd.DataFrame()
 
@@ -71,51 +54,9 @@ def problem_priority_summary(
     total = len(work)
     result["退货构成占比"] = result["退货记录数"] / total
 
-    product_counts = (
-        labels.loc[labels["sku"].ne("")]
-        .groupby(["标签编码", "sku"], as_index=False)
-        .size()
-    )
-    top_products = (
-        product_counts.groupby("标签编码", as_index=False)[["size"]]
-        .max()
-        .rename(columns={"size": "Top SKU记录数"})
-    )
-    result = result.merge(top_products, on="标签编码", how="left")
-    result["Top SKU记录数"] = result["Top SKU记录数"].fillna(0)
-    result["Top SKU集中度"] = result["Top SKU记录数"] / result["退货记录数"]
+    result = _sku_concentration(result, labels)
 
-    valid_dates = work["return_date"].dropna()
-    period_names = ("近30天占比", "前30天占比")
-    if valid_dates.empty:
-        result[period_names[0]] = float("nan")
-        result[period_names[1]] = float("nan")
-    else:
-        end_date = valid_dates.max().date()
-        current_start = end_date - timedelta(days=comparison_days - 1)
-        previous_end = current_start - timedelta(days=1)
-        previous_start = previous_end - timedelta(days=comparison_days - 1)
-        record_dates = work["return_date"].dt.date
-        periods = (
-            work.loc[record_dates.between(current_start, end_date)],
-            work.loc[record_dates.between(previous_start, previous_end)],
-        )
-        for period_name, period in zip(period_names, periods, strict=True):
-            if period.empty:
-                result[period_name] = float("nan")
-                continue
-            shares = label_summary(
-                period,
-                "问题标签",
-                label_catalog,
-            )[["标签编码", "占退货记录比例"]].rename(
-                columns={"占退货记录比例": period_name}
-            )
-            result = result.merge(shares, on="标签编码", how="left")
-            result[period_name] = pd.to_numeric(
-                result[period_name],
-                errors="coerce",
-            ).fillna(0.0)
+    result = _comparison_periods(result, work, label_catalog, comparison_days)
 
     result["变化百分点"] = (result["近30天占比"] - result["前30天占比"]) * 100
     return result.sort_values(
@@ -150,6 +91,108 @@ def common_problem_summary(
             lambda values: values[values.ne("")].nunique(),
         ),
     )
+    top_styles, concentration = _style_concentration(dimensions)
+    result = result.merge(breadth, on="标签编码", how="left")
+    result = result.merge(top_styles, on="标签编码", how="left")
+    result = result.merge(concentration, on="标签编码", how="left")
+    result[["影响款式数", "影响尺码数"]] = (
+        result[["影响款式数", "影响尺码数"]].fillna(0).astype(int)
+    )
+    result["Top款式记录数"] = result["Top款式记录数"].fillna(0)
+    result[["款式HHI", "款式分布均衡度"]] = result[
+        ["款式HHI", "款式分布均衡度"]
+    ].fillna(0.0)
+    result["Top款式集中度"] = result["Top款式记录数"] / result["退货记录数"]
+
+    result = _style_coverage(result, frame)
+    return result.sort_values(
+        ["款式覆盖率", "影响款式数", "退货记录数"],
+        ascending=[False, False, False],
+    ).reset_index(drop=True)
+
+
+def _priority_labels(frame: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    work = frame.reset_index(drop=True).copy()
+    work["_multi_problem"] = work["问题标签"].map(
+        lambda value: len(label_codes(value)) > 1
+    )
+    work["_listing_conflict"] = work["Listing承诺关系"].map(
+        lambda value: "CONTRADICTS" in split_values(value)
+    )
+    work["_needs_review"] = work["处理状态"].isin(REVIEW_STATUSES)
+    labels = explode_labels(
+        work,
+        "问题标签",
+        keep_columns=[
+            "sku",
+            "_multi_problem",
+            "_listing_conflict",
+            "_needs_review",
+        ],
+    )
+    return work, labels
+
+
+def _sku_concentration(result: pd.DataFrame, labels: pd.DataFrame) -> pd.DataFrame:
+    product_counts = (
+        labels.loc[labels["sku"].ne("")]
+        .groupby(["标签编码", "sku"], as_index=False)
+        .size()
+    )
+    top_products = (
+        product_counts.groupby("标签编码", as_index=False)[["size"]]
+        .max()
+        .rename(columns={"size": "Top SKU记录数"})
+    )
+    result = result.merge(top_products, on="标签编码", how="left")
+    result["Top SKU记录数"] = result["Top SKU记录数"].fillna(0)
+    result["Top SKU集中度"] = result["Top SKU记录数"] / result["退货记录数"]
+
+    return result
+
+
+def _comparison_periods(
+    result: pd.DataFrame,
+    work: pd.DataFrame,
+    label_catalog: pd.DataFrame,
+    comparison_days: int,
+) -> pd.DataFrame:
+    valid_dates = work["return_date"].dropna()
+    period_names = ("近30天占比", "前30天占比")
+    if valid_dates.empty:
+        result[period_names[0]] = float("nan")
+        result[period_names[1]] = float("nan")
+    else:
+        end_date = valid_dates.max().date()
+        current_start = end_date - timedelta(days=comparison_days - 1)
+        previous_end = current_start - timedelta(days=1)
+        previous_start = previous_end - timedelta(days=comparison_days - 1)
+        record_dates = work["return_date"].dt.date
+        periods = (
+            work.loc[record_dates.between(current_start, end_date)],
+            work.loc[record_dates.between(previous_start, previous_end)],
+        )
+        for period_name, period in zip(period_names, periods, strict=True):
+            if period.empty:
+                result[period_name] = float("nan")
+                continue
+            shares = label_summary(
+                period,
+                "问题标签",
+                label_catalog,
+            )[["标签编码", "占退货记录比例"]].rename(
+                columns={"占退货记录比例": period_name}
+            )
+            result = result.merge(shares, on="标签编码", how="left")
+            result[period_name] = pd.to_numeric(
+                result[period_name],
+                errors="coerce",
+            ).fillna(0.0)
+
+    return result
+
+
+def _style_concentration(dimensions: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     style_counts = (
         dimensions.loc[dimensions["款式"].ne("")]
         .groupby(["标签编码", "款式"], as_index=False)
@@ -170,18 +213,10 @@ def common_problem_summary(
         款式HHI=("款式份额", lambda values: float((values**2).sum())),
         款式分布均衡度=("款式份额", _normalized_entropy),
     )
-    result = result.merge(breadth, on="标签编码", how="left")
-    result = result.merge(top_styles, on="标签编码", how="left")
-    result = result.merge(concentration, on="标签编码", how="left")
-    result[["影响款式数", "影响尺码数"]] = (
-        result[["影响款式数", "影响尺码数"]].fillna(0).astype(int)
-    )
-    result["Top款式记录数"] = result["Top款式记录数"].fillna(0)
-    result[["款式HHI", "款式分布均衡度"]] = result[
-        ["款式HHI", "款式分布均衡度"]
-    ].fillna(0.0)
-    result["Top款式集中度"] = result["Top款式记录数"] / result["退货记录数"]
+    return top_styles, concentration
 
+
+def _style_coverage(result: pd.DataFrame, frame: pd.DataFrame) -> pd.DataFrame:
     style_total = frame.loc[frame["款式"].ne(""), "款式"].nunique()
     size_total = frame.loc[frame["尺码"].ne(""), "尺码"].nunique()
     result["款式覆盖率"] = result["影响款式数"] / style_total if style_total else 0.0
@@ -195,7 +230,4 @@ def common_problem_summary(
             else "少数款式"
         )
     )
-    return result.sort_values(
-        ["款式覆盖率", "影响款式数", "退货记录数"],
-        ascending=[False, False, False],
-    ).reset_index(drop=True)
+    return result

@@ -106,6 +106,35 @@ def problem_pair_summary(
 
     transaction_count = exploded["_record_id"].nunique()
     label_counts = exploded.groupby("标签编码")["_record_id"].nunique()
+    pair_counts, multi_problem_records = _count_problem_pairs(exploded, focus_code)
+
+    if not pair_counts:
+        return pd.DataFrame(columns=columns)
+
+    result = pd.DataFrame(
+        [
+            {
+                "左标签编码": left_code,
+                "右标签编码": right_code,
+                "问题组合": name,
+                "退货记录数": count,
+            }
+            for (left_code, right_code, name), count in pair_counts.items()
+        ]
+    )
+    result = _pair_strength(
+        result, label_counts, transaction_count, focus_code, multi_problem_records
+    )
+    result = result.sort_values(
+        ["提升度", "退货记录数", "问题组合"],
+        ascending=[False, False, True],
+    ).reset_index(drop=True)
+    return result[columns].head(top_n)
+
+
+def _count_problem_pairs(
+    exploded: pd.DataFrame, focus_code: str | None
+) -> tuple[Counter[tuple[str, str, str]], int]:
     exploded["显示名称"] = exploded["标签名称"].where(
         exploded["标签名称"].ne(""),
         exploded["标签编码"],
@@ -127,20 +156,16 @@ def problem_pair_summary(
         if record_has_pair:
             multi_problem_records += 1
 
-    if not pair_counts:
-        return pd.DataFrame(columns=columns)
+    return pair_counts, multi_problem_records
 
-    result = pd.DataFrame(
-        [
-            {
-                "左标签编码": left_code,
-                "右标签编码": right_code,
-                "问题组合": name,
-                "退货记录数": count,
-            }
-            for (left_code, right_code, name), count in pair_counts.items()
-        ]
-    )
+
+def _pair_strength(
+    result: pd.DataFrame,
+    label_counts: pd.Series,
+    transaction_count: int,
+    focus_code: str | None,
+    multi_problem_records: int,
+) -> pd.DataFrame:
     result["占多问题记录比例"] = result["退货记录数"] / multi_problem_records
     result["支持度"] = result["退货记录数"] / transaction_count
     result["左标签记录数"] = result["左标签编码"].map(label_counts)
@@ -157,8 +182,4 @@ def problem_pair_summary(
         )
     else:
         result["聚焦置信度"] = pd.NA
-    result = result.sort_values(
-        ["提升度", "退货记录数", "问题组合"],
-        ascending=[False, False, True],
-    ).reset_index(drop=True)
-    return result[columns].head(top_n)
+    return result

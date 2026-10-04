@@ -36,6 +36,13 @@ def build_gold_sample(
     if total > len(unique_comments):
         raise ValueError("抽样数量不能超过去重评论数量")
 
+    sample = _select_sample(unique_comments, total, seed)
+    return _sample_sheet(sample, total, calibration_size)
+
+
+def _select_sample(
+    unique_comments: pd.DataFrame, total: int, seed: int
+) -> pd.DataFrame:
     candidates = unique_comments.copy()
     candidates["抽样类型"] = candidates["comment_normalized"].map(
         classify_sample_bucket
@@ -61,6 +68,12 @@ def build_gold_sample(
         sample = guaranteed.reset_index(drop=True)
 
     sample = sample.sample(frac=1, random_state=seed).reset_index(drop=True)
+    return sample
+
+
+def _sample_sheet(
+    sample: pd.DataFrame, total: int, calibration_size: int
+) -> pd.DataFrame:
     sample.insert(
         0,
         "样本编号",
