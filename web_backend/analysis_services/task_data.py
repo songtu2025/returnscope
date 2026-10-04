@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import json
-import pickle
-import tempfile
 from functools import lru_cache
 from pathlib import Path
 from threading import Lock
@@ -10,17 +8,44 @@ from typing import Any
 
 import pandas as pd
 
-from return_analysis.data import (
-    PRODUCT_DIMENSION_COLUMNS,
-    AnalysisData,
-    load_analysis_data,
-    load_product_dimensions,
-)
+from return_analysis.data import AnalysisData
 from return_analysis.metrics import (
     filter_details,
 )
+from web_backend.analysis_services.cache import (
+    _load_product_data,
+    _read_cached_data,
+    _write_cached_data,
+)
 from web_backend.analysis_services.filters import AnalysisFilters
 from web_backend.database import Database
+
+TASK_SOURCE_QUERY = """
+SELECT t.id, t.title, t.status, t.store, t.listing,
+       t.result_version, t.result_file_path, t.completed_at,
+       t.revision,
+       rd.name AS dataset_name,
+       rv.version AS dataset_version,
+       cv.primary_model,
+       u.display_name AS owner_name,
+       pv.file_path AS product_file_path
+FROM tasks t
+JOIN users u ON u.id = t.owner_id
+JOIN dataset_versions rv ON rv.id = t.dataset_version_id
+JOIN datasets rd ON rd.id = rv.dataset_id
+JOIN dataset_versions pv ON pv.id = t.product_version_id
+JOIN api_config_versions cv ON cv.id = t.config_version_id
+WHERE t.id = ?
+"""
+
+COMPLETED_SEGMENTS_QUERY = """
+SELECT id, status, result_version, result_file_path,
+       completed_at, scope_json
+FROM task_segments
+WHERE task_id = ?
+  AND status IN ('completed', 'completed_with_errors')
+ORDER BY execution_order, id
+"""
 
 ANALYSIS_CACHE_VERSION = 1
 ANALYSIS_CACHE_LOCK = Lock()
@@ -36,34 +61,11 @@ class _AnalysisTaskData:
     ) -> dict[str, Any]:
         with self.database.connect() as connection:
             row = connection.execute(
-                """
-                SELECT t.id, t.title, t.status, t.store, t.listing,
-                       t.result_version, t.result_file_path, t.completed_at,
-                       t.revision,
-                       rd.name AS dataset_name,
-                       rv.version AS dataset_version,
-                       cv.primary_model,
-                       u.display_name AS owner_name,
-                       pv.file_path AS product_file_path
-                FROM tasks t
-                JOIN users u ON u.id = t.owner_id
-                JOIN dataset_versions rv ON rv.id = t.dataset_version_id
-                JOIN datasets rd ON rd.id = rv.dataset_id
-                JOIN dataset_versions pv ON pv.id = t.product_version_id
-                JOIN api_config_versions cv ON cv.id = t.config_version_id
-                WHERE t.id = ?
-                """,
+                TASK_SOURCE_QUERY,
                 (task_id,),
             ).fetchone()
             segment_rows = connection.execute(
-                """
-                SELECT id, status, result_version, result_file_path,
-                       completed_at, scope_json
-                FROM task_segments
-                WHERE task_id = ?
-                  AND status IN ('completed', 'completed_with_errors')
-                ORDER BY execution_order, id
-                """,
+                COMPLETED_SEGMENTS_QUERY,
                 (task_id,),
             ).fetchall()
         if row is None:
@@ -136,57 +138,11 @@ class _AnalysisTaskData:
             store,
         )
         with ANALYSIS_CACHE_LOCK:
-            try:
-                with cache_path.open("rb") as cache_file:
-                    stored_key, cached_data = pickle.load(cache_file)
-                if stored_key == cache_key and isinstance(cached_data, AnalysisData):
-                    return cached_data
-            except (OSError, EOFError, pickle.PickleError, ValueError, TypeError):
-                pass
-
-            data = load_analysis_data(result)
-            try:
-                products = load_product_dimensions(
-                    product,
-                    data.details["sku"].unique(),
-                    store=store,
-                )
-            except (KeyError, ValueError):
-                products = pd.DataFrame()
-            if not products.empty:
-                dimensions = set(PRODUCT_DIMENSION_COLUMNS[1:])
-                details = data.details.drop(
-                    columns=[column for column in dimensions if column in data.details],
-                ).merge(products, on="sku", how="left", validate="many_to_one")
-                for column in dimensions:
-                    details[column] = details[column].fillna("").astype(str).str.strip()
-                data = AnalysisData(
-                    details=details,
-                    semantics=data.semantics,
-                    unknowns=data.unknowns,
-                    label_catalog=data.label_catalog,
-                    products=products,
-                )
-
-            temp_path: Path | None = None
-            try:
-                with tempfile.NamedTemporaryFile(
-                    mode="wb",
-                    dir=cache_path.parent,
-                    prefix=f"{cache_path.name}.",
-                    suffix=".tmp",
-                    delete=False,
-                ) as cache_file:
-                    temp_path = Path(cache_file.name)
-                    pickle.dump(
-                        (cache_key, data),
-                        cache_file,
-                        protocol=pickle.HIGHEST_PROTOCOL,
-                    )
-                temp_path.replace(cache_path)
-            except (OSError, pickle.PickleError):
-                if temp_path is not None:
-                    temp_path.unlink(missing_ok=True)
+            cached = _read_cached_data(cache_path, cache_key)
+            if cached is not None:
+                return cached
+            data = _load_product_data(result, product, store)
+            _write_cached_data(cache_path, cache_key, data)
             return data
 
     @staticmethod
