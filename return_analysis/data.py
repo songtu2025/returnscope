@@ -189,6 +189,24 @@ def load_analysis_data(
     semantics = sheets[SEMANTIC_SHEET].copy()
     unknowns = sheets[UNKNOWN_SHEET].copy()
 
+    semantics, unknowns = _normalize_analysis_sheets(details, semantics, unknowns)
+
+    details, products = _enrich_product_dimensions(details, product_path, store)
+
+    label_catalog = _analysis_label_catalog(semantics)
+
+    return AnalysisData(
+        details=details,
+        semantics=semantics,
+        unknowns=unknowns,
+        label_catalog=label_catalog,
+        products=products,
+    )
+
+
+def _normalize_analysis_sheets(
+    details: pd.DataFrame, semantics: pd.DataFrame, unknowns: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     if semantics.empty:
         semantics = semantics.reindex(columns=sorted(SEMANTIC_COLUMNS))
     if unknowns.empty:
@@ -222,6 +240,12 @@ def load_analysis_data(
     )
     details["has_text"] = details["标准化评论"].ne("")
 
+    return semantics, unknowns
+
+
+def _enrich_product_dimensions(
+    details: pd.DataFrame, product_path: Path | None, store: str | None
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     if product_path is None:
         products = pd.DataFrame(columns=PRODUCT_DIMENSION_COLUMNS)
         for column in PRODUCT_DIMENSION_COLUMNS[1:]:
@@ -242,7 +266,11 @@ def load_analysis_data(
         )
         _clean_text_columns(details, PRODUCT_DIMENSION_COLUMNS[1:])
 
-    label_catalog = (
+    return details, products
+
+
+def _analysis_label_catalog(semantics: pd.DataFrame) -> pd.DataFrame:
+    return (
         semantics.loc[
             semantics["标签编码"].ne(""),
             ["标签编码", "标签名称", "一级分类"],
@@ -250,12 +278,4 @@ def load_analysis_data(
         .drop_duplicates(subset=["标签编码"])
         .sort_values(["一级分类", "标签名称"])
         .reset_index(drop=True)
-    )
-
-    return AnalysisData(
-        details=details,
-        semantics=semantics,
-        unknowns=unknowns,
-        label_catalog=label_catalog,
-        products=products,
     )
