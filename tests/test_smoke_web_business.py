@@ -55,13 +55,16 @@ def smoke_transport(monkeypatch):
                 "version_id": "dv-2",
                 "filters": {},
                 "source_snapshot": [{"result_version_id": "result-2"}],
+                "summary": {"record_count": 2},
             },
         },
         "/api/analysis-dashboards/dashboard-1/versions/dv-2/sources": [
             {"result_version_id": "result-2"},
         ],
         "/api/analysis-dashboards/dashboard-1/versions/dv-2/summary": {
-            "record_count": 2
+            "dashboard_id": "dashboard-1",
+            "version_id": "dv-2",
+            "record_count": 2,
         },
         "/api/analysis-dashboards/dashboard-1/versions/dv-2/records?page_size=1": {
             "total": 2,
@@ -121,6 +124,17 @@ def test_business_smoke_checks_scope_without_business_writes(
         assert value not in output
 
 
+def test_feedback_group_count_can_differ_from_source_rows(smoke_scope, smoke_transport):
+    summary = {"record_count": 1, "counting_basis": "feedback_group"}
+    smoke_transport.payloads["/api/analysis-dashboards/dashboard-1?version_id=dv-2"][
+        "version"
+    ]["summary"] = summary
+    smoke_transport.payloads[
+        "/api/analysis-dashboards/dashboard-1/versions/dv-2/summary"
+    ].update(summary)
+    business.check_business(SmokeClient("https://smoke.example.test"), smoke_scope)
+
+
 @pytest.mark.parametrize(
     "path,fields,replacement",
     [
@@ -153,6 +167,21 @@ def test_business_smoke_checks_scope_without_business_writes(
             "/api/analysis-dashboards/dashboard-1/versions/dv-2/summary",
             ["record_count"],
             9,
+        ),
+        (
+            "/api/analysis-dashboards/dashboard-1/versions/dv-2/summary",
+            ["version_id"],
+            "other-version",
+        ),
+        (
+            "/api/analysis-dashboards/dashboard-1/versions/dv-2/summary",
+            ["counting_basis"],
+            "unknown-basis",
+        ),
+        (
+            "/api/analysis-dashboards/dashboard-1?version_id=dv-2",
+            ["version", "summary", "record_count"],
+            1,
         ),
         ("/api/ai-insight-reports/report-1", ["status"], "running"),
         ("/api/ai-insight-reports/report-1", ["dashboard_version_id"], "other-version"),

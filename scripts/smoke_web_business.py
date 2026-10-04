@@ -111,12 +111,33 @@ def _check_dashboard(
     )
     summary = _get(client, version_path + "/summary")
     records = _get(client, version_path + "/records?page_size=1")
-    _require(
-        summary.get("record_count") == result["record_count"]
-        and records.get("total") == result["record_count"],
-        "驾驶舱统计与来源结果记录数不一致",
-    )
+    _check_dashboard_counts(scope, result, version, summary, records)
     print("[通过] 驾驶舱版本、来源与统计")
+
+
+def _check_dashboard_counts(
+    scope: BusinessScope,
+    result: dict[str, Any],
+    version: dict[str, Any],
+    summary: dict[str, Any],
+    records: dict[str, Any],
+) -> None:
+    snapshot = version.get("summary", {})
+    count = summary.get("record_count")
+    basis = summary.get("counting_basis", "source_record")
+    # 驾驶舱按反馈组计数，明细分页仍按原始行计数；分别核对相同口径。
+    _require(
+        summary.get("dashboard_id") == scope.dashboard_id
+        and summary.get("version_id") == scope.dashboard_version_id
+        and isinstance(count, int)
+        and 0 < count <= result["record_count"]
+        and count == snapshot.get("record_count")
+        and basis == snapshot.get("counting_basis", "source_record")
+        and basis in {"source_record", "feedback_group"}
+        and (basis == "feedback_group" or count == result["record_count"])
+        and records.get("total") == result["record_count"],
+        "驾驶舱统计快照、计数口径或明细来源不一致",
+    )
 
 
 def _check_report(client: SmokeClient, scope: BusinessScope) -> None:
