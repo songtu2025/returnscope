@@ -7,12 +7,14 @@ from return_semantics.schemas import TaxonomyConfig, ValidatedClassification
 from web_backend import classification_result_payload as _payload
 from web_backend import classification_result_publication as _publication
 from web_backend.classification_result_download import _ClassificationResultDownload
-from web_backend.classification_result_queries import (
-    _ClassificationResultQueries,
-    system_rerun_count,
-)
+from web_backend.classification_result_queries import _ClassificationResultQueries
 from web_backend.classification_result_records import _ClassificationResultRecords
-from web_backend.common import json_text, new_id
+from web_backend.classification_results.publication_transaction import (
+    _publication_versions as _publication_versions,
+)
+from web_backend.classification_results.publication_transaction import (
+    publish_with_connection,
+)
 from web_backend.database import Database
 from web_backend.security import utc_now
 
@@ -47,35 +49,6 @@ ResultPublicationConflict.__module__ = __name__
 ResultPublicationError.__module__ = __name__
 
 
-def _publication_versions(connection: Any, segment: Any) -> tuple[Any, Any]:
-    latest_version = connection.execute(
-        """
-        SELECT v.* FROM classification_result_versions v
-        WHERE v.source_segment_id = ?
-        ORDER BY v.version_no DESC
-        LIMIT 1
-        """,
-        (segment["id"],),
-    ).fetchone()
-    active_system_rerun = (
-        segment["result_version_id"] is not None and str(segment["status"]) == "running"
-    )
-    if not active_system_rerun:
-        return latest_version, None
-    if not system_rerun_count(connection, str(segment["result_version_id"])):
-        raise ValueError("Listing 片段没有需要系统重跑的分类结果")
-    parent_version = connection.execute(
-        """
-        SELECT * FROM classification_result_versions
-        WHERE id = ? AND source_segment_id = ?
-        """,
-        (segment["result_version_id"], segment["id"]),
-    ).fetchone()
-    if parent_version is None:
-        raise ValueError("Listing 片段当前结果版本不存在")
-    return None, parent_version
-
-
 class ClassificationResultService(
     _ClassificationResultPublication,
     _ClassificationResultQueries,
@@ -98,235 +71,11 @@ class ClassificationResultService(
         conflict: str | None = None
         try:
             with self.database.transaction(immediate=True) as connection:
-                task = connection.execute(
-                    """
-                    SELECT id, dataset_version_id, product_version_id,
-                           owner_id, store, listing
-                    FROM tasks WHERE id = ?
-                    """,
-                    (segment_state.task_id,),
-                ).fetchone()
-                segment = connection.execute(
-                    "SELECT * FROM task_segments WHERE id = ? AND task_id = ?",
-                    (segment_state.segment_id, segment_state.task_id),
-                ).fetchone()
-                if task is None or segment is None:
-                    raise ValueError("任务或 Listing 片段不存在")
-
-                content_hash = self._content_hash(
-                    str(task["dataset_version_id"]),
-                    str(task["product_version_id"]),
-                    prepared["units"],
-                    prepared["records"],
+                existing, conflict = publish_with_connection(
+                    self, connection, prepared, segment_state, now
                 )
-                latest_version, parent_version = _publication_versions(
-                    connection,
-                    segment,
-                )
-                if latest_version is not None:
-                    if str(latest_version["content_hash"]) == content_hash:
-                        return self._get_version_with_connection(
-                            connection,
-                            str(latest_version["id"]),
-                        )
-                    conflict = "Listing 片段已发布且内容哈希不同，拒绝覆盖"
-                    connection.execute(
-                        """
-                        UPDATE task_segments
-                        SET result_publish_error = ?, revision = revision + 1
-                        WHERE id = ?
-                        """,
-                        (conflict, segment_state.segment_id),
-                    )
-                    connection.execute(
-                        """
-                        INSERT INTO task_events(
-                            task_id, event_type, stage, message,
-                            data_json, created_at
-                        ) VALUES (?, 'result_publish_conflict', '生成结果',
-                                  ?, ?, ?)
-                        """,
-                        (
-                            segment_state.task_id,
-                            conflict,
-                            json_text(
-                                {
-                                    "segment_id": segment_state.segment_id,
-                                    "existing_content_hash": latest_version[
-                                        "content_hash"
-                                    ],
-                                    "incoming_content_hash": content_hash,
-                                }
-                            ),
-                            now,
-                        ),
-                    )
-                else:
-                    result_id = (
-                        str(parent_version["result_id"])
-                        if parent_version is not None
-                        else new_id("classification_result")
-                    )
-                    version_no = (
-                        int(
-                            connection.execute(
-                                """
-                                SELECT COALESCE(MAX(version_no), 0) + 1
-                                FROM classification_result_versions
-                                WHERE result_id = ?
-                                """,
-                                (result_id,),
-                            ).fetchone()[0]
-                        )
-                        if parent_version is not None
-                        else 1
-                    )
-                    version_id = new_id("classification_version")
-                    quality_status = _version_quality(
-                        [str(value["quality_status"]) for value in prepared["units"]]
-                    )
-                    if parent_version is None:
-                        connection.execute(
-                            """
-                            INSERT INTO classification_results(
-                                id, source_task_id, source_segment_id,
-                                dataset_version_id, product_version_id,
-                                store_site, listing, agent_key, agent_family,
-                                logic_version, taxonomy_version,
-                                model_policy_version, standard_version_id,
-                                claims_version, created_at
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            """,
-                            (
-                                result_id,
-                                segment_state.task_id,
-                                segment_state.segment_id,
-                                task["dataset_version_id"],
-                                task["product_version_id"],
-                                prepared["store_site"] or task["store"],
-                                prepared["listing"] or task["listing"],
-                                segment["agent_key"],
-                                segment["agent_family"],
-                                segment["logic_version"],
-                                segment["taxonomy_version"],
-                                segment["model_policy_version"],
-                                segment["standard_version_id"],
-                                segment["claims_version"],
-                                now,
-                            ),
-                        )
-                    connection.execute(
-                        """
-                        INSERT INTO classification_result_versions(
-                            id, result_id, source_segment_id, version_no,
-                            content_hash, quality_status, publish_status,
-                            unit_count, record_count, parent_version_id,
-                            version_reason, created_by, created_at, published_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, 'publishing', ?, ?, ?,
-                                  ?, ?, ?, NULL)
-                        """,
-                        (
-                            version_id,
-                            result_id,
-                            segment_state.segment_id,
-                            version_no,
-                            content_hash,
-                            quality_status,
-                            len(prepared["units"]),
-                            len(prepared["records"]),
-                            (
-                                str(parent_version["id"])
-                                if parent_version is not None
-                                else None
-                            ),
-                            (
-                                "系统异常局部重跑"
-                                if parent_version is not None
-                                else "首次发布"
-                            ),
-                            task["owner_id"],
-                            now,
-                        ),
-                    )
-                    self._insert_units(
-                        connection,
-                        version_id,
-                        prepared["units"],
-                        prepared["labels"],
-                    )
-                    self._insert_records(
-                        connection,
-                        version_id,
-                        str(task["dataset_version_id"]),
-                        prepared["records"],
-                    )
-                    connection.execute(
-                        """
-                        UPDATE classification_result_versions
-                        SET publish_status = 'published', published_at = ?
-                        WHERE id = ?
-                        """,
-                        (now, version_id),
-                    )
-                    connection.execute(
-                        """
-                        UPDATE task_segments
-                        SET status = ?, progress_current = ?, progress_total = ?,
-                            model_calls = ?, cache_hits = ?, model_failures = ?,
-                            error = NULL,
-                            requested_action = NULL, result_json_path = ?,
-                            result_version = ?, result_version_id = ?,
-                            result_publish_status = 'published',
-                            result_quality_status = ?, result_published_at = ?,
-                            result_publish_error = NULL, completed_at = ?,
-                            heartbeat_at = ?, revision = revision + 1
-                        WHERE id = ? AND task_id = ?
-                        """,
-                        (
-                            segment_state.segment_status,
-                            segment_state.progress_total,
-                            segment_state.progress_total,
-                            segment_state.model_calls,
-                            segment_state.cache_hits,
-                            segment_state.model_failures,
-                            segment_state.checkpoint_path,
-                            segment_state.legacy_result_version,
-                            version_id,
-                            quality_status,
-                            now,
-                            now,
-                            now,
-                            segment_state.segment_id,
-                            segment_state.task_id,
-                        ),
-                    )
-                    connection.execute(
-                        """
-                        INSERT INTO task_events(
-                            task_id, event_type, stage, message,
-                            data_json, created_at
-                        ) VALUES (?, 'segment_completed', '语义分析',
-                                  'Listing 分类结果已发布', ?, ?)
-                        """,
-                        (
-                            segment_state.task_id,
-                            json_text(
-                                {
-                                    "segment_id": segment_state.segment_id,
-                                    "status": segment_state.segment_status,
-                                    "result_version_id": version_id,
-                                    "result_version": version_no,
-                                    "parent_version_id": (
-                                        str(parent_version["id"])
-                                        if parent_version is not None
-                                        else None
-                                    ),
-                                    "quality_status": quality_status,
-                                }
-                            ),
-                            now,
-                        ),
-                    )
+                if existing is not None:
+                    return existing
             if conflict is not None:
                 raise ResultPublicationConflict(conflict)
         except ResultPublicationConflict:
