@@ -71,12 +71,9 @@ class SmokeClient:
             with self.opener.open(request, timeout=self.timeout) as response:
                 return response.status, response.headers, response.read()
         except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(
-                f"{method} {path} 返回 {exc.code}：{detail[:300]}"
-            ) from exc
-        except urllib.error.URLError as exc:
-            raise RuntimeError(f"无法连接服务：{exc.reason}") from exc
+            raise RuntimeError(f"{method} {path} 返回 {exc.code}") from None
+        except (urllib.error.URLError, TimeoutError):
+            raise RuntimeError("无法连接服务或请求超时") from None
 
     def json(
         self,
@@ -87,9 +84,32 @@ class SmokeClient:
         status, headers, body = self.request(path, method, payload)
         try:
             value = json.loads(body.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise RuntimeError(f"{path} 没有返回有效 JSON") from exc
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            raise RuntimeError(f"{path} 没有返回有效 JSON") from None
         return status, headers, value
+
+    def login(self, email: str, password: str) -> None:
+        status, headers, _login = self.json(
+            "/api/auth/login", "POST", {"email": email, "password": password}
+        )
+        cookies = "; ".join(headers.get_all("Set-Cookie", []))
+        flags = ["HttpOnly", "SameSite=lax"]
+        if self.base_url.startswith("https://"):
+            flags.append("Secure")
+        if status != 200 or any(flag not in cookies for flag in flags):
+            raise RuntimeError("登录会话 Cookie 安全属性不完整")
+        status, _headers, user = self.json("/api/auth/me")
+        if (
+            status != 200
+            or not isinstance(user, dict)
+            or user.get("email") != email.lower()
+        ):
+            raise RuntimeError("登录后身份校验失败")
+
+    def logout(self) -> None:
+        status, _headers, _body = self.request("/api/auth/logout", "POST")
+        if status != 204:
+            raise RuntimeError("退出登录失败")
 
 
 def run_smoke(
@@ -115,25 +135,7 @@ def run_smoke(
         raise RuntimeError("健康检查未通过")
     print("[通过] 数据库与任务执行器健康")
 
-    status, login_headers, _login = client.json(
-        "/api/auth/login",
-        method="POST",
-        payload={"email": email, "password": password},
-    )
-    cookies = "; ".join(login_headers.get_all("Set-Cookie", []))
-    required_cookie_flags = ["HttpOnly", "SameSite=lax"]
-    if base_url.startswith("https://"):
-        required_cookie_flags.append("Secure")
-    if status != 200 or any(flag not in cookies for flag in required_cookie_flags):
-        raise RuntimeError("登录会话 Cookie 安全属性不完整")
-
-    status, _headers, current_user = client.json("/api/auth/me")
-    if (
-        status != 200
-        or not isinstance(current_user, dict)
-        or current_user.get("email") != email.lower()
-    ):
-        raise RuntimeError("登录后身份校验失败")
+    client.login(email, password)
     print("[通过] 登录与安全会话")
 
     status, _headers, system = client.json("/api/system/status")
@@ -154,12 +156,7 @@ def run_smoke(
             raise RuntimeError(f"核心接口异常：{path}")
     print("[通过] 数据、模型配置与任务接口")
 
-    status, _headers, _body = client.request(
-        "/api/auth/logout",
-        method="POST",
-    )
-    if status != 204:
-        raise RuntimeError("退出登录失败")
+    client.logout()
     print("[通过] 退出登录")
 
 
