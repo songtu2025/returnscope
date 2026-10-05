@@ -10,10 +10,19 @@ import pandas as pd
 
 from return_semantics.capabilities import (
     CapabilityRegistry,
+    CategoryCapability,
     resolve_model_policy,
 )
 from return_semantics.claims import NO_CLAIMS_VERSION, ClaimsResolver
 from return_semantics.data import ReturnDataset
+from return_semantics.execution_plan_summary import (
+    _product_match_statuses as _product_match_statuses,
+)
+from return_semantics.execution_plan_summary import _variant_counts as _variant_counts
+from return_semantics.execution_plan_summary import (
+    build_plan_summary,
+    prepare_plan_groups,
+)
 
 
 @dataclass(frozen=True)
@@ -64,40 +73,132 @@ class CategoryExecutionPlan:
         ]
 
 
-def _variant_counts(
-    selected: pd.DataFrame,
-    record_counts: pd.Series,
-) -> list[dict[str, Any]]:
-    variants = []
-    for (category_a, category_b), rows in selected.groupby(
-        ["category_a", "category_b"],
-        sort=True,
-        dropna=False,
-    ):
-        variants.append(
-            {
-                "category_a": str(category_a),
-                "category_b": str(category_b),
-                "record_count": int(
-                    rows["classification_key"].map(record_counts).fillna(0).sum()
-                ),
-                "unique_comments": len(rows),
-            }
-        )
-    return variants
-
-
 def _scope_segment_key(store: str, listing: str, agent_key: str) -> str:
     return f"{store}/{listing or '*'}/{agent_key}"
 
 
-def _product_match_statuses(unique_comments: pd.DataFrame) -> pd.Series:
-    if "product_match_status" not in unique_comments.columns:
-        return pd.Series("matched", index=unique_comments.index)
-    values = unique_comments["product_match_status"]
-    if not isinstance(values, pd.Series):
-        raise ValueError("product_match_status 列必须唯一")
-    return values.fillna("").astype(str).str.strip()
+class _CategoryPlanBuilder:
+    def __init__(
+        self,
+        dataset: ReturnDataset,
+        registry: CapabilityRegistry,
+        scope: tuple[str, str | None],
+        model_config: dict[str, Any],
+        claims_resolver: ClaimsResolver | None,
+    ) -> None:
+        self.dataset = dataset
+        self.registry = registry
+        self.store, self.listing = scope
+        self.model_config = model_config
+        self.claims_resolver = claims_resolver
+        self.unique_comments = dataset.unique_comments
+        self.record_counts = dataset.records["classification_key"].value_counts()
+        self.split_scopes = dataset.scope_mode == "auto"
+        self.assignments = self._assignments()
+        self.assignment_series = pd.Series(
+            self.assignments, index=self.unique_comments.index
+        )
+        self.groups = prepare_plan_groups(
+            self.unique_comments, self.assignment_series, self.record_counts
+        )
+
+    def _assignments(self) -> tuple[str | None, ...]:
+        assignments_list: list[str | None] = []
+        for row in self.unique_comments.itertuples(index=False):
+            category_a = str(row.category_a).strip()
+            category_b = str(row.category_b).strip()
+            row_match_status = str(
+                getattr(row, "product_match_status", "matched")
+            ).strip()
+            if row_match_status != "matched":
+                assignments_list.append("excluded")
+                continue
+            if not category_a or not category_b:
+                assignments_list.append("excluded")
+                continue
+            capability = self.registry.resolve(category_a, category_b)
+            if capability is None or (self.split_scopes and (not str(row.store))):
+                assignments_list.append(None)
+                continue
+            assignments_list.append(
+                _scope_segment_key(str(row.store), str(row.listing), capability.key)
+                if self.split_scopes
+                else capability.key
+            )
+        return tuple(assignments_list)
+
+    def _segments(self) -> list[dict[str, Any]]:
+        segments: list[dict[str, Any]] = []
+        for capability in self.registry.capabilities:
+            if self.split_scopes:
+                scope_groups: Iterable[tuple[tuple[Any, Any], pd.DataFrame]] = (
+                    self.unique_comments.groupby(
+                        ["store", "listing"], sort=True, dropna=False
+                    )
+                )
+            else:
+                scope_groups = [
+                    ((self.store, self.listing or ""), self.unique_comments)
+                ]
+            for (scope_store, scope_listing), scope_rows in scope_groups:
+                segment_key = (
+                    _scope_segment_key(
+                        str(scope_store), str(scope_listing), capability.key
+                    )
+                    if self.split_scopes
+                    else capability.key
+                )
+                selected = scope_rows.loc[self.assignment_series.eq(segment_key)].copy()
+                if selected.empty:
+                    continue
+                segments.append(
+                    self._build_segment(
+                        capability, (scope_store, scope_listing), segment_key, selected
+                    )
+                )
+        return segments
+
+    def _build_segment(
+        self,
+        capability: CategoryCapability,
+        scope: tuple[Any, Any],
+        segment_key: str,
+        selected: pd.DataFrame,
+    ) -> dict[str, Any]:
+        scope_store, scope_listing = scope
+        taxonomy = self.registry.load_taxonomy(capability)
+        model_policy = resolve_model_policy(capability, self.model_config)
+        claims = (
+            self.claims_resolver.resolve(
+                str(scope_store), str(scope_listing) or None, capability.key
+            )
+            if self.claims_resolver is not None
+            else None
+        )
+        return {
+            "segment_key": segment_key,
+            "agent_key": capability.key,
+            "agent_family": capability.agent_family,
+            "logic_version": capability.logic_version,
+            "taxonomy_version": taxonomy.version,
+            "model_policy_version": capability.model_policy.version,
+            "model_policy": model_policy,
+            "claims_version": claims.version
+            if claims is not None
+            else NO_CLAIMS_VERSION,
+            "scope": {"store": str(scope_store), "listing": str(scope_listing)},
+            "record_count": int(
+                selected["classification_key"].map(self.record_counts).fillna(0).sum()
+            ),
+            "unique_comments": len(selected),
+            "status": "ready",
+            "variants": _variant_counts(selected, self.record_counts),
+        }
+
+    def summary(self) -> dict[str, Any]:
+        return build_plan_summary(
+            self.dataset, self.registry, self.groups, self._segments(), self.store
+        )
 
 
 def build_category_execution_plan(
@@ -117,187 +218,14 @@ def build_category_execution_plan(
         "secondary_model": None,
         "secondary_effort": None,
     }
-    unique_comments = dataset.unique_comments
-    record_counts = dataset.records["classification_key"].value_counts()
-    split_scopes = dataset.scope_mode == "auto"
-    assignments_list: list[str | None] = []
-    for row in unique_comments.itertuples(index=False):
-        category_a = str(row.category_a).strip()
-        category_b = str(row.category_b).strip()
-        row_match_status = str(getattr(row, "product_match_status", "matched")).strip()
-        if row_match_status != "matched":
-            assignments_list.append("excluded")
-            continue
-        if not category_a or not category_b:
-            assignments_list.append("excluded")
-            continue
-        capability = registry.resolve(
-            category_a,
-            category_b,
-        )
-        if capability is None or (split_scopes and not str(row.store)):
-            assignments_list.append(None)
-            continue
-        assignments_list.append(
-            _scope_segment_key(str(row.store), str(row.listing), capability.key)
-            if split_scopes
-            else capability.key
-        )
-    assignments = tuple(assignments_list)
-    assignment_series = pd.Series(assignments, index=unique_comments.index)
-    segments: list[dict[str, Any]] = []
+    builder = _CategoryPlanBuilder(
+        dataset, registry, (store, listing), effective_model_config, claims_resolver
+    )
+    return CategoryExecutionPlan(
+        summary=builder.summary(), assignments=builder.assignments
+    )
 
-    excluded = unique_comments.loc[assignment_series.eq("excluded")].copy()
-    blocked = unique_comments.loc[assignment_series.isna()].copy()
-    match_status = _product_match_statuses(unique_comments)
-    unmatched_product = unique_comments.loc[match_status.ne("matched")].copy()
-    missing_category = unique_comments.loc[
-        match_status.eq("matched")
-        & (
-            unique_comments["category_a"].fillna("").astype(str).str.strip().eq("")
-            | unique_comments["category_b"].fillna("").astype(str).str.strip().eq("")
-        )
-    ].copy()
-    for capability in registry.capabilities:
-        if split_scopes:
-            scope_groups: Iterable[tuple[tuple[Any, Any], pd.DataFrame]] = (
-                unique_comments.groupby(
-                    ["store", "listing"],
-                    sort=True,
-                    dropna=False,
-                )
-            )
-        else:
-            scope_groups = [((store, listing or ""), unique_comments)]
-        for (scope_store, scope_listing), scope_rows in scope_groups:
-            segment_key = (
-                _scope_segment_key(
-                    str(scope_store),
-                    str(scope_listing),
-                    capability.key,
-                )
-                if split_scopes
-                else capability.key
-            )
-            selected = scope_rows.loc[assignment_series.eq(segment_key)].copy()
-            if selected.empty:
-                continue
-            taxonomy = registry.load_taxonomy(capability)
-            model_policy = resolve_model_policy(
-                capability,
-                effective_model_config,
-            )
-            claims = (
-                claims_resolver.resolve(
-                    str(scope_store),
-                    str(scope_listing) or None,
-                    capability.key,
-                )
-                if claims_resolver is not None
-                else None
-            )
-            segments.append(
-                {
-                    "segment_key": segment_key,
-                    "agent_key": capability.key,
-                    "agent_family": capability.agent_family,
-                    "logic_version": capability.logic_version,
-                    "taxonomy_version": taxonomy.version,
-                    "model_policy_version": capability.model_policy.version,
-                    "model_policy": model_policy,
-                    "claims_version": (
-                        claims.version if claims is not None else NO_CLAIMS_VERSION
-                    ),
-                    "scope": {
-                        "store": str(scope_store),
-                        "listing": str(scope_listing),
-                    },
-                    "record_count": int(
-                        selected["classification_key"]
-                        .map(record_counts)
-                        .fillna(0)
-                        .sum()
-                    ),
-                    "unique_comments": len(selected),
-                    "status": "ready",
-                    "variants": _variant_counts(selected, record_counts),
-                }
-            )
 
-    unsupported = blocked.loc[
-        [
-            registry.resolve(str(row.category_a), str(row.category_b)) is None
-            for row in blocked.itertuples(index=False)
-        ]
-    ]
-    unresolved_scope = blocked.drop(index=unsupported.index)
-    executable = sum(
-        int(segment["unique_comments"])
-        for segment in segments
-        if segment["status"] == "ready"
-    )
-    executable_records = sum(
-        int(segment["record_count"])
-        for segment in segments
-        if segment["status"] == "ready"
-    )
-    not_analyzed = pd.concat([excluded, blocked]).sort_index()
-    excluded_records = int(
-        not_analyzed["classification_key"].map(record_counts).fillna(0).sum()
-    )
-    blocked_records = int(
-        blocked["classification_key"].map(record_counts).fillna(0).sum()
-    )
-    valid_comment_count = (
-        int(dataset.records["has_text_evidence"].sum())
-        if "has_text_evidence" in dataset.records.columns
-        else len(dataset.records)
-    )
-    summary = {
-        "registry_version": registry.version,
-        "scope_mode": dataset.scope_mode,
-        "primary_store": dataset.primary_store or store,
-        "detected_scopes": list(dataset.scopes),
-        "unresolved_scope_count": int(
-            unresolved_scope["store"].eq("").sum()
-            if "store" in unresolved_scope.columns
-            else 0
-        ),
-        "unresolved_scope_record_count": int(
-            unresolved_scope.loc[
-                unresolved_scope["store"].eq(""),
-                "classification_key",
-            ]
-            .map(record_counts)
-            .fillna(0)
-            .sum()
-            if "store" in unresolved_scope.columns
-            else 0
-        ),
-        "record_count": len(dataset.records),
-        "valid_comment_count": valid_comment_count,
-        "unique_comment_count": len(unique_comments),
-        "executable_count": executable,
-        "executable_record_count": executable_records,
-        "blocked_count": len(blocked),
-        "blocked_record_count": blocked_records,
-        "excluded_count": len(not_analyzed),
-        "excluded_record_count": excluded_records,
-        "excluded_categories": _variant_counts(not_analyzed, record_counts),
-        "unmatched_product_count": len(unmatched_product),
-        "unmatched_product_record_count": int(
-            unmatched_product["classification_key"].map(record_counts).fillna(0).sum()
-        ),
-        "missing_category_count": len(missing_category),
-        "missing_category_record_count": int(
-            missing_category["classification_key"].map(record_counts).fillna(0).sum()
-        ),
-        "missing_categories": _variant_counts(missing_category, record_counts),
-        "unknown_category_count": len(unsupported),
-        "unknown_category_record_count": int(
-            unsupported["classification_key"].map(record_counts).fillna(0).sum()
-        ),
-        "unknown_categories": _variant_counts(unsupported, record_counts),
-        "segments": segments,
-    }
-    return CategoryExecutionPlan(summary=summary, assignments=assignments)
+# 辅助入口仍从原模块导出，并共享统计模块的唯一实现。
+_variant_counts.__module__ = __name__
+_product_match_statuses.__module__ = __name__

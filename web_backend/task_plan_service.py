@@ -17,6 +17,13 @@ from web_backend.database import Database
 from web_backend.dataset_cache import load_cached_dataset
 from web_backend.settings import PROJECT_ROOT
 from web_backend.tasks.plan_inputs import TaskPlanInputsMixin
+from web_backend.tasks.plan_response import (
+    bind_standard_versions,
+    category_options,
+    input_versions,
+    model_configuration,
+    unresolved_product_counts,
+)
 from web_backend.tasks.product_resolution import TaskProductResolutionMixin
 
 
@@ -79,12 +86,69 @@ class TaskPlanService(TaskPlanInputsMixin, TaskProductResolutionMixin):
         clean_store = (store or "").strip()
         clean_listing = (listing or "").strip() or None
         returns, products, config = self._load_inputs(
-            dataset_version_id,
-            product_version_id,
-            config_version_id,
+            dataset_version_id, product_version_id, config_version_id
         )
         if model_policy is not None:
             config = self._apply_model_policy(config, model_policy)
+        automatic_scope = not clean_store
+        dataset, clean_store, clean_listing = self._dataset_scope(
+            returns, products, (clean_store, clean_listing), analysis_context
+        )
+        model_config = model_configuration(config)
+        registry = self.registry or self.standard_service.active_registry()
+        execution_plan = build_category_execution_plan(
+            dataset,
+            registry,
+            store=clean_store,
+            listing=clean_listing,
+            model_config=model_config,
+            claims_resolver=self.claims_resolver,
+        )
+        standards = self.standard_service.current_version_by_agent()
+        execution_plan = bind_standard_versions(execution_plan, standards)
+        unresolved_products = self._unresolved_products(
+            dataset,
+            execution_plan,
+            Path(str(products["file_path"])),
+            clean_store,
+            clean_listing,
+        )
+        missing_category_products = [
+            item for item in unresolved_products if item["issue"] == "missing_category"
+        ]
+        inputs = {
+            "analysis_context": analysis_context,
+            **input_versions(returns, products, config),
+            "scope": {
+                "mode": "auto" if automatic_scope else "manual",
+                "store": clean_store,
+                "listing": clean_listing,
+                "detected_scopes": list(dataset.scopes),
+            },
+        }
+        response = {
+            **execution_plan.with_hash(inputs),
+            "inputs": inputs,
+            **unresolved_product_counts(unresolved_products, missing_category_products),
+            "category_options": category_options(registry, standards),
+        }
+        return PreparedTaskPlan(
+            returns=returns,
+            products=products,
+            config=config,
+            dataset=dataset,
+            execution_plan=execution_plan,
+            response=response,
+        )
+
+    def _dataset_scope(
+        self,
+        returns: dict[str, Any],
+        products: dict[str, Any],
+        scope: tuple[str, str | None],
+        analysis_context: AnalysisContext,
+    ) -> tuple[ReturnDataset, str, str | None]:
+        clean_store, clean_listing = scope
         automatic_scope = not clean_store
         dataset = load_cached_dataset(
             str(returns["file_path"]),
@@ -99,124 +163,4 @@ class TaskPlanService(TaskPlanInputsMixin, TaskProductResolutionMixin):
         if automatic_scope:
             clean_store = dataset.primary_store or "AUTO"
             clean_listing = None
-        model_config = {
-            "primary_model": config["primary_model"],
-            "primary_effort": config["primary_effort"],
-            "cheap_model": config["cheap_model"],
-            "cheap_effort": config["cheap_effort"],
-            "secondary_model": config["secondary_model"],
-            "secondary_effort": config["secondary_effort"],
-        }
-        registry = self.registry or self.standard_service.active_registry()
-        execution_plan = build_category_execution_plan(
-            dataset,
-            registry,
-            store=clean_store,
-            listing=clean_listing,
-            model_config=model_config,
-            claims_resolver=self.claims_resolver,
-        )
-        standards = self.standard_service.current_version_by_agent()
-        execution_plan = CategoryExecutionPlan(
-            summary={
-                **execution_plan.summary,
-                "segments": [
-                    {
-                        **segment,
-                        "standard_id": standards.get(str(segment["agent_key"]), {}).get(
-                            "standard_id"
-                        ),
-                        "standard_version_id": standards.get(
-                            str(segment["agent_key"]), {}
-                        ).get("standard_version_id"),
-                        "standard_name": standards.get(
-                            str(segment["agent_key"]), {}
-                        ).get("name"),
-                        "standard_version": standards.get(
-                            str(segment["agent_key"]), {}
-                        ).get("version_no"),
-                    }
-                    for segment in execution_plan.summary["segments"]
-                ],
-            },
-            assignments=execution_plan.assignments,
-        )
-        unresolved_products = self._unresolved_products(
-            dataset,
-            execution_plan,
-            Path(str(products["file_path"])),
-            clean_store,
-            clean_listing,
-        )
-        missing_category_products = [
-            item for item in unresolved_products if item["issue"] == "missing_category"
-        ]
-        inputs = {
-            "analysis_context": analysis_context,
-            "returns": {
-                "version_id": returns["id"],
-                "sha256": returns["sha256"],
-            },
-            "products": {
-                "version_id": products["id"],
-                "sha256": products["sha256"],
-            },
-            "config": {
-                "version_id": config["id"],
-                "version": config["version"],
-                "primary_model": config["primary_model"],
-                "primary_effort": config["primary_effort"],
-                "cheap_model": config["cheap_model"],
-                "cheap_effort": config["cheap_effort"],
-                "secondary_model": config["secondary_model"],
-                "secondary_effort": config["secondary_effort"],
-            },
-            "scope": {
-                "mode": "auto" if automatic_scope else "manual",
-                "store": clean_store,
-                "listing": clean_listing,
-                "detected_scopes": list(dataset.scopes),
-            },
-        }
-        response = {
-            **execution_plan.with_hash(inputs),
-            "inputs": inputs,
-            "unresolved_product_count": len(unresolved_products),
-            "unresolved_products": unresolved_products,
-            "category_completion_required": bool(missing_category_products),
-            "missing_category_product_count": len(missing_category_products),
-            "missing_category_product_record_count": sum(
-                int(item["record_count"]) for item in missing_category_products
-            ),
-            "missing_category_comment_count": sum(
-                int(item["comment_count"]) for item in missing_category_products
-            ),
-            "unresolved_product_comment_count": sum(
-                int(item["comment_count"]) for item in unresolved_products
-            ),
-            "category_options": [
-                {
-                    "category_a": variant.category_a,
-                    "category_b": variant.category_b,
-                    "agent_family": capability.agent_family,
-                    "standard_id": standards.get(capability.key, {}).get("standard_id"),
-                    "standard_version_id": standards.get(capability.key, {}).get(
-                        "standard_version_id"
-                    ),
-                    "standard_name": standards.get(capability.key, {}).get("name"),
-                    "standard_version": standards.get(capability.key, {}).get(
-                        "version_no"
-                    ),
-                }
-                for capability in registry.capabilities
-                for variant in capability.variants
-            ],
-        }
-        return PreparedTaskPlan(
-            returns=returns,
-            products=products,
-            config=config,
-            dataset=dataset,
-            execution_plan=execution_plan,
-            response=response,
-        )
+        return (dataset, clean_store, clean_listing)
