@@ -105,3 +105,46 @@ def test_existing_required_fields_still_report_their_own_issue():
     assert len(issues) == 1
     assert issues[0]["kind"] == "missing_sentiment"
     assert issues[0]["label_code"] == "ORDINARY"
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "name", "detail"),
+    [
+        ("code", "", "不合身", "缺少编码"),
+        ("name", None, "ORDINARY", "缺少名称"),
+        ("group", "  ", "不合身", "缺少分组"),
+    ],
+)
+def test_missing_text_fields_keep_issue_location_and_name(field, value, name, detail):
+    taxonomy = _taxonomy(required=False)
+    label = taxonomy["labels"][1]
+    label[field] = value
+    before = deepcopy(taxonomy)
+    assert label_field_issues(taxonomy) == [
+        {
+            "kind": "missing_field",
+            "message": f"{name}：{detail}",
+            "label_code": label["code"],
+            "label_index": 1,
+            "field": field,
+        }
+    ]
+    assert taxonomy == before
+
+
+def test_required_field_and_boundary_issues_keep_label_and_field_order():
+    taxonomy = _taxonomy()
+    taxonomy["labels"][0].update(name="", group="", allowed_sentiments=[])
+    taxonomy["labels"][1]["allowed_sentiments"] = []
+    before = deepcopy(taxonomy)
+    issues = label_field_issues(taxonomy)
+    assert [(item["label_index"], item["field"]) for item in issues] == [
+        (0, "name"),
+        (0, "group"),
+        (0, "allowed_sentiments"),
+        (0, "exclusions"),
+        (0, "examples"),
+        (1, "allowed_sentiments"),
+    ]
+    assert all(item["message"].startswith("BOUNDARY：") for item in issues[:5])
+    assert taxonomy == before

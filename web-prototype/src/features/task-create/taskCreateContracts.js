@@ -1,13 +1,5 @@
 /**
- * @typedef {Object} TaskModelPolicy
- * @property {string} connection_id
- * @property {string} cheap_model
- * @property {string} cheap_effort
- * @property {string} primary_model
- * @property {string} primary_effort
- * @property {string} secondary_model
- * @property {string} secondary_effort
- * @property {number} cheap_audit_percent
+ * @typedef {import("../../shared/api/systemSettingsContracts").ModelPreference} TaskModelPolicy
  *
  * @typedef {Object} TaskForm
  * @property {string} title
@@ -31,13 +23,7 @@
  * @property {string} [usage_scope]
  * @property {{stores?: string[], valid_comment_rows?: number, missing_store_rows?: number} & Record<string, unknown>} [quality]
  *
- * @typedef {Object} AvailableModel
- * @property {string} id
- * @property {string} model_key
- * @property {string} display_name
- * @property {string[]} supported_efforts
- * @property {boolean} active
- * @property {string} validation_status
+ * @typedef {Pick<import("../../shared/api/systemSettingsContracts").CatalogModel, "id" | "model_key" | "display_name" | "supported_efforts" | "active" | "validation_status">} AvailableModel
  *
  * @typedef {Object} ApiConfigVersion
  * @property {string} id
@@ -118,10 +104,7 @@
  * @property {boolean} partialPlan
  * @property {boolean} requiresScopeConfirmation
  *
- * @typedef {Object} MysqlFormState
- * @property {boolean} ready
- * @property {string} busy
- * @property {number} rowCount
+ * @typedef {import("./mysqlReturnContracts").MysqlFormState} MysqlFormState
  *
  * @typedef {Object} ReturnImportResult
  * @property {string} version_id

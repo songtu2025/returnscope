@@ -12,38 +12,35 @@ def label_field_issues(taxonomy: dict[str, Any]) -> list[dict[str, Any]]:
         "group": "分组",
         "allowed_sentiments": "适用情感",
     }
-    kinds = {
-        "allowed_sentiments": "missing_sentiment",
-    }
     required = taxonomy.get("validation_rules", {}).get("boundary_required_labels", [])
     for index, label in enumerate(taxonomy.get("labels", [])):
         for field, title in fields.items():
-            value = label.get(field)
-            missing = (
-                not value
-                if field == "allowed_sentiments"
-                else not str(value or "").strip()
-            )
-            if not missing:
-                continue
-            name = label.get("name") or label.get("code") or f"第 {index + 1} 个标签"
-            detail = (
-                "至少需要一种适用情感"
-                if field == "allowed_sentiments"
-                else f"缺少{title}"
-            )
-            issues.append(
-                {
-                    "kind": kinds.get(field, "missing_field"),
-                    "message": f"{name}：{detail}",
-                    "label_code": label.get("code", ""),
-                    "label_index": index,
-                    "field": field,
-                }
-            )
+            issue = _label_field_issue(label, index, field, title)
+            if issue is not None:
+                issues.append(issue)
         if label.get("code") in required:
             issues.extend(_label_boundary_issues(label, index))
     return issues
+
+
+def _label_field_issue(
+    label: dict[str, Any], index: int, field: str, title: str
+) -> dict[str, Any] | None:
+    """按既有空值规则生成一个可定位的字段问题。"""
+    value = label.get(field)
+    is_sentiment = field == "allowed_sentiments"
+    missing = not value if is_sentiment else not str(value or "").strip()
+    if not missing:
+        return None
+    name = label.get("name") or label.get("code") or f"第 {index + 1} 个标签"
+    detail = "至少需要一种适用情感" if is_sentiment else f"缺少{title}"
+    return {
+        "kind": "missing_sentiment" if is_sentiment else "missing_field",
+        "message": f"{name}：{detail}",
+        "label_code": label.get("code", ""),
+        "label_index": index,
+        "field": field,
+    }
 
 
 def _label_boundary_issues(label: dict[str, Any], index: int) -> list[dict[str, Any]]:

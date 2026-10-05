@@ -35,14 +35,9 @@
  * @property {string} [updater_name]
  * @property {string} [updated_at]
  * @property {boolean} [historical]
- * @typedef {{id: string, model_key: string, display_name: string, supported_efforts: string[], active: boolean, historical?: boolean}} ModelOption
+ * @typedef {Pick<CatalogModel, "id" | "model_key" | "display_name" | "supported_efforts" | "active" | "historical">} ModelOption
  *
- * @typedef {Object} ModelDraft
- * @property {string} [id]
- * @property {string} model_key
- * @property {string} display_name
- * @property {string[]} supported_efforts
- * @property {boolean} active
+ * @typedef {Pick<CatalogModel, "model_key" | "display_name" | "supported_efforts" | "active"> & Partial<Pick<CatalogModel, "id">>} ModelDraft
  *
  * @typedef {Object} ConfigVersion
  * @property {string} id
