@@ -7,6 +7,16 @@ from web_backend.operations.workbench_common import _actor
 
 
 def _actions(connection: Any) -> list[dict[str, Any]]:
+    task_rows, segment_rows = _task_action_rows(connection)
+    result_rows, report_rows = _result_report_action_rows(connection)
+    output = _task_actions(task_rows)
+    output.extend(_segment_actions(segment_rows))
+    output.extend(_result_actions(result_rows))
+    output.extend(_report_actions(report_rows))
+    return output
+
+
+def _task_action_rows(connection: Any) -> tuple[Any, Any]:
     task_rows = connection.execute(
         """
         SELECT t.id, t.title, t.status, t.message, t.error,
@@ -31,6 +41,10 @@ def _actions(connection: Any) -> list[dict[str, Any]]:
         WHERE s.status IN ('blocked', 'failed', 'paused')
         """
     ).fetchall()
+    return task_rows, segment_rows
+
+
+def _result_report_action_rows(connection: Any) -> tuple[Any, Any]:
     result_rows = connection.execute(
         """
         SELECT v.id, v.result_id, v.quality_status, v.published_at,
@@ -66,7 +80,10 @@ def _actions(connection: Any) -> list[dict[str, Any]]:
            )
         """
     ).fetchall()
+    return result_rows, report_rows
 
+
+def _task_actions(task_rows: Any) -> list[dict[str, Any]]:
     output: list[dict[str, Any]] = []
     for row in task_rows:
         item = dict(row)
@@ -87,6 +104,11 @@ def _actions(connection: Any) -> list[dict[str, Any]]:
                 "target": {"route": "tasks", "task_id": item["id"]},
             }
         )
+    return output
+
+
+def _segment_actions(segment_rows: Any) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
     for row in segment_rows:
         item = dict(row)
         scope = json_value(item.pop("scope_json"), {}) or {}
@@ -113,6 +135,11 @@ def _actions(connection: Any) -> list[dict[str, Any]]:
                 },
             }
         )
+    return output
+
+
+def _result_actions(result_rows: Any) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
     for row in result_rows:
         item = dict(row)
         title = " / ".join(
@@ -141,6 +168,11 @@ def _actions(connection: Any) -> list[dict[str, Any]]:
                 },
             }
         )
+    return output
+
+
+def _report_actions(report_rows: Any) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
     stage_labels = {
         "queued": "等待生成",
         "preparing_evidence": "正在准备证据",
