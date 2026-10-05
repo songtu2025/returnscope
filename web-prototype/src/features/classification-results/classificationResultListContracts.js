@@ -2,15 +2,7 @@
 /** @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultVersionResponse} ClassificationResultVersion */
 /** @typedef {import("./classificationResultRoute").ClassificationResultRoute} ClassificationResultRoute */
 /** @typedef {import("../analysis-dashboards/analysisDashboardContracts").DashboardSelection} DashboardSelection */
-/**
- * @typedef {object} InsightModel
- * @property {string} id
- * @property {string} [model_key]
- * @property {string} [display_name]
- * @property {string} [connection_id]
- * @property {string} [connection_name]
- * @property {string[]} [supported_efforts]
- */
+/** @typedef {Pick<import("../analysis-dashboards/analysisDashboardContracts").InsightModel, "id" | "model_key" | "display_name" | "connection_id" | "connection_name" | "supported_efforts">} InsightModel */
 /**
  * @typedef {object} InsightPlan
  * @property {boolean} ready

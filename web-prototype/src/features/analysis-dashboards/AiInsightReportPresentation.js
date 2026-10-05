@@ -1,3 +1,5 @@
+export { formatPercent as percent } from "./returnReasonInsightPresentation";
+
 export const STATUS_LABELS = /** @type {Record<string, string>} */ ({
   queued: "等待生成",
   running: "正在生成",
@@ -31,9 +33,32 @@ export function number(value) {
   return Number(value || 0);
 }
 
-/** @param {unknown} value */
-export function percent(value) {
-  return `${number(value).toFixed(1)}%`;
+/** @typedef {Readonly<{title: string, description: string} & ({kind: "running", latestReport: InsightReport | null} | {kind: "historical_failure", latestReport: InsightReport} | {kind: "failed", latestReport: InsightReport | null})>} ReportRuntimePresentation */
+
+/** @param {InsightReport} report @param {InsightReport | null} latestReport @returns {ReportRuntimePresentation} */
+export function reportRuntimePresentation(report, latestReport) {
+  if (report.status === "queued" || report.status === "running") {
+    return {
+      kind: "running",
+      latestReport,
+      title: "AI 正在生成洞察报告",
+      description: `${STAGE_LABELS[report.stage || ""] || "系统正在生成报告"}。可以离开当前页面，进度也会显示在首页。`,
+    };
+  }
+  if (report.status === "failed" && latestReport && latestReport.id !== report.id) {
+    return {
+      kind: "historical_failure",
+      latestReport,
+      title: "这是一次历史生成失败",
+      description: `这次生成没有发布，也不会影响当前的报告 V${latestReport.version_no}。`,
+    };
+  }
+  return {
+    kind: "failed",
+    latestReport,
+    title: "本次报告生成失败",
+    description: report.error || "模型没有返回可用的结构化报告。",
+  };
 }
 
 /** @param {unknown} value */

@@ -57,6 +57,8 @@ import {
 import { ClassificationResultsPage } from "../src/pages/ClassificationResultsPage";
 import { useDashboardReports } from "../src/features/analysis-dashboards/useDashboardReports";
 import { useDashboardReportActions } from "../src/features/analysis-dashboards/useDashboardReportActions";
+import { ReportStatus } from "../src/features/analysis-dashboards/AiInsightReportCommon";
+import { percent as reportPercent } from "../src/features/analysis-dashboards/AiInsightReportPresentation";
 
 const readyResult = {
   version_id: "result-v1",
@@ -733,6 +735,101 @@ beforeEach(() => {
 });
 
 afterEach(() => cleanup());
+
+test.each([
+  {
+    status: "queued",
+    latestReport: null,
+    stage: "queued",
+    error: "",
+    title: "AI 正在生成洞察报告",
+    description: "等待生成。可以离开当前页面，进度也会显示在首页。",
+    action: null,
+  },
+  {
+    status: "running",
+    latestReport: { id: "published-report", version_no: 3 },
+    stage: "calling_model",
+    error: "",
+    title: "AI 正在生成洞察报告",
+    description: "模型正在解释证据。可以离开当前页面，进度也会显示在首页。",
+    action: "查看已发布报告",
+  },
+  {
+    status: "failed",
+    latestReport: null,
+    stage: "",
+    error: "合成生成错误",
+    title: "本次报告生成失败",
+    description: "合成生成错误",
+    action: "重试",
+  },
+  {
+    status: "failed",
+    latestReport: { id: "published-report", version_no: 3 },
+    stage: "",
+    error: "",
+    title: "这是一次历史生成失败",
+    description: "这次生成没有发布，也不会影响当前的报告 V3。",
+    action: "查看最新报告",
+  },
+  {
+    status: "failed",
+    latestReport: { id: "current-report", version_no: 3 },
+    stage: "",
+    error: "",
+    title: "本次报告生成失败",
+    description: "模型没有返回可用的结构化报告。",
+    action: "重试",
+  },
+])("报告$status状态展示对应文案和操作：$title", async (scenario) => {
+  const { status, latestReport, stage, error, title, description, action } = scenario;
+  const onRetry = vi.fn();
+  const onSelect = vi.fn();
+  render(
+    <ReportStatus
+      report={{
+        id: "current-report",
+        status,
+        stage,
+        error,
+        attempt_no: 7,
+        model_name: "合成模型",
+        reasoning_effort: "high",
+      }}
+      latestReport={latestReport}
+      onRetry={onRetry}
+      onSelect={onSelect}
+    />,
+  );
+  expect(screen.getByRole("status")).toHaveClass(`ai-report-runtime-state ${status}`);
+  expect(screen.getByRole("heading", { name: title })).toBeVisible();
+  expect(screen.getByText(description)).toBeVisible();
+  expect(screen.getByText("合成模型 · high 推理强度")).toBeVisible();
+  if (!action) {
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    return;
+  }
+  await userEvent.setup().click(screen.getByRole("button", { name: action }));
+  if (action === "重试") {
+    expect(onRetry).toHaveBeenCalledOnce();
+    expect(onSelect).not.toHaveBeenCalled();
+  } else {
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith(latestReport.id);
+    expect(onRetry).not.toHaveBeenCalled();
+  }
+});
+
+test.each([
+  [undefined, "0.0%"],
+  [0, "0.0%"],
+  [12.345, "12.3%"],
+  ["12.5", "12.5%"],
+  [-5, "-5.0%"],
+  [100, "100.0%"],
+])("报告百分比保持既有单位和格式：%s", (value, expected) => {
+  expect(reportPercent(value)).toBe(expected);
+});
 
 test("报告版本切换取消旧请求，过期响应不能覆盖新报告", async () => {
   let resolveOld;
