@@ -12,6 +12,7 @@ from web_backend.insight_report_diagnostics import (
     _filter_issue_case_text,
     _has_text_anomaly,
 )
+from web_backend.insight_reports.quality_issues import source_quality_issues
 
 
 @dataclass
@@ -62,29 +63,11 @@ def _prepare_live_quality(
                 "evidence_ids": ["text_quality", "scope"],
             }
         )
-    if not mapping_trusted:
-        source_issues.append(
-            {
-                "code": "product_mapping",
-                "label": "商品主数据需核对",
-                "detail": str(
-                    product_mapping.get("note") or "商品主数据映射需要核对。"
-                ),
-                "evidence_ids": ["product_mapping", "scope"],
-            }
+    source_issues.extend(
+        source_quality_issues(
+            product_mapping, review_bias, pending_count, mapping_trusted=mapping_trusted
         )
-    if pending_count:
-        source_issues.append(
-            {
-                "code": "pending_review",
-                "label": "存在待审核记录",
-                "detail": str(
-                    review_bias.get("note")
-                    or f"{pending_count} 条待审核记录未进入本次统计。"
-                ),
-                "evidence_ids": ["scope", "review_bias"],
-            }
-        )
+    )
     product_names = [
         str(item.get("value") or "")
         for item in analysis.get("product_reason_matrix", [])

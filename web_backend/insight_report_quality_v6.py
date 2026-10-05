@@ -11,22 +11,17 @@ from web_backend.insight_report_diagnostics import (
     _filter_issue_case_text,
     _has_text_anomaly,
 )
+from web_backend.insight_reports.quality_issues import source_quality_issues
 
 
-def _evaluate_live_quality_v6(
-    content: dict[str, Any],
-    evidence: dict[str, Any],
+def _apply_text_quality(
+    safe_content: dict[str, Any],
+    source: dict[str, Any],
+    analysis: dict[str, Any],
+    catalog: dict[str, Any],
     text_quality: dict[str, Any],
-) -> dict[str, Any]:
-    safe_content = deepcopy(content)
-    safe_evidence = deepcopy(evidence)
-    source = safe_evidence.setdefault("source", {})
-    analysis = safe_evidence.setdefault("analysis", {})
-    catalog = safe_evidence.setdefault("catalog", {})
-    product_mapping = source.get("product_mapping", {})
-    review_bias = analysis.get("review_bias", {})
-    pending_count = int(source.get("pending_review_record_count") or 0)
-    quality_issues = []
+) -> list[dict[str, Any]]:
+    quality_issues: list[dict[str, Any]] = []
 
     source["text_quality"] = text_quality
     analysis["text_quality"] = text_quality
@@ -45,30 +40,34 @@ def _evaluate_live_quality_v6(
             }
         )
         _sanitize_untrusted_text(safe_content, analysis, catalog)
+    return quality_issues
 
-    if product_mapping.get("status") == "needs_review":
-        quality_issues.append(
-            {
-                "code": "product_mapping",
-                "label": "商品主数据需核对",
-                "detail": str(
-                    product_mapping.get("note") or "商品主数据映射需要核对。"
-                ),
-                "evidence_ids": ["product_mapping", "scope"],
-            }
+
+def _evaluate_live_quality_v6(
+    content: dict[str, Any],
+    evidence: dict[str, Any],
+    text_quality: dict[str, Any],
+) -> dict[str, Any]:
+    safe_content = deepcopy(content)
+    safe_evidence = deepcopy(evidence)
+    source = safe_evidence.setdefault("source", {})
+    analysis = safe_evidence.setdefault("analysis", {})
+    catalog = safe_evidence.setdefault("catalog", {})
+    product_mapping = source.get("product_mapping", {})
+    review_bias = analysis.get("review_bias", {})
+    pending_count = int(source.get("pending_review_record_count") or 0)
+    quality_issues = _apply_text_quality(
+        safe_content, source, analysis, catalog, text_quality
+    )
+
+    quality_issues.extend(
+        source_quality_issues(
+            product_mapping,
+            review_bias,
+            pending_count,
+            mapping_trusted=product_mapping.get("status") != "needs_review",
         )
-    if pending_count:
-        quality_issues.append(
-            {
-                "code": "pending_review",
-                "label": "存在待审核记录",
-                "detail": str(
-                    review_bias.get("note")
-                    or f"{pending_count} 条待审核记录未进入本次统计。"
-                ),
-                "evidence_ids": ["scope", "review_bias"],
-            }
-        )
+    )
 
     consistency = _decision_report_consistency(
         safe_content,
