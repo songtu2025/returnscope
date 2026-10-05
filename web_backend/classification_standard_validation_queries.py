@@ -62,6 +62,16 @@ class ClassificationStandardValidationQueriesMixin:
         value["source"] = source.get("result", {})
         if include_items:
             value["items"] = items
+        self._apply_review_status(value, snapshot, source)
+        self._apply_publication_quality(value, snapshot, source, items)
+        return value
+
+    def _apply_review_status(
+        self,
+        value: dict[str, Any],
+        snapshot: dict[str, Any],
+        source: dict[str, Any],
+    ) -> None:
         with self.database.connect() as connection:
             draft = connection.execute(
                 """
@@ -88,6 +98,14 @@ class ClassificationStandardValidationQueriesMixin:
                 or validation_contract_matches(snapshot, source)
             )
         )
+
+    @staticmethod
+    def _apply_publication_quality(
+        value: dict[str, Any],
+        snapshot: dict[str, Any],
+        source: dict[str, Any],
+        items: list[dict[str, Any]],
+    ) -> None:
         if items:
             value["summary"]["reference_evaluation"] = evaluate_references(items)
             if source.get("comparison_type", "standard_version") == "standard_version":
@@ -103,4 +121,3 @@ class ClassificationStandardValidationQueriesMixin:
             and bool(value.get("approved_at"))
             and source.get("comparison_type", "standard_version") == "standard_version"
         )
-        return value
