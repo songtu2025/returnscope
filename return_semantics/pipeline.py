@@ -2,18 +2,15 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, replace
-from threading import Event, Lock
+from dataclasses import replace
 from typing import Any
 
 import pandas as pd
 
 from return_semantics.analysis_context import (
     RETURNS_CONTEXT,
-    AnalysisContext,
     validate_analysis_context,
 )
 from return_semantics.fact_pipeline import FactPipelineCancelled, classify_facts
@@ -21,9 +18,44 @@ from return_semantics.model_client import (
     JsonlCache,
     ModelCallResult,
     ModelClient,
-    ModelHTTPError,
 )
 from return_semantics.output_correction import correct_invalid_output
+from return_semantics.pipeline_metrics import (
+    _add_usage as _add_usage,
+)
+from return_semantics.pipeline_metrics import (
+    _is_model_service_error as _is_model_service_error,
+)
+from return_semantics.pipeline_metrics import (
+    _RunTracker as _RunTracker,
+)
+from return_semantics.pipeline_models import (
+    ModelServiceUnavailable as ModelServiceUnavailable,
+)
+from return_semantics.pipeline_models import (
+    PipelineCancelled as PipelineCancelled,
+)
+from return_semantics.pipeline_models import (
+    PipelineRun as PipelineRun,
+)
+from return_semantics.pipeline_models import (
+    _PipelineContext as _PipelineContext,
+)
+from return_semantics.pipeline_models import (
+    _RowContext as _RowContext,
+)
+from return_semantics.pipeline_routing_policy import (
+    _SEMANTIC_RISK_PATTERNS as _SEMANTIC_RISK_PATTERNS,
+)
+from return_semantics.pipeline_routing_policy import (
+    can_accept_cheap_result as can_accept_cheap_result,
+)
+from return_semantics.pipeline_routing_policy import (
+    has_input_semantic_risk as has_input_semantic_risk,
+)
+from return_semantics.pipeline_routing_policy import (
+    should_audit_cheap_model as should_audit_cheap_model,
+)
 from return_semantics.prompt import (
     PROMPT_VERSION,
     build_messages,
@@ -37,7 +69,6 @@ from return_semantics.review import (
     should_run_secondary,
 )
 from return_semantics.schemas import (
-    ClaimRelation,
     ListingClaimsConfig,
     ProcessingStatus,
     ReviewDiagnostic,
@@ -47,100 +78,6 @@ from return_semantics.schemas import (
 from return_semantics.semantic_review import requires_system_rerun
 from return_semantics.taxonomy import adapt_claims_to_taxonomy
 from return_semantics.validator import validate_classification
-
-_SEMANTIC_RISK_PATTERNS = (
-    re.compile(r"[|;/?&,]"),
-    re.compile(r"[.!]\s+\S"),
-    re.compile(
-        r"\b(?:and|or|but|however|although|though|because|if|unless|"
-        r"while|except|yet|also)\b",
-        re.IGNORECASE,
-    ),
-    re.compile(
-        r"\b(?:no|not|never|neither|nor|without|cannot|can't|don't|"
-        r"doesn't|didn't|isn't|wasn't|weren't|won't|wouldn't|"
-        r"couldn't|shouldn't|barely|hardly)\b",
-        re.IGNORECASE,
-    ),
-    re.compile(
-        r"\b(?:need|needed|want|wanted|expected|expecting|wish|"
-        r"should|would)\b",
-        re.IGNORECASE,
-    ),
-    re.compile(
-        r"\b(?:than|unlike|compared|previous|another|other|different|"
-        r"maybe|perhaps|seems?|unsure|uncertain)\b",
-        re.IGNORECASE,
-    ),
-    re.compile(
-        r"\b(?:size|sized|sizing|order|ordered)\s+(?:up|down)\b",
-        re.IGNORECASE,
-    ),
-)
-
-
-def has_input_semantic_risk(comment: str) -> bool:
-    return any(pattern.search(comment) for pattern in _SEMANTIC_RISK_PATTERNS)
-
-
-def can_accept_cheap_result(result: ValidatedClassification) -> bool:
-    if result.status != ProcessingStatus.AUTO_APPROVED:
-        return False
-    if result.unknown_semantics:
-        return False
-    if len(result.semantic_units) != 1:
-        return False
-    if len(result.problem_label_codes) != 1:
-        return False
-    unit = result.semantic_units[0]
-    return (
-        not unit.implicit
-        and unit.claim_relation == ClaimRelation.NONE
-        and unit.claim_id is None
-    )
-
-
-def should_audit_cheap_model(comment: str, percent: int) -> bool:
-    if percent <= 0:
-        return False
-    if percent >= 100:
-        return True
-    digest = hashlib.sha256(comment.lower().encode("utf-8")).digest()
-    bucket = int.from_bytes(digest[:4], "big") % 10_000
-    return bucket < percent * 100
-
-
-@dataclass(frozen=True)
-class PipelineRun:
-    classifications: dict[str, ValidatedClassification]
-    usage: dict[str, int]
-    usage_by_model: dict[str, dict[str, int]]
-    cache_hits: int
-    cache_hits_by_model: dict[str, int]
-    model_calls: int
-    model_calls_by_model: dict[str, int]
-    request_metrics: dict[str, int]
-    routing: dict[str, int]
-    model_failures: int = 0
-
-
-class PipelineCancelled(RuntimeError):
-    pass
-
-
-class ModelServiceUnavailable(RuntimeError):
-    def __init__(self, message: str, consecutive_failures: int) -> None:
-        super().__init__(message)
-        self.consecutive_failures = consecutive_failures
-
-
-def _is_model_service_error(exc: Exception) -> bool:
-    current: BaseException | None = exc
-    while current is not None:
-        if isinstance(current, ModelHTTPError):
-            return current.status_code >= 500
-        current = current.__cause__
-    return False
 
 
 def _is_timeout_error(exc: Exception) -> bool:
@@ -288,148 +225,6 @@ def _call_with_cache(
         ):
             context.cache.put(cache_key, result)
         return result, False
-
-
-def _add_usage(total: dict[str, int], usage: dict[str, int]) -> None:
-    for key, value in usage.items():
-        total[key] = total.get(key, 0) + value
-
-
-@dataclass(frozen=True)
-class _PipelineContext:
-    taxonomy: TaxonomyConfig
-    claims: ListingClaimsConfig
-    client: ModelClient
-    cache: JsonlCache
-    force: bool
-    secondary_model: str | None
-    should_cancel: Callable[[], bool] | None
-    model_policy_version: str
-    secondary_is_fallback: bool
-    analysis_context: AnalysisContext
-
-
-@dataclass(frozen=True)
-class _RowContext:
-    classification_key: str
-    comment: str
-    reason: str
-    classification_scope: str
-    messages: list[dict[str, str]]
-    use_cheap_model: bool
-    initial_model: str
-
-
-class _RunTracker:
-    def __init__(
-        self,
-        on_model_degraded: Callable[[PipelineRun, int, str], None] | None,
-    ) -> None:
-        self.results: dict[str, ValidatedClassification] = {}
-        self.usage: dict[str, int] = {}
-        self.usage_by_model: dict[str, dict[str, int]] = {}
-        self.cache_hits = 0
-        self.cache_hits_by_model: dict[str, int] = {}
-        self.model_calls = 0
-        self.model_calls_by_model: dict[str, int] = {}
-        self.model_failures = 0
-        self.consecutive_service_failures = 0
-        self.last_service_error = ""
-        self.request_metrics: dict[str, int] = {}
-        self.routing: dict[str, int] = {}
-        self._on_model_degraded = on_model_degraded
-        self._lock = Lock()
-        self._service_breaker = Event()
-
-    def increment_routing(self, route_name: str) -> None:
-        with self._lock:
-            self.routing[route_name] = self.routing.get(route_name, 0) + 1
-
-    def record_call(
-        self,
-        requested_model: str,
-        call_result: ModelCallResult,
-        cache_hit: bool,
-    ) -> None:
-        with self._lock:
-            if cache_hit:
-                self.cache_hits += 1
-                self.cache_hits_by_model[requested_model] = (
-                    self.cache_hits_by_model.get(requested_model, 0) + 1
-                )
-                return
-
-            self.consecutive_service_failures = 0
-            call_count = call_result.metrics.get(
-                "fact_model_calls", 1
-            ) + call_result.metrics.get("output_correction_calls", 0)
-            self.model_calls += call_count
-            self.model_calls_by_model[requested_model] = (
-                self.model_calls_by_model.get(requested_model, 0) + call_count
-            )
-            _add_usage(self.usage, call_result.usage)
-            model_usage = self.usage_by_model.setdefault(requested_model, {})
-            _add_usage(model_usage, call_result.usage)
-            _add_usage(self.request_metrics, call_result.metrics)
-
-    def record_failure(self, exc: Exception) -> int:
-        is_service_error = _is_model_service_error(exc)
-        with self._lock:
-            self.model_failures += 1
-            if is_service_error:
-                self.consecutive_service_failures += 1
-                self.last_service_error = str(exc)
-            else:
-                self.consecutive_service_failures = 0
-            failure_count = self.consecutive_service_failures
-        if failure_count >= 3 and self._on_model_degraded is not None:
-            self._on_model_degraded(self.snapshot(), failure_count, str(exc))
-        return failure_count
-
-    def raise_if_service_paused(self) -> None:
-        if not self._service_breaker.is_set():
-            return
-        with self._lock:
-            failure_count = self.consecutive_service_failures
-            error = self.last_service_error
-        raise ModelServiceUnavailable(
-            f"模型服务连续失败 {failure_count} 次，已自动暂停：{error}",
-            failure_count,
-        )
-
-    def pause_after_failure(self, failure_count: int, exc: Exception) -> None:
-        if failure_count < 5:
-            return
-        self._service_breaker.set()
-        raise ModelServiceUnavailable(
-            f"模型服务连续失败 {failure_count} 次，已自动暂停：{exc}",
-            failure_count,
-        ) from exc
-
-    def add_result(
-        self,
-        classification_key: str,
-        validated: ValidatedClassification,
-    ) -> None:
-        with self._lock:
-            self.results[classification_key] = validated
-
-    def snapshot(self) -> PipelineRun:
-        with self._lock:
-            return PipelineRun(
-                classifications=dict(self.results),
-                usage=dict(self.usage),
-                usage_by_model={
-                    key: dict(values) for key, values in self.usage_by_model.items()
-                },
-                cache_hits=self.cache_hits,
-                cache_hits_by_model=dict(self.cache_hits_by_model),
-                model_calls=self.model_calls,
-                model_calls_by_model=dict(self.model_calls_by_model),
-                request_metrics=dict(self.request_metrics),
-                routing=dict(self.routing),
-                model_failures=self.model_failures,
-            )
 
 
 class _CommentClassifier:
@@ -792,3 +587,16 @@ def classify_comments(
         progress,
         checkpoint,
     )
+
+
+PipelineRun.__module__ = __name__
+PipelineCancelled.__module__ = __name__
+ModelServiceUnavailable.__module__ = __name__
+_PipelineContext.__module__ = __name__
+_RowContext.__module__ = __name__
+_add_usage.__module__ = __name__
+_is_model_service_error.__module__ = __name__
+_RunTracker.__module__ = __name__
+has_input_semantic_risk.__module__ = __name__
+can_accept_cheap_result.__module__ = __name__
+should_audit_cheap_model.__module__ = __name__
