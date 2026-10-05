@@ -6,6 +6,23 @@ from web_backend.operations.workbench_common import _time_key
 
 
 def _recent_outputs(connection: Any, limit: int) -> list[dict[str, Any]]:
+    result_rows, dashboard_rows, report_rows = _recent_output_rows(connection, limit)
+    output = _result_outputs(result_rows)
+    output.extend(_dashboard_outputs(dashboard_rows))
+    output.extend(_report_outputs(report_rows))
+    output.sort(
+        key=lambda item: (
+            -_time_key(item.get("updated_at")),
+            str(item["type"]),
+            str(item["object_id"]),
+        )
+    )
+    return output[:limit]
+
+
+def _recent_output_rows(
+    connection: Any, limit: int
+) -> tuple[list[Any], list[Any], list[Any]]:
     result_rows = connection.execute(
         """
         SELECT v.id, v.result_id, v.version_no, v.parent_version_id,
@@ -46,14 +63,18 @@ def _recent_outputs(connection: Any, limit: int) -> list[dict[str, Any]]:
         """,
         (limit,),
     ).fetchall()
+    return (result_rows, dashboard_rows, report_rows)
+
+
+def _result_outputs(rows: list[Any]) -> list[dict[str, Any]]:
     output: list[dict[str, Any]] = []
-    for row in result_rows:
+    for row in rows:
         item = dict(row)
         output_type = (
             "derived_result" if item["parent_version_id"] else "classification_result"
         )
         title = " / ".join(
-            value for value in (item["store_site"], item["listing"]) if value
+            (value for value in (item["store_site"], item["listing"]) if value)
         ) or str(item["id"])
         output.append(
             {
@@ -70,7 +91,12 @@ def _recent_outputs(connection: Any, limit: int) -> list[dict[str, Any]]:
                 },
             }
         )
-    for row in dashboard_rows:
+    return output
+
+
+def _dashboard_outputs(rows: list[Any]) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
+    for row in rows:
         item = dict(row)
         output.append(
             {
@@ -88,7 +114,12 @@ def _recent_outputs(connection: Any, limit: int) -> list[dict[str, Any]]:
                 },
             }
         )
-    for row in report_rows:
+    return output
+
+
+def _report_outputs(rows: list[Any]) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
+    for row in rows:
         item = dict(row)
         output.append(
             {
@@ -108,11 +139,4 @@ def _recent_outputs(connection: Any, limit: int) -> list[dict[str, Any]]:
                 },
             }
         )
-    output.sort(
-        key=lambda item: (
-            -_time_key(item.get("updated_at")),
-            str(item["type"]),
-            str(item["object_id"]),
-        )
-    )
-    return output[:limit]
+    return output
