@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import replace
 from typing import Any
 
 import pandas as pd
@@ -20,6 +16,21 @@ from return_semantics.model_client import (
     ModelClient,
 )
 from return_semantics.output_correction import correct_invalid_output
+from return_semantics.pipeline_cache import (
+    _cache_key_for_row as _cache_key_for_row,
+)
+from return_semantics.pipeline_cache import (
+    _model_reasoning_effort as _model_reasoning_effort,
+)
+from return_semantics.pipeline_cache import (
+    build_cache_key as build_cache_key,
+)
+from return_semantics.pipeline_cache import (
+    call_with_cache as _cached_model_call,
+)
+from return_semantics.pipeline_execution import (
+    _classify_selected_comments as _classify_selected_comments,
+)
 from return_semantics.pipeline_metrics import (
     _add_usage as _add_usage,
 )
@@ -57,10 +68,8 @@ from return_semantics.pipeline_routing_policy import (
     should_audit_cheap_model as should_audit_cheap_model,
 )
 from return_semantics.prompt import (
-    PROMPT_VERSION,
     build_messages,
     prompt_version,
-    recognition_fingerprint,
 )
 from return_semantics.review import (
     build_model_difference_diagnostics,
@@ -75,7 +84,6 @@ from return_semantics.schemas import (
     TaxonomyConfig,
     ValidatedClassification,
 )
-from return_semantics.semantic_review import requires_system_rerun
 from return_semantics.taxonomy import adapt_claims_to_taxonomy
 from return_semantics.validator import validate_classification
 
@@ -90,77 +98,6 @@ def _is_timeout_error(exc: Exception) -> bool:
             return True
         current = current.__cause__
     return False
-
-
-def build_cache_key(
-    comment: str,
-    model_name: str,
-    provider_name: str,
-    taxonomy_version: str,
-    claims_version: str,
-    thinking: bool = False,
-    classification_scope: str = "",
-    reasoning_effort: str = "",
-    model_policy_version: str = "legacy-model-policy-v1",
-    recognition_key: str = "",
-    effective_prompt_version: str = PROMPT_VERSION,
-) -> str:
-    payload = {
-        "comment": comment.lower(),
-        "model": f"{model_name}:thinking" if thinking else model_name,
-        "prompt": effective_prompt_version,
-        "taxonomy": taxonomy_version,
-        "claims": claims_version,
-        "scope": classification_scope,
-        "effort": reasoning_effort,
-        "model_policy": model_policy_version,
-    }
-    if recognition_key:
-        payload["recognition"] = recognition_key
-    payload["provider"] = provider_name
-    encoded = json.dumps(
-        payload,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
-
-
-def _model_reasoning_effort(
-    client: ModelClient, model_name: str, thinking: bool
-) -> Any:
-    if thinking:
-        return getattr(client.settings, "secondary_reasoning_effort", "")
-    if model_name == getattr(client.settings, "cheap_model", None):
-        return getattr(client.settings, "cheap_reasoning_effort", "")
-    return getattr(client.settings, "reasoning_effort", "")
-
-
-def _cache_key_for_row(
-    row: _RowContext,
-    context: _PipelineContext,
-    model_name: str,
-    thinking: bool,
-    reasoning_effort: Any,
-) -> str:
-    return build_cache_key(
-        comment=row.comment,
-        model_name=model_name,
-        provider_name=context.client.settings.cache_namespace,
-        taxonomy_version=context.taxonomy.version,
-        claims_version=context.claims.version,
-        effective_prompt_version=prompt_version(context.taxonomy),
-        recognition_key=(
-            recognition_fingerprint(context.taxonomy)
-            if context.taxonomy.recognition_profile != "legacy_v3"
-            else ""
-        ),
-        thinking=thinking,
-        classification_scope=row.classification_scope,
-        reasoning_effort=str(reasoning_effort),
-        model_policy_version=context.model_policy_version,
-    )
 
 
 def _classify_uncached(
@@ -207,24 +144,10 @@ def _call_with_cache(
     model_name: str,
     thinking: bool,
 ) -> tuple[ModelCallResult, bool]:
-    reasoning_effort = _model_reasoning_effort(context.client, model_name, thinking)
-    cache_key = _cache_key_for_row(row, context, model_name, thinking, reasoning_effort)
-    with context.cache.lock_for(cache_key):
-        cached = None if context.force else context.cache.get(cache_key)
-        if cached is not None and not requires_system_rerun(
-            cached.classification,
-            row.comment,
-            context.taxonomy,
-        ):
-            return cached, True
-        result = _classify_uncached(
-            row, context, model_name, thinking, reasoning_effort
-        )
-        if not requires_system_rerun(
-            result.classification, row.comment, context.taxonomy
-        ):
-            context.cache.put(cache_key, result)
-        return result, False
+    # 保留现有模型分类替换入口；缓存模块不反向导入流水线。
+    return _cached_model_call(
+        row, context, model_name, thinking, classify_uncached=_classify_uncached
+    )
 
 
 class _CommentClassifier:
@@ -508,35 +431,6 @@ class _CommentClassifier:
         )
 
 
-def _classify_selected_comments(
-    selected: pd.DataFrame,
-    classifier: _CommentClassifier,
-    max_workers: int,
-    progress: Callable[[int, int], None] | None,
-    checkpoint: Callable[[PipelineRun], None] | None,
-) -> PipelineRun:
-    total = len(selected)
-    rows = list(selected.itertuples(index=False))
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(classifier.classify, row) for row in rows]
-        for position, future in enumerate(as_completed(futures), start=1):
-            classification_key, validated = future.result()
-            classifier.tracker.add_result(classification_key, validated)
-            if progress is not None:
-                progress(position, total)
-            if checkpoint is not None and (
-                position == 1 or position == total or position % 5 == 0
-            ):
-                checkpoint(classifier.tracker.snapshot())
-    run = classifier.tracker.snapshot()
-    ordered_results: dict[str, ValidatedClassification] = {
-        str(row.classification_key): run.classifications[str(row.classification_key)]
-        for row in rows
-        if str(row.classification_key) in run.classifications
-    }
-    return replace(run, classifications=ordered_results)
-
-
 def classify_comments(
     unique_comments: pd.DataFrame,
     taxonomy: TaxonomyConfig,
@@ -600,3 +494,8 @@ _RunTracker.__module__ = __name__
 has_input_semantic_risk.__module__ = __name__
 can_accept_cheap_result.__module__ = __name__
 should_audit_cheap_model.__module__ = __name__
+
+build_cache_key.__module__ = __name__
+_model_reasoning_effort.__module__ = __name__
+_cache_key_for_row.__module__ = __name__
+_classify_selected_comments.__module__ = __name__
