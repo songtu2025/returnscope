@@ -1,9 +1,10 @@
 from typing import Annotated, Any, Callable
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from fastapi.responses import Response
 
 from web_backend.analysis_service import AnalysisFilters, AnalysisService
+from web_backend.routers.task_route_support import task_analysis_errors
 
 
 def register_task_analysis_routes(
@@ -20,11 +21,8 @@ def register_task_analysis_routes(
         _user: User,
         filters: Annotated[AnalysisFilters, Depends(analysis_filters)],
     ) -> dict[str, Any]:
-        try:
+        with task_analysis_errors():
             return analysis_service.get(task_id, filters)
-        except ValueError as exc:
-            status_code = 404 if str(exc) == "任务不存在" else 409
-            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
 
     @router.get("/api/tasks/{task_id}/analysis/download")
     def download_filtered_analysis(
@@ -32,11 +30,8 @@ def register_task_analysis_routes(
         _user: User,
         filters: Annotated[AnalysisFilters, Depends(analysis_filters)],
     ) -> Response:
-        try:
+        with task_analysis_errors():
             content, filename = analysis_service.export_filtered(task_id, filters)
-        except ValueError as exc:
-            status_code = 404 if str(exc) == "任务不存在" else 409
-            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
         return Response(
             content=content,
             media_type=(

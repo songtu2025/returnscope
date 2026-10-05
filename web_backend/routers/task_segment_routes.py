@@ -1,6 +1,6 @@
 from typing import Annotated, Any, Callable
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from web_backend.api_contracts.tasks import (
     TaskParallelismRequest,
@@ -9,6 +9,7 @@ from web_backend.api_contracts.tasks import (
     TaskSegmentRetryRequest,
 )
 from web_backend.classification_result_service import ResultPublicationError
+from web_backend.routers.task_route_support import task_request_errors
 from web_backend.task_service import (
     TaskResultPublishConflict,
     TaskRevisionConflict,
@@ -30,17 +31,13 @@ def register_segment_retry_routes(
         payload: TaskSegmentRetryRequest,
         user: User,
     ) -> dict[str, Any]:
-        try:
+        with task_request_errors(TaskRevisionConflict):
             return task_service.retry_segment(
                 task_id=task_id,
                 segment_key=segment_key,
                 actor_id=str(user["id"]),
                 **payload.model_dump(),
             )
-        except TaskRevisionConflict as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @router.post("/api/tasks/{task_id}/segments/{segment_id}/retry-result-publish")
     def retry_segment_result_publish(
@@ -49,21 +46,15 @@ def register_segment_retry_routes(
         payload: TaskSegmentRetryRequest,
         user: User,
     ) -> dict[str, Any]:
-        try:
+        with task_request_errors(
+            ResultPublicationError, TaskResultPublishConflict, TaskRevisionConflict
+        ):
             return task_service.retry_result_publish(
                 task_id=task_id,
                 segment_id=segment_id,
                 actor_id=str(user["id"]),
                 **payload.model_dump(),
             )
-        except (
-            ResultPublicationError,
-            TaskResultPublishConflict,
-            TaskRevisionConflict,
-        ) as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def register_segment_control_routes(
@@ -79,16 +70,12 @@ def register_segment_control_routes(
         payload: TaskSegmentOrderRequest,
         user: User,
     ) -> dict[str, Any]:
-        try:
+        with task_request_errors(TaskRevisionConflict):
             return task_service.reorder_segments(
                 task_id=task_id,
                 actor_id=str(user["id"]),
                 **payload.model_dump(),
             )
-        except TaskRevisionConflict as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @router.patch("/api/tasks/{task_id}/parallelism")
     def update_task_parallelism(
@@ -96,16 +83,12 @@ def register_segment_control_routes(
         payload: TaskParallelismRequest,
         user: User,
     ) -> dict[str, Any]:
-        try:
+        with task_request_errors(TaskRevisionConflict):
             return task_service.set_parallelism(
                 task_id=task_id,
                 actor_id=str(user["id"]),
                 **payload.model_dump(),
             )
-        except TaskRevisionConflict as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @router.post("/api/tasks/{task_id}/segments/{segment_key:path}/{action}")
     def control_task_segment(
@@ -115,7 +98,7 @@ def register_segment_control_routes(
         payload: TaskSegmentActionRequest,
         user: User,
     ) -> dict[str, Any]:
-        try:
+        with task_request_errors(TaskRevisionConflict):
             return task_service.segment_action(
                 task_id=task_id,
                 segment_key=segment_key,
@@ -123,7 +106,3 @@ def register_segment_control_routes(
                 actor_id=str(user["id"]),
                 **payload.model_dump(),
             )
-        except TaskRevisionConflict as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc

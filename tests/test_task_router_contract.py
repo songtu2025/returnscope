@@ -63,6 +63,22 @@ SERVICE_METHODS = {
     "retry_task": "retry",
     "resume_task": "resume",
 }
+CONFLICT_CASES = [
+    ("create_task", TaskPlanConflict),
+    ("replan_task", TaskPlanConflict),
+    ("replan_task", TaskRevisionConflict),
+    ("retry_task_segment", TaskRevisionConflict),
+    ("retry_segment_result_publish", ResultPublicationError),
+    ("retry_segment_result_publish", TaskResultPublishConflict),
+    ("retry_segment_result_publish", TaskRevisionConflict),
+    ("reorder_task_segments", TaskRevisionConflict),
+    ("update_task_parallelism", TaskRevisionConflict),
+    ("control_task_segment", TaskRevisionConflict),
+    ("rename_task", TaskRevisionConflict),
+    ("cancel_task", TaskRevisionConflict),
+    ("pause_task", TaskRevisionConflict),
+    ("resume_task", TaskRevisionConflict),
+]
 SEGMENT_KEY = "SEEKWAY:US/KP001/footwear"
 XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -186,32 +202,51 @@ def test_task_service_value_errors_remain_bad_requests(
     assert response.json() == {"detail": "合成错误"}
 
 
+@pytest.mark.parametrize("name", SERVICE_METHODS)
 @pytest.mark.parametrize(
-    ("name", "error_type"),
+    "error_type",
     [
-        ("create_task", TaskPlanConflict),
-        ("replan_task", TaskPlanConflict),
-        ("replan_task", TaskRevisionConflict),
-        ("retry_task_segment", TaskRevisionConflict),
-        ("retry_segment_result_publish", ResultPublicationError),
-        ("retry_segment_result_publish", TaskResultPublishConflict),
-        ("retry_segment_result_publish", TaskRevisionConflict),
-        ("reorder_task_segments", TaskRevisionConflict),
-        ("update_task_parallelism", TaskRevisionConflict),
-        ("control_task_segment", TaskRevisionConflict),
-        ("rename_task", TaskRevisionConflict),
-        ("cancel_task", TaskRevisionConflict),
-        ("pause_task", TaskRevisionConflict),
-        ("resume_task", TaskRevisionConflict),
+        TaskPlanConflict,
+        TaskRevisionConflict,
+        TaskResultPublishConflict,
+        ResultPublicationError,
     ],
 )
 def test_task_conflicts_preserve_status_and_message(
-    harness: SimpleNamespace, name: str, error_type: type[ValueError]
+    harness: SimpleNamespace, name: str, error_type: type[Exception]
 ) -> None:
-    getattr(harness.task, SERVICE_METHODS[name]).side_effect = error_type("合成冲突")
-    response = _request(harness, name)
-    assert response.status_code == 409
-    assert response.json() == {"detail": "合成冲突"}
+    error = error_type("合成冲突")
+    service_method = getattr(harness.task, SERVICE_METHODS[name])
+    service_method.side_effect = error
+    mapped = (name, error_type) in CONFLICT_CASES
+    if mapped or isinstance(error, ValueError):
+        response = _request(harness, name)
+        assert response.status_code == (409 if mapped else 400)
+        assert response.json() == {"detail": "合成冲突"}
+    else:
+        with pytest.raises(error_type) as raised:
+            _request(harness, name)
+        assert raised.value is error
+    service_method.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "name", [*SERVICE_METHODS, "get_task_analysis", "download_filtered_analysis"]
+)
+def test_unexpected_route_errors_are_propagated_once(
+    harness: SimpleNamespace, name: str
+) -> None:
+    service = harness.task if name in SERVICE_METHODS else harness.analysis
+    method = SERVICE_METHODS.get(
+        name, "get" if name == "get_task_analysis" else "export_filtered"
+    )
+    service_method = getattr(service, method)
+    error = RuntimeError("合成意外异常")
+    service_method.side_effect = error
+    with pytest.raises(RuntimeError) as raised:
+        _request(harness, name)
+    assert raised.value is error
+    service_method.assert_called_once()
 
 
 def test_segment_specific_routes_precede_dynamic_actions(

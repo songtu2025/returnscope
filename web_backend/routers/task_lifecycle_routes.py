@@ -7,6 +7,7 @@ from web_backend.api_contracts.tasks import (
     TaskRenameRequest,
     TaskSegmentActionRequest,
 )
+from web_backend.routers.task_route_support import task_request_errors
 from web_backend.task_service import (
     TaskRevisionConflict,
     TaskService,
@@ -33,7 +34,7 @@ def register_task_detail_routes(
         payload: TaskRenameRequest,
         user: User,
     ) -> dict[str, Any]:
-        try:
+        with task_request_errors(TaskRevisionConflict):
             return task_service.rename(
                 task_id=task_id,
                 title=payload.title,
@@ -41,10 +42,6 @@ def register_task_detail_routes(
                 expected_revision=payload.expected_revision,
                 actor_id=str(user["id"]),
             )
-        except TaskRevisionConflict as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def register_task_stop_routes(
@@ -60,17 +57,13 @@ def register_task_stop_routes(
         payload: TaskActionRequest,
         user: User,
     ) -> dict[str, Any]:
-        try:
+        with task_request_errors(TaskRevisionConflict):
             return task_service.cancel(
                 task_id,
                 str(user["id"]),
                 payload.note,
                 payload.expected_revision,
             )
-        except TaskRevisionConflict as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @router.post("/api/tasks/{task_id}/pause")
     def pause_task(
@@ -78,16 +71,12 @@ def register_task_stop_routes(
         payload: TaskSegmentActionRequest,
         user: User,
     ) -> dict[str, Any]:
-        try:
+        with task_request_errors(TaskRevisionConflict):
             return task_service.pause(
                 task_id=task_id,
                 actor_id=str(user["id"]),
                 expected_revision=payload.expected_revision,
             )
-        except TaskRevisionConflict as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def register_task_restart_routes(
@@ -99,10 +88,8 @@ def register_task_restart_routes(
 
     @router.post("/api/tasks/{task_id}/retry", status_code=201)
     def retry_task(task_id: str, user: User) -> dict[str, Any]:
-        try:
+        with task_request_errors():
             return task_service.retry(task_id, str(user["id"]))
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @router.post("/api/tasks/{task_id}/resume")
     def resume_task(
@@ -110,14 +97,10 @@ def register_task_restart_routes(
         payload: TaskActionRequest,
         user: User,
     ) -> dict[str, Any]:
-        try:
+        with task_request_errors(TaskRevisionConflict):
             return task_service.resume(
                 task_id=task_id,
                 actor_id=str(user["id"]),
                 expected_revision=payload.expected_revision,
                 note=payload.note,
             )
-        except TaskRevisionConflict as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -1,6 +1,6 @@
 from typing import Annotated, Any, Callable
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 
 from web_backend.api_contracts.tasks import (
     TaskArchiveRequest,
@@ -9,6 +9,7 @@ from web_backend.api_contracts.tasks import (
     TaskReplanPreflightRequest,
     TaskReplanRequest,
 )
+from web_backend.routers.task_route_support import task_request_errors
 from web_backend.task_service import (
     TaskPlanConflict,
     TaskRevisionConflict,
@@ -41,33 +42,25 @@ def register_task_collection_routes(
         payload: TaskPreflightRequest,
         _user: User,
     ) -> dict[str, Any]:
-        try:
+        with task_request_errors():
             return task_service.preflight(**payload.model_dump())
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @router.post("/api/tasks", status_code=201)
     def create_task(payload: TaskCreateRequest, user: User) -> dict[str, Any]:
-        try:
+        with task_request_errors(TaskPlanConflict):
             return task_service.create(actor_id=str(user["id"]), **payload.model_dump())
-        except TaskPlanConflict as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @router.post("/api/tasks/archive")
     def archive_tasks(
         payload: TaskArchiveRequest,
         user: User,
     ) -> list[dict[str, Any]]:
-        try:
+        with task_request_errors():
             return task_service.set_archived(
                 task_ids=payload.task_ids,
                 archived=payload.archived,
                 actor_id=str(user["id"]),
             )
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def register_task_replan_routes(
@@ -83,13 +76,11 @@ def register_task_replan_routes(
         payload: TaskReplanPreflightRequest,
         _user: User,
     ) -> dict[str, Any]:
-        try:
+        with task_request_errors():
             return task_service.replan_preflight(
                 task_id,
                 payload.product_version_id,
             )
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @router.post("/api/tasks/{task_id}/replan")
     def replan_task(
@@ -97,13 +88,9 @@ def register_task_replan_routes(
         payload: TaskReplanRequest,
         user: User,
     ) -> dict[str, Any]:
-        try:
+        with task_request_errors(TaskPlanConflict, TaskRevisionConflict):
             return task_service.replan(
                 task_id=task_id,
                 actor_id=str(user["id"]),
                 **payload.model_dump(),
             )
-        except (TaskPlanConflict, TaskRevisionConflict) as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
