@@ -1,3 +1,4 @@
+import { dispositionTone } from "./semanticReviewPresentation";
 import Button from "antd/es/button";
 import { CheckCircle, Trash, WarningCircle } from "@phosphor-icons/react";
 import { upsert } from "./semanticReviewDrafts";
@@ -37,7 +38,7 @@ export function SemanticReviewLedger(props) {
         labels={labels}
         editable={
           editable &&
-          !["ANALYSIS_FAILURE", "MODEL_ERROR"].includes(item.disposition) &&
+          dispositionTone(item.disposition) !== "failure" &&
           item.businessReviewRequired !== false
         }
         review={review}

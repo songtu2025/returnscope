@@ -114,7 +114,7 @@ function ReviewItemDecision({
       />
       {review &&
         item.businessReviewRequired !== false &&
-        !["ANALYSIS_FAILURE", "MODEL_ERROR"].includes(item.disposition) && (
+        dispositionTone(item.disposition) !== "failure" && (
           <small>人工调整：{ACTION_LABELS[review.action]}</small>
         )}
       {editable && !item.manual && (

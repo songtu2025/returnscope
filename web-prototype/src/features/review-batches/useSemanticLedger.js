@@ -32,11 +32,11 @@ export function useSemanticLedger({
     ...ledger.items.filter((item) => !item.manual || item.applied),
     ...manualItems,
   ];
-  const systemItems = items.filter((item) =>
-    ["ANALYSIS_FAILURE", "MODEL_ERROR"].includes(item.disposition),
+  const systemItems = items.filter(
+    (item) => dispositionTone(item.disposition) === "failure",
   );
   const businessItems = items.filter(
-    (item) => !["ANALYSIS_FAILURE", "MODEL_ERROR"].includes(item.disposition),
+    (item) => dispositionTone(item.disposition) !== "failure",
   );
   /** @param {SemanticReviewLedgerItem} item */
   const reviewFor = (item) =>

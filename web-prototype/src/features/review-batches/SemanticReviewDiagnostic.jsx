@@ -1,3 +1,5 @@
+import { dispositionTone } from "./semanticReviewPolicy";
+
 /** @typedef {import("./semanticLedgerContracts").SemanticReviewLedgerItem} SemanticReviewLedgerItem */
 
 /** @type {Record<string, string>} */
@@ -16,7 +18,7 @@ const DIAGNOSTIC_DETAIL_STATUS_LABELS = {
 
 /** @param {{item: SemanticReviewLedgerItem, suggestedAction: string}} props */
 export function DiagnosticDetails({ item, suggestedAction }) {
-  const systemFailure = ["ANALYSIS_FAILURE", "MODEL_ERROR"].includes(item.disposition);
+  const systemFailure = dispositionTone(item.disposition) === "failure";
   if (
     !systemFailure &&
     !item.diagnosticDomain &&
