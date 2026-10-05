@@ -1,12 +1,24 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import pandas as pd
 
 from return_semantics.capabilities import CapabilityRegistry
+from return_semantics.category_results import _add_counts as _add_counts
+from return_semantics.category_results import _add_nested_counts as _add_nested_counts
+from return_semantics.category_results import _completed_segment as _completed_segment
+from return_semantics.category_results import _failed_segment as _failed_segment
+from return_semantics.category_results import _PipelineTotals as _PipelineTotals
+from return_semantics.category_results import (
+    _report_running_segment as _report_running_segment,
+)
+from return_semantics.category_results import (
+    _report_segment_start as _report_segment_start,
+)
+from return_semantics.category_results import _SegmentResultRecorder
 from return_semantics.claims import NO_CLAIMS_VERSION
 from return_semantics.data import ReturnDataset
 from return_semantics.model_client import JsonlCache, ModelClient
@@ -17,7 +29,6 @@ from return_semantics.pipeline import (
 )
 from return_semantics.schemas import (
     ListingClaimsConfig,
-    ProcessingStatus,
     TaxonomyConfig,
     ValidatedClassification,
 )
@@ -49,6 +60,29 @@ class _ResolvedSegmentRuntime:
     secondary_model: str | None
     model_policy: dict[str, Any] | None
 
+    def classify(
+        self,
+        selected: pd.DataFrame,
+        taxonomy: TaxonomyConfig,
+        cache: JsonlCache,
+        progress: Callable[[int, int], None],
+        should_cancel: Callable[[], bool] | None,
+    ) -> PipelineRun:
+        return classify_comments(
+            unique_comments=selected,
+            taxonomy=taxonomy,
+            claims=self.claims,
+            client=self.client,
+            cache=cache,
+            secondary_model=self.secondary_model,
+            model_policy_version=str(self.model_policy["version"])
+            if self.model_policy is not None
+            else "legacy-model-policy-v1",
+            secondary_is_fallback=_secondary_is_fallback(self.model_policy),
+            progress=progress,
+            should_cancel=should_cancel,
+        )
+
 
 @dataclass(frozen=True)
 class _SegmentProgress:
@@ -68,58 +102,6 @@ class _SegmentProgress:
         )
         if self.progress is not None:
             self.progress(self.progress_base + current, self.total)
-
-
-@dataclass
-class _PipelineTotals:
-    classifications: dict[str, ValidatedClassification] = field(default_factory=dict)
-    usage: dict[str, int] = field(default_factory=dict)
-    usage_by_model: dict[str, dict[str, int]] = field(default_factory=dict)
-    cache_hits_by_model: dict[str, int] = field(default_factory=dict)
-    model_calls_by_model: dict[str, int] = field(default_factory=dict)
-    request_metrics: dict[str, int] = field(default_factory=dict)
-    routing: dict[str, int] = field(default_factory=dict)
-    cache_hits: int = 0
-    model_calls: int = 0
-    processed: int = 0
-
-    def add(self, run: PipelineRun, selected_count: int) -> None:
-        self.classifications.update(run.classifications)
-        _add_counts(self.usage, run.usage)
-        _add_nested_counts(self.usage_by_model, run.usage_by_model)
-        _add_counts(self.cache_hits_by_model, run.cache_hits_by_model)
-        _add_counts(self.model_calls_by_model, run.model_calls_by_model)
-        _add_counts(self.request_metrics, run.request_metrics)
-        _add_counts(self.routing, run.routing)
-        self.cache_hits += run.cache_hits
-        self.model_calls += run.model_calls
-        self.processed += selected_count
-
-    def build(self) -> PipelineRun:
-        return PipelineRun(
-            classifications=self.classifications,
-            usage=self.usage,
-            usage_by_model=self.usage_by_model,
-            cache_hits=self.cache_hits,
-            cache_hits_by_model=self.cache_hits_by_model,
-            model_calls=self.model_calls,
-            model_calls_by_model=self.model_calls_by_model,
-            request_metrics=self.request_metrics,
-            routing=self.routing,
-        )
-
-
-def _add_counts(target: dict[str, int], source: dict[str, int]) -> None:
-    for key, value in source.items():
-        target[key] = target.get(key, 0) + value
-
-
-def _add_nested_counts(
-    target: dict[str, dict[str, int]],
-    source: dict[str, dict[str, int]],
-) -> None:
-    for key, values in source.items():
-        _add_counts(target.setdefault(key, {}), values)
 
 
 def _ready_segments(
@@ -191,76 +173,6 @@ def _runtime_segment(
     }
 
 
-def _report_running_segment(
-    segment_update: Callable[[dict[str, object]], None] | None,
-    segment: dict[str, object],
-    current: int,
-    total: int,
-) -> None:
-    if segment_update is not None:
-        segment_update(
-            {
-                **segment,
-                "status": "running",
-                "progress_current": current,
-                "progress_total": total,
-            }
-        )
-
-
-def _report_segment_start(
-    segment_update: Callable[[dict[str, object]], None] | None,
-    segment: dict[str, object],
-    total: int,
-) -> None:
-    if segment_update is not None:
-        segment_update(
-            {
-                **segment,
-                "status": "running",
-                "progress_current": 0,
-                "progress_total": total,
-                "model_calls": 0,
-                "cache_hits": 0,
-            }
-        )
-
-
-def _failed_segment(
-    segment: dict[str, object],
-    selected_count: int,
-    error: Exception,
-) -> dict[str, object]:
-    return {
-        **segment,
-        "status": "failed",
-        "progress_current": 0,
-        "progress_total": selected_count,
-        "model_calls": 0,
-        "cache_hits": 0,
-        "error": str(error),
-    }
-
-
-def _completed_segment(
-    segment: dict[str, object],
-    selected_count: int,
-    run: PipelineRun,
-) -> dict[str, object]:
-    has_errors = any(
-        result.status == ProcessingStatus.MODEL_ERROR
-        for result in run.classifications.values()
-    )
-    return {
-        **segment,
-        "model_calls": run.model_calls,
-        "cache_hits": run.cache_hits,
-        "status": "completed_with_errors" if has_errors else "completed",
-        "progress_current": selected_count,
-        "progress_total": selected_count,
-    }
-
-
 def _secondary_is_fallback(model_policy: dict[str, object] | None) -> bool:
     if not model_policy:
         return False
@@ -298,6 +210,9 @@ def classify_category_segments(
     )
     totals = _PipelineTotals()
     segments: list[dict[str, object]] = []
+    recorder = _SegmentResultRecorder(
+        totals, segments, segment_update, segment_completed
+    )
     total = int((assignments.notna() & assignments.ne("excluded")).sum())
     capabilities = {item.key: item for item in registry.capabilities}
     for planned_segment in _ready_segments(execution_plan, allowed_agent_keys):
@@ -334,41 +249,28 @@ def classify_category_segments(
         )
 
         try:
-            run = classify_comments(
-                unique_comments=selected,
-                taxonomy=taxonomy,
-                claims=runtime.claims,
-                client=runtime.client,
-                cache=cache,
-                secondary_model=runtime.secondary_model,
-                model_policy_version=(
-                    str(runtime.model_policy["version"])
-                    if runtime.model_policy is not None
-                    else "legacy-model-policy-v1"
-                ),
-                secondary_is_fallback=_secondary_is_fallback(runtime.model_policy),
-                progress=segment_progress,
-                should_cancel=should_cancel,
+            run = runtime.classify(
+                selected, taxonomy, cache, segment_progress, should_cancel
             )
         except PipelineCancelled:
             raise
         except Exception as exc:
-            failed_segment = _failed_segment(runtime_segment, len(selected), exc)
-            if segment_update is not None:
-                segment_update(failed_segment)
-            segments.append(failed_segment)
-            totals.processed += len(selected)
+            recorder.failed(runtime_segment, selected, exc)
             continue
-        totals.add(run, len(selected))
-        completed_segment = _completed_segment(runtime_segment, len(selected), run)
-        segments.append(completed_segment)
-        if segment_completed is not None:
-            segment_completed(str(runtime_segment["segment_key"]), run.classifications)
-        if segment_update is not None:
-            segment_update(completed_segment)
+        recorder.completed(runtime_segment, selected, run)
 
     return CategoryPipelineRun(
         pipeline=totals.build(),
         taxonomy=registry.combined_taxonomy(),
         segments=segments,
     )
+
+
+_PipelineTotals.__module__ = __name__
+_add_counts.__module__ = __name__
+_add_nested_counts.__module__ = __name__
+_failed_segment.__module__ = __name__
+_completed_segment.__module__ = __name__
+
+_report_running_segment.__module__ = __name__
+_report_segment_start.__module__ = __name__

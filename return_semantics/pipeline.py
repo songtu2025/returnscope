@@ -190,91 +190,103 @@ def build_cache_key(
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _model_reasoning_effort(
+    client: ModelClient, model_name: str, thinking: bool
+) -> Any:
+    if thinking:
+        return getattr(client.settings, "secondary_reasoning_effort", "")
+    if model_name == getattr(client.settings, "cheap_model", None):
+        return getattr(client.settings, "cheap_reasoning_effort", "")
+    return getattr(client.settings, "reasoning_effort", "")
+
+
+def _cache_key_for_row(
+    row: _RowContext,
+    context: _PipelineContext,
+    model_name: str,
+    thinking: bool,
+    reasoning_effort: Any,
+) -> str:
+    return build_cache_key(
+        comment=row.comment,
+        model_name=model_name,
+        provider_name=context.client.settings.cache_namespace,
+        taxonomy_version=context.taxonomy.version,
+        claims_version=context.claims.version,
+        effective_prompt_version=prompt_version(context.taxonomy),
+        recognition_key=(
+            recognition_fingerprint(context.taxonomy)
+            if context.taxonomy.recognition_profile != "legacy_v3"
+            else ""
+        ),
+        thinking=thinking,
+        classification_scope=row.classification_scope,
+        reasoning_effort=str(reasoning_effort),
+        model_policy_version=context.model_policy_version,
+    )
+
+
+def _classify_uncached(
+    row: _RowContext,
+    context: _PipelineContext,
+    model_name: str,
+    thinking: bool,
+    reasoning_effort: Any,
+) -> ModelCallResult:
+    if context.taxonomy.recognition_profile == "fact_v2":
+        try:
+            return classify_facts(
+                comment=row.comment,
+                taxonomy=context.taxonomy,
+                client=context.client,
+                model_name=model_name,
+                reasoning_effort=str(reasoning_effort),
+                should_cancel=context.should_cancel,
+                claims=context.claims,
+            )
+        except FactPipelineCancelled as exc:
+            raise PipelineCancelled(str(exc)) from exc
+    result = context.client.classify(
+        messages=row.messages,
+        model=model_name,
+        thinking=thinking,
+    )
+    return correct_invalid_output(
+        result,
+        comment=row.comment,
+        messages=row.messages,
+        taxonomy=context.taxonomy,
+        claims=context.claims,
+        client=context.client,
+        model_name=model_name,
+        thinking=thinking,
+        should_cancel=context.should_cancel,
+    )
+
+
 def _call_with_cache(
     row: _RowContext,
     context: _PipelineContext,
     model_name: str,
     thinking: bool,
 ) -> tuple[ModelCallResult, bool]:
-    comment = row.comment
-    messages = row.messages
-    classification_scope = row.classification_scope
-    taxonomy = context.taxonomy
-    claims = context.claims
-    client = context.client
-    cache = context.cache
-    force = context.force
-    model_policy_version = context.model_policy_version
-    should_cancel = context.should_cancel
-    if thinking:
-        reasoning_effort = getattr(
-            client.settings,
-            "secondary_reasoning_effort",
-            "",
-        )
-    elif model_name == getattr(client.settings, "cheap_model", None):
-        reasoning_effort = getattr(client.settings, "cheap_reasoning_effort", "")
-    else:
-        reasoning_effort = getattr(client.settings, "reasoning_effort", "")
-
-    cache_key = build_cache_key(
-        comment=comment,
-        model_name=model_name,
-        provider_name=client.settings.cache_namespace,
-        taxonomy_version=taxonomy.version,
-        claims_version=claims.version,
-        effective_prompt_version=prompt_version(taxonomy),
-        recognition_key=(
-            recognition_fingerprint(taxonomy)
-            if taxonomy.recognition_profile != "legacy_v3"
-            else ""
-        ),
-        thinking=thinking,
-        classification_scope=classification_scope,
-        reasoning_effort=str(reasoning_effort),
-        model_policy_version=model_policy_version,
-    )
-    with cache.lock_for(cache_key):
-        cached = None if force else cache.get(cache_key)
+    reasoning_effort = _model_reasoning_effort(context.client, model_name, thinking)
+    cache_key = _cache_key_for_row(row, context, model_name, thinking, reasoning_effort)
+    with context.cache.lock_for(cache_key):
+        cached = None if context.force else context.cache.get(cache_key)
         if cached is not None and not requires_system_rerun(
             cached.classification,
-            comment,
-            taxonomy,
+            row.comment,
+            context.taxonomy,
         ):
             return cached, True
-
-        if taxonomy.recognition_profile == "fact_v2":
-            try:
-                result = classify_facts(
-                    comment=comment,
-                    taxonomy=taxonomy,
-                    client=client,
-                    model_name=model_name,
-                    reasoning_effort=str(reasoning_effort),
-                    should_cancel=should_cancel,
-                    claims=claims,
-                )
-            except FactPipelineCancelled as exc:
-                raise PipelineCancelled(str(exc)) from exc
-        else:
-            result = client.classify(
-                messages=messages,
-                model=model_name,
-                thinking=thinking,
-            )
-            result = correct_invalid_output(
-                result,
-                comment=comment,
-                messages=messages,
-                taxonomy=taxonomy,
-                claims=claims,
-                client=client,
-                model_name=model_name,
-                thinking=thinking,
-                should_cancel=should_cancel,
-            )
-        if not requires_system_rerun(result.classification, comment, taxonomy):
-            cache.put(cache_key, result)
+        result = _classify_uncached(
+            row, context, model_name, thinking, reasoning_effort
+        )
+        if not requires_system_rerun(
+            result.classification, row.comment, context.taxonomy
+        ):
+            context.cache.put(cache_key, result)
         return result, False
 
 
