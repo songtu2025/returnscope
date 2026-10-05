@@ -12,7 +12,10 @@ from web_backend.database import Database
 from web_backend.dataset_cache import load_cached_dataset
 from web_backend.security import utc_now
 from web_backend.settings import Settings
-from web_backend.task_state import summarize_task_status
+from web_backend.task_execution.parent_refresh_state import (
+    _parent_refresh_state,
+    _ParentRefreshState,
+)
 
 
 class ParentResultMixin:
@@ -36,17 +39,7 @@ class ParentResultMixin:
                 "cancelled",
             }:
                 return
-            snapshot = json_value(task.get("snapshot_json"), {})
-            dataset = load_cached_dataset(
-                str(task["return_file_path"]),
-                str(task["product_file_path"]),
-                str(task["store"]),
-                task["listing"],
-                str(snapshot.get("scope", {}).get("mode", "manual")),
-                str(task["return_sha256"]),
-                str(task["product_sha256"]),
-                analysis_context_from_snapshot(snapshot),
-            )
+            dataset = self._load_parent_dataset(task)
             try:
                 self._build_parent_result(task_id, dataset, str(task["status"]))
             except Exception as exc:
@@ -65,123 +58,18 @@ class ParentResultMixin:
             task = self._load_task(task_id)
             if task is None:
                 return
-            segments = self._load_segments(task_id)
-            executable = [
-                segment for segment in segments if segment["agent_key"] != "unknown"
-            ]
-            statuses = [str(segment["status"]) for segment in executable]
-            has_running = "running" in statuses
-            if task["cancel_requested"] and not has_running:
-                parent_status = "cancelled"
-            elif task["pause_requested"] and not has_running:
-                parent_status = "paused"
-            else:
-                parent_status = summarize_task_status(statuses)
-            degraded_segment = next(
-                (
-                    segment
-                    for segment in executable
-                    if int(segment.get("model_failures") or 0) >= 5
-                    and segment.get("error")
-                ),
-                None,
+            state = _parent_refresh_state(
+                task, self._load_segments(task_id), self._parent_status_text
             )
-            if degraded_segment is not None and task["pause_requested"]:
-                stage = "模型服务异常"
-                message = (
-                    "模型服务连续失败，正在保存其他运行中 Listing 的检查点"
-                    if has_running
-                    else "模型服务连续失败，任务已自动暂停；请检查连接后继续执行"
-                )
-                parent_error = str(degraded_segment["error"])
-            else:
-                stage, message = self._parent_status_text(parent_status, 0)
-                parent_error = None
-            current = sum(int(segment["progress_current"]) for segment in executable)
-            total = sum(int(segment["progress_total"]) for segment in executable)
-            percent = round(current / total * 100, 2) if total else 0
-            terminal = parent_status in {
-                "completed",
-                "partial",
-                "cancelled",
-                "failed",
-                "blocked",
-            }
-            has_deliverable = any(
-                segment["status"] in {"completed", "completed_with_errors"}
-                for segment in executable
-            )
-            if terminal and has_deliverable:
+            if state.terminal and state.has_deliverable:
                 if dataset is None:
-                    snapshot = json_value(task.get("snapshot_json"), {})
-                    dataset = load_cached_dataset(
-                        str(task["return_file_path"]),
-                        str(task["product_file_path"]),
-                        str(task["store"]),
-                        task["listing"],
-                        str(snapshot.get("scope", {}).get("mode", "manual")),
-                        str(task["return_sha256"]),
-                        str(task["product_sha256"]),
-                        analysis_context_from_snapshot(snapshot),
-                    )
+                    dataset = self._load_parent_dataset(task)
                 try:
-                    self._build_parent_result(task_id, dataset, parent_status)
+                    self._build_parent_result(task_id, dataset, state.status)
                 except Exception as exc:
-                    self._record_parent_result_error(
-                        task_id,
-                        str(exc),
-                        parent_status,
-                    )
+                    self._record_parent_result_error(task_id, str(exc), state.status)
                     return
-            now = utc_now()
-            with self.database.transaction(immediate=True) as connection:
-                before_status = str(task["status"])
-                connection.execute(
-                    """
-                    UPDATE tasks
-                    SET status = ?, stage = ?, message = ?,
-                        progress_current = ?, progress_total = ?,
-                        progress_percent = ?,
-                        error = ?,
-                        completed_at = CASE WHEN ? THEN ? ELSE NULL END,
-                        heartbeat_at = ?, revision = revision + 1
-                    WHERE id = ?
-                    """,
-                    (
-                        parent_status,
-                        stage,
-                        message,
-                        current,
-                        total,
-                        percent,
-                        parent_error,
-                        terminal,
-                        now,
-                        now,
-                        task_id,
-                    ),
-                )
-                if before_status != parent_status:
-                    connection.execute(
-                        """
-                        INSERT INTO task_events(
-                            task_id, event_type, stage, message,
-                            data_json, created_at
-                        ) VALUES (?, 'status_changed', ?, ?, ?, ?)
-                        """,
-                        (
-                            task_id,
-                            stage,
-                            message,
-                            json_text(
-                                {
-                                    "before": {"status": before_status},
-                                    "after": {"status": parent_status},
-                                }
-                            ),
-                            now,
-                        ),
-                    )
+            self._persist_parent_refresh(task_id, task, state)
 
     def _record_parent_result_error(
         self,
@@ -272,3 +160,71 @@ class ParentResultMixin:
         return sum(
             1 for value in results.values() if value["status"] in REVIEW_STATUSES
         )
+
+    @staticmethod
+    def _load_parent_dataset(task: dict[str, Any]) -> ReturnDataset:
+        snapshot = json_value(task.get("snapshot_json"), {})
+        dataset = load_cached_dataset(
+            str(task["return_file_path"]),
+            str(task["product_file_path"]),
+            str(task["store"]),
+            task["listing"],
+            str(snapshot.get("scope", {}).get("mode", "manual")),
+            str(task["return_sha256"]),
+            str(task["product_sha256"]),
+            analysis_context_from_snapshot(snapshot),
+        )
+        return dataset
+
+    def _persist_parent_refresh(
+        self, task_id: str, task: dict[str, Any], state: _ParentRefreshState
+    ) -> None:
+        now = utc_now()
+        with self.database.transaction(immediate=True) as connection:
+            before_status = str(task["status"])
+            connection.execute(
+                """
+                    UPDATE tasks
+                    SET status = ?, stage = ?, message = ?,
+                        progress_current = ?, progress_total = ?,
+                        progress_percent = ?,
+                        error = ?,
+                        completed_at = CASE WHEN ? THEN ? ELSE NULL END,
+                        heartbeat_at = ?, revision = revision + 1
+                    WHERE id = ?
+                    """,
+                (
+                    state.status,
+                    state.stage,
+                    state.message,
+                    state.current,
+                    state.total,
+                    state.percent,
+                    state.error,
+                    state.terminal,
+                    now,
+                    now,
+                    task_id,
+                ),
+            )
+            if before_status != state.status:
+                connection.execute(
+                    """
+                        INSERT INTO task_events(
+                            task_id, event_type, stage, message,
+                            data_json, created_at
+                        ) VALUES (?, 'status_changed', ?, ?, ?, ?)
+                        """,
+                    (
+                        task_id,
+                        state.stage,
+                        state.message,
+                        json_text(
+                            {
+                                "before": {"status": before_status},
+                                "after": {"status": state.status},
+                            }
+                        ),
+                        now,
+                    ),
+                )

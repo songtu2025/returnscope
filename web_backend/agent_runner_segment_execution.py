@@ -3,8 +3,11 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from pandas import DataFrame
 
 from return_semantics.analysis_context import analysis_context_from_snapshot
 from return_semantics.category_pipeline import CategorySegmentRuntime
@@ -20,6 +23,14 @@ from web_backend.task_execution.segment_configuration import SegmentConfiguratio
 from web_backend.task_execution.segment_state import SegmentStateMixin
 
 performance_logger = logging.getLogger("uvicorn.error.performance")
+
+
+@dataclass(frozen=True)
+class _SegmentRunSetup:
+    all_keys: set[str]
+    selected: DataFrame
+    taxonomy: TaxonomyConfig
+    runtime: CategorySegmentRuntime
 
 
 class SegmentExecutionMixin(SegmentStateMixin, SegmentConfigurationMixin):
@@ -81,51 +92,26 @@ class SegmentExecutionMixin(SegmentStateMixin, SegmentConfigurationMixin):
         )
         data_ms = (time.perf_counter() - data_started) * 1000
         setup_started = time.perf_counter()
-        all_keys = {
-            str(key) for key in json_value(segment["classification_keys_json"], [])
-        }
-        context.existing_results = {
-            key: value
-            for key, value in context.existing_results.items()
-            if key in all_keys
-        }
-        remaining_keys = all_keys - set(context.existing_results)
-        selected = dataset.unique_comments.loc[
-            dataset.unique_comments["classification_key"]
-            .astype(str)
-            .isin(remaining_keys)
-        ].reset_index(drop=True)
-
-        capability = self._capability_for_segment(segment)
-        taxonomy = self._taxonomy_for_segment(segment, capability)
-        base_settings = self._snapshot_model_settings(task, snapshot)
-        runtime = self._build_segment_runtime(
-            segment,
-            base_settings,
-            str(task["config_version_id"]),
-            str(task["store"]),
-            task["listing"],
+        setup = self._prepare_segment_run(
+            context, dataset, snapshot, task=task, segment=segment
         )
         setup_ms = (time.perf_counter() - setup_started) * 1000
         model_started = time.perf_counter()
         run = self._classify_segment(
-            context,
-            selected,
-            taxonomy,
-            runtime,
-            len(all_keys),
+            context, setup.selected, setup.taxonomy, setup.runtime, len(setup.all_keys)
         )
         model_ms = (time.perf_counter() - model_started) * 1000
         context.latest_run = run
         persist_started = time.perf_counter()
-        self._complete_segment_run(context, dataset, all_keys, taxonomy, run)
+        self._complete_segment_run(
+            context, dataset, setup.all_keys, setup.taxonomy, run
+        )
         persist_ms = (time.perf_counter() - persist_started) * 1000
         performance_logger.info(
-            "segment_stages task_id=%s segment_id=%s records=%s "
-            "data_ms=%.2f setup_ms=%.2f model_ms=%.2f persist_ms=%.2f",
+            "segment_stages task_id=%s segment_id=%s records=%s data_ms=%.2f setup_ms=%.2f model_ms=%.2f persist_ms=%.2f",
             context.task_id,
             context.segment_id,
-            len(all_keys),
+            len(setup.all_keys),
             data_ms,
             setup_ms,
             model_ms,
@@ -182,3 +168,40 @@ class SegmentExecutionMixin(SegmentStateMixin, SegmentConfigurationMixin):
             taxonomy,
         )
         self._refresh_parent(context.task_id, dataset)
+
+    def _prepare_segment_run(
+        self,
+        context: _SegmentRunContext,
+        dataset: ReturnDataset,
+        snapshot: dict[str, Any],
+        *,
+        task: dict[str, Any],
+        segment: dict[str, Any],
+    ) -> _SegmentRunSetup:
+        all_keys = {
+            str(key) for key in json_value(segment["classification_keys_json"], [])
+        }
+        context.existing_results = {
+            key: value
+            for key, value in context.existing_results.items()
+            if key in all_keys
+        }
+        remaining_keys = all_keys - set(context.existing_results)
+        selected = dataset.unique_comments.loc[
+            dataset.unique_comments["classification_key"]
+            .astype(str)
+            .isin(remaining_keys)
+        ].reset_index(drop=True)
+        capability = self._capability_for_segment(segment)
+        taxonomy = self._taxonomy_for_segment(segment, capability)
+        base_settings = self._snapshot_model_settings(task, snapshot)
+        runtime = self._build_segment_runtime(
+            segment,
+            base_settings,
+            str(task["config_version_id"]),
+            str(task["store"]),
+            task["listing"],
+        )
+        return _SegmentRunSetup(
+            all_keys=all_keys, selected=selected, taxonomy=taxonomy, runtime=runtime
+        )
