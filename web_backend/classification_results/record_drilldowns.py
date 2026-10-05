@@ -15,7 +15,6 @@ from web_backend.result_hierarchy import feedback_group_key_sql, hierarchy_count
 
 class ClassificationResultRecordDrilldownsMixin(ClassificationResultRecordFiltersMixin):
     database: Database
-
     if TYPE_CHECKING:
 
         def get(self, version_id: str) -> dict[str, Any]: ...
@@ -38,27 +37,47 @@ class ClassificationResultRecordDrilldownsMixin(ClassificationResultRecordFilter
         where_sql, params = self._record_filters(version_id, filters)
         group_key = feedback_group_key_sql("r")
         if group_by == "category":
-            taxonomy = self.taxonomy(version_id)
-            with self.database.connect() as connection:
-                items = (
-                    hierarchy_counts(
-                        connection,
-                        taxonomy,
-                        where_sql,
-                        params,
-                        feedback_groups=True,
-                    )
-                    if taxonomy
-                    else []
+            items = self._category_drilldown_items(version_id, where_sql, params)
+            total = len(items)
+            items = items[(page - 1) * page_size : page * page_size]
+        else:
+            taxonomy = self.taxonomy(version_id) if group_by == "problem" else None
+            count_sql, page_sql = self._drilldown_query(group_by, where_sql, group_key)
+            total, rows = self._drilldown_page(
+                count_sql, page_sql, params, page, page_size
+            )
+            items = [
+                {**dict(row), "label_path": label_path(taxonomy, row["value"])}
+                if taxonomy
+                else dict(row)
+                for row in rows
+            ]
+        return {
+            "group_by": group_by,
+            "items": items,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+
+    def _category_drilldown_items(
+        self, version_id: str, where_sql: str, params: list[Any]
+    ) -> list[dict[str, Any]]:
+        taxonomy = self.taxonomy(version_id)
+        with self.database.connect() as connection:
+            items = (
+                hierarchy_counts(
+                    connection, taxonomy, where_sql, params, feedback_groups=True
                 )
-            return {
-                "group_by": group_by,
-                "items": items[(page - 1) * page_size : page * page_size],
-                "total": len(items),
-                "page": page,
-                "page_size": page_size,
-            }
-        taxonomy = self.taxonomy(version_id) if group_by == "problem" else None
+                if taxonomy
+                else []
+            )
+        return items
+
+    @staticmethod
+    def _drilldown_query(
+        group_by: str, where_sql: str, group_key: str
+    ) -> tuple[str, str]:
         if group_by == "problem":
             join_sql = """
                 JOIN classification_unit_labels l
@@ -82,15 +101,9 @@ class ClassificationResultRecordDrilldownsMixin(ClassificationResultRecordFilter
             WHERE {where_sql}
             GROUP BY {group_columns}
         """
-        with self.database.connect() as connection:
-            total = int(
-                connection.execute(
-                    f"SELECT COUNT(*) FROM (SELECT 1 {base_sql})",
-                    tuple(params),
-                ).fetchone()[0]
-            )
-            rows = connection.execute(
-                f"""
+        return (
+            f"SELECT COUNT(*) FROM (SELECT 1 {base_sql})",
+            f"""
                 SELECT {value_columns},
                        COUNT(DISTINCT {group_key}) AS record_count,
                        COUNT(DISTINCT r.classification_key) AS unit_count
@@ -98,17 +111,19 @@ class ClassificationResultRecordDrilldownsMixin(ClassificationResultRecordFilter
                 ORDER BY record_count DESC, value ASC
                 LIMIT ? OFFSET ?
                 """,
-                (*params, page_size, (page - 1) * page_size),
+        )
+
+    def _drilldown_page(
+        self,
+        count_sql: str,
+        page_sql: str,
+        params: list[Any],
+        page: int,
+        page_size: int,
+    ) -> tuple[int, list[Any]]:
+        with self.database.connect() as connection:
+            total = int(connection.execute(count_sql, tuple(params)).fetchone()[0])
+            rows = connection.execute(
+                page_sql, (*params, page_size, (page - 1) * page_size)
             ).fetchall()
-        return {
-            "group_by": group_by,
-            "items": [
-                {**dict(row), "label_path": label_path(taxonomy, row["value"])}
-                if taxonomy
-                else dict(row)
-                for row in rows
-            ],
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-        }
+        return (total, rows)
