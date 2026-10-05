@@ -4,7 +4,7 @@ import hashlib
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, SupportsInt, cast
 
-from return_semantics.data import load_return_dataset_auto
+from return_semantics.data import ReturnDataset, load_return_dataset_auto
 from web_backend.database import Database
 
 
@@ -76,10 +76,7 @@ class ClassificationStandardValidationRawSourcesMixin:
         return output
 
     def _raw_source_context(
-        self,
-        source_id: str,
-        draft: dict[str, Any],
-        sample_size: int,
+        self, source_id: str, draft: dict[str, Any], sample_size: int
     ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         option = next(
             (item for item in self._raw_source_options() if item["id"] == source_id),
@@ -88,9 +85,24 @@ class ClassificationStandardValidationRawSourcesMixin:
         if option is None:
             raise ValueError("所选用户反馈数据或产品信息版本已不可用")
         dataset = load_return_dataset_auto(
-            Path(option["return"]["file_path"]),
-            Path(option["product"]["file_path"]),
+            Path(option["return"]["file_path"]), Path(option["product"]["file_path"])
         )
+        candidates = self._raw_candidates(dataset, draft)
+        samples = self._round_robin_samples(
+            candidates, sample_size, bucket_fields=("store", "listing")
+        )
+        if not samples:
+            raise ValueError("所选数据中没有当前品类可用于验证的评论")
+        config_version_id = self._published_config_id()
+        return (
+            self._raw_source_details(option, draft, candidates, config_version_id),
+            samples,
+        )
+
+    @staticmethod
+    def _raw_candidates(
+        dataset: ReturnDataset, draft: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         categories = {
             (str(item["category_a"]), str(item["category_b"]))
             for item in draft["snapshot"]["variants"]
@@ -113,39 +125,35 @@ class ClassificationStandardValidationRawSourcesMixin:
                     "baseline": {},
                 }
             )
-        samples = self._round_robin_samples(
-            candidates,
-            sample_size,
-            bucket_fields=("store", "listing"),
-        )
-        if not samples:
-            raise ValueError("所选数据中没有当前品类可用于验证的评论")
-        config_version_id = self._published_config_id()
+        return candidates
+
+    @staticmethod
+    def _raw_source_details(
+        option: dict[str, Any],
+        draft: dict[str, Any],
+        candidates: list[dict[str, Any]],
+        config_version_id: str,
+    ) -> dict[str, Any]:
         stores = sorted({item["store"] for item in candidates if item["store"]})
         listings = sorted({item["listing"] for item in candidates if item["listing"]})
         public = {
             **option["public"],
-            "comparison_mode": (
-                "draft_only" if draft["is_new"] else "baseline_and_draft"
-            ),
+            "comparison_mode": "draft_only"
+            if draft["is_new"]
+            else "baseline_and_draft",
             "unit_count": len(candidates),
             "available_sample_count": len(candidates),
             "store_site": stores[0] if len(stores) == 1 else f"{len(stores)} 个店铺",
-            "listing": (
-                listings[0] if len(listings) == 1 else f"{len(listings)} 个 Listing"
-            ),
+            "listing": listings[0]
+            if len(listings) == 1
+            else f"{len(listings)} 个 Listing",
         }
-        return (
-            {
-                "kind": "raw_dataset",
-                "result": public,
-                "config_version_id": config_version_id,
-                "standard_key": str(draft["standard_key"]),
-                "model_policy_version": str(
-                    draft["snapshot"]["model_policy"]["version"]
-                ),
-                "store": stores[0] if len(stores) == 1 else "",
-                "listing": listings[0] if len(listings) == 1 else None,
-            },
-            samples,
-        )
+        return {
+            "kind": "raw_dataset",
+            "result": public,
+            "config_version_id": config_version_id,
+            "standard_key": str(draft["standard_key"]),
+            "model_policy_version": str(draft["snapshot"]["model_policy"]["version"]),
+            "store": stores[0] if len(stores) == 1 else "",
+            "listing": listings[0] if len(listings) == 1 else None,
+        }
