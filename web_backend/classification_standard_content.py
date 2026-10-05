@@ -20,27 +20,14 @@ class ClassificationStandardContentMixin(
     StandardCandidateValidationMixin, StandardContentComparisonMixin
 ):
     def _snapshot_from_content(
-        self,
-        source: dict[str, Any],
-        content: dict[str, Any],
+        self, source: dict[str, Any], content: dict[str, Any]
     ) -> dict[str, Any]:
         snapshot = deepcopy(source)
         existing_labels = {
             str(label["code"]): label for label in source["taxonomy"]["labels"]
         }
         snapshot["name"] = str(content["name"]).strip()
-        snapshot["variants"] = [
-            {
-                "category_a": str(item["category_a"]).strip(),
-                "category_b": str(item["category_b"]).strip(),
-                "attributes": {
-                    str(key).strip(): str(value).strip()
-                    for key, value in item.get("attributes", {}).items()
-                    if str(key).strip()
-                },
-            }
-            for item in content["variants"]
-        ]
+        snapshot["variants"] = self._content_variants(content)
         taxonomy = snapshot["taxonomy"]
         if content.get("structure_version", 1) == 2:
             taxonomy["structure_version"] = 2
@@ -66,61 +53,10 @@ class ClassificationStandardContentMixin(
             if str(value).strip()
         ]
         taxonomy["validation_rules"] = deepcopy(
-            content.get(
-                "validation_rules",
-                taxonomy.get("validation_rules", {}),
-            )
+            content.get("validation_rules", taxonomy.get("validation_rules", {}))
         )
-        taxonomy["labels"] = []
-        for item in content["labels"]:
-            code = str(item["code"]).strip()
-            if taxonomy.get("structure_version", 1) == 1:
-                code = code.upper()
-            previous = existing_labels.get(code, {})
-            taxonomy["labels"].append(
-                {
-                    "code": code,
-                    "name": str(item["name"]).strip(),
-                    "group": str(item.get("group", "")).strip(),
-                    **(
-                        {"parent_code": item.get("parent_code")}
-                        if taxonomy.get("structure_version") == 2
-                        else {}
-                    ),
-                    "description": str(item.get("description", "")).strip(),
-                    "exclusions": list(
-                        item.get("exclusions", previous.get("exclusions", []))
-                    ),
-                    "examples": deepcopy(
-                        item.get("examples", previous.get("examples", []))
-                    ),
-                    "keywords": [
-                        str(value).strip()
-                        for value in item.get("keywords", previous.get("keywords", []))
-                        if str(value).strip()
-                    ],
-                    "allowed_sentiments": [
-                        str(value).strip().upper()
-                        for value in item["allowed_sentiments"]
-                    ],
-                    "allowed_claim_ids": list(
-                        item["allowed_claim_ids"]
-                        if item.get("allowed_claim_ids") is not None
-                        else previous.get("allowed_claim_ids", [])
-                    ),
-                }
-            )
-        if taxonomy.get("structure_version") == 2:
-            # 草稿允许暂存未完成的树，合法结构才更新派生分组。
-            try:
-                parsed = TaxonomyConfig.model_validate(taxonomy)
-            except ValidationError:
-                pass
-            else:
-                for label, definition in zip(
-                    taxonomy["labels"], parsed.labels, strict=True
-                ):
-                    label["group"] = definition.group
+        self._apply_content_labels(taxonomy, content, existing_labels)
+        self._update_derived_groups(taxonomy)
         return snapshot
 
     @classmethod
@@ -190,3 +126,78 @@ class ClassificationStandardContentMixin(
                 for label in taxonomy["labels"]
             ],
         }
+
+    @staticmethod
+    def _content_variants(content: dict[str, Any]) -> list[dict[str, Any]]:
+        return [
+            {
+                "category_a": str(item["category_a"]).strip(),
+                "category_b": str(item["category_b"]).strip(),
+                "attributes": {
+                    str(key).strip(): str(value).strip()
+                    for key, value in item.get("attributes", {}).items()
+                    if str(key).strip()
+                },
+            }
+            for item in content["variants"]
+        ]
+
+    @staticmethod
+    def _apply_content_labels(
+        taxonomy: dict[str, Any],
+        content: dict[str, Any],
+        existing_labels: dict[str, Any],
+    ) -> None:
+        taxonomy["labels"] = []
+        for item in content["labels"]:
+            code = str(item["code"]).strip()
+            if taxonomy.get("structure_version", 1) == 1:
+                code = code.upper()
+            previous = existing_labels.get(code, {})
+            taxonomy["labels"].append(
+                {
+                    "code": code,
+                    "name": str(item["name"]).strip(),
+                    "group": str(item.get("group", "")).strip(),
+                    **(
+                        {"parent_code": item.get("parent_code")}
+                        if taxonomy.get("structure_version") == 2
+                        else {}
+                    ),
+                    "description": str(item.get("description", "")).strip(),
+                    "exclusions": list(
+                        item.get("exclusions", previous.get("exclusions", []))
+                    ),
+                    "examples": deepcopy(
+                        item.get("examples", previous.get("examples", []))
+                    ),
+                    "keywords": [
+                        str(value).strip()
+                        for value in item.get("keywords", previous.get("keywords", []))
+                        if str(value).strip()
+                    ],
+                    "allowed_sentiments": [
+                        str(value).strip().upper()
+                        for value in item["allowed_sentiments"]
+                    ],
+                    "allowed_claim_ids": list(
+                        item["allowed_claim_ids"]
+                        if item.get("allowed_claim_ids") is not None
+                        else previous.get("allowed_claim_ids", [])
+                    ),
+                }
+            )
+
+    @staticmethod
+    def _update_derived_groups(taxonomy: dict[str, Any]) -> None:
+        if taxonomy.get("structure_version") == 2:
+            # 草稿允许暂存未完成的树，合法结构才更新派生分组。
+            try:
+                parsed = TaxonomyConfig.model_validate(taxonomy)
+            except ValidationError:
+                pass
+            else:
+                for label, definition in zip(
+                    taxonomy["labels"], parsed.labels, strict=True
+                ):
+                    label["group"] = definition.group
