@@ -75,16 +75,7 @@ def quality_gate(summary: dict, policy: dict | None = None) -> dict:
             "note": "未配置自动质量门槛，需人工审阅；不代表语义质量已通过",
         }
     values = evaluation.get("sides", {}).get("draft", {})
-    blocking = [
-        f"{METRIC_LABELS.get(metric, metric)}={values.get(metric, '未评估')}，要求不超过 {limit}"
-        for metric, limit in policy["thresholds"].items()
-        if metric not in values or values[metric] > limit
-    ]
-    warnings = [
-        f"{METRIC_LABELS.get(metric, metric)}={values.get(metric, '未评估')}，请人工复核"
-        for metric in policy.get("warning_metrics", [])
-        if metric not in values or values[metric] > 0
-    ]
+    blocking, warnings = _metric_quality_issues(values, policy)
     sample_count = evaluation.get("sample_count", 0)
     if sample_count < policy["min_reference_samples"]:
         blocking.append(
@@ -94,35 +85,17 @@ def quality_gate(summary: dict, policy: dict | None = None) -> dict:
     scope_blocking, scope_warnings = _scope_quality_issues(evaluation, policy, total)
     blocking.extend(scope_blocking)
     warnings.extend(scope_warnings)
-    coverage = sample_count / total * 100 if total else 0
-    denominator = max(
-        values.get("expected_instances", 0), values.get("actual_instances", 0)
-    )
-    match_rate = (
-        values.get("matched_instances", 0) / denominator * 100
-        if denominator
-        else (100 if sample_count else 0)
-    )
-    duplicate_rate = values.get("duplicate_samples", 0) / max(1, sample_count) * 100
+    coverage, match_rate, duplicate_rate = _reference_rates(values, sample_count, total)
     rate_blocking, rate_warnings = _rate_quality_issues(
         coverage, match_rate, duplicate_rate, policy
     )
     blocking.extend(rate_blocking)
     warnings.extend(rate_warnings)
-    if (
-        policy.get("require_fact_states")
-        and evaluation.get("fact_state_sample_count", 0) != total
-    ):
-        blocking.append(
-            "事实状态参考答案不完整：每条参考行须填写事实状态及对应证据；不能将未验证状态算作通过"
-        )
-    if (
-        policy.get("warn_incomplete_fact_states")
-        and evaluation.get("fact_state_sample_count", 0) != total
-    ):
-        warnings.append(
-            "事实状态参考答案不完整：请在人工审批时核对未标注样本的事实状态"
-        )
+    state_blocking, state_warnings = _fact_state_quality_issues(
+        evaluation, policy, total
+    )
+    blocking.extend(state_blocking)
+    warnings.extend(state_warnings)
     return {
         "status": "failed" if blocking else "passed",
         "passed": not blocking,
@@ -179,3 +152,57 @@ def _rate_quality_issues(
         elif (minimum and actual < 100) or (not minimum and actual > 0):
             warnings.append(f"{message} {actual:.2f}%，请人工复核")
     return blocking, warnings
+
+
+def _metric_quality_issues(values: dict, policy: dict) -> tuple[list[str], list[str]]:
+    blocking = [
+        f"{METRIC_LABELS.get(metric, metric)}={values.get(metric, '未评估')}，要求不超过 {limit}"
+        for metric, limit in policy["thresholds"].items()
+        if metric not in values or values[metric] > limit
+    ]
+    warnings = [
+        f"{METRIC_LABELS.get(metric, metric)}={values.get(metric, '未评估')}，请人工复核"
+        for metric in policy.get("warning_metrics", [])
+        if metric not in values or values[metric] > 0
+    ]
+    return (blocking, warnings)
+
+
+def _reference_rates(
+    values: dict, sample_count: int, total: int
+) -> tuple[float, float, float]:
+    coverage = sample_count / total * 100 if total else 0
+    denominator = max(
+        values.get("expected_instances", 0), values.get("actual_instances", 0)
+    )
+    match_rate = (
+        values.get("matched_instances", 0) / denominator * 100
+        if denominator
+        else 100
+        if sample_count
+        else 0
+    )
+    duplicate_rate = values.get("duplicate_samples", 0) / max(1, sample_count) * 100
+    return (coverage, match_rate, duplicate_rate)
+
+
+def _fact_state_quality_issues(
+    evaluation: dict, policy: dict, total: int
+) -> tuple[list[str], list[str]]:
+    blocking = []
+    warnings = []
+    if (
+        policy.get("require_fact_states")
+        and evaluation.get("fact_state_sample_count", 0) != total
+    ):
+        blocking.append(
+            "事实状态参考答案不完整：每条参考行须填写事实状态及对应证据；不能将未验证状态算作通过"
+        )
+    if (
+        policy.get("warn_incomplete_fact_states")
+        and evaluation.get("fact_state_sample_count", 0) != total
+    ):
+        warnings.append(
+            "事实状态参考答案不完整：请在人工审批时核对未标注样本的事实状态"
+        )
+    return (blocking, warnings)

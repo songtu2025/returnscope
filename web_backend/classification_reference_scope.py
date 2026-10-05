@@ -78,6 +78,17 @@ def compare_reference_scope(item: dict, side: str, pairs: dict[int, int]) -> dic
     reference = item["reference"]
     expected = reference.get("facts", [])
     actual = item[side].get("extracted_facts", [])
+    counts, event_errors = _matched_scope_counts(expected, actual, pairs)
+    _add_event_relation_errors(expected, actual, pairs, event_errors)
+    counts["event_errors"] = len(event_errors)
+    if reference.get("scope_complete", {}).get("primary"):
+        counts["primary_errors"] = _primary_scope_error(item, side, reference, actual)
+    return counts
+
+
+def _matched_scope_counts(
+    expected: list[dict], actual: list[dict], pairs: dict[int, int]
+) -> tuple[dict, set[int]]:
     counts = dict.fromkeys(SCOPE_METRICS, 0)
     event_errors = set()
     for index, fact in enumerate(expected):
@@ -101,6 +112,15 @@ def compare_reference_scope(item: dict, side: str, pairs: dict[int, int]) -> dic
             )
         if fact.get("expected_event_ref") and not match.get("event_ref"):
             event_errors.add(index)
+    return counts, event_errors
+
+
+def _add_event_relation_errors(
+    expected: list[dict],
+    actual: list[dict],
+    pairs: dict[int, int],
+    event_errors: set[int],
+) -> None:
     # 事件编号由各自文本独立命名，只检查配对事实之间的同事件关系。
     event_indices = [
         index for index in pairs if expected[index].get("expected_event_ref")
@@ -115,20 +135,22 @@ def compare_reference_scope(item: dict, side: str, pairs: dict[int, int]) -> dic
         )
         if expected_same != actual_same:
             event_errors.update((left, right))
-    counts["event_errors"] = len(event_errors)
-    if reference.get("scope_complete", {}).get("primary"):
-        primary_fact_ids = {
-            fact.get("fact_id") for fact in actual if fact.get("is_primary_reason")
-        }
-        mapped_primary = {
-            code
-            for mapping in item[side].get("fact_mappings", [])
-            if mapping.get("fact_id") in primary_fact_ids
-            for code in mapping.get("label_codes", [])
-        }
-        expected_primary = set(reference.get("primary_label_codes", []))
-        counts["primary_errors"] = int(
-            expected_primary != set(item[side].get("primary_label_codes", []))
-            or expected_primary != mapped_primary
-        )
-    return counts
+
+
+def _primary_scope_error(
+    item: dict, side: str, reference: dict, actual: list[dict]
+) -> int:
+    primary_fact_ids = {
+        fact.get("fact_id") for fact in actual if fact.get("is_primary_reason")
+    }
+    mapped_primary = {
+        code
+        for mapping in item[side].get("fact_mappings", [])
+        if mapping.get("fact_id") in primary_fact_ids
+        for code in mapping.get("label_codes", [])
+    }
+    expected_primary = set(reference.get("primary_label_codes", []))
+    return int(
+        expected_primary != set(item[side].get("primary_label_codes", []))
+        or expected_primary != mapped_primary
+    )
