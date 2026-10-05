@@ -305,6 +305,12 @@ test("修改分类时不使用主因作为预选标签", async () => {
   await userEvent.click(await screen.findByRole("button", { name: "处理" }));
   await userEvent.click(screen.getByRole("button", { name: /修改分类/ }));
   expectSelectedOption("修改分类标签", "偏大 · FIT_TOO_LARGE");
+  await userEvent.type(screen.getByRole("textbox", { name: "搜索分类标签" }), "偏");
+  await userEvent.click(
+    screen.getByRole("button", { name: "确认原结果", exact: true }),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "修改分类", exact: true }));
+  expect(screen.getByRole("textbox", { name: "搜索分类标签" })).toHaveValue("偏");
 });
 
 test("待处理记录回填已存在的复核质量判断", async () => {
