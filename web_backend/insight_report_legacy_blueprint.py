@@ -17,19 +17,13 @@ from web_backend.insight_reports.legacy_findings import (
 from web_backend.insight_reports.legacy_structure import (
     _build_caveats,
     _build_structure_section,
+    _StructureSection,
 )
 
 
-def _build_blueprint(evidence: dict[str, Any]) -> dict[str, Any]:
-    source = evidence["source"]
-    analysis = evidence["analysis"]
-    profile = get_insight_report_profile(source.get("report_profile", {}).get("key"))
-    reasons = list(analysis.get("reasons", []))
-    diagnostics = {
-        str(item.get("reason_code")): item
-        for item in analysis.get("diagnostics", [])
-        if item.get("reason_code")
-    }
+def _scope_summary(
+    source: dict[str, Any], analysis: dict[str, Any]
+) -> tuple[str, bool, str, str]:
     listings = list(source.get("listings", []))
     scope_name = (
         str(listings[0])
@@ -51,6 +45,86 @@ def _build_blueprint(evidence: dict[str, Any]) -> dict[str, Any]:
         f"另有 {pending} 条待审核记录未进入本次统计。{bias_note}"
         if pending
         else f"报告纳入 {included} 条记录，当前范围内无待审核记录。"
+    )
+    return scope_name, provisional, scope_statement, problem_label
+
+
+def _validation_summary(
+    structure: _StructureSection,
+    findings: list[dict[str, Any]],
+    actions: list[dict[str, Any]],
+    hotspot_targets: list[str],
+) -> str:
+    diagnostic_summary = (
+        findings[1]["conclusion"]
+        if len(findings) > 1
+        else structure.structure_statement
+    )
+    diagnostic_action = next(
+        (action for action in actions if action.get("id") == "action.diagnostic"),
+        None,
+    )
+    validation_target = (
+        str(diagnostic_action.get("target") or "")
+        if diagnostic_action
+        else "、".join(hotspot_targets[:2])
+    )
+    validation_statement = (
+        f"优先验证{validation_target}：{diagnostic_action.get('fallback_action')}"
+        if validation_target and diagnostic_action
+        else diagnostic_summary
+    )
+    return validation_statement
+
+
+def _executive_summaries(
+    structure: _StructureSection,
+    findings: list[dict[str, Any]],
+    validation_statement: str,
+    scope_statement: str,
+    provisional: bool,
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "summary.1",
+            "title": "最明确的问题分化",
+            "statement": structure.business_statement,
+            "tone": "primary",
+            "evidence_ids": [
+                *structure.business_evidence_ids,
+                structure.group_evidence_id,
+                *structure.reason_evidence_ids,
+            ],
+        },
+        {
+            "id": "summary.2",
+            "title": "优先验证对象",
+            "statement": validation_statement,
+            "tone": "neutral",
+            "evidence_ids": findings[1]["evidence_ids"],
+        },
+        {
+            "id": "summary.3",
+            "title": "结论可信边界",
+            "statement": scope_statement,
+            "tone": "warning" if provisional else "neutral",
+            "evidence_ids": ["scope", "review_bias"],
+        },
+    ]
+
+
+def _build_blueprint(evidence: dict[str, Any]) -> dict[str, Any]:
+    source = evidence["source"]
+    analysis = evidence["analysis"]
+    profile = get_insight_report_profile(source.get("report_profile", {}).get("key"))
+    reasons = list(analysis.get("reasons", []))
+    diagnostics = {
+        str(item.get("reason_code")): item
+        for item in analysis.get("diagnostics", [])
+        if item.get("reason_code")
+    }
+    scope_name, provisional, scope_statement, problem_label = _scope_summary(
+        source, analysis
     )
     actionable_reasons, broad_reason = _select_reasons(reasons, profile)
     structure = _build_structure_section(source, analysis, profile, actionable_reasons)
@@ -88,54 +162,14 @@ def _build_blueprint(evidence: dict[str, Any]) -> dict[str, Any]:
     )
     caveats = _build_caveats(evidence)
 
-    diagnostic_summary = (
-        findings[1]["conclusion"]
-        if len(findings) > 1
-        else structure.structure_statement
-    )
-    diagnostic_action = next(
-        (action for action in actions if action.get("id") == "action.diagnostic"),
-        None,
-    )
-    validation_target = (
-        str(diagnostic_action.get("target") or "")
-        if diagnostic_action
-        else "、".join(hotspot_targets[:2])
-    )
-    validation_statement = (
-        f"优先验证{validation_target}：{diagnostic_action.get('fallback_action')}"
-        if validation_target and diagnostic_action
-        else diagnostic_summary
+    validation_statement = _validation_summary(
+        structure, findings, actions, hotspot_targets
     )
     return {
         "title": f"{scope_name} {problem_label}{'临时' if provisional else ''}诊断报告",
-        "executive_summary": [
-            {
-                "id": "summary.1",
-                "title": "最明确的问题分化",
-                "statement": structure.business_statement,
-                "tone": "primary",
-                "evidence_ids": [
-                    *structure.business_evidence_ids,
-                    structure.group_evidence_id,
-                    *structure.reason_evidence_ids,
-                ],
-            },
-            {
-                "id": "summary.2",
-                "title": "优先验证对象",
-                "statement": validation_statement,
-                "tone": "neutral",
-                "evidence_ids": findings[1]["evidence_ids"],
-            },
-            {
-                "id": "summary.3",
-                "title": "结论可信边界",
-                "statement": scope_statement,
-                "tone": "warning" if provisional else "neutral",
-                "evidence_ids": ["scope", "review_bias"],
-            },
-        ],
+        "executive_summary": _executive_summaries(
+            structure, findings, validation_statement, scope_statement, provisional
+        ),
         "findings": findings,
         "actions": actions,
         "further_questions": list(profile.further_questions),
