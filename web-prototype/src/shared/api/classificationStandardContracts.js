@@ -140,7 +140,7 @@
  * @property {string | null} [listing]
  * @property {string} [filename]
  * @property {string} [analysis_context]
- * @property {"standard_version" | "keyword_ab" | "semantic_ab"} [comparison_type]
+ * @property {ValidationComparisonType} [comparison_type]
  * @property {{baseline: {profile: ReadableRecognitionProfile}, candidate: {profile: ReadableRecognitionProfile}}} [recognition_contract]
  * @property {number} [skipped_category_count]
  */

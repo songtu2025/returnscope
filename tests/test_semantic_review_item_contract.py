@@ -231,6 +231,7 @@ def test_fact_fallback_and_handled_items_keep_existing_precedence(
         ],
     }
 
+    result["extracted_facts"][0]["sentiment"] = "NEGATIVE"
     view = build_semantic_review_view(result, "未使用的原文")
 
     assert len(view["semantic_items"]) == 1
@@ -238,6 +239,7 @@ def test_fact_fallback_and_handled_items_keep_existing_precedence(
     assert item["evidence_text"] == expected_text
     assert item["evidence_source"] == expected_source
     assert item["opinion"] == "事实观点"
+    assert item["sentiment"] == "NEGATIVE"
     assert item["label_code"] == "FIT_TOO_SMALL"
     assert item["reason"] == "映射原因"
     assert view["coverage_summary"]["complete"] is True

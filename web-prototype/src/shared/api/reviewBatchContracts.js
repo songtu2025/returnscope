@@ -1,3 +1,4 @@
+/** @typedef {{label_correctness?: string, evidence_completeness?: string, review_routing?: string}} HumanReviewAssessment */
 /** @typedef {"draft" | "in_review" | "conflict" | "published"} ReviewBatchStatus */
 /** @typedef {"pending" | "resolved" | "excluded"} ReviewWorkflowStatus */
 /** @typedef {"confirm" | "modify" | "exclude"} ReviewAction */
@@ -36,7 +37,7 @@
  * @property {string} [taxonomy_version]
  * @property {string} [model_name]
  * @property {Array<{evidence?: string}>} [semantic_units]
- * @property {{label_correctness?: string, evidence_completeness?: string, review_routing?: string}} [human_review_assessment]
+ * @property {HumanReviewAssessment} [human_review_assessment]
  * @property {SemanticReviewData} [semantic_review]
  * @property {SemanticReviewItem[]} [semantic_review_items]
  * @property {PersistedSemanticItemReview[]} [human_semantic_reviews]
@@ -196,7 +197,7 @@
  * @property {string[]} [source_skus]
  * @property {string[]} [matched_mskus]
  * @property {string[]} [product_skus]
- * @property {{label_correctness?: string, evidence_completeness?: string, review_routing?: string}} [human_review_assessment]
+ * @property {HumanReviewAssessment} [human_review_assessment]
  *
  * @typedef {ReviewRecordFields & Record<string, unknown>} ReviewRecord
  * @typedef {import("./generated/classification-results/types.gen").ClassificationResultTaxonomyLabelResponse} ReviewLabel
@@ -226,13 +227,7 @@
  * @property {string} segmentId
  * @property {string} returnTo
  *
- * @typedef {Object} ReviewRecordFilters
- * @property {string} q
- * @property {string} status
- * @property {string} listing
- * @property {string} productName
- * @property {string} productSku
- * @property {string} orderId
+ * @typedef {Pick<ReviewBatchRoute, "q" | "status" | "listing" | "productName" | "productSku" | "orderId">} ReviewRecordFilters
  */
 
 export {};
