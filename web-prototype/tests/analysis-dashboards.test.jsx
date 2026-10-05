@@ -3,6 +3,7 @@ import {
   act,
   cleanup,
   fireEvent,
+  renderHook,
   screen,
   waitFor,
   within,
@@ -54,6 +55,8 @@ import {
   readDashboardSelection,
 } from "../src/features/analysis-dashboards/dashboardSelectionStorage";
 import { ClassificationResultsPage } from "../src/pages/ClassificationResultsPage";
+import { useDashboardReports } from "../src/features/analysis-dashboards/useDashboardReports";
+import { useDashboardReportActions } from "../src/features/analysis-dashboards/useDashboardReportActions";
 
 const readyResult = {
   version_id: "result-v1",
@@ -730,6 +733,216 @@ beforeEach(() => {
 });
 
 afterEach(() => cleanup());
+
+test("报告版本切换取消旧请求，过期响应不能覆盖新报告", async () => {
+  let resolveOld;
+  dashboardApiMock.analysisDashboardInsightReports
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveOld = resolve;
+        }),
+    )
+    .mockResolvedValueOnce([{ id: "new-report", status: "completed", version_no: 2 }]);
+  const props = {
+    route: { dashboardId: "dashboard-1", versionId: "old-version", tab: "report" },
+    updateRoute: vi.fn(),
+    notify: vi.fn(),
+  };
+  const view = renderHook((value) => useDashboardReports(value), {
+    initialProps: props,
+  });
+  const oldSignal =
+    dashboardApiMock.analysisDashboardInsightReports.mock.calls[0][2].signal;
+  view.rerender({ ...props, route: { ...props.route, versionId: "new-version" } });
+  expect(oldSignal.aborted).toBe(true);
+  await waitFor(() =>
+    expect(view.result.current.selectedReport?.id).toBe("new-report"),
+  );
+  await act(async () =>
+    resolveOld([{ id: "old-report", status: "completed", version_no: 1 }]),
+  );
+  expect(view.result.current.reports.items.map((item) => item.id)).toEqual([
+    "new-report",
+  ]);
+  expect(dashboardApiMock.analysisDashboardInsightReports).toHaveBeenCalledTimes(2);
+  expect(props.updateRoute).toHaveBeenCalledWith(
+    { reportId: "new-report", issueId: "" },
+    { replace: true },
+  );
+});
+
+test.each([
+  ["completed", "AI 洞察报告已生成"],
+  ["failed", "AI 洞察报告生成未完成，可在报告页重试"],
+])("报告轮询在隐藏页面暂停并通知%s状态", async (status, message) => {
+  let poll;
+  const realInterval = window.setInterval.bind(window);
+  const interval = vi
+    .spyOn(window, "setInterval")
+    .mockImplementation((callback, delay) => {
+      if (delay !== 2000) return realInterval(callback, delay);
+      poll = callback;
+      return 101;
+    });
+  const clear = vi.spyOn(window, "clearInterval");
+  const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(false);
+  const notify = vi.fn();
+  const original = { id: "report-job", status: "queued", kind: "generation_job" };
+  dashboardApiMock.analysisDashboardInsightReports.mockResolvedValue([original]);
+  const updated = { ...original, status };
+  dashboardApiMock.insightReport
+    .mockResolvedValueOnce({ ...original, status: "running" })
+    .mockResolvedValue(updated);
+  const view = renderHook(() =>
+    useDashboardReports({
+      route: { dashboardId: "dashboard-1", versionId: "version-1", tab: "report" },
+      updateRoute: vi.fn(),
+      notify,
+    }),
+  );
+  try {
+    await waitFor(() =>
+      expect(interval).toHaveBeenCalledWith(expect.any(Function), 2000),
+    );
+    hidden.mockReturnValue(true);
+    await act(async () => poll());
+    expect(dashboardApiMock.insightReport).not.toHaveBeenCalled();
+    hidden.mockReturnValue(false);
+    await act(async () => poll());
+    expect(view.result.current.reports.items[0].status).toBe("running");
+    expect(notify).not.toHaveBeenCalled();
+    await act(async () => poll());
+    expect(dashboardApiMock.insightReport).toHaveBeenCalledTimes(2);
+    expect(dashboardApiMock.insightReport).toHaveBeenNthCalledWith(1, "report-job");
+    expect(dashboardApiMock.insightReport).toHaveBeenNthCalledWith(2, "report-job");
+    expect(interval.mock.calls.filter(([, delay]) => delay === 2000)).toHaveLength(1);
+    expect(view.result.current.reports.items).toEqual([updated]);
+    expect(notify).toHaveBeenCalledExactlyOnceWith(message);
+    expect(clear).toHaveBeenCalledWith(101);
+  } finally {
+    view.unmount();
+    hidden.mockRestore();
+    interval.mockRestore();
+    clear.mockRestore();
+  }
+});
+
+test("报告轮询请求失败时清理定时器并保留原状态", async () => {
+  let poll;
+  const realInterval = window.setInterval.bind(window);
+  const interval = vi
+    .spyOn(window, "setInterval")
+    .mockImplementation((callback, delay) => {
+      if (delay !== 2000) return realInterval(callback, delay);
+      poll = callback;
+      return 102;
+    });
+  const clear = vi.spyOn(window, "clearInterval");
+  const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(false);
+  const notify = vi.fn();
+  const original = { id: "report-job", status: "running", kind: "generation_job" };
+  dashboardApiMock.analysisDashboardInsightReports.mockResolvedValue([original]);
+  dashboardApiMock.insightReport.mockRejectedValue(new Error("合成网络错误"));
+  const view = renderHook(() =>
+    useDashboardReports({
+      route: { dashboardId: "dashboard-1", versionId: "version-1", tab: "report" },
+      updateRoute: vi.fn(),
+      notify,
+    }),
+  );
+  try {
+    await waitFor(() =>
+      expect(interval).toHaveBeenCalledWith(expect.any(Function), 2000),
+    );
+    await act(async () => poll());
+    expect(clear).toHaveBeenCalledWith(102);
+    expect(view.result.current.reports.items).toEqual([original]);
+    expect(notify).not.toHaveBeenCalled();
+  } finally {
+    view.unmount();
+    hidden.mockRestore();
+    interval.mockRestore();
+    clear.mockRestore();
+  }
+});
+
+test("模型偏好失败仍可打开生成表单，提交失败保留输入", async () => {
+  resultApiMock.modelPreference.mockRejectedValue(new Error("合成偏好错误"));
+  dashboardApiMock.createAnalysisDashboardInsightReport.mockRejectedValue(
+    new Error("合成提交错误"),
+  );
+  const props = {
+    route: { dashboardId: "dashboard-1", versionId: "version-1" },
+    updateRoute: vi.fn(),
+    notify: vi.fn(),
+    setReports: vi.fn(),
+    selectedReport: null,
+  };
+  const view = renderHook(() => useDashboardReportActions(props));
+  await act(async () => view.result.current.openReportGeneration());
+  expect(view.result.current.generationForm).toEqual({
+    modelId: "model-1",
+    effort: "high",
+  });
+  expect(view.result.current.generationState.error).toBe("");
+  act(() =>
+    view.result.current.setGenerationForm({ modelId: "model-1", effort: "medium" }),
+  );
+  const preventDefault = vi.fn();
+  await act(async () => view.result.current.submitReportGeneration({ preventDefault }));
+  expect(preventDefault).toHaveBeenCalledOnce();
+  expect(
+    dashboardApiMock.createAnalysisDashboardInsightReport,
+  ).toHaveBeenCalledExactlyOnceWith("dashboard-1", "version-1", {
+    model_id: "model-1",
+    reasoning_effort: "medium",
+  });
+  expect(view.result.current.generationOpen).toBe(true);
+  expect(view.result.current.generationForm).toEqual({
+    modelId: "model-1",
+    effort: "medium",
+  });
+  expect(view.result.current.generationState).toMatchObject({
+    submitting: false,
+    error: "合成提交错误",
+  });
+  expect(props.setReports).not.toHaveBeenCalled();
+  expect(props.updateRoute).not.toHaveBeenCalled();
+  expect(props.notify).not.toHaveBeenCalled();
+});
+
+test("报告重试保留失败记录，新增尝试并更新路由", async () => {
+  const failed = { id: "failed-report", status: "failed", kind: "generation_job" };
+  const queued = { id: "new-job", status: "queued", kind: "generation_job" };
+  dashboardApiMock.retryInsightReport.mockResolvedValue(queued);
+  const props = {
+    route: { dashboardId: "dashboard-1", versionId: "version-1" },
+    updateRoute: vi.fn(),
+    notify: vi.fn(),
+    setReports: vi.fn(),
+    selectedReport: failed,
+  };
+  const view = renderHook(() => useDashboardReportActions(props));
+  await act(async () => view.result.current.retryReport());
+  expect(dashboardApiMock.retryInsightReport).toHaveBeenCalledExactlyOnceWith(
+    "failed-report",
+  );
+  const next = props.setReports.mock.calls[0][0]({
+    loading: false,
+    error: "",
+    items: [failed],
+  });
+  expect(next.items).toEqual([queued, failed]);
+  expect(next.items[1]).toBe(failed);
+  expect(props.updateRoute).toHaveBeenCalledExactlyOnceWith(
+    { reportId: "new-job", issueId: "" },
+    { replace: true },
+  );
+  expect(props.notify).toHaveBeenCalledExactlyOnceWith(
+    "新的生成尝试已加入队列，原失败记录已保留",
+  );
+});
 
 test("切换问题对象清除原类别和原因，只用新范围选择诊断", async () => {
   const user = userEvent.setup();

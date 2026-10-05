@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { dashboardApi } from "../../shared/api/dashboardApi";
-import { asItems, isPublishedReport } from "./DashboardDetailHelpers";
+import { asItems } from "./DashboardDetailHelpers";
 import { errorName, errorMessage } from "./dashboardRequestErrors";
-import { selectedDashboardIssue } from "./dashboardReportPolicy";
+import {
+  useDashboardReportSelection,
+  useDashboardReportPolling,
+} from "./dashboardReportLifecycle";
 
 /** @typedef {import("./dashboardDetailContracts").InsightReport} InsightReport */
 /** @typedef {import("./dashboardDetailContracts").DashboardDetailProps} DashboardDetailProps */
 
-/** @param {DashboardDetailProps} props */
-export function useDashboardReports({ route, updateRoute, notify }) {
+/** @param {Pick<DashboardDetailProps, "route">} props */
+function useReportList({ route }) {
   const [reports, setReports] = useState(
-    /** @returns {{loading: boolean, error: string, items: InsightReport[]}} */ () => ({
+    /** @returns {import("./dashboardReportLifecycle").DashboardReportState} */ () => ({
       loading: false,
       error: "",
       items: [],
@@ -63,59 +66,19 @@ export function useDashboardReports({ route, updateRoute, notify }) {
     };
   }, [loadReports]);
 
-  const publishedReports = reports.items.filter(isPublishedReport);
-  const generationAttempts = reports.items.filter(
-    (report) => !isPublishedReport(report),
-  );
-  const latestPublishedReport = publishedReports[0] || null;
-  const selectedReport =
-    reports.items.find((report) => report.id === route.reportId) ||
-    latestPublishedReport ||
-    generationAttempts[0] ||
-    null;
+  return { reports, setReports, loadReports };
+}
 
-  useEffect(() => {
-    if (route.tab !== "report" || reports.loading || reports.error || !selectedReport) {
-      return;
-    }
-    const issueId = selectedDashboardIssue(selectedReport, route.issueId);
-    if (selectedReport.id === route.reportId && issueId === route.issueId) return;
-    // 一次补全报告与问题，避免两个更新互相覆盖并反复加载正文。
-    updateRoute({ reportId: selectedReport.id, issueId }, { replace: true });
-  }, [
-    reports.error,
-    reports.loading,
-    route.issueId,
-    route.reportId,
-    route.tab,
+/** @param {DashboardDetailProps} props */
+export function useDashboardReports({ route, updateRoute, notify }) {
+  const { reports, setReports, loadReports } = useReportList({ route });
+  const {
+    publishedReports,
+    generationAttempts,
+    latestPublishedReport,
     selectedReport,
-    updateRoute,
-  ]);
-  const activeReportId = generationAttempts.find((report) =>
-    ["queued", "running"].includes(report.status),
-  )?.id;
-
-  useEffect(() => {
-    if (!activeReportId) return undefined;
-    const timer = window.setInterval(async () => {
-      if (document.hidden) return;
-      try {
-        const updated = await dashboardApi.insightReport(activeReportId);
-        setReports((current) => ({
-          ...current,
-          items: current.items.map((item) => (item.id === updated.id ? updated : item)),
-        }));
-        if (updated.status === "completed") {
-          notify?.("AI 洞察报告已生成");
-        } else if (updated.status === "failed") {
-          notify?.("AI 洞察报告生成未完成，可在报告页重试");
-        }
-      } catch {
-        window.clearInterval(timer);
-      }
-    }, 2000);
-    return () => window.clearInterval(timer);
-  }, [activeReportId, notify]);
+  } = useDashboardReportSelection({ route, updateRoute, reports });
+  useDashboardReportPolling({ generationAttempts, setReports, notify });
   return {
     reports,
     setReports,
