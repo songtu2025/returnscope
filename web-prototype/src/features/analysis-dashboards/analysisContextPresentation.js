@@ -1,38 +1,58 @@
 const DEFAULT_ANALYSIS_CONTEXT = "user_feedback";
 
-/** @param {unknown} value */
-function isReturnsContext(value) {
-  return value === "returns";
-}
+const ANALYSIS_CONTEXT_TERMS = {
+  user_feedback: {
+    pageTitle: "用户反馈语义洞察",
+    reportTitle: "AI 用户反馈语义洞察报告",
+    filterAria: "用户反馈语义洞察筛选",
+    reasonChooserAria: "选择主题与反馈原因",
+    reasonCategoryAria: "反馈原因类别",
+    reasonHeading: "具体反馈原因",
+    includedLabel: "有效反馈",
+    recordUnit: "反馈",
+    includedRecordLabel: "可用反馈记录",
+    shareLabel: "占有效反馈",
+    weeklyVolumeLabel: "周反馈量",
+    sourceSkuLabel: "来源 SKU（MSKU）",
+    originalTextLabel: "反馈原文",
+    sourceReasonLabel: "来源原因",
+    missingText: "未提供反馈原文",
+    sampleShareLabel: "反馈样本内占比",
+    rateBoundary: "不等于总体发生率",
+    sampleStructure: "反馈样本结构",
+    problemStructure: "用户反馈问题结构",
+    selectReasonPrompt: "请选择一个反馈原因开始诊断",
+    originalFeedback: "原始用户反馈",
+  },
+  returns: {
+    pageTitle: "退货原因洞察",
+    reportTitle: "AI 退货洞察报告",
+    filterAria: "退货原因洞察筛选",
+    reasonChooserAria: "选择主题与退货原因",
+    reasonCategoryAria: "退货原因类别",
+    reasonHeading: "具体退货原因",
+    includedLabel: "有效退货",
+    recordUnit: "退货记录",
+    includedRecordLabel: "可用退货记录",
+    shareLabel: "占有效退货",
+    weeklyVolumeLabel: "周退货量",
+    sourceSkuLabel: "退货 SKU（MSKU）",
+    originalTextLabel: "退货原文",
+    sourceReasonLabel: "Amazon 原因",
+    missingText: "未提供退货评论",
+    sampleShareLabel: "退货样本内占比",
+    rateBoundary: "不等于退货率",
+    sampleStructure: "退货样本结构",
+    problemStructure: "退货问题结构",
+    selectReasonPrompt: "请选择一个退货原因开始诊断",
+    originalFeedback: "原始退货评论",
+  },
+};
 
 /** @param {unknown} value */
 export function analysisContextTerms(value) {
-  const returns = isReturnsContext(value);
-  return {
-    pageTitle: returns ? "退货原因洞察" : "用户反馈语义洞察",
-    reportTitle: returns ? "AI 退货洞察报告" : "AI 用户反馈语义洞察报告",
-    filterAria: returns ? "退货原因洞察筛选" : "用户反馈语义洞察筛选",
-    reasonChooserAria: returns ? "选择主题与退货原因" : "选择主题与反馈原因",
-    reasonCategoryAria: returns ? "退货原因类别" : "反馈原因类别",
-    reasonHeading: returns ? "具体退货原因" : "具体反馈原因",
-    includedLabel: returns ? "有效退货" : "有效反馈",
-    recordUnit: returns ? "退货记录" : "反馈",
-    includedRecordLabel: returns ? "可用退货记录" : "可用反馈记录",
-    shareLabel: returns ? "占有效退货" : "占有效反馈",
-    weeklyVolumeLabel: returns ? "周退货量" : "周反馈量",
-    sourceSkuLabel: returns ? "退货 SKU（MSKU）" : "来源 SKU（MSKU）",
-    originalTextLabel: returns ? "退货原文" : "反馈原文",
-    sourceReasonLabel: returns ? "Amazon 原因" : "来源原因",
-    missingText: returns ? "未提供退货评论" : "未提供反馈原文",
-    sampleShareLabel: returns ? "退货样本内占比" : "反馈样本内占比",
-    rateBoundary: returns ? "不等于退货率" : "不等于总体发生率",
-    sampleStructure: returns ? "退货样本结构" : "反馈样本结构",
-    problemStructure: returns ? "退货问题结构" : "用户反馈问题结构",
-    selectReasonPrompt: returns
-      ? "请选择一个退货原因开始诊断"
-      : "请选择一个反馈原因开始诊断",
-    originalFeedback: returns ? "原始退货评论" : "原始用户反馈",
-  };
+  const context = value === "returns" ? "returns" : DEFAULT_ANALYSIS_CONTEXT;
+  return { ...ANALYSIS_CONTEXT_TERMS[context] };
 }
 
 /**

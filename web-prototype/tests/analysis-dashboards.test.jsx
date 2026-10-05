@@ -370,6 +370,18 @@ test("分析场景决定看板与报告用语", () => {
   });
 });
 
+test("场景文案返回独立对象，未知场景保持用户反馈文案", () => {
+  const first = analysisContextTerms("returns");
+  const second = analysisContextTerms("returns");
+  expect(first).not.toBe(second);
+  first.pageTitle = "临时修改";
+  expect(second.pageTitle).toBe("退货原因洞察");
+  expect(analysisContextTerms("returns").pageTitle).toBe("退货原因洞察");
+  expect(analysisContextTerms("unknown")).toEqual(
+    analysisContextTerms("user_feedback"),
+  );
+});
+
 test("筛选更新时明确标记旧结果并在失败后保留结果", async () => {
   const user = userEvent.setup();
   const onRetry = vi.fn();
