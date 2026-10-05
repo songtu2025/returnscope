@@ -83,11 +83,7 @@ class _InsightReportRecords:
         )
 
     def set_issue_decision(
-        self,
-        report_id: str,
-        issue_id: str,
-        status: str,
-        actor_id: str,
+        self, report_id: str, issue_id: str, status: str, actor_id: str
     ) -> dict[str, Any]:
         if status not in {"pending", "ignored", "watching", "verify"}:
             raise ValueError("问题决策状态不合法")
@@ -95,28 +91,7 @@ class _InsightReportRecords:
         if not clean_issue_id:
             raise InsightReportNotFound("报告问题不存在")
         with self.database.transaction(immediate=True) as connection:
-            report = connection.execute(
-                """
-                SELECT prompt_version, status, content_json
-                FROM ai_insight_reports WHERE id = ?
-                """,
-                (report_id,),
-            ).fetchone()
-            if report is None:
-                raise InsightReportNotFound("AI 洞察报告不存在")
-            if (
-                report["status"] != "completed"
-                or report["prompt_version"] != PROMPT_VERSION
-            ):
-                raise InsightReportConflict("只有已完成的 V6 报告支持问题决策")
-            content = json_value(report["content_json"], {})
-            issue_ids = {
-                str(issue.get("id") or "")
-                for issue in content.get("issues", [])
-                if isinstance(issue, dict)
-            }
-            if clean_issue_id not in issue_ids:
-                raise InsightReportNotFound("报告问题不存在")
+            self._validate_decision_report(connection, report_id, clean_issue_id)
             existing = connection.execute(
                 """
                 SELECT report_id, issue_id, status, updated_by, updated_at
@@ -148,23 +123,7 @@ class _InsightReportRecords:
                 "updated_by": actor_id,
                 "updated_at": now,
             }
-            connection.execute(
-                """
-                INSERT INTO audit_logs(
-                    id, entity_type, entity_id, action,
-                    before_json, after_json, actor_id, created_at
-                ) VALUES (?, 'ai_insight_issue_decision', ?,
-                          'set_decision', ?, ?, ?, ?)
-                """,
-                (
-                    new_id("audit"),
-                    f"{report_id}:{clean_issue_id}",
-                    json_text(before) if before else None,
-                    json_text(decision),
-                    actor_id,
-                    now,
-                ),
-            )
+            self._audit_issue_decision(connection, decision, before)
         return decision
 
     @staticmethod
@@ -210,3 +169,52 @@ class _InsightReportRecords:
             value = dict(row)
             decisions.setdefault(str(value["report_id"]), []).append(value)
         return decisions
+
+    @staticmethod
+    def _validate_decision_report(
+        connection: Any, report_id: str, issue_id: str
+    ) -> None:
+        report = connection.execute(
+            """
+                SELECT prompt_version, status, content_json
+                FROM ai_insight_reports WHERE id = ?
+                """,
+            (report_id,),
+        ).fetchone()
+        if report is None:
+            raise InsightReportNotFound("AI 洞察报告不存在")
+        if (
+            report["status"] != "completed"
+            or report["prompt_version"] != PROMPT_VERSION
+        ):
+            raise InsightReportConflict("只有已完成的 V6 报告支持问题决策")
+        content = json_value(report["content_json"], {})
+        issue_ids = {
+            str(issue.get("id") or "")
+            for issue in content.get("issues", [])
+            if isinstance(issue, dict)
+        }
+        if issue_id not in issue_ids:
+            raise InsightReportNotFound("报告问题不存在")
+
+    @staticmethod
+    def _audit_issue_decision(
+        connection: Any, decision: dict[str, Any], before: dict[str, Any] | None
+    ) -> None:
+        connection.execute(
+            """
+                INSERT INTO audit_logs(
+                    id, entity_type, entity_id, action,
+                    before_json, after_json, actor_id, created_at
+                ) VALUES (?, 'ai_insight_issue_decision', ?,
+                          'set_decision', ?, ?, ?, ?)
+                """,
+            (
+                new_id("audit"),
+                f"{decision['report_id']}:{decision['issue_id']}",
+                json_text(before) if before else None,
+                json_text(decision),
+                decision["updated_by"],
+                decision["updated_at"],
+            ),
+        )
