@@ -129,32 +129,10 @@ def _analysis_target(
     entity_id: str,
     source: dict[str, Any],
 ) -> dict[str, Any] | None:
-    if entity_type == "task":
-        return {"route": "tasks", "task_id": entity_id}
-    if entity_type == "task_segment":
-        return {
-            "route": "tasks",
-            "task_id": source["task_id"],
-            "segment_id": entity_id,
-        }
-    if entity_type == "classification_result_version":
-        return {
-            "route": "classification-results",
-            "result_version_id": entity_id,
-        }
-    if entity_type == "classification_result":
-        return {
-            "route": "classification-results",
-            "result_version_id": source["result_version_id"],
-        }
-    if entity_type == "review":
-        return {
-            "route": "review",
-            "review_id": entity_id,
-            "workflow_status": source["workflow_status"],
-        }
-    if entity_type == "review_batch":
-        return {"route": "review-center", "batch_id": entity_id}
+    for resolver in (_task_target, _result_target, _review_target):
+        target = resolver(entity_type, entity_id, source)
+        if target is not None:
+            return target
     if entity_type == "dataset":
         return {
             "route": "data",
@@ -169,6 +147,50 @@ def _analysis_target(
         if source["current_version_id"]:
             target["version_id"] = source["current_version_id"]
         return target
+    return None
+
+
+def _task_target(
+    entity_type: str, entity_id: str, source: dict[str, Any]
+) -> dict[str, Any] | None:
+    if entity_type == "task":
+        return {"route": "tasks", "task_id": entity_id}
+    if entity_type == "task_segment":
+        return {
+            "route": "tasks",
+            "task_id": source["task_id"],
+            "segment_id": entity_id,
+        }
+    return None
+
+
+def _result_target(
+    entity_type: str, entity_id: str, source: dict[str, Any]
+) -> dict[str, Any] | None:
+    if entity_type == "classification_result_version":
+        return {
+            "route": "classification-results",
+            "result_version_id": entity_id,
+        }
+    if entity_type == "classification_result":
+        return {
+            "route": "classification-results",
+            "result_version_id": source["result_version_id"],
+        }
+    return None
+
+
+def _review_target(
+    entity_type: str, entity_id: str, source: dict[str, Any]
+) -> dict[str, Any] | None:
+    if entity_type == "review":
+        return {
+            "route": "review",
+            "review_id": entity_id,
+            "workflow_status": source["workflow_status"],
+        }
+    if entity_type == "review_batch":
+        return {"route": "review-center", "batch_id": entity_id}
     return None
 
 
