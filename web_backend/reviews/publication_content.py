@@ -52,6 +52,19 @@ class ReviewPublicationContentMixin:
             """,
             (batch["base_result_version_id"],),
         ).fetchall()
+        base_labels = ReviewPublicationContentMixin._load_base_labels(connection, batch)
+        units, labels, unit_quality = ReviewPublicationContentMixin._derive_units(
+            base_units, base_labels, changes, label_map
+        )
+        records = ReviewPublicationContentMixin._derive_records(
+            connection, batch, unit_quality
+        )
+        return _DerivedResultContent(units=units, labels=labels, records=records)
+
+    @staticmethod
+    def _load_base_labels(
+        connection: Any, batch: Any
+    ) -> dict[str, list[dict[str, Any]]]:
         base_labels: dict[str, list[dict[str, Any]]] = {}
         for label_row in connection.execute(
             """
@@ -67,66 +80,99 @@ class ReviewPublicationContentMixin:
                 str(label_row["classification_key"]),
                 [],
             ).append(dict(label_row))
+        return base_labels
+
+    @staticmethod
+    def _derive_units(
+        base_units: list[Any],
+        base_labels: dict[str, list[dict[str, Any]]],
+        changes: _CompletedReviewChanges,
+        label_map: dict[str, Any],
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, str]]:
         units: list[dict[str, Any]] = []
         labels: list[dict[str, Any]] = []
         unit_quality: dict[str, str] = {}
         for row in base_units:
             key = str(row["classification_key"])
-            classification = changes.revisions.get(
-                key,
-                json_value(row["classification_json"], {}),
+            unit, validated = ReviewPublicationContentMixin._derive_unit(
+                row, key, changes
             )
-            validated, human_fields = (
-                ReviewPublicationContentMixin._validate_reviewed_classification(
-                    classification
-                )
-            )
-            serialized = validated.model_dump(mode="json")
-            serialized.update(human_fields)
-            quality_status = (
-                "excluded"
-                if key in changes.excluded_keys
-                else "ready"
-                if key in changes.revisions
-                else str(row["quality_status"])
-            )
-            unit_quality[key] = quality_status
-            units.append(
-                {
-                    "classification_key": key,
-                    "reason": row["reason"],
-                    "comment": row["comment"],
-                    "classification": serialized,
-                    "problem_labels": list(validated.problem_label_codes),
-                    "processing_status": validated.status.value,
-                    "quality_status": quality_status,
-                    "record_count": int(row["record_count"]),
-                    "model_name": validated.model_name,
-                    "prompt_version": validated.prompt_version,
-                    "taxonomy_version": validated.taxonomy_version,
-                }
-            )
+            unit_quality[key] = unit["quality_status"]
+            units.append(unit)
             if key in changes.excluded_keys:
                 continue
             if key not in changes.revisions:
                 labels.extend(base_labels.get(key, []))
                 continue
-            for kind, codes in (
-                ("problem", validated.problem_label_codes),
-                ("positive", validated.positive_label_codes),
-                ("primary", validated.primary_label_codes),
-            ):
-                for code in sorted(set(codes)):
-                    label = label_map.get(code)
-                    labels.append(
-                        {
-                            "classification_key": key,
-                            "label_kind": kind,
-                            "label_code": code,
-                            "label_name": label.name if label else None,
-                            "label_group": label.group if label else None,
-                        }
-                    )
+            labels.extend(
+                ReviewPublicationContentMixin._derive_unit_labels(
+                    key, validated, label_map
+                )
+            )
+        return units, labels, unit_quality
+
+    @staticmethod
+    def _derive_unit(
+        row: Any, key: str, changes: _CompletedReviewChanges
+    ) -> tuple[dict[str, Any], ValidatedClassification]:
+        classification = changes.revisions.get(
+            key, json_value(row["classification_json"], {})
+        )
+        validated, human_fields = (
+            ReviewPublicationContentMixin._validate_reviewed_classification(
+                classification
+            )
+        )
+        serialized = validated.model_dump(mode="json")
+        serialized.update(human_fields)
+        quality_status = (
+            "excluded"
+            if key in changes.excluded_keys
+            else "ready"
+            if key in changes.revisions
+            else str(row["quality_status"])
+        )
+        return {
+            "classification_key": key,
+            "reason": row["reason"],
+            "comment": row["comment"],
+            "classification": serialized,
+            "problem_labels": list(validated.problem_label_codes),
+            "processing_status": validated.status.value,
+            "quality_status": quality_status,
+            "record_count": int(row["record_count"]),
+            "model_name": validated.model_name,
+            "prompt_version": validated.prompt_version,
+            "taxonomy_version": validated.taxonomy_version,
+        }, validated
+
+    @staticmethod
+    def _derive_unit_labels(
+        key: str, validated: ValidatedClassification, label_map: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        labels: list[dict[str, Any]] = []
+        for kind, codes in (
+            ("problem", validated.problem_label_codes),
+            ("positive", validated.positive_label_codes),
+            ("primary", validated.primary_label_codes),
+        ):
+            for code in sorted(set(codes)):
+                label = label_map.get(code)
+                labels.append(
+                    {
+                        "classification_key": key,
+                        "label_kind": kind,
+                        "label_code": code,
+                        "label_name": label.name if label else None,
+                        "label_group": label.group if label else None,
+                    }
+                )
+        return labels
+
+    @staticmethod
+    def _derive_records(
+        connection: Any, batch: Any, unit_quality: dict[str, str]
+    ) -> list[dict[str, Any]]:
         base_records = connection.execute(
             """
             SELECT * FROM classification_result_records
@@ -158,4 +204,4 @@ class ReviewPublicationContentMixin:
             }
             for row in base_records
         ]
-        return _DerivedResultContent(units=units, labels=labels, records=records)
+        return records

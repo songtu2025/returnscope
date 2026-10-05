@@ -11,6 +11,18 @@ from web_backend.security import utc_now
 
 
 class ReviewBatchEditingMixin(_ReviewBatchCreation, _ReviewRecordEditing):
+    @staticmethod
+    def _load_editable_batch(connection: Any, batch_id: str) -> Any:
+        batch = connection.execute(
+            "SELECT * FROM review_batches WHERE id = ?",
+            (batch_id,),
+        ).fetchone()
+        if batch is None:
+            raise ValueError("复核批次不存在")
+        if batch["status"] != "draft":
+            raise ReviewBatchConflict("已发布的复核批次不能修改")
+        return batch
+
     def update_batch_record(
         self,
         batch_id: str,
@@ -32,14 +44,7 @@ class ReviewBatchEditingMixin(_ReviewBatchCreation, _ReviewRecordEditing):
         now = utc_now()
         try:
             with self.database.transaction(immediate=True) as connection:
-                batch = connection.execute(
-                    "SELECT * FROM review_batches WHERE id = ?",
-                    (batch_id,),
-                ).fetchone()
-                if batch is None:
-                    raise ValueError("复核批次不存在")
-                if batch["status"] != "draft":
-                    raise ReviewBatchConflict("已发布的复核批次不能修改")
+                batch = self._load_editable_batch(connection, batch_id)
                 row = connection.execute(
                     """
                     SELECT * FROM review_records
@@ -128,14 +133,7 @@ class ReviewBatchEditingMixin(_ReviewBatchCreation, _ReviewRecordEditing):
         now = utc_now()
         try:
             with self.database.transaction(immediate=True) as connection:
-                batch = connection.execute(
-                    "SELECT * FROM review_batches WHERE id = ?",
-                    (batch_id,),
-                ).fetchone()
-                if batch is None:
-                    raise ValueError("复核批次不存在")
-                if batch["status"] != "draft":
-                    raise ReviewBatchConflict("已发布的复核批次不能修改")
+                batch = self._load_editable_batch(connection, batch_id)
                 placeholders = ",".join("?" for _ in review_ids)
                 rows = connection.execute(
                     f"""
