@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from web_backend.insight_report_profiles import get_insight_report_profile
+from web_backend.insight_report_profiles import (
+    InsightReportProfile,
+    get_insight_report_profile,
+)
 from web_backend.insight_reports.legacy_common import (
     _reason_evidence_ids,
     _report_language,
@@ -29,8 +32,43 @@ def _build_actions(
     mapping_trusted = product_mapping.get("status") != "needs_review"
     text_quality = source.get("text_quality", {})
     text_trusted = text_quality.get("status") != "needs_review"
-    record_label, feedback_label, rate_label, problem_label = _report_language(source)
+    language = _report_language(source)
     reason_evidence_ids = _reason_evidence_ids(actionable_reasons)
+    actions = _quality_actions(
+        product_mapping, text_trusted, mapping_trusted, language[1]
+    )
+    if actionable_reasons and mapping_trusted:
+        actions.append(
+            _diagnostic_action(
+                primary_issues,
+                hotspot_targets,
+                profile,
+                reason_evidence_ids,
+                diagnostic_ids,
+            )
+        )
+    actions.extend(
+        _followup_actions(
+            broad_reason, information_ids, language[3], language[0], language[2]
+        )
+    )
+    action_order = {
+        "action.mapping": 0,
+        "action.diagnostic": 1,
+        "action.text_quality": 2,
+        "action.information": 3,
+        "action.scope": 4,
+    }
+    actions.sort(key=lambda item: action_order.get(str(item.get("id")), 99))
+    return actions
+
+
+def _quality_actions(
+    product_mapping: dict[str, Any],
+    text_trusted: bool,
+    mapping_trusted: bool,
+    feedback_label: str,
+) -> list[dict[str, Any]]:
     actions = []
     if not text_trusted:
         actions.append(
@@ -58,75 +96,103 @@ def _build_actions(
                 "fallback_success_signal": "源 SKU、商品 SKU 与商品名称形成唯一且可追溯的映射。",
             }
         )
-    if actionable_reasons and mapping_trusted:
-        validation_issues = [issue for issue in primary_issues if issue.get("cases")][
-            :3
-        ]
-        validation_cases = [issue["cases"][0] for issue in validation_issues]
-        target = (
-            "、".join(
-                dict.fromkeys(
+    return actions
+
+
+def _diagnostic_action(
+    primary_issues: list[dict[str, Any]],
+    hotspot_targets: list[str],
+    profile: InsightReportProfile,
+    reason_evidence_ids: list[str],
+    diagnostic_ids: list[str],
+) -> dict[str, Any]:
+    validation_issues = [issue for issue in primary_issues if issue.get("cases")][:3]
+    validation_cases = [issue["cases"][0] for issue in validation_issues]
+    target = _validation_target(validation_cases, hotspot_targets, profile)
+    case_actions = [
+        str(issue.get("validation_focus") or "")
+        for issue in validation_issues
+        if issue.get("validation_focus")
+    ]
+    case_rationales = _validation_rationales(validation_cases)
+    action_evidence_ids = _validation_evidence(
+        validation_cases, reason_evidence_ids, diagnostic_ids
+    )
+    return {
+        "id": "action.diagnostic",
+        "priority": "P0",
+        "target": target,
+        "finding_id": "finding.diagnostic",
+        "evidence_ids": action_evidence_ids,
+        "fallback_action": "；".join(case_actions)
+        if case_actions
+        else profile.diagnostic_action,
+        "fallback_rationale": "；".join(case_rationales)
+        + "。这些集中信号值得优先验证，但不能单凭反馈结构推断原因。"
+        if case_rationales
+        else profile.diagnostic_rationale,
+        "fallback_success_signal": "每个目标 SKU 都形成可复核的原因结论；后续同口径反馈中，对应问题连续两个完整周期下降，且反向问题不升高。"
+        if validation_cases
+        else profile.diagnostic_success_signal,
+    }
+
+
+def _validation_target(
+    validation_cases: list[dict[str, Any]],
+    hotspot_targets: list[str],
+    profile: InsightReportProfile,
+) -> str:
+    return (
+        "、".join(
+            dict.fromkeys(
+                (
                     str(case.get("product_sku") or "")
                     for case in validation_cases
                     if case.get("product_sku")
                 )
             )
-            or "、".join(hotspot_targets[:2])
-            or f"高频{profile.variant_label}"
         )
-        case_actions = [
-            str(issue.get("validation_focus") or "")
-            for issue in validation_issues
-            if issue.get("validation_focus")
-        ]
-        case_rationales = [
-            (
-                f"{case.get('product_sku')}的{case.get('label')}为"
-                f"{float(case.get('product_reason_rate') or 0):.1f}%"
-                f"（整体{float(case.get('overall_reason_rate') or 0):.1f}%，"
-                f"{float(case.get('lift') or 0):.2f}倍）"
-            )
-            for case in validation_cases
-        ]
-        action_evidence_ids = list(
-            dict.fromkeys(
-                [
-                    *reason_evidence_ids,
-                    *diagnostic_ids,
-                    *(
-                        str(case.get("id"))
-                        for case in validation_cases
-                        if case.get("id")
-                    ),
-                ]
-            )
+        or "、".join(hotspot_targets[:2])
+        or f"高频{profile.variant_label}"
+    )
+
+
+def _validation_rationales(validation_cases: list[dict[str, Any]]) -> list[str]:
+    return [
+        (
+            f"{case.get('product_sku')}的{case.get('label')}为"
+            f"{float(case.get('product_reason_rate') or 0):.1f}%"
+            f"（整体{float(case.get('overall_reason_rate') or 0):.1f}%，"
+            f"{float(case.get('lift') or 0):.2f}倍）"
         )
-        actions.append(
-            {
-                "id": "action.diagnostic",
-                "priority": "P0",
-                "target": target,
-                "finding_id": "finding.diagnostic",
-                "evidence_ids": action_evidence_ids,
-                "fallback_action": (
-                    "；".join(case_actions)
-                    if case_actions
-                    else profile.diagnostic_action
-                ),
-                "fallback_rationale": (
-                    "；".join(case_rationales)
-                    + "。这些集中信号值得优先验证，但不能单凭反馈结构推断原因。"
-                    if case_rationales
-                    else profile.diagnostic_rationale
-                ),
-                "fallback_success_signal": (
-                    "每个目标 SKU 都形成可复核的原因结论；后续同口径反馈中，"
-                    "对应问题连续两个完整周期下降，且反向问题不升高。"
-                    if validation_cases
-                    else profile.diagnostic_success_signal
-                ),
-            }
+        for case in validation_cases
+    ]
+
+
+def _validation_evidence(
+    validation_cases: list[dict[str, Any]],
+    reason_evidence_ids: list[str],
+    diagnostic_ids: list[str],
+) -> list[str]:
+    return list(
+        dict.fromkeys(
+            [
+                *reason_evidence_ids,
+                *diagnostic_ids,
+                *(str(case.get("id")) for case in validation_cases if case.get("id")),
+            ]
         )
+    )
+
+
+def _followup_actions(
+    broad_reason: dict[str, Any] | None,
+    information_ids: list[str],
+    problem_label: str,
+    record_label: str,
+    rate_label: str,
+) -> list[dict[str, Any]]:
+    actions = []
     if broad_reason:
         actions.append(
             {
@@ -152,12 +218,4 @@ def _build_actions(
             "fallback_success_signal": f"待审核占比下降并形成商品级{rate_label}基线。",
         }
     )
-    action_order = {
-        "action.mapping": 0,
-        "action.diagnostic": 1,
-        "action.text_quality": 2,
-        "action.information": 3,
-        "action.scope": 4,
-    }
-    actions.sort(key=lambda item: action_order.get(str(item.get("id")), 99))
     return actions
