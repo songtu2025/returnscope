@@ -1,30 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import "../styles/analysis-workbench.css";
 
-import {
-  ChartBar,
-  CheckCircle,
-  DownloadSimple,
-  Plus,
-  WarningCircle,
-} from "@phosphor-icons/react";
+import { ChartBar, Plus } from "@phosphor-icons/react";
 import { api } from "../api";
+import { errorMessage } from "../shared/api/requestErrors";
+import { AnalysisContext } from "../features/legacy-analysis/AnalysisContext";
+import { AnalysisViews } from "../features/legacy-analysis/AnalysisViews";
 import { AnalysisFilters } from "../features/legacy-analysis/AnalysisFilters";
 import { EmptyState, InlineLoading, PageHeading } from "../components/SharedUi";
-import { DetailsSection } from "../features/legacy-analysis/DetailsSection";
-import { DiagnosisSection } from "../features/legacy-analysis/DiagnosisSection";
-import { ProductsSection } from "../features/legacy-analysis/ProductsSection";
-import { OverviewSection } from "../features/legacy-analysis/OverviewSection";
-import { QualitySection } from "../features/legacy-analysis/QualitySection";
-import { formatNumber, formatPercent, formatTime } from "../lib/presentation";
-
-const TABS = [
-  ["overview", "全站分析"],
-  ["diagnosis", "问题诊断"],
-  ["products", "商品下钻"],
-  ["quality", "分类质量"],
-  ["details", "数据明细"],
-];
 
 const EMPTY_FILTERS = {
   start_date: "",
@@ -41,10 +24,9 @@ const EMPTY_FILTERS = {
 };
 
 /** @typedef {import("../app/navigation").Navigate} Navigate */
-/** @typedef {import("../features/task-runtime/taskRuntimeContracts").AnalysisTask & {result_version?: number, completed_at?: string}} AnalysisResultTask */
+/** @typedef {import("../features/legacy-analysis/AnalysisContext").AnalysisResultTask} AnalysisResultTask */
 /** @typedef {import("../shared/api/legacyAnalysisContracts").LegacyAnalysis} LegacyAnalysis */
-/** @typedef {import("../shared/api/legacyAnalysisContracts").AnalysisMetrics} AnalysisMetrics */
-/** @typedef {{kind: "result", id: string, listing?: string}} ResultsFocus */
+/** @typedef {import("../features/legacy-analysis/AnalysisContext").ResultsFocus} ResultsFocus */
 /** @typedef {{notify: (message: string, tone?: string) => void, onNavigate: Navigate, focus?: ResultsFocus | null}} ResultsPageProps */
 
 const resultsApi = {
@@ -55,11 +37,6 @@ const resultsApi = {
   analysis: (id, query, options) =>
     /** @type {Promise<LegacyAnalysis>} */ (api.analysis(id, query, options)),
 };
-
-/** @param {unknown} error */
-function errorMessage(error) {
-  return error instanceof Error ? error.message : "请求失败";
-}
 
 /** @param {ResultsPageProps} props */
 export function ResultsPage({ notify, onNavigate, focus = null }) {
@@ -155,15 +132,8 @@ export function ResultsPage({ notify, onNavigate, focus = null }) {
   }, [selectedId, query, notify]);
 
   const task = tasks.find((item) => item.id === selectedId);
-  const isListingDelivery = task && !["completed", "cancelled"].includes(task.status);
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
   const downloadUrl = selectedId ? api.analysisDownloadUrl(selectedId, filters) : "#";
-  const activeViewReady = !analysis?.view || analysis.view === activeTab;
-  const resultUnavailable = analysis?.quality_gate?.status === "unusable";
-  const primaryQualityReason = analysis?.quality_gate?.review_reasons?.[0]?.name;
-  const qualityAction = primaryQualityReason?.includes("品类")
-    ? { page: "data", label: "补充商品信息" }
-    : { page: "api", label: "检查模型配置" };
 
   /** @param {string} taskId */
   const changeTask = (taskId) => {
@@ -214,103 +184,18 @@ export function ResultsPage({ notify, onNavigate, focus = null }) {
 
       {task && (
         <>
-          <section className="analysis-context-bar">
-            <div className="analysis-task-picker">
-              <label htmlFor="analysis-task">分析任务</label>
-              <select
-                id="analysis-task"
-                value={selectedId ?? ""}
-                onChange={(event) => changeTask(event.target.value)}
-              >
-                {tasks.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.title}
-                    {item.status === "cancelled" ? "（部分结果）" : ""}
-                    {!["completed", "cancelled"].includes(item.status)
-                      ? `（${focus?.listing ?? "已完成 Listing"} 阶段结果）`
-                      : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="analysis-context-meta">
-              <b>
-                {task.store}
-                {task.listing ? ` · ${task.listing}` : ""}
-              </b>
-              <span>
-                {isListingDelivery
-                  ? "Listing 结果"
-                  : task.status === "cancelled"
-                    ? "部分结果"
-                    : "结果"}{" "}
-                v{analysis?.task?.result_version ?? task.result_version} ·{" "}
-                {task.dataset_name} v{task.dataset_version} ·{" "}
-                {formatTime(analysis?.task?.completed_at ?? task.completed_at)}
-              </span>
-            </div>
-            <a className="primary-button" href={downloadUrl}>
-              <DownloadSimple size={18} />
-              {isListingDelivery
-                ? `下载 ${filters.listing} 结果`
-                : task.status === "cancelled"
-                  ? "下载部分结果"
-                  : "下载当前结果"}
-            </a>
-          </section>
-
-          {isListingDelivery && analysis && !resultUnavailable && (
-            <div className="plan-state success" role="status">
-              <CheckCircle size={19} />
-              <div>
-                <b>{filters.listing} 已完成，可以先查看和下载</b>
-                <p>
-                  本页只统计该 Listing 的已交付结果；批量任务中的其他 Listing
-                  继续独立运行。
-                </p>
-              </div>
-            </div>
-          )}
-
-          {analysis && resultUnavailable && (
-            <div className="plan-state warning result-quality-warning" role="alert">
-              <WarningCircle size={19} />
-              <div>
-                <b>本批结果尚不能用于问题分析</b>
-                <p>
-                  {formatNumber(analysis.quality_gate.text_records)} 条有效评论中，
-                  {formatNumber(analysis.quality_gate.labeled_records)} 条形成问题标签；
-                  {formatNumber(analysis.quality_gate.review_records)} 条进入人工复核。
-                  当前没有可聚合的问题标签，因此图表为空。
-                  {primaryQualityReason && ` 最常见复核原因：${primaryQualityReason}。`}
-                </p>
-              </div>
-              <div className="result-quality-actions">
-                <button
-                  className="secondary-button"
-                  onClick={() => setActiveTab("quality")}
-                >
-                  查看复核原因
-                </button>
-                <button
-                  className="primary-button"
-                  onClick={() => onNavigate(qualityAction.page)}
-                >
-                  {qualityAction.label}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {task.status === "cancelled" && (
-            <div className="plan-state warning" role="status">
-              <WarningCircle size={19} />
-              <div>
-                <b>当前为部分结果</b>
-                <p>仅包含取消前已经完成的 Listing 片段；未完成片段未计入本页指标。</p>
-              </div>
-            </div>
-          )}
+          <AnalysisContext
+            task={task}
+            tasks={tasks}
+            selectedId={selectedId}
+            analysis={analysis}
+            filters={filters}
+            focus={focus}
+            onChangeTask={changeTask}
+            onNavigate={onNavigate}
+            onQuality={() => setActiveTab("quality")}
+            downloadUrl={downloadUrl}
+          />
 
           {analysis && (
             <>
@@ -324,63 +209,22 @@ export function ResultsPage({ notify, onNavigate, focus = null }) {
                 onChange={changeFilter}
               />
 
-              <MetricCards metrics={analysis.overview.metrics} />
-
-              <div className="analysis-tabs" role="tablist" aria-label="分析结果视图">
-                {TABS.map(([id, label]) => (
-                  <button
-                    key={id}
-                    role="tab"
-                    aria-selected={activeTab === id}
-                    className={activeTab === id ? "active" : ""}
-                    onClick={() => setActiveTab(id)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-
-              <div className={`analysis-tab-panel ${loading ? "is-loading" : ""}`}>
-                {activeViewReady && activeTab === "overview" && (
-                  <OverviewSection
-                    overview={analysis.overview}
-                    qualityGate={analysis.quality_gate}
-                  />
-                )}
-                {activeViewReady && activeTab === "diagnosis" && (
-                  <DiagnosisSection
-                    diagnosis={analysis.diagnosis}
-                    onFocusProblem={(value) => {
-                      setFocusProblem(value);
-                      setPage(1);
-                    }}
-                  />
-                )}
-                {activeViewReady && activeTab === "products" && (
-                  <ProductsSection
-                    products={analysis.products}
-                    onDimension={(value) => {
-                      setDimension(value);
-                      setPage(1);
-                    }}
-                  />
-                )}
-                {activeViewReady && activeTab === "quality" && (
-                  <QualitySection quality={analysis.quality} />
-                )}
-                {activeViewReady && activeTab === "details" && (
-                  <DetailsSection
-                    details={analysis.details}
-                    onPage={setPage}
-                    downloadUrl={downloadUrl}
-                  />
-                )}
-                {loading && (
-                  <div className="analysis-loading">
-                    <InlineLoading label="正在更新分析结果…" />
-                  </div>
-                )}
-              </div>
+              <AnalysisViews
+                analysis={analysis}
+                activeTab={activeTab}
+                loading={loading}
+                onTab={setActiveTab}
+                onFocusProblem={(value) => {
+                  setFocusProblem(value);
+                  setPage(1);
+                }}
+                onDimension={(value) => {
+                  setDimension(value);
+                  setPage(1);
+                }}
+                onPage={setPage}
+                downloadUrl={downloadUrl}
+              />
             </>
           )}
 
@@ -391,44 +235,6 @@ export function ResultsPage({ notify, onNavigate, focus = null }) {
           )}
         </>
       )}
-    </div>
-  );
-}
-
-/** @param {{metrics: AnalysisMetrics}} props */
-function MetricCards({ metrics }) {
-  const cards = [
-    ["退货记录", formatNumber(metrics.total_records), "当前筛选范围"],
-    [
-      "覆盖 Listing",
-      formatNumber(metrics.listing_count),
-      `${formatNumber(metrics.sku_count)} 个 SKU`,
-    ],
-    [
-      "有效评论",
-      formatNumber(metrics.text_records),
-      `文本覆盖率 ${formatPercent(metrics.text_coverage)}`,
-    ],
-    [
-      "需人工复核",
-      formatNumber(metrics.review_records),
-      `占有效评论 ${formatPercent(metrics.review_rate)}`,
-    ],
-    [
-      "产品信息匹配",
-      formatNumber(metrics.product_matched),
-      `匹配率 ${formatPercent(metrics.product_match_rate)}`,
-    ],
-  ];
-  return (
-    <div className="analysis-kpis">
-      {cards.map(([label, value, note]) => (
-        <div key={label}>
-          <span>{label}</span>
-          <strong>{value}</strong>
-          <small>{note}</small>
-        </div>
-      ))}
     </div>
   );
 }
