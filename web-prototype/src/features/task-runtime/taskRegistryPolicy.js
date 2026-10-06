@@ -41,10 +41,8 @@ export function segmentNeedsAttention(segment) {
   );
 }
 
-/** @param {AnalysisTask} task */
-export function taskSummary(task) {
-  const segments = task.segments ?? [];
-  const executable = segments.filter((segment) => segment.agent_key !== "unknown");
+/** @param {AnalysisTask} task @param {TaskSegment[]} executable */
+function taskResultCounts(task, executable) {
   const published = executable.filter(isPublishedResult);
   const legacy = executable.filter(isLegacyResult);
   const generated = published.length + legacy.length;
@@ -59,10 +57,6 @@ export function taskSummary(task) {
     (segment) => resultState(segment) === "unusable",
   ).length;
   const unknown = generated - ready - reviews - unusable;
-  const issues = executable.filter(segmentNeedsAttention).length;
-  const excluded = segments.some((segment) => segment.agent_key === "unknown");
-  const needsAttention =
-    issues > 0 || excluded || ["failed", "blocked", "partial"].includes(task.status);
   const resultDescription = [
     ready > 0 && `${ready} 个可用`,
     reviews > 0 && `${reviews} 个需复核`,
@@ -71,19 +65,38 @@ export function taskSummary(task) {
   ]
     .filter(Boolean)
     .join(" · ");
+  return { total, generated, ready, reviews, unusable, unknown, resultDescription };
+}
+
+/** @param {AnalysisTask} task */
+function isPartiallyQueued(task) {
+  return (
+    task.status === "queued" &&
+    Boolean(
+      task.partial_queue ??
+      (task.snapshot?.execution_plan?.unresolved_policy === "run_ready" &&
+        Number(task.snapshot?.execution_plan?.summary?.blocked_count || 0) > 0),
+    )
+  );
+}
+
+/** @param {AnalysisTask} task */
+export function taskSummary(task) {
+  const segments = task.segments ?? [];
+  const executable = segments.filter((segment) => segment.agent_key !== "unknown");
+  const { total, generated, ready, reviews, unusable, unknown, resultDescription } =
+    taskResultCounts(task, executable);
+  const issues = executable.filter(segmentNeedsAttention).length;
+  const excluded = segments.some((segment) => segment.agent_key === "unknown");
+  const needsAttention =
+    issues > 0 || excluded || ["failed", "blocked", "partial"].includes(task.status);
   const issueDescription =
     issues > 0
       ? `${issues} 个 Listing 需处理`
       : needsAttention
         ? "查看任务原因并处理"
         : "";
-  const partialQueue =
-    task.status === "queued" &&
-    Boolean(
-      task.partial_queue ??
-      (task.snapshot?.execution_plan?.unresolved_policy === "run_ready" &&
-        Number(task.snapshot?.execution_plan?.summary?.blocked_count || 0) > 0),
-    );
+  const partialQueue = isPartiallyQueued(task);
   return {
     total,
     generated,
