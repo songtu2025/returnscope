@@ -1,78 +1,17 @@
-import {
-  ArrowClockwise,
-  ArrowDown,
-  ArrowLineUp,
-  ArrowUp,
-  ChartBar,
-  DownloadSimple,
-  Pause,
-  Play,
-  X,
-} from "@phosphor-icons/react";
+import { ArrowClockwise, ChartBar, Pause, Play } from "@phosphor-icons/react";
 import Button from "antd/es/button";
 
-import { api } from "../../api";
-import { classNames, formatTime } from "../../lib/presentation";
+import { classNames } from "../../lib/presentation";
+import { isLegacyResult, isPublishedResult, moveSegmentKey } from "./taskSegmentPolicy";
+import { SegmentBoardDetail } from "./SegmentBoardDetail";
 import {
-  resultState,
-  resultStateLabel,
-} from "../classification-results/resultActionPolicy";
-import {
-  isLegacyResult,
-  isPublishedResult,
-  moveSegmentKey,
-  resultPublishStatus,
-} from "./taskSegmentPolicy";
+  canRetrySegment,
+  segmentResultPresentation,
+  SEGMENT_STATUS_LABELS,
+} from "./segmentBoardRowPolicy";
 import { segmentNeedsAttention } from "./taskRegistryPolicy";
 
-/** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
-/** @typedef {import("./taskRuntimeContracts").TaskSegment} TaskSegment */
-/** @typedef {import("./taskRuntimeContracts").SegmentAction} SegmentAction */
-/**
- * @typedef {Object} SegmentBoardRowProps
- * @property {AnalysisTask} task
- * @property {TaskSegment} segment
- * @property {{segmentIndex: number, page: number, pageSize: number, focusSegmentId?: string | null, focusedSegmentRef: import("react").RefObject<HTMLElement | null>}} position
- * @property {{canManageQueue: boolean, orderableKeys: string[], reordering: boolean, applyOrder: (segmentKeys: string[]) => Promise<void>}} queue
- * @property {{expandedSegmentKey: string | null, setExpandedSegmentKey: import("react").Dispatch<import("react").SetStateAction<string | null>>, retryingPublishId: string | null, setRetryingPublishId: import("react").Dispatch<import("react").SetStateAction<string | null>>}} rowState
- * @property {{onResumeUnfinished: () => void, onAction: (segmentKey: string, action: SegmentAction, note?: string) => Promise<unknown>, onRetry: (segment: TaskSegment) => void, onViewClassification: (segment: TaskSegment & {result_version_id: string}) => void, onRetryPublish: (segmentId: string) => Promise<unknown>, onCancel: (segment: TaskSegment) => void}} actions
- */
-
-const RETRYABLE_SEGMENT_STATUSES = ["failed", "completed_with_errors", "not_started"];
-const SEGMENT_STATUS_LABELS = {
-  ready: "可执行",
-  queued: "等待",
-  running: "运行中",
-  pause_pending: "正在暂停",
-  cancel_pending: "正在取消",
-  paused: "已暂停",
-  completed: "已完成",
-  completed_with_errors: "完成但有异常",
-  failed: "失败",
-  blocked: "未纳入分析",
-  cancelled: "已取消",
-  not_started: "尚未运行",
-  retry_pending: "等待重试",
-};
-
-/** @param {unknown} value */
-function shortPublishError(value) {
-  const message = String(value || "未返回具体原因")
-    .replace(/\s+/g, " ")
-    .trim();
-  return message.length > 80 ? `${message.slice(0, 80)}…` : message;
-}
-
-/** @param {AnalysisTask} task @param {TaskSegment} segment */
-function canRetrySegment(task, segment) {
-  if (["queued", "running"].includes(task.status)) return false;
-  if (segment.agent_key === "unknown" || segment.status === "blocked") return false;
-  if (isPublishedResult(segment)) return false;
-  if (!RETRYABLE_SEGMENT_STATUSES.includes(segment.status)) return false;
-  const blockedExists = task.segments?.some((item) => item.status === "blocked");
-  const policy = task.snapshot?.execution_plan?.unresolved_policy ?? "block_all";
-  return !(segment.status === "not_started" && policy === "block_all" && blockedExists);
-}
+/** @typedef {import("./segmentBoardRowContracts").SegmentBoardRowProps} SegmentBoardRowProps */
 
 /** @param {SegmentBoardRowProps} props */
 export function SegmentBoardRow({ task, segment, position, queue, rowState, actions }) {
@@ -90,7 +29,6 @@ export function SegmentBoardRow({ task, segment, position, queue, rowState, acti
     onRetry,
     onViewClassification,
     onRetryPublish,
-    onCancel,
   } = actions;
   const isFocused =
     Boolean(focusSegmentId) &&
@@ -100,40 +38,13 @@ export function SegmentBoardRow({ task, segment, position, queue, rowState, acti
   const progress = segment.progress_total
     ? Math.round((segment.progress_current / segment.progress_total) * 100)
     : 0;
-  const modelFailures = Number(segment.model_failures || 0);
-  const modelRequests = Number(segment.model_calls || 0) + modelFailures;
   const orderableIndex = orderableKeys.indexOf(segment.segment_key);
   const canOrder = canManageQueue && orderableIndex >= 0 && orderableKeys.length > 1;
   const canRetrySystemAnomalies =
     segment.system_retry_available === true &&
     !["queued", "running"].includes(task.status);
-  const segmentLabel = segment.scope?.listing || segment.agent_family;
-  const displayStatus = segment.display_status || segment.status;
-  const publishStatus = resultPublishStatus(segment);
-  const qualityResult = {
-    result_state: segment.result_state,
-    result_quality_status: segment.result_quality_status,
-    source_review_batch_id: segment.source_review_batch_id,
-    publish_status: publishStatus,
-  };
-  const qualityState = resultState(qualityResult);
-  const qualityLabel = resultStateLabel(qualityResult);
-  const stateLabel =
-    publishStatus === "publishing"
-      ? "正在生成结果"
-      : publishStatus === "failed"
-        ? "结果生成失败"
-        : publishStatus === "published"
-          ? qualityLabel
-          : (SEGMENT_STATUS_LABELS[displayStatus] ?? displayStatus);
-  const stateDescription =
-    publishStatus === "publishing"
-      ? "分类已完成，正在生成结果"
-      : publishStatus === "failed"
-        ? shortPublishError(segment.result_publish_error)
-        : publishStatus === "published"
-          ? "结果已生成"
-          : segment.wait_reason;
+  const { displayStatus, publishStatus, qualityState, stateLabel, stateDescription } =
+    segmentResultPresentation(segment);
 
   return (
     <article
@@ -318,131 +229,16 @@ export function SegmentBoardRow({ task, segment, position, queue, rowState, acti
         <p className="segment-error">{segment.error}</p>
       )}
       {expandedSegmentKey === segment.segment_key && (
-        <div className="listing-row-detail" role="cell">
-          <div className="listing-model">
-            <b>{modelRequests} 次请求</b>
-            <span>
-              成功 {segment.model_calls || 0} · 失败 {modelFailures}
-            </span>
-            <small>
-              缓存 {segment.cache_hits || 0} · {segment.taxonomy_version}
-            </small>
-          </div>
-          <div className="listing-updated">
-            <b>
-              {formatTime(segment.updated_at || task.updated_at || task.created_at)}
-            </b>
-            <small>{task.owner_name || "—"}</small>
-          </div>
-          <div>
-            <span>标准版本</span>{" "}
-            <small>
-              {segment.standard_version ? `标准 V${segment.standard_version} · ` : ""}
-              {segment.logic_version || "未配置逻辑"}
-            </small>
-          </div>
-          <div>
-            <span>记录与评论</span>
-            <b>
-              {(segment.record_count || 0).toLocaleString()} 条记录 ·{" "}
-              {(segment.unique_comments || 0).toLocaleString()} 组评论
-            </b>
-          </div>
-          <div>
-            <span>执行逻辑</span>
-            <b>{segment.logic_version || "未配置"}</b>
-          </div>
-          <div>
-            <span>分类版本</span>
-            <b>{segment.taxonomy_version || "未生成"}</b>
-          </div>
-          <div>
-            <span>状态说明</span>
-            <b>{stateDescription || segment.error || stateLabel}</b>
-          </div>
-          <div className="listing-secondary-actions">
-            {canOrder && (
-              <div className="listing-order-actions" aria-label="调整执行顺序">
-                <button
-                  type="button"
-                  className="icon-button"
-                  aria-label={`置顶 ${segmentLabel}`}
-                  title="置顶"
-                  disabled={reordering || orderableIndex === 0}
-                  onClick={() =>
-                    applyOrder(moveSegmentKey(orderableKeys, segment.segment_key, 0))
-                  }
-                >
-                  <ArrowLineUp size={15} />
-                </button>
-                <button
-                  type="button"
-                  className="icon-button"
-                  aria-label={`上移 ${segmentLabel}`}
-                  title="上移"
-                  disabled={reordering || orderableIndex === 0}
-                  onClick={() =>
-                    applyOrder(
-                      moveSegmentKey(
-                        orderableKeys,
-                        segment.segment_key,
-                        orderableIndex - 1,
-                      ),
-                    )
-                  }
-                >
-                  <ArrowUp size={15} />
-                </button>
-                <button
-                  type="button"
-                  className="icon-button"
-                  aria-label={`下移 ${segmentLabel}`}
-                  title="下移"
-                  disabled={reordering || orderableIndex === orderableKeys.length - 1}
-                  onClick={() =>
-                    applyOrder(
-                      moveSegmentKey(
-                        orderableKeys,
-                        segment.segment_key,
-                        orderableIndex + 1,
-                      ),
-                    )
-                  }
-                >
-                  <ArrowDown size={15} />
-                </button>
-              </div>
-            )}
-            {["queued", "retry_pending", "running", "paused", "failed"].includes(
-              segment.status,
-            ) && (
-              <Button
-                className="secondary-button compact-button listing-cancel-button"
-                onClick={() => onCancel(segment)}
-              >
-                <X size={14} /> 取消
-              </Button>
-            )}
-            {["completed", "completed_with_errors"].includes(segment.status) &&
-              isPublishedResult(segment) && (
-                <a
-                  className="secondary-button compact-button"
-                  href={api.classificationResultDownloadUrl(segment.result_version_id)}
-                >
-                  <DownloadSimple size={14} /> 下载
-                </a>
-              )}
-            {["completed", "completed_with_errors"].includes(segment.status) &&
-              isLegacyResult(segment) && (
-                <a
-                  className="secondary-button compact-button"
-                  href={api.segmentDownloadUrl(task.id, segment.segment_key)}
-                >
-                  <DownloadSimple size={14} /> 下载旧结果
-                </a>
-              )}
-          </div>
-        </div>
+        <SegmentBoardDetail
+          task={task}
+          segment={segment}
+          canOrder={canOrder}
+          orderableIndex={orderableIndex}
+          queue={queue}
+          actions={actions}
+          stateDescription={stateDescription}
+          stateLabel={stateLabel}
+        />
       )}
     </article>
   );
