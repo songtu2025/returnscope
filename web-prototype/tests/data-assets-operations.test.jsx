@@ -65,6 +65,89 @@ beforeEach(() => {
 
 afterEach(() => cleanup());
 
+function syntheticReturnSource(index, sourceKey = `synthetic-${index}`) {
+  return {
+    id: `synthetic-${index}`,
+    source_key: sourceKey,
+    name: `SYNTHETIC ${index}`,
+    kind: "returns",
+    current_version: 1,
+    row_count: index + 1,
+    quality: {
+      stores: ["SYNTHETIC:US"],
+      matching_key_ready_rate: index === 20 ? 50 : 100,
+    },
+  };
+}
+
+test("数据源成员合并后按需并发读取，折叠仅在数据源路由变化时重置", async () => {
+  const user = userEvent.setup();
+  const sources = [
+    syntheticReturnSource(0, "synthetic-group"),
+    syntheticReturnSource(1, "synthetic-group"),
+    syntheticReturnSource(2),
+  ];
+  managedDatasets.mockResolvedValue(sources);
+  dataset.mockImplementation(async (id) => sources.find((source) => source.id === id));
+  const onRouteChange = vi.fn();
+  const props = { notify: vi.fn(), onRouteChange };
+  const view = render(
+    <ReturnDataAssetsPage {...props} route={{ query: { dataset: "synthetic-1" } }} />,
+  );
+  expect(await screen.findByText("当前数据摘要")).toBeVisible();
+  expect(screen.getByText("2 个数据源")).toBeVisible();
+  expect(dataset.mock.calls).toEqual([
+    ["synthetic-0", { include: "versions,imports" }],
+    ["synthetic-1", { include: "versions,imports" }],
+  ]);
+  await user.click(screen.getByRole("button", { name: "收起详情" }));
+  expect(onRouteChange).not.toHaveBeenCalled();
+  view.rerender(
+    <ReturnDataAssetsPage
+      {...props}
+      route={{ query: { dataset: "synthetic-1", q: " SYNTHETIC ", tab: "snapshots" } }}
+    />,
+  );
+  expect(screen.queryByText("当前数据摘要")).not.toBeInTheDocument();
+  expect(dataset).toHaveBeenCalledTimes(2);
+  view.rerender(
+    <ReturnDataAssetsPage {...props} route={{ query: { dataset: "synthetic-2" } }} />,
+  );
+  expect(await screen.findByText("当前数据摘要")).toBeVisible();
+  expect(dataset).toHaveBeenLastCalledWith("synthetic-2", {
+    include: "versions,imports",
+  });
+});
+
+test("数据源保持20条分页上界与筛选的原路由参数", async () => {
+  const user = userEvent.setup();
+  const sources = Array.from({ length: 21 }, (_, index) =>
+    syntheticReturnSource(index),
+  );
+  managedDatasets.mockResolvedValue(sources);
+  dataset.mockImplementation(async (id) => sources.find((source) => source.id === id));
+  const onRouteChange = vi.fn();
+  render(
+    <ReturnDataAssetsPage
+      route={{ query: { page: 999, status: "invalid" } }}
+      notify={vi.fn()}
+      onRouteChange={onRouteChange}
+    />,
+  );
+  expect(await screen.findByText("SYNTHETIC 20")).toBeVisible();
+  expect(screen.queryByText("SYNTHETIC 0")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "下一页" })).toBeDisabled();
+  await user.click(screen.getByRole("button", { name: "上一页" }));
+  expect(onRouteChange).toHaveBeenLastCalledWith({ page: 1 });
+  await user.selectOptions(
+    screen.getByRole("combobox", { name: "按数据状态筛选" }),
+    "attention",
+  );
+  expect(onRouteChange).toHaveBeenLastCalledWith({ status: "attention", page: 1 });
+  await user.type(screen.getByRole("textbox", { name: "搜索用户反馈数据源" }), " ");
+  expect(onRouteChange).toHaveBeenLastCalledWith({ q: " ", page: 1 });
+});
+
 async function openSyntheticSnapshot() {
   const source = {
     id: "synthetic-source",

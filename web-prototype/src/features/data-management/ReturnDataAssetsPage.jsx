@@ -1,40 +1,35 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  CaretDown,
-  CaretLeft,
-  CaretRight,
-  CheckCircle,
-  Database,
-  FileCsv,
-  Funnel,
-  MagnifyingGlass,
-  UploadSimple,
-  WarningCircle,
-} from "@phosphor-icons/react";
+import { FileCsv, UploadSimple } from "@phosphor-icons/react";
 import Button from "antd/es/button";
-import Input from "antd/es/input";
-import useSWR from "swr";
-
 import { EmptyState, InlineLoading, PageHeading } from "../../components/SharedUi";
-import { formatTime } from "../../lib/presentation";
-import { dataApi } from "../../shared/api/dataApi";
-import { serverStateKeys } from "../../shared/serverState";
 import { ReturnImportDialog } from "../task-create/ReturnImportDialog";
 import { DataAssetTabs } from "./DataAssetTabs";
 import { SourceDetail } from "./ReturnDataAssetDetail";
+import { ReturnDataAssetRegistry } from "./ReturnDataAssetRegistry";
 import {
-  canonicalSources,
   dataStatus,
-  mergeSourceDetails,
   sourceDisplayName,
   sourceScopeLabel,
 } from "./returnDataAssetPresentation";
+import { useReturnSources, useReturnSourceDetails } from "./useReturnDataAssetSources";
 
 const PAGE_SIZE = 20;
 
 /** @typedef {import("../../shared/api/dataManagementContracts").DatasetSource} DatasetSource */
 /** @typedef {import("../task-create/taskCreateContracts").ReturnImportResult} ReturnImportResult */
 /** @typedef {{query: {dataset?: string, tab?: string, q?: string, status?: string, page?: string | number}}} DataAssetsRoute */
+
+/** @param {DataAssetsRoute["query"]} query */
+function sourceListQuery(query) {
+  return {
+    query: query.q ?? "",
+    status: ["all", "available", "attention"].includes(query.status ?? "")
+      ? query.status
+      : "all",
+    requestedPage: Number(query.page) || 1,
+  };
+}
+
 /**
  * @param {{
  *   route: DataAssetsRoute,
@@ -47,19 +42,13 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
   const [expandedOverride, setExpandedOverride] = useState(
     /** @type {string | null} */ (null),
   );
-  const query = route.query.q ?? "";
-  const status = ["all", "available", "attention"].includes(route.query.status ?? "")
-    ? route.query.status
-    : "all";
-  const requestedPage = Number(route.query.page) || 1;
+  const { query, status, requestedPage } = sourceListQuery(route.query);
   const {
     data: sourceData,
     error: sourcesError,
     isLoading,
     mutate: mutateSources,
-  } = useSWR(serverStateKeys.returnSources, async () =>
-    canonicalSources(await dataApi.managedDatasets("returns")),
-  );
+  } = useReturnSources();
   const sources = useMemo(() => sourceData ?? [], [sourceData]);
 
   useEffect(() => {
@@ -104,23 +93,7 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
     error: detailError,
     isLoading: detailLoading,
     mutate: mutateDetail,
-  } = useSWR(
-    expandedSource
-      ? serverStateKeys.returnSourceDetails(
-          expandedSource.id,
-          expandedSource.member_ids,
-        )
-      : null,
-    async () => {
-      if (!expandedSource) return null;
-      const members = await Promise.all(
-        expandedSource.member_ids.map((id) =>
-          dataApi.dataset(id, { include: "versions,imports" }),
-        ),
-      );
-      return mergeSourceDetails(expandedSource, members);
-    },
-  );
+  } = useReturnSourceDetails(expandedSource);
 
   useEffect(() => {
     setExpandedOverride(null);
@@ -166,6 +139,19 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
     );
   };
 
+  const expandedContent = expandedDetail ? (
+    <SourceDetail
+      source={expandedDetail}
+      notify={notify}
+      onStorageChanged={async () => {
+        await Promise.all([mutateSources(), mutateDetail()]);
+      }}
+      initiallyShowTrace={["imports", "snapshots"].includes(route.query.tab ?? "")}
+    />
+  ) : detailLoading ? (
+    <InlineLoading label="正在读取数据源详情…" />
+  ) : null;
+
   return (
     <div className="standard-page data-page returns-assets-page">
       <PageHeading
@@ -206,148 +192,21 @@ export function ReturnDataAssetsPage({ route, notify, onRouteChange }) {
           }
         />
       ) : (
-        <section className="returns-registry" aria-label="用户反馈数据源清单">
-          <header className="returns-registry-toolbar">
-            <div className="returns-registry-summary">
-              <span>
-                <Database size={18} />
-                <b>{sources.length} 个数据源</b>
-              </span>
-              <i aria-hidden="true">•</i>
-              <strong>{availableCount} 个当前可用</strong>
-              <i aria-hidden="true">•</i>
-              <em>{sources.length - availableCount} 个需关注</em>
-              <i aria-hidden="true">•</i>
-              <span>最近导入：{formatTime(latestUpdate)}</span>
-            </div>
-            <div className="returns-registry-filters">
-              <Input
-                className="returns-registry-search"
-                aria-label="搜索用户反馈数据源"
-                prefix={<MagnifyingGlass size={17} />}
-                value={query}
-                onChange={(event) => onRouteChange({ q: event.target.value, page: 1 })}
-                placeholder="搜索数据源或业务范围"
-              />
-              <label className="returns-registry-filter">
-                <Funnel size={17} />
-                <select
-                  aria-label="按数据状态筛选"
-                  value={status}
-                  onChange={(event) =>
-                    onRouteChange({ status: event.target.value, page: 1 })
-                  }
-                >
-                  <option value="all">全部状态</option>
-                  <option value="available">当前可用</option>
-                  <option value="attention">需关注</option>
-                </select>
-              </label>
-            </div>
-          </header>
-
-          {visibleSources.length ? (
-            <div className="returns-registry-table" role="table">
-              <div className="returns-registry-head" role="row">
-                <span>数据源</span>
-                <span>业务范围</span>
-                <span>当前数据</span>
-                <span>最近导入</span>
-                <span>数据状态</span>
-                <span>被任务使用</span>
-                <span>操作</span>
-              </div>
-              {visibleSources.map((source) => {
-                const expanded = source.id === expandedId;
-                const sourceState = dataStatus(source);
-                return (
-                  <article
-                    className={`returns-registry-record ${expanded ? "expanded" : ""}`}
-                    key={source.id}
-                  >
-                    <div className="returns-registry-row" role="row">
-                      <div className="returns-registry-name">
-                        <Database size={19} weight="duotone" />
-                        <b>{sourceDisplayName(source)}</b>
-                      </div>
-                      <span>{sourceScopeLabel(source)}</span>
-                      <b>{Number(source.row_count || 0).toLocaleString()} 行</b>
-                      <span>{formatTime(source.updated_at)}</span>
-                      <span className={`returns-source-status ${sourceState.value}`}>
-                        {sourceState.value === "available" ? (
-                          <CheckCircle size={18} weight="fill" />
-                        ) : (
-                          <WarningCircle size={18} weight="fill" />
-                        )}
-                        <span>
-                          <b>{sourceState.label}</b>
-                          <small>{sourceState.description}</small>
-                        </span>
-                      </span>
-                      <span>
-                        {Number(source.task_reference_count || 0).toLocaleString()}{" "}
-                        个任务
-                      </span>
-                      <button
-                        className="returns-detail-button"
-                        aria-expanded={expanded}
-                        onClick={() => selectSource(source)}
-                      >
-                        {expanded ? "收起详情" : "查看详情"}
-                        <CaretDown size={17} />
-                      </button>
-                    </div>
-                    {expanded &&
-                      (expandedDetail ? (
-                        <SourceDetail
-                          source={expandedDetail}
-                          notify={notify}
-                          onStorageChanged={async () => {
-                            await Promise.all([mutateSources(), mutateDetail()]);
-                          }}
-                          initiallyShowTrace={["imports", "snapshots"].includes(
-                            route.query.tab ?? "",
-                          )}
-                        />
-                      ) : detailLoading ? (
-                        <InlineLoading label="正在读取数据源详情…" />
-                      ) : null)}
-                  </article>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="returns-registry-empty">
-              <MagnifyingGlass size={23} />
-              <b>没有符合条件的数据源</b>
-              <span>请修改搜索词或数据状态。</span>
-            </div>
-          )}
-
-          <footer className="returns-registry-footer">
-            <span>共 {filteredSources.length} 个数据源</span>
-            {totalPages > 1 && (
-              <div>
-                <button
-                  aria-label="上一页"
-                  disabled={page === 1}
-                  onClick={() => onRouteChange({ page: page - 1 })}
-                >
-                  <CaretLeft size={16} />
-                </button>
-                <b>{page}</b>
-                <span>/ {totalPages}</span>
-                <button
-                  aria-label="下一页"
-                  disabled={page === totalPages}
-                  onClick={() => onRouteChange({ page: page + 1 })}
-                >
-                  <CaretRight size={16} />
-                </button>
-              </div>
-            )}
-          </footer>
-        </section>
+        <ReturnDataAssetRegistry
+          sourceCount={sources.length}
+          availableCount={availableCount}
+          latestUpdate={latestUpdate}
+          query={query}
+          status={status}
+          onRouteChange={onRouteChange}
+          visibleSources={visibleSources}
+          expandedId={expandedId}
+          selectSource={selectSource}
+          filteredCount={filteredSources.length}
+          page={page}
+          totalPages={totalPages}
+          expandedContent={expandedContent}
+        />
       )}
 
       {uploadOpen && (
