@@ -1,15 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  loadSelectedStandardDraft,
+  classificationDraftErrorMessage as errorMessage,
+} from "./classificationDraftSelection";
+import {
+  persistStandardDraft,
+  prepareStandardExcelDraft,
+} from "./classificationDraftPersistence";
+import { importStandardDraftJson } from "./classificationDraftImport";
 
 import { navigateHash } from "../../app/hashRouter";
 import { classificationStandardApi } from "../../shared/api/classificationStandardApi";
 import {
-  classificationStandardContentFieldErrors,
   clearClassificationStandardContentFieldError,
   cloneClassificationStandardContent,
   contentFromClassificationStandardSnapshot,
   EMPTY_CLASSIFICATION_STANDARD_CONTENT,
-  validateClassificationStandardContent,
-  writableClassificationStandardContent,
 } from "./classificationStandardContent";
 import { useClassificationStandardValidationController } from "./useClassificationStandardValidationController";
 
@@ -18,11 +24,6 @@ import { useClassificationStandardValidationController } from "./useClassificati
 /** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardDraft} ClassificationStandardDraft */
 /** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardVersion} ClassificationStandardVersion */
 /** @typedef {import("./classificationStandardContent").ClassificationStandardFieldErrors} ClassificationStandardFieldErrors */
-
-/** @param {unknown} error */
-function errorMessage(error) {
-  return error instanceof Error ? error.message : "请求失败";
-}
 
 /**
  * @param {{
@@ -91,43 +92,23 @@ export function useClassificationStandardDraftController({
   }
 
   const loadSelected = useCallback(
-    async (/** @type {string} */ standardId) => {
-      const generation = ++loadGenerationRef.current;
-      setPageLoading(true);
-      setPageError(null);
-      try {
-        const [standard, versionRows] = await Promise.all([
-          classificationStandardApi.classificationStandard(standardId),
-          classificationStandardApi.classificationStandardVersions(standardId),
-        ]);
-        const draftValue = standard.draft_id
-          ? await classificationStandardApi.classificationStandardDraft(
-              standard.draft_id,
-            )
-          : null;
-        if (generation !== loadGenerationRef.current) return;
-        setDetail(standard);
-        setVersions(versionRows);
-        setDraft(draftValue);
-        setContent(
-          cloneClassificationStandardContent(
-            draftValue?.content ??
-              contentFromClassificationStandardSnapshot(standard.snapshot),
-          ),
-        );
-        setFieldErrors({});
-        setChangeReason(draftValue?.change_reason || `更新${standard.name}`);
-        if (draftValue) await loadValidation(draftValue.id);
-        else clearValidation();
-      } catch (error) {
-        if (generation === loadGenerationRef.current) {
-          setPageError({ id: standardId, message: errorMessage(error) });
-          throw error;
-        }
-      } finally {
-        if (generation === loadGenerationRef.current) setPageLoading(false);
-      }
-    },
+    (/** @type {string} */ standardId) =>
+      loadSelectedStandardDraft(standardId, {
+        loadGenerationRef,
+        state: {
+          setPageLoading,
+          setPageError,
+          setDetail,
+          setVersions,
+          setDraft,
+          setContent,
+          setFieldErrors,
+          setChangeReason,
+        },
+        loadValidation,
+        clearValidation,
+        errorMessage,
+      }),
     [clearValidation, loadValidation],
   );
 
@@ -179,51 +160,14 @@ export function useClassificationStandardDraftController({
 
   /** @returns {Promise<ClassificationStandardDraft>} */
   async function persistDraft() {
-    const error = validateClassificationStandardContent(content);
-    if (error) {
-      setFieldErrors(classificationStandardContentFieldErrors(content));
-      setValidationAttempt((value) => value + 1);
-      throw new Error(error);
-    }
-    const writableContent = writableClassificationStandardContent(content);
-    setFieldErrors({});
-
-    let workingDraft = draft;
-    if (!workingDraft) {
-      if (mode === "new") {
-        const firstCategory = content.variants[0];
-        const createdDraft =
-          await classificationStandardApi.createClassificationStandard({
-            name: content.name.trim(),
-            product_context: content.product_context.trim(),
-            category_a: firstCategory.category_a.trim(),
-            category_b: firstCategory.category_b.trim(),
-          });
-        workingDraft = createdDraft;
-      } else {
-        const createdDraft =
-          await classificationStandardApi.createClassificationStandardDraft(
-            requireDetail().id,
-          );
-        workingDraft = createdDraft;
-      }
-    }
-
-    if (JSON.stringify(writableContent) !== JSON.stringify(workingDraft.content)) {
-      const updatedDraft =
-        await classificationStandardApi.updateClassificationStandardDraft(
-          workingDraft.id,
-          {
-            expected_revision: workingDraft.revision,
-            content: writableContent,
-            change_reason: changeReason.trim(),
-          },
-        );
-      workingDraft = updatedDraft;
-    }
-    setDraft(workingDraft);
-    setContent(cloneClassificationStandardContent(workingDraft.content));
-    return workingDraft;
+    return await persistStandardDraft({
+      content,
+      draft,
+      mode,
+      changeReason,
+      requireDetail,
+      state: { setFieldErrors, setValidationAttempt, setDraft, setContent },
+    });
   }
 
   const saveDraft = async () => {
@@ -253,36 +197,15 @@ export function useClassificationStandardDraftController({
     }
   };
 
-  const prepareExcelDraft = async () => {
-    if (dirty && (draft || content.labels.length))
-      throw new Error("请先保存当前修改，再导入标签框架");
-    if (draft) return draft;
-    let created;
-    if (mode === "new") {
-      const category = content.variants[0];
-      if (
-        !content.name.trim() ||
-        !content.product_context.trim() ||
-        !category?.category_a.trim() ||
-        !category?.category_b.trim()
-      )
-        throw new Error("请先填写标准名称、适用商品说明和适用品类");
-      created = await classificationStandardApi.createClassificationStandard({
-        name: content.name.trim(),
-        product_context: content.product_context.trim(),
-        category_a: category.category_a.trim(),
-        category_b: category.category_b.trim(),
-      });
-    } else {
-      created = await classificationStandardApi.createClassificationStandardDraft(
-        requireDetail().id,
-      );
-    }
-    setDraft(created);
-    setContent(cloneClassificationStandardContent(created.content));
-    setChangeReason("导入层级标签框架");
-    return created;
-  };
+  const prepareExcelDraft = async () =>
+    prepareStandardExcelDraft({
+      dirty,
+      draft,
+      content,
+      mode,
+      requireDetail,
+      state: { setDraft, setContent, setChangeReason },
+    });
 
   const publish = async (/** @type {string | null} */ validationRunId = null) => {
     setBusy("publish");
@@ -310,40 +233,18 @@ export function useClassificationStandardDraftController({
 
   const importJson = async (
     /** @type {import("react").ChangeEvent<HTMLInputElement>} */ event,
-  ) => {
-    const file = event.target.files?.[0];
-    if (!file || !detail) return;
-    setBusy("import");
-    try {
-      const document = JSON.parse(await file.text());
-      const workingDraft =
-        draft ??
-        (await classificationStandardApi.createClassificationStandardDraft(detail.id));
-      const imported =
-        await classificationStandardApi.importClassificationStandardDraft(
-          workingDraft.id,
-          {
-            expected_revision: workingDraft.revision,
-            document,
-            change_reason: `导入 ${file.name}`,
-          },
-        );
-      setDraft(imported);
-      setContent(cloneClassificationStandardContent(imported.content));
-      setChangeReason(imported.change_reason || `导入 ${file.name}`);
-      await loadStandards();
-      await loadValidation(imported.id);
-      notify("JSON 已导入草稿，请检查后再发布");
-    } catch (error) {
-      notify(
-        error instanceof SyntaxError ? "JSON 文件格式错误" : errorMessage(error),
-        "error",
-      );
-    } finally {
-      event.target.value = "";
-      setBusy("");
-    }
-  };
+  ) =>
+    importStandardDraftJson(event, {
+      detail,
+      draft,
+      content,
+      state: { setDraft, setContent, setChangeReason },
+      setBusy,
+      loadStandards,
+      loadValidation,
+      notify,
+      errorMessage,
+    });
 
   const changeContent = (
     /** @type {ClassificationStandardEditableContent} */ value,
