@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
 import { Modal } from "../../components/SharedUi";
 import { classificationStandardApi } from "../../shared/api/classificationStandardApi";
-import { taxonomyPath } from "../../lib/taxonomyPresentation";
+import { ExcelMappingFields } from "./ExcelMappingFields";
+import { ExcelImportPreview } from "./ExcelImportPreview";
 
 /** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardDraft} ClassificationStandardDraft */
 /** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardDraftContent} ClassificationStandardDraftContent */
@@ -9,12 +10,6 @@ import { taxonomyPath } from "../../lib/taxonomyPresentation";
 /** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardExcelPreview} ClassificationStandardExcelPreview */
 /** @typedef {{file: File, draftId: string, data: ClassificationStandardExcelPreview, sheet: string, columns: Required<ClassificationStandardExcelColumns>}} ClassificationExcelImportState */
 /** @typedef {{prepareDraft: () => Promise<ClassificationStandardDraft>, onApply: (content: ClassificationStandardDraftContent, filename: string) => void, disabled: boolean}} ClassificationExcelImportProps */
-
-/** @type {["source_label_column" | "sentiment_column", string][]} */
-const OPTIONAL_COLUMN_FIELDS = [
-  ["source_label_column", "原始说法列"],
-  ["sentiment_column", "评价方向列"],
-];
 
 /** @param {unknown} cause */
 function errorMessage(cause) {
@@ -152,155 +147,18 @@ export function ClassificationExcelImport({ prepareDraft, onApply, disabled }) {
               确认层级列的顺序。导入会替换草稿中的标签框架，请检查层级和评价方向，保存后可运行样本验证。
             </p>
             <fieldset disabled={busy}>
-              <label>
-                工作表
-                <select
-                  aria-label="标签框架工作表"
-                  value={state.sheet}
-                  onChange={(event) => changeSheet(event.target.value)}
-                >
-                  <option value="">请选择工作表</option>
-                  {state.data.sheets.map((sheet) => (
-                    <option key={sheet} value={sheet}>
-                      {sheet}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {state.sheet && (
-                <>
-                  {state.columns.hierarchy_columns.map((column, index) => (
-                    <label key={index}>
-                      第 {index + 1} 级
-                      <select
-                        aria-label={`第 ${index + 1} 级来源列`}
-                        value={column}
-                        onChange={(event) =>
-                          updateColumns({
-                            ...state.columns,
-                            hierarchy_columns: state.columns.hierarchy_columns.map(
-                              (value, position) =>
-                                position === index ? event.target.value : value,
-                            ),
-                          })
-                        }
-                      >
-                        <option value="">请选择列</option>
-                        {(state.data.headers ?? []).map((header) => (
-                          <option key={header}>{header}</option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        className="secondary-button compact-button"
-                        onClick={() =>
-                          updateColumns({
-                            ...state.columns,
-                            hierarchy_columns: state.columns.hierarchy_columns.filter(
-                              (_value, position) => position !== index,
-                            ),
-                          })
-                        }
-                      >
-                        移除此级
-                      </button>
-                    </label>
-                  ))}
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() =>
-                      updateColumns({
-                        ...state.columns,
-                        hierarchy_columns: [...state.columns.hierarchy_columns, ""],
-                      })
-                    }
-                  >
-                    增加层级列
-                  </button>
-                  {OPTIONAL_COLUMN_FIELDS.map(([field, label]) => (
-                    <label key={field}>
-                      {label}
-                      <select
-                        aria-label={label}
-                        value={state.columns[field]}
-                        onChange={(event) =>
-                          updateColumns({
-                            ...state.columns,
-                            [field]: event.target.value,
-                          })
-                        }
-                      >
-                        <option value="">不指定</option>
-                        {(state.data.headers ?? []).map((header) => (
-                          <option key={header}>{header}</option>
-                        ))}
-                      </select>
-                    </label>
-                  ))}
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    disabled={
-                      state.columns.hierarchy_columns.length < 2 ||
-                      state.columns.hierarchy_columns.some((value) => !value)
-                    }
-                    onClick={preview}
-                  >
-                    生成预览
-                  </button>
-                </>
-              )}
+              <ExcelMappingFields
+                sheet={state.sheet}
+                sheets={state.data.sheets}
+                columns={state.columns}
+                headers={state.data.headers}
+                updateColumns={updateColumns}
+                onSheetChange={changeSheet}
+                onPreview={preview}
+              />
             </fieldset>
             {error && <p role="alert">{error}</p>}
-            {content && (
-              <>
-                <p>
-                  {content.categories.length} 个分类节点，{content.labels.length}{" "}
-                  个末端标签。
-                </p>
-                <div className="taxonomy-import-paths">
-                  {content.labels.map((label) => (
-                    <p key={label.code}>{taxonomyPath(content, label).join(" → ")}</p>
-                  ))}
-                </div>
-                {content.import_sources?.length > 0 && (
-                  <details>
-                    <summary>
-                      核对原始说法与归并结果（{content.import_sources.length} 行）
-                    </summary>
-                    <div className="taxonomy-import-paths">
-                      {content.import_sources.map((source, index) => (
-                        <p key={index}>
-                          第 {source.row} 行：{source.source_label || "未指定原始说法"}{" "}
-                          → {source.path?.join(" → ") || "未识别路径"}；原方向：
-                          {source.source_sentiment || "空白"}
-                        </p>
-                      ))}
-                    </div>
-                  </details>
-                )}
-              </>
-            )}
-            {state.data.issues?.length > 0 && (
-              <div className="taxonomy-import-issues" aria-label="导入检查结果">
-                {state.data.issues.map((item, index) => (
-                  <p key={index}>
-                    {item.row ? `第 ${item.row} 行：` : ""}
-                    {item.severity === "blocking" ? "需修正：" : "提示："}
-                    {item.message}
-                  </p>
-                ))}
-              </div>
-            )}
-            {Boolean(state.data.validation?.blocking?.length) && (
-              <div className="taxonomy-import-issues">
-                <b>采用后仍需完成以下发布检查</b>
-                {state.data.validation?.blocking?.map((message, index) => (
-                  <p key={index}>{message}</p>
-                ))}
-              </div>
-            )}
+            <ExcelImportPreview data={state.data} />
             <div className="modal-actions">
               <button
                 type="button"
