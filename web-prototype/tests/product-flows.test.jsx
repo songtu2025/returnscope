@@ -57,6 +57,7 @@ const { apiMock } = vi.hoisted(() => ({
     validationRun: vi.fn(),
     reviews: vi.fn(),
     review: vi.fn(),
+    reviewTaxonomy: vi.fn(),
     taxonomy: vi.fn(),
     resolveReview: vi.fn(),
     createTask: vi.fn(),
@@ -239,6 +240,7 @@ beforeEach(() => {
   });
   apiMock.productScopes.mockResolvedValue([]);
   apiMock.taxonomy.mockResolvedValue({ labels: [] });
+  apiMock.reviewTaxonomy.mockResolvedValue({ labels: [] });
   apiMock.activeValidation.mockResolvedValue(null);
   apiMock.users.mockResolvedValue([]);
   apiMock.invitations.mockResolvedValue([]);
@@ -2989,7 +2991,7 @@ describe("关键用户流程", () => {
     };
     apiMock.reviews.mockResolvedValue([row]);
     apiMock.review.mockResolvedValue(detail);
-    apiMock.taxonomy.mockResolvedValue({
+    apiMock.reviewTaxonomy.mockResolvedValue({
       labels: [{ code: "size_large", name: "尺码偏大" }],
     });
     apiMock.resolveReview.mockResolvedValue({});
@@ -3020,6 +3022,59 @@ describe("关键用户流程", () => {
     expect(onChanged).toHaveBeenCalled();
   });
 
+  const conflictingReview = {
+    id: "review-conflict",
+    task_title: "合成冲突任务",
+    owner_name: "合成用户",
+    comment: "合成评论",
+    updated_at: "2026-08-10T08:00:00Z",
+    workflow_status: "pending",
+    revision: 3,
+    revisions: [],
+    classification: { status: "MANUAL_REVIEW", primary_label_codes: ["size_large"] },
+  };
+
+  test("复核版本冲突只刷新详情，保留标签和说明草稿", async () => {
+    const row = conflictingReview;
+    const notify = vi.fn();
+    const onChanged = vi.fn();
+    apiMock.reviews.mockResolvedValue([row]);
+    apiMock.review
+      .mockResolvedValueOnce(row)
+      .mockResolvedValueOnce({ ...row, revision: 4 });
+    apiMock.reviewTaxonomy.mockResolvedValue({
+      labels: [{ code: "size_small", name: "偏小" }],
+    });
+    apiMock.resolveReview.mockRejectedValue(
+      Object.assign(new Error("合成版本冲突"), { status: 409 }),
+    );
+    render(<ReviewCenter notify={notify} onChanged={onChanged} focus={null} />);
+    await screen.findByRole("option", { name: "偏小 · size_small" });
+
+    fireEvent.change(screen.getByLabelText("最终标签"), {
+      target: { value: "size_small" },
+    });
+    fireEvent.change(screen.getByLabelText("修改说明"), {
+      target: { value: "  合成说明  " },
+    });
+    await userEvent.click(screen.getByRole("button", { name: /确认并完成复核/ }));
+
+    expect(await screen.findByText(/记录版本 #4/)).toBeVisible();
+    expect(screen.getByLabelText("最终标签")).toHaveValue("size_small");
+    expect(screen.getByLabelText("修改说明")).toHaveValue("  合成说明  ");
+    expect(screen.getByRole("button", { name: /确认并完成复核/ })).toBeEnabled();
+    expect(apiMock.resolveReview).toHaveBeenCalledExactlyOnceWith("review-conflict", {
+      expected_revision: 3,
+      label_code: "size_small",
+      note: "  合成说明  ",
+    });
+    expect(apiMock.review).toHaveBeenCalledTimes(2);
+    expect(apiMock.reviewTaxonomy).toHaveBeenCalledTimes(1);
+    expect(apiMock.reviews).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenCalledWith("该记录已被他人修改，已为你刷新", "error");
+    expect(onChanged).not.toHaveBeenCalled();
+  });
+
   test("旧复核审计目标按 workflow_status 打开指定记录", async () => {
     const row = {
       id: "review-2",
@@ -3040,7 +3095,7 @@ describe("关键用户流程", () => {
       Promise.resolve(status === "resolved" ? [row] : []),
     );
     apiMock.review.mockResolvedValue(row);
-    apiMock.taxonomy.mockResolvedValue({ labels: [] });
+    apiMock.reviewTaxonomy.mockResolvedValue({ labels: [] });
 
     render(
       <ReviewCenter
