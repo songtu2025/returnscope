@@ -1,0 +1,115 @@
+.evidence-drawer-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(13, 28, 23, 0.32);
+}
+.evidence-drawer {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: min(520px, calc(100vw - 24px));
+  overflow-y: auto;
+  background: #f7f9f7;
+  box-shadow: -20px 0 60px rgba(19, 34, 29, 0.2);
+}
+.evidence-drawer > header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 78px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(10px);
+}
+.evidence-drawer > header span {
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 700;
+}
+.evidence-drawer > header h2 {
+  margin: 4px 0 0;
+  font-size: 19px;
+}
+.drawer-section {
+  margin: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+.drawer-section > b {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+.drawer-section blockquote {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-left: 3px solid #9fcdbd;
+  color: #263b33;
+  font-size: 13px;
+  line-height: 1.55;
+  background: #f4f8f6;
+}
+.drawer-source-members details {
+  padding: 9px 0;
+  border-top: 1px solid var(--line-soft);
+}
+.drawer-source-members summary {
+  color: var(--green-dark);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.drawer-source-members summary:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 3px;
+}
+.drawer-field {
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr);
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.drawer-field:last-child {
+  border-bottom: 0;
+}
+.drawer-field span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.drawer-field b {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  text-align: right;
+}
+.evidence-unit {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid #cce1d9;
+  border-radius: 8px;
+  background: #f6faf8;
+}
+.evidence-unit > span {
+  color: var(--green-dark);
+  font-size: 11px;
+  font-weight: 700;
+}
+.evidence-unit blockquote {
+  margin-block: 7px;
+}
+.evidence-unit small,
+.drawer-empty {
+  color: var(--muted);
+  font-size: 11px;
+}
+.evidence-unit.is-unknown {
+  border-color: #ead2b7;
+  background: #fffaf2;
+}
