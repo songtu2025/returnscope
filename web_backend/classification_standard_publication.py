@@ -19,6 +19,16 @@ from web_backend.database import Database
 from web_backend.security import utc_now
 
 
+def _publication_snapshot(
+    draft: dict[str, Any], version_no: int
+) -> tuple[dict[str, Any], str, str, str]:
+    snapshot = deepcopy(draft["snapshot"])
+    taxonomy_version = f"{draft['standard_key']}-taxonomy-v{version_no}"
+    snapshot["taxonomy"]["version"] = taxonomy_version
+    encoded = encode_snapshot(snapshot)
+    return snapshot, taxonomy_version, encoded, encoded_snapshot_hash(encoded)
+
+
 class ClassificationStandardPublicationMixin:
     database: Database
     _validate_candidate: Callable[..., dict[str, Any]]
@@ -79,11 +89,9 @@ class ClassificationStandardPublicationMixin:
                     (standard_id,),
                 ).fetchone()[0]
             )
-            snapshot = deepcopy(draft["snapshot"])
-            taxonomy_version = f"{draft['standard_key']}-taxonomy-v{version_no}"
-            snapshot["taxonomy"]["version"] = taxonomy_version
-            encoded = encode_snapshot(snapshot)
-            content_hash = encoded_snapshot_hash(encoded)
+            snapshot, taxonomy_version, encoded, content_hash = _publication_snapshot(
+                draft, version_no
+            )
             version_id = new_id("classification_standard_version")
             connection.execute(
                 """
