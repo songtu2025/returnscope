@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from typing import Any
 
 from web_backend.classification_standard_contracts import ClassificationStandardNotFound
@@ -40,6 +41,14 @@ JOIN classification_standard_versions v
 LEFT JOIN classification_standard_drafts draft
   ON draft.standard_id = s.id
 """
+
+
+def _can_hard_delete(value: Mapping[str, Any]) -> bool:
+    return (
+        int(value.get("published_version_count") or 0) == 0
+        and int(value.get("task_segment_count") or 0) == 0
+        and int(value.get("result_count") or 0) == 0
+    )
 
 
 class ClassificationStandardCatalogMixin(
@@ -163,7 +172,13 @@ class ClassificationStandardCatalogMixin(
             published_count = int(standard["published_version_count"] or 0)
             task_count = int(standard["task_segment_count"] or 0)
             result_count = int(standard["result_count"] or 0)
-            hard_delete = published_count == 0 and task_count == 0 and result_count == 0
+            hard_delete = _can_hard_delete(
+                {
+                    "published_version_count": published_count,
+                    "task_segment_count": task_count,
+                    "result_count": result_count,
+                }
+            )
             if hard_delete:
                 connection.execute(
                     "DELETE FROM classification_standard_validation_runs WHERE standard_id = ?",
@@ -235,13 +250,7 @@ class ClassificationStandardCatalogMixin(
             "label_group_count": len(
                 {str(label["group"]) for label in taxonomy["labels"]}
             ),
-            "delete_mode": (
-                "delete"
-                if int(value.get("published_version_count") or 0) == 0
-                and int(value.get("task_segment_count") or 0) == 0
-                and int(value.get("result_count") or 0) == 0
-                else "deactivate"
-            ),
+            "delete_mode": ("delete" if _can_hard_delete(value) else "deactivate"),
         }
         if include_snapshot:
             output["snapshot"] = snapshot
