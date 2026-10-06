@@ -12,11 +12,9 @@ import {
 } from "@phosphor-icons/react";
 import { api } from "../api";
 import { EmptyState, InlineLoading, PageHeading } from "../components/SharedUi";
-import {
-  DetailsSection,
-  DiagnosisSection,
-  ProductsSection,
-} from "../components/ResultsSections";
+import { DetailsSection } from "../features/legacy-analysis/DetailsSection";
+import { DiagnosisSection } from "../features/legacy-analysis/DiagnosisSection";
+import { ProductsSection } from "../features/legacy-analysis/ProductsSection";
 import { OverviewSection } from "../features/legacy-analysis/OverviewSection";
 import { QualitySection } from "../features/legacy-analysis/QualitySection";
 import { formatNumber, formatPercent, formatTime } from "../lib/presentation";
