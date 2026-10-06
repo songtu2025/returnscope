@@ -11,21 +11,16 @@ import pandas as pd
 
 from web_backend.database import Database
 from web_backend.dataset_cache import load_cached_dataset
+from web_backend.datasets.quality_rules import ISSUE_REASONS as ISSUE_REASONS
+from web_backend.datasets.quality_rules import quality_masks
 
-ISSUE_REASONS = {
-    "missing_store": "缺少店铺/站点",
-    "missing_source_sku": "缺少退货 SKU",
-    "unmatched_product": "店铺/站点 + 退货 SKU 未匹配商品",
-    "missing_category": "已匹配商品缺少品类",
-    "missing_product_name": "已匹配商品缺少产品名称",
-}
+_QUALITY_CACHE_CAPACITY = 2
 
 
 @dataclass(frozen=True)
 class _QualityCacheEntry:
     returns: dict[str, Any]
     products: dict[str, Any]
-    records: pd.DataFrame
     counts: dict[str, int]
     issue_frame: pd.DataFrame
 
@@ -171,13 +166,12 @@ class DataQualityService:
             entry = _QualityCacheEntry(
                 returns=dict(returns),
                 products=dict(products),
-                records=records,
                 counts=self._counts(records),
                 issue_frame=self._issue_frame(records),
             )
             self._cache[cache_key] = entry
             self._cache.move_to_end(cache_key)
-            while len(self._cache) > 2:
+            while len(self._cache) > _QUALITY_CACHE_CAPACITY:
                 self._cache.popitem(last=False)
             return entry
 
@@ -196,18 +190,26 @@ class DataQualityService:
             .drop_duplicates()
             .shape[0]
         )
+        masks = quality_masks(
+            {
+                "store_site": store,
+                "source_sku": source_sku,
+                "product_name": product_name,
+                "category_a": category_a,
+                "category_b": category_b,
+            },
+            matched,
+        )
         return {
             "total_records": int(len(records)),
             "match_key_ready_records": int(key_ready.sum()),
             "match_key_ready_keys": key_count,
             "matched_records": int(matched.sum()),
-            "unmatched_records": int((~matched).sum()),
-            "missing_store_records": int(store.eq("").sum()),
-            "missing_source_sku_records": int(source_sku.eq("").sum()),
-            "missing_category_records": int(
-                (matched & category_a.eq("") & category_b.eq("")).sum()
-            ),
-            "missing_product_name_records": int((matched & product_name.eq("")).sum()),
+            "unmatched_records": int(masks["unmatched_product"].sum()),
+            "missing_store_records": int(masks["missing_store"].sum()),
+            "missing_source_sku_records": int(masks["missing_source_sku"].sum()),
+            "missing_category_records": int(masks["missing_category"].sum()),
+            "missing_product_name_records": int(masks["missing_product_name"].sum()),
         }
 
     @staticmethod
@@ -223,17 +225,19 @@ class DataQualityService:
         ):
             normalized[target] = DataQualityService._text(records, source)
         matched = records["product_match_status"].eq("matched")
-        masks = {
-            "missing_store": normalized["store_site"].eq(""),
-            "missing_source_sku": normalized["source_sku"].eq(""),
-            "unmatched_product": ~matched,
-            "missing_category": (
-                matched
-                & normalized["category_a"].eq("")
-                & normalized["category_b"].eq("")
-            ),
-            "missing_product_name": matched & normalized["product_name"].eq(""),
-        }
+        masks = quality_masks(
+            {
+                column: normalized[column]
+                for column in (
+                    "store_site",
+                    "source_sku",
+                    "product_name",
+                    "category_a",
+                    "category_b",
+                )
+            },
+            matched,
+        )
         frames = []
         for name, mask in masks.items():
             selected = normalized.loc[mask].copy()

@@ -228,6 +228,50 @@ def test_data_quality_preflight_hash_issues_and_zero_model_calls(
     assert missing_name["items"][0]["product_name"] == ""
 
 
+@pytest.mark.parametrize(
+    ("category_a", "category_b", "missing"),
+    [("SYNTHETIC-A", "", 0), ("", "SYNTHETIC-B", 0), ("", "", 1)],
+)
+def test_quality_category_requires_both_levels_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    category_a: str,
+    category_b: str,
+    missing: int,
+) -> None:
+    context = _seed_result_context(tmp_path)
+    records = pd.DataFrame(
+        [
+            {
+                "store": "SYNTHETIC-STORE",
+                "source_sku": "SYNTHETIC-SKU",
+                "listing": "SYNTHETIC-LISTING",
+                "product_name": "SYNTHETIC-PRODUCT",
+                "category_a": category_a,
+                "category_b": category_b,
+                "product_match_status": "matched",
+            }
+        ]
+    )
+    original = records.copy(deep=True)
+    monkeypatch.setattr(
+        data_quality_module,
+        "load_cached_dataset",
+        lambda *_args: SimpleNamespace(records=records),
+    )
+    service = DataQualityService(context.database)
+    preflight = service.preflight("version-returns", "version-products")
+    issues = service.issues(
+        "version-returns", "version-products", issue_type="missing_category"
+    )
+    assert preflight["counts"]["missing_category_records"] == missing
+    assert issues["total"] == missing
+    assert [item["record_count"] for item in issues["items"]] == (
+        [1] if missing else []
+    )
+    pd.testing.assert_frame_equal(records, original)
+
+
 def test_data_quality_cache_is_bounded_invalidates_and_isolation_safe(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
