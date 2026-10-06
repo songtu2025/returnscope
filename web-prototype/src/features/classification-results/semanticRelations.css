@@ -1,0 +1,44 @@
+.semantic-relation-list {
+  display: grid;
+  gap: 7px;
+  padding-top: 2px;
+}
+.semantic-relation-list > b {
+  font-size: 12px;
+}
+.semantic-relation-list > div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 5px 8px;
+  padding: 8px 9px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #f8faf9;
+}
+.semantic-relation-list > div > span:not(.semantic-status-badge) {
+  font-size: 11px;
+}
+.semantic-relation-badge {
+  display: inline-flex;
+  width: max-content;
+  padding: 3px 6px;
+  border-radius: 999px;
+  color: #245b85;
+  background: #eaf4fb;
+  font-size: 9px !important;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.semantic-relation-badge.is-conflict {
+  color: #8c5318;
+  background: var(--amber-pale);
+}
+.semantic-relation-list > div > small {
+  grid-column: 2;
+  color: var(--muted);
+  font-size: 10px;
+}
+.drawer-lineage .drawer-field {
+  grid-template-columns: 110px minmax(0, 1fr);
+}

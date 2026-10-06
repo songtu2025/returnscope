@@ -1,0 +1,137 @@
+.semantic-unknown-group {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+.semantic-unknown-group > header,
+.semantic-unknown-group > summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+  padding: 9px 10px;
+}
+.semantic-unknown-group > summary {
+  cursor: pointer;
+  list-style: none;
+}
+.semantic-unknown-group > summary::-webkit-details-marker {
+  display: none;
+}
+.semantic-unknown-group > summary:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: -2px;
+}
+.semantic-unknown-group > header > svg,
+.semantic-unknown-group > summary > svg:first-child {
+  margin-top: 1px;
+}
+.semantic-unknown-group > header > div,
+.semantic-unknown-group > summary > div {
+  display: grid;
+  gap: 2px;
+}
+.semantic-unknown-group > header b,
+.semantic-unknown-group > summary b {
+  font-size: 12px;
+}
+.semantic-unknown-group > header span,
+.semantic-unknown-group > summary span {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+.semantic-unknown-group > summary > svg:last-child {
+  transition: transform 150ms ease;
+}
+.semantic-unknown-group[open] > summary > svg:last-child {
+  transform: rotate(180deg);
+}
+.semantic-unknown-group.is-review {
+  border-color: #ead2b7;
+  background: #fffaf2;
+}
+.semantic-unknown-group.is-review > header {
+  color: #805517;
+}
+.semantic-unknown-group.is-informational > summary {
+  color: #245b85;
+  background: #f6fafc;
+}
+.semantic-unknown-group > div {
+  display: grid;
+  gap: 8px;
+  padding: 0 10px 10px;
+}
+.semantic-unknown-card {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #fff;
+}
+.semantic-unknown-card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.semantic-unknown-card > header > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.semantic-unknown-card > header > div > small {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+}
+.semantic-unknown-card > header b {
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+.semantic-unknown-card > header span {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+}
+.semantic-unknown-card > p {
+  margin: 6px 0 0;
+  color: #5e6c66;
+  font-size: 10px;
+  line-height: 1.45;
+}
+.semantic-unknown-card dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 12px;
+  margin: 7px 0 0;
+}
+.semantic-unknown-card dl > div {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr);
+  gap: 7px;
+  padding: 4px 0;
+  border-top: 1px solid var(--line-soft);
+  font-size: 10px;
+}
+.semantic-unknown-card dt {
+  color: var(--muted);
+}
+.semantic-unknown-card dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+.semantic-unknown-card blockquote {
+  margin: 7px 0 0;
+  padding: 7px 9px;
+  border-left: 3px solid #c7d8d1;
+  color: #263b33;
+  background: #f8faf9;
+  font-size: 10px;
+  line-height: 1.5;
+}
