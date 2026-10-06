@@ -1,16 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import {
-  ArrowClockwise,
-  CaretLeft,
-  CaretRight,
-  CheckCircle,
-  MagnifyingGlass,
-  ShieldCheck,
-} from "@phosphor-icons/react";
+import { ArrowClockwise, MagnifyingGlass } from "@phosphor-icons/react";
 import Button from "antd/es/button";
 import Input from "antd/es/input";
 import { api } from "../../api";
-import { InlineLoading, Modal } from "../../components/SharedUi";
+import { InlineLoading } from "../../components/SharedUi";
+
+import { ProductDimensionEditDialog } from "./ProductDimensionEditDialog";
+import { ProductDimensionTable } from "./ProductDimensionTable";
 
 /** @typedef {import("../../shared/api/dataManagementContracts").DatasetRecord} DatasetRecord */
 /** @typedef {import("../../shared/api/dataManagementContracts").DatasetRowsPage} DatasetRowsPage */
@@ -100,280 +96,169 @@ export function ProductDimensionRows({ dataset, notify, onChanged }) {
   const hasFilters = Boolean(query || store || category);
   return (
     <section className="dimension-table-panel">
-      <div className="dimension-table-toolbar">
-        <form
-          className="dimension-search"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setPage(1);
-            setQuery(draftQuery);
-          }}
-        >
-          <Input
-            aria-label="搜索产品信息"
-            prefix={<MagnifyingGlass size={15} />}
-            value={draftQuery}
-            onChange={(event) => setDraftQuery(event.target.value)}
-            placeholder="搜索 MSKU、商品名称或 Listing"
-          />
-          <Button htmlType="submit" autoInsertSpace={false}>
-            搜索
-          </Button>
-        </form>
-        <div className="product-master-filters">
-          <label>
-            店铺/站点
-            <select
-              value={store}
-              onChange={(event) => {
-                setPage(1);
-                setStore(event.target.value);
-              }}
-            >
-              <option value="">全部</option>
-              {(data?.facets?.stores ?? []).map((value) => (
-                <option value={value} key={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            品类
-            <select
-              value={category}
-              onChange={(event) => {
-                setPage(1);
-                setCategory(event.target.value);
-              }}
-            >
-              <option value="">全部</option>
-              {(data?.facets?.categories ?? []).map((value) => (
-                <option value={value} key={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <div>
-          <span>共 {(data?.total ?? dataset.row_count).toLocaleString()} 条产品</span>
-          <Button
-            autoInsertSpace={false}
-            icon={<ArrowClockwise size={15} />}
-            onClick={() => load().catch((error) => notify(error.message, "error"))}
-          >
-            刷新
-          </Button>
-        </div>
-      </div>
+      <ProductDimensionToolbar
+        data={data}
+        dataset={dataset}
+        draftQuery={draftQuery}
+        setDraftQuery={setDraftQuery}
+        setPage={setPage}
+        setQuery={setQuery}
+        store={store}
+        setStore={setStore}
+        category={category}
+        setCategory={setCategory}
+        load={load}
+        notify={notify}
+      />
       {!data && <InlineLoading label="读取产品信息…" />}
       {data && (
-        <>
-          <div className="dimension-table">
-            <div className="table-head">
-              <span>MSKU</span>
-              <span>店铺 / 站点</span>
-              <span>Listing</span>
-              <span>产品名称</span>
-              <span>品类</span>
-              <span>状态</span>
-              <span>操作</span>
-            </div>
-            {data.records.map((row) => (
-              <div key={row._row_index}>
-                <code title={row.MSKU}>{row.MSKU || "—"}</code>
-                <span title={row["店铺/站点"]}>{row["店铺/站点"] || "—"}</span>
-                <span title={row.Listing}>{row.Listing || "—"}</span>
-                <span title={row["产品名称"]}>{row["产品名称"] || "—"}</span>
-                <span title={[row["品类A"], row["品类B"]].filter(Boolean).join(" > ")}>
-                  {[row["品类A"], row["品类B"]].filter(Boolean).join(" > ") || "待补充"}
-                </span>
-                <span className="product-master-status">
-                  <CheckCircle size={14} weight="fill" />
-                  生效
-                </span>
-                <button
-                  type="button"
-                  aria-label={`编辑 ${row.MSKU} 产品信息`}
-                  onClick={() => {
-                    setEditing(row);
-                    setChangeNote("");
-                  }}
-                >
-                  编辑信息
-                </button>
-              </div>
-            ))}
-            {data.records.length === 0 && (
-              <div className="dimension-empty">
-                <span>没有匹配的产品信息。</span>
-                {hasFilters && (
-                  <button type="button" onClick={clearFilters}>
-                    清除筛选
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-          <footer className="dimension-pagination">
-            <span className="dimension-page-size">{pageSize} 条/页</span>
-            <div>
-              <button
-                type="button"
-                aria-label="上一页"
-                disabled={page === 1}
-                onClick={() => setPage((current) => current - 1)}
-              >
-                <CaretLeft size={15} />
-              </button>
-              {pageStart > 1 && (
-                <>
-                  <button type="button" onClick={() => setPage(1)}>
-                    1
-                  </button>
-                  <span>…</span>
-                </>
-              )}
-              {visiblePages.map((value) => (
-                <button
-                  type="button"
-                  className={value === page ? "active" : ""}
-                  key={value}
-                  onClick={() => setPage(value)}
-                >
-                  {value}
-                </button>
-              ))}
-              {(visiblePages.at(-1) ?? 0) < totalPages && (
-                <>
-                  <span>…</span>
-                  <button type="button" onClick={() => setPage(totalPages)}>
-                    {totalPages}
-                  </button>
-                </>
-              )}
-              <button
-                type="button"
-                aria-label="下一页"
-                disabled={page === totalPages}
-                onClick={() => setPage((current) => current + 1)}
-              >
-                <CaretRight size={15} />
-              </button>
-            </div>
-          </footer>
-        </>
+        <ProductDimensionTable
+          data={data}
+          page={page}
+          pageSize={pageSize}
+          pageStart={pageStart}
+          totalPages={totalPages}
+          visiblePages={visiblePages}
+          setPage={setPage}
+          hasFilters={hasFilters}
+          clearFilters={clearFilters}
+          onEdit={(row) => {
+            setEditing(row);
+            setChangeNote("");
+          }}
+        />
       )}
       {editing && (
-        <Modal
-          eyebrow="产品信息"
-          title={`编辑产品信息 · ${editing.MSKU}`}
+        <ProductDimensionEditDialog
+          dataset={dataset}
+          editing={editing}
+          setEditing={setEditing}
+          changeNote={changeNote}
+          setChangeNote={setChangeNote}
+          saving={saving}
+          onSave={save}
           onClose={() => setEditing(null)}
-        >
-          <form className="modal-form product-info-edit-form" onSubmit={save}>
-            <fieldset className="product-info-form-section product-info-identity-fields">
-              <legend>匹配标识</legend>
-              <div>
-                <label>
-                  MSKU
-                  <input
-                    value={editing.MSKU}
-                    onChange={(event) =>
-                      setEditing({ ...editing, MSKU: event.target.value })
-                    }
-                    required
-                  />
-                </label>
-                <label>
-                  店铺 / 站点
-                  <input
-                    value={editing["店铺/站点"]}
-                    onChange={(event) =>
-                      setEditing({ ...editing, "店铺/站点": event.target.value })
-                    }
-                    required
-                  />
-                </label>
-                <label>
-                  Listing
-                  <input
-                    value={editing.Listing}
-                    onChange={(event) =>
-                      setEditing({ ...editing, Listing: event.target.value })
-                    }
-                    required
-                  />
-                </label>
-              </div>
-            </fieldset>
-            <fieldset className="product-info-form-section product-info-attribute-fields">
-              <legend>产品属性</legend>
-              <div>
-                {editing["产品名称"] !== undefined && (
-                  <label className="product-info-name-field">
-                    产品名称
-                    <input
-                      value={editing["产品名称"]}
-                      onChange={(event) =>
-                        setEditing({ ...editing, 产品名称: event.target.value })
-                      }
-                    />
-                  </label>
-                )}
-                {editing["品类A"] !== undefined && (
-                  <label>
-                    品类A
-                    <input
-                      value={editing["品类A"]}
-                      onChange={(event) =>
-                        setEditing({ ...editing, 品类A: event.target.value })
-                      }
-                    />
-                  </label>
-                )}
-                {editing["品类B"] !== undefined && (
-                  <label>
-                    品类B
-                    <input
-                      value={editing["品类B"]}
-                      onChange={(event) =>
-                        setEditing({ ...editing, 品类B: event.target.value })
-                      }
-                    />
-                  </label>
-                )}
-              </div>
-            </fieldset>
-            <label className="product-info-change-note">
-              修改原因
-              <textarea
-                value={changeNote}
-                onChange={(event) => setChangeNote(event.target.value)}
-                rows={2}
-                maxLength={500}
-                placeholder="必填：说明为什么修改这条产品信息"
-                required
-              />
-            </label>
-            <div className="snapshot-notice">
-              <ShieldCheck size={18} />
-              <span>
-                保存后创建 v{dataset.current_version + 1}，历史任务仍保留 v
-                {dataset.current_version} 快照。
-              </span>
-            </div>
-            <div className="modal-actions">
-              <Button autoInsertSpace={false} onClick={() => setEditing(null)}>
-                取消
-              </Button>
-              <Button type="primary" htmlType="submit" disabled={saving}>
-                {saving ? "正在创建新版本…" : "保存并创建新版本"}
-              </Button>
-            </div>
-          </form>
-        </Modal>
+        />
       )}
     </section>
+  );
+}
+
+/** @param {{draftQuery: string, setDraftQuery: (value: string) => void, setPage: (value: number) => void, setQuery: (value: string) => void}} props */
+function ProductDimensionSearch({ draftQuery, setDraftQuery, setPage, setQuery }) {
+  return (
+    <form
+      className="dimension-search"
+      onSubmit={(event) => {
+        event.preventDefault();
+        setPage(1);
+        setQuery(draftQuery);
+      }}
+    >
+      <Input
+        aria-label="搜索产品信息"
+        prefix={<MagnifyingGlass size={15} />}
+        value={draftQuery}
+        onChange={(event) => setDraftQuery(event.target.value)}
+        placeholder="搜索 MSKU、商品名称或 Listing"
+      />
+      <Button htmlType="submit" autoInsertSpace={false}>
+        搜索
+      </Button>
+    </form>
+  );
+}
+
+/** @param {{data: DatasetRowsPage | null, store: string, category: string, setStore: (value: string) => void, setCategory: (value: string) => void, setPage: (value: number) => void}} props */
+function ProductDimensionFilters({
+  data,
+  store,
+  category,
+  setStore,
+  setCategory,
+  setPage,
+}) {
+  return (
+    <div className="product-master-filters">
+      <label>
+        店铺/站点
+        <select
+          value={store}
+          onChange={(event) => {
+            setPage(1);
+            setStore(event.target.value);
+          }}
+        >
+          <option value="">全部</option>
+          {(data?.facets?.stores ?? []).map((value) => (
+            <option value={value} key={value}>
+              {value}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        品类
+        <select
+          value={category}
+          onChange={(event) => {
+            setPage(1);
+            setCategory(event.target.value);
+          }}
+        >
+          <option value="">全部</option>
+          {(data?.facets?.categories ?? []).map((value) => (
+            <option value={value} key={value}>
+              {value}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  );
+}
+
+/** @param {{data: DatasetRowsPage | null, dataset: DatasetRecord, draftQuery: string, setDraftQuery: (value: string) => void, setPage: (value: number) => void, setQuery: (value: string) => void, store: string, setStore: (value: string) => void, category: string, setCategory: (value: string) => void, load: () => Promise<void>, notify: (message: string, tone?: string) => void}} props */
+function ProductDimensionToolbar({
+  data,
+  dataset,
+  draftQuery,
+  setDraftQuery,
+  setPage,
+  setQuery,
+  store,
+  setStore,
+  category,
+  setCategory,
+  load,
+  notify,
+}) {
+  return (
+    <div className="dimension-table-toolbar">
+      <ProductDimensionSearch
+        draftQuery={draftQuery}
+        setDraftQuery={setDraftQuery}
+        setPage={setPage}
+        setQuery={setQuery}
+      />
+      <ProductDimensionFilters
+        data={data}
+        store={store}
+        category={category}
+        setStore={setStore}
+        setCategory={setCategory}
+        setPage={setPage}
+      />
+      <div>
+        <span>共 {(data?.total ?? dataset.row_count).toLocaleString()} 条产品</span>
+        <Button
+          autoInsertSpace={false}
+          icon={<ArrowClockwise size={15} />}
+          onClick={() => load().catch((error) => notify(error.message, "error"))}
+        >
+          刷新
+        </Button>
+      </div>
+    </div>
   );
 }
