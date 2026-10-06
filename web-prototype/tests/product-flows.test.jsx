@@ -840,6 +840,57 @@ describe("关键用户流程", () => {
       expect.objectContaining({ listing: "SR001", view: "details" }),
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
+
+    await user.selectOptions(
+      screen.getByLabelText("Listing", { exact: true }),
+      "SK001",
+    );
+    await user.selectOptions(
+      screen.getByLabelText("问题标签", { exact: true }),
+      "SIZE_LARGE",
+    );
+    await waitFor(() =>
+      expect(apiMock.analysis).toHaveBeenLastCalledWith(
+        "task-live-result",
+        expect.objectContaining({
+          listing: "SK001",
+          problem_code: "SIZE_LARGE",
+          focus_problem: "",
+          page: 1,
+          page_size: 50,
+          view: "details",
+        }),
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      ),
+    );
+    const downloadFilters = apiMock.analysisDownloadUrl.mock.calls.at(-1)[1];
+    expect(downloadFilters).toEqual({
+      start_date: "",
+      end_date: "",
+      category_a: "",
+      category_b: "",
+      listing: "SK001",
+      sku: "",
+      asin: "",
+      reason: "",
+      status: "",
+      problem_code: "SIZE_LARGE",
+      claim_relation: "",
+    });
+    await user.click(screen.getByRole("button", { name: "重置筛选" }));
+    await waitFor(() =>
+      expect(apiMock.analysis).toHaveBeenLastCalledWith(
+        "task-live-result",
+        expect.objectContaining({
+          listing: "",
+          problem_code: "",
+          focus_problem: "",
+          page: 1,
+          view: "details",
+        }),
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      ),
+    );
   });
 
   test("旧版分析结果首次读取统一使用公共加载态", async () => {

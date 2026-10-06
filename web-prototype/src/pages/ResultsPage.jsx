@@ -5,12 +5,11 @@ import {
   ChartBar,
   CheckCircle,
   DownloadSimple,
-  FunnelSimple,
   Plus,
-  SlidersHorizontal,
   WarningCircle,
 } from "@phosphor-icons/react";
 import { api } from "../api";
+import { AnalysisFilters } from "../features/legacy-analysis/AnalysisFilters";
 import { EmptyState, InlineLoading, PageHeading } from "../components/SharedUi";
 import { DetailsSection } from "../features/legacy-analysis/DetailsSection";
 import { DiagnosisSection } from "../features/legacy-analysis/DiagnosisSection";
@@ -45,7 +44,6 @@ const EMPTY_FILTERS = {
 /** @typedef {import("../features/task-runtime/taskRuntimeContracts").AnalysisTask & {result_version?: number, completed_at?: string}} AnalysisResultTask */
 /** @typedef {import("../shared/api/legacyAnalysisContracts").LegacyAnalysis} LegacyAnalysis */
 /** @typedef {import("../shared/api/legacyAnalysisContracts").AnalysisMetrics} AnalysisMetrics */
-/** @typedef {import("../shared/api/legacyAnalysisContracts").AnalysisProblemLabel} AnalysisProblemLabel */
 /** @typedef {{kind: "result", id: string, listing?: string}} ResultsFocus */
 /** @typedef {{notify: (message: string, tone?: string) => void, onNavigate: Navigate, focus?: ResultsFocus | null}} ResultsPageProps */
 
@@ -316,109 +314,15 @@ export function ResultsPage({ notify, onNavigate, focus = null }) {
 
           {analysis && (
             <>
-              <section
-                className={`analysis-filter-panel ${filtersOpen ? "is-open" : ""}`}
-              >
-                <header>
-                  <div>
-                    <FunnelSimple size={19} />
-                    <div>
-                      <b>分析筛选</b>
-                      <span>
-                        当前范围 {formatNumber(analysis.scope.filtered_records)} /{" "}
-                        {formatNumber(analysis.scope.total_records)} 条退货记录
-                      </span>
-                    </div>
-                  </div>
-                  <div>
-                    {activeFilterCount > 0 && (
-                      <button className="text-button" onClick={resetFilters}>
-                        重置筛选
-                      </button>
-                    )}
-                    <button
-                      className="secondary-button"
-                      onClick={() => setFiltersOpen((current) => !current)}
-                      aria-expanded={filtersOpen}
-                    >
-                      <SlidersHorizontal size={17} />
-                      {filtersOpen
-                        ? "收起"
-                        : `展开${activeFilterCount ? `（${activeFilterCount}）` : ""}`}
-                    </button>
-                  </div>
-                </header>
-                {filtersOpen && (
-                  <div className="analysis-filter-grid">
-                    <FilterInput
-                      label="开始日期"
-                      type="date"
-                      min={analysis.filters.date_min ?? undefined}
-                      max={analysis.filters.date_max ?? undefined}
-                      value={filters.start_date}
-                      onChange={(value) => changeFilter("start_date", value)}
-                    />
-                    <FilterInput
-                      label="结束日期"
-                      type="date"
-                      min={analysis.filters.date_min ?? undefined}
-                      max={analysis.filters.date_max ?? undefined}
-                      value={filters.end_date}
-                      onChange={(value) => changeFilter("end_date", value)}
-                    />
-                    <FilterSelect
-                      label="Listing"
-                      value={filters.listing}
-                      options={analysis.filters.listings}
-                      onChange={(value) => changeFilter("listing", value)}
-                    />
-                    <FilterSelect
-                      label="问题标签"
-                      value={filters.problem_code}
-                      options={analysis.filters.problem_labels}
-                      optionValue="code"
-                      optionLabel="name"
-                      onChange={(value) => changeFilter("problem_code", value)}
-                    />
-                    <FilterSelect
-                      label="处理状态"
-                      value={filters.status}
-                      options={analysis.filters.statuses}
-                      onChange={(value) => changeFilter("status", value)}
-                    />
-                    <FilterSelect
-                      label="品类A"
-                      value={filters.category_a}
-                      options={analysis.filters.category_as}
-                      onChange={(value) => changeFilter("category_a", value)}
-                    />
-                    <FilterSelect
-                      label="品类B"
-                      value={filters.category_b}
-                      options={analysis.filters.category_bs}
-                      onChange={(value) => changeFilter("category_b", value)}
-                    />
-                    <FilterSelect
-                      label="Amazon 原因"
-                      value={filters.reason}
-                      options={analysis.filters.reasons}
-                      onChange={(value) => changeFilter("reason", value)}
-                    />
-                    <FilterSelect
-                      label="SKU"
-                      value={filters.sku}
-                      options={analysis.filters.skus}
-                      onChange={(value) => changeFilter("sku", value)}
-                    />
-                    <FilterSelect
-                      label="Listing 承诺关系"
-                      value={filters.claim_relation}
-                      options={analysis.filters.claim_relations}
-                      onChange={(value) => changeFilter("claim_relation", value)}
-                    />
-                  </div>
-                )}
-              </section>
+              <AnalysisFilters
+                analysis={analysis}
+                filters={filters}
+                filtersOpen={filtersOpen}
+                activeFilterCount={activeFilterCount}
+                onReset={resetFilters}
+                onToggle={() => setFiltersOpen((current) => !current)}
+                onChange={changeFilter}
+              />
 
               <MetricCards metrics={analysis.overview.metrics} />
 
@@ -488,58 +392,6 @@ export function ResultsPage({ notify, onNavigate, focus = null }) {
         </>
       )}
     </div>
-  );
-}
-
-/** @param {{label: string, value: string, onChange: (value: string) => void} & Omit<import("react").InputHTMLAttributes<HTMLInputElement>, "value" | "onChange">} props */
-function FilterInput({ label, value, onChange, ...props }) {
-  return (
-    <label className="analysis-filter-field">
-      <span>{label}</span>
-      <input
-        {...props}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </label>
-  );
-}
-
-/** @param {{label: string, value: string, options?: Array<string | AnalysisProblemLabel>, optionValue?: "code" | null, optionLabel?: "name" | null, onChange: (value: string) => void}} props */
-function FilterSelect({
-  label,
-  value,
-  options = [],
-  optionValue = null,
-  optionLabel = null,
-  onChange,
-}) {
-  return (
-    <label className="analysis-filter-field">
-      <span>{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)}>
-        <option value="">全部</option>
-        {options.map((option) => {
-          const optionId =
-            typeof option === "string"
-              ? option
-              : optionValue
-                ? option[optionValue]
-                : option.code;
-          const optionName =
-            typeof option === "string"
-              ? option
-              : optionLabel
-                ? option[optionLabel]
-                : option.name;
-          return (
-            <option key={optionId} value={optionId}>
-              {optionName}
-            </option>
-          );
-        })}
-      </select>
-    </label>
   );
 }
 
