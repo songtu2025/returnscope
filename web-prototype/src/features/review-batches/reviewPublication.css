@@ -1,0 +1,29 @@
+.review-publish-modal,
+.review-create-modal {
+  display: grid;
+  gap: 12px;
+}
+
+.review-create-scope {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 12px;
+  border-radius: 8px;
+  color: #315f4e;
+  background: #eff8f4;
+}
+
+.review-create-scope p,
+.review-publish-modal p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.review-create-reason-hint {
+  display: block;
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}

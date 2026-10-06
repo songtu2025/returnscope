@@ -1,0 +1,139 @@
+.semantic-review-ledger {
+  display: grid;
+  gap: 12px;
+}
+
+.semantic-review-ledger > header,
+.semantic-review-ledger > header > div:first-child {
+  display: grid;
+  gap: 10px;
+}
+
+.semantic-review-ledger > header > div:first-child {
+  gap: 3px;
+}
+
+.semantic-review-ledger > header > div:first-child > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.semantic-review-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.semantic-review-summary > span,
+.semantic-review-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 26px;
+  padding: 4px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  color: var(--muted);
+  background: #f7faf8;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.semantic-review-summary .has-review,
+.semantic-review-state.is-review {
+  border-color: #ead09e;
+  color: #805517;
+  background: #fff8e8;
+}
+
+.semantic-review-summary .has-failure,
+.semantic-review-state.is-failure {
+  border-color: #ecc2bf;
+  color: var(--red);
+  background: #fff1f0;
+}
+
+.semantic-review-state.is-mapped {
+  border-color: #b8dfcf;
+  color: var(--green-dark);
+  background: var(--green-pale);
+}
+
+.semantic-review-items {
+  display: grid;
+  gap: 8px;
+}
+
+.semantic-review-groups,
+.semantic-review-group {
+  display: grid;
+  gap: 10px;
+}
+
+.semantic-review-group {
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  background: #f8faf9;
+}
+
+.semantic-review-group.is-system {
+  border-color: #ecc2bf;
+  background: #fff7f6;
+}
+
+.semantic-review-group > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.semantic-review-group > header > div {
+  display: grid;
+  gap: 3px;
+}
+
+.semantic-review-group > header span,
+.semantic-review-group-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.semantic-review-group.is-system > header > span {
+  flex: 0 0 auto;
+  color: var(--red);
+  font-weight: 700;
+}
+
+.semantic-review-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(165px, 0.8fr);
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-left: 3px solid #b8dfcf;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.semantic-review-item.is-review {
+  border-left-color: var(--amber);
+  background: #fffdf7;
+}
+
+.semantic-review-item.is-failure {
+  border-left-color: var(--red);
+  background: #fffafa;
+}
+
+.semantic-review-item.is-informational {
+  border-left-color: #9aa8a2;
+  background: #f8faf9;
+}
+
+.semantic-review-item.is-removed {
+  opacity: 0.72;
+}
