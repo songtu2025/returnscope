@@ -1,16 +1,10 @@
+import { CLASSIFICATION_LABEL_SENTIMENTS as SENTIMENT_LABELS } from "./classificationLabelSentiments";
 import { ValidationFactTrace } from "./ClassificationValidationQuality";
 /** @typedef {import("./ClassificationStandardValidationResult").ClassificationStandardValidationResultProps} ResultProps */
 /** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardValidationRunDetail} ClassificationStandardValidationRunDetail */
-/** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardSentiment} ClassificationStandardSentiment */
 /** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationValidationSemanticResult} ClassificationValidationSemanticResult */
 /** @typedef {ClassificationStandardValidationRunDetail["items"][number]} ComparisonItem */
 /** @typedef {"all" | "changed" | "semantic" | "primary" | "errors" | "unknown"} ComparisonFilter */
-/** @type {Record<ClassificationStandardSentiment, string>} */
-const SENTIMENT_LABELS = {
-  POSITIVE: "正向",
-  NEGATIVE: "负向",
-  NEUTRAL: "中性",
-};
 
 /** @param {string[] | undefined} values */
 function labels(values) {
