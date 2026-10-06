@@ -1,0 +1,91 @@
+.standard-delete-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.standard-validation-approval {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.8fr) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 16px;
+  background: #f8faf9;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.standard-quality-summary {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.standard-quality-group {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+
+.standard-quality-group > summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.standard-quality-group details {
+  margin-block: 10px;
+}
+
+.standard-quality-group summary:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 3px;
+}
+
+.standard-validation-approval > div {
+  display: grid;
+  gap: 4px;
+}
+
+.standard-validation-approval span,
+.standard-validation-approval label {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.standard-validation-approval label:not(.standard-validation-confirmation) {
+  display: grid;
+  gap: 6px;
+}
+
+.standard-validation-approval textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  resize: vertical;
+}
+
+.standard-validation-confirmation {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+
+.standard-validation-approval.ready {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  color: var(--green);
+  background: var(--green-pale);
+}
+
+@media (max-width: 900px) {
+  .standard-validation-approval:not(.ready) {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .standard-validation-approval:not(.ready) .primary-button {
+    justify-self: start;
+  }
+}

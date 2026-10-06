@@ -1,0 +1,158 @@
+@media (max-height: 760px) {
+  .label-directory {
+    gap: 6px;
+    padding-top: 10px;
+  }
+  .label-directory > header .icon-button {
+    width: 28px;
+    height: 28px;
+  }
+  .label-directory-scroll > button {
+    padding-block: 8px;
+  }
+  .label-workspace > header {
+    padding-block: 12px;
+  }
+  .label-workspace > header h2 {
+    font-size: 18px;
+    margin-top: 0;
+  }
+  .label-workspace .label-business-definition dl {
+    margin-block: 12px;
+    padding-bottom: 12px;
+  }
+}
+
+/* 查看与编辑共用工作台，低频操作收纳到菜单。 */
+.standard-more-menu {
+  position: relative;
+  flex-shrink: 0;
+}
+.standard-more-menu summary {
+  cursor: pointer;
+  list-style: none;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: white;
+}
+.standard-more-menu[open] > button {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 10;
+  min-width: 120px;
+  padding: 12px;
+  color: var(--red);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: white;
+  box-shadow: var(--shadow-sm);
+  white-space: nowrap;
+}
+.label-code-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.label-code-line .icon-button {
+  width: 26px;
+  height: 26px;
+  min-height: 26px;
+  border: 0;
+  color: var(--muted);
+}
+.label-related-rules {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+.label-related-rules p {
+  color: var(--muted);
+}
+.label-related-rules h3 {
+  font-size: 13px;
+}
+.label-related-rules button {
+  margin: 6px 6px 0 0;
+}
+.standard-editor-stack fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.standard-editor-stack .standard-editor-section {
+  margin-bottom: 16px;
+}
+.standard-settings-extra {
+  margin-top: 16px;
+}
+.standard-more-menu summary:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 3px;
+}
+
+.label-boundaries textarea {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+}
+.label-boundaries > div {
+  margin-block: 20px;
+}
+.label-example {
+  padding: 14px;
+  margin-block: 12px;
+  border: 1px solid var(--line, #dce5df);
+  border-radius: 8px;
+}
+.label-example label {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.label-keyword-editor summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.standard-structure-issues details {
+  margin-block: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.standard-structure-issues summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.standard-structure-issues ul {
+  list-style: none;
+  padding: 0;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.standard-structure-issues li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-block: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.standard-structure-issues li > div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+.standard-structure-issues li > button {
+  flex-shrink: 0;
+}
+.standard-structure-issues li span,
+.standard-structure-issues li small {
+  color: var(--muted);
+}
