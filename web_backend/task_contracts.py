@@ -6,6 +6,7 @@ from typing import Any
 ACTIVE_STATUSES = {"queued", "running", "paused"}
 FINAL_STATUSES = {"completed", "failed", "cancelled", "blocked", "partial"}
 WAITING_SEGMENT_STATUSES = {"queued", "retry_pending"}
+COMPLETED_SEGMENT_STATUSES = frozenset({"completed", "completed_with_errors"})
 SEGMENT_USER_LIMIT = 3
 
 

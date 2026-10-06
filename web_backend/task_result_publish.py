@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -7,7 +8,10 @@ from typing import Any
 from web_backend.common import json_text
 from web_backend.database import Database
 from web_backend.security import utc_now
-from web_backend.task_contracts import TaskResultPublishConflict
+from web_backend.task_contracts import (
+    COMPLETED_SEGMENT_STATUSES,
+    TaskResultPublishConflict,
+)
 
 
 class TaskResultPublishMixin:
@@ -28,7 +32,7 @@ class TaskResultPublishMixin:
         clean_reason, publisher = self._validate_result_publish_retry(reason)
         now = utc_now()
         with self.database.transaction(immediate=True) as connection:
-            task, segment = self._result_publish_retry_target(
+            _, segment = self._result_publish_retry_target(
                 connection,
                 task_id,
                 segment_id,
@@ -104,11 +108,11 @@ class TaskResultPublishMixin:
 
     def _result_publish_retry_target(
         self,
-        connection: Any,
+        connection: sqlite3.Connection,
         task_id: str,
         segment_id: str,
         expected_revision: int,
-    ) -> tuple[Any, Any]:
+    ) -> tuple[sqlite3.Row, sqlite3.Row]:
         task = connection.execute(
             "SELECT revision, stage FROM tasks WHERE id = ?",
             (task_id,),
@@ -130,7 +134,7 @@ class TaskResultPublishMixin:
             raise TaskResultPublishConflict("Listing 分类结果已经发布")
         if publish_status != "failed":
             raise TaskResultPublishConflict("Listing 分类结果不处于发布失败状态")
-        if segment["status"] not in {"completed", "completed_with_errors"}:
+        if segment["status"] not in COMPLETED_SEGMENT_STATUSES:
             raise TaskResultPublishConflict("仅分类已完成的 Listing 可以重试发布")
         checkpoint_path = str(segment["result_json_path"] or "").strip()
         if not checkpoint_path or not Path(checkpoint_path).is_file():

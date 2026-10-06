@@ -6,8 +6,10 @@ from typing import Any
 
 from return_semantics.pipeline import PipelineRun
 from return_semantics.schemas import ValidatedClassification
+from web_backend.task_contracts import (
+    COMPLETED_SEGMENT_STATUSES as COMPLETED_SEGMENT_STATUSES,
+)
 
-COMPLETED_SEGMENT_STATUSES = frozenset({"completed", "completed_with_errors"})
 TASK_ERROR_TEXT_LIMIT = 2000
 TASK_EVENT_ERROR_TEXT_LIMIT = 500
 

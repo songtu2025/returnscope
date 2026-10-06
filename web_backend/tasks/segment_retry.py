@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import Callable
 from typing import Any
 
@@ -7,12 +8,16 @@ from web_backend.classification_result_queries import system_rerun_count
 from web_backend.common import json_text, json_value
 from web_backend.database import Database
 from web_backend.security import utc_now
-from web_backend.task_contracts import (
-    TaskRevisionConflict,
+
+_RETRYABLE_SEGMENT_STATUSES = frozenset(
+    {"failed", "completed_with_errors", "not_started"}
 )
+_BLOCK_ALL_UNRESOLVED_POLICY = "block_all"
 
 
-def _retry_system_failure_count(connection: Any, segment: Any) -> int:
+def _retry_system_failure_count(
+    connection: sqlite3.Connection, segment: sqlite3.Row
+) -> int:
     if (
         segment["status"] != "completed_with_errors"
         or segment["result_version_id"] is None
@@ -26,6 +31,7 @@ def _retry_system_failure_count(connection: Any, segment: Any) -> int:
 
 class TaskSegmentRetryMixin:
     _insert_audit: Callable[..., None]
+    _validate_task_revision: Callable[..., None]
     database: Database
     get: Callable[..., dict[str, Any] | None]
 
@@ -42,44 +48,9 @@ class TaskSegmentRetryMixin:
             raise ValueError("请填写片段重试原因")
         now = utc_now()
         with self.database.transaction(immediate=True) as connection:
-            task = connection.execute(
-                "SELECT revision, status, snapshot_json FROM tasks WHERE id = ?",
-                (task_id,),
-            ).fetchone()
-            if task is None:
-                raise ValueError("任务不存在")
-            if int(task["revision"]) != expected_revision:
-                raise TaskRevisionConflict("任务已被他人修改，请刷新后重试")
-            segment = connection.execute(
-                """
-                SELECT * FROM task_segments
-                WHERE task_id = ? AND segment_key = ?
-                """,
-                (task_id, segment_key),
-            ).fetchone()
-            if segment is None:
-                raise ValueError("任务片段不存在")
-            if segment["agent_key"] == "unknown" or segment["status"] == "blocked":
-                raise ValueError("未知品类仍未解决，不能直接重试")
-            allowed = {"failed", "completed_with_errors", "not_started"}
-            if segment["status"] not in allowed:
-                raise ValueError("该片段当前状态不允许重试")
-            system_failure_count = _retry_system_failure_count(connection, segment)
-            if segment["status"] == "not_started":
-                snapshot = json_value(task["snapshot_json"], {})
-                policy = snapshot.get("execution_plan", {}).get(
-                    "unresolved_policy",
-                    "block_all",
-                )
-                blocked_exists = connection.execute(
-                    """
-                    SELECT 1 FROM task_segments
-                    WHERE task_id = ? AND status = 'blocked' LIMIT 1
-                    """,
-                    (task_id,),
-                ).fetchone()
-                if policy == "block_all" and blocked_exists is not None:
-                    raise ValueError("当前策略仍阻断全部片段，请先重新规划")
+            segment, system_failure_count = self._segment_retry_target(
+                connection, task_id, segment_key, expected_revision
+            )
             connection.execute(
                 """
                 UPDATE task_segments
@@ -110,9 +81,9 @@ class TaskSegmentRetryMixin:
                 "before_status": segment["status"],
                 "after_status": "retry_pending",
                 "reason": clean_reason,
-                "retry_scope": (
-                    "system_failures_only" if system_failure_count else "full_segment"
-                ),
+                "retry_scope": "system_failures_only"
+                if system_failure_count
+                else "full_segment",
                 "system_rerun_count": system_failure_count,
             }
             connection.execute(
@@ -130,10 +101,7 @@ class TaskSegmentRetryMixin:
                 task_id,
                 "segment_retry",
                 actor_id,
-                {
-                    "segment_key": segment_key,
-                    "status": segment["status"],
-                },
+                {"segment_key": segment_key, "status": segment["status"]},
                 {
                     "segment_key": segment_key,
                     "status": "retry_pending",
@@ -144,3 +112,49 @@ class TaskSegmentRetryMixin:
                 now,
             )
         return self.get(task_id) or {}
+
+    def _segment_retry_target(
+        self,
+        connection: sqlite3.Connection,
+        task_id: str,
+        segment_key: str,
+        expected_revision: int,
+    ) -> tuple[sqlite3.Row, int]:
+        task = connection.execute(
+            "SELECT revision, status, snapshot_json FROM tasks WHERE id = ?", (task_id,)
+        ).fetchone()
+        self._validate_task_revision(task, expected_revision)
+        segment = connection.execute(
+            """
+                SELECT * FROM task_segments
+                WHERE task_id = ? AND segment_key = ?
+                """,
+            (task_id, segment_key),
+        ).fetchone()
+        if segment is None:
+            raise ValueError("任务片段不存在")
+        if segment["agent_key"] == "unknown" or segment["status"] == "blocked":
+            raise ValueError("未知品类仍未解决，不能直接重试")
+        if segment["status"] not in _RETRYABLE_SEGMENT_STATUSES:
+            raise ValueError("该片段当前状态不允许重试")
+        system_failure_count = _retry_system_failure_count(connection, segment)
+        if segment["status"] == "not_started":
+            self._validate_unstarted_retry(connection, task, task_id)
+        return (segment, system_failure_count)
+
+    def _validate_unstarted_retry(
+        self, connection: sqlite3.Connection, task: sqlite3.Row, task_id: str
+    ) -> None:
+        snapshot = json_value(task["snapshot_json"], {})
+        policy = snapshot.get("execution_plan", {}).get(
+            "unresolved_policy", _BLOCK_ALL_UNRESOLVED_POLICY
+        )
+        blocked_exists = connection.execute(
+            """
+                    SELECT 1 FROM task_segments
+                    WHERE task_id = ? AND status = 'blocked' LIMIT 1
+                    """,
+            (task_id,),
+        ).fetchone()
+        if policy == _BLOCK_ALL_UNRESOLVED_POLICY and blocked_exists is not None:
+            raise ValueError("当前策略仍阻断全部片段，请先重新规划")

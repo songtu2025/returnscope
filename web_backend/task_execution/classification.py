@@ -17,10 +17,14 @@ from return_semantics.pipeline import (
     PipelineRun,
     classify_comments,
 )
+from return_semantics.pipeline_metrics import MODEL_SERVICE_ALERT_FAILURES
 from return_semantics.schemas import TaxonomyConfig
 from web_backend.common import json_value
 from web_backend.config_service import ConfigService
 from web_backend.task_execution.contracts import _SegmentRunContext
+
+_PROGRESS_UPDATE_INTERVAL = 5
+_RAW_SAMPLE_SOURCE_KINDS = frozenset({"raw_dataset", "review_file"})
 
 
 class ClassificationExecutionMixin:
@@ -48,7 +52,11 @@ class ClassificationExecutionMixin:
 
         def progress(current: int, _total: int) -> None:
             completed = completed_base + current
-            if completed == total or completed == 1 or completed % 5 == 0:
+            if (
+                completed == total
+                or completed == 1
+                or completed % _PROGRESS_UPDATE_INTERVAL == 0
+            ):
                 self._update_segment_progress(
                     context.task_id,
                     context.segment_id,
@@ -65,7 +73,7 @@ class ClassificationExecutionMixin:
             error: str,
         ) -> None:
             self._save_segment_checkpoint(context, run)
-            if consecutive_failures == 3:
+            if consecutive_failures == MODEL_SERVICE_ALERT_FAILURES:
                 self._record_model_degraded(
                     context.task_id,
                     context.segment_id,
@@ -130,45 +138,9 @@ class ClassificationExecutionMixin:
                 for item in samples
             ]
         )
-        if source.get("kind") in {"raw_dataset", "review_file"}:
-            config_version_id = str(source["config_version_id"])
-            settings = self.config_service.build_model_settings(config_version_id)
-            model_policy = source.get("model_policy")
-            if model_policy is not None:
-                settings = self._settings_for_model_policy(settings, model_policy)
-            claims = self.claims_resolver.resolve(
-                str(source.get("store") or ""),
-                source.get("listing"),
-                str(source["standard_key"]),
-                expected_version=NO_CLAIMS_VERSION,
-            )
-            client = Sub2APIClient(
-                settings,
-                rate_limiter=self._get_rate_limiter(
-                    config_version_id,
-                    settings.requests_per_minute,
-                ),
-            )
-            return classify_comments(
-                unique_comments=unique_comments,
-                taxonomy=taxonomy,
-                claims=claims,
-                client=client,
-                cache=self._get_cache("classification-standard-validation"),
-                secondary_model=(
-                    str(model_policy["actual"]["review"]["model"])
-                    if model_policy and model_policy["actual"].get("review")
-                    else settings.secondary_model
-                ),
-                progress=progress,
-                model_policy_version=str(source["model_policy_version"]),
-                secondary_is_fallback=bool(
-                    model_policy
-                    and model_policy["actual"].get("review")
-                    and model_policy["actual"]["review"].get("fallback_from")
-                    == "secondary"
-                ),
-                analysis_context=source.get("analysis_context", "returns"),
+        if source.get("kind") in _RAW_SAMPLE_SOURCE_KINDS:
+            return self._classify_source_sample(
+                unique_comments, taxonomy, source, progress
             )
         task = source["task"]
         segment = source["segment"]
@@ -195,4 +167,49 @@ class ClassificationExecutionMixin:
                 review and review.get("fallback_from") == "secondary"
             ),
             analysis_context=analysis_context_from_snapshot(snapshot),
+        )
+
+    def _classify_source_sample(
+        self,
+        unique_comments: pd.DataFrame,
+        taxonomy: TaxonomyConfig,
+        source: dict[str, Any],
+        progress: Callable[[int, int], None] | None,
+    ) -> PipelineRun:
+        config_version_id = str(source["config_version_id"])
+        settings = self.config_service.build_model_settings(config_version_id)
+        model_policy = source.get("model_policy")
+        if model_policy is not None:
+            settings = self._settings_for_model_policy(settings, model_policy)
+        claims = self.claims_resolver.resolve(
+            str(source.get("store") or ""),
+            source.get("listing"),
+            str(source["standard_key"]),
+            expected_version=NO_CLAIMS_VERSION,
+        )
+        client = Sub2APIClient(
+            settings,
+            rate_limiter=self._get_rate_limiter(
+                config_version_id, settings.requests_per_minute
+            ),
+        )
+        return classify_comments(
+            unique_comments=unique_comments,
+            taxonomy=taxonomy,
+            claims=claims,
+            client=client,
+            cache=self._get_cache("classification-standard-validation"),
+            secondary_model=str(model_policy["actual"]["review"]["model"])
+            if model_policy and model_policy["actual"].get("review")
+            else settings.secondary_model,
+            progress=progress,
+            model_policy_version=str(source["model_policy_version"]),
+            secondary_is_fallback=bool(
+                model_policy
+                and model_policy["actual"].get("review")
+                and (
+                    model_policy["actual"]["review"].get("fallback_from") == "secondary"
+                )
+            ),
+            analysis_context=source.get("analysis_context", "returns"),
         )

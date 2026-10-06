@@ -6,11 +6,14 @@ from typing import Any
 from web_backend.common import json_text
 from web_backend.database import Database
 from web_backend.security import utc_now
-from web_backend.task_contracts import TaskRevisionConflict
+
+_PAUSABLE_TASK_STATUSES = frozenset({"queued", "running"})
+_RESUMABLE_TASK_STATUSES = frozenset({"paused", "cancelled"})
 
 
 class TaskExecutionControlMixin:
     _insert_audit: Callable[..., None]
+    _validate_task_revision: Callable[..., None]
     database: Database
     get: Callable[..., dict[str, Any] | None]
 
@@ -26,11 +29,8 @@ class TaskExecutionControlMixin:
                 "SELECT status, stage, revision FROM tasks WHERE id = ?",
                 (task_id,),
             ).fetchone()
-            if task is None:
-                raise ValueError("任务不存在")
-            if int(task["revision"]) != expected_revision:
-                raise TaskRevisionConflict("任务已被他人修改，请刷新后重试")
-            if task["status"] not in {"queued", "running"}:
+            self._validate_task_revision(task, expected_revision)
+            if task["status"] not in _PAUSABLE_TASK_STATUSES:
                 raise ValueError("当前任务不能暂停")
             connection.execute(
                 """
@@ -101,11 +101,8 @@ class TaskExecutionControlMixin:
                 "SELECT status, stage, revision FROM tasks WHERE id = ?",
                 (task_id,),
             ).fetchone()
-            if task is None:
-                raise ValueError("任务不存在")
-            if int(task["revision"]) != expected_revision:
-                raise TaskRevisionConflict("任务已被他人修改，请刷新后重试")
-            if task["status"] not in {"paused", "cancelled"}:
+            self._validate_task_revision(task, expected_revision)
+            if task["status"] not in _RESUMABLE_TASK_STATUSES:
                 raise ValueError("仅已暂停或已取消任务可以继续执行")
             source_status = str(task["status"])
             resumable = connection.execute(

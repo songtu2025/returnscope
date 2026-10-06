@@ -1,7 +1,15 @@
 """全局一对一参考事实匹配，先最大化覆盖，再最小化分级配对代价。"""
 
+from collections.abc import Sequence
 
-def _assignment_path(costs, row, matched, left_prices, right_prices):
+
+def _assignment_path(
+    costs: list[list[int]],
+    row: int,
+    matched: list[int],
+    left_prices: list[float],
+    right_prices: list[float],
+) -> tuple[int, list[int]]:
     width = len(matched)
     distance = [float("inf")] * width
     previous = [0] * width
@@ -38,7 +46,11 @@ def _assignment_path(costs, row, matched, left_prices, right_prices):
             return column, previous
 
 
-def minimum_rank_matching(row_count: int, column_count: int, edges: list) -> dict:
+def minimum_rank_matching(
+    row_count: int,
+    column_count: int,
+    edges: Sequence[tuple[Sequence[int], int, int]],
+) -> dict[int, int]:
     if not edges:
         return {}
     # 每个高优先级分量的权重，超过所有低优先级分量在整份样本中的总和。
@@ -62,8 +74,8 @@ def minimum_rank_matching(row_count: int, column_count: int, edges: list) -> dic
         for row in range(row_count)
     ]
     matched = [0] * (column_count + row_count + 1)
-    left_prices = [0] * (row_count + 1)
-    right_prices = [0] * len(matched)
+    left_prices: list[float] = [0] * (row_count + 1)
+    right_prices: list[float] = [0] * len(matched)
     for row in range(1, row_count + 1):
         column, previous = _assignment_path(
             costs, row, matched, left_prices, right_prices
