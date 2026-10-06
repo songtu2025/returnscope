@@ -150,3 +150,17 @@ export function taskPlanViewState(preflight, unresolvedPolicy, scopeConfirmed) {
     requiresScopeConfirmation,
   };
 }
+
+/**
+ * @param {{dataEntryMode: "mysql" | "upload" | "existing", mysqlDraft?: Partial<import("./mysqlReturnContracts").MysqlReturnFormState>, selectedReturns?: DataVersion, selectedDataLabel: string}} data
+ */
+export function taskDataScopeLabel({
+  dataEntryMode,
+  mysqlDraft,
+  selectedReturns,
+  selectedDataLabel,
+}) {
+  return dataEntryMode === "mysql"
+    ? `${mysqlDraft?.store || mysqlDraft?.default_store || "全部店铺"} · ${mysqlDraft?.date_from || "不限开始日期"} — ${mysqlDraft?.date_to || "不限结束日期"}${mysqlDraft?.sku ? ` · 商品：${mysqlDraft.sku}` : ""}`
+    : `${dataEntryMode === "upload" ? "上传文件" : "已有数据"} · ${selectedReturns?.dataset_name || selectedDataLabel}${selectedReturns?.version ? ` · 版本 ${selectedReturns.version}` : ""}`;
+}

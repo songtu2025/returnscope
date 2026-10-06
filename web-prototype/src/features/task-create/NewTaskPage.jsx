@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useSWRConfig } from "swr";
-import { api } from "../../api";
 import { AntdProvider } from "../../components/AntdProvider";
-import { serverStateKeys } from "../../shared/serverState";
 import { taskPlanCounts } from "../task-planning/taskPlanPolicy";
 import { TaskLaunchActions } from "./NewTaskActions";
 import { NewTaskView } from "./NewTaskView";
@@ -11,6 +9,7 @@ import {
   normalizeReturnVersion,
   resolveTaskModelPolicy,
   taskConnectionPolicy,
+  taskDataScopeLabel,
   taskLaunchCopy,
   taskPlanViewState,
 } from "./newTaskPolicy";
@@ -19,6 +18,7 @@ import { useNewTaskSetup } from "./useNewTaskSetup";
 import { useProductMatching } from "./useProductMatching";
 import { useTaskImport } from "./useTaskImport";
 import { useTaskPreflight } from "./useTaskPreflight";
+import { submitNewTask } from "./newTaskSubmission";
 
 /** @typedef {import("./taskCreateContracts").TaskDraft} TaskDraft */
 /** @typedef {import("./taskCreateContracts").TaskForm} TaskForm */
@@ -190,69 +190,26 @@ export function NewTaskPage({
     scopeConfirmed,
   );
 
-  const submit = async () => {
-    if (
-      submitting ||
-      preflight.status !== "ready" ||
-      !preflight.data ||
-      !unresolvedPolicy ||
-      planState.categoryCompletionRequired ||
-      planState.countMismatch ||
-      planState.noExecutable ||
-      (planState.requiresScopeConfirmation && !scopeConfirmed)
-    ) {
-      return;
-    }
-    setSubmitting(true);
-    setSubmitError("");
-    try {
-      await api.createTask({
-        ...form,
-        store: null,
-        listing: null,
-        title: form.title.trim(),
-        plan_hash: preflight.data.plan_hash,
-        unresolved_policy: unresolvedPolicy,
-        segment_order: segmentOrder,
-      });
-      try {
-        await mutateServerState(
-          serverStateKeys.taskList,
-          api.tasks({ include_archived: true }),
-          { revalidate: false },
-        );
-      } catch {
-        await mutateServerState(serverStateKeys.taskList, undefined, {
-          revalidate: false,
-        });
-      }
-      notify("任务已创建，后台执行器会自动领取");
-      onDraftComplete?.();
-      onChanged();
-      onNavigate("tasks");
-    } catch (error) {
-      const status =
-        typeof error === "object" && error !== null && "status" in error
-          ? error.status
-          : undefined;
-      const message =
-        error instanceof Error ? error.message : "暂时无法创建任务，请重试。";
-      if (status === 409) {
-        setPrepared(true);
-        setPreflight({
-          status: "error",
-          data: null,
-          error: "执行计划已变化，请重新预检后再启动任务。",
-        });
-        setUnresolvedPolicy("");
-      } else {
-        setSubmitError(message);
-      }
-      notify(message, "error");
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  const submit = () =>
+    submitNewTask({
+      submitting,
+      preflight,
+      unresolvedPolicy,
+      planState,
+      scopeConfirmed,
+      form,
+      segmentOrder,
+      mutateServerState,
+      setSubmitting,
+      setSubmitError,
+      setPrepared,
+      setPreflight,
+      setUnresolvedPolicy,
+      notify,
+      onDraftComplete,
+      onChanged,
+      onNavigate,
+    });
 
   const canContinue = planState.canContinue;
 
@@ -298,10 +255,12 @@ export function NewTaskPage({
       }}
     />
   );
-  const scopeLabel =
-    dataEntryMode === "mysql"
-      ? `${mysqlDraft?.store || mysqlDraft?.default_store || "全部店铺"} · ${mysqlDraft?.date_from || "不限开始日期"} — ${mysqlDraft?.date_to || "不限结束日期"}${mysqlDraft?.sku ? ` · 商品：${mysqlDraft.sku}` : ""}`
-      : `${dataEntryMode === "upload" ? "上传文件" : "已有数据"} · ${selectedReturns?.dataset_name || selectedDataLabel}${selectedReturns?.version ? ` · 版本 ${selectedReturns.version}` : ""}`;
+  const scopeLabel = taskDataScopeLabel({
+    dataEntryMode,
+    mysqlDraft,
+    selectedReturns,
+    selectedDataLabel,
+  });
 
   if (!loadingSetup && ready && matchingOpen && preflight.data) {
     return (
