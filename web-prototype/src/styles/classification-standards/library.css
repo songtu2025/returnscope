@@ -1,0 +1,238 @@
+.standard-library-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 16px;
+  overflow: hidden;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.standard-library-summary > div {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  align-items: center;
+  min-height: 82px;
+  padding: 16px 20px;
+  border-right: 1px solid var(--line);
+}
+
+.standard-library-summary > div:last-child {
+  border-right: 0;
+}
+
+.standard-library-summary svg {
+  grid-row: 1 / 3;
+  color: var(--green);
+}
+
+.standard-library-summary span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.standard-library-summary strong {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.standard-library-card,
+.standard-editor-section,
+.standard-change-reason,
+.standard-json-transfer,
+.standard-advanced-settings,
+.standard-required-validation,
+.standard-version-history {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.standard-library-toolbar {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.standard-search-box {
+  flex: 1 1 320px;
+  max-width: 480px;
+}
+.standard-library-toolbar > .standard-search-box {
+  height: 40px;
+}
+.classification-standard-page
+  :is(.standard-library-toolbar, .label-directory)
+  .standard-search-box.ant-input-affix-wrapper
+  > input.ant-input.ant-input {
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.classification-standard-page
+  .standard-search-box.ant-input-affix-wrapper
+  > input.ant-input:focus-visible {
+  outline: none;
+}
+
+.standard-status-filter {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: #f3f6f4;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.standard-status-filter button {
+  min-height: 32px;
+  padding: 0 14px;
+  color: var(--muted);
+  font-size: 12px;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+}
+
+.standard-status-filter button:hover {
+  color: var(--ink);
+}
+
+.standard-status-filter button.active {
+  color: var(--green);
+  font-weight: 700;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(18, 49, 39, 0.12);
+}
+
+.standard-table-wrap {
+  overflow-x: auto;
+}
+
+.standard-library-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.standard-library-table th,
+.standard-library-table td {
+  padding: 15px 18px;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--line);
+}
+
+.standard-library-table th {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: #f8faf9;
+}
+
+.standard-library-table td {
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.standard-library-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.standard-name-button {
+  display: grid;
+  gap: 4px;
+  max-width: 360px;
+  padding: 0;
+  text-align: left;
+  background: transparent;
+  border: 0;
+}
+
+.standard-name-button b {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.standard-name-button span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.standard-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  background: #f1f4f2;
+  border-radius: 999px;
+}
+
+.standard-status.active {
+  color: var(--green);
+  background: var(--green-pale);
+}
+
+.standard-library-table td > small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+}
+
+.standard-row-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+
+.standard-row-actions button {
+  min-height: 32px;
+  padding: 0;
+  color: var(--green);
+  font-size: 12px;
+  background: transparent;
+  border: 0;
+}
+
+.standard-row-actions .standard-deactivate-action {
+  color: var(--muted);
+}
+
+.standard-row-actions .standard-deactivate-action:hover,
+.standard-row-actions .standard-deactivate-action:focus-visible {
+  color: var(--red);
+}
+
+.standard-deactivate-warning {
+  margin: 24px 24px 0;
+  padding: 14px 16px;
+  border: 1px solid #efd5af;
+  border-radius: 8px;
+  background: #fff8ed;
+  color: #865413;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.standard-lifecycle-modal .standard-delete-actions {
+  padding: 24px;
+}
