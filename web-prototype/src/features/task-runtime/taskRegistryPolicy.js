@@ -101,3 +101,40 @@ export function taskSummary(task) {
       : (STATUS_LABELS[task.status] ?? task.status),
   };
 }
+
+/** @param {AnalysisTask} task */
+export function canArchiveTask(task) {
+  return Boolean(task.archived_at) || FINAL_TASK_STATUSES.includes(task.status);
+}
+
+/** @param {AnalysisTask} task @param {string} query */
+export function matchesQuery(task, query) {
+  if (!query) return true;
+  const source = [
+    task.title,
+    task.store,
+    task.listing,
+    task.listing_search_text,
+    task.dataset_name,
+    task.owner_name,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLocaleLowerCase();
+  return source.includes(query);
+}
+
+/** @param {AnalysisTask[]} tasks @param {string} sort */
+export function sortTasks(tasks, sort) {
+  return [...tasks].sort((left, right) => {
+    if (sort === "created_desc") {
+      return String(right.created_at).localeCompare(String(left.created_at));
+    }
+    if (sort === "progress_desc") {
+      return Number(right.progress_percent || 0) - Number(left.progress_percent || 0);
+    }
+    return String(right.updated_at || right.created_at).localeCompare(
+      String(left.updated_at || left.created_at),
+    );
+  });
+}
