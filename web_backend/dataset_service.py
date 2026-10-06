@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
-
-from web_backend.common import add_audit, json_text, json_value, new_id
+from web_backend.common import add_audit, new_id
 from web_backend.database import Database
 from web_backend.dataset_files import (
     ALLOWED_EXTENSIONS as ALLOWED_EXTENSIONS,
@@ -19,7 +16,6 @@ from web_backend.dataset_files import (
 )
 from web_backend.dataset_files import (
     _fill_missing_return_store,
-    _inspect_file_with_frame,
     _return_source_key,
     _return_source_name,
     _sha256_file,
@@ -40,6 +36,11 @@ from web_backend.dataset_storage import shutil as shutil
 from web_backend.datasets.catalog import _DatasetCatalog
 from web_backend.datasets.preview import _DatasetPreview
 from web_backend.datasets.references import _DatasetReferences
+from web_backend.datasets.return_inspection import (
+    DatasetFilePreparationMixin,
+    persist_return_inspection,
+    return_inspection_matches,
+)
 from web_backend.security import utc_now
 from web_backend.settings import Settings
 
@@ -52,6 +53,7 @@ class DatasetService(
     DatasetReturnVersionMixin,
     DatasetReturnImportMixin,
     DatasetProductWorkbookMixin,
+    DatasetFilePreparationMixin,
 ):
     def __init__(self, database: Database, settings: Settings) -> None:
         self.database = database
@@ -93,16 +95,7 @@ class DatasetService(
                 mode="analyze_only",
                 dataset_id="",
             )
-        matches = []
-        for row in rows:
-            item = dict(row)
-            item_quality = json_value(item.pop("quality_json", None), {})
-            item_source_key = str(item.get("source_key") or "") or _return_source_key(
-                item_quality.get("stores", [])
-            )
-            if source_key and item_source_key == source_key:
-                item["source_key"] = item_source_key
-                matches.append(item)
+        matches = return_inspection_matches(rows, source_key)
         inspection = {
             "original_name": original_name,
             "raw_sha256": raw_sha256,
@@ -118,31 +111,9 @@ class DatasetService(
         }
         if actor_id is not None:
             self._cleanup_staged_imports()
-            inspection_id = new_id("inspection")
-            created_at = datetime.now(timezone.utc)
-            expires_at = created_at + timedelta(minutes=30)
-            with self.database.transaction(immediate=True) as connection:
-                connection.execute(
-                    """
-                    INSERT INTO dataset_import_staging(
-                        id, owner_id, temp_path, original_name, content_type,
-                        size_bytes, sha256, inspection_json, created_at, expires_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        inspection_id,
-                        actor_id,
-                        str(source_path),
-                        original_name,
-                        content_type,
-                        source_path.stat().st_size,
-                        raw_sha256,
-                        json_text(inspection),
-                        created_at.isoformat(),
-                        expires_at.isoformat(),
-                    ),
-                )
-            inspection["inspection_id"] = inspection_id
+            inspection["inspection_id"] = persist_return_inspection(
+                self.database, source_path, actor_id, content_type, inspection
+            )
         return inspection
 
     def create(
@@ -230,36 +201,16 @@ class DatasetService(
         kind = str(dataset["kind"])
         if kind == "returns":
             _fill_missing_return_store(source_path, default_store)
-        inspected_frame: pd.DataFrame | None = None
-        # 仅复用同次导入在服务端产生的检查结果，修改文件后必须重新检查。
-        if _inspection is not None and not default_store:
-            row_count = _inspection["row_count"]
-            column_count = _inspection["column_count"]
-            schema = _inspection["schema"]
-            quality = _inspection["quality"]
-            digest = _inspection["raw_sha256"]
-        else:
-            (
-                inspected_frame,
-                row_count,
-                column_count,
-                schema,
-                quality,
-            ) = _inspect_file_with_frame(source_path, kind)
-            digest = _sha256_file(source_path)
-        destination = self._ensure_blob(source_path, digest)
-        if kind == "products":
-            self._ensure_product_preview(destination, digest, inspected_frame)
-        prepared = self._prepared_version(
-            destination=destination,
-            original_name=original_name,
-            content_type=content_type,
-            change_note=change_note.strip(),
-            digest=digest,
-            row_count=row_count,
-            column_count=column_count,
-            schema=schema,
-            quality=quality,
+        prepared = self._prepare_dataset_file(
+            source_path,
+            kind,
+            _inspection,
+            {
+                "original_name": original_name,
+                "content_type": content_type,
+                "change_note": change_note,
+                "default_store": default_store,
+            },
         )
         version_id = str(prepared["id"])
 
