@@ -15,10 +15,10 @@ import { EmptyState, InlineLoading, PageHeading } from "../components/SharedUi";
 import {
   DetailsSection,
   DiagnosisSection,
-  OverviewSection,
   ProductsSection,
-  QualitySection,
 } from "../components/ResultsSections";
+import { OverviewSection } from "../features/legacy-analysis/OverviewSection";
+import { QualitySection } from "../features/legacy-analysis/QualitySection";
 import { formatNumber, formatPercent, formatTime } from "../lib/presentation";
 
 const TABS = [
