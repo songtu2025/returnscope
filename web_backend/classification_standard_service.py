@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import hashlib
-import json
 from typing import Any
 
 from return_semantics.taxonomy import load_taxonomy_alignment
@@ -18,6 +16,10 @@ from web_backend.classification_standard_content import (
 from web_backend.classification_standard_drafts import ClassificationStandardDraftsMixin
 from web_backend.classification_standard_publication import (
     ClassificationStandardPublicationMixin,
+)
+from web_backend.classification_standards.snapshot_encoding import (
+    encode_snapshot,
+    encoded_snapshot_hash,
 )
 from web_backend.common import add_audit, json_text, new_id
 from web_backend.database import Database
@@ -127,13 +129,8 @@ class ClassificationStandardService(
                 "labels": [],
             },
         }
-        encoded = json.dumps(
-            snapshot,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-        content_hash = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+        encoded = encode_snapshot(snapshot)
+        content_hash = encoded_snapshot_hash(encoded)
         validation = self._validate_candidate(standard_id, snapshot, snapshot)
         with self.database.transaction(immediate=True) as connection:
             connection.execute(

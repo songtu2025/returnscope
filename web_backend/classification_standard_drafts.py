@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Callable
 from typing import Any
 
@@ -12,6 +10,7 @@ from web_backend.classification_standard_contracts import (
 )
 from web_backend.classification_standard_excel import preview_excel
 from web_backend.classification_standards.draft_records import StandardDraftRecordsMixin
+from web_backend.classification_standards.snapshot_encoding import snapshot_content_hash
 from web_backend.common import add_audit, json_text
 from web_backend.database import Database
 from web_backend.security import utc_now
@@ -40,13 +39,7 @@ class ClassificationStandardDraftsMixin(StandardDraftRecordsMixin):
         snapshot = document.get("snapshot")
         if not isinstance(snapshot, dict):
             raise ValueError("导入文件缺少分类标准快照")
-        encoded = json.dumps(
-            snapshot,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-        content_hash = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+        content_hash = snapshot_content_hash(snapshot)
         if content_hash != document.get("content_hash"):
             raise ValueError("导入文件内容哈希校验失败")
         try:

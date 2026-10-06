@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import sqlite3
 from dataclasses import asdict, dataclass
@@ -8,6 +7,9 @@ from pathlib import Path
 from typing import Any, Literal
 
 from return_semantics.schemas import TaxonomyConfig
+from web_backend.classification_standards.snapshot_encoding import (
+    snapshot_content_hash as _content_hash,
+)
 
 ComparisonStatus = Literal[
     "match",
@@ -289,13 +291,3 @@ def _runtime_identity(snapshot: dict[str, Any]) -> StandardRuntimeIdentity:
         category_count=len(taxonomy["categories"]),
         label_count=len(taxonomy["labels"]),
     )
-
-
-def _content_hash(value: dict[str, Any]) -> str:
-    encoded = json.dumps(
-        value,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()

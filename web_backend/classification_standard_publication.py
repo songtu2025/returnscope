@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from copy import deepcopy
 from typing import Any, Callable
@@ -9,6 +8,10 @@ from return_semantics.prompt import validation_contract_matches
 from web_backend.classification_standard_contracts import (
     ClassificationStandardConflict,
     ClassificationStandardValidationError,
+)
+from web_backend.classification_standards.snapshot_encoding import (
+    encode_snapshot,
+    encoded_snapshot_hash,
 )
 from web_backend.classification_validation_quality import publication_quality_gate
 from web_backend.common import add_audit, new_id
@@ -79,13 +82,8 @@ class ClassificationStandardPublicationMixin:
             snapshot = deepcopy(draft["snapshot"])
             taxonomy_version = f"{draft['standard_key']}-taxonomy-v{version_no}"
             snapshot["taxonomy"]["version"] = taxonomy_version
-            encoded = json.dumps(
-                snapshot,
-                ensure_ascii=False,
-                sort_keys=True,
-                separators=(",", ":"),
-            )
-            content_hash = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+            encoded = encode_snapshot(snapshot)
+            content_hash = encoded_snapshot_hash(encoded)
             version_id = new_id("classification_standard_version")
             connection.execute(
                 """
