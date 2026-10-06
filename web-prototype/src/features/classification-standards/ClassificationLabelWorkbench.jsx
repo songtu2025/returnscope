@@ -1,7 +1,11 @@
 import { useId } from "react";
-import { ArrowCounterClockwise, Copy, Plus, X } from "@phosphor-icons/react";
+import { LabelWorkspaceHeader } from "./LabelWorkspaceHeader";
+import { LabelKeywordEditor } from "./LabelKeywordEditor";
+import { LabelWorkspaceRelatedRules } from "./LabelWorkspaceRelatedRules";
+import { LabelActionConfirmation } from "./LabelActionConfirmation";
+import { Plus } from "@phosphor-icons/react";
 import Button from "antd/es/button";
-import { EmptyState, Modal } from "../../components/SharedUi";
+import { EmptyState } from "../../components/SharedUi";
 import { ClassificationLabelBoundaries } from "./ClassificationLabelBoundaries";
 import { ClassificationLabelDefinition } from "./ClassificationLabelDefinition";
 import { ClassificationLabelDirectory } from "./ClassificationLabelDirectory";
@@ -109,61 +113,20 @@ export function ClassificationLabelWorkbench({
         )}
         {label && entry ? (
           <>
-            <header>
-              <div>
-                <h2>{label.name || "新建标签"}</h2>
-                <div className="label-code-line">
-                  <code>{label.code}</code>
-                  <button
-                    type="button"
-                    className="icon-button"
-                    aria-label="复制标签编码"
-                    onClick={async () => {
-                      try {
-                        await navigator.clipboard.writeText(label.code);
-                        notify("标签编码已复制");
-                      } catch {
-                        notify("复制失败，请选中编码手动复制", "error");
-                      }
-                    }}
-                  >
-                    <Copy size={14} />
-                  </button>
-                </div>
-              </div>
-              <div className="label-workspace-actions">
-                {editable && !removed && (
-                  <Button onClick={() => setEditing((value) => !value)}>
-                    {editing ? "完成编辑" : "编辑"}
-                  </Button>
-                )}
-                {editable && labelDirty && (
-                  <Button
-                    disabled={Boolean(busy)}
-                    icon={<ArrowCounterClockwise size={15} />}
-                    onClick={undoLabel}
-                  >
-                    撤销当前修改
-                  </Button>
-                )}
-                {editable && !removed && (
-                  <details className="standard-more-menu">
-                    <summary>更多</summary>
-                    <button
-                      type="button"
-                      disabled={Boolean(busy) || content.labels.length <= 1}
-                      onClick={(event) => {
-                        const menu = event.currentTarget.closest("details");
-                        if (menu) menu.open = false;
-                        setPending({ type: "retire" });
-                      }}
-                    >
-                      {published ? "停用标签" : "移除新标签"}
-                    </button>
-                  </details>
-                )}
-              </div>
-            </header>
+            <LabelWorkspaceHeader
+              label={label}
+              notify={notify}
+              editable={editable}
+              removed={removed}
+              editing={editing}
+              setEditing={setEditing}
+              labelDirty={labelDirty}
+              busy={busy}
+              undoLabel={undoLabel}
+              content={content}
+              published={published}
+              setPending={setPending}
+            />
             <div className="label-workspace-scroll" key={`${selected}-${removed}`}>
               {removed ? (
                 <div className="label-workspace-notice">
@@ -198,85 +161,25 @@ export function ClassificationLabelWorkbench({
                       labelFieldRefs.current.set(`${entry.index}.${field}`, node);
                     }}
                   />
-                  <details className="label-keyword-editor">
-                    <summary>搜索别名（可选） · {label.keywords?.length ?? 0}</summary>
-                    <p>
-                      {["semantic_v1", "fact_v2"].includes(content.recognition_profile)
-                        ? "仅用于管理页面搜索，不参与当前语义策略分类。"
-                        : "当前仍使用旧策略：这些词同时用于搜索和模型提示。切换语义策略并发布后，仅用于搜索。"}
-                    </p>
-                    <h3>
-                      搜索别名 <span>{label.keywords?.length ?? 0}</span>
-                    </h3>
-
-                    <div className="label-keyword-tokens">
-                      {label.keywords?.map((word, index) => (
-                        <span key={index}>
-                          {word}
-                          {editable && editing && (
-                            <button
-                              type="button"
-                              aria-label={`移除搜索别名 ${word}`}
-                              onClick={() =>
-                                updateLabel({
-                                  keywords: label.keywords.filter(
-                                    (_word, i) => i !== index,
-                                  ),
-                                })
-                              }
-                            >
-                              <X size={13} />
-                            </button>
-                          )}
-                        </span>
-                      ))}
-                    </div>
-                    {editable && editing && (
-                      <input
-                        aria-label={`搜索别名 ${entry.index + 1}`}
-                        value={keywordText}
-                        placeholder="添加搜索别名，回车确认；支持逗号分隔"
-                        onChange={(event) => setKeywordText(event.target.value)}
-                        onBlur={() => commitKeywords(keywordText)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" && !event.nativeEvent.isComposing) {
-                            event.preventDefault();
-                            commitKeywords(keywordText);
-                          }
-                        }}
-                      />
-                    )}
-                    {!label.keywords?.length && !editing && <p>未配置搜索别名。</p>}
-                  </details>
-                  {relatedLabels.length > 0 && (
-                    <section className="label-related-rules">
-                      <h3>同时出现时需复核</h3>
-                      <p>这些标签同时出现时，需检查各自的证据与适用范围。</p>
-                      {relatedLabels.map((item) => (
-                        <button
-                          type="button"
-                          key={item.code}
-                          className="secondary-button"
-                          onClick={() => {
-                            setQuery("");
-                            setGroup("");
-                            selectLabel(content.labels.indexOf(item));
-                          }}
-                        >
-                          {item.name}
-                        </button>
-                      ))}
-                    </section>
-                  )}
-                  {label.allowed_claim_ids?.length > 0 && (
-                    <details className="label-related-rules">
-                      <summary>关联承诺（{label.allowed_claim_ids.length}）</summary>
-                      <p>实际适用范围以具体 Listing 的承诺配置为准。</p>
-                      {label.allowed_claim_ids.map((id) => (
-                        <code key={id}>{id} </code>
-                      ))}
-                    </details>
-                  )}
+                  <LabelKeywordEditor
+                    label={label}
+                    editable={editable}
+                    editing={editing}
+                    updateLabel={updateLabel}
+                    entry={entry}
+                    keywordText={keywordText}
+                    setKeywordText={setKeywordText}
+                    commitKeywords={commitKeywords}
+                    content={content}
+                  />
+                  <LabelWorkspaceRelatedRules
+                    relatedLabels={relatedLabels}
+                    setQuery={setQuery}
+                    setGroup={setGroup}
+                    selectLabel={selectLabel}
+                    content={content}
+                    label={label}
+                  />
                 </>
               )}
             </div>
@@ -305,36 +208,14 @@ export function ClassificationLabelWorkbench({
         )}
       </div>
       {pending && (
-        <Modal
-          eyebrow="标签草稿"
-          title={
-            pending.type === "replace"
-              ? "创建替代标签"
-              : published
-                ? "停用此标签？"
-                : "移除新标签？"
-          }
-          onClose={() => setPending(null)}
-        >
-          <div className="label-action-confirm">
-            <p>
-              {pending.type === "replace"
-                ? "将复制名称、判定说明和关键词，生成新编码，并将旧标签标记为拟停用。新标签不继承旧标签的承诺关联与专用校验规则；发布前请在标准设置中核对相关指令。"
-                : "仅修改当前草稿。相关标签校验引用会同步清理，已发布标准和历史结果保持原样。"}
-            </p>
-            <div>
-              <Button onClick={() => setPending(null)}>继续编辑</Button>
-              <Button
-                type="primary"
-                onClick={() =>
-                  pending.type === "replace" ? addLabel(label) : retireLabel()
-                }
-              >
-                {pending.type === "replace" ? "创建替代标签" : "确认移除"}
-              </Button>
-            </div>
-          </div>
-        </Modal>
+        <LabelActionConfirmation
+          pending={pending}
+          published={published}
+          setPending={setPending}
+          label={label}
+          addLabel={addLabel}
+          retireLabel={retireLabel}
+        />
       )}
     </div>
   );
