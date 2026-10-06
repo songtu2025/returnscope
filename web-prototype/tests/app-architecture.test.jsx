@@ -239,4 +239,35 @@ describe("应用壳层与路由", () => {
     expect(readTaskDraft("user-1")).toBeNull();
     expect(readTaskDraft("user-2")).toEqual({ step: 2, taskName: "用户二任务" });
   });
+
+  test("导航保留显式空焦点键与审计查询键顺序", () => {
+    expect(routeForDestination("review", { kind: "review", id: "" })).toStrictEqual({
+      page: "review",
+      query: { review: "", status: undefined },
+    });
+    expect(
+      routeForDestination("data", { kind: "dataset", datasetKind: "products" }),
+    ).toStrictEqual({
+      page: "data-assets",
+      query: { dataset: undefined, view: "products" },
+    });
+    const target = routeForTarget({
+      route: "api",
+      task_id: "task-1",
+      dashboard_id: "dashboard-1",
+      review_id: "review-1",
+      tab: "audit",
+      entity_id: "entity-1",
+      action: "",
+    });
+    expect(Object.keys(target.query)).toEqual([
+      "tab",
+      "task_id",
+      "dashboard",
+      "review_id",
+      "entity_id",
+    ]);
+    expect(target.query).not.toHaveProperty("action");
+    expect(target.query.tab).toBe("audit");
+  });
 });

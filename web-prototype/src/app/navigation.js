@@ -62,6 +62,83 @@ export const LEGACY_ROUTES = {
 };
 
 /**
+ * @template {Record<string, string | undefined>} T
+ * @param {RouteQuery} query
+ * @param {T} source
+ * @param {Array<[keyof T, string]>} fields
+ */
+function copyTruthyFields(query, source, fields) {
+  for (const [sourceKey, queryKey] of fields) {
+    if (source[sourceKey]) query[queryKey] = source[sourceKey];
+  }
+  return query;
+}
+
+/** @param {Extract<NavigationFocus, {kind: "dataset"}>} focus */
+function datasetFocusQuery(focus) {
+  const query = { dataset: focus.id, view: focus.datasetKind };
+  if (focus.returnToTask) {
+    return { ...query, return_to: "task-create", issue: "product-category" };
+  }
+  return query;
+}
+
+/** @param {NavigationFocus} focus @returns {RouteQuery} */
+function focusQuery(focus) {
+  switch (focus.kind) {
+    case "task":
+      return { task_id: focus.id };
+    case "task-template":
+      return { template_task: focus.id };
+    case "result":
+      return copyTruthyFields({ task_id: focus.id }, focus, [["listing", "listing"]]);
+    case "classification-result":
+      return copyTruthyFields({ result_version_id: focus.id }, focus, [
+        ["taskId", "task_id"],
+        ["segmentId", "segment_id"],
+        ["listing", "listing"],
+        ["reviewBatchId", "review_batch_id"],
+      ]);
+    case "return-version":
+      return { dataset_version: focus.id };
+    case "data-view":
+      return { view: focus.view };
+    case "review":
+      return { review: focus.id, status: focus.status };
+    case "review-batch":
+      return copyTruthyFields({ review_batch_id: focus.id }, focus, [
+        ["resultVersionId", "result_version_id"],
+      ]);
+    case "dataset":
+      return datasetFocusQuery(focus);
+  }
+}
+
+/** @type {Array<[keyof NavigationTarget, string]>} */
+const TARGET_ENTITY_FIELDS = [
+  ["task_id", "task_id"],
+  ["segment_id", "segment_id"],
+  ["result_version_id", "result_version_id"],
+  ["action", "action"],
+  ["dashboard_id", "dashboard"],
+  ["version_id", "version"],
+  ["report_id", "report"],
+  ["batch_id", "review_batch_id"],
+];
+/** @type {Array<[keyof NavigationTarget, string]>} */
+const TARGET_FILTER_FIELDS = [
+  ["workflow_status", "status"],
+  ["dataset_id", "dataset"],
+  ["view", "view"],
+  ["tab", "tab"],
+  ["connection_id", "connection_id"],
+  ["config_version_id", "config_version_id"],
+  ["model_id", "model_id"],
+  ["entity_id", "entity_id"],
+  ["user_id", "user_id"],
+];
+
+/**
  * @param {string} destination
  * @param {NavigationFocus | null} [focus]
  * @returns {AppRoute}
@@ -70,39 +147,7 @@ export function routeForDestination(destination, focus = null) {
   const legacy = LEGACY_ROUTES[destination];
   const page = legacy?.page ?? destination;
   const query = { ...(legacy?.query ?? {}) };
-
-  if (!focus) return { page, query };
-  if (focus.kind === "task") query.task_id = focus.id;
-  if (focus.kind === "task-template") query.template_task = focus.id;
-  if (focus.kind === "result") {
-    query.task_id = focus.id;
-    if (focus.listing) query.listing = focus.listing;
-  }
-  if (focus.kind === "classification-result") {
-    query.result_version_id = focus.id;
-    if (focus.taskId) query.task_id = focus.taskId;
-    if (focus.segmentId) query.segment_id = focus.segmentId;
-    if (focus.listing) query.listing = focus.listing;
-    if (focus.reviewBatchId) query.review_batch_id = focus.reviewBatchId;
-  }
-  if (focus.kind === "return-version") query.dataset_version = focus.id;
-  if (focus.kind === "data-view") query.view = focus.view;
-  if (focus.kind === "review") {
-    query.review = focus.id;
-    query.status = focus.status;
-  }
-  if (focus.kind === "review-batch") {
-    query.review_batch_id = focus.id;
-    if (focus.resultVersionId) query.result_version_id = focus.resultVersionId;
-  }
-  if (focus.kind === "dataset") {
-    query.dataset = focus.id;
-    query.view = focus.datasetKind;
-    if (focus.returnToTask) {
-      query.return_to = "task-create";
-      query.issue = "product-category";
-    }
-  }
+  if (focus) Object.assign(query, focusQuery(focus));
   return { page, query };
 }
 
@@ -114,26 +159,10 @@ export function routeForTarget(target) {
   if (!target?.route) return null;
   const page = LEGACY_ROUTES[target.route]?.page ?? target.route;
   const query = { ...(LEGACY_ROUTES[target.route]?.query ?? {}) };
-  if (target.task_id) query.task_id = target.task_id;
-  if (target.segment_id) query.segment_id = target.segment_id;
-  if (target.result_version_id) query.result_version_id = target.result_version_id;
-  if (target.action) query.action = target.action;
-  if (target.dashboard_id) query.dashboard = target.dashboard_id;
-  if (target.version_id) query.version = target.version_id;
-  if (target.report_id) query.report = target.report_id;
-  if (target.batch_id) query.review_batch_id = target.batch_id;
+  copyTruthyFields(query, target, TARGET_ENTITY_FIELDS);
   if (target.review_id) {
-    if (page === "review") query.review = target.review_id;
-    else query.review_id = target.review_id;
+    query[page === "review" ? "review" : "review_id"] = target.review_id;
   }
-  if (target.workflow_status) query.status = target.workflow_status;
-  if (target.dataset_id) query.dataset = target.dataset_id;
-  if (target.view) query.view = target.view;
-  if (target.tab) query.tab = target.tab;
-  if (target.connection_id) query.connection_id = target.connection_id;
-  if (target.config_version_id) query.config_version_id = target.config_version_id;
-  if (target.model_id) query.model_id = target.model_id;
-  if (target.entity_id) query.entity_id = target.entity_id;
-  if (target.user_id) query.user_id = target.user_id;
+  copyTruthyFields(query, target, TARGET_FILTER_FIELDS);
   return { page, query };
 }

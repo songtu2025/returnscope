@@ -8,9 +8,4 @@ export function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** @param {unknown} error */
-export function errorStatus(error) {
-  return typeof error === "object" && error !== null && "status" in error
-    ? error.status
-    : undefined;
-}
+export { errorStatus } from "../../shared/api/requestErrors";

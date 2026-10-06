@@ -129,10 +129,7 @@ export function configValue(key, value) {
     : String(value);
 }
 
-/** @param {unknown} error */
-export function errorMessage(error) {
-  return error instanceof Error ? error.message : "请求失败";
-}
+export { errorMessage } from "../../shared/api/requestErrors";
 
 /**
  * @param {ConfigVersion} left

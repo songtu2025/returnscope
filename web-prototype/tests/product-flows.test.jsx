@@ -100,6 +100,7 @@ vi.mock("../src/shared/api/resultApi", () => ({
 }));
 
 import { App, Sidebar } from "../src/App";
+import { GlobalSearch } from "../src/app/GlobalSearch";
 import { useHashRoute } from "../src/app/hashRouter";
 import { AuthPages } from "../src/pages/AuthPages";
 import { ModelServicePage } from "../src/features/system-settings/ModelServicePage";
@@ -518,6 +519,90 @@ describe("关键用户流程", () => {
 
     expect(screen.queryByRole("dialog", { name: "全局搜索" })).not.toBeInTheDocument();
     expect(window.location.hash).toBe("#analysis-tasks?task_id=task-search-route");
+  });
+
+  test("全局搜索保留任务优先和12项上限，限定产品源并区分复核状态", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    apiMock.tasks.mockResolvedValue(
+      Array.from({ length: 13 }, (_, index) => ({
+        id: `task-limit-${index}`,
+        title: `上限任务${index}`,
+        owner_name: "合成账号",
+        status: "completed",
+        store: "合成店铺",
+      })),
+    );
+    apiMock.datasets.mockResolvedValue([
+      {
+        id: "product-match",
+        kind: "products",
+        name: "MATCH产品",
+        current_version: 1,
+        row_count: 0,
+      },
+      {
+        id: "return-hidden",
+        kind: "returns",
+        name: "隐藏退货源",
+        current_version: 1,
+        row_count: 1,
+      },
+    ]);
+    apiMock.reviews.mockResolvedValue([
+      {
+        id: "review-match",
+        workflow_status: "pending",
+        comment: "合成待复核",
+        task_title: "合成任务",
+        owner_name: "合成账号",
+      },
+    ]);
+    render(<GlobalSearch onClose={vi.fn()} onSelect={onSelect} notify={vi.fn()} />);
+    const dialog = screen.getByRole("dialog", { name: "全局搜索" });
+    await within(dialog).findByRole("button", { name: /上限任务0/ });
+    expect(within(dialog).getAllByRole("button")).toHaveLength(12);
+    expect(within(dialog).queryByRole("button", { name: /上限任务12/ })).toBeNull();
+    const input = within(dialog).getByRole("textbox", { name: "全局搜索" });
+    await user.keyboard("{Enter}");
+    expect(onSelect).toHaveBeenLastCalledWith("legacy-results", {
+      kind: "result",
+      id: "task-limit-0",
+    });
+    await user.type(input, " match ");
+    await user.click(within(dialog).getByRole("button", { name: /MATCH产品/ }));
+    expect(onSelect).toHaveBeenLastCalledWith("data-assets", {
+      kind: "dataset",
+      id: "product-match",
+      datasetKind: "products",
+    });
+    await user.clear(input);
+    await user.type(input, "隐藏退货源");
+    expect(within(dialog).getByText("没有找到匹配内容")).toBeVisible();
+    await user.clear(input);
+    await user.type(input, "合成待复核");
+    await user.keyboard("{Enter}");
+    expect(onSelect).toHaveBeenLastCalledWith("review", {
+      kind: "review",
+      id: "review-match",
+      status: "pending",
+    });
+    for (const request of [apiMock.tasks, apiMock.datasets, apiMock.reviews])
+      expect(request).toHaveBeenCalledOnce();
+  });
+
+  test.each([
+    [new Error("合成搜索失败"), "合成搜索失败"],
+    ["合成非Error拒绝", "请求失败"],
+  ])("全局搜索失败后恢复空态并保留错误文案：%s", async (error, message) => {
+    const notify = vi.fn();
+    apiMock.tasks.mockRejectedValue(error);
+    render(<GlobalSearch onClose={vi.fn()} onSelect={vi.fn()} notify={notify} />);
+    await waitFor(() => expect(notify).toHaveBeenCalledWith(message, "error"));
+    expect(await screen.findByText("没有找到匹配内容")).toBeVisible();
+    expect(screen.queryByText("正在读取工作区…")).not.toBeInTheDocument();
+    for (const request of [apiMock.tasks, apiMock.datasets, apiMock.reviews])
+      expect(request).toHaveBeenCalledOnce();
   });
 
   test("浏览器前进后退可以恢复对应页面", async () => {

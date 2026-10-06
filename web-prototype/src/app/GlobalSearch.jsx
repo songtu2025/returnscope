@@ -1,29 +1,14 @@
 import { useEffect, useState } from "react";
-import {
-  CaretRight,
-  Database,
-  ListChecks,
-  MagnifyingGlass,
-  PlayCircle,
-  Pulse,
-} from "@phosphor-icons/react";
+import { CaretRight, MagnifyingGlass, Pulse } from "@phosphor-icons/react";
 import { api } from "../api";
-import { STATUS_LABELS } from "../constants";
+import { errorMessage } from "../shared/api/requestErrors";
+import { matchingSearchItems } from "./globalSearchItems";
 import { useDialogFocus } from "../hooks/useDialogFocus";
 
 /** @typedef {import("./navigation").NavigationFocus} NavigationFocus */
 /** @typedef {(message: string, tone?: string) => void} Notify */
 /** @typedef {(destination: string, focus?: NavigationFocus | null) => void} Navigate */
-/** @typedef {{id: string, title: string, owner_name: string, status: keyof typeof STATUS_LABELS, store: string, listing?: string}} SearchTask */
-/** @typedef {{id: string, kind: string, name: string, current_version: number, row_count: number, description?: string}} SearchDataset */
-/** @typedef {{id: string, workflow_status: string, comment: string, task_title: string, owner_name: string}} SearchReview */
-/** @typedef {{tasks: SearchTask[], datasets: SearchDataset[], reviews: SearchReview[]}} SearchResources */
-/** @typedef {{id: string, type: string, icon: import("react").ElementType, title: string, meta: string, keywords: string, page: string, focus: NavigationFocus}} GlobalSearchItem */
-
-/** @param {unknown} error */
-function errorMessage(error) {
-  return error instanceof Error ? error.message : "请求失败";
-}
+/** @typedef {import("./globalSearchItems").SearchResources} SearchResources */
 
 /** @param {{onClose: () => void, onSelect: Navigate, notify: Notify}} props */
 export function GlobalSearch({ onClose, onSelect, notify }) {
@@ -46,58 +31,7 @@ export function GlobalSearch({ onClose, onSelect, notify }) {
       .finally(() => setLoading(false));
   }, [notify]);
 
-  /** @type {GlobalSearchItem[]} */
-  const items = [
-    ...resources.tasks.map(
-      /** @returns {GlobalSearchItem} */ (task) => ({
-        id: task.id,
-        type: "任务",
-        icon: PlayCircle,
-        title: task.title,
-        meta: `${task.owner_name} · ${STATUS_LABELS[task.status] ?? task.status}`,
-        keywords: `${task.title} ${task.store} ${task.listing ?? ""} ${task.owner_name}`,
-        page: task.status === "completed" ? "legacy-results" : "analysis-tasks",
-        focus: {
-          kind: task.status === "completed" ? "result" : "task",
-          id: task.id,
-        },
-      }),
-    ),
-    ...resources.datasets
-      .filter((dataset) => dataset.kind === "products")
-      .map(
-        /** @returns {GlobalSearchItem} */ (dataset) => ({
-          id: dataset.id,
-          type: "产品信息",
-          icon: Database,
-          title: dataset.name,
-          meta: `v${dataset.current_version} · ${dataset.row_count.toLocaleString()} 行`,
-          keywords: `${dataset.name} ${dataset.description ?? ""} ${dataset.kind}`,
-          page: "data-assets",
-          focus: { kind: "dataset", id: dataset.id, datasetKind: dataset.kind },
-        }),
-      ),
-    ...resources.reviews.map(
-      /** @returns {GlobalSearchItem} */ (review) => ({
-        id: review.id,
-        type: review.workflow_status === "pending" ? "待复核" : "已复核",
-        icon: ListChecks,
-        title: review.comment,
-        meta: `${review.task_title} · ${review.owner_name}`,
-        keywords: `${review.comment} ${review.task_title} ${review.owner_name}`,
-        page: "review",
-        focus: { kind: "review", id: review.id, status: review.workflow_status },
-      }),
-    ),
-  ];
-  const normalized = query.trim().toLowerCase();
-  const matches = items
-    .filter(
-      (item) =>
-        !normalized ||
-        `${item.title} ${item.keywords}`.toLowerCase().includes(normalized),
-    )
-    .slice(0, 12);
+  const matches = matchingSearchItems(resources, query);
 
   return (
     <div
