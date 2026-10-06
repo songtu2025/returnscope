@@ -317,6 +317,92 @@ def test_staged_cleanup_keeps_expired_import_while_processing(tmp_path: Path) ->
     assert source.exists()
 
 
+@pytest.mark.parametrize("failure", ["staging_row", "source_file"])
+def test_successful_staged_import_logs_cleanup_failure_without_payload(
+    tmp_path: Path, monkeypatch, caplog, failure: str
+) -> None:
+    context = _seed_result_context(tmp_path)
+    service = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
+    source = tmp_path / "SYNTHETIC-cleanup.csv"
+    _write_returns(source, [_return_row("SYNTHETIC-ORDER", "SYNTHETIC-COMMENT")])
+    inspection = service.inspect_return_import(source, source.name, actor_id="user-1")
+    if failure == "staging_row":
+        with context.database.transaction() as connection:
+            connection.execute(
+                """
+                CREATE TRIGGER fail_staging_cleanup
+                BEFORE DELETE ON dataset_import_staging
+                BEGIN
+                    SELECT RAISE(ABORT, 'SYNTHETIC-CONFIDENTIAL');
+                END
+                """
+            )
+    else:
+        original_unlink = Path.unlink
+
+        def fail_source_unlink(path, *args, **kwargs):
+            if path == source:
+                raise OSError("SYNTHETIC-CONFIDENTIAL")
+            return original_unlink(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "unlink", fail_source_unlink)
+    result = service.import_staged_returns(
+        inspection_id=str(inspection["inspection_id"]),
+        actor_id="user-1",
+        mode="analyze_only",
+    )
+    assert result["summary"]["imported_row_count"] == 1
+    assert service.version_file(str(result["dataset"]["id"])) is not None
+    records = [
+        item
+        for item in caplog.records
+        if item.name == "web_backend.dataset_return_import"
+    ]
+    assert len(records) == 1
+    assert "error_type=" in records[0].getMessage()
+    assert records[0].exc_info is None
+    assert "SYNTHETIC-CONFIDENTIAL" not in caplog.text
+    assert str(source) not in caplog.text
+
+
+def test_import_source_directory_cleanup_logs_only_error_type(
+    tmp_path: Path, caplog
+) -> None:
+    directory = tmp_path / "SYNTHETIC-import"
+    directory.mkdir()
+    source = directory / "source.csv"
+    source.write_text("SYNTHETIC-DATA", encoding="utf-8")
+    extra = directory / "SYNTHETIC-CONFIDENTIAL"
+    extra.write_text("SYNTHETIC-EXTRA", encoding="utf-8")
+    DatasetService._cleanup_import_source(source)
+    assert not source.exists()
+    assert extra.exists()
+    records = [
+        item
+        for item in caplog.records
+        if item.name == "web_backend.dataset_return_versions"
+    ]
+    assert len(records) == 1
+    assert records[0].getMessage() == "导入归档目录清理失败: error_type=OSError"
+    assert records[0].exc_info is None
+    assert "SYNTHETIC-CONFIDENTIAL" not in caplog.text
+    assert str(directory) not in caplog.text
+
+
+def test_import_source_file_cleanup_keeps_unlink_failure(
+    monkeypatch, tmp_path: Path, caplog
+) -> None:
+    source = tmp_path / "SYNTHETIC-source.csv"
+
+    def fail_unlink(*_args, **_kwargs):
+        raise OSError("SYNTHETIC-UNLINK")
+
+    monkeypatch.setattr(Path, "unlink", fail_unlink)
+    with pytest.raises(OSError, match="SYNTHETIC-UNLINK"):
+        DatasetService._cleanup_import_source(source)
+    assert not caplog.records
+
+
 def test_return_import_recognizes_identity_and_separates_task_input(
     tmp_path: Path,
 ) -> None:

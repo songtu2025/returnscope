@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,6 +15,8 @@ from web_backend.datasets.return_import_preparation import (
 )
 from web_backend.security import utc_now
 from web_backend.settings import Settings
+
+logger = logging.getLogger(__name__)
 
 
 class DatasetReturnImportMixin(ReturnImportPreparationMixin):
@@ -99,12 +102,12 @@ class DatasetReturnImportMixin(ReturnImportPreparationMixin):
                     "DELETE FROM dataset_import_staging WHERE id = ?",
                     (inspection_id,),
                 )
-        except Exception:
-            pass
+        except Exception as error:
+            logger.warning("导入检查记录清理失败: error_type=%s", type(error).__name__)
         try:
             path.unlink(missing_ok=True)
-        except OSError:
-            pass
+        except OSError as error:
+            logger.warning("导入临时文件清理失败: error_type=%s", type(error).__name__)
         return result
 
     def _return_import_target(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,8 @@ from web_backend.dataset_files import (
 )
 from web_backend.security import utc_now
 from web_backend.settings import Settings
+
+logger = logging.getLogger(__name__)
 
 RETURN_APPEND_MAX_ATTEMPTS = 3
 
@@ -405,5 +408,5 @@ class DatasetReturnVersionMixin:
         raw_destination.unlink(missing_ok=True)
         try:
             raw_destination.parent.rmdir()
-        except OSError:
-            pass
+        except OSError as error:
+            logger.warning("导入归档目录清理失败: error_type=%s", type(error).__name__)
