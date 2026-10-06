@@ -4,6 +4,25 @@ from typing import Any
 
 from web_backend.insight_report_profiles import InsightReportProfile
 
+_EVIDENCE_COMMENT_LIMIT = 160
+
+
+def _opinion_entry(opinion: dict[str, Any], index: int) -> dict[str, Any]:
+    return {
+        "label": str(opinion.get("opinion") or f"高频表述 {index}"),
+        "value": f"{int(opinion.get('record_count') or 0)} 条",
+        "data": opinion,
+    }
+
+
+def _sample_entry(sample: dict[str, Any], label: Any) -> dict[str, Any]:
+    text = str(sample.get("comment") or sample.get("reason") or "").strip()
+    return {
+        "label": str(label or "原始评论"),
+        "value": text[:_EVIDENCE_COMMENT_LIMIT] or "未提供评论",
+        "data": sample,
+    }
+
 
 def _counted_entry(item: dict[str, Any], label: str) -> dict[str, Any]:
     return {
@@ -154,18 +173,11 @@ def _issue_case_evidence(case: dict[str, Any]) -> dict[str, dict[str, Any]]:
     for index, opinion in enumerate(
         case.get("semantic_profile", {}).get("opinions", []), 1
     ):
-        catalog[f"{case_id}.opinion.{index}"] = {
-            "label": str(opinion.get("opinion") or f"高频表述 {index}"),
-            "value": f"{int(opinion.get('record_count') or 0)} 条",
-            "data": opinion,
-        }
+        catalog[f"{case_id}.opinion.{index}"] = _opinion_entry(opinion, index)
     for index, sample in enumerate(case.get("samples", []), 1):
-        text = str(sample.get("comment") or sample.get("reason") or "").strip()
-        catalog[f"{case_id}.sample.{index}"] = {
-            "label": str(case.get("product_sku") or "原始评论"),
-            "value": text[:160] or "未提供评论",
-            "data": sample,
-        }
+        catalog[f"{case_id}.sample.{index}"] = _sample_entry(
+            sample, case.get("product_sku")
+        )
     return catalog
 
 
@@ -195,17 +207,8 @@ def _diagnostic_evidence(diagnostic: dict[str, Any]) -> dict[str, dict[str, Any]
         )
     opinions = diagnostic.get("semantic_profile", {}).get("opinions", [])
     for index, opinion in enumerate(opinions, 1):
-        catalog[f"diagnostic.{code}.opinion.{index}"] = {
-            "label": str(opinion.get("opinion") or f"高频表述 {index}"),
-            "value": f"{int(opinion.get('record_count') or 0)} 条",
-            "data": opinion,
-        }
+        catalog[f"diagnostic.{code}.opinion.{index}"] = _opinion_entry(opinion, index)
     for index, sample in enumerate(diagnostic.get("samples", []), 1):
-        text = str(sample.get("comment") or sample.get("reason") or "").strip()
         sample_id = f"diagnostic.{code}.sample.{index}"
-        catalog[sample_id] = {
-            "label": str(sample.get("product_name") or "原始评论"),
-            "value": text[:160] or "未提供评论",
-            "data": sample,
-        }
+        catalog[sample_id] = _sample_entry(sample, sample.get("product_name"))
     return catalog

@@ -4,6 +4,10 @@ from typing import Any
 
 from web_backend.insight_report_profiles import resolve_insight_report_profile
 
+_REASON_SCAN_LIMIT = 15
+_ACTIONABLE_REASON_LIMIT = 2
+_DIAGNOSTIC_REASON_LIMIT = 4
+
 
 def _mask_product_diagnostics(
     diagnostics: list[dict[str, Any]],
@@ -23,10 +27,19 @@ def _mask_product_diagnostics(
 
 
 def _diagnostic_reason_codes(analysis: dict[str, Any]) -> list[str]:
-    reasons = list(analysis.get("reasons", []))[:15]
+    reasons = list(analysis.get("reasons", []))[:_REASON_SCAN_LIMIT]
     profile = resolve_insight_report_profile(analysis.get("sources"))
+    candidates = _diagnostic_reason_candidates(reasons, profile.preferred_reason_codes)
+    codes = [str(reason.get("value") or "") for reason in candidates]
+    return list(dict.fromkeys(code for code in codes if code))[
+        :_DIAGNOSTIC_REASON_LIMIT
+    ]
+
+
+def _diagnostic_reason_candidates(
+    reasons: list[dict[str, Any]], preferred_codes: tuple[str, ...]
+) -> list[dict[str, Any]]:
     reason_by_code = {str(reason.get("value") or ""): reason for reason in reasons}
-    selected: list[str] = []
     actionable = [
         reason
         for reason in reasons
@@ -43,21 +56,12 @@ def _diagnostic_reason_codes(analysis: dict[str, Any]) -> list[str]:
         None,
     )
     candidates = [
-        reason_by_code[code]
-        for code in profile.preferred_reason_codes
-        if code in reason_by_code
+        reason_by_code[code] for code in preferred_codes if code in reason_by_code
     ]
-    candidates.extend(actionable[:2])
+    candidates.extend(actionable[:_ACTIONABLE_REASON_LIMIT])
     if broad_reason:
         candidates.append(broad_reason)
-    if not candidates and reasons:
-        candidates.append(reasons[0])
-
-    for reason in candidates:
-        code = str(reason.get("value") or "")
-        if code and code not in selected:
-            selected.append(code)
-    return [code for code in selected if code][:4]
+    return candidates or reasons[:1]
 
 
 def _trend_summary(

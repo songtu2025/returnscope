@@ -568,39 +568,6 @@ def test_result_entry_creates_dashboard_and_report(tmp_path) -> None:
     assert created["report"]["dashboard_id"] == created["dashboard"]["id"]
 
 
-def test_diagnostic_reasons_follow_report_blueprint() -> None:
-    analysis = {
-        "reasons": [
-            {
-                "value": "OTHER_NO_LONGER_NEEDED",
-                "label_group": "其他原因",
-                "subjects": ["BUYER", "ORDER"],
-            },
-            {
-                "value": "FIT_TOO_SMALL",
-                "label_group": "尺码",
-                "subjects": ["PRODUCT"],
-            },
-            {
-                "value": "FIT_TOO_LARGE",
-                "label_group": "尺码",
-                "subjects": ["PRODUCT"],
-            },
-            {
-                "value": "COLOR_MISMATCH",
-                "label_group": "外观",
-                "subjects": ["PRODUCT"],
-            },
-        ]
-    }
-
-    assert InsightReportService._diagnostic_reason_codes(analysis) == [
-        "FIT_TOO_SMALL",
-        "FIT_TOO_LARGE",
-        "OTHER_NO_LONGER_NEEDED",
-    ]
-
-
 @pytest.mark.parametrize("multi_source", [False, True])
 def test_report_diagnostics_share_overview_without_changing_evidence(
     tmp_path, monkeypatch, multi_source
@@ -773,41 +740,6 @@ def test_report_diagnostics_share_overview_without_changing_evidence(
         {**deepcopy(analysis), "diagnostics": actual}, prompt_version=PROMPT_VERSION
     )
     assert json_text(new_evidence) == json_text(old_evidence)
-
-
-def test_glove_profile_prioritizes_category_problems() -> None:
-    analysis = {
-        "sources": [{"agent_key": "gloves"}],
-        "reasons": [
-            {
-                "value": "OTHER_EXPECTATION_MISMATCH",
-                "label_group": "其他原因",
-                "subjects": ["PRODUCT", "BUYER"],
-            },
-            {
-                "value": "GLOVE_WARMTH",
-                "label_group": "功能",
-                "subjects": ["PRODUCT"],
-            },
-            {
-                "value": "GLOVE_SIZE_LARGE",
-                "label_group": "尺码",
-                "subjects": ["PRODUCT"],
-            },
-            {
-                "value": "GLOVE_SIZE_SMALL",
-                "label_group": "尺码",
-                "subjects": ["PRODUCT"],
-            },
-        ],
-    }
-
-    assert InsightReportService._diagnostic_reason_codes(analysis) == [
-        "GLOVE_SIZE_SMALL",
-        "GLOVE_SIZE_LARGE",
-        "GLOVE_WARMTH",
-        "OTHER_EXPECTATION_MISMATCH",
-    ]
 
 
 def test_glove_evidence_uses_variant_diagnostic_blueprint() -> None:

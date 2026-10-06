@@ -12,37 +12,21 @@ def _business_issue_evidence(code: str, context: _BusinessIssueContext) -> list[
         primary_id = str(context.cases[0].get("id"))
         if context.cases[0].get("trend"):
             evidence_ids.append(f"{primary_id}.trend")
-        evidence_ids.extend(
-            (
-                f"{primary_id}.opinion.{index}"
-                for index in range(1, len(context.opinions) + 1)
-            )
-        )
-        evidence_ids.extend(
-            (
-                f"{primary_id}.sample.{index}"
-                for index in range(1, len(context.samples) + 1)
-            )
-        )
+        prefix = primary_id
     elif context.trend_summary.get("status") == "available":
-        evidence_ids.append(f"diagnostic.{code}.trend")
+        prefix = f"diagnostic.{code}"
+        evidence_ids.append(f"{prefix}.trend")
         evidence_ids.extend(
             (
-                f"diagnostic.{code}.{context.dimension}.{index}"
+                f"{prefix}.{context.dimension}.{index}"
                 for index in range(1, len(context.hotspots) + 1)
             )
         )
+    else:
+        return evidence_ids
+    for kind, items in (("opinion", context.opinions), ("sample", context.samples)):
         evidence_ids.extend(
-            (
-                f"diagnostic.{code}.opinion.{index}"
-                for index in range(1, len(context.opinions) + 1)
-            )
-        )
-        evidence_ids.extend(
-            (
-                f"diagnostic.{code}.sample.{index}"
-                for index in range(1, len(context.samples) + 1)
-            )
+            f"{prefix}.{kind}.{index}" for index in range(1, len(items) + 1)
         )
     return list(dict.fromkeys(evidence_ids))
 

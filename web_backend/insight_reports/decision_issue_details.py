@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
+_MIN_READY_SAMPLES = 10
+
 
 def _report_language(source: dict[str, Any]) -> tuple[str, str, str, str]:
     is_returns = source.get("analysis_context") == "returns"
@@ -29,15 +31,13 @@ def _issue_scope(
         else:
             product = value
 
-    issue_id = case_id
-    if not issue_id:
-        if not product and not sku:
-            issue_id = f"issue.reason.{code}"
-        else:
-            identity = "\x1f".join([code, dimension, product or "", sku or ""])
-            suffix = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:12]
-            issue_id = f"issue.{code}.{suffix}"
-    return case_id, product, sku, issue_id
+    if case_id:
+        return case_id, product, sku, case_id
+    if not product and not sku:
+        return case_id, product, sku, f"issue.reason.{code}"
+    identity = "\x1f".join([code, dimension, product or "", sku or ""])
+    suffix = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:12]
+    return case_id, product, sku, f"issue.{code}.{suffix}"
 
 
 def _issue_metrics(
@@ -49,6 +49,17 @@ def _issue_metrics(
     scoped = int(
         row.get("total_record_count") or source.get("included_record_count") or 0
     )
+    return {
+        "matched_return_samples": matched,
+        "scoped_return_samples": scoped,
+        **_issue_rate_metrics(row, business_issue),
+        **_issue_trend_metrics(row, business_issue),
+    }
+
+
+def _issue_rate_metrics(
+    row: dict[str, Any], business_issue: dict[str, Any]
+) -> dict[str, Any]:
     share_value = (
         row.get("product_reason_rate")
         if row.get("product_reason_rate") is not None
@@ -66,6 +77,19 @@ def _issue_metrics(
     gap = round(share - baseline, 1) if baseline is not None else None
     lift_value = row.get("lift")
     lift = float(lift_value) if lift_value is not None else None
+    return {
+        "return_sample_share": round(share, 1),
+        "baseline_return_sample_share": (
+            round(baseline, 1) if baseline is not None else None
+        ),
+        "gap_percentage_points": gap,
+        "lift": round(lift, 2) if lift is not None else None,
+    }
+
+
+def _issue_trend_metrics(
+    row: dict[str, Any], business_issue: dict[str, Any]
+) -> dict[str, Any]:
     trend = row.get("trend_summary") or business_issue.get("trend_summary", {})
     trend_available = trend.get("status") == "available"
     recent_change = (
@@ -77,14 +101,6 @@ def _issue_metrics(
     if direction not in {"rising", "stable", "falling"}:
         direction = "insufficient"
     return {
-        "matched_return_samples": matched,
-        "scoped_return_samples": scoped,
-        "return_sample_share": round(share, 1),
-        "baseline_return_sample_share": (
-            round(baseline, 1) if baseline is not None else None
-        ),
-        "gap_percentage_points": gap,
-        "lift": round(lift, 2) if lift is not None else None,
         "recent_change_percentage_points": recent_change,
         "trend_direction": direction,
     }
@@ -174,8 +190,8 @@ def _issue_readiness(
     if (
         not concrete_scope
         or not reliable
-        or metrics["matched_return_samples"] < 10
-        or metrics["scoped_return_samples"] < 10
+        or metrics["matched_return_samples"] < _MIN_READY_SAMPLES
+        or metrics["scoped_return_samples"] < _MIN_READY_SAMPLES
     ):
         return {
             "status": "diagnostic_only",
