@@ -17,6 +17,41 @@ from return_semantics.model_client import (
 from web_backend.common import json_value
 
 
+def _legacy_model_policy(base_settings: Any) -> dict[str, Any]:
+    return {
+        "version": "legacy-model-policy-v1",
+        "configured": {
+            "first_pass_role": ("cheap" if base_settings.cheap_model else "primary"),
+            "review_role": ("secondary" if base_settings.secondary_model else None),
+        },
+        "actual": {
+            "primary": {
+                "role": "primary",
+                "model": base_settings.model,
+                "effort": base_settings.reasoning_effort,
+            },
+            "first_pass": {
+                "role": ("cheap" if base_settings.cheap_model else "primary"),
+                "model": base_settings.cheap_model or base_settings.model,
+                "effort": (
+                    base_settings.cheap_reasoning_effort
+                    if base_settings.cheap_model
+                    else base_settings.reasoning_effort
+                ),
+            },
+            "review": (
+                {
+                    "role": "secondary",
+                    "model": base_settings.secondary_model,
+                    "effort": base_settings.secondary_reasoning_effort,
+                }
+                if base_settings.secondary_model
+                else None
+            ),
+        },
+    }
+
+
 class ModelRuntimeMixin:
     _capability_for_segment: Callable[..., CategoryCapability]
     _get_rate_limiter: Callable[..., RequestRateLimiter]
@@ -35,42 +70,7 @@ class ModelRuntimeMixin:
 
         model_policy = json_value(segment.get("model_policy_json"), None)
         if model_policy is None:
-            model_policy = {
-                "version": "legacy-model-policy-v1",
-                "configured": {
-                    "first_pass_role": (
-                        "cheap" if base_settings.cheap_model else "primary"
-                    ),
-                    "review_role": (
-                        "secondary" if base_settings.secondary_model else None
-                    ),
-                },
-                "actual": {
-                    "primary": {
-                        "role": "primary",
-                        "model": base_settings.model,
-                        "effort": base_settings.reasoning_effort,
-                    },
-                    "first_pass": {
-                        "role": ("cheap" if base_settings.cheap_model else "primary"),
-                        "model": base_settings.cheap_model or base_settings.model,
-                        "effort": (
-                            base_settings.cheap_reasoning_effort
-                            if base_settings.cheap_model
-                            else base_settings.reasoning_effort
-                        ),
-                    },
-                    "review": (
-                        {
-                            "role": "secondary",
-                            "model": base_settings.secondary_model,
-                            "effort": base_settings.secondary_reasoning_effort,
-                        }
-                        if base_settings.secondary_model
-                        else None
-                    ),
-                },
-            }
+            model_policy = _legacy_model_policy(base_settings)
         elif str(model_policy.get("version")) != capability.model_policy.version:
             raise ValueError(
                 f"片段 {segment['segment_key']} 的模型策略版本已不可用，请重新规划"

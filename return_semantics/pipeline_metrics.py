@@ -7,6 +7,9 @@ from return_semantics.model_client import ModelCallResult, ModelHTTPError
 from return_semantics.pipeline_models import ModelServiceUnavailable, PipelineRun
 from return_semantics.schemas import ValidatedClassification
 
+MODEL_SERVICE_ALERT_FAILURES = 3
+MODEL_SERVICE_PAUSE_FAILURES = 5
+
 
 def _add_usage(total: dict[str, int], usage: dict[str, int]) -> None:
     for key, value in usage.items():
@@ -84,7 +87,10 @@ class _RunTracker:
             else:
                 self.consecutive_service_failures = 0
             failure_count = self.consecutive_service_failures
-        if failure_count >= 3 and self._on_model_degraded is not None:
+        if (
+            failure_count >= MODEL_SERVICE_ALERT_FAILURES
+            and self._on_model_degraded is not None
+        ):
             self._on_model_degraded(self.snapshot(), failure_count, str(exc))
         return failure_count
 
@@ -100,7 +106,7 @@ class _RunTracker:
         )
 
     def pause_after_failure(self, failure_count: int, exc: Exception) -> None:
-        if failure_count < 5:
+        if failure_count < MODEL_SERVICE_PAUSE_FAILURES:
             return
         self._service_breaker.set()
         raise ModelServiceUnavailable(

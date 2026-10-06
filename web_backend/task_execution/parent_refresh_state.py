@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from web_backend.task_contracts import FINAL_STATUSES
+from web_backend.task_execution.contracts import COMPLETED_SEGMENT_STATUSES
 from web_backend.task_state import summarize_task_status
 
 _MODEL_FAILURE_DISPLAY_THRESHOLD = 5
@@ -39,8 +40,7 @@ def _parent_refresh_state(
     percent = round(current / total * 100, 2) if total else 0
     terminal = parent_status in FINAL_STATUSES
     has_deliverable = any(
-        segment["status"] in {"completed", "completed_with_errors"}
-        for segment in executable
+        segment["status"] in COMPLETED_SEGMENT_STATUSES for segment in executable
     )
     return _ParentRefreshState(
         status=parent_status,

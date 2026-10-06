@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from return_semantics.pipeline_metrics import MODEL_SERVICE_PAUSE_FAILURES
 from web_backend.common import json_text
 from web_backend.database import Database
 from web_backend.security import utc_now
+from web_backend.task_execution.contracts import TASK_EVENT_ERROR_TEXT_LIMIT
 
 
 class SegmentStateMixin:
@@ -133,7 +135,7 @@ class SegmentStateMixin:
         now = utc_now()
         message = (
             f"模型服务已连续失败 {consecutive_failures} 次，正在重试；"
-            "达到 5 次将自动暂停"
+            f"达到 {MODEL_SERVICE_PAUSE_FAILURES} 次将自动暂停"
         )
         with self.database.transaction(immediate=True) as connection:
             connection.execute(
@@ -166,7 +168,7 @@ class SegmentStateMixin:
                         {
                             "segment_id": segment_id,
                             "consecutive_failures": consecutive_failures,
-                            "error": error[:500],
+                            "error": error[:TASK_EVENT_ERROR_TEXT_LIMIT],
                         }
                     ),
                     now,

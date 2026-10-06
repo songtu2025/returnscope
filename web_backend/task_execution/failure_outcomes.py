@@ -6,7 +6,11 @@ from return_semantics.schemas import ValidatedClassification
 from web_backend.common import json_text
 from web_backend.database import Database
 from web_backend.security import utc_now
-from web_backend.task_execution.contracts import _SegmentRunContext
+from web_backend.task_execution.contracts import (
+    TASK_ERROR_TEXT_LIMIT,
+    TASK_EVENT_ERROR_TEXT_LIMIT,
+    _SegmentRunContext,
+)
 
 
 class SegmentFailureOutcomesMixin:
@@ -79,7 +83,7 @@ class SegmentFailureOutcomesMixin:
                     revision = revision + 1
                 WHERE id = ?
                 """,
-                (message, error[:2000], now, task_id),
+                (message, error[:TASK_ERROR_TEXT_LIMIT], now, task_id),
             )
             connection.execute(
                 """
@@ -94,7 +98,7 @@ class SegmentFailureOutcomesMixin:
                         {
                             "segment_id": segment_id,
                             "model_failures": model_failures,
-                            "error": error[:500],
+                            "error": error[:TASK_EVENT_ERROR_TEXT_LIMIT],
                         }
                     ),
                     now,
@@ -131,7 +135,7 @@ class SegmentFailureOutcomesMixin:
                     model_calls,
                     cache_hits,
                     model_failures,
-                    error[:2000],
+                    error[:TASK_ERROR_TEXT_LIMIT],
                     checkpoint_reference,
                     now,
                     now,
@@ -147,7 +151,7 @@ class SegmentFailureOutcomesMixin:
                 """,
                 (
                     task_id,
-                    error[:500],
+                    error[:TASK_EVENT_ERROR_TEXT_LIMIT],
                     json_text({"segment_id": segment_id}),
                     now,
                 ),
