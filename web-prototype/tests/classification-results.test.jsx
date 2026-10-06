@@ -1164,3 +1164,89 @@ test("复核创建 409 后刷新失败保留原因、显示刷新错误并恢复
   expect(apiMock.createReviewBatch).toHaveBeenCalledTimes(1);
   expect(window.location.hash).not.toContain("review_batch_id=");
 });
+
+import { classificationResultRouteState } from "../src/features/classification-results/classificationResultRoute";
+import { useClassificationResultDetailData } from "../src/features/classification-results/useClassificationResultDetailData";
+
+function ResultResourceProbe({ route, notify }) {
+  const state = useClassificationResultDetailData({ route, notify });
+  return (
+    <div>
+      <output aria-label="概况版本">{state.result?.version_id || ""}</output>
+      <output aria-label="记录总数">{state.records?.total ?? 0}</output>
+      <output aria-label="记录加载">{String(state.recordsLoading)}</output>
+      <output aria-label="概况错误">{state.error}</output>
+      <button onClick={state.retry}>重试概况</button>
+    </div>
+  );
+}
+
+test("详情资源切换筛选后忽略迟到记录并保持概况请求去重", async () => {
+  const notify = vi.fn();
+  let resolveOld;
+  const oldRequest = new Promise((resolve) => {
+    resolveOld = resolve;
+  });
+  apiMock.classificationResultRecordGroups.mockReturnValueOnce(oldRequest);
+  apiMock.classificationResultRecordGroups.mockResolvedValue({ items: [], total: 7 });
+  const route = classificationResultRouteState({
+    result_version_id: resultVersion.version_id,
+  });
+  const { rerender } = render(<ResultResourceProbe route={route} notify={notify} />);
+  await waitFor(() =>
+    expect(screen.getByLabelText("概况版本")).toHaveTextContent(
+      resultVersion.version_id,
+    ),
+  );
+  const firstSignal = apiMock.classificationResultRecordGroups.mock.calls[0][2].signal;
+  rerender(
+    <ResultResourceProbe
+      route={{ ...route, productName: "合成筛选商品" }}
+      notify={notify}
+    />,
+  );
+  await waitFor(() => expect(screen.getByLabelText("记录总数")).toHaveTextContent("7"));
+  expect(firstSignal.aborted).toBe(true);
+  expect(apiMock.classificationResult).toHaveBeenCalledTimes(1);
+  expect(apiMock.classificationResultSummary).toHaveBeenCalledTimes(1);
+  expect(apiMock.classificationResultRecordGroups).toHaveBeenCalledTimes(2);
+  expect(apiMock.classificationResultDrilldown).toHaveBeenCalledTimes(6);
+  await act(async () => {
+    resolveOld({ items: [], total: 2 });
+    await oldRequest;
+  });
+  expect(screen.getByLabelText("记录总数")).toHaveTextContent("7");
+  expect(screen.getByLabelText("概况错误")).toBeEmptyDOMElement();
+  expect(notify).not.toHaveBeenCalled();
+});
+
+test("历史页不请求记录且下钻失败不影响概况重试", async () => {
+  const notify = vi.fn();
+  const route = classificationResultRouteState({
+    result_version_id: resultVersion.version_id,
+    tab: "history",
+  });
+  const { rerender } = render(<ResultResourceProbe route={route} notify={notify} />);
+  await waitFor(() =>
+    expect(screen.getByLabelText("概况版本")).toHaveTextContent(
+      resultVersion.version_id,
+    ),
+  );
+  expect(screen.getByLabelText("记录加载")).toHaveTextContent("false");
+  expect(apiMock.classificationResultRecordGroups).not.toHaveBeenCalled();
+  expect(apiMock.classificationResultDrilldown).not.toHaveBeenCalled();
+  apiMock.classificationResultRecordGroups.mockRejectedValueOnce(
+    new Error("合成下钻读取失败"),
+  );
+  rerender(
+    <ResultResourceProbe route={{ ...route, tab: "records" }} notify={notify} />,
+  );
+  await waitFor(() => expect(notify).toHaveBeenCalledWith("合成下钻读取失败", "error"));
+  expect(screen.getByLabelText("概况版本")).toHaveTextContent(resultVersion.version_id);
+  expect(screen.getByLabelText("概况错误")).toBeEmptyDOMElement();
+  fireEvent.click(screen.getByRole("button", { name: "重试概况" }));
+  await waitFor(() => expect(apiMock.classificationResult).toHaveBeenCalledTimes(2));
+  expect(apiMock.classificationResultSummary).toHaveBeenCalledTimes(2);
+  expect(apiMock.classificationResultRecordGroups).toHaveBeenCalledTimes(1);
+  expect(apiMock.classificationResultDrilldown).toHaveBeenCalledTimes(3);
+});

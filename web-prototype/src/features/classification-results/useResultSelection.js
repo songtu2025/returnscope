@@ -6,11 +6,8 @@ import {
   selectionItem,
   updateDashboardSelection,
 } from "../analysis-dashboards/dashboardSelectionStorage";
-import {
-  isDashboardSelectable,
-  resultActionPolicy,
-  resultVersionId,
-} from "./resultActionPolicy";
+import { isDashboardSelectable, resultVersionId } from "./resultActionPolicy";
+import { runResultPrimaryAction } from "./resultSelectionActions";
 
 /** @typedef {import("./classificationResultListContracts").ClassificationResultVersion} ClassificationResultVersion */
 /** @typedef {import("./classificationResultListContracts").DashboardSelectionItem} DashboardSelectionItem */
@@ -105,38 +102,8 @@ export function useResultSelection({ route, updateRoute, userId }) {
   };
 
   /** @param {ClassificationResultVersion} result */
-  const createDashboardFromResult = (result) => {
-    const token = createDashboardSelection(userId, {
-      selected: [selectionItem(result)],
-    });
-    navigateHash("analysis-dashboards", { selection_token: token, step: "check" });
-  };
-
-  /** @param {ClassificationResultVersion} result */
-  const runPrimaryAction = (result) => {
-    const policy = resultActionPolicy(result, { taskId: route.taskId });
-    if (policy.primary.kind === "create-dashboard") {
-      createDashboardFromResult(result);
-      return;
-    }
-    if (policy.primary.kind === "repair-source") {
-      navigateHash("analysis-tasks", {
-        task_id: policy.primary.taskId,
-        segment_id: route.segmentId,
-      });
-      return;
-    }
-    updateRoute({
-      version: resultVersionId(result),
-      tab: policy.primary.kind === "create-review" ? "history" : "records",
-      action: policy.primary.kind === "create-review" ? "review" : "",
-      recordPage: 1,
-      problem: "",
-      productName: "",
-      productSku: "",
-      orderId: "",
-    });
-  };
+  const runPrimaryAction = (result) =>
+    runResultPrimaryAction(result, { route, updateRoute, userId });
 
   return {
     selectionIntent,

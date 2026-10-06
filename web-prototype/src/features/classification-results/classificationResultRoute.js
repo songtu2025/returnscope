@@ -30,32 +30,40 @@ import { RESULT_PAGE_SIZES } from "./classificationResultConstants";
 
 /**
  * @param {ClassificationResultQuery} query
+ * @param {string} key
+ */
+function queryValue(query, key) {
+  return query[key] || "";
+}
+
+/**
+ * @param {ClassificationResultQuery} query
  * @returns {ClassificationResultRoute}
  */
 export function classificationResultRouteState(query) {
   /** @param {string} key */
   const number = (key) => Number(query[key]);
   return {
-    version: query.result_version_id || query.version || "",
+    version: query.result_version_id || queryValue(query, "version"),
     page: Math.max(number("page") || 1, 1),
     recordPage: Math.max(number("record_page") || 1, 1),
     pageSize: RESULT_PAGE_SIZES.includes(number("page_size"))
       ? number("page_size")
       : 20,
-    q: query.q || "",
-    storeSite: query.store_site || "",
-    listing: query.listing || "",
-    qualityStatus: query.quality_status || "",
-    problem: query.problem || "",
-    productName: query.product_name || "",
-    productSku: query.product_sku || "",
-    orderId: query.order_id || "",
+    q: queryValue(query, "q"),
+    storeSite: queryValue(query, "store_site"),
+    listing: queryValue(query, "listing"),
+    qualityStatus: queryValue(query, "quality_status"),
+    problem: queryValue(query, "problem"),
+    productName: queryValue(query, "product_name"),
+    productSku: queryValue(query, "product_sku"),
+    orderId: queryValue(query, "order_id"),
     view: query.view === "reviews" ? "reviews" : "results",
     tab: query.tab === "history" ? "history" : "records",
-    selectionToken: query.selection_token || "",
-    taskId: query.task_id || "",
-    segmentId: query.segment_id || "",
-    reviewBatchId: query.review_batch_id || "",
+    selectionToken: queryValue(query, "selection_token"),
+    taskId: queryValue(query, "task_id"),
+    segmentId: queryValue(query, "segment_id"),
+    reviewBatchId: queryValue(query, "review_batch_id"),
     action: query.action || "",
   };
 }

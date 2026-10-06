@@ -1,12 +1,8 @@
 import { ClassificationResultDetailView } from "./ClassificationResultDetailView";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft } from "@phosphor-icons/react";
-import { navigateHash } from "../../app/hashRouter";
 import { PageLoadingState } from "../../components/SharedUi";
-import {
-  createDashboardSelection,
-  selectionItem,
-} from "../analysis-dashboards/dashboardSelectionStorage";
+import { createResultDashboard } from "./resultSelectionActions";
 import { ResultError } from "./ClassificationResultCommon";
 import { useClassificationResultDetailData } from "./useClassificationResultDetailData";
 
@@ -24,10 +20,7 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
 
   const createDashboardFromResult = () => {
     if (!result) return;
-    const token = createDashboardSelection(userId, {
-      selected: [selectionItem(result)],
-    });
-    navigateHash("analysis-dashboards", { selection_token: token, step: "check" });
+    createResultDashboard(userId, result);
   };
 
   const openOrderRecords = () => {
