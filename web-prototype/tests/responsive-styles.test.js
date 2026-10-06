@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { expect, test } from "vitest";
 
 const styleFiles = [
@@ -11,6 +11,7 @@ const styleFiles = [
   "src/styles/analysis-dashboards.css",
   "src/styles/analysis-workbench.css",
   "src/styles/classification-results.css",
+  "src/styles/review-batches.css",
   "src/styles/operations.css",
   "src/styles/workbench.css",
   "src/styles/review-center.css",
@@ -20,9 +21,14 @@ const styleFiles = [
   "src/styles/ai-insight-reports.css",
   "src/styles/product-info.css",
 ];
-const styles = styleFiles
-  .map((file) => readFileSync(resolve(process.cwd(), file), "utf8"))
-  .join("\n");
+function readStyles(file) {
+  const path = resolve(process.cwd(), file);
+  return readFileSync(path, "utf8").replace(/@import\s+"([^"]+)";/g, (_, imported) =>
+    readStyles(resolve(dirname(path), imported)),
+  );
+}
+
+const styles = styleFiles.map(readStyles).join("\n");
 
 test("business pages use tiered desktop work widths", () => {
   expect(styles).toMatch(/--layout-wide-max:\s*1680px/);
@@ -182,5 +188,17 @@ test("用户与安全和审计记录使用紧凑桌面布局", () => {
   );
   expect(styles).toMatch(
     /\.audit-list article\s*{[^}]*padding:\s*var\(--desktop-card-padding\);/s,
+  );
+});
+
+test("复核批次的列表、抽屉与语义诊断纳入桌面样式验证", () => {
+  expect(styles).toMatch(
+    /\.review-batch-filters\s*{[^}]*grid-template-columns:\s*minmax\(260px, 1fr\) 180px auto;/s,
+  );
+  expect(styles).toMatch(
+    /\.review-record-drawer\s*{[^}]*width:\s*520px;[^}]*height:\s*100%;/s,
+  );
+  expect(styles).toMatch(
+    /\.semantic-review-diagnostic dl\s*{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);/s,
   );
 });

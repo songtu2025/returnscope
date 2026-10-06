@@ -1,0 +1,125 @@
+.analysis-kpis,
+.quality-kpis,
+.diagnosis-summary {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.analysis-kpis {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.quality-kpis {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.diagnosis-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.analysis-kpis > div,
+.quality-kpis > div,
+.diagnosis-summary > div {
+  min-height: 98px;
+  padding: 14px 15px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+.analysis-kpis span,
+.quality-kpis span,
+.diagnosis-summary span,
+.analysis-kpis small,
+.quality-kpis small,
+.diagnosis-summary small,
+.analysis-kpis strong,
+.quality-kpis strong,
+.diagnosis-summary strong {
+  display: block;
+}
+.analysis-kpis span,
+.quality-kpis span,
+.diagnosis-summary span {
+  color: #53615a;
+  font-size: 12px;
+}
+.analysis-kpis strong,
+.quality-kpis strong,
+.diagnosis-summary strong {
+  margin: 7px 0 5px;
+  color: #14251e;
+  font-size: 25px;
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+.analysis-kpis small,
+.quality-kpis small,
+.diagnosis-summary small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.analysis-tabs {
+  display: flex;
+  gap: 23px;
+  margin: 2px 0 14px;
+  padding: 0 4px;
+  border-bottom: 1px solid #cfd8d3;
+}
+.analysis-tabs button {
+  position: relative;
+  height: 43px;
+  padding: 0 1px;
+  border: 0;
+  color: #48564f;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.analysis-tabs button::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  content: "";
+  background: transparent;
+}
+.analysis-tabs button.active {
+  color: var(--green-dark);
+}
+.analysis-tabs button.active::after {
+  background: var(--green);
+}
+.analysis-tab-panel {
+  position: relative;
+  min-height: 320px;
+}
+.analysis-tab-panel.is-loading > *:not(.analysis-loading) {
+  opacity: 0.45;
+  pointer-events: none;
+}
+.analysis-loading,
+.analysis-first-loading {
+  overflow: hidden;
+}
+.analysis-loading {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+}
+.analysis-first-loading {
+  min-height: 320px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+.analysis-loading > .inline-loading,
+.analysis-first-loading > .inline-loading {
+  width: 100%;
+  height: 100%;
+  min-height: inherit;
+  border-radius: inherit;
+}
+.analysis-section-stack {
+  display: grid;
+  gap: 13px;
+}
