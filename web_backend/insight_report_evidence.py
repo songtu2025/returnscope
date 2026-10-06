@@ -16,6 +16,9 @@ from web_backend.insight_report_profiles import (
     InsightReportProfile,
     resolve_insight_report_profile,
 )
+from web_backend.insight_reports.diagnostic_summary import (
+    _mask_product_diagnostics as _mask_product_diagnostics,
+)
 from web_backend.insight_reports.evidence_catalog import _build_catalog
 
 
@@ -44,23 +47,6 @@ def _build_evidence(
         else _build_blueprint(evidence)
     )
     return evidence
-
-
-def _mask_product_diagnostics(
-    diagnostics: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    return [
-        {
-            **diagnostic,
-            "hotspots": [],
-            "variants": [],
-            "samples": [
-                {**sample, "product_name": None, "product_sku": None}
-                for sample in diagnostic.get("samples", [])
-            ],
-        }
-        for diagnostic in diagnostics
-    ]
 
 
 def _prepare_report_analysis(

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from web_backend.dashboard_service import TEXT_ENCODING_ANOMALY
+from web_backend.dashboard_common import TEXT_ENCODING_ANOMALY
 
 
 def _has_text_anomaly(*values: Any) -> bool:

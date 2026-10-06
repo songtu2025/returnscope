@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from web_backend.insight_reports.quality_context import _LiveQualityEvaluation
+from web_backend.insight_reports.quality_context import (
+    PRODUCT_EVIDENCE_MARKERS,
+    TEXT_EVIDENCE_MARKERS,
+    _LiveQualityEvaluation,
+)
 
 
 def _summary_is_blocked(
@@ -12,21 +16,14 @@ def _summary_is_blocked(
     if not context.mapping_trusted:
         summary_text = f"{summary.get('title', '')} {summary.get('statement', '')}"
         references_product = any(
-            marker in item
-            for item in references
-            for marker in (
-                ".hotspot.",
-                ".variant.",
-                "business_issue.",
-                "issue_case.",
-            )
+            marker in item for item in references for marker in PRODUCT_EVIDENCE_MARKERS
         )
         if any(name in summary_text for name in context.product_names):
             return True
         if references_product:
             return True
     return not context.text_trusted and any(
-        marker in item for item in references for marker in (".sample.", ".opinion.")
+        marker in item for item in references for marker in TEXT_EVIDENCE_MARKERS
     )
 
 

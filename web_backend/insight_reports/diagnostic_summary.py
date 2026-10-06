@@ -5,6 +5,23 @@ from typing import Any
 from web_backend.insight_report_profiles import resolve_insight_report_profile
 
 
+def _mask_product_diagnostics(
+    diagnostics: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    return [
+        {
+            **diagnostic,
+            "hotspots": [],
+            "variants": [],
+            "samples": [
+                {**sample, "product_name": None, "product_sku": None}
+                for sample in diagnostic.get("samples", [])
+            ],
+        }
+        for diagnostic in diagnostics
+    ]
+
+
 def _diagnostic_reason_codes(analysis: dict[str, Any]) -> list[str]:
     reasons = list(analysis.get("reasons", []))[:15]
     profile = resolve_insight_report_profile(analysis.get("sources"))

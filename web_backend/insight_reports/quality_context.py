@@ -7,6 +7,14 @@ from typing import Any
 from web_backend.insight_report_consistency import _report_consistency
 from web_backend.insight_reports.quality_issues import source_quality_issues
 
+PRODUCT_EVIDENCE_MARKERS = (
+    ".hotspot.",
+    ".variant.",
+    "business_issue.",
+    "issue_case.",
+)
+TEXT_EVIDENCE_MARKERS = (".sample.", ".opinion.")
+
 
 @dataclass
 class _LiveQualityEvaluation:
