@@ -1,0 +1,141 @@
+.semantic-fact-card {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #dce8e3;
+  border-radius: 7px;
+  background: #f8faf9;
+}
+.semantic-fact-card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.semantic-fact-card > header > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.semantic-fact-card > header > div > small {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+}
+.semantic-fact-card > header b {
+  overflow-wrap: anywhere;
+  color: var(--green-dark);
+  font-size: 11px;
+}
+.semantic-fact-card > header > span {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 9px;
+}
+.semantic-fact-card.is-context {
+  border-style: dashed;
+  background: #fbfcfb;
+}
+.semantic-fact-card dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 12px;
+  margin: 8px 0 0;
+}
+.semantic-fact-card dl > div {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 7px;
+  padding: 5px 0;
+  border-top: 1px solid var(--line-soft);
+  font-size: 10px;
+}
+.semantic-fact-card dt {
+  color: var(--muted);
+}
+.semantic-fact-card dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  text-align: right;
+}
+.semantic-fact-card .semantic-fact-verdict {
+  margin-top: 8px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.semantic-fact-summary {
+  display: grid;
+  gap: 3px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--green);
+  background: #f2f8f5;
+}
+.semantic-fact-summary span {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+}
+.semantic-fact-summary b {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.semantic-other-explanation {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 9px 10px;
+  border: 1px solid #e4c997;
+  border-radius: 7px;
+  color: #704615;
+  background: #fff9ed;
+}
+.semantic-other-explanation b {
+  font-size: 10px;
+}
+.semantic-other-explanation span {
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.semantic-other-explanation small {
+  color: #84623b;
+  font-size: 9px;
+  line-height: 1.45;
+}
+.semantic-evidence-source {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.semantic-fact-card blockquote {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-left: 3px solid #9fcdbd;
+  color: #263b33;
+  background: #f1f7f4;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.semantic-legacy-note {
+  display: block;
+  margin-top: 7px;
+  color: #8c5318;
+  font-size: 10px;
+}
+.semantic-empty-state {
+  display: grid;
+  gap: 3px;
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  background: #f8faf9;
+  font-size: 11px;
+}
+.semantic-empty-state b {
+  color: var(--ink);
+  font-size: 12px;
+}

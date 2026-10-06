@@ -1,0 +1,158 @@
+.semantic-result-panel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.semantic-result-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.semantic-result-header > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.semantic-result-header > div > b {
+  font-size: 13px;
+}
+.semantic-result-header > div > span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.semantic-status-badge {
+  display: inline-flex !important;
+  align-items: center;
+  width: max-content;
+  margin: 0 !important;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: var(--green-dark) !important;
+  background: var(--green-pale);
+  font-size: 10px !important;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.semantic-status-badge.is-negative {
+  color: #8c352f !important;
+  background: #fff0ee;
+}
+.semantic-status-badge.is-mixed {
+  color: #245b85 !important;
+  background: #eaf4fb;
+}
+.semantic-status-badge.is-conflict {
+  color: #8c5318 !important;
+  background: var(--amber-pale);
+}
+.semantic-status-badge.is-no_confirmed {
+  color: var(--muted) !important;
+  background: #eef1ef;
+}
+.semantic-compatibility-note,
+.semantic-boundary-note,
+.semantic-conflict-note {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 7px;
+  color: #5e6c66;
+  background: #f3f6f4;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.semantic-boundary-note {
+  margin: 8px 10px 0;
+  color: #245b85;
+  background: #edf6fb;
+}
+.semantic-conflict-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 8px 10px 0;
+  color: #805517;
+  background: #fff7e8;
+}
+.semantic-conflict-note svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+.semantic-conclusion-list {
+  display: grid;
+  gap: 8px;
+}
+.semantic-conclusion-item {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+.semantic-conclusion-item > summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 54px;
+  padding: 9px 10px;
+  cursor: pointer;
+  list-style: none;
+}
+.semantic-conclusion-item > summary::-webkit-details-marker {
+  display: none;
+}
+.semantic-conclusion-item > summary:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: -2px;
+}
+.semantic-conclusion-item > summary > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.semantic-conclusion-item > summary > div span,
+.semantic-conclusion-item > summary > small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.semantic-conclusion-item > summary > div b {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.semantic-conclusion-item > summary > svg {
+  transition: transform 150ms ease;
+}
+.semantic-conclusion-item[open] > summary > svg {
+  transform: rotate(180deg);
+}
+.semantic-fact-list {
+  display: grid;
+  gap: 8px;
+  padding: 0 10px 10px;
+}
+.semantic-label-group {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.semantic-label-group > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  color: var(--green-dark);
+  background: var(--green-pale);
+  font-size: 11px;
+}
+.semantic-label-group > header b {
+  overflow-wrap: anywhere;
+}
+.semantic-label-group > header span {
+  color: var(--muted);
+  white-space: nowrap;
+}
