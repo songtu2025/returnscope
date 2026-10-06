@@ -43,6 +43,7 @@ vi.mock("../src/api", () => ({
 
 import { ImportRulesPage } from "../src/features/data-management/ImportRulesPage";
 import { ReturnDataAssetsPage } from "../src/features/data-management/ReturnDataAssetsPage";
+import { SourceDetail } from "../src/features/data-management/ReturnDataAssetDetail";
 import { ReturnImportDialog } from "../src/features/task-create/ReturnImportDialog";
 import { DatasetUploadDialog } from "../src/components/DatasetUploadDialog";
 import { DatasetReferences } from "../src/features/data-management/DatasetReferences";
@@ -63,6 +64,105 @@ beforeEach(() => {
 });
 
 afterEach(() => cleanup());
+
+async function openSyntheticSnapshot() {
+  const source = {
+    id: "synthetic-source",
+    version_id: "synthetic-current",
+    row_count: 2,
+    versions: [{ id: "synthetic-history", version: 3, original_name: "SYNTHETIC.csv" }],
+  };
+  datasetStorageSummary.mockResolvedValue({
+    version_count: 1,
+    logical_bytes: 0,
+    physical_bytes: 0,
+    duplicate_groups: 0,
+    dedup_reclaimable_bytes: 0,
+    expired_versions: 0,
+    expired_reclaimable_bytes: 0,
+    current_versions: 1,
+    task_referenced_versions: 0,
+    task_reference_count: 0,
+    retention_days: 30,
+    retain_latest: 2,
+    can_cleanup: false,
+  });
+  datasetDownloadUrl.mockReturnValue("/synthetic-download?version=3");
+  const user = userEvent.setup();
+  render(<SourceDetail source={source} notify={vi.fn()} initiallyShowTrace />);
+  await user.click(
+    screen.getByRole("button", { name: "查看历史快照内容：SYNTHETIC.csv" }),
+  );
+  return { user, dialog: screen.getByRole("dialog", { name: "历史快照内容" }) };
+}
+
+test("快照保持数据源回退、首行列顺序与零值展示", async () => {
+  datasetRows.mockResolvedValue({
+    records: [
+      { _row_index: 0, zero: 0, empty: " ", comment: null },
+      { _row_index: 5, zero: 2, empty: "", comment: "SYNTHETIC", extra: "后续行字段" },
+    ],
+    source_total: 20,
+  });
+  const { dialog } = await openSyntheticSnapshot();
+  const table = await within(dialog).findByRole("table");
+  expect(
+    within(table)
+      .getAllByRole("columnheader")
+      .map((cell) => cell.textContent),
+  ).toEqual(["#", "zero", "comment"]);
+  const rows = within(table).getAllByRole("row");
+  expect(
+    within(rows[1])
+      .getAllByRole("cell")
+      .map((cell) => cell.textContent),
+  ).toEqual(["1", "—", "—"]);
+  expect(within(rows[1]).getAllByRole("cell")[1]).toHaveAttribute("title", "");
+  expect(
+    within(rows[2])
+      .getAllByRole("cell")
+      .map((cell) => cell.textContent),
+  ).toEqual(["6", "2", "SYNTHETIC"]);
+  expect(datasetRows).toHaveBeenCalledWith(
+    "synthetic-source",
+    "",
+    0,
+    10,
+    { version: 3 },
+    expect.objectContaining({ signal: expect.anything() }),
+  );
+  expect(within(dialog).getByRole("link", { name: "下载此快照" })).toHaveAttribute(
+    "href",
+    "/synthetic-download?version=3",
+  );
+});
+
+test.each([new Error("合成读取错误"), { message: "对象错误" }])(
+  "快照错误保持原反馈：%s",
+  async (error) => {
+    datasetRows.mockRejectedValue(error);
+    const { dialog } = await openSyntheticSnapshot();
+    const titles = await within(dialog).findAllByText("快照读取失败");
+    expect(titles[0]).toBeVisible();
+    if (error instanceof Error) {
+      expect(within(dialog).getByText(error.message)).toBeVisible();
+    } else {
+      expect(titles).toHaveLength(2);
+      expect(titles[1]).toBeVisible();
+    }
+  },
+);
+
+test("关闭待完成快照请求时取消原信号", async () => {
+  datasetRows.mockReturnValue(new Promise(() => {}));
+  const { user, dialog } = await openSyntheticSnapshot();
+  expect(within(dialog).getByText("正在读取该快照…")).toBeVisible();
+  const signal = datasetRows.mock.calls[0][5].signal;
+  expect(signal.aborted).toBe(false);
+  await user.click(within(dialog).getByRole("button", { name: "关闭" }));
+  expect(signal.aborted).toBe(true);
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+});
 
 test("导入规则页只读展示真实系统规则与折叠技术信息", async () => {
   importRules.mockResolvedValue({
