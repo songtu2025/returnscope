@@ -11,6 +11,10 @@ from return_semantics.data import PRODUCT_CATEGORY_COLUMNS, PRODUCT_COLUMNS
 from web_backend.common import add_audit, new_id
 from web_backend.database import Database
 from web_backend.dataset_files import PRODUCT_WORKSHEET, DatasetRevisionConflict
+from web_backend.datasets.product_category_rows import (
+    append_category_row,
+    update_category_rows,
+)
 from web_backend.settings import Settings
 
 
@@ -204,35 +208,9 @@ class DatasetProductWorkbookMixin:
         for item in items:
             matching = rows_by_product.get((item["store"], item["msku"]), [])
             if matching:
-                before_items.append(
-                    {
-                        "msku": item["msku"],
-                        "store": item["store"],
-                        "rows": [int(index) for index in matching],
-                        "category_a": str(frame.at[matching[0], "品类A"] or ""),
-                        "category_b": str(frame.at[matching[0], "品类B"] or ""),
-                    }
-                )
-                for index in matching:
-                    frame.at[index, "Listing"] = item["listing"]
-                    frame.at[index, "品类A"] = item["category_a"]
-                    frame.at[index, "品类B"] = item["category_b"]
-                    if "产品名称" in frame.columns and item["product_name"]:
-                        frame.at[index, "产品名称"] = item["product_name"]
+                update_category_rows(frame, matching, item, before_items)
                 continue
-            new_row: dict[str, Any] = {column: "" for column in frame.columns}
-            new_row.update(
-                {
-                    "MSKU": item["msku"],
-                    "店铺/站点": item["store"],
-                    "Listing": item["listing"],
-                    "品类A": item["category_a"],
-                    "品类B": item["category_b"],
-                }
-            )
-            if "产品名称" in frame.columns:
-                new_row["产品名称"] = item["product_name"]
-            frame.loc[len(frame), list(new_row)] = list(new_row.values())
+            append_category_row(frame, item)
             before_items.append(
                 {"store": item["store"], "msku": item["msku"], "rows": []}
             )
