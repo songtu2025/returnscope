@@ -747,3 +747,80 @@ test("看板以评论数展示互斥的评论级结论分布", () => {
     screen.getByText(/同一反馈可命中多个原因，占比之和可能超过 100%/),
   ).toBeVisible();
 });
+
+test.each([
+  {
+    name: "内嵌",
+    fields: {
+      facts: [{ fact_id: "SYNTHETIC-EMBEDDED" }],
+      supporting_fact_ids: ["SYNTHETIC-ID"],
+      label_codes: ["LABEL"],
+    },
+    expected: ["SYNTHETIC-EMBEDDED"],
+  },
+  {
+    name: "编号",
+    fields: { supporting_fact_ids: ["SYNTHETIC-ID"], label_codes: ["LABEL"] },
+    expected: ["SYNTHETIC-ID"],
+  },
+  {
+    name: "标签",
+    fields: { supporting_fact_ids: ["SYNTHETIC-MISSING"], label_codes: ["LABEL"] },
+    expected: ["SYNTHETIC-LABEL"],
+  },
+  {
+    name: "主题",
+    fields: { supporting_fact_ids: ["SYNTHETIC-MISSING"], label_codes: ["MISSING"] },
+    expected: ["SYNTHETIC-ID", "SYNTHETIC-LABEL", "SYNTHETIC-TOPIC"],
+  },
+])("结论事实来源按内嵌、编号、标签、主题优先级匹配：$name", ({ fields, expected }) => {
+  const record = {
+    comment_conclusions: [{ topic_path: ["合成主题"], status: "NEGATIVE", ...fields }],
+    atomic_facts: [
+      {
+        fact_id: "SYNTHETIC-ID",
+        label_code: "ID",
+        label_path: ["合成主题", "编号标签"],
+      },
+      {
+        fact_id: "SYNTHETIC-LABEL",
+        label_code: "LABEL",
+        label_path: ["合成主题", "匹配标签"],
+      },
+      {
+        fact_id: "SYNTHETIC-TOPIC",
+        label_code: "OTHER",
+        label_path: ["合成主题", "其他标签"],
+      },
+    ],
+  };
+  expect(semanticConclusions(record)[0].facts.map(({ factId }) => factId)).toEqual(
+    expected,
+  );
+});
+
+test.each([
+  undefined,
+  null,
+  "",
+  "TAXONOMY_GAP",
+  "MAPPING_UNCERTAIN",
+  "SYNTHETIC-UNKNOWN",
+])("非信息类处置保留复核归属：%s", (disposition) => {
+  const groups = semanticUnknownGroups({
+    unknown_semantics: [{ fact_id: "SYNTHETIC-UNKNOWN", disposition }],
+  });
+  expect(groups.review).toHaveLength(1);
+  expect(groups.informational).toHaveLength(0);
+});
+
+test.each(["EXPECTED_ABSTENTION", "OUT_OF_SCOPE", "EVIDENCE_ONLY"])(
+  "信息类处置保留信息归属：%s",
+  (disposition) => {
+    const groups = semanticUnknownGroups({
+      unknown_semantics: [{ fact_id: "SYNTHETIC-INFORMATIONAL", disposition }],
+    });
+    expect(groups.review).toHaveLength(0);
+    expect(groups.informational).toHaveLength(1);
+  },
+);
