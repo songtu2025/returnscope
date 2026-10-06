@@ -34,6 +34,7 @@ vi.mock("../src/shared/api/dashboardApi", () => ({
 }));
 
 import { ClassificationResultsPage } from "../src/pages/ClassificationResultsPage";
+import { ResultVersionReviewPanel } from "../src/features/review-batches/ResultVersionReviewPanel";
 import { renderWithServerState as render } from "./renderWithServerState";
 
 const resultVersion = {
@@ -1101,4 +1102,65 @@ test("并发创建返回 409 时读取并进入服务器已有草稿", async () 
     page_size: 100,
     base_result_version_id: "classification-version-1",
   });
+});
+
+test("复核版本切换取消共享旧请求，晚返回不覆盖新历史且卸载取消新请求", async () => {
+  let finishOld;
+  const oldHistory = new Promise((resolve) => {
+    finishOld = resolve;
+  });
+  const nextVersion = {
+    ...resultVersion,
+    version_id: "synthetic-version-2",
+    version: 2,
+  };
+  apiMock.classificationResultVersions.mockImplementation((id) =>
+    id === resultVersion.version_id ? oldHistory : Promise.resolve([nextVersion]),
+  );
+  const props = { onSelectVersion: vi.fn(), notify: vi.fn() };
+  const view = render(<ResultVersionReviewPanel result={resultVersion} {...props} />);
+  const oldSignal = apiMock.classificationResultVersions.mock.calls[0][1].signal;
+  expect(apiMock.reviewBatches.mock.calls[0][1].signal).toBe(oldSignal);
+
+  view.rerender(<ResultVersionReviewPanel result={nextVersion} {...props} />);
+  expect(await screen.findByText("v2 · 复核派生")).toBeVisible();
+  expect(oldSignal.aborted).toBe(true);
+  const nextSignal = apiMock.classificationResultVersions.mock.calls[1][1].signal;
+  expect(apiMock.reviewBatches.mock.calls[1][1].signal).toBe(nextSignal);
+  await act(async () => finishOld([resultVersion]));
+  expect(screen.queryByText("v1 · 原始分类")).not.toBeInTheDocument();
+  expect(screen.getByText("v2 · 复核派生")).toBeVisible();
+  expect(apiMock.classificationResultVersions).toHaveBeenCalledTimes(2);
+  expect(apiMock.reviewBatches).toHaveBeenCalledTimes(2);
+  view.unmount();
+  expect(nextSignal.aborted).toBe(true);
+});
+
+test("复核创建 409 后刷新失败保留原因、显示刷新错误并恢复提交", async () => {
+  const needsReview = { ...resultVersion, quality_status: "review_required" };
+  const notify = vi.fn();
+  apiMock.classificationResultVersions.mockResolvedValue([needsReview]);
+  apiMock.reviewBatches
+    .mockResolvedValueOnce({ items: [], total: 0, page: 1, page_size: 100 })
+    .mockRejectedValueOnce(new Error("合成草稿刷新失败"));
+  apiMock.createReviewBatch.mockRejectedValue(
+    Object.assign(new Error("合成已有复核批次"), { status: 409 }),
+  );
+  render(
+    <ResultVersionReviewPanel
+      result={needsReview}
+      onSelectVersion={vi.fn()}
+      notify={notify}
+    />,
+  );
+  await userEvent.click(await screen.findByRole("button", { name: "创建复核批次" }));
+  const reason = screen.getByPlaceholderText("必填：说明为什么需要发起本次复核");
+  await userEvent.type(reason, "合成复核原因");
+  await userEvent.click(screen.getByRole("button", { name: "创建并进入批次" }));
+  await waitFor(() => expect(notify).toHaveBeenCalledWith("合成草稿刷新失败", "error"));
+  expect(reason).toHaveValue("合成复核原因");
+  expect(screen.getByRole("button", { name: "创建并进入批次" })).toBeEnabled();
+  expect(apiMock.reviewBatches).toHaveBeenCalledTimes(2);
+  expect(apiMock.createReviewBatch).toHaveBeenCalledTimes(1);
+  expect(window.location.hash).not.toContain("review_batch_id=");
 });
