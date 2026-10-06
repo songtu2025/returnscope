@@ -403,6 +403,42 @@ def test_import_source_file_cleanup_keeps_unlink_failure(
     assert not caplog.records
 
 
+@pytest.mark.parametrize("failure", ["preview_unlink", "path_resolve"])
+def test_storage_file_cleanup_logs_only_error_type(
+    tmp_path: Path, monkeypatch, caplog, failure: str
+) -> None:
+    context = _seed_result_context(tmp_path)
+    service = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
+    target = (
+        service._preview_path("SYNTHETIC-DIGEST")
+        if failure == "preview_unlink"
+        else tmp_path / "uploads" / "SYNTHETIC-source.csv"
+    )
+    method = "unlink" if failure == "preview_unlink" else "resolve"
+    original = getattr(Path, method)
+
+    def fail_target(path, *args, **kwargs):
+        if path == target:
+            raise OSError("SYNTHETIC-CONFIDENTIAL")
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, method, fail_target)
+    if failure == "preview_unlink":
+        assert service._remove_unreferenced_preview("SYNTHETIC-DIGEST") is None
+    else:
+        assert service._safe_unlink_unreferenced(str(target)) == 0
+    records = [
+        item
+        for item in caplog.records
+        if item.name == "web_backend.datasets.storage_files"
+    ]
+    assert len(records) == 1
+    assert "error_type=OSError" in records[0].getMessage()
+    assert records[0].exc_info is None
+    assert "SYNTHETIC-CONFIDENTIAL" not in caplog.text
+    assert str(target) not in caplog.text
+
+
 def test_return_import_recognizes_identity_and_separates_task_input(
     tmp_path: Path,
 ) -> None:
