@@ -1,5 +1,4 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readStyles } from "./styleSource";
 import {
   act,
   cleanup,
@@ -974,10 +973,7 @@ test("分类标准首页使用全宽列表并支持搜索", async () => {
 });
 
 test("分类标准搜索框保留原尺寸并只复位 AntD 内部输入框", () => {
-  const styles = readFileSync(
-    resolve(process.cwd(), "src/styles/classification-standards.css"),
-    "utf8",
-  );
+  const styles = readStyles("src/styles/classification-standards.css");
   expect(styles).toMatch(
     /\.standard-library-toolbar > \.standard-search-box\s*{[^}]*height:\s*40px;/s,
   );
@@ -1912,10 +1908,7 @@ test("样本验证按钮解释当前优先禁用原因", async () => {
 });
 
 test("发布前样本验证在目标宽度使用三段响应式布局", () => {
-  const styles = readFileSync(
-    resolve(process.cwd(), "src/styles/classification-standards.css"),
-    "utf8",
-  );
+  const styles = readStyles("src/styles/classification-standards.css");
   expect(styles).toMatch(
     /\.standard-validation-configuration\s*{[^}]*grid-template-columns:\s*repeat\(2, minmax\(220px, 1fr\)\) auto;/s,
   );

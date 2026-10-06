@@ -1,5 +1,4 @@
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { readStyles } from "./styleSource";
 import { expect, test } from "vitest";
 
 const styleFiles = [
@@ -21,13 +20,6 @@ const styleFiles = [
   "src/styles/ai-insight-reports.css",
   "src/styles/product-info.css",
 ];
-function readStyles(file) {
-  const path = resolve(process.cwd(), file);
-  return readFileSync(path, "utf8").replace(/@import\s+"([^"]+)";/g, (_, imported) =>
-    readStyles(resolve(dirname(path), imported)),
-  );
-}
-
 const styles = styleFiles.map(readStyles).join("\n");
 
 test("business pages use tiered desktop work widths", () => {
