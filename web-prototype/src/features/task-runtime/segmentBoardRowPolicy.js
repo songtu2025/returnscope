@@ -72,3 +72,11 @@ export function segmentResultPresentation(segment) {
           : segment.wait_reason;
   return { displayStatus, publishStatus, qualityState, stateLabel, stateDescription };
 }
+
+/** @param {TaskSegment} segment @param {import("./segmentBoardRowContracts").SegmentBoardRowProps["queue"]} queue */
+export function segmentOrderPosition(segment, queue) {
+  const { canManageQueue, orderableKeys } = queue;
+  const orderableIndex = orderableKeys.indexOf(segment.segment_key);
+  const canOrder = canManageQueue && orderableIndex >= 0 && orderableKeys.length > 1;
+  return { orderableIndex, canOrder };
+}
