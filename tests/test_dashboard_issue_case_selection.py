@@ -96,3 +96,32 @@ def test_empty_reason_codes_return_before_case_limit_validation(tmp_path: Path):
         == []
     )
     assert not database.path.exists()
+
+
+@pytest.mark.parametrize(
+    "count,total,baseline,expected_lift",
+    [
+        (11, 20, 51, None),
+        (11, 20, 50, 1.1),
+        (12, 20, 50, 1.2),
+        (10, 10, 50, 2.0),
+    ],
+)
+def test_case_selection_preserves_exact_lift_and_sample_boundaries(
+    count, total, baseline, expected_lift
+):
+    rows = _candidate_rows([("FIT", "SKU", count, total)])
+    cases = select_issue_cases(
+        rows,
+        {"FIT": {"label": "偏小", "label_group": "适配", "record_count": baseline}},
+        ["FIT"],
+        100,
+        3,
+    )
+    if expected_lift is None:
+        assert cases == []
+    else:
+        assert len(cases) == 1
+        assert cases[0]["lift"] == expected_lift
+        assert cases[0]["record_count"] == count
+        assert cases[0]["total_record_count"] == total

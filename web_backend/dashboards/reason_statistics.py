@@ -4,6 +4,7 @@ from typing import Any
 
 from web_backend.dashboard_insight_scope import InsightQueryScope, subject_label_filter
 from web_backend.dashboard_support import percentage
+from web_backend.dashboards.statistics_thresholds import MIN_TREND_RECORDS
 from web_backend.request_timing import timed_stage
 
 
@@ -63,7 +64,7 @@ def collect_trend(scope: InsightQueryScope) -> list[dict[str, Any]]:
                 int(row["record_count"] or 0),
                 int(row["total_record_count"] or 0),
             ),
-            "low_sample": int(row["total_record_count"] or 0) < 10,
+            "low_sample": int(row["total_record_count"] or 0) < MIN_TREND_RECORDS,
         }
         for row in trend_rows
     ]

@@ -164,3 +164,21 @@ def test_empty_case_details_does_not_query_database():
     cases = []
     with closing(sqlite3.connect(":memory:")) as connection:
         assert populate_issue_case_details(connection, cases, "unused", []) is cases
+
+
+@pytest.mark.parametrize("sample_count", [9, 10, 11])
+def test_case_trend_low_sample_boundary_keeps_query_budget(
+    case_connection, sample_count
+):
+    case_connection.executemany(
+        "INSERT INTO classification_result_records VALUES "
+        "(?, 'version', ?, '合成商品', 'SKU-A', '2026-01-05', '', '')",
+        [(f"extra-{index}", f"extra-{index}") for index in range(sample_count - 2)],
+    )
+    statements = []
+    case_connection.set_trace_callback(statements.append)
+    trend = collect_case_trend(case_connection, "FIT", CASE_WHERE, CASE_PARAMS)
+    assert len(statements) == 1
+    assert trend[-1]["total_record_count"] == sample_count
+    assert trend[-1]["record_count"] == 2
+    assert trend[-1]["low_sample"] is (sample_count < 10)

@@ -158,3 +158,56 @@ def test_reason_statistics_without_selection_does_not_query(statistics_scope):
         for key, value in details.items()
         if not key.endswith(("total", "count"))
     )
+
+
+@pytest.mark.parametrize("sample_count", [14, 15, 16])
+def test_product_reliability_boundary_matches_overview_matrix(
+    statistics_scope, sample_count
+):
+    from web_backend.dashboards.overview_products import collect_product_reason_matrix
+
+    connection = statistics_scope.connection
+    connection.execute(
+        "UPDATE classification_result_records SET product_name = '产品A' WHERE id = '15'"
+    )
+    scope = replace(
+        statistics_scope, where_sql="CAST(r.id AS INTEGER) < ?", params=[sample_count]
+    )
+    selected_count = min(sample_count, 15)
+    details = collect_reason_details(
+        scope,
+        {"value": "FIT", "record_count": selected_count},
+        {"total_records": sample_count, "label_counts": {"FIT": selected_count}},
+    )
+    matrix = collect_product_reason_matrix(
+        scope, sample_count, {"FIT": "偏小"}, {"FIT": selected_count}
+    )
+    assert details["products"][0]["total_record_count"] == sample_count
+    assert matrix[0]["total_record_count"] == sample_count
+    assert details["products"][0]["reliable"] is (sample_count >= 15)
+    assert matrix[0]["reliable"] is (sample_count >= 15)
+
+
+@pytest.mark.parametrize("sample_count", [9, 10, 11])
+def test_variant_and_trend_sample_boundaries_keep_distinct_meanings(
+    statistics_scope, sample_count
+):
+    connection = statistics_scope.connection
+    connection.execute(
+        "UPDATE classification_result_records SET product_sku = 'SKU-A' WHERE id = '10'"
+    )
+    scope = replace(
+        statistics_scope, where_sql="CAST(r.id AS INTEGER) < ?", params=[sample_count]
+    )
+    statements = []
+    connection.set_trace_callback(statements.append)
+    details = collect_reason_details(
+        scope,
+        {"value": "FIT", "record_count": sample_count},
+        {"total_records": sample_count, "label_counts": {"FIT": sample_count}},
+    )
+    assert len(statements) == 7
+    assert details["variants"][0]["total_record_count"] == sample_count
+    assert details["variants"][0]["reliable"] is (sample_count >= 10)
+    assert details["trend"][0]["total_record_count"] == sample_count
+    assert details["trend"][0]["low_sample"] is (sample_count < 10)

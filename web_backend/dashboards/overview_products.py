@@ -5,6 +5,7 @@ from typing import Any
 
 from web_backend.dashboard_insight_scope import InsightQueryScope, subject_label_filter
 from web_backend.dashboard_support import percentage
+from web_backend.dashboards.statistics_thresholds import MIN_PRODUCT_RECORDS
 
 
 def _product_matrix_rows(scope: InsightQueryScope) -> list[sqlite3.Row]:
@@ -67,7 +68,7 @@ def collect_product_reason_matrix(
             product = {
                 "value": product_name_value,
                 "total_record_count": int(row["total_record_count"]),
-                "reliable": int(row["total_record_count"]) >= 15,
+                "reliable": int(row["total_record_count"]) >= MIN_PRODUCT_RECORDS,
                 "reason_rates": {},
             }
             products_by_name[product_name_value] = product

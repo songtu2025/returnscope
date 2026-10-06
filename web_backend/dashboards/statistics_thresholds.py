@@ -1,0 +1,4 @@
+# 商品可靠性、SKU可靠性和周趋势低样本属于不同业务口径，分别命名。
+MIN_PRODUCT_RECORDS = 15
+MIN_VARIANT_RECORDS = 10
+MIN_TREND_RECORDS = 10

@@ -6,6 +6,10 @@ from typing import Any
 
 from web_backend.dashboard_support import percentage
 
+_MIN_CASE_TOTAL_RECORDS = 10
+_MIN_CASE_MATCHED_RECORDS = 10
+_MIN_CASE_LIFT = 1.1
+
 
 def _eligible_case(
     row: sqlite3.Row,
@@ -18,7 +22,12 @@ def _eligible_case(
     baseline = overall["record_count"] / total_record_count
     lift = round((record_count / variant_total) / baseline, 2)
     excess = round(record_count - variant_total * baseline)
-    if variant_total < 10 or record_count < 10 or lift < 1.1 or excess <= 0:
+    if (
+        variant_total < _MIN_CASE_TOTAL_RECORDS
+        or record_count < _MIN_CASE_MATCHED_RECORDS
+        or lift < _MIN_CASE_LIFT
+        or excess <= 0
+    ):
         return None
     product_name = str(row["product_name"])
     product_sku = str(row["product_sku"])

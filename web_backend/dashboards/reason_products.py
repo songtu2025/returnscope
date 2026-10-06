@@ -5,6 +5,10 @@ from typing import Any
 
 from web_backend.dashboard_insight_scope import InsightQueryScope
 from web_backend.dashboard_support import percentage
+from web_backend.dashboards.statistics_thresholds import (
+    MIN_PRODUCT_RECORDS,
+    MIN_VARIANT_RECORDS,
+)
 from web_backend.request_timing import timed_stage
 
 
@@ -64,7 +68,7 @@ def collect_products(
     return [
         {
             "value": row["value"],
-            **_product_metrics(row, selected_count, total_records, 15),
+            **_product_metrics(row, selected_count, total_records, MIN_PRODUCT_RECORDS),
         }
         for row in product_rows
     ]
@@ -103,7 +107,7 @@ def collect_variants(
         {
             "value": str(row["value"]),
             "product_name": str(row["product_name"]),
-            **_product_metrics(row, selected_count, total_records, 10),
+            **_product_metrics(row, selected_count, total_records, MIN_VARIANT_RECORDS),
         }
         for row in variant_rows
     ]
