@@ -1,4 +1,4 @@
-import { cleanup, screen, within } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -556,6 +556,102 @@ test("退货文件检查失败后可重新选择 XLSX 修正文件", async () =>
   await user.click(screen.getByRole("button", { name: "更换文件" }));
   expect(screen.getByText("选择 CSV 或 XLSX 文件")).toBeVisible();
   expect(screen.getByRole("button", { name: "检查文件" })).toBeDisabled();
+});
+
+async function inspectSyntheticImport(purpose, overrides = {}, onDone = vi.fn()) {
+  const user = userEvent.setup();
+  inspectReturnImport.mockResolvedValue({
+    inspection_id: "synthetic-inspection",
+    original_name: "SYNTHETIC.csv",
+    suggested_name: "  合成数据源  ",
+    row_count: 2,
+    stores: ["SYNTHETIC:US"],
+    quality: { valid_comment_rows: 2, missing_store_rows: 0 },
+    matches: [],
+    ...overrides,
+  });
+  render(<ReturnImportDialog purpose={purpose} onClose={vi.fn()} onDone={onDone} />);
+  await user.upload(
+    document.querySelector('input[type="file"]'),
+    new File(["synthetic"], "SYNTHETIC.csv"),
+  );
+  await user.click(screen.getByRole("button", { name: "检查文件" }));
+  await screen.findByText("文件检查完成");
+  return user;
+}
+
+test.each([
+  ["task", "仅分析本批", "analyze_only", false, "导入并分析本批"],
+  ["task", "建立长期数据源", "create", false, "建立数据源并选中"],
+  ["asset", "追加到已有数据源", "append", true, "追加并选中完整数据"],
+  ["asset", "替换当前数据", "replace", true, "替换并选中新快照"],
+])(
+  "文件导入%s/%s保持模式、目标和提交字段",
+  async (purpose, label, mode, hasMatch, submitLabel) => {
+    const matches = hasMatch
+      ? [{ dataset_id: "synthetic-source", dataset_name: "合成已有源", row_count: 4 }]
+      : [];
+    const result = { version_id: "synthetic-version", mode };
+    importReturns.mockResolvedValue(result);
+    const onDone = vi.fn();
+    const user = await inspectSyntheticImport(purpose, { matches }, onDone);
+    await user.click(screen.getByRole("radio", { name: new RegExp(`^${label}`) }));
+    if (purpose === "asset")
+      expect(
+        screen.queryByRole("radio", { name: /^仅分析本批/ }),
+      ).not.toBeInTheDocument();
+    if (mode !== "analyze_only")
+      await user.type(screen.getByLabelText("变更说明（可选）"), "  合成变更  ");
+    await user.click(screen.getByRole("button", { name: submitLabel }));
+    await waitFor(() => expect(onDone).toHaveBeenCalledWith(result));
+    expect(importReturns).toHaveBeenCalledExactlyOnceWith({
+      inspection_id: "synthetic-inspection",
+      mode,
+      dataset_id: hasMatch ? "synthetic-source" : "",
+      name: "合成数据源",
+      change_note: mode === "analyze_only" ? "" : "合成变更",
+    });
+  },
+);
+
+test("重复批次允许直接复用，店铺缺失仍阻断提交", async () => {
+  const duplicate = { dataset_name: "合成已有源" };
+  const user = await inspectSyntheticImport("task", { duplicate });
+  expect(screen.getByRole("button", { name: "使用已导入的数据" })).toBeEnabled();
+  cleanup();
+  await inspectSyntheticImport("task", {
+    duplicate,
+    quality: { valid_comment_rows: 2, missing_store_rows: 1 },
+  });
+  expect(screen.getByRole("alert")).toHaveTextContent("行缺少店铺/站点");
+  const button = screen.getByRole("button", { name: "请先修正文件" });
+  expect(button).toBeDisabled();
+  await user.click(button);
+  expect(importReturns).not.toHaveBeenCalled();
+});
+
+test("导入完成回调失败时保留模式、目标和修改说明以便重试", async () => {
+  importReturns.mockResolvedValue({ version_id: "synthetic-version" });
+  const onDone = vi.fn().mockRejectedValue(new Error("合成后续处理失败"));
+  const user = await inspectSyntheticImport(
+    "asset",
+    {
+      matches: [
+        { dataset_id: "synthetic-source", dataset_name: "合成已有源", row_count: 4 },
+      ],
+    },
+    onDone,
+  );
+  await user.click(screen.getByRole("radio", { name: /^替换当前数据/ }));
+  await user.type(screen.getByLabelText("变更说明（可选）"), "  合成说明  ");
+  await user.click(screen.getByRole("button", { name: "替换并选中新快照" }));
+  expect(
+    await screen.findByText("合成后续处理失败 请检查导入方式和目标数据源后重试。"),
+  ).toBeVisible();
+  expect(screen.getByRole("radio", { name: /^替换当前数据/ })).toBeChecked();
+  expect(screen.getByLabelText("目标数据源")).toHaveValue("synthetic-source");
+  expect(screen.getByLabelText("变更说明（可选）")).toHaveValue("  合成说明  ");
+  expect(screen.getByRole("button", { name: "替换并选中新快照" })).toBeEnabled();
 });
 
 test("两个退货上传入口都声明支持 CSV 和 XLSX", () => {

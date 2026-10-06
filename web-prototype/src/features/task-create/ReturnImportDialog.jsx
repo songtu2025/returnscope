@@ -1,38 +1,13 @@
 import { useState } from "react";
-import {
-  CheckCircle,
-  FileArrowUp,
-  Info,
-  UploadSimple,
-  WarningCircle,
-} from "@phosphor-icons/react";
+import { FileArrowUp } from "@phosphor-icons/react";
 
 import { api } from "../../api";
 import { Modal } from "../../components/SharedUi";
+import { ImportError, ReturnImportReview } from "./ReturnImportReview";
 
 /** @typedef {"analyze_only" | "create" | "append" | "replace"} ReturnImportMode */
 /** @typedef {import("./taskCreateContracts").ReturnImportInspection} ReturnImportInspection */
 /** @typedef {import("./taskCreateContracts").ReturnImportResult} ReturnImportResult */
-
-/** @type {Record<ReturnImportMode, {title: string, description: string}>} */
-const IMPORT_MODES = {
-  analyze_only: {
-    title: "仅分析本批",
-    description: "不改变任何长期数据源；任务会固定使用这次上传的文件。",
-  },
-  create: {
-    title: "建立长期数据源",
-    description: "保存为一个新的业务数据源，后续任务可继续使用。",
-  },
-  append: {
-    title: "追加到已有数据源",
-    description: "跳过完全重复的记录，并分析合并后的当前完整数据。",
-  },
-  replace: {
-    title: "替换当前数据",
-    description: "上传文件成为新的当前完整数据；旧快照仍会保留。",
-  },
-};
 
 /**
  * @param {{onClose: () => void, onDone: (result: ReturnImportResult) => void | Promise<void>, purpose?: "task" | "asset"}} props
@@ -112,27 +87,10 @@ export function ReturnImportDialog({ onClose, onDone, purpose = "task" }) {
   };
 
   const matches = inspection?.matches ?? [];
-  /** @type {ReturnImportMode[]} */
-  const availableModes =
-    purpose === "asset"
-      ? matches.length
-        ? ["append", "replace"]
-        : ["create"]
-      : matches.length
-        ? ["analyze_only", "append", "replace"]
-        : ["analyze_only", "create"];
+  const availableModes = availableImportModes(purpose, matches.length);
   const duplicate = inspection?.duplicate;
   const missingStoreRows = Number(inspection?.quality?.missing_store_rows ?? 0);
-  const submitLabel =
-    duplicate && mode === "analyze_only"
-      ? "使用已导入的数据"
-      : mode === "append"
-        ? "追加并选中完整数据"
-        : mode === "replace"
-          ? "替换并选中新快照"
-          : mode === "create"
-            ? "建立数据源并选中"
-            : "导入并分析本批";
+  const submitLabel = importSubmitLabel(duplicate, mode);
 
   return (
     <Modal
@@ -175,170 +133,37 @@ export function ReturnImportDialog({ onClose, onDone, purpose = "task" }) {
           </div>
         </form>
       ) : (
-        <div className="return-import-review">
-          <section className="return-import-detection" aria-label="文件识别结果">
-            <header>
-              <CheckCircle size={21} weight="fill" />
-              <div>
-                <b>文件检查完成</b>
-                <span>{inspection.original_name}</span>
-              </div>
-              <button
-                type="button"
-                className="link-button"
-                onClick={() => {
-                  setFile(null);
-                  setInspection(null);
-                  setError("");
-                }}
-              >
-                更换文件
-              </button>
-            </header>
-            <dl>
-              <div>
-                <dt>识别的数据源</dt>
-                <dd>{inspection.suggested_name}</dd>
-              </div>
-              <div>
-                <dt>店铺/站点</dt>
-                <dd>{inspection.stores?.join("、") || "未识别"}</dd>
-              </div>
-              <div>
-                <dt>数据行数</dt>
-                <dd>{Number(inspection.row_count).toLocaleString()} 行</dd>
-              </div>
-              <div>
-                <dt>有效评论</dt>
-                <dd>
-                  {Number(inspection.quality?.valid_comment_rows ?? 0).toLocaleString()}{" "}
-                  行
-                </dd>
-              </div>
-            </dl>
-          </section>
-
-          {duplicate && (
-            <div className="return-import-notice duplicate" role="status">
-              <Info size={18} weight="fill" />
-              <span>
-                这份文件已经导入到“{duplicate.dataset_name}
-                ”。选择“仅分析本批”时会直接复用， 不会再创建重复数据。
-              </span>
-            </div>
-          )}
-
-          {missingStoreRows > 0 && (
-            <div className="return-import-notice warning" role="alert">
-              <WarningCircle size={18} weight="fill" />
-              <span>
-                有 {missingStoreRows.toLocaleString()}{" "}
-                行缺少店铺/站点。请修正文件后重新检查。
-              </span>
-            </div>
-          )}
-
-          <fieldset className="return-import-mode-fieldset">
-            <legend>这批数据如何进入系统？</legend>
-            <div className="return-import-modes">
-              {availableModes.map((value) => (
-                <label className={mode === value ? "active" : ""} key={value}>
-                  <input
-                    type="radio"
-                    name="return-import-mode"
-                    value={value}
-                    checked={mode === value}
-                    onChange={() => setMode(value)}
-                  />
-                  <span>
-                    <b>{IMPORT_MODES[value].title}</b>
-                    <small>{IMPORT_MODES[value].description}</small>
-                  </span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-
-          {["append", "replace"].includes(mode) && (
-            <label>
-              目标数据源
-              <select
-                value={datasetId}
-                onChange={(event) => setDatasetId(event.target.value)}
-              >
-                {matches.map((item) => (
-                  <option key={item.dataset_id} value={item.dataset_id}>
-                    {item.dataset_name} · 当前 {Number(item.row_count).toLocaleString()}{" "}
-                    行
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-
-          {mode === "create" && (
-            <label>
-              数据源名称
-              <input
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                maxLength={100}
-              />
-            </label>
-          )}
-
-          {mode !== "analyze_only" && (
-            <label>
-              变更说明（可选）
-              <input
-                value={note}
-                onChange={(event) => setNote(event.target.value)}
-                placeholder="说明这次为什么追加或替换数据"
-                maxLength={500}
-              />
-            </label>
-          )}
-
-          {mode === "replace" && (
-            <div className="return-import-notice warning">
-              <WarningCircle size={18} weight="fill" />
-              <span>
-                替换会改变该数据源的当前数据；历史快照和已创建任务不会被修改。
-              </span>
-            </div>
-          )}
-          {error && <ImportError message={error} />}
-          <div className="modal-actions">
-            <button type="button" className="secondary-button" onClick={onClose}>
-              取消
-            </button>
-            <button
-              type="button"
-              className="primary-button"
-              onClick={submit}
-              disabled={submitting || missingStoreRows > 0}
-            >
-              {submitting
-                ? "正在处理…"
-                : missingStoreRows > 0
-                  ? "请先修正文件"
-                  : submitLabel}
-              {!submitting && <UploadSimple size={17} />}
-            </button>
-          </div>
-        </div>
+        <ReturnImportReview
+          inspection={inspection}
+          selection={{
+            mode,
+            datasetId,
+            name,
+            note,
+            availableModes,
+            matches,
+            duplicate,
+            missingStoreRows,
+            submitting,
+            submitLabel,
+            error,
+          }}
+          actions={{
+            onClose,
+            onSubmit: submit,
+            setMode,
+            setDatasetId,
+            setName,
+            setNote,
+            onChangeFile: () => {
+              setFile(null);
+              setInspection(null);
+              setError("");
+            },
+          }}
+        />
       )}
     </Modal>
-  );
-}
-
-/** @param {{message: string}} props */
-function ImportError({ message }) {
-  return (
-    <div className="form-error">
-      <WarningCircle size={17} />
-      {message}
-    </div>
   );
 }
 
@@ -349,4 +174,21 @@ function importErrorMessage(error, nextStep) {
     return `无法连接服务，${nextStep}`;
   }
   return detail ? `${detail} ${nextStep}` : nextStep;
+}
+
+/** @param {ReturnImportInspection["duplicate"]} duplicate @param {ReturnImportMode} mode */
+function importSubmitLabel(duplicate, mode) {
+  if (duplicate && mode === "analyze_only") return "使用已导入的数据";
+  if (mode === "append") return "追加并选中完整数据";
+  if (mode === "replace") return "替换并选中新快照";
+  if (mode === "create") return "建立数据源并选中";
+  return "导入并分析本批";
+}
+
+/** @param {"task" | "asset"} purpose @param {number} matchCount @returns {ReturnImportMode[]} */
+function availableImportModes(purpose, matchCount) {
+  if (purpose === "asset") return matchCount ? ["append", "replace"] : ["create"];
+  return matchCount
+    ? ["analyze_only", "append", "replace"]
+    : ["analyze_only", "create"];
 }
