@@ -1,0 +1,94 @@
+.semantic-review-evidence,
+.semantic-review-opinion,
+.semantic-review-decision {
+  min-width: 0;
+}
+
+.semantic-review-evidence > span,
+.semantic-review-opinion > span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.semantic-review-evidence blockquote,
+.review-source-context blockquote {
+  margin: 0;
+  padding-left: 9px;
+  border-left: 2px solid var(--green);
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+.semantic-review-opinion p,
+.semantic-review-decision b {
+  margin: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
+.semantic-review-opinion small,
+.semantic-review-decision small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.semantic-review-decision {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.semantic-review-diagnostic {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.semantic-review-diagnostic-heading {
+  display: grid;
+  gap: 3px;
+}
+
+.semantic-review-diagnostic-heading small,
+.semantic-review-diagnostic dt {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.semantic-review-diagnostic dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.semantic-review-diagnostic dl > div {
+  min-width: 0;
+}
+
+.semantic-review-diagnostic dd {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
+.semantic-review-diagnostic > p {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  margin: 0;
+  padding: 8px;
+  border-radius: 7px;
+  background: #f7faf8;
+  line-height: 1.45;
+}
