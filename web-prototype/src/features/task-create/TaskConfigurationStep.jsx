@@ -1,13 +1,9 @@
-import { CaretDown } from "@phosphor-icons/react";
-import { EFFORT_LABELS } from "../../constants";
+import { TaskModelSettings } from "./TaskModelSettings";
 
 /** @typedef {import("./taskCreateContracts").AvailableModel} AvailableModel */
 /** @typedef {import("./taskCreateContracts").PublishedConfig} PublishedConfig */
 /** @typedef {import("./taskCreateContracts").TaskForm} TaskForm */
 /** @typedef {import("./taskCreateContracts").TaskModelPolicy} TaskModelPolicy */
-/** @typedef {"cheap_model" | "primary_model" | "secondary_model"} ModelKey */
-/** @typedef {"cheap_effort" | "primary_effort" | "secondary_effort"} EffortKey */
-/** @typedef {readonly [string, ModelKey, EffortKey, boolean]} ModelStage */
 /**
  * @typedef {{
  *   headingRef: import("react").RefObject<HTMLHeadingElement | null>,
@@ -22,21 +18,6 @@ import { EFFORT_LABELS } from "../../constants";
  *   children?: import("react").ReactNode
  * }} TaskConfigurationStepProps
  */
-
-/** @type {readonly ModelStage[]} */
-const MODEL_STAGES = [
-  ["低成本初筛", "cheap_model", "cheap_effort", false],
-  ["主分析", "primary_model", "primary_effort", true],
-  ["风险复核", "secondary_model", "secondary_effort", false],
-];
-
-/** @param {string} effort */
-function effortLabel(effort) {
-  if (effort === "low" || effort === "medium" || effort === "high") {
-    return EFFORT_LABELS[effort];
-  }
-  return effort;
-}
 
 /** @param {TaskConfigurationStepProps} props */
 export function TaskConfigurationStep({
@@ -71,122 +52,15 @@ export function TaskConfigurationStep({
             onChange={(event) => onFormChange({ ...form, title: event.target.value })}
           />
         </label>
-        <details className="task-advanced-settings task-model-settings">
-          <summary aria-label="分析设置">
-            <div className="task-model-selection">
-              <span>主分析模型</span>
-              <strong>
-                {availableModels.find(
-                  (model) => model.model_key === modelPolicy.primary_model,
-                )?.display_name ||
-                  modelPolicy.primary_model ||
-                  "默认模型"}
-              </strong>
-              <small>
-                {selectedConfig?.connection_name} · 推理强度
-                {effortLabel(modelPolicy.primary_effort)}
-              </small>
-              {MODEL_STAGES.filter(
-                ([, modelKey, , required]) => !required && modelPolicy[modelKey],
-              ).map(([label, modelKey, effortKey]) => (
-                <small key={modelKey}>
-                  {label}：
-                  {availableModels.find(
-                    (model) => model.model_key === modelPolicy[modelKey],
-                  )?.display_name || modelPolicy[modelKey]}
-                  {" · 推理强度"}
-                  {effortLabel(modelPolicy[effortKey])}
-                </small>
-              ))}
-            </div>
-            <span className="task-model-edit">
-              更改设置 <CaretDown size={16} />
-            </span>
-          </summary>
-          <div className="task-advanced-body">
-            <label className="task-config-choice">
-              模型接入
-              <select
-                value={form.config_version_id}
-                onChange={(event) => onConnectionChange(event.target.value)}
-              >
-                {publishedConfigs.map((config) => (
-                  <option key={config.id} value={config.id}>
-                    {config.connection_name} · 配置 #{config.version}
-                  </option>
-                ))}
-              </select>
-              <small>使用已验证的接入，以下设置仅用于本次任务。</small>
-            </label>
-            <div className="task-model-policy-grid">
-              {MODEL_STAGES.map(([label, modelKey, effortKey, required]) => {
-                const selectedModel = availableModels.find(
-                  (item) => item.model_key === modelPolicy[modelKey],
-                );
-                return (
-                  <label className="task-config-choice" key={modelKey}>
-                    {label}
-                    <select
-                      value={modelPolicy[modelKey] || ""}
-                      onChange={(event) => {
-                        const model = availableModels.find(
-                          (item) => item.model_key === event.target.value,
-                        );
-                        onModelPolicyChange({
-                          [modelKey]: event.target.value,
-                          [effortKey]: model?.supported_efforts.includes(
-                            modelPolicy[effortKey],
-                          )
-                            ? modelPolicy[effortKey]
-                            : (model?.supported_efforts[0] ?? "medium"),
-                        });
-                      }}
-                    >
-                      {!required && <option value="">不启用</option>}
-                      {availableModels.map((model) => (
-                        <option key={model.id} value={model.model_key}>
-                          {model.display_name}
-                        </option>
-                      ))}
-                    </select>
-                    {modelPolicy[modelKey] && (
-                      <select
-                        aria-label={`${label}推理强度`}
-                        value={modelPolicy[effortKey]}
-                        onChange={(event) =>
-                          onModelPolicyChange({ [effortKey]: event.target.value })
-                        }
-                      >
-                        {(selectedModel?.supported_efforts ?? []).map((effort) => (
-                          <option key={effort} value={effort}>
-                            推理强度{effortLabel(effort)}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </label>
-                );
-              })}
-            </div>
-            <div className="task-runtime-override">
-              <label className="task-config-choice">
-                本次初筛抽检比例（%）
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={modelPolicy.cheap_audit_percent ?? 5}
-                  onChange={(event) =>
-                    onModelPolicyChange({
-                      cheap_audit_percent: Number(event.target.value),
-                    })
-                  }
-                />
-                <small>修改后自动更新检查结果，仅用于本次任务。</small>
-              </label>
-            </div>
-          </div>
-        </details>
+        <TaskModelSettings
+          form={form}
+          publishedConfigs={publishedConfigs}
+          selectedConfig={selectedConfig}
+          availableModels={availableModels}
+          modelPolicy={modelPolicy}
+          onConnectionChange={onConnectionChange}
+          onModelPolicyChange={onModelPolicyChange}
+        />
       </div>
       {children}
     </section>

@@ -17,9 +17,10 @@ const DATA_ENTRY_OPTIONS = [
 ];
 
 /**
- * @param {{form: TaskForm, onFormChange: (form: TaskForm) => void, returns: DataVersion[], selectedReturns?: DataVersion, dataEntryMode: "mysql" | "upload" | "existing", selectedDataLabel: string, onDataEntryModeChange: (mode: "mysql" | "upload" | "existing") => void, onSelectedDataLabelChange: (label: string) => void, onUploadReturns: () => void, mysqlDraft?: Partial<MysqlReturnFormState>, onMysqlDraftChange: (draft: MysqlReturnFormState) => void, onMysqlDone: (result: MysqlImportResult) => void | Promise<void>, onMysqlStateChange: (state: MysqlFormState) => void, onInvalidateMysql: () => void, busy: boolean, prepared: boolean, scopeLabel: string, children?: import("react").ReactNode}} props
+ * @typedef {{form: TaskForm, onFormChange: (form: TaskForm) => void, returns: DataVersion[], selectedReturns?: DataVersion, dataEntryMode: "mysql" | "upload" | "existing", selectedDataLabel: string, onDataEntryModeChange: (mode: "mysql" | "upload" | "existing") => void, onSelectedDataLabelChange: (label: string) => void, onUploadReturns: () => void, mysqlDraft?: Partial<MysqlReturnFormState>, onMysqlDraftChange: (draft: MysqlReturnFormState) => void, onMysqlDone: (result: MysqlImportResult) => void | Promise<void>, onMysqlStateChange: (state: MysqlFormState) => void, onInvalidateMysql: () => void, busy: boolean, prepared: boolean, scopeLabel: string, children?: import("react").ReactNode}} TaskDataStepProps
  */
 
+/** @param {TaskDataStepProps} props */
 export function TaskDataStep({
   form,
   onFormChange,
@@ -94,56 +95,20 @@ export function TaskDataStep({
           ) : (
             <>
               {dataEntryMode === "upload" ? (
-                <div className="task-upload-source">
-                  <div>
-                    <b>{selectedReturns?.dataset_name || "选择要分析的用户反馈文件"}</b>
-                    <small>
-                      {selectedReturns
-                        ? `${selectedDataLabel || "本次上传数据"} · ${selectedReturns.row_count.toLocaleString()} 条记录`
-                        : "上传 CSV 或 XLSX，系统会识别字段并检查数据。"}
-                    </small>
-                  </div>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    disabled={busy}
-                    onClick={onUploadReturns}
-                  >
-                    <UploadSimple size={17} />
-                    {selectedReturns ? "更换文件" : "选择文件"}
-                  </button>
-                </div>
+                <TaskUploadSource
+                  selectedReturns={selectedReturns}
+                  selectedDataLabel={selectedDataLabel}
+                  onUploadReturns={onUploadReturns}
+                  busy={busy}
+                />
               ) : (
-                <div className="task-data-picker existing-source-picker">
-                  <label className="task-config-choice">
-                    已有数据源
-                    <select
-                      value={form.dataset_version_id}
-                      disabled={busy}
-                      onChange={(event) => {
-                        onFormChange({
-                          ...form,
-                          dataset_version_id: event.target.value,
-                        });
-                        onSelectedDataLabelChange(
-                          event.target.value ? "当前完整数据" : "",
-                        );
-                      }}
-                    >
-                      <option value="">请选择数据源</option>
-                      {returns.map((item) => (
-                        <option key={item.version_id} value={item.version_id}>
-                          {item.dataset_name} · {item.row_count.toLocaleString()} 条记录
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  {!returns.length && (
-                    <p className="return-import-intro">
-                      还没有保存的数据，可以从数据库读取或上传文件。
-                    </p>
-                  )}
-                </div>
+                <ExistingTaskSourcePicker
+                  form={form}
+                  onFormChange={onFormChange}
+                  returns={returns}
+                  onSelectedDataLabelChange={onSelectedDataLabelChange}
+                  busy={busy}
+                />
               )}
             </>
           )}
@@ -151,5 +116,75 @@ export function TaskDataStep({
         {children}
       </div>
     </section>
+  );
+}
+
+/** @param {Pick<TaskDataStepProps, "selectedReturns" | "selectedDataLabel" | "onUploadReturns" | "busy">} props */
+function TaskUploadSource({
+  selectedReturns,
+  selectedDataLabel,
+  onUploadReturns,
+  busy,
+}) {
+  return (
+    <div className="task-upload-source">
+      <div>
+        <b>{selectedReturns?.dataset_name || "选择要分析的用户反馈文件"}</b>
+        <small>
+          {selectedReturns
+            ? `${selectedDataLabel || "本次上传数据"} · ${selectedReturns.row_count.toLocaleString()} 条记录`
+            : "上传 CSV 或 XLSX，系统会识别字段并检查数据。"}
+        </small>
+      </div>
+      <button
+        type="button"
+        className="secondary-button"
+        disabled={busy}
+        onClick={onUploadReturns}
+      >
+        <UploadSimple size={17} />
+        {selectedReturns ? "更换文件" : "选择文件"}
+      </button>
+    </div>
+  );
+}
+
+/** @param {Pick<TaskDataStepProps, "form" | "onFormChange" | "returns" | "onSelectedDataLabelChange" | "busy">} props */
+function ExistingTaskSourcePicker({
+  form,
+  onFormChange,
+  returns,
+  onSelectedDataLabelChange,
+  busy,
+}) {
+  return (
+    <div className="task-data-picker existing-source-picker">
+      <label className="task-config-choice">
+        已有数据源
+        <select
+          value={form.dataset_version_id}
+          disabled={busy}
+          onChange={(event) => {
+            onFormChange({
+              ...form,
+              dataset_version_id: event.target.value,
+            });
+            onSelectedDataLabelChange(event.target.value ? "当前完整数据" : "");
+          }}
+        >
+          <option value="">请选择数据源</option>
+          {returns.map((item) => (
+            <option key={item.version_id} value={item.version_id}>
+              {item.dataset_name} · {item.row_count.toLocaleString()} 条记录
+            </option>
+          ))}
+        </select>
+      </label>
+      {!returns.length && (
+        <p className="return-import-intro">
+          还没有保存的数据，可以从数据库读取或上传文件。
+        </p>
+      )}
+    </div>
   );
 }
