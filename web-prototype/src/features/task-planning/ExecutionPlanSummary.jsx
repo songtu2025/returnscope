@@ -1,16 +1,13 @@
 import {
-  ArrowDown,
-  ArrowLineUp,
   ArrowRight,
-  ArrowUp,
   CheckCircle,
   Database,
   Pulse,
   WarningCircle,
 } from "@phosphor-icons/react";
 import { classNames } from "../../lib/presentation";
-import { moveSegmentKey } from "../task-runtime/taskSegmentPolicy";
 import { taskPlanCounts } from "./taskPlanPolicy";
+import { ExecutionPlanSegments } from "./ExecutionPlanSegments";
 
 /** @typedef {import("./taskPlanContracts").TaskExecutionPlan} TaskExecutionPlan */
 /** @typedef {import("./taskPlanContracts").TaskDataQuality} TaskDataQuality */
@@ -74,16 +71,6 @@ export function ExecutionPlanSummary({
         segmentByKey.get(key)
       ),
   );
-  const executableKeys = orderedSegments
-    .filter((segment) => segment.status !== "blocked")
-    .map((segment) => segment.segment_key);
-  const blockedKeys = orderedSegments
-    .filter((segment) => segment.status === "blocked")
-    .map((segment) => segment.segment_key);
-  /** @param {string[]} keys */
-  const applyExecutableOrder = (keys) => {
-    onSegmentOrderChange?.([...keys, ...blockedKeys]);
-  };
   const detectedStores = new Set(
     (plan.detected_scopes ?? []).map((scope) => scope.store).filter(Boolean),
   );
@@ -91,119 +78,10 @@ export function ExecutionPlanSummary({
     (plan.detected_scopes ?? []).map((scope) => scope.listing).filter(Boolean),
   );
   const segmentsView = (
-    <div className="plan-segments">
-      {orderedSegments.map((segment) => {
-        const executableIndex = executableKeys.indexOf(segment.segment_key);
-        const canOrder = Boolean(onSegmentOrderChange) && executableIndex >= 0;
-        const segmentLabel = segment.scope?.listing || segment.agent_family;
-        return (
-          <article
-            key={segment.segment_key}
-            className={classNames(segment.status, canOrder && "is-orderable")}
-            draggable={canOrder}
-            onDragStart={(event) => {
-              event.dataTransfer.setData("text/plain", segment.segment_key);
-              event.dataTransfer.effectAllowed = "move";
-            }}
-            onDragOver={(event) => {
-              if (canOrder) event.preventDefault();
-            }}
-            onDrop={(event) => {
-              if (!canOrder) return;
-              event.preventDefault();
-              const sourceKey = event.dataTransfer.getData("text/plain");
-              applyExecutableOrder(
-                moveSegmentKey(executableKeys, sourceKey, executableIndex),
-              );
-            }}
-          >
-            <div>
-              <span>{segment.status === "blocked" ? "阻断" : "可执行"}</span>
-              <h4>
-                {executableIndex >= 0
-                  ? `${String(executableIndex + 1).padStart(2, "0")} · `
-                  : ""}
-                {segment.scope?.listing
-                  ? `${segment.scope.listing} · ${segment.standard_name || segment.agent_family}`
-                  : segment.standard_name || segment.agent_family}
-              </h4>
-              <p>
-                {segment.scope?.store
-                  ? `${segment.scope.store} / ${segment.scope.listing || "未识别 Listing"} · `
-                  : ""}
-                {segment.standard_version ? `标准 V${segment.standard_version} · ` : ""}
-                logic {segment.logic_version || "—"} · taxonomy{" "}
-                {segment.taxonomy_version}
-              </p>
-            </div>
-            <strong>
-              {segment.record_count.toLocaleString()} 条 /{" "}
-              {segment.unique_comments.toLocaleString()} 评论
-            </strong>
-            <ul>
-              {segment.variants.map((variant) => (
-                <li key={`${variant.category_a}-${variant.category_b}`}>
-                  {variant.category_a || "缺失品类A"} /{" "}
-                  {variant.category_b || "缺失品类B"}
-                </li>
-              ))}
-            </ul>
-            {canOrder && executableKeys.length > 1 && (
-              <div className="segment-order-actions">
-                <button
-                  type="button"
-                  aria-label={`置顶 ${segmentLabel}`}
-                  title="置顶"
-                  disabled={executableIndex === 0}
-                  onClick={() =>
-                    applyExecutableOrder(
-                      moveSegmentKey(executableKeys, segment.segment_key, 0),
-                    )
-                  }
-                >
-                  <ArrowLineUp size={15} />
-                </button>
-                <button
-                  type="button"
-                  aria-label={`上移 ${segmentLabel}`}
-                  title="上移"
-                  disabled={executableIndex === 0}
-                  onClick={() =>
-                    applyExecutableOrder(
-                      moveSegmentKey(
-                        executableKeys,
-                        segment.segment_key,
-                        executableIndex - 1,
-                      ),
-                    )
-                  }
-                >
-                  <ArrowUp size={15} />
-                </button>
-                <button
-                  type="button"
-                  aria-label={`下移 ${segmentLabel}`}
-                  title="下移"
-                  disabled={executableIndex === executableKeys.length - 1}
-                  onClick={() =>
-                    applyExecutableOrder(
-                      moveSegmentKey(
-                        executableKeys,
-                        segment.segment_key,
-                        executableIndex + 1,
-                      ),
-                    )
-                  }
-                >
-                  <ArrowDown size={15} />
-                </button>
-                <span>拖拽或使用按钮调整</span>
-              </div>
-            )}
-          </article>
-        );
-      })}
-    </div>
+    <ExecutionPlanSegments
+      orderedSegments={orderedSegments}
+      onSegmentOrderChange={onSegmentOrderChange}
+    />
   );
   return (
     <section className="execution-plan" aria-label="真实品类执行计划">
