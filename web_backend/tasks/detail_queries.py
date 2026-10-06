@@ -1,30 +1,18 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
+from sqlite3 import Connection
 from typing import TYPE_CHECKING, Any
 
 from web_backend.classification_result_queries import system_rerun_counts
 from web_backend.database import Database
 from web_backend.task_contracts import SEGMENT_USER_LIMIT, WAITING_SEGMENT_STATUSES
 
+_DEFAULT_TASK_PARALLELISM = 3
+_PAUSED_MODEL_FAILURE_DISPLAY_THRESHOLD = 3
 
-class TaskDetailQueriesMixin:
-    database: Database
-    _serialize: Callable[[dict[str, Any]], dict[str, Any]]
-
-    if TYPE_CHECKING:
-
-        @classmethod
-        def _serialize_segment(
-            cls,
-            item: dict[str, Any],
-            system_failure_count: int = 0,
-        ) -> dict[str, Any]: ...
-
-    def get(self, task_id: str) -> dict[str, Any] | None:
-        with self.database.connect() as connection:
-            row = connection.execute(
-                """
+_TASK_DETAIL_SQL = """
                 SELECT t.*, u.display_name AS owner_name,
                        rd.name AS dataset_name, rv.version AS dataset_version,
                        pd.name AS product_name, pv.version AS product_version,
@@ -45,11 +33,9 @@ class TaskDetailQueriesMixin:
                 JOIN api_config_versions cv ON cv.id = t.config_version_id
                 JOIN api_connections c ON c.id = cv.connection_id
                 WHERE t.id = ?
-                """,
-                (task_id,),
-            ).fetchone()
-            segment_rows = connection.execute(
                 """
+
+_TASK_SEGMENTS_SQL = """
                 SELECT segment.*, standard.name AS standard_name,
                        standard.id AS standard_id,
                        standard_version.version_no AS standard_version
@@ -60,41 +46,21 @@ class TaskDetailQueriesMixin:
                   ON standard.id = standard_version.standard_id
                 WHERE segment.task_id = ?
                 ORDER BY segment.execution_order, segment.segment_key
-                """,
-                (task_id,),
-            ).fetchall()
-            rerun_counts = system_rerun_counts(
-                connection,
-                [
-                    str(segment["result_version_id"])
-                    for segment in segment_rows
-                    if segment["result_version_id"] is not None
-                ],
-            )
-            owner_running = 0
-            task_running = 0
-            waiting_positions: dict[str, int] = {}
-            if row is not None:
-                owner_running_row = connection.execute(
-                    """
+                """
+
+_OWNER_RUNNING_SQL = """
                     SELECT COUNT(*) AS count
                     FROM task_segments s
                     JOIN tasks t ON t.id = s.task_id
                     WHERE t.owner_id = ? AND s.status = 'running'
-                    """,
-                    (row["owner_id"],),
-                ).fetchone()
-                owner_running = int(owner_running_row["count"])
-                task_running_row = connection.execute(
                     """
+
+_TASK_RUNNING_SQL = """
                     SELECT COUNT(*) AS count FROM task_segments
                     WHERE task_id = ? AND status = 'running'
-                    """,
-                    (task_id,),
-                ).fetchone()
-                task_running = int(task_running_row["count"])
-                waiting_rows = connection.execute(
                     """
+
+_OWNER_WAITING_SQL = """
                     SELECT s.id
                     FROM task_segments s
                     JOIN tasks t ON t.id = s.task_id
@@ -105,15 +71,80 @@ class TaskDetailQueriesMixin:
                        WHERE active.task_id = t.id AND active.status = 'running'),
                       COALESCE(t.last_scheduled_at, t.created_at),
                       s.execution_order, s.created_at
-                    """,
-                    (row["owner_id"],),
-                ).fetchall()
-                waiting_positions = {
-                    str(value["id"]): position
-                    for position, value in enumerate(waiting_rows, start=1)
-                }
-        if row is None:
-            return None
+                    """
+
+
+@dataclass(frozen=True)
+class _TaskCapacity:
+    owner_running: int
+    task_running: int
+    waiting_positions: dict[str, int]
+
+
+def _running_capacity(
+    connection: Connection, task_id: str, owner_id: str
+) -> _TaskCapacity:
+    owner_row = connection.execute(_OWNER_RUNNING_SQL, (owner_id,)).fetchone()
+    task_row = connection.execute(_TASK_RUNNING_SQL, (task_id,)).fetchone()
+    waiting_rows = connection.execute(_OWNER_WAITING_SQL, (owner_id,)).fetchall()
+    positions = {
+        str(value["id"]): position
+        for position, value in enumerate(waiting_rows, start=1)
+    }
+    return _TaskCapacity(int(owner_row["count"]), int(task_row["count"]), positions)
+
+
+def _segment_wait_reason(
+    segment: dict[str, Any],
+    task: dict[str, Any],
+    capacity: _TaskCapacity,
+    max_parallel: int,
+) -> str | None:
+    status = str(segment["status"])
+    if status == "paused":
+        model_issue = int(
+            segment.get("model_failures") or 0
+        ) >= _PAUSED_MODEL_FAILURE_DISPLAY_THRESHOLD and segment.get("error")
+        return "模型服务异常，任务已暂停" if model_issue else "已由用户暂停"
+    if status not in WAITING_SEGMENT_STATUSES:
+        return None
+    if task.get("pause_requested"):
+        return "批量任务已暂停"
+    if capacity.task_running >= max_parallel:
+        return f"本批量并发已满：{capacity.task_running}/{max_parallel}"
+    if capacity.owner_running >= SEGMENT_USER_LIMIT:
+        return f"个人运行槽位已满：{capacity.owner_running}/{SEGMENT_USER_LIMIT}"
+    return f"我的队列第 {capacity.waiting_positions.get(str(segment['id']), 1)} 位"
+
+
+class TaskDetailQueriesMixin:
+    database: Database
+    _serialize: Callable[[dict[str, Any]], dict[str, Any]]
+
+    if TYPE_CHECKING:
+
+        @classmethod
+        def _serialize_segment(
+            cls,
+            item: dict[str, Any],
+            system_failure_count: int = 0,
+        ) -> dict[str, Any]: ...
+
+    def get(self, task_id: str) -> dict[str, Any] | None:
+        with self.database.connect() as connection:
+            row = connection.execute(_TASK_DETAIL_SQL, (task_id,)).fetchone()
+            segment_rows = connection.execute(_TASK_SEGMENTS_SQL, (task_id,)).fetchall()
+            rerun_counts = system_rerun_counts(
+                connection,
+                [
+                    str(segment["result_version_id"])
+                    for segment in segment_rows
+                    if segment["result_version_id"] is not None
+                ],
+            )
+            if row is None:
+                return None
+            capacity = _running_capacity(connection, task_id, row["owner_id"])
         item = self._serialize(dict(row))
         item["segments"] = [
             self._serialize_segment(
@@ -122,28 +153,17 @@ class TaskDetailQueriesMixin:
             )
             for value in segment_rows
         ]
-        max_parallel = int(item.get("max_parallel_segments", 3))
+        max_parallel = int(item.get("max_parallel_segments", _DEFAULT_TASK_PARALLELISM))
         for segment in item["segments"]:
-            status = str(segment["status"])
-            if status not in WAITING_SEGMENT_STATUSES:
-                if status == "paused":
-                    if int(segment.get("model_failures") or 0) >= 3 and segment.get(
-                        "error"
-                    ):
-                        segment["wait_reason"] = "模型服务异常，任务已暂停"
-                    else:
-                        segment["wait_reason"] = "已由用户暂停"
-                continue
-            if item.get("pause_requested"):
-                reason = "批量任务已暂停"
-            elif task_running >= max_parallel:
-                reason = f"本批量并发已满：{task_running}/{max_parallel}"
-            elif owner_running >= SEGMENT_USER_LIMIT:
-                reason = f"个人运行槽位已满：{owner_running}/{SEGMENT_USER_LIMIT}"
-            else:
-                reason = f"我的队列第 {waiting_positions.get(str(segment['id']), 1)} 位"
-            segment["wait_reason"] = reason
-        item["running_segments"] = task_running
-        item["owner_running_segments"] = owner_running
+            reason = _segment_wait_reason(
+                segment,
+                item,
+                capacity,
+                max_parallel,
+            )
+            if reason is not None:
+                segment["wait_reason"] = reason
+        item["running_segments"] = capacity.task_running
+        item["owner_running_segments"] = capacity.owner_running
         item["owner_segment_limit"] = SEGMENT_USER_LIMIT
         return item

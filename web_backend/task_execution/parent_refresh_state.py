@@ -6,7 +6,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from web_backend.task_contracts import FINAL_STATUSES
 from web_backend.task_state import summarize_task_status
+
+_MODEL_FAILURE_DISPLAY_THRESHOLD = 5
 
 
 @dataclass(frozen=True)
@@ -34,13 +37,7 @@ def _parent_refresh_state(
     current = sum(int(segment["progress_current"]) for segment in executable)
     total = sum(int(segment["progress_total"]) for segment in executable)
     percent = round(current / total * 100, 2) if total else 0
-    terminal = parent_status in {
-        "completed",
-        "partial",
-        "cancelled",
-        "failed",
-        "blocked",
-    }
+    terminal = parent_status in FINAL_STATUSES
     has_deliverable = any(
         segment["status"] in {"completed", "completed_with_errors"}
         for segment in executable
@@ -75,7 +72,9 @@ def _parent_status_details(
         (
             segment
             for segment in executable
-            if int(segment.get("model_failures") or 0) >= 5 and segment.get("error")
+            if int(segment.get("model_failures") or 0)
+            >= _MODEL_FAILURE_DISPLAY_THRESHOLD
+            and segment.get("error")
         ),
         None,
     )

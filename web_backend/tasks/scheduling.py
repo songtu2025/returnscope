@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
+from sqlite3 import Connection, Row
 from typing import Any
 
 from web_backend.common import json_text
@@ -9,8 +11,53 @@ from web_backend.security import utc_now
 from web_backend.task_contracts import (
     ACTIVE_STATUSES,
     SEGMENT_USER_LIMIT,
+    WAITING_SEGMENT_STATUSES,
     TaskRevisionConflict,
 )
+
+_MOVABLE_SEGMENT_STATUSES = WAITING_SEGMENT_STATUSES | {"paused"}
+
+
+@dataclass(frozen=True)
+class _SegmentOrderChange:
+    before: list[str]
+    after: list[str]
+    rows: list[Row]
+    created_at: str
+
+
+def _segment_reorder(
+    rows: list[Row], segment_keys: list[str], now: str
+) -> _SegmentOrderChange | None:
+    movable_keys = [
+        str(row["segment_key"])
+        for row in rows
+        if row["status"] in _MOVABLE_SEGMENT_STATUSES
+    ]
+    if len(segment_keys) != len(set(segment_keys)) or set(segment_keys) != set(
+        movable_keys
+    ):
+        raise TaskRevisionConflict("等待片段已经变化，请刷新后重新排序")
+    if segment_keys == movable_keys:
+        return None
+
+    history_rows = [
+        row
+        for row in rows
+        if row["status"] not in _MOVABLE_SEGMENT_STATUSES and row["status"] != "blocked"
+    ]
+    movable_by_key = {
+        str(row["segment_key"]): row
+        for row in rows
+        if row["status"] in _MOVABLE_SEGMENT_STATUSES
+    }
+    blocked_rows = [row for row in rows if row["status"] == "blocked"]
+    ordered_rows = (
+        history_rows
+        + [movable_by_key[segment_key] for segment_key in segment_keys]
+        + blocked_rows
+    )
+    return _SegmentOrderChange(movable_keys, segment_keys, ordered_rows, now)
 
 
 class TaskSchedulingMixin:
@@ -47,70 +94,55 @@ class TaskSchedulingMixin:
                 """,
                 (task_id,),
             ).fetchall()
-            movable_statuses = {"queued", "retry_pending", "paused"}
-            movable_keys = [
-                str(row["segment_key"])
-                for row in rows
-                if row["status"] in movable_statuses
-            ]
-            if len(segment_keys) != len(set(segment_keys)) or set(segment_keys) != set(
-                movable_keys
-            ):
-                raise TaskRevisionConflict("等待片段已经变化，请刷新后重新排序")
-            if segment_keys == movable_keys:
+            change = _segment_reorder(rows, segment_keys, now)
+            if change is None:
                 return self.get(task_id) or {}
-
-            history_rows = [
-                row
-                for row in rows
-                if row["status"] not in movable_statuses and row["status"] != "blocked"
-            ]
-            movable_by_key = {
-                str(row["segment_key"]): row
-                for row in rows
-                if row["status"] in movable_statuses
-            }
-            blocked_rows = [row for row in rows if row["status"] == "blocked"]
-            ordered_rows = (
-                history_rows
-                + [movable_by_key[segment_key] for segment_key in segment_keys]
-                + blocked_rows
-            )
-            for position, row in enumerate(ordered_rows, start=1):
-                connection.execute(
-                    "UPDATE task_segments SET execution_order = ? WHERE id = ?",
-                    (position, row["id"]),
-                )
-            connection.execute(
-                "UPDATE tasks SET revision = revision + 1 WHERE id = ?",
-                (task_id,),
-            )
-            event_data = {"before": movable_keys, "after": segment_keys}
-            connection.execute(
-                """
-                INSERT INTO task_events(
-                    task_id, event_type, stage, message, actor_id,
-                    data_json, created_at
-                ) VALUES (?, 'segments_reordered', ?, '用户调整了片段执行顺序', ?, ?, ?)
-                """,
-                (
-                    task_id,
-                    task["stage"],
-                    actor_id,
-                    json_text(event_data),
-                    now,
-                ),
-            )
-            self._insert_audit(
-                connection,
-                task_id,
-                "reorder_segments",
-                actor_id,
-                {"segment_order": movable_keys},
-                {"segment_order": segment_keys},
-                now,
-            )
+            self._apply_segment_order(connection, task, task_id, actor_id, change)
         return self.get(task_id) or {}
+
+    def _apply_segment_order(
+        self,
+        connection: Connection,
+        task: Row,
+        task_id: str,
+        actor_id: str,
+        change: _SegmentOrderChange,
+    ) -> None:
+        now = change.created_at
+        for position, row in enumerate(change.rows, start=1):
+            connection.execute(
+                "UPDATE task_segments SET execution_order = ? WHERE id = ?",
+                (position, row["id"]),
+            )
+        connection.execute(
+            "UPDATE tasks SET revision = revision + 1 WHERE id = ?",
+            (task_id,),
+        )
+        event_data = {"before": change.before, "after": change.after}
+        connection.execute(
+            """
+            INSERT INTO task_events(
+                task_id, event_type, stage, message, actor_id,
+                data_json, created_at
+            ) VALUES (?, 'segments_reordered', ?, '用户调整了片段执行顺序', ?, ?, ?)
+            """,
+            (
+                task_id,
+                task["stage"],
+                actor_id,
+                json_text(event_data),
+                now,
+            ),
+        )
+        self._insert_audit(
+            connection,
+            task_id,
+            "reorder_segments",
+            actor_id,
+            {"segment_order": change.before},
+            {"segment_order": change.after},
+            now,
+        )
 
     def set_parallelism(
         self,
