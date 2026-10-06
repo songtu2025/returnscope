@@ -2346,3 +2346,225 @@ def test_replan_api_maps_stale_revision_and_hash_to_409() -> None:
 
     assert revision_response.status_code == 409
     assert hash_response.status_code == 409
+
+
+def test_archive_batch_deduplicates_and_does_not_rewrite_noop(tmp_path: Path) -> None:
+    database, _, _ = _database_with_inputs(tmp_path)
+    service = TaskService(database)
+    tasks = [_create_task(database, "run_ready") for _ in range(2)]
+    ids = [str(task["id"]) for task in tasks]
+    with database.transaction(immediate=True) as connection:
+        connection.execute("UPDATE tasks SET status = 'completed'")
+    archived = service.set_archived([ids[1], ids[0], ids[1]], True, "user-1")
+    assert [task["id"] for task in archived] == [ids[1], ids[0]]
+    assert archived[0]["archived_at"] == archived[1]["archived_at"]
+    revisions = [task["revision"] for task in archived]
+    events = [service.events(task_id) for task_id in ids]
+    audits = [list_audit(database, "task", task_id) for task_id in ids]
+    noop = service.set_archived([ids[1], ids[0]], True, "user-1")
+    assert [task["revision"] for task in noop] == revisions
+    assert [service.events(task_id) for task_id in ids] == events
+    assert [list_audit(database, "task", task_id) for task_id in ids] == audits
+
+
+@pytest.mark.parametrize(
+    ("selection", "message"),
+    [
+        ([], "请选择任务"),
+        (["finished", "missing", "active"], "部分任务不存在"),
+        (["finished", "active"], "仅已结束任务可以归档"),
+    ],
+)
+def test_archive_batch_validates_every_task_before_writing(
+    tmp_path: Path, selection: list[str], message: str
+) -> None:
+    database, _, _ = _database_with_inputs(tmp_path)
+    service = TaskService(database)
+    finished = _create_task(database, "run_ready")
+    active = _create_task(database, "run_ready")
+    with database.transaction(immediate=True) as connection:
+        connection.execute(
+            "UPDATE tasks SET status = 'completed' WHERE id = ?", (finished["id"],)
+        )
+    ids = {"finished": str(finished["id"]), "active": str(active["id"])}
+    before = [service.get(task_id) for task_id in ids.values()]
+    events = [service.events(task_id) for task_id in ids.values()]
+    audits = [list_audit(database, "task", task_id) for task_id in ids.values()]
+    with pytest.raises(ValueError, match=message):
+        service.set_archived([ids.get(key, key) for key in selection], True, "user-1")
+    assert [service.get(task_id) for task_id in ids.values()] == before
+    assert [service.events(task_id) for task_id in ids.values()] == events
+    assert [list_audit(database, "task", task_id) for task_id in ids.values()] == audits
+
+
+def test_archive_batch_rolls_back_all_writes_if_audit_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    database, _, _ = _database_with_inputs(tmp_path)
+    service = TaskService(database)
+    ids = [str(_create_task(database, "run_ready")["id"]) for _ in range(2)]
+    with database.transaction(immediate=True) as connection:
+        connection.execute("UPDATE tasks SET status = 'completed'")
+    before = [service.get(task_id) for task_id in ids]
+    events = [service.events(task_id) for task_id in ids]
+    audits = [list_audit(database, "task", task_id) for task_id in ids]
+    insert_audit = service._insert_audit
+
+    def fail_second_audit(*args):
+        insert_audit(*args)
+        if args[1] == ids[1]:
+            raise RuntimeError("合成审计失败")
+
+    monkeypatch.setattr(service, "_insert_audit", fail_second_audit)
+    with pytest.raises(RuntimeError, match="合成审计失败"):
+        service.set_archived(ids, True, "user-1")
+    assert [service.get(task_id) for task_id in ids] == before
+    assert [service.events(task_id) for task_id in ids] == events
+    assert [list_audit(database, "task", task_id) for task_id in ids] == audits
+
+
+def _published_policy_inputs(tmp_path: Path):
+    database, _, _ = _database_with_inputs(tmp_path)
+    with database.transaction(immediate=True) as connection:
+        connection.executemany(
+            """
+            INSERT INTO api_models(
+                id, connection_id, model_key, display_name, supported_efforts_json,
+                active, validation_status, created_by, created_at, updated_by, updated_at
+            ) VALUES (?, 'connection-1', ?, ?, ?, 1, 'validated', 'user-1',
+                      '2026-01-01', 'user-1', '2026-01-01')
+            """,
+            [
+                (key, key, key, json.dumps(["low", "medium", "high"]))
+                for key in ("cheap", "primary", "secondary")
+            ],
+        )
+        config = dict(
+            connection.execute(
+                "SELECT * FROM api_config_versions WHERE id = 'config-1'"
+            ).fetchone()
+        )
+    return TaskPlanService(database), config
+
+
+def test_model_policy_normalizes_defaults_without_changing_published_config(
+    tmp_path: Path,
+) -> None:
+    service, config = _published_policy_inputs(tmp_path)
+    before = dict(config)
+    result = service._apply_model_policy(
+        config, {"connection_id": "connection-1", "primary_model": " primary "}
+    )
+    assert config == before
+    assert result == {
+        **before,
+        "cheap_model": None,
+        "cheap_effort": "low",
+        "primary_model": "primary",
+        "primary_effort": "medium",
+        "secondary_model": None,
+        "secondary_effort": "high",
+        "cheap_audit_percent": 5,
+    }
+    policy = {
+        "connection_id": "connection-1",
+        "cheap_model": " cheap ",
+        "primary_model": " primary ",
+        "secondary_model": " secondary ",
+        "cheap_audit_percent": "7",
+    }
+    original_policy = dict(policy)
+    selected = service._apply_model_policy(config, policy)
+    assert policy == original_policy and config == before
+    assert [
+        selected[key] for key in ("cheap_model", "primary_model", "secondary_model")
+    ] == ["cheap", "primary", "secondary"]
+    assert selected["cheap_audit_percent"] == 7
+
+
+@pytest.mark.parametrize(
+    ("policy", "active_version", "message"),
+    [
+        (
+            {"connection_id": "other", "cheap_audit_percent": "bad"},
+            None,
+            "本次模型策略与所选模型服务连接不一致",
+        ),
+        (
+            {"connection_id": "connection-1", "primary_model": " "},
+            None,
+            "主分析模型不能为空",
+        ),
+        (
+            {"connection_id": "connection-1", "primary_model": "missing"},
+            None,
+            "请选择当前已发布的模型服务连接",
+        ),
+        (
+            {"connection_id": "connection-1", "primary_model": "primary"},
+            "old-version",
+            "请选择当前已发布的模型服务连接",
+        ),
+    ],
+)
+def test_model_policy_rejects_invalid_selection_in_original_priority(
+    tmp_path: Path, policy: dict, active_version: str | None, message: str
+) -> None:
+    service, config = _published_policy_inputs(tmp_path)
+    with service.database.transaction(immediate=True) as connection:
+        connection.execute(
+            "UPDATE api_connections SET active_version_id = ?", (active_version,)
+        )
+    with pytest.raises(ValueError, match=message):
+        service._apply_model_policy(config, policy)
+
+
+@pytest.mark.parametrize(
+    "model_case",
+    [
+        ("missing", 1, "validated", ["medium"], "模型 missing 不可用"),
+        ("primary", 0, "draft", [], "模型 primary 不可用"),
+        ("primary", 1, "draft", [], "模型 primary 必须先验证通过"),
+        ("primary", 1, "validated", ["low"], "模型 primary 不支持 medium 推理强度"),
+    ],
+)
+def test_model_policy_validates_model_availability_before_effort(
+    tmp_path: Path,
+    model_case: tuple[str, int, str, list[str], str],
+) -> None:
+    model_key, active, status, efforts, message = model_case
+    service, config = _published_policy_inputs(tmp_path)
+    with service.database.transaction(immediate=True) as connection:
+        connection.execute(
+            "UPDATE api_models SET active = ?, validation_status = ?, supported_efforts_json = ? WHERE model_key = ?",
+            (active, status, json.dumps(efforts), model_key),
+        )
+    with pytest.raises(ValueError, match=message):
+        service._apply_model_policy(
+            config,
+            {
+                "connection_id": "connection-1",
+                "primary_model": model_key,
+            },
+        )
+
+
+def test_model_policy_checks_cheap_then_primary_then_secondary(tmp_path: Path) -> None:
+    service, config = _published_policy_inputs(tmp_path)
+    policy = {
+        "connection_id": "connection-1",
+        "cheap_model": "cheap",
+        "primary_model": "primary",
+        "secondary_model": "secondary",
+    }
+    with service.database.transaction(immediate=True) as connection:
+        connection.execute("UPDATE api_models SET validation_status = 'draft'")
+    for key in ("cheap", "primary", "secondary"):
+        with pytest.raises(ValueError, match=f"模型 {key} 必须先验证通过"):
+            service._apply_model_policy(config, policy)
+        with service.database.transaction(immediate=True) as connection:
+            connection.execute(
+                "UPDATE api_models SET validation_status = 'validated' WHERE model_key = ?",
+                (key,),
+            )
+    assert service._apply_model_policy(config, policy)["secondary_model"] == "secondary"

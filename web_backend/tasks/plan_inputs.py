@@ -1,9 +1,43 @@
 from __future__ import annotations
 
 import json
+from sqlite3 import Connection
 from typing import Any
 
 from web_backend.database import Database
+
+
+def _model_policy_values(policy: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "cheap_model": (policy.get("cheap_model") or "").strip() or None,
+        "cheap_effort": str(policy.get("cheap_effort") or "low"),
+        "primary_model": str(policy.get("primary_model") or "").strip(),
+        "primary_effort": str(policy.get("primary_effort") or "medium"),
+        "secondary_model": (policy.get("secondary_model") or "").strip() or None,
+        "secondary_effort": str(policy.get("secondary_effort") or "high"),
+        "cheap_audit_percent": int(policy.get("cheap_audit_percent", 5)),
+    }
+
+
+def _validate_policy_model(
+    connection: Connection,
+    connection_id: str,
+    model_key: str,
+    effort: str,
+) -> None:
+    row = connection.execute(
+        """
+        SELECT display_name, supported_efforts_json, active, validation_status
+        FROM api_models WHERE connection_id = ? AND model_key = ?
+        """,
+        (connection_id, model_key),
+    ).fetchone()
+    if row is None or not row["active"]:
+        raise ValueError(f"模型 {model_key} 不可用")
+    if row["validation_status"] != "validated":
+        raise ValueError(f"模型 {row['display_name']} 必须先验证通过")
+    if effort not in json.loads(row["supported_efforts_json"]):
+        raise ValueError(f"模型 {row['display_name']} 不支持 {effort} 推理强度")
 
 
 class TaskPlanInputsMixin:
@@ -71,15 +105,7 @@ class TaskPlanInputsMixin:
         connection_id = str(policy.get("connection_id") or "")
         if connection_id != str(config["connection_id"]):
             raise ValueError("本次模型策略与所选模型服务连接不一致")
-        values = {
-            "cheap_model": (policy.get("cheap_model") or "").strip() or None,
-            "cheap_effort": str(policy.get("cheap_effort") or "low"),
-            "primary_model": str(policy.get("primary_model") or "").strip(),
-            "primary_effort": str(policy.get("primary_effort") or "medium"),
-            "secondary_model": (policy.get("secondary_model") or "").strip() or None,
-            "secondary_effort": str(policy.get("secondary_effort") or "high"),
-            "cheap_audit_percent": int(policy.get("cheap_audit_percent", 5)),
-        }
+        values = _model_policy_values(policy)
         if not values["primary_model"]:
             raise ValueError("主分析模型不能为空")
         with self.database.connect() as connection:
@@ -98,19 +124,5 @@ class TaskPlanInputsMixin:
             ):
                 if not model_key:
                     continue
-                row = connection.execute(
-                    """
-                    SELECT display_name, supported_efforts_json, active, validation_status
-                    FROM api_models WHERE connection_id = ? AND model_key = ?
-                    """,
-                    (connection_id, model_key),
-                ).fetchone()
-                if row is None or not row["active"]:
-                    raise ValueError(f"模型 {model_key} 不可用")
-                if row["validation_status"] != "validated":
-                    raise ValueError(f"模型 {row['display_name']} 必须先验证通过")
-                if effort not in json.loads(row["supported_efforts_json"]):
-                    raise ValueError(
-                        f"模型 {row['display_name']} 不支持 {effort} 推理强度"
-                    )
+                _validate_policy_model(connection, connection_id, model_key, effort)
         return {**config, **values}

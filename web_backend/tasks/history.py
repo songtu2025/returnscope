@@ -1,12 +1,56 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
+from sqlite3 import Connection, Row
 from typing import Any
 
 from web_backend.common import add_audit, json_text
 from web_backend.database import Database
 from web_backend.security import utc_now
 from web_backend.task_contracts import FINAL_STATUSES
+
+
+@dataclass(frozen=True, kw_only=True)
+class _ArchiveOperation:
+    """同一批归档写入共用的操作者、时间和事件信息。"""
+
+    archived: bool
+    actor_id: str
+    now: str
+    action: str
+    event_type: str
+    message: str
+
+
+def _archive_rows(
+    connection: Connection,
+    unique_ids: list[str],
+    placeholders: str,
+    archived: bool,
+) -> dict[str, Row]:
+    rows = connection.execute(
+        f"""
+        SELECT id, status, stage, archived_at
+        FROM tasks
+        WHERE id IN ({placeholders})
+        """,
+        tuple(unique_ids),
+    ).fetchall()
+    rows_by_id = {str(row["id"]): row for row in rows}
+    missing = [task_id for task_id in unique_ids if task_id not in rows_by_id]
+    if missing:
+        raise ValueError("部分任务不存在")
+    if archived:
+        invalid = [
+            task_id
+            for task_id in unique_ids
+            if rows_by_id[task_id]["status"] not in FINAL_STATUSES
+        ]
+        if invalid:
+            raise ValueError("仅已结束任务可以归档")
+
+    return rows_by_id
 
 
 class TaskHistoryMixin:
@@ -27,78 +71,75 @@ class TaskHistoryMixin:
         placeholders = ",".join("?" for _ in unique_ids)
         now = utc_now()
         with self.database.transaction(immediate=True) as connection:
-            rows = connection.execute(
-                f"""
-                SELECT id, status, stage, archived_at
-                FROM tasks
-                WHERE id IN ({placeholders})
-                """,
-                tuple(unique_ids),
-            ).fetchall()
-            rows_by_id = {str(row["id"]): row for row in rows}
-            missing = [task_id for task_id in unique_ids if task_id not in rows_by_id]
-            if missing:
-                raise ValueError("部分任务不存在")
-            if archived:
-                invalid = [
-                    task_id
-                    for task_id in unique_ids
-                    if rows_by_id[task_id]["status"] not in FINAL_STATUSES
-                ]
-                if invalid:
-                    raise ValueError("仅已结束任务可以归档")
-
-            action = "archive" if archived else "restore"
-            event_type = "task_archived" if archived else "task_restored"
-            message = "任务已归档" if archived else "任务已恢复"
+            rows_by_id = _archive_rows(connection, unique_ids, placeholders, archived)
+            operation = _ArchiveOperation(
+                archived=archived,
+                actor_id=actor_id,
+                now=now,
+                action="archive" if archived else "restore",
+                event_type="task_archived" if archived else "task_restored",
+                message="任务已归档" if archived else "任务已恢复",
+            )
             for task_id in unique_ids:
                 row = rows_by_id[task_id]
                 was_archived = bool(row["archived_at"])
                 if was_archived == archived:
                     continue
-                connection.execute(
-                    """
-                    UPDATE tasks
-                    SET archived_at = ?, archived_by = ?, revision = revision + 1
-                    WHERE id = ?
-                    """,
-                    (
-                        now if archived else None,
-                        actor_id if archived else None,
-                        task_id,
-                    ),
-                )
-                event_data = {
-                    "before": {"archived": was_archived},
-                    "after": {"archived": archived},
-                }
-                connection.execute(
-                    """
-                    INSERT INTO task_events(
-                        task_id, event_type, stage, message, actor_id,
-                        data_json, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        task_id,
-                        event_type,
-                        row["stage"],
-                        message,
-                        actor_id,
-                        json_text(event_data),
-                        now,
-                    ),
-                )
-                self._insert_audit(
-                    connection,
-                    task_id,
-                    action,
-                    actor_id,
-                    event_data["before"],
-                    event_data["after"],
-                    now,
+                self._write_archive_change(
+                    connection, task_id, row, operation, was_archived
                 )
         return [self.get(task_id) or {} for task_id in unique_ids]
+
+    def _write_archive_change(
+        self,
+        connection: Connection,
+        task_id: str,
+        row: Row,
+        operation: _ArchiveOperation,
+        was_archived: bool,
+    ) -> None:
+        connection.execute(
+            """
+            UPDATE tasks
+            SET archived_at = ?, archived_by = ?, revision = revision + 1
+            WHERE id = ?
+            """,
+            (
+                operation.now if operation.archived else None,
+                operation.actor_id if operation.archived else None,
+                task_id,
+            ),
+        )
+        event_data = {
+            "before": {"archived": was_archived},
+            "after": {"archived": operation.archived},
+        }
+        connection.execute(
+            """
+            INSERT INTO task_events(
+                task_id, event_type, stage, message, actor_id,
+                data_json, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                task_id,
+                operation.event_type,
+                row["stage"],
+                operation.message,
+                operation.actor_id,
+                json_text(event_data),
+                operation.now,
+            ),
+        )
+        self._insert_audit(
+            connection,
+            task_id,
+            operation.action,
+            operation.actor_id,
+            event_data["before"],
+            event_data["after"],
+            operation.now,
+        )
 
     def retry(self, task_id: str, actor_id: str) -> dict[str, Any]:
         source = self.get(task_id)
