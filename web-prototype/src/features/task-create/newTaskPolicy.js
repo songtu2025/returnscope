@@ -1,3 +1,5 @@
+export { taskLaunchCopy } from "./taskLaunchPolicy";
+
 /** @typedef {import("./taskCreateContracts").ApiConnection} ApiConnection */
 /** @typedef {import("./taskCreateContracts").DataVersion} DataVersion */
 /** @typedef {import("./taskCreateContracts").PublishedConfig} PublishedConfig */
@@ -6,7 +8,6 @@
 /** @typedef {import("./taskCreateContracts").TaskModelPolicy} TaskModelPolicy */
 /** @typedef {import("./taskCreateContracts").TaskPlanViewState} TaskPlanViewState */
 /** @typedef {import("./taskCreateContracts").TaskPreflightState} TaskPreflightState */
-/** @typedef {import("./taskCreateContracts").TaskSystemStatus} TaskSystemStatus */
 /** @typedef {import("../task-planning/taskPlanContracts").TaskExecutionPlan} TaskExecutionPlan */
 /** @typedef {import("../task-planning/taskPlanContracts").TaskPlanCounts} TaskPlanCounts */
 
@@ -148,60 +149,4 @@ export function taskPlanViewState(preflight, unresolvedPolicy, scopeConfirmed) {
     partialPlan,
     requiresScopeConfirmation,
   };
-}
-
-/**
- * @param {TaskPlanViewState & {planCounts: TaskPlanCounts, preflightStatus: TaskPreflightState["status"], scopeConfirmed: boolean, submitError: string, submitting: boolean, system: TaskSystemStatus | null, unresolvedPolicy: string}} state
- */
-export function taskLaunchCopy({
-  blocked,
-  categoryCompletionRequired,
-  countMismatch,
-  noExecutable,
-  partialPlan,
-  planCounts,
-  preflightStatus,
-  requiresScopeConfirmation,
-  scopeConfirmed,
-  submitError,
-  submitting,
-  system,
-  unresolvedPolicy,
-}) {
-  const submitLabel = categoryCompletionRequired
-    ? "请先补齐商品品类"
-    : countMismatch
-      ? "评论数量需要重新预检"
-      : noExecutable
-        ? "没有可执行评论"
-        : blocked
-          ? unresolvedPolicy === "run_ready"
-            ? `启动 ${planCounts.executable.toLocaleString()} 组已就绪评论`
-            : unresolvedPolicy === "block_all"
-              ? "保存任务，等待问题处理"
-              : "选择处理方式后继续"
-          : partialPlan
-            ? `启动 ${planCounts.executable.toLocaleString()} 组可执行评论`
-            : "开始分析";
-
-  let launchStatus = "确认任务名称与模型后，即可开始分析。";
-  if (submitting) launchStatus = "正在创建任务，请稍候…";
-  else if (submitError) launchStatus = "配置已保留，可以重试创建。";
-  else if (preflightStatus === "loading" || preflightStatus === "idle") {
-    launchStatus = "正在检查数据，不会调用模型…";
-  } else if (preflightStatus === "error") {
-    launchStatus = "检查未完成，请在上方重新检查数据。";
-  } else if (categoryCompletionRequired) launchStatus = "请先补齐上方提示的商品品类。";
-  else if (countMismatch) launchStatus = "评论数量校验未通过，请重新检查数据。";
-  else if (noExecutable) launchStatus = "当前范围没有可执行评论，请修改分析数据。";
-  else if (blocked && !unresolvedPolicy)
-    launchStatus = "请在上方选择未解决问题的处理方式。";
-  else if (blocked && unresolvedPolicy === "block_all") {
-    launchStatus = "仅保存任务，处理完数据问题后再开始分析。";
-  } else if (requiresScopeConfirmation && !scopeConfirmed) {
-    launchStatus = "请先确认上方的分析范围与排除项。";
-  } else if ((system?.my_running_tasks ?? 0) >= 3) {
-    launchStatus = "并行名额已满，启动后将进入队列。";
-  }
-  return { launchStatus, submitLabel };
 }

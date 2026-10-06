@@ -54,55 +54,16 @@ export function TaskPlanReviewStep({
           )}
           {preflight.data && (
             <>
-              <div
-                className={classNames(
-                  "plan-state",
-                  categoryCompletionRequired ||
-                    blocked ||
-                    countMismatch ||
-                    noExecutable ||
-                    partialPlan
-                    ? "warning"
-                    : "success",
-                )}
-                role="status"
-              >
-                {categoryCompletionRequired ||
-                blocked ||
-                countMismatch ||
-                noExecutable ||
-                partialPlan ? (
-                  <WarningCircle size={20} />
-                ) : (
-                  <CheckCircle size={20} weight="fill" />
-                )}
-                <div>
-                  <b>
-                    {categoryCompletionRequired || blocked
-                      ? "需要处理"
-                      : countMismatch
-                        ? "数量口径异常"
-                        : noExecutable
-                          ? "不可执行"
-                          : partialPlan
-                            ? `将分析 ${planCounts.executable.toLocaleString()} 组评论`
-                            : `已准备好 ${planCounts.executable.toLocaleString()} 组评论`}
-                  </b>
-                  <p>
-                    {categoryCompletionRequired
-                      ? "先补齐产品信息中的品类A和品类B，重新预检后才能创建任务。"
-                      : blocked
-                        ? "补充商品信息，或选择如何处理已就绪片段。"
-                        : countMismatch
-                          ? "去重评论无法与可执行和不分析评论对账，请重新预检或联系管理员。"
-                          : noExecutable
-                            ? "当前没有可执行评论，请补充品类或调整数据范围。"
-                            : partialPlan
-                              ? `另有 ${planCounts.notAnalyzed.toLocaleString()} 组评论不进入分析，请查看原因并确认。`
-                              : "数据检查完成，可以开始分析。"}
-                  </p>
-                </div>
-              </div>
+              <PlanStateNotice
+                state={{
+                  categoryCompletionRequired,
+                  blocked,
+                  countMismatch,
+                  noExecutable,
+                  partialPlan,
+                }}
+                planCounts={planCounts}
+              />
               <ExecutionPlanSummary
                 compact
                 plan={preflight.data}
@@ -134,4 +95,66 @@ export function TaskPlanReviewStep({
       </div>
     </div>
   );
+}
+
+/** @typedef {{categoryCompletionRequired: boolean, blocked: boolean, countMismatch: boolean, noExecutable: boolean, partialPlan: boolean}} PlanNoticeState */
+
+/** @param {{state: PlanNoticeState, planCounts: TaskPlanCounts}} props */
+function PlanStateNotice({ state, planCounts }) {
+  const notice = planReviewNotice(state, planCounts);
+  return (
+    <div
+      className={classNames("plan-state", notice.warning ? "warning" : "success")}
+      role="status"
+    >
+      {notice.warning ? (
+        <WarningCircle size={20} />
+      ) : (
+        <CheckCircle size={20} weight="fill" />
+      )}
+      <div>
+        <b>{notice.title}</b>
+        <p>{notice.description}</p>
+      </div>
+    </div>
+  );
+}
+
+/** @param {PlanNoticeState} state @param {TaskPlanCounts} counts */
+function planReviewNotice(state, counts) {
+  if (state.categoryCompletionRequired)
+    return {
+      warning: true,
+      title: "需要处理",
+      description: "先补齐产品信息中的品类A和品类B，重新预检后才能创建任务。",
+    };
+  if (state.blocked)
+    return {
+      warning: true,
+      title: "需要处理",
+      description: "补充商品信息，或选择如何处理已就绪片段。",
+    };
+  if (state.countMismatch)
+    return {
+      warning: true,
+      title: "数量口径异常",
+      description: "去重评论无法与可执行和不分析评论对账，请重新预检或联系管理员。",
+    };
+  if (state.noExecutable)
+    return {
+      warning: true,
+      title: "不可执行",
+      description: "当前没有可执行评论，请补充品类或调整数据范围。",
+    };
+  if (state.partialPlan)
+    return {
+      warning: true,
+      title: `将分析 ${counts.executable.toLocaleString()} 组评论`,
+      description: `另有 ${counts.notAnalyzed.toLocaleString()} 组评论不进入分析，请查看原因并确认。`,
+    };
+  return {
+    warning: false,
+    title: `已准备好 ${counts.executable.toLocaleString()} 组评论`,
+    description: "数据检查完成，可以开始分析。",
+  };
 }
