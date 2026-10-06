@@ -72,12 +72,87 @@ function unique(values) {
   return [...new Map(values.map((value) => [JSON.stringify(value), value])).values()];
 }
 
-/** @template {{label_code: string}} T @param {T[]} current @param {T[]} base @param {string | undefined} restoredCode @param {Set<string>} codes */
+/** @template {{label_code: string}} T @param {T[] | undefined} current @param {T[] | undefined} base @param {string | undefined} restoredCode @param {Set<string>} codes */
 function reconcileLabelRuleList(current, base, restoredCode, codes) {
   const restored = restoredCode
-    ? base.filter((rule) => rule.label_code === restoredCode)
+    ? (base ?? []).filter((rule) => rule.label_code === restoredCode)
     : [];
-  return unique([...current, ...restored]).filter((rule) => codes.has(rule.label_code));
+  return unique([...(current ?? []), ...restored]).filter((rule) =>
+    codes.has(rule.label_code),
+  );
+}
+
+/** @typedef {{rules: ClassificationStandardValidationRules, baseRules: ClassificationStandardValidationRules, restoredCode: string | undefined, codes: Set<string>}} LabelRuleContext */
+/** @param {LabelRuleContext} context */
+function oppositeReasonRules({ rules, baseRules, restoredCode, codes }) {
+  const entries = { ...rules.opposite_reason_labels };
+  if (restoredCode)
+    for (const [reason, values] of Object.entries(
+      baseRules.opposite_reason_labels ?? {},
+    )) {
+      if (values.includes(restoredCode))
+        entries[reason] = [...new Set([...(entries[reason] ?? []), ...values])];
+    }
+  return Object.fromEntries(
+    Object.entries(entries).map(([reason, values]) => [
+      reason,
+      values.filter((code) => codes.has(code)),
+    ]),
+  );
+}
+/** @param {LabelRuleContext} context */
+function conflictingLabelRules({ rules, baseRules, restoredCode, codes }) {
+  const restored = restoredCode
+    ? (baseRules.conflicting_label_sets ?? []).filter((group) =>
+        group.includes(restoredCode),
+      )
+    : [];
+  return unique([...(rules.conflicting_label_sets ?? []), ...restored])
+    .map((group) => group.filter((code) => codes.has(code)))
+    .filter((group) => new Set(group).size >= 2);
+}
+/** @param {ClassificationStandardValidationRules} result @param {LabelRuleContext} context */
+function reconcileEvidenceRuleLists(result, { rules, baseRules, restoredCode, codes }) {
+  if (rules.evidence_requirements || baseRules.evidence_requirements) {
+    result.evidence_requirements = reconcileLabelRuleList(
+      rules.evidence_requirements,
+      baseRules.evidence_requirements,
+      restoredCode,
+      codes,
+    );
+  }
+  if (rules.implicit_evidence_rules || baseRules.implicit_evidence_rules) {
+    result.implicit_evidence_rules = reconcileLabelRuleList(
+      rules.implicit_evidence_rules,
+      baseRules.implicit_evidence_rules,
+      restoredCode,
+      codes,
+    );
+  }
+  if (rules.claim_evidence_requirements || baseRules.claim_evidence_requirements) {
+    result.claim_evidence_requirements = reconcileLabelRuleList(
+      rules.claim_evidence_requirements,
+      baseRules.claim_evidence_requirements,
+      restoredCode,
+      codes,
+    );
+  }
+}
+/** @param {ClassificationStandardValidationRules} result @param {LabelRuleContext} context */
+function reconcileRequiredLabelCodes(
+  result,
+  { rules, baseRules, restoredCode, codes },
+) {
+  /** @type {("neutral_reason_labels" | "required_review_labels")[]} */
+  const codeFields = ["neutral_reason_labels", "required_review_labels"];
+  for (const field of codeFields) {
+    if (!rules[field] && !baseRules[field]) continue;
+    const restored =
+      restoredCode && baseRules[field]?.includes(restoredCode) ? [restoredCode] : [];
+    result[field] = [...new Set([...(rules[field] ?? []), ...restored])].filter(
+      (code) => codes.has(code),
+    );
+  }
 }
 
 /**
@@ -90,68 +165,12 @@ function reconcileLabelRuleList(current, base, restoredCode, codes) {
 export function reconcileLabelRules(rules = {}, labels, baseRules = {}, restoredCode) {
   const codes = new Set(labels.map((label) => label.code));
   const result = structuredClone(rules);
-  if (rules.opposite_reason_labels || restoredCode) {
-    const entries = { ...rules.opposite_reason_labels };
-    if (restoredCode)
-      for (const [reason, values] of Object.entries(
-        baseRules.opposite_reason_labels ?? {},
-      )) {
-        if (values.includes(restoredCode))
-          entries[reason] = [...new Set([...(entries[reason] ?? []), ...values])];
-      }
-    result.opposite_reason_labels = Object.fromEntries(
-      Object.entries(entries).map(([reason, values]) => [
-        reason,
-        values.filter((code) => codes.has(code)),
-      ]),
-    );
-  }
-  if (rules.conflicting_label_sets || baseRules.conflicting_label_sets) {
-    const restored = restoredCode
-      ? (baseRules.conflicting_label_sets ?? []).filter((group) =>
-          group.includes(restoredCode),
-        )
-      : [];
-    result.conflicting_label_sets = unique([
-      ...(rules.conflicting_label_sets ?? []),
-      ...restored,
-    ])
-      .map((group) => group.filter((code) => codes.has(code)))
-      .filter((group) => new Set(group).size >= 2);
-  }
-  if (rules.evidence_requirements || baseRules.evidence_requirements) {
-    result.evidence_requirements = reconcileLabelRuleList(
-      rules.evidence_requirements ?? [],
-      baseRules.evidence_requirements ?? [],
-      restoredCode,
-      codes,
-    );
-  }
-  if (rules.implicit_evidence_rules || baseRules.implicit_evidence_rules) {
-    result.implicit_evidence_rules = reconcileLabelRuleList(
-      rules.implicit_evidence_rules ?? [],
-      baseRules.implicit_evidence_rules ?? [],
-      restoredCode,
-      codes,
-    );
-  }
-  if (rules.claim_evidence_requirements || baseRules.claim_evidence_requirements) {
-    result.claim_evidence_requirements = reconcileLabelRuleList(
-      rules.claim_evidence_requirements ?? [],
-      baseRules.claim_evidence_requirements ?? [],
-      restoredCode,
-      codes,
-    );
-  }
-  /** @type {("neutral_reason_labels" | "required_review_labels")[]} */
-  const codeFields = ["neutral_reason_labels", "required_review_labels"];
-  for (const field of codeFields) {
-    if (!rules[field] && !baseRules[field]) continue;
-    const restored =
-      restoredCode && baseRules[field]?.includes(restoredCode) ? [restoredCode] : [];
-    result[field] = [...new Set([...(rules[field] ?? []), ...restored])].filter(
-      (code) => codes.has(code),
-    );
-  }
+  const context = { rules, baseRules, restoredCode, codes };
+  if (rules.opposite_reason_labels || restoredCode)
+    result.opposite_reason_labels = oppositeReasonRules(context);
+  if (rules.conflicting_label_sets || baseRules.conflicting_label_sets)
+    result.conflicting_label_sets = conflictingLabelRules(context);
+  reconcileEvidenceRuleLists(result, context);
+  reconcileRequiredLabelCodes(result, context);
   return result;
 }
