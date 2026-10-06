@@ -25,6 +25,22 @@ function normalizeDisposition(item, fallback = "") {
   return item.label_code || item.labelCode ? "MAPPED" : "UNKNOWN";
 }
 
+/** @param {SemanticReviewSourceItem} item */
+function diagnosticFields(item) {
+  return {
+    diagnosticDomain: item.diagnostic_domain || item.diagnosticDomain || "",
+    diagnosticCode: item.diagnostic_code || item.diagnosticCode || item.code || "",
+    diagnosticTitle: item.diagnostic_title || item.diagnosticTitle || item.title || "",
+    detailStatus: item.detail_status || item.detailStatus || "",
+    primaryResult: item.primary_result || item.primaryResult || "",
+    secondaryResult: item.secondary_result || item.secondaryResult || "",
+    diagnosticDetail: item.detail || item.diagnosticDetail || "",
+    diagnosticAction: item.action || item.diagnosticAction || "",
+    businessReviewRequired:
+      item.business_review_required ?? item.businessReviewRequired,
+  };
+}
+
 /** @param {SemanticReviewSourceItem} item @param {number} index @param {string} [fallbackDisposition] @returns {SemanticReviewLedgerItem} */
 export function normalizeItem(item, index, fallbackDisposition = "") {
   const evidenceSpans = item.evidence_spans ?? [];
@@ -64,16 +80,7 @@ export function normalizeItem(item, index, fallbackDisposition = "") {
     labelPath,
     disposition: normalizeDisposition(item, fallbackDisposition),
     reason: item.reason || item.mapping_reason || item.mappingReason || "",
-    diagnosticDomain: item.diagnostic_domain || item.diagnosticDomain || "",
-    diagnosticCode: item.diagnostic_code || item.diagnosticCode || item.code || "",
-    diagnosticTitle: item.diagnostic_title || item.diagnosticTitle || item.title || "",
-    detailStatus: item.detail_status || item.detailStatus || "",
-    primaryResult: item.primary_result || item.primaryResult || "",
-    secondaryResult: item.secondary_result || item.secondaryResult || "",
-    diagnosticDetail: item.detail || item.diagnosticDetail || "",
-    diagnosticAction: item.action || item.diagnosticAction || "",
-    businessReviewRequired:
-      item.business_review_required ?? item.businessReviewRequired,
+    ...diagnosticFields(item),
     manual: Boolean(item.manual),
     sentiment: item.sentiment || "",
   };

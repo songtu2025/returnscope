@@ -1,7 +1,8 @@
-/** @typedef {"confirm" | "modify" | "exclude"} ReviewAction */
+/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewAction} ReviewAction */
+/** @typedef {import("../../shared/api/reviewBatchContracts").HumanReviewAssessment} HumanReviewAssessment */
 /** @typedef {{labelCorrectness: string, evidenceCompleteness: string, reviewRouting: string}} ReviewAssessment */
 /** @typedef {"labelCorrectness" | "evidenceCompleteness" | "reviewRouting"} AssessmentKey */
-/** @typedef {{key: AssessmentKey, storedKey: string, label: string, options: Array<[string, string]>}} AssessmentField */
+/** @typedef {{key: AssessmentKey, storedKey: keyof HumanReviewAssessment, label: string, options: Array<[string, string]>}} AssessmentField */
 
 /** @type {AssessmentField[]} */
 export const REVIEW_ASSESSMENT_FIELDS = [
@@ -62,7 +63,7 @@ export function defaultReviewAssessment(action) {
   return { ...DEFAULTS[action] };
 }
 
-/** @param {Record<string, any>} record @param {ReviewAction} [action] */
+/** @param {Pick<import("../../shared/api/reviewBatchContracts").ReviewRecord, "classification" | "human_review_assessment">} record @param {ReviewAction} [action] */
 export function reviewAssessment(record, action = "confirm") {
   const stored =
     record?.classification?.human_review_assessment ??
@@ -76,7 +77,7 @@ export function reviewAssessment(record, action = "confirm") {
   };
 }
 
-/** @param {AssessmentField} field @param {string} value */
+/** @param {AssessmentField} field @param {string | undefined} value */
 export function reviewAssessmentLabel(field, value) {
   return field.options.find(([code]) => code === value)?.[1] || "未单独记录";
 }

@@ -1,15 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../api";
+import { errorMessage, errorStatus } from "../../shared/api/requestErrors";
 import { activeReviewBatch } from "../classification-results/resultActionPolicy";
 /** @typedef {import("../../shared/api/reviewBatchContracts").ResultVersion} ResultVersion */
 /** @typedef {import("../../shared/api/reviewBatchContracts").ReviewBatch} ReviewBatch */
-/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewRequestError} ReviewRequestError */
-/** @param {unknown} error @returns {ReviewRequestError} */
-function requestError(error) {
-  return error instanceof Error
-    ? /** @type {ReviewRequestError} */ (error)
-    : new Error("请求失败");
-}
 
 /**
  * @param {string} resultVersionId
@@ -61,12 +55,14 @@ export function useResultVersionReview(resultVersionId, notify, openBatch) {
         });
       }
     } catch (error) {
-      const nextError = requestError(error);
-      if (generationRef.current === generation && nextError.name !== "AbortError") {
+      if (
+        generationRef.current === generation &&
+        !(error instanceof Error && error.name === "AbortError")
+      ) {
         setState((current) => ({
           ...current,
           loading: false,
-          error: nextError.message,
+          error: errorMessage(error),
         }));
       }
     }
@@ -91,8 +87,7 @@ export function useResultVersionReview(resultVersionId, notify, openBatch) {
       setCreateOpen(false);
       openBatch(batch);
     } catch (error) {
-      const nextError = requestError(error);
-      if (nextError.status === 409) {
+      if (error instanceof Error && errorStatus(error) === 409) {
         try {
           const batches = await api.reviewBatches({
             page: 1,
@@ -107,11 +102,11 @@ export function useResultVersionReview(resultVersionId, notify, openBatch) {
             return;
           }
         } catch (refreshError) {
-          notify(requestError(refreshError).message, "error");
+          notify(errorMessage(refreshError), "error");
           return;
         }
       }
-      notify(nextError.message, "error");
+      notify(errorMessage(error), "error");
     } finally {
       setCreating(false);
     }

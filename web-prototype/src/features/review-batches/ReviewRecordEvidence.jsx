@@ -4,7 +4,7 @@ import { REVIEW_ASSESSMENT_FIELDS, reviewAssessmentLabel } from "./reviewAssessm
 import { SemanticReviewLedger } from "./SemanticReviewLedger";
 import { values, valueText } from "./reviewRecordPresentation";
 
-/** @param {{value?: Record<string, any>}} props */
+/** @param {{value?: import("../../shared/api/reviewBatchContracts").HumanReviewAssessment}} props */
 function ReviewAssessmentSummary({ value }) {
   return (
     <section className="review-assessment-summary" aria-label="已保存的复核质量判断">
@@ -24,63 +24,45 @@ function ReviewAssessmentSummary({ value }) {
   );
 }
 
-/** @param {Pick<import("./reviewRecordPresentation").ReviewRecordDrawerProps, "record" | "labels" | "semanticItemReviews" | "addedSemanticItems" | "coverageStatus" | "onSemanticItemReviews" | "onAddedSemanticItems" | "onCoverageStatus"> & {editable: boolean}} props */
-export function ReviewRecordEvidence({
-  record,
-  labels,
-  editable,
-  semanticItemReviews,
-  addedSemanticItems,
-  coverageStatus,
-  onSemanticItemReviews,
-  onAddedSemanticItems,
-  onCoverageStatus,
-}) {
+/** @param {{record: import("../../shared/api/reviewBatchContracts").ReviewRecord}} props */
+function ReviewBusinessEvidence({ record }) {
+  return (
+    <section className="review-business-evidence">
+      <dl>
+        <div>
+          <dt>产品名称</dt>
+          <dd>{valueText(values(record, "product_names"))}</dd>
+        </div>
+        <div>
+          <dt>Listing</dt>
+          <dd>{valueText(values(record, "listings"), "未提供 Listing")}</dd>
+        </div>
+        <div>
+          <dt>产品SKU</dt>
+          <dd>{valueText(values(record, "product_skus"))}</dd>
+        </div>
+        <div>
+          <dt>退货SKU（MSKU）</dt>
+          <dd>{valueText(values(record, "source_skus"))}</dd>
+        </div>
+        <div>
+          <dt>匹配MSKU</dt>
+          <dd>{valueText(values(record, "matched_mskus"), "未匹配")}</dd>
+        </div>
+        <div>
+          <dt>分类单元记录数</dt>
+          <dd>{Number(record.record_count || 0).toLocaleString()}</dd>
+        </div>
+      </dl>
+    </section>
+  );
+}
+
+/** @param {{record: import("../../shared/api/reviewBatchContracts").ReviewRecord}} props */
+function ReviewSourceContext({ record }) {
   const classification = record.classification ?? {};
   return (
     <>
-      <section className="review-business-evidence">
-        <dl>
-          <div>
-            <dt>产品名称</dt>
-            <dd>{valueText(values(record, "product_names"))}</dd>
-          </div>
-          <div>
-            <dt>Listing</dt>
-            <dd>{valueText(values(record, "listings"), "未提供 Listing")}</dd>
-          </div>
-          <div>
-            <dt>产品SKU</dt>
-            <dd>{valueText(values(record, "product_skus"))}</dd>
-          </div>
-          <div>
-            <dt>退货SKU（MSKU）</dt>
-            <dd>{valueText(values(record, "source_skus"))}</dd>
-          </div>
-          <div>
-            <dt>匹配MSKU</dt>
-            <dd>{valueText(values(record, "matched_mskus"), "未匹配")}</dd>
-          </div>
-          <div>
-            <dt>分类单元记录数</dt>
-            <dd>{Number(record.record_count || 0).toLocaleString()}</dd>
-          </div>
-        </dl>
-      </section>
-
-      <SemanticReviewLedger
-        key={record.id}
-        record={record}
-        labels={labels}
-        editable={editable}
-        itemReviews={semanticItemReviews}
-        addedItems={addedSemanticItems}
-        coverageStatus={coverageStatus}
-        onItemReviews={onSemanticItemReviews}
-        onAddedItems={onAddedSemanticItems}
-        onCoverageStatus={onCoverageStatus}
-      />
-
       <details className="review-source-context">
         <summary>展开完整原文上下文</summary>
         <blockquote>“{record.comment || "没有评论证据"}”</blockquote>
@@ -97,6 +79,41 @@ export function ReviewRecordEvidence({
         </div>
         <SemanticResultPanel record={record} />
       </details>
+    </>
+  );
+}
+
+/** @param {Pick<import("./reviewRecordPresentation").ReviewRecordDrawerProps, "record" | "labels" | "semanticItemReviews" | "addedSemanticItems" | "coverageStatus" | "onSemanticItemReviews" | "onAddedSemanticItems" | "onCoverageStatus"> & {editable: boolean}} props */
+export function ReviewRecordEvidence({
+  record,
+  labels,
+  editable,
+  semanticItemReviews,
+  addedSemanticItems,
+  coverageStatus,
+  onSemanticItemReviews,
+  onAddedSemanticItems,
+  onCoverageStatus,
+}) {
+  const classification = record.classification ?? {};
+  return (
+    <>
+      <ReviewBusinessEvidence record={record} />
+
+      <SemanticReviewLedger
+        key={record.id}
+        record={record}
+        labels={labels}
+        editable={editable}
+        itemReviews={semanticItemReviews}
+        addedItems={addedSemanticItems}
+        coverageStatus={coverageStatus}
+        onItemReviews={onSemanticItemReviews}
+        onAddedItems={onAddedSemanticItems}
+        onCoverageStatus={onCoverageStatus}
+      />
+
+      <ReviewSourceContext record={record} />
 
       {!editable && (
         <ReviewAssessmentSummary value={classification.human_review_assessment} />

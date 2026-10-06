@@ -30,6 +30,30 @@ export class ApiError extends Error {
   }
 }
 
+/** @param {Response} response */
+function responsePayload(response) {
+  const contentType = response.headers.get("content-type") ?? "";
+  return contentType.includes("application/json") ? response.json() : response.text();
+}
+
+/** @param {unknown} item */
+function validationMessage(item) {
+  if (typeof item !== "object" || item === null || !("msg" in item)) return "";
+  return item.msg == null ? "" : String(item.msg);
+}
+
+/** @param {unknown} payload */
+function responseErrorMessage(payload) {
+  const detail =
+    typeof payload === "object" && payload !== null
+      ? "detail" in payload
+        ? payload.detail
+        : undefined
+      : payload;
+  if (Array.isArray(detail)) return detail.map(validationMessage).join("；");
+  return detail ? String(detail) : "请求失败";
+}
+
 /**
  * @param {string} path
  * @param {RequestInit} [options]
@@ -46,10 +70,7 @@ export async function request(path, options = {}) {
     },
   });
   if (response.status === 204) return null;
-  const contentType = response.headers.get("content-type") ?? "";
-  const payload = contentType.includes("application/json")
-    ? await response.json()
-    : await response.text();
+  const payload = await responsePayload(response);
   if (!response.ok) {
     if (
       response.status === 401 &&
@@ -59,27 +80,7 @@ export async function request(path, options = {}) {
       sessionExpiredNotified = true;
       window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
     }
-    const errorPayload = /** @type {unknown} */ (payload);
-    const detail =
-      typeof errorPayload === "object" && errorPayload !== null
-        ? "detail" in errorPayload
-          ? errorPayload.detail
-          : undefined
-        : errorPayload;
-    const message = Array.isArray(detail)
-      ? detail
-          .map((item) =>
-            typeof item === "object" && item !== null && "msg" in item
-              ? item.msg == null
-                ? ""
-                : String(item.msg)
-              : "",
-          )
-          .join("；")
-      : detail
-        ? String(detail)
-        : "请求失败";
-    throw new ApiError(message, response.status);
+    throw new ApiError(responseErrorMessage(payload), response.status);
   }
   if (
     path === "/api/auth/login" ||
