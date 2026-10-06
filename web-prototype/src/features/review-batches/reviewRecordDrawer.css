@@ -1,0 +1,99 @@
+.review-drawer-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgb(15 34 27 / 28%);
+}
+
+.review-record-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: 520px;
+  height: 100%;
+  border-left: 1px solid var(--line);
+  background: #fff;
+  box-shadow: -18px 0 42px rgb(15 34 27 / 14%);
+}
+
+.review-record-drawer > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.review-record-drawer > header span {
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.review-record-drawer > header h2 {
+  margin: 4px 0 0;
+}
+
+.review-drawer-scroll {
+  min-height: 0;
+  padding: 18px 20px 28px;
+  overflow-y: auto;
+}
+
+.review-drawer-scroll > section {
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.review-business-evidence dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.review-business-evidence dl > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.review-business-evidence dt {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.review-business-evidence dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: 700;
+}
+
+.review-business-evidence blockquote {
+  margin: 14px 0 0;
+  padding: 12px;
+  border-left: 3px solid var(--green);
+  background: #f3f8f5;
+  line-height: 1.6;
+}
+
+.review-current-result > b,
+.review-record-editor > b {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.review-current-result > div {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.review-current-result p {
+  margin: 3px 0;
+}
