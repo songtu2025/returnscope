@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 from copy import deepcopy
 from io import BytesIO
 from typing import Any
@@ -10,44 +9,23 @@ from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
 from pydantic import BaseModel, Field
 
+from web_backend.classification_standards.excel_nodes import (
+    _existing_paths,
+    _text,
+    category_parent,
+    label_for_path,
+    reconcile_sentiments,
+    row_path,
+)
+from web_backend.classification_standards.excel_nodes import (
+    _node_code as _node_code,
+)
+
 
 class ExcelColumnMapping(BaseModel):
     hierarchy_columns: list[str] = Field(min_length=2)
     source_label_column: str | None = None
     sentiment_column: str | None = None
-
-
-def _text(value: Any) -> str:
-    return "" if value is None else str(value).strip()
-
-
-def _node_code(namespace: str, kind: str, path: tuple[str, ...]) -> str:
-    identity = "\x1f".join((namespace, kind, *path))
-    return f"{kind}_{hashlib.sha256(identity.encode()).hexdigest()[:20].upper()}"
-
-
-def _existing_paths(content: dict[str, Any]) -> tuple[dict, dict]:
-    categories = {item["code"]: item for item in content.get("categories", [])}
-
-    def path(item: dict[str, Any]) -> tuple[str, ...]:
-        names = [item["name"]]
-        parent = _text(item.get("parent_code"))
-        visited: set[str] = set()
-        while parent in categories and parent not in visited:
-            visited.add(parent)
-            category = categories[parent]
-            names.insert(0, category["name"])
-            parent = _text(category.get("parent_code"))
-        return tuple(names)
-
-    category_paths = {path(item): item for item in categories.values()}
-    label_items = (
-        content.get("labels", []) if content.get("structure_version") == 2 else []
-    )
-    label_paths = {path(item): item for item in label_items}
-    if len(category_paths) != len(categories) or len(label_paths) != len(label_items):
-        raise ValueError("现有草稿中同一路径存在多个编码，请先修复重复节点后再导入")
-    return category_paths, label_paths
 
 
 def _read_rows(sheet: Any) -> list[list[str]]:
@@ -72,6 +50,10 @@ def _sentiments(value: str) -> list[str]:
         "中性": ["NEUTRAL"],
         "NEUTRAL": ["NEUTRAL"],
     }.get(value.upper(), [])
+
+
+def _mapped_cell(row: list[str], index: int | None) -> str:
+    return row[index] if index is not None else ""
 
 
 def _parse_rows(
@@ -99,17 +81,8 @@ def _parse_rows(
     for number, row in enumerate(rows[1:], start=2):
         if not any(row):
             continue
-        path = tuple(row[index] for index in indices)
-        while path and not path[-1]:
-            path = path[:-1]
-        if len(path) < 2 or any(not name for name in path):
-            issues.append(
-                {
-                    "severity": "blocking",
-                    "row": number,
-                    "message": "至少需要分类和末端标签，且不能缺失中间层级",
-                }
-            )
+        path = row_path(row, indices, number, issues)
+        if path is None:
             continue
         sentiments = (
             _sentiments(row[sentiment_index]) if sentiment_index is not None else []
@@ -122,45 +95,12 @@ def _parse_rows(
                     "message": "评价方向为空或尚未明确，已保留路径与来源；请在草稿中选择方向后再发布",
                 }
             )
-        parent = None
-        for depth in range(1, len(path)):
-            prefix = path[:depth]
-            categories.setdefault(
-                prefix,
-                {
-                    "code": old_categories.get(prefix, {}).get("code")
-                    or _node_code(namespace, "CAT", prefix),
-                    "name": prefix[-1],
-                    "parent_code": parent,
-                },
-            )
-            parent = categories[prefix]["code"]
+        parent = category_parent(path, old_categories, categories, namespace)
         existing = labels.get(path)
-        if existing and existing["allowed_sentiments"] != sentiments:
-            issues.append(
-                {
-                    "severity": "warning"
-                    if not sentiments or not existing["allowed_sentiments"]
-                    else "blocking",
-                    "row": number,
-                    "message": "同一路径的评价方向冲突或未明确，已清空该标签方向，请核对所有来源后选择",
-                }
-            )
-            existing["allowed_sentiments"] = []
+        reconcile_sentiments(existing, sentiments, number, issues)
         if existing is None:
-            existing = deepcopy(old_labels.get(path)) or {
-                "code": _node_code(namespace, "LABEL", path),
-                "description": "",
-                "keywords": [],
-                "exclusions": [],
-                "examples": [],
-                "allowed_claim_ids": [],
-            }
-            existing.update(
-                name=path[-1],
-                parent_code=parent,
-                group=path[0],
-                allowed_sentiments=sentiments,
+            existing = label_for_path(
+                path, parent, sentiments, old_labels.get(path), namespace
             )
             labels[path] = existing
         sources.append(
@@ -169,10 +109,8 @@ def _parse_rows(
                 "row": number,
                 "path": list(path),
                 "label_code": existing["code"],
-                "source_label": row[source_index] if source_index is not None else "",
-                "source_sentiment": row[sentiment_index]
-                if sentiment_index is not None
-                else "",
+                "source_label": _mapped_cell(row, source_index),
+                "source_sentiment": _mapped_cell(row, sentiment_index),
             }
         )
     return _build_preview(current, categories, labels, sources, issues)

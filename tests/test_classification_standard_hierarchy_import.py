@@ -125,6 +125,24 @@ def test_conflicting_sentiment_is_not_silently_merged():
     )
 
 
+def test_repeated_sentiment_after_conflict_preserves_issue_order() -> None:
+    data = _workbook(
+        [
+            ["功能", "保暖性", "不保暖", "冷", "负向"],
+            ["功能", "保暖性", "不保暖", "暖", "正向"],
+            ["功能", "保暖性", "不保暖", "冻手", "负向"],
+        ]
+    )
+    result = preview_excel(data, "框架", MAPPING, _content(), "one")
+    assert result["content"]["labels"][0]["allowed_sentiments"] == []
+    assert [(issue["row"], issue["severity"]) for issue in result["issues"]] == [
+        (3, "blocking"),
+        (4, "warning"),
+    ]
+    assert [row["row"] for row in result["content"]["import_sources"]] == [2, 3, 4]
+    assert result["stats"] == {"rows": 3, "categories": 2, "labels": 1}
+
+
 def test_sheet_and_mapping_are_explicit():
     data = _workbook([["功能", "保暖性", "不保暖", "冷", "负向"]])
     assert preview_excel(data, "", {}, _content(), "one")["content"] is None
