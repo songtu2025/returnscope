@@ -1,12 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import {
-  CaretLeft,
-  CaretRight,
-  MagnifyingGlass,
-  WarningCircle,
-} from "@phosphor-icons/react";
-import Button from "antd/es/button";
-
+import { SegmentBoardPagination } from "./SegmentBoardPagination";
+import { SegmentBoardToolbar } from "./SegmentBoardToolbar";
+import { SegmentBoardHeader, ExcludedListingsSummary } from "./SegmentBoardSummary";
 import { SegmentBoardRow } from "./SegmentBoardRow";
 import { isLegacyResult, isPublishedResult } from "./taskSegmentPolicy";
 import { segmentNeedsAttention } from "./taskRegistryPolicy";
@@ -172,79 +167,22 @@ export function SegmentBoard({
 
   return (
     <section className="segment-board listing-queue" aria-label="Listing 执行队列">
-      <div className="listing-queue-header">
-        <div>
-          <h3>
-            Listing 明细 <span>{queueSegments.length}</span>
-          </h3>
-        </div>
-      </div>
-      <div className="listing-queue-toolbar">
-        <div className="listing-queue-filters">
-          <label className="listing-queue-search">
-            <MagnifyingGlass size={17} />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="搜索 Listing（编号 / 站点 / 标准）"
-              aria-label="搜索 Listing"
-            />
-          </label>
-          <select
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
-            aria-label="按 Listing 状态筛选"
-          >
-            <option value="all">全部状态</option>
-            <option value="active">未结束</option>
-            <option value="attention">需处理</option>
-            <option value="delivered">已生成结果</option>
-            <option value="cancelled">已取消</option>
-          </select>
-        </div>
-        <details className="listing-execution-settings">
-          <summary>执行设置</summary>
-          <div className="parallelism-control" aria-label="Listing 并行数">
-            <span>运行配额</span>
-            <b>
-              {ownerRunningSegments}/{task.owner_segment_limit ?? 3}
-            </b>
-            <span className="parallelism-divider" />
-            <span>并行数</span>
-            <button
-              type="button"
-              className="icon-button"
-              disabled={
-                changingParallelism || !canManageQueue || maxParallelSegments <= 1
-              }
-              aria-label="减少 Listing 并行数"
-              onClick={async () => {
-                setChangingParallelism(true);
-                await onParallelism(maxParallelSegments - 1);
-                setChangingParallelism(false);
-              }}
-            >
-              −
-            </button>
-            <b>{maxParallelSegments}</b>
-            <button
-              type="button"
-              className="icon-button"
-              disabled={
-                changingParallelism || !canManageQueue || maxParallelSegments >= 3
-              }
-              aria-label="增加 Listing 并行数"
-              onClick={async () => {
-                setChangingParallelism(true);
-                await onParallelism(maxParallelSegments + 1);
-                setChangingParallelism(false);
-              }}
-            >
-              +
-            </button>
-          </div>
-        </details>
-      </div>
+      <SegmentBoardHeader count={queueSegments.length} />
+      <SegmentBoardToolbar
+        task={task}
+        query={query}
+        statusFilter={statusFilter}
+        setQuery={setQuery}
+        setStatusFilter={setStatusFilter}
+        parallelism={{
+          changingParallelism,
+          setChangingParallelism,
+          canManageQueue,
+          maxParallelSegments,
+          ownerRunningSegments,
+          onParallelism,
+        }}
+      />
       {queueSegments.length > 0 && (
         <>
           <div className="listing-table" role="table">
@@ -289,46 +227,20 @@ export function SegmentBoard({
               <div className="listing-table-empty">没有匹配的 Listing。</div>
             )}
           </div>
-          <footer className="listing-table-footer">
-            <span>共 {filteredQueueSegments.length} 条</span>
-            <div>
-              <span>{PAGE_SIZE} 条/页</span>
-              <Button
-                type="text"
-                className="icon-button"
-                aria-label="上一页"
-                disabled={page <= 1}
-                onClick={() => setPage((current) => Math.max(current - 1, 1))}
-              >
-                <CaretLeft size={15} />
-              </Button>
-              <b>{page}</b>
-              <Button
-                type="text"
-                className="icon-button"
-                aria-label="下一页"
-                disabled={page >= totalPages}
-                onClick={() => setPage((current) => Math.min(current + 1, totalPages))}
-              >
-                <CaretRight size={15} />
-              </Button>
-            </div>
-          </footer>
+          <SegmentBoardPagination
+            total={filteredQueueSegments.length}
+            pageSize={PAGE_SIZE}
+            page={page}
+            totalPages={totalPages}
+            setPage={setPage}
+          />
         </>
       )}
-      {excludedSegments.length > 0 && (
-        <div className="excluded-listing-summary">
-          <WarningCircle size={18} />
-          <div>
-            <b>未配置品类的数据未纳入语义分析</b>
-            <p>
-              {excludedRecords.toLocaleString()} 条记录 /{" "}
-              {excludedComments.toLocaleString()}
-              组评论，不创建 Listing 执行项，也不会调用模型。
-            </p>
-          </div>
-        </div>
-      )}
+      <ExcludedListingsSummary
+        count={excludedSegments.length}
+        excludedRecords={excludedRecords}
+        excludedComments={excludedComments}
+      />
     </section>
   );
 }
