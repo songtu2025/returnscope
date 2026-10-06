@@ -25,17 +25,13 @@ export function TaskLaunchActions({
   return (
     <footer className={prepared ? "task-launch-actions" : "task-step-actions"}>
       <span role="status" id="task-action-status">
-        {prepared
-          ? launchStatus
-          : dataEntryMode === "mysql"
-            ? mysqlState.busy === "import"
-              ? "正在保存本次数据…"
-              : mysqlState.ready
-                ? `已选 ${mysqlState.rowCount.toLocaleString()} 条用户反馈`
-                : "选择店铺和日期，查看本次分析范围"
-            : selectedReturns
-              ? `已选 ${selectedReturns.row_count.toLocaleString()} 条用户反馈`
-              : "请选择本次分析数据"}
+        {launchStatusText({
+          prepared,
+          dataEntryMode,
+          mysqlState,
+          selectedReturns,
+          launchStatus,
+        })}
       </span>
       {prepared ? (
         <Button
@@ -69,6 +65,26 @@ export function TaskLaunchActions({
       )}
     </footer>
   );
+}
+
+/** @param {{prepared: boolean, dataEntryMode: "mysql" | "upload" | "existing", mysqlState: MysqlFormState, selectedReturns?: DataVersion, launchStatus: string}} state */
+function launchStatusText({
+  prepared,
+  dataEntryMode,
+  mysqlState,
+  selectedReturns,
+  launchStatus,
+}) {
+  if (prepared) return launchStatus;
+  if (dataEntryMode === "mysql") {
+    if (mysqlState.busy === "import") return "正在保存本次数据…";
+    return mysqlState.ready
+      ? `已选 ${mysqlState.rowCount.toLocaleString()} 条用户反馈`
+      : "选择店铺和日期，查看本次分析范围";
+  }
+  return selectedReturns
+    ? `已选 ${selectedReturns.row_count.toLocaleString()} 条用户反馈`
+    : "请选择本次分析数据";
 }
 
 /**
