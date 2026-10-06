@@ -4,12 +4,20 @@
 /** @param {Taxonomy | null | undefined} taxonomy @param {TaxonomyNode} node @returns {string[]} */
 export function taxonomyPath(taxonomy, node) {
   if (node.label_path?.length) return node.label_path;
-  if (taxonomy?.structure_version !== 2) {
-    const simplePath = [];
-    if (node.group) simplePath.push(node.group);
-    if (node.name) simplePath.push(node.name);
-    return simplePath;
-  }
+  if (taxonomy?.structure_version !== 2) return legacyTaxonomyPath(node);
+  return hierarchicalTaxonomyPath(taxonomy, node);
+}
+
+/** @param {TaxonomyNode} node @returns {string[]} */
+function legacyTaxonomyPath(node) {
+  const simplePath = [];
+  if (node.group) simplePath.push(node.group);
+  if (node.name) simplePath.push(node.name);
+  return simplePath;
+}
+
+/** @param {Taxonomy} taxonomy @param {TaxonomyNode} node @returns {string[]} */
+function hierarchicalTaxonomyPath(taxonomy, node) {
   const categories = new Map(
     (taxonomy.categories ?? []).map((item) => [item.code, item]),
   );

@@ -1,33 +1,26 @@
+import {
+  compatibilityString,
+  isDashboardSelectable,
+  RESULT_STATE_LABELS,
+  resultBlockingReason,
+  resultState,
+  resultVersionId,
+} from "./resultStatePolicy";
+
+export {
+  isDashboardSelectable,
+  resultState,
+  resultStateLabel,
+  resultVersionId,
+} from "./resultStatePolicy";
+
 /**
- * @typedef {"ready" | "needs_review" | "review-derived" | "unusable" | "unknown"} ResultState
- * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultVersionResponse} GeneratedResultVersion
- * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultBlockingReasonResponse} GeneratedBlockingReason
- * @typedef {object} CompatibilityResultFields
- * @property {string} [version_id]
- * @property {string} [result_version_id]
- * @property {string} [id]
- * @property {string} [delivery_status]
- * @property {string} [result_state]
- * @property {string} [action_state]
- * @property {string} [workflow_state]
- * @property {string} [publish_origin]
- * @property {string | null} [source_review_batch_id]
- * @property {string} [publish_status]
- * @property {string} [quality_status]
- * @property {string} [result_quality_status]
- * @property {boolean} [dashboard_eligibility]
- * @property {Array<string | GeneratedBlockingReason>} [blocking_reasons]
- * @property {string} [blocking_reason]
- * @property {string} [action_blocking_reason]
- * @property {string} [unusable_reason]
- * @property {string} [quality_reason]
- * @property {string} [derived_result_version_id]
- * @property {string} [derived_version_id]
- * @property {string} [source_task_id]
- * @property {string} [task_id]
- * @typedef {CompatibilityResultFields & Record<string, unknown>} CompatibilityResult
- * @typedef {GeneratedResultVersion | CompatibilityResult} ResultPolicyInput
- *
+ * @typedef {import("./resultStatePolicy").ResultState} ResultState
+ * @typedef {import("./resultStatePolicy").GeneratedResultVersion} GeneratedResultVersion
+ * @typedef {import("./resultStatePolicy").GeneratedBlockingReason} GeneratedBlockingReason
+ * @typedef {import("./resultStatePolicy").CompatibilityResultFields} CompatibilityResultFields
+ * @typedef {import("./resultStatePolicy").CompatibilityResult} CompatibilityResult
+ * @typedef {import("./resultStatePolicy").ResultPolicyInput} ResultPolicyInput
  * @typedef {{ id: string, status: string }} ReviewBatch
  * @typedef {{ activeBatch?: ReviewBatch | null, derivedVersionId?: string, taskId?: string }} ResultPolicyOptions
  * @typedef {
@@ -49,110 +42,88 @@
  * }} ResultPolicy
  */
 
-/** @type {Readonly<Record<string, ResultState>>} */
-const STATE_ALIASES = {
-  ready: "ready",
-  needs_review: "needs_review",
-  review_required: "needs_review",
-  "review-derived": "review-derived",
-  review_derived: "review-derived",
-  derived: "review-derived",
-  unusable: "unusable",
-};
-
-/** @type {Readonly<Record<ResultState, string>>} */
-const RESULT_STATE_LABELS = {
-  ready: "可用",
-  needs_review: "需复核",
-  "review-derived": "复核已发布",
-  unusable: "不可用",
-  unknown: "状态未提供",
-};
-
 const ACTIVE_REVIEW_STATUSES = new Set(["draft", "in_review", "conflict"]);
 
 /**
- * @param {ResultPolicyInput | null | undefined} result
- * @param {string} key
- * @returns {string}
+ * @param {ResultPolicyInput} result
+ * @param {ResultState} state
+ * @param {boolean} dashboardSelectable
+ * @param {ReviewBatch | null | undefined} activeBatch
+ * @returns {ResultPolicy}
  */
-function compatibilityString(result, key) {
-  const value = result?.[key];
-  return typeof value === "string" ? value : "";
+function reviewRequiredPolicy(result, state, dashboardSelectable, activeBatch) {
+  return {
+    state,
+    label: RESULT_STATE_LABELS[state],
+    dashboardSelectable,
+    primary: activeBatch
+      ? {
+          kind: "enter-review",
+          label: "进入复核批次",
+          reviewBatchId: activeBatch.id,
+        }
+      : { kind: "create-review", label: "创建复核批次" },
+    secondary: {
+      kind: "create-dashboard",
+      label: "创建已可用数据看板",
+      disabled: !dashboardSelectable,
+    },
+    blockingReason: resultBlockingReason(result),
+  };
 }
 
-/** @param {ResultPolicyInput | null | undefined} result @returns {string} */
-export function resultVersionId(result) {
-  return (
-    result?.version_id ||
-    compatibilityString(result, "result_version_id") ||
-    compatibilityString(result, "id")
-  );
+/**
+ * @param {ResultPolicyInput} result
+ * @param {ResultState} state
+ * @param {boolean} dashboardSelectable
+ * @param {string} derivedVersionId
+ * @returns {ResultPolicy}
+ */
+function reviewDerivedPolicy(result, state, dashboardSelectable, derivedVersionId) {
+  return {
+    state,
+    label: RESULT_STATE_LABELS[state],
+    dashboardSelectable,
+    primary: {
+      kind: "view-derived",
+      label: "查看衍生版本",
+      resultVersionId: derivedVersionId || resultVersionId(result),
+    },
+    secondary: {
+      kind: "create-dashboard",
+      label: "创建分析看板",
+      disabled: !dashboardSelectable,
+    },
+    blockingReason: dashboardSelectable ? "" : resultBlockingReason(result),
+  };
 }
 
-/** @param {ResultPolicyInput | null | undefined} result @returns {ResultState} */
-export function resultState(result) {
-  const explicit =
-    result?.delivery_status ||
-    compatibilityString(result, "result_state") ||
-    compatibilityString(result, "action_state") ||
-    compatibilityString(result, "workflow_state");
-  if (STATE_ALIASES[explicit]) return STATE_ALIASES[explicit];
-
-  if (
-    result?.publish_origin === "review-derived" ||
-    (result?.source_review_batch_id && result?.publish_status === "published")
-  ) {
-    return "review-derived";
-  }
-
-  const quality =
-    result?.quality_status || compatibilityString(result, "result_quality_status");
-  return STATE_ALIASES[quality] || "unknown";
-}
-
-/** @param {ResultPolicyInput | null | undefined} result @returns {string} */
-export function resultStateLabel(result) {
-  return RESULT_STATE_LABELS[resultState(result)];
-}
-
-/** @param {ResultPolicyInput | null | undefined} result @returns {string} */
-function resultBlockingReason(result) {
-  if (Array.isArray(result?.blocking_reasons)) {
-    const messages = result.blocking_reasons
-      .map((reason) => (typeof reason === "string" ? reason : reason?.message))
-      .filter(Boolean);
-    if (messages.length) return messages.join("；");
-  }
-  const supplied =
-    compatibilityString(result, "blocking_reason") ||
-    compatibilityString(result, "action_blocking_reason") ||
-    compatibilityString(result, "unusable_reason") ||
-    compatibilityString(result, "quality_reason");
-  if (supplied) return supplied;
-
-  const state = resultState(result);
-  if (state === "needs_review") {
-    return "当前版本仍有待复核数据；可先创建仅统计已可用数据的分析看板。";
-  }
-  if (state === "unusable") {
-    return "当前版本不可用于复核或分析看板，请返回来源任务修复数据或重新分类。";
-  }
-  if (state === "unknown") {
-    return "后端未返回可识别的结果质量状态，暂不能继续操作。";
-  }
-  return "";
-}
-
-/** @param {ResultPolicyInput | null | undefined} result @returns {boolean} */
-export function isDashboardSelectable(result) {
-  const eligibleState = ["ready", "needs_review", "review-derived"].includes(
-    resultState(result),
-  );
-  if (typeof result?.dashboard_eligibility === "boolean") {
-    return eligibleState && result.dashboard_eligibility;
-  }
-  return eligibleState;
+/**
+ * @param {ResultPolicyInput} result
+ * @param {ResultState} state
+ * @param {ResultPolicyOptions} options
+ * @returns {ResultPolicy}
+ */
+function blockedResultPolicy(result, state, options) {
+  const sourceTaskId =
+    result?.source_task_id ||
+    compatibilityString(result, "task_id") ||
+    options.taskId ||
+    "";
+  return {
+    state,
+    label: RESULT_STATE_LABELS[state] || RESULT_STATE_LABELS.unknown,
+    dashboardSelectable: false,
+    primary: sourceTaskId
+      ? {
+          kind: "repair-source",
+          label: "返回来源任务修复",
+          taskId: sourceTaskId,
+        }
+      : { kind: "view-blocker", label: "查看阻断原因" },
+    secondary: null,
+    blockingReason: resultBlockingReason(result),
+  };
 }
 
 /**
@@ -186,64 +157,19 @@ export function resultActionPolicy(result, options = {}) {
   }
 
   if (state === "needs_review") {
-    return {
+    return reviewRequiredPolicy(
+      result,
       state,
-      label: RESULT_STATE_LABELS[state],
       dashboardSelectable,
-      primary: hasActiveBatch
-        ? {
-            kind: "enter-review",
-            label: "进入复核批次",
-            reviewBatchId: activeBatch.id,
-          }
-        : { kind: "create-review", label: "创建复核批次" },
-      secondary: {
-        kind: "create-dashboard",
-        label: "创建已可用数据看板",
-        disabled: !dashboardSelectable,
-      },
-      blockingReason: resultBlockingReason(result),
-    };
+      hasActiveBatch ? activeBatch : null,
+    );
   }
 
   if (state === "review-derived") {
-    return {
-      state,
-      label: RESULT_STATE_LABELS[state],
-      dashboardSelectable,
-      primary: {
-        kind: "view-derived",
-        label: "查看衍生版本",
-        resultVersionId: derivedVersionId || resultVersionId(result),
-      },
-      secondary: {
-        kind: "create-dashboard",
-        label: "创建分析看板",
-        disabled: !dashboardSelectable,
-      },
-      blockingReason: dashboardSelectable ? "" : resultBlockingReason(result),
-    };
+    return reviewDerivedPolicy(result, state, dashboardSelectable, derivedVersionId);
   }
 
-  const sourceTaskId =
-    result?.source_task_id ||
-    compatibilityString(result, "task_id") ||
-    options.taskId ||
-    "";
-  return {
-    state,
-    label: RESULT_STATE_LABELS[state] || RESULT_STATE_LABELS.unknown,
-    dashboardSelectable: false,
-    primary: sourceTaskId
-      ? {
-          kind: "repair-source",
-          label: "返回来源任务修复",
-          taskId: sourceTaskId,
-        }
-      : { kind: "view-blocker", label: "查看阻断原因" },
-    secondary: null,
-    blockingReason: resultBlockingReason(result),
-  };
+  return blockedResultPolicy(result, state, options);
 }
 
 /** @template {ReviewBatch} T @param {T[]} [batches] @returns {T | null} */

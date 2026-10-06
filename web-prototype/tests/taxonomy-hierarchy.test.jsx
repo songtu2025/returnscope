@@ -151,3 +151,54 @@ test("解析结构错误阻止采用预览", async () => {
     await screen.findByRole("button", { name: "采用预览并继续编辑" }),
   ).toBeDisabled();
 });
+
+test("提供的标签路径保留原数组身份，旧格式保留分组与名称顺序", () => {
+  const path = ["合成分组", "合成标签"];
+  const node = { code: "SYNTHETIC", group: "旧分组", name: "旧名称", label_path: path };
+  expect(taxonomyPath(content, node)).toBe(path);
+  expect(
+    taxonomyPath(null, { code: "SYNTHETIC", group: "分组", name: "标签" }),
+  ).toEqual(["分组", "标签"]);
+  expect(
+    taxonomyPath({ structure_version: 1 }, { code: "SYNTHETIC", name: "标签" }),
+  ).toEqual(["标签"]);
+});
+
+test.each([
+  [
+    "重复编码以最后一项为准",
+    [
+      { code: "A", name: "旧分类" },
+      { code: "A", name: "末分类" },
+    ],
+    ["末分类", "标签"],
+  ],
+  [
+    "循环父链到首次已访问节点停止",
+    [
+      { code: "A", name: "甲", parent_code: "B" },
+      { code: "B", name: "乙", parent_code: "A" },
+    ],
+    ["乙", "甲", "标签"],
+  ],
+  [
+    "缺失祖先保留已找到分类",
+    [{ code: "A", name: "甲", parent_code: "MISSING" }],
+    ["甲", "标签"],
+  ],
+  [
+    "无名称分类继续回溯到根",
+    [
+      { code: "A", parent_code: "B" },
+      { code: "B", name: "根" },
+    ],
+    ["根", "标签"],
+  ],
+])("层级路径%s", (_, categories, expected) => {
+  expect(
+    taxonomyPath(
+      { structure_version: 2, categories },
+      { code: "LEAF", name: "标签", parent_code: "A" },
+    ),
+  ).toEqual(expected);
+});

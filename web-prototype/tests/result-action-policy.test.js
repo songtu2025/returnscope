@@ -4,6 +4,7 @@ import {
   isDashboardSelectable,
   resultActionPolicy,
   resultStateLabel,
+  resultVersionId,
 } from "../src/features/classification-results/resultActionPolicy";
 
 describe("分类结果状态与主操作", () => {
@@ -83,4 +84,68 @@ describe("分类结果状态与主操作", () => {
 
     expect(resultActionPolicy(result).state).toBe("review-derived");
   });
+});
+
+test.each([
+  ["draft", "enter-review"],
+  ["in_review", "enter-review"],
+  ["conflict", "enter-review"],
+  ["published", "create-review"],
+  ["cancelled", "create-review"],
+])("需复核结果仅进入活动批次：%s", (status, kind) => {
+  const policy = resultActionPolicy(
+    { version_id: "synthetic-version", delivery_status: "needs_review" },
+    { activeBatch: { id: "synthetic-batch", status } },
+  );
+  expect(policy.primary.kind).toBe(kind);
+  expect(policy.primary.reviewBatchId).toBe(
+    kind === "enter-review" ? "synthetic-batch" : undefined,
+  );
+});
+
+test("衍生版本和来源任务保留覆盖优先级及不可选状态", () => {
+  const derived = {
+    version_id: "synthetic-current",
+    result_version_id: "synthetic-legacy-current",
+    derived_result_version_id: "synthetic-server-derived",
+    derived_version_id: "synthetic-legacy-derived",
+    publish_origin: "review-derived",
+    dashboard_eligibility: false,
+  };
+  expect(resultVersionId(derived)).toBe("synthetic-current");
+  expect(
+    resultActionPolicy(derived, { derivedVersionId: "synthetic-option-derived" })
+      .primary.resultVersionId,
+  ).toBe("synthetic-option-derived");
+  expect(resultActionPolicy(derived).primary.resultVersionId).toBe(
+    "synthetic-server-derived",
+  );
+  expect(resultActionPolicy(derived).secondary.disabled).toBe(true);
+  const blocked = {
+    delivery_status: "unusable",
+    source_task_id: "synthetic-source-task",
+    task_id: "synthetic-legacy-task",
+  };
+  expect(
+    resultActionPolicy(blocked, { taskId: "synthetic-route-task" }).primary,
+  ).toEqual({
+    kind: "repair-source",
+    label: "返回来源任务修复",
+    taskId: "synthetic-source-task",
+  });
+  expect(
+    resultActionPolicy(
+      { ...blocked, source_task_id: "" },
+      { taskId: "synthetic-route-task" },
+    ).primary.taskId,
+  ).toBe("synthetic-legacy-task");
+  expect(
+    resultActionPolicy(
+      { delivery_status: "unusable" },
+      { taskId: "synthetic-route-task" },
+    ).primary.taskId,
+  ).toBe("synthetic-route-task");
+  expect(resultActionPolicy({ delivery_status: "unusable" }).primary.kind).toBe(
+    "view-blocker",
+  );
 });
