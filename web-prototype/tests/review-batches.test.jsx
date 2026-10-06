@@ -27,6 +27,8 @@ vi.mock("../src/shared/api/reviewBatchApi", () => ({
 }));
 
 import { ReviewBatchPage } from "../src/features/review-batches/ReviewBatchPage";
+import { ReviewBatchList } from "../src/features/review-batches/ReviewBatchList";
+import { reviewBatchRouteState } from "../src/features/review-batches/reviewBatchRoute";
 
 function expectSelectedOption(label, option) {
   expect(
@@ -205,6 +207,102 @@ test("批次列表从 URL 恢复服务端筛选并进入批次", async () => {
   await userEvent.click(screen.getByRole("button", { name: /进入批次/ }));
   expect(window.location.hash).toContain("review_batch_id=review-batch-1");
   expect(window.location.hash).toContain("result_version_id=classification-version-1");
+});
+
+test("编辑批次筛选草稿不提前请求，确认筛选才更新路由", async () => {
+  reviewBatchApiMock.reviewBatches.mockResolvedValue({ items: [baseBatch], total: 1 });
+  const updateRoute = vi.fn();
+  render(
+    <ReviewBatchList
+      route={reviewBatchRouteState({ q: "SR001", status: "draft", page: "3" })}
+      updateRoute={updateRoute}
+    />,
+  );
+  await screen.findByText("复核员甲");
+
+  await userEvent.clear(screen.getByRole("textbox", { name: "搜索复核批次" }));
+  await userEvent.type(
+    screen.getByRole("textbox", { name: "搜索复核批次" }),
+    "新关键词",
+  );
+  await selectOption("批次状态", "已发布");
+  expect(reviewBatchApiMock.reviewBatches).toHaveBeenCalledTimes(1);
+  expect(updateRoute).not.toHaveBeenCalled();
+
+  await userEvent.click(screen.getByRole("button", { name: "筛选", exact: true }));
+  expect(updateRoute).toHaveBeenCalledExactlyOnceWith({
+    q: "新关键词",
+    status: "published",
+    page: 1,
+  });
+});
+
+test("进入批次只重置原有记录筛选，保留分页大小与返回上下文", async () => {
+  reviewBatchApiMock.reviewBatches.mockResolvedValue({ items: [baseBatch], total: 1 });
+  const updateRoute = vi.fn();
+  render(
+    <ReviewBatchList
+      route={reviewBatchRouteState({
+        q: "SR001",
+        status: "draft",
+        page: "3",
+        page_size: "50",
+        task_id: "task-1",
+        segment_id: "segment-1",
+        return_to: "workbench",
+      })}
+      updateRoute={updateRoute}
+    />,
+  );
+  await userEvent.click(await screen.findByRole("button", { name: /进入批次/ }));
+  expect(updateRoute).toHaveBeenCalledExactlyOnceWith({
+    batchId: baseBatch.id,
+    resultVersionId: baseBatch.base_result_version_id,
+    status: "",
+    page: 1,
+    listing: "",
+    productName: "",
+    productSku: "",
+    orderId: "",
+    q: "",
+  });
+});
+
+test("批次查询变化会取消旧请求，迟到的旧响应不覆盖新列表", async () => {
+  let finishOld;
+  reviewBatchApiMock.reviewBatches
+    .mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishOld = resolve;
+      }),
+    )
+    .mockResolvedValueOnce({
+      items: [{ ...baseBatch, creator_name: "新列表创建人" }],
+      total: 1,
+    });
+  const updateRoute = vi.fn();
+  const { rerender } = render(
+    <ReviewBatchList
+      route={reviewBatchRouteState({ q: "旧查询" })}
+      updateRoute={updateRoute}
+    />,
+  );
+  await waitFor(() =>
+    expect(reviewBatchApiMock.reviewBatches).toHaveBeenCalledTimes(1),
+  );
+  const oldSignal = reviewBatchApiMock.reviewBatches.mock.calls[0][1].signal;
+  rerender(
+    <ReviewBatchList
+      route={reviewBatchRouteState({ q: "新查询" })}
+      updateRoute={updateRoute}
+    />,
+  );
+  expect(await screen.findByText("新列表创建人")).toBeVisible();
+  expect(oldSignal.aborted).toBe(true);
+  await act(async () => finishOld({ items: [baseBatch], total: 1 }));
+  expect(screen.getByText("新列表创建人")).toBeVisible();
+  expect(screen.queryByText("复核员甲")).not.toBeInTheDocument();
+  expect(reviewBatchApiMock.reviewBatches).toHaveBeenCalledTimes(2);
 });
 
 test("空复核记录引导用户查看待复核分类结果", async () => {
