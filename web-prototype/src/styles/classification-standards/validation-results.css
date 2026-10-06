@@ -1,0 +1,148 @@
+.standard-validation-runtime {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 14px;
+  color: var(--green);
+  background: var(--green-pale);
+  border-radius: 8px;
+}
+
+.standard-validation-runtime.failed {
+  color: var(--red);
+  background: var(--red-pale);
+}
+
+.standard-validation-runtime > div {
+  display: grid;
+  gap: 5px;
+}
+
+.standard-validation-runtime span {
+  color: currentcolor;
+  font-size: 11px;
+}
+
+.standard-validation-runtime > div > div {
+  overflow: hidden;
+  height: 5px;
+  background: rgb(255 255 255 / 70%);
+  border-radius: 999px;
+}
+
+.standard-validation-runtime i {
+  display: block;
+  height: 100%;
+  background: currentcolor;
+  border-radius: inherit;
+  transition: width 180ms ease;
+}
+
+.standard-validation-result > header > span {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  font-size: 10px;
+  font-weight: 800;
+  border-radius: 6px;
+}
+
+.standard-validation-result > header > span.ready {
+  color: var(--green);
+  background: var(--green-pale);
+}
+
+.standard-validation-result > header > span.stale {
+  color: var(--amber);
+  background: var(--amber-pale);
+}
+
+.standard-validation-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  border-block: 1px solid var(--line);
+}
+
+.standard-validation-metrics > div {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-right: 1px solid var(--line);
+}
+
+.standard-validation-metrics > div:last-child {
+  border-right: 0;
+}
+
+.standard-validation-metrics span,
+.standard-validation-metrics small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.standard-validation-metrics strong {
+  font-size: 17px;
+}
+
+.standard-validation-comparison {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.standard-validation-comparison-head,
+.standard-validation-comparison > div:not(.standard-validation-comparison-head) {
+  display: grid;
+  grid-template-columns:
+    minmax(230px, 1.6fr) minmax(130px, 0.8fr)
+    minmax(130px, 0.8fr) minmax(180px, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 10px 12px;
+}
+
+.standard-validation-comparison-head {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+  background: var(--canvas);
+}
+
+.standard-validation-comparison > div:not(.standard-validation-comparison-head) {
+  min-height: 62px;
+  font-size: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.standard-validation-comparison > div.changed {
+  box-shadow: inset 3px 0 var(--amber);
+}
+
+.standard-validation-comparison span {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.standard-validation-comparison b,
+.standard-validation-comparison small,
+.standard-validation-comparison code {
+  overflow-wrap: anywhere;
+}
+
+.standard-validation-comparison b {
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.standard-validation-comparison small {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.standard-validation-comparison code {
+  color: var(--green);
+  font-size: 9px;
+  line-height: 1.5;
+}
