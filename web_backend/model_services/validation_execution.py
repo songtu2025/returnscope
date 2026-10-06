@@ -4,7 +4,10 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from web_backend.model_catalog import ModelCatalogService
+from web_backend.model_catalog import (
+    MODEL_VALIDATION_MESSAGE_LIMIT,
+    ModelCatalogService,
+)
 from web_backend.model_probe import ModelProbe, ModelValidationError
 from web_backend.model_services.validation_events import (
     _ValidationItemEvent,
@@ -71,20 +74,7 @@ class _ValidationRunExecution(_ValidationRunRecords, _ValidationRunEvents):
     ) -> ModelValidationError | None:
         run = context.run
         run_id = str(run["id"])
-        self._update_validation_item(
-            run_id,
-            index,
-            {
-                "status": "running",
-                "stage": "preparing",
-                "message": "正在检查模型与连接配置",
-                "started_at": utc_now(),
-            },
-            _ValidationItemEvent(
-                event_type="model_started",
-                message="正在检查模型与连接配置",
-            ),
-        )
+        self._start_validation_item(run_id, index)
 
         def on_stage(
             stage: str,
@@ -110,39 +100,82 @@ class _ValidationRunExecution(_ValidationRunRecords, _ValidationRunEvents):
         except Exception as exc:
             error = self._as_validation_error(exc)
             duration_ms = round((time.monotonic() - started) * 1000)
-            model = self.model_catalog.get(str(item["model_id"]))
-            if model:
-                self.model_catalog.set_validation(
-                    model,
-                    "failed",
-                    str(error)[:500],
-                    str(run["created_by"]),
-                )
-            self._update_validation_item(
-                run_id,
-                index,
-                {
-                    "status": "failed",
-                    "stage": "failed",
-                    "message": str(error),
+            self._record_validation_failure(
+                context, index, item, error, duration_ms=duration_ms
+            )
+            return error
+        self._record_validation_success(context, index, item, report)
+        return None
+
+    def _start_validation_item(self, run_id: str, index: int) -> None:
+        self._update_validation_item(
+            run_id,
+            index,
+            {
+                "status": "running",
+                "stage": "preparing",
+                "message": "正在检查模型与连接配置",
+                "started_at": utc_now(),
+            },
+            _ValidationItemEvent(
+                event_type="model_started",
+                message="正在检查模型与连接配置",
+            ),
+        )
+
+    def _record_validation_failure(
+        self,
+        context: _ValidationRunContext,
+        index: int,
+        item: dict[str, Any],
+        error: ModelValidationError,
+        *,
+        duration_ms: int,
+    ) -> None:
+        run = context.run
+        run_id = str(run["id"])
+        model = self.model_catalog.get(str(item["model_id"]))
+        if model:
+            self.model_catalog.set_validation(
+                model,
+                "failed",
+                str(error)[:MODEL_VALIDATION_MESSAGE_LIMIT],
+                str(run["created_by"]),
+            )
+        self._update_validation_item(
+            run_id,
+            index,
+            {
+                "status": "failed",
+                "stage": "failed",
+                "message": str(error),
+                "duration_ms": duration_ms,
+                "http_status": error.http_status,
+                "error_category": error.category,
+                "suggestion": error.suggestion,
+                "completed_at": utc_now(),
+            },
+            _ValidationItemEvent(
+                event_type="model_failed",
+                message=str(error),
+                data={
                     "duration_ms": duration_ms,
                     "http_status": error.http_status,
                     "error_category": error.category,
                     "suggestion": error.suggestion,
-                    "completed_at": utc_now(),
                 },
-                _ValidationItemEvent(
-                    event_type="model_failed",
-                    message=str(error),
-                    data={
-                        "duration_ms": duration_ms,
-                        "http_status": error.http_status,
-                        "error_category": error.category,
-                        "suggestion": error.suggestion,
-                    },
-                ),
-            )
-            return error
+            ),
+        )
+
+    def _record_validation_success(
+        self,
+        context: _ValidationRunContext,
+        index: int,
+        item: dict[str, Any],
+        report: dict[str, Any],
+    ) -> None:
+        run = context.run
+        run_id = str(run["id"])
         model = self.model_catalog.get(str(item["model_id"]))
         message = (
             f"HTTP {report['http_status']} · {report['duration_ms']} ms · "
@@ -173,7 +206,6 @@ class _ValidationRunExecution(_ValidationRunRecords, _ValidationRunEvents):
                 data=report,
             ),
         )
-        return None
 
     def _finish_failed_validation(
         self,
@@ -187,7 +219,7 @@ class _ValidationRunExecution(_ValidationRunRecords, _ValidationRunEvents):
             self._set_config_validation(
                 str(run["target_id"]),
                 "failed",
-                str(error)[:500],
+                str(error)[:MODEL_VALIDATION_MESSAGE_LIMIT],
                 str(run["created_by"]),
             )
         self._finish_validation_run(
@@ -223,7 +255,7 @@ class _ValidationRunExecution(_ValidationRunRecords, _ValidationRunEvents):
         if isinstance(exc, ModelValidationError):
             return exc
         return ModelValidationError(
-            str(exc)[:500] or "模型验证失败",
+            str(exc)[:MODEL_VALIDATION_MESSAGE_LIMIT] or "模型验证失败",
             "unknown",
             "请检查模型配置后重新验证",
         )

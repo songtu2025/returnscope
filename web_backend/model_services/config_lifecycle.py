@@ -4,7 +4,10 @@ from typing import TYPE_CHECKING, Any
 
 from web_backend.common import add_audit
 from web_backend.database import Database
-from web_backend.model_catalog import ModelCatalogService
+from web_backend.model_catalog import (
+    MODEL_VALIDATION_MESSAGE_LIMIT,
+    ModelCatalogService,
+)
 from web_backend.model_probe import ModelProbe
 from web_backend.security import utc_now
 
@@ -94,39 +97,13 @@ class _ConfigVersionLifecycle:
                 str(config["connection_id"]),
                 models,
             )
-        tested = []
         try:
-            for model, effort in models:
-                if not model or model in tested:
-                    continue
-                catalog_model = self.model_catalog.get_by_key(
-                    str(config["connection_id"]),
-                    str(model),
-                )
-                try:
-                    self.model_probe.test(config, str(model), str(effort))
-                except Exception as exc:
-                    if catalog_model:
-                        self.model_catalog.set_validation(
-                            catalog_model,
-                            "failed",
-                            str(exc)[:500],
-                            actor_id,
-                        )
-                    raise
-                if catalog_model:
-                    self.model_catalog.set_validation(
-                        catalog_model,
-                        "validated",
-                        f"使用 {effort} 推理强度测试通过",
-                        actor_id,
-                    )
-                tested.append(model)
+            tested_count = self._validate_pipeline_models(config, models, actor_id)
             status = "validated"
-            message = f"连接与 {len(tested)} 个模型均测试通过"
+            message = f"连接与 {tested_count} 个模型均测试通过"
         except Exception as exc:
             status = "failed"
-            message = str(exc)[:500]
+            message = str(exc)[:MODEL_VALIDATION_MESSAGE_LIMIT]
         with self.database.transaction() as connection:
             connection.execute(
                 """
@@ -149,6 +126,41 @@ class _ConfigVersionLifecycle:
         if status == "failed":
             raise ValueError(message)
         return result
+
+    def _validate_pipeline_models(
+        self,
+        config: dict[str, Any],
+        models: list[tuple[str | None, str]],
+        actor_id: str,
+    ) -> int:
+        tested: list[str] = []
+        for model, effort in models:
+            if not model or model in tested:
+                continue
+            catalog_model = self.model_catalog.get_by_key(
+                str(config["connection_id"]),
+                str(model),
+            )
+            try:
+                self.model_probe.test(config, str(model), str(effort))
+            except Exception as exc:
+                if catalog_model:
+                    self.model_catalog.set_validation(
+                        catalog_model,
+                        "failed",
+                        str(exc)[:MODEL_VALIDATION_MESSAGE_LIMIT],
+                        actor_id,
+                    )
+                raise
+            if catalog_model:
+                self.model_catalog.set_validation(
+                    catalog_model,
+                    "validated",
+                    f"使用 {effort} 推理强度测试通过",
+                    actor_id,
+                )
+            tested.append(model)
+        return len(tested)
 
     def publish(self, version_id: str, actor_id: str) -> dict[str, Any]:
         config = self.get_version(version_id)

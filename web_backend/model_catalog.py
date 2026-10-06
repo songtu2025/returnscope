@@ -9,6 +9,7 @@ from web_backend.security import utc_now
 
 EFFORTS = {"low", "medium", "high"}
 DEFAULT_EFFORTS = ["low", "medium", "high"]
+MODEL_VALIDATION_MESSAGE_LIMIT = 500
 
 
 def validate_effort(value: str, field_name: str) -> str:

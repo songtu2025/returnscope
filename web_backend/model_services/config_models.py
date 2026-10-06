@@ -4,7 +4,11 @@ import builtins
 from typing import TYPE_CHECKING, Any
 
 from web_backend.database import Database
-from web_backend.model_catalog import DEFAULT_EFFORTS, ModelCatalogService
+from web_backend.model_catalog import (
+    DEFAULT_EFFORTS,
+    MODEL_VALIDATION_MESSAGE_LIMIT,
+    ModelCatalogService,
+)
 from web_backend.model_probe import ModelProbe
 
 
@@ -86,6 +90,18 @@ class _ConfigModelOperations:
         )
         if model_connection is None:
             raise ValueError("API 接入不存在")
+        self._apply_provider_models(
+            connection_id, actor_id, model_keys, model_connection
+        )
+        return {"model_keys": model_keys, "count": len(model_keys)}
+
+    def _apply_provider_models(
+        self,
+        connection_id: str,
+        actor_id: str,
+        model_keys: builtins.list[str],
+        model_connection: dict[str, Any],
+    ) -> None:
         existing = {item["model_key"]: item for item in model_connection["models"]}
         discovered = set(model_keys)
         for model_key in model_keys:
@@ -115,7 +131,6 @@ class _ConfigModelOperations:
                     model["supported_efforts"],
                     False,
                 )
-        return {"model_keys": model_keys, "count": len(model_keys)}
 
     def validate_model(
         self,
@@ -132,7 +147,7 @@ class _ConfigModelOperations:
         try:
             self.model_probe.test(config, model["model_key"], chosen_effort)
         except Exception as exc:
-            message = str(exc)[:500]
+            message = str(exc)[:MODEL_VALIDATION_MESSAGE_LIMIT]
             self.model_catalog.set_validation(
                 model,
                 "failed",
