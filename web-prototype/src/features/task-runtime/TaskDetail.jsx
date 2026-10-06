@@ -8,14 +8,11 @@ import {
   GearSix,
   Pause,
   PlayCircle,
-  WarningCircle,
   X,
 } from "@phosphor-icons/react";
 import Button from "antd/es/button";
 import { api } from "../../api";
 import { AntdProvider } from "../../components/AntdProvider";
-import { InfoRow } from "../../components/SharedUi";
-import { EFFORT_LABELS } from "../../constants";
 import { classNames, formatTime } from "../../lib/presentation";
 import {
   SegmentCancelDialog,
@@ -25,6 +22,9 @@ import {
   TaskResumeDialog,
 } from "./TaskActionDialogs";
 import { SegmentBoard } from "./SegmentBoard";
+import { TaskDetailAlerts } from "./TaskDetailAlerts";
+import { TaskDetailConfig } from "./TaskDetailConfig";
+import { TaskDetailOverview } from "./TaskDetailOverview";
 import { TaskEventList } from "./TaskEventList";
 import { TaskReplanDialog } from "./TaskReplanDialog";
 
@@ -130,18 +130,6 @@ export function TaskDetail({
       segment.error,
   );
   const remainingSegments = summary.remaining;
-  const firstStandard = executableSegments.find((segment) => segment.standard_name);
-  const snapshotConfig = task.snapshot?.config;
-  const connectionName = snapshotConfig?.connection || task.connection_name || "—";
-  const configVersion = snapshotConfig?.version ?? task.config_version ?? "—";
-  const primaryModel = snapshotConfig?.primary_model || task.primary_model || "—";
-  const primaryEffort = snapshotConfig?.primary_effort || task.primary_effort;
-  const configSource =
-    snapshotConfig?.strategy_source === "task"
-      ? "任务自定义"
-      : snapshotConfig?.strategy_source === "connection"
-        ? "连接默认配置"
-        : null;
 
   return (
     <AntdProvider>
@@ -238,94 +226,16 @@ export function TaskDetail({
           </div>
         </header>
 
-        {actionError && !retrySegment && (
-          <div className="task-action-error" role="alert">
-            <WarningCircle size={18} />
-            <span>{actionError}</span>
-            <Button type="text" onClick={onClearActionError}>
-              关闭
-            </Button>
-          </div>
-        )}
+        <TaskDetailAlerts
+          task={task}
+          summary={summary}
+          actionError={actionError}
+          retrySegment={retrySegment}
+          modelServiceIssue={modelServiceIssue}
+          onClearActionError={onClearActionError}
+        />
 
-        {["failed", "blocked", "partial"].includes(task.status) && task.message && (
-          <section className="task-action-banner" role="status">
-            <WarningCircle size={19} />
-            <div>
-              <b>{summary.issueDescription}</b>
-              <p>{task.message}</p>
-              <small>查看下方 Listing 的原因和可执行操作；已生成的结果仍可查看。</small>
-            </div>
-          </section>
-        )}
-
-        {modelServiceIssue && (
-          <div className="task-model-service-alert" role="alert">
-            <WarningCircle size={20} weight="fill" />
-            <div>
-              <b>
-                {task.status === "paused" && task.pause_requested
-                  ? "模型服务异常，任务已自动暂停"
-                  : task.status === "paused"
-                    ? "模型服务异常，任务已暂停"
-                    : task.status === "failed"
-                      ? "模型服务异常，执行已停止"
-                      : "模型服务异常，请检查连接与运行日志"}
-              </b>
-              <span>{modelServiceIssue.error}</span>
-            </div>
-            <small>
-              成功 {modelServiceIssue.model_calls || 0} · 失败{" "}
-              {modelServiceIssue.model_failures || 0} · 缓存{" "}
-              {modelServiceIssue.cache_hits || 0}
-            </small>
-          </div>
-        )}
-
-        <section className="task-overview-band" aria-label="任务运行总览">
-          <div className="task-overview-metrics">
-            <div className="primary">
-              <span>评论处理进度</span>
-              <b>{Math.round(task.progress_percent || 0)}%</b>
-              <small>
-                {(task.progress_current || 0).toLocaleString()} /{" "}
-                {(task.progress_total || 0).toLocaleString()} 组评论
-              </small>
-            </div>
-            <div>
-              <span>已生成结果</span>
-              <b>
-                {summary.generated}
-                <small> / {summary.total} 个 Listing</small>
-              </b>
-              <small>{summary.resultDescription || "分析完成后生成结果"}</small>
-            </div>
-            <div>
-              <span>需要处理</span>
-              <b>
-                {summary.issues || (summary.needsAttention ? "待确认" : 0)}
-                {(!summary.needsAttention || summary.issues > 0) && (
-                  <small> 个 Listing</small>
-                )}
-              </b>
-              {summary.needsAttention ? (
-                <Button
-                  type="link"
-                  className="task-inline-action"
-                  onClick={() => showListings("attention")}
-                >
-                  查看需处理事项
-                </Button>
-              ) : (
-                <small>
-                  {task.status === "paused"
-                    ? "未完成部分已暂停，可随时继续"
-                    : "暂无需介入的问题"}
-                </small>
-              )}
-            </div>
-          </div>
-        </section>
+        <TaskDetailOverview task={task} summary={summary} showListings={showListings} />
 
         <div className="task-detail-tabs" role="tablist" aria-label="任务详情视图">
           {DETAIL_TABS.map(([value, label]) => (
@@ -390,39 +300,7 @@ export function TaskDetail({
           )}
 
           {activeTab === "config" && (
-            <section className="task-secondary-section task-config-panel">
-              <header>
-                <div>
-                  <h3>任务配置</h3>
-                  <p>任务运行期间始终使用创建时固化的版本。</p>
-                </div>
-              </header>
-              <div className="task-config-body">
-                <InfoRow label="分类标准" value={firstStandard?.standard_name || "—"} />
-                <InfoRow label="并行数" value={task.max_parallel_segments ?? 3} />
-                <InfoRow label="任务 ID" value={task.id} />
-                <InfoRow
-                  label="退货明细"
-                  value={`${task.dataset_name || "—"} · v${task.dataset_version || "—"}`}
-                />
-                <InfoRow
-                  label="产品信息"
-                  value={`${task.product_name || "—"} · v${task.product_version || "—"}`}
-                />
-                <InfoRow
-                  label="模型配置"
-                  value={`${connectionName} · #${configVersion}${
-                    configSource ? ` · ${configSource}` : ""
-                  }`}
-                />
-                <InfoRow
-                  label="主模型"
-                  value={`${primaryModel} · ${
-                    (primaryEffort && EFFORT_LABELS[primaryEffort]) || "—"
-                  }`}
-                />
-              </div>
-            </section>
+            <TaskDetailConfig task={task} executableSegments={executableSegments} />
           )}
         </section>
 
