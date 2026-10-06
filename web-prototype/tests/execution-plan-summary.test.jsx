@@ -152,3 +152,105 @@ test("紧凑模式在原生折叠中保留分组、标准、范围和品类显�
   ).toBeVisible();
   expect(screen.getByRole("button", { name: "下移 合成Listing" })).toBeEnabled();
 });
+
+test("品类补齐提示显示商品与评论口径，保留补齐回调并隐藏重复排除操作", async () => {
+  const user = userEvent.setup();
+  const onResolveCategories = vi.fn();
+  render(
+    <ExecutionPlanSummary
+      plan={plan({
+        blocked_count: 0,
+        category_completion_required: true,
+        missing_category_count: 2,
+        missing_category_product_count: 3,
+        missing_category_comment_count: 5,
+      })}
+      onResolveCategories={onResolveCategories}
+    />,
+  );
+  expect(screen.getByText("3 个商品缺少品类A或品类B，影响 5 条评论")).toBeVisible();
+  expect(
+    screen.queryByRole("button", { name: "处理排除原因" }),
+  ).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "补齐商品品类" }));
+  expect(onResolveCategories).toHaveBeenCalledOnce();
+});
+
+test("排除原因沿用数量和顺序，处理按钮使用既有修复回调", async () => {
+  const user = userEvent.setup();
+  const onResolveCategories = vi.fn();
+  render(
+    <ExecutionPlanSummary
+      plan={plan({
+        blocked_count: 0,
+        unmatched_product_count: 1,
+        missing_category_count: 2,
+        unknown_category_count: 3,
+        unresolved_scope_count: 4,
+      })}
+      onResolveCategories={onResolveCategories}
+    />,
+  );
+  expect(
+    screen.getByText(
+      /原因：产品信息未匹配 1 组；缺失品类 2 组；未配置分类逻辑 3 组；范围未识别 4 组。/,
+    ),
+  ).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "处理排除原因" }));
+  expect(onResolveCategories).toHaveBeenCalledOnce();
+});
+
+test("阻断范围、商品修复和处理策略保留各自的动作", async () => {
+  const user = userEvent.setup();
+  const onResolveCategories = vi.fn();
+  const onPolicyChange = vi.fn();
+  render(
+    <ExecutionPlanSummary
+      plan={plan({
+        unresolved_product_count: 2,
+        unknown_categories: [
+          { category_a: "合成未知A", category_b: "合成未知B", record_count: 2 },
+        ],
+      })}
+      policy="block_all"
+      onResolveCategories={onResolveCategories}
+      onPolicyChange={onPolicyChange}
+    />,
+  );
+  expect(screen.getByText("合成未知A / 合成未知B · 2 条")).toBeVisible();
+  expect(screen.getByRole("radio", { name: /全部阻断/ })).toBeChecked();
+  await user.click(screen.getByRole("radio", { name: /先运行已就绪/ }));
+  expect(onPolicyChange).toHaveBeenCalledExactlyOnceWith("run_ready");
+  await user.click(screen.getByRole("button", { name: "处理 2 个商品匹配异常" }));
+  expect(onResolveCategories).toHaveBeenCalledOnce();
+});
+
+test.each([false, true])("数量不对账时保留警告和覆盖率，紧凑=%s", (compact) => {
+  render(
+    <ExecutionPlanSummary
+      plan={plan({ unique_comment_count: 7 })}
+      quality={{
+        counts: { total_records: 9, matched_records: 3, unmatched_records: 6 },
+      }}
+      compact={compact}
+    />,
+  );
+  expect(screen.getByText("评论数量口径未对齐")).toBeVisible();
+  expect(screen.getByText(/可执行覆盖率 57.1%。/)).toBeVisible();
+  if (!compact) expect(screen.getByText("33.33%")).toBeVisible();
+});
+
+test("紧凑且已对账时只显示原数量行，零匹配总数显示零百分比", () => {
+  const value = plan({ blocked_count: 0, unknown_category_count: 0 });
+  const view = render(<ExecutionPlanSummary plan={value} compact />);
+  expect(screen.getByText("9 条用户反馈 · 9 条有文本 · 合并为 6 组评论")).toBeVisible();
+  expect(screen.queryByText(/去重评论已对账/)).not.toBeInTheDocument();
+  view.rerender(
+    <ExecutionPlanSummary
+      plan={value}
+      quality={{ counts: { total_records: 0, matched_records: 0 } }}
+    />,
+  );
+  expect(screen.getByText("0.00%")).toBeVisible();
+  expect(screen.getByText("去重评论已对账：6 = 4 + 2")).toBeVisible();
+});
