@@ -1,0 +1,162 @@
+.ai-decision-evidence {
+  border: 1px solid #d8e0dc;
+  border-radius: 9px;
+  overflow: hidden;
+}
+
+.ai-decision-evidence > header {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 11px 14px;
+  background: #fbfcfb;
+}
+
+.ai-decision-evidence > header strong {
+  color: #166e55;
+  font-size: 12px;
+}
+
+.ai-decision-evidence > header span {
+  color: #7b8781;
+  font-size: 10px;
+}
+
+.ai-decision-evidence-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 10px 12px 12px;
+}
+
+.ai-decision-evidence-columns > div {
+  min-width: 0;
+  padding: 12px 13px;
+  border-radius: 8px;
+  background: #f3f6f4;
+}
+
+.ai-decision-evidence-columns > div:last-child {
+  border: 1px solid #e0e5e2;
+  background: #fff;
+}
+
+.ai-decision-evidence-columns h4 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+
+.ai-decision-evidence-columns ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  color: #33443b;
+  font-size: 10px;
+  line-height: 1.5;
+  list-style: none;
+}
+
+.ai-decision-evidence-columns li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.ai-decision-evidence-columns li svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: #17775b;
+}
+
+.ai-decision-evidence-columns > div:last-child li svg {
+  color: #a4691a;
+}
+
+.ai-decision-evidence-columns p {
+  margin: 10px 0 0;
+  padding: 9px 10px;
+  border-radius: 7px;
+  color: #65736c;
+  background: #fff;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.ai-decision-evidence-columns .ai-decision-hypothesis {
+  color: #a46010;
+  background: #fff1d9;
+}
+
+.ai-decision-evidence > footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 9px 13px;
+  border-top: 1px solid #e4e9e6;
+  color: #6f7c75;
+  font-size: 9px;
+}
+
+.ai-decision-evidence details {
+  color: #15745a;
+}
+
+.ai-decision-evidence details[open] {
+  flex: 1 0 100%;
+}
+
+.ai-decision-evidence summary {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ai-evidence-collapse-label {
+  display: none;
+}
+
+.ai-decision-evidence details[open] .ai-evidence-expand-label {
+  display: none;
+}
+
+.ai-decision-evidence details[open] .ai-evidence-collapse-label {
+  display: inline;
+}
+
+.ai-decision-evidence details ul {
+  display: grid;
+  gap: 7px;
+  width: 100%;
+  margin: 10px 0 2px;
+  padding: 12px;
+  border: 1px solid #d2ddd7;
+  border-radius: 8px;
+  background: #f8faf9;
+  list-style: none;
+}
+
+.ai-decision-evidence details li {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.8fr) minmax(0, 1.2fr);
+  gap: 12px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid #e4e9e6;
+}
+
+.ai-decision-evidence details li:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.ai-decision-evidence details li span {
+  color: #738078;
+  font-weight: 400;
+}
