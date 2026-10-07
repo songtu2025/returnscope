@@ -1,0 +1,94 @@
+/* 模型服务摘要：只呈现运行、待处理变更和模型可用性。 */
+.model-service-summary {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+}
+.model-service-runtime {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  min-height: 130px;
+  padding: 24px;
+}
+.model-service-runtime-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  color: var(--amber);
+}
+.model-service-runtime-icon.online {
+  color: var(--green);
+}
+.model-service-runtime-main {
+  min-width: 0;
+}
+.model-service-runtime-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+.model-service-runtime h2,
+.model-service-catalog h3 {
+  margin: 0;
+  font-size: 22px;
+}
+.model-service-runtime-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.model-service-runtime-meta b {
+  display: inline-block;
+  max-width: 420px;
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+.model-service-runtime-actions,
+.model-service-draft-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.model-service-draft-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  min-height: 72px;
+  padding: 14px 18px;
+  border: 1px solid #e8c58f;
+  border-radius: 8px;
+  background: var(--amber-pale);
+}
+.model-service-draft-copy {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  color: var(--amber);
+}
+.model-service-draft-copy p {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0;
+  font-size: 13px;
+}
+.model-service-draft-copy p span {
+  color: #856c42;
+}
+.model-service-discard-confirmation {
+  flex-wrap: nowrap;
+}
+.model-service-discard-confirmation span {
+  font-size: 12px;
+}
