@@ -1,0 +1,202 @@
+.dashboard-detail-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 16px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--panel);
+  box-shadow: var(--shadow-sm);
+}
+.dashboard-detail-header h1 {
+  margin: 7px 0 4px;
+  font-size: 24px;
+}
+.dashboard-detail-header p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.dashboard-version-controls label {
+  min-width: 150px;
+}
+.dashboard-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.dashboard-summary-grid > div {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+.dashboard-summary-grid span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.dashboard-summary-grid b {
+  font-size: 21px;
+}
+.dashboard-drilldown-card,
+.dashboard-record-card,
+.dashboard-lineage-card,
+.dashboard-history-card {
+  margin-top: 12px;
+  padding: 16px;
+}
+.dashboard-drilldown-card > header,
+.dashboard-record-card > header,
+.dashboard-history-card > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.dashboard-drilldown-card > header > div,
+.dashboard-record-card > header > div,
+.dashboard-history-card > header {
+  display: grid;
+  gap: 4px;
+}
+.dashboard-drilldown-card header span,
+.dashboard-record-card header span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.dashboard-drilldown-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  min-height: 250px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.dashboard-drilldown-column {
+  min-width: 0;
+  padding: 11px;
+  border-right: 1px solid var(--line-soft);
+}
+.dashboard-drilldown-column:last-child {
+  border-right: 0;
+}
+.dashboard-drilldown-column > b {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+.dashboard-drilldown-column > div {
+  display: grid;
+  gap: 4px;
+  max-height: 310px;
+  overflow-y: auto;
+}
+.dashboard-drilldown-column button {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  min-width: 0;
+  padding: 7px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.dashboard-drilldown-column button:hover,
+.dashboard-drilldown-column button.active {
+  border-color: #abd1c5;
+  background: var(--green-pale);
+}
+.dashboard-drilldown-column button span {
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dashboard-drilldown-column button small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.dashboard-record-list {
+  display: grid;
+  gap: 8px;
+}
+.dashboard-record-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 16px;
+  padding: 13px;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  background: #fbfcfb;
+}
+.dashboard-record-row > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.dashboard-record-row span {
+  color: var(--muted);
+  font-size: 10px;
+}
+.dashboard-record-row b {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dashboard-record-result {
+  align-items: start;
+}
+.dashboard-record-result button {
+  width: max-content;
+  margin-top: 3px;
+}
+.dashboard-lineage-card > header {
+  margin-bottom: 12px;
+}
+.dashboard-history-card ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dashboard-history-card li {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+}
+.dashboard-history-card li.current {
+  border-color: #9acabb;
+  background: #f1f9f6;
+}
+.dashboard-history-card li > span {
+  color: var(--green-dark);
+  font-weight: 800;
+}
+.dashboard-history-card li > div {
+  display: grid;
+  gap: 3px;
+}
+.dashboard-history-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.dashboard-history-card small {
+  color: var(--muted);
+}
