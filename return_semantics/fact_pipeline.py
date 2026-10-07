@@ -14,6 +14,7 @@ from return_semantics.fact_classification import (
 from return_semantics.fact_coverage_audit import (
     _audit_fact_coverage as _audit_fact_coverage,
 )
+from return_semantics.fact_coverage_audit import _extract_audited_facts
 from return_semantics.fact_execution import (
     _extract_primary_facts as _extract_primary_facts,
 )
@@ -30,7 +31,7 @@ from return_semantics.fact_extraction import (
     FactPipelineCancelled as FactPipelineCancelled,
 )
 from return_semantics.fact_extraction import (
-    _messages,
+    _messages as _messages,
 )
 from return_semantics.fact_extraction import (
     _normalize_fact_branch_codes as _normalize_fact_branch_codes,
@@ -75,11 +76,16 @@ from return_semantics.fact_mapping import (
     ModelFactMappings as ModelFactMappings,
 )
 from return_semantics.fact_mapping import (
-    _adjudication_messages,
-    _adjudication_payload,
-    _decision_payload,
-    _mapping_messages,
-    _parse_model_fact_mappings,
+    _adjudication_messages as _adjudication_messages,
+)
+from return_semantics.fact_mapping import (
+    _adjudication_payload as _adjudication_payload,
+)
+from return_semantics.fact_mapping import (
+    _decision_payload as _decision_payload,
+)
+from return_semantics.fact_mapping import (
+    _mapping_messages as _mapping_messages,
 )
 from return_semantics.fact_mapping import (
     _mapping_payload as _mapping_payload,
@@ -88,7 +94,21 @@ from return_semantics.fact_mapping import (
     _overlapping_fact_identity as _overlapping_fact_identity,
 )
 from return_semantics.fact_mapping import (
+    _parse_model_fact_mappings as _parse_model_fact_mappings,
+)
+from return_semantics.fact_mapping import (
     _retain_fact_unit as _retain_fact_unit,
+)
+from return_semantics.fact_stages import (
+    _adjudicate_classification as _adjudicate_classification,
+)
+from return_semantics.fact_stages import (
+    _classify_fact_stages,
+    _FactStageContext,
+    _finalize_fact_review,
+)
+from return_semantics.fact_stages import (
+    _dimension_decision_messages as _dimension_decision_messages,
 )
 from return_semantics.model_client import ModelCallResult, ModelClient
 from return_semantics.schemas import (
@@ -96,66 +116,6 @@ from return_semantics.schemas import (
     ModelClassification,
     TaxonomyConfig,
 )
-
-
-def _adjudicate_classification(
-    classification: ModelClassification,
-    *,
-    payload: dict,
-    comment: str,
-    taxonomy: TaxonomyConfig,
-    call: Callable,
-    metrics: dict[str, int],
-) -> ModelClassification:
-    adjudication_payload = _adjudication_payload(
-        classification,
-        taxonomy,
-        comment,
-        payload["allowed_labels_by_fact"],
-    )
-    if adjudication_payload["facts"]:
-
-        def compile_adjudications(response: dict) -> ModelClassification:
-            return compile_evidence_label_adjudications(
-                classification,
-                EvidenceLabelAdjudications.model_validate(response),
-                comment=comment,
-                taxonomy=taxonomy,
-                allowed=payload["allowed_labels_by_fact"],
-                recovery_metrics=metrics,
-            )
-
-        def recover_adjudications(response: dict) -> ModelClassification:
-            try:
-                safe_review = EvidenceLabelAdjudications.model_validate(response)
-            except ValueError:
-                safe_review = EvidenceLabelAdjudications(
-                    adjudications=[
-                        EvidenceLabelAdjudication(
-                            fact_id=fact["fact_id"],
-                            action="REVIEW",
-                            reason="证据-标签裁决输出未通过结构校验",
-                        )
-                        for fact in adjudication_payload["facts"]
-                    ]
-                )
-            return compile_evidence_label_adjudications(
-                classification,
-                safe_review,
-                comment=comment,
-                taxonomy=taxonomy,
-                allowed=payload["allowed_labels_by_fact"],
-                recover_invalid_actions=True,
-                recovery_metrics=metrics,
-            )
-
-        classification = _validated_stage(
-            _adjudication_messages(adjudication_payload),
-            call,
-            compile_adjudications,
-            recover_adjudications,
-        )
-    return classification
 
 
 def classify_facts(
@@ -179,17 +139,7 @@ def classify_facts(
     )
     call = caller
     metrics = caller.metrics
-    facts = _validated_stage(
-        extraction_messages(comment, taxonomy),
-        call,
-        lambda payload: _extract_primary_facts(
-            payload,
-            taxonomy=taxonomy,
-            comment=comment,
-        ),
-    )
-    coverage_merge = _audit_fact_coverage(
-        facts,
+    coverage_merge = _extract_audited_facts(
         comment=comment,
         taxonomy=taxonomy,
         call=call,
@@ -198,104 +148,14 @@ def classify_facts(
     facts = coverage_merge.facts
     classification = ModelClassification()
     if facts:
-        payload = _mapping_payload(facts, taxonomy)
-
-        def compile_mapping(response: dict) -> ModelClassification:
-            return compile_fact_classification(
-                facts,
-                _parse_model_fact_mappings(response),
-                comment=comment,
-                taxonomy=taxonomy,
-                allowed=payload["allowed_labels_by_fact"],
-            )
-
-        def recover_mapping(response: dict) -> ModelClassification:
-            return compile_fact_classification(
-                facts,
-                _parse_model_fact_mappings(response),
-                comment=comment,
-                taxonomy=taxonomy,
-                allowed=payload["allowed_labels_by_fact"],
-                recover_mapping_errors=True,
-            )
-
-        classification = _validated_stage(
-            _mapping_messages(payload),
-            call,
-            compile_mapping,
-            recover_mapping,
+        context = _FactStageContext(
+            comment=comment, taxonomy=taxonomy, call=call, metrics=metrics
         )
-        classification = _adjudicate_classification(
-            classification,
-            payload=payload,
-            comment=comment,
-            taxonomy=taxonomy,
-            call=call,
-            metrics=metrics,
-        )
-        if taxonomy.validation_rules.dimension_contracts:
-            decision_payload = _decision_payload(
-                facts,
-                classification.fact_mappings,
-                taxonomy,
-            )
+        classification = _classify_fact_stages(facts, context=context)
+    _finalize_fact_review(classification, coverage_merge, claims)
 
-            def compile_decisions(response: dict) -> ModelClassification:
-                return compile_dimension_decisions(
-                    classification,
-                    FactDecisions.model_validate(response),
-                    comment=comment,
-                    taxonomy=taxonomy,
-                )
-
-            def recover_decisions(response: dict) -> ModelClassification:
-                return compile_dimension_decisions(
-                    classification,
-                    FactDecisions.model_validate(response),
-                    comment=comment,
-                    taxonomy=taxonomy,
-                    recover_invalid_decisions=True,
-                )
-
-            classification = _validated_stage(
-                _dimension_decision_messages(decision_payload),
-                call,
-                compile_decisions,
-                recover_decisions,
-            )
-    if claims and claims.claims:
-        classification.needs_review = True
-        classification.review_reasons.append(
-            "fact_v2尚未完成Listing承诺关系核验，需人工确认；未推断承诺关系"
-        )
-    if coverage_merge.diagnostics:
-        classification.needs_review = True
-        classification.review_reasons.append("覆盖审计失败，分析结果尚未完成")
-        classification.review_diagnostics.extend(coverage_merge.diagnostics)
     metrics["fact_model_calls"] = caller.calls
     return ModelCallResult(classification, model_name, caller.usage, metrics)
-
-
-def _dimension_decision_messages(payload: dict) -> list[dict[str, str]]:
-    return _messages(
-        "根据全部事实、候选映射与维度契约生成最终维度结论，输出schema规定JSON。"
-        "候选标签不是终态标签；每个contract按scope_fields分组，同一父维度同一作用域只能一个verdict。"
-        "同一decision中的事实必须属于同一contract管理的可比较业务维度；"
-        "不能仅因共享更上层分类、相同方向或相似措辞而合并不同维度事实。"
-        "scope中未由contract声明的字段必须保持schema默认值，不能通过填写operation、condition等字段拆分冲突。"
-        "supporting_fact_ids只放直接支持verdict且已确认的事实，至少一个必须是CONCLUSION，"
-        "或fact_mappings中已由adjudication_action=ACCEPT/REPLACE晋升的EVIDENCE；"
-        "相反候选、最低能力、比较背景、转折前件与限定信息放context_fact_ids。"
-        "context事实必须属于当前父维度并与decision的scope_fields完全一致；"
-        "无独立标签但已被最终结论解释的事实也应放入context_fact_ids。"
-        "转折让步按完整命题的最终立场裁决；基础可用不等于性能正向，明确的速度、准确性、稳定性或限制优先。"
-        "比较基准不等于评价对象；尺码表标定偏差不能变成本人穿戴偏小，"
-        "轻微偏差但明确接受或拒绝调整不能变成需要纠正的缺陷。"
-        "所有受contract管理的已确认候选事实必须进入同父级、同作用域decision的supporting或context，"
-        "不得静默丢弃，也不得跨使用者、商品、规格或作用域借用context覆盖。"
-        "未来意图、预测、假设、否认和未测试事实不能支持已确认verdict。",
-        payload,
-    )
 
 
 # 保留原辅助入口的模块归属及可调用签名。
@@ -304,6 +164,8 @@ for _entry in (
     _extract_primary_facts,
     _validated_stage,
     _audit_fact_coverage,
+    _adjudicate_classification,
+    _dimension_decision_messages,
 ):
     _entry.__module__ = __name__
 del _entry

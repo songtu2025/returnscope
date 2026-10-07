@@ -3,11 +3,13 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from return_semantics.fact_execution import _extract_primary_facts, _validated_stage
 from return_semantics.fact_extraction import (
     CoverageMergeResult,
     FactPipelineCancelled,
     coverage_audit_messages,
     coverage_correction_messages,
+    extraction_messages,
     merge_coverage_facts,
     validate_coverage_correction,
 )
@@ -138,3 +140,22 @@ def _audit_fact_coverage(
     if merged.rejected:
         metrics["coverage_audit_failures"] = 1
     return merged
+
+
+def _extract_audited_facts(
+    *,
+    comment: str,
+    taxonomy: TaxonomyConfig,
+    call: Callable,
+    metrics: dict[str, int],
+) -> CoverageMergeResult:
+    facts = _validated_stage(
+        extraction_messages(comment, taxonomy),
+        call,
+        lambda payload: _extract_primary_facts(
+            payload, taxonomy=taxonomy, comment=comment
+        ),
+    )
+    return _audit_fact_coverage(
+        facts, comment=comment, taxonomy=taxonomy, call=call, metrics=metrics
+    )
