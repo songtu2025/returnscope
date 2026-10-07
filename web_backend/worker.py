@@ -9,14 +9,14 @@ from typing import Any
 from web_backend.agent_runner import AgentRunner
 from web_backend.database import Database
 from web_backend.security import utc_now
-from web_backend.task_state import summarize_task_status
+from web_backend.tasks.worker_recovery import TaskWorkerRecoveryMixin
 from web_backend.worker_health import WorkerHealthMixin, WorkerHealthState
 
 USER_SEGMENT_LIMIT = 3
 logger = logging.getLogger(__name__)
 
 
-class TaskWorker(WorkerHealthMixin):
+class TaskWorker(TaskWorkerRecoveryMixin, WorkerHealthMixin):
     def __init__(
         self,
         database: Database,
@@ -215,118 +215,10 @@ class TaskWorker(WorkerHealthMixin):
                 """
             ).fetchall()
             task_ids: set[str] = set()
-            for segment in interrupted:
-                requested_action = str(segment["requested_action"] or "")
-                if requested_action == "cancel" or segment["cancel_requested"]:
-                    status = "cancelled"
-                    error = None
-                elif requested_action == "pause" or segment["pause_requested"]:
-                    status = "paused"
-                    error = None
-                else:
-                    status = "retry_pending"
-                    error = "服务重启，Listing 等待从检查点恢复"
-                connection.execute(
-                    """
-                    UPDATE task_segments
-                    SET status = ?, requested_action = NULL, error = ?,
-                        started_at = CASE WHEN ? = 'retry_pending' THEN NULL
-                                          ELSE started_at END,
-                        completed_at = CASE WHEN ? = 'cancelled' THEN ? ELSE NULL END,
-                        heartbeat_at = ?, revision = revision + 1
-                    WHERE id = ?
-                    """,
-                    (status, error, status, status, now, now, segment["id"]),
-                )
-                task_ids.add(str(segment["task_id"]))
-
-            for task in flagged_tasks:
-                task_id = str(task["id"])
-                if task["cancel_requested"]:
-                    connection.execute(
-                        """
-                        UPDATE task_segments
-                        SET status = 'cancelled', requested_action = NULL,
-                            error = NULL, completed_at = ?, heartbeat_at = ?,
-                            revision = revision + 1
-                        WHERE task_id = ?
-                          AND status IN (
-                              'queued', 'retry_pending', 'paused',
-                              'not_started', 'blocked', 'failed'
-                          )
-                        """,
-                        (now, now, task_id),
-                    )
-                elif task["pause_requested"]:
-                    connection.execute(
-                        """
-                        UPDATE task_segments
-                        SET status = 'paused', requested_action = NULL,
-                            heartbeat_at = ?, revision = revision + 1
-                        WHERE task_id = ?
-                          AND status IN ('queued', 'retry_pending', 'not_started')
-                        """,
-                        (now, task_id),
-                    )
-                task_ids.add(task_id)
-
+            self._recover_running_segments(connection, interrupted, task_ids, now)
+            self._apply_pending_task_requests(connection, flagged_tasks, task_ids, now)
             for task_id in task_ids:
-                task = connection.execute(
-                    """
-                    SELECT cancel_requested, pause_requested
-                    FROM tasks WHERE id = ?
-                    """,
-                    (task_id,),
-                ).fetchone()
-                statuses = [
-                    str(row["status"])
-                    for row in connection.execute(
-                        "SELECT status FROM task_segments WHERE task_id = ?",
-                        (task_id,),
-                    ).fetchall()
-                ]
-                has_running = "running" in statuses
-                if task and task["cancel_requested"] and not has_running:
-                    task_status = "cancelled"
-                elif task and task["pause_requested"] and not has_running:
-                    task_status = "paused"
-                else:
-                    task_status = summarize_task_status(statuses)
-                stage = {
-                    "queued": "等待恢复",
-                    "paused": "已暂停",
-                    "cancelled": "已取消",
-                    "partial": "部分完成",
-                    "failed": "运行失败",
-                    "blocked": "等待品类处理",
-                    "completed": "分析完成",
-                    "running": "语义分析",
-                }[task_status]
-                connection.execute(
-                    """
-                    UPDATE tasks
-                    SET status = ?, stage = ?,
-                        message = '服务重启后已恢复 Listing 状态',
-                        completed_at = CASE
-                            WHEN ? IN ('cancelled', 'completed', 'partial',
-                                       'failed', 'blocked')
-                            THEN COALESCE(completed_at, ?)
-                            ELSE NULL
-                        END,
-                        heartbeat_at = ?, revision = revision + 1
-                    WHERE id = ?
-                    """,
-                    (task_status, stage, task_status, now, now, task_id),
-                )
-                connection.execute(
-                    """
-                    INSERT INTO task_events(
-                        task_id, event_type, stage, message, created_at
-                    ) VALUES (?, 'recovered', ?,
-                              '服务重启后 Listing 状态已恢复', ?)
-                    """,
-                    (task_id, stage, now),
-                )
+                self._refresh_recovered_task(connection, task_id, now)
 
     def _recover_interrupted_tasks(self) -> None:
         self._recover_interrupted_segments()
