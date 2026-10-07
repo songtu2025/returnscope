@@ -1,28 +1,47 @@
 from __future__ import annotations
 
-from itertools import product
-
 from return_semantics.analysis_context import RETURNS_CONTEXT, AnalysisContext
 from return_semantics.comment_summary import compile_comment_semantics
 from return_semantics.schemas import ClaimDefinition as ClaimDefinition
 from return_semantics.schemas import CommentSummary as CommentSummary
+from return_semantics.schemas import LabelDefinition as LabelDefinition
 from return_semantics.schemas import (
-    LabelDefinition,
     ListingClaimsConfig,
     ModelClassification,
-    ProcessingStatus,
-    ReviewDiagnostic,
     SemanticDisposition,
-    SemanticRelationType,
-    SemanticUnit,
-    SentimentCode,
     TaxonomyConfig,
     ValidatedClassification,
 )
+from return_semantics.schemas import ReviewDiagnostic as ReviewDiagnostic
 from return_semantics.schemas import SemanticRelation as SemanticRelation
+from return_semantics.schemas import SemanticUnit as SemanticUnit
 from return_semantics.schemas import UnknownSemantic as UnknownSemantic
 from return_semantics.semantic_guardrails import (
     apply_fallback_precedence,
+)
+from return_semantics.validator_labels import (
+    _conflict_reasons as _conflict_reasons,
+)
+from return_semantics.validator_labels import (
+    _has_evidence_overlap as _has_evidence_overlap,
+)
+from return_semantics.validator_labels import (
+    _is_problem_unit as _is_problem_unit,
+)
+from return_semantics.validator_labels import (
+    _project_label_codes as _project_label_codes,
+)
+from return_semantics.validator_labels import (
+    _project_primary_codes as _project_primary_codes,
+)
+from return_semantics.validator_labels import (
+    _validate_primary_codes as _validate_primary_codes,
+)
+from return_semantics.validator_reviews import (
+    _append_classification_reviews as _append_classification_reviews,
+)
+from return_semantics.validator_reviews import (
+    _status_for as _status_for,
 )
 from return_semantics.validator_state import (
     _unique as _unique,
@@ -109,202 +128,9 @@ def collect_output_errors(
     return errors
 
 
-def _is_problem_unit(
-    unit: SemanticUnit,
-    taxonomy: TaxonomyConfig,
-    labels: dict[str, LabelDefinition],
-) -> bool:
-    if unit.sentiment == SentimentCode.NEGATIVE:
-        return True
-    if unit.sentiment != SentimentCode.NEUTRAL:
-        return False
-    neutral_labels = taxonomy.validation_rules.neutral_reason_labels
-    if neutral_labels is not None:
-        return unit.label_code in neutral_labels
-    return labels[unit.label_code].group in {"其他", "其他原因"}
-
-
-def _project_label_codes(
-    valid_units: list[SemanticUnit],
-    taxonomy: TaxonomyConfig,
-    labels: dict[str, LabelDefinition],
-) -> tuple[list[str], list[str]]:
-    problem_codes = _unique(
-        unit.label_code
-        for unit in valid_units
-        if _is_problem_unit(unit, taxonomy, labels)
-    )
-    positive_codes = _unique(
-        unit.label_code
-        for unit in valid_units
-        if unit.sentiment == SentimentCode.POSITIVE
-    )
-    return problem_codes, positive_codes
-
-
-def _project_primary_codes(
-    model_result: ModelClassification,
-    taxonomy: TaxonomyConfig,
-) -> list[str]:
-    primary_codes = _unique(model_result.primary_label_codes)
-    if taxonomy.recognition_profile != "fact_v2":
-        return primary_codes
-    primary_facts = {
-        fact.fact_id for fact in model_result.extracted_facts if fact.is_primary_reason
-    }
-    explicit_codes = {
-        code
-        for mapping in model_result.fact_mappings
-        if mapping.fact_id in primary_facts
-        for code in mapping.label_codes
-    }
-    return [code for code in primary_codes if code in explicit_codes]
-
-
-def _validate_primary_codes(
-    primary_codes: list[str],
-    problem_codes: list[str],
-    taxonomy: TaxonomyConfig,
-    state: _ValidationState,
-) -> list[str]:
-    invalid_primary = set(primary_codes).difference(problem_codes)
-    hard_invalid_primary = invalid_primary.difference(state.guardrail_removed_codes)
-    if hard_invalid_primary:
-        state.hard_reasons.append(f"主因不属于问题标签: {sorted(hard_invalid_primary)}")
-    if invalid_primary:
-        primary_codes = [code for code in primary_codes if code in problem_codes]
-    if (
-        taxonomy.recognition_profile != "fact_v2"
-        and len(problem_codes) == 1
-        and not primary_codes
-    ):
-        primary_codes = problem_codes.copy()
-    return primary_codes
-
-
-def _has_evidence_overlap(
-    codes: list[str],
-    valid_units: list[SemanticUnit],
-    comment: str,
-) -> bool:
-    candidates = [
-        [unit for unit in valid_units if unit.label_code == code] for code in codes
-    ]
-    return any(
-        len({unit.part for unit in units} - {"UNSPECIFIED"}) <= 1
-        and max(comment.index(unit.evidence) for unit in units)
-        < min(comment.index(unit.evidence) + len(unit.evidence) for unit in units)
-        for units in product(*candidates)
-    )
-
-
-def _conflict_reasons(
-    valid_units: list[SemanticUnit],
-    taxonomy: TaxonomyConfig,
-    comment: str,
-) -> list[str]:
-    all_label_codes = {unit.label_code for unit in valid_units}
-    reasons: list[str] = []
-    for codes in taxonomy.validation_rules.conflicting_label_sets:
-        conflict_set = set(codes)
-        if not conflict_set.issubset(all_label_codes):
-            continue
-        if (
-            taxonomy.validation_rules.conflict_scope == "evidence"
-            and not _has_evidence_overlap(codes, valid_units, comment)
-        ):
-            continue
-        message = (
-            "评论包含需核对的标签组合"
-            if taxonomy.validation_rules.conflict_scope == "evidence"
-            else "评论包含相反标签"
-        )
-        reasons.append(f"{message}: {sorted(conflict_set)}")
-    return reasons
-
-
-def _append_classification_reviews(
-    reason: str,
-    analysis_context: AnalysisContext,
-    model_result: ModelClassification,
-    context: _ValidationContext,
-    state: _ValidationState,
-) -> None:
-    if analysis_context == RETURNS_CONTEXT:
-        opposite_codes = set(
-            context.taxonomy.validation_rules.opposite_reason_labels.get(reason, [])
-        )
-        if set(state.problem_codes).intersection(opposite_codes):
-            state.soft_reasons.append("Amazon 原因与评论方向冲突")
-    state.soft_reasons.extend(
-        _conflict_reasons(
-            state.valid_units,
-            context.taxonomy,
-            context.comment,
-        )
-    )
-    if any(
-        relation.relation_type == SemanticRelationType.CONFLICT
-        for relation in state.semantic_relations
-    ):
-        state.soft_reasons.append("同一语义范围内存在相反的已确认事实")
-    required_review_labels = set(
-        context.taxonomy.validation_rules.required_review_labels
-    )
-    state.soft_reasons.extend(
-        f"标签规则要求人工复核: {unit.label_code}；证据={unit.evidence}"
-        for unit in state.valid_units
-        if unit.label_code in required_review_labels
-    )
-    for unit in state.valid_units:
-        if unit.label_code not in required_review_labels:
-            continue
-        label = context.labels[unit.label_code]
-        readable_path = " → ".join(part for part in (label.group, label.name) if part)
-        state.review_diagnostics.append(
-            ReviewDiagnostic(
-                code="LABEL_RULE_REVIEW_REQUIRED",
-                evidence_text=unit.evidence,
-                primary_result=f"{unit.label_code}: {readable_path}",
-                detail="标签体系 required_review_labels 规则要求人工判断",
-                action="请业务员核对原文证据是否足以支持该标签，并确认保留或修改标签。",
-            )
-        )
-    if model_result.needs_review:
-        state.soft_reasons.append("模型要求复核")
-    if not state.valid_units and not state.unknown_semantics:
-        state.soft_reasons.append("没有可确认的语义标签")
-    if (
-        state.positive_codes
-        and not state.problem_codes
-        and analysis_context == RETURNS_CONTEXT
-    ):
-        state.soft_reasons.append("只有正面信息，无法确认退货原因")
-
-
-def _status_for(state: _ValidationState) -> ProcessingStatus:
-    has_boundary_review = any(
-        reason.startswith("语义边界需人工确认:") for reason in state.soft_reasons
-    )
-    if state.hard_reasons or has_boundary_review:
-        return ProcessingStatus.MANUAL_REVIEW
-    if any(
-        item.disposition
-        in {
-            SemanticDisposition.TAXONOMY_GAP,
-            SemanticDisposition.MAPPING_UNCERTAIN,
-        }
-        for item in state.unknown_semantics
-    ):
-        return ProcessingStatus.UNKNOWN_SEMANTIC
-    if state.soft_reasons:
-        return ProcessingStatus.SECONDARY_REVIEW
-    return ProcessingStatus.AUTO_APPROVED
-
-
-def _validate_classification(
+def _prepare_validation(
     request: _ValidationRequest,
-) -> tuple[ValidatedClassification, list[str]]:
+) -> tuple[_ValidationContext, _ValidationState]:
     model_result = request.model_result
     taxonomy = request.taxonomy
     labels = {label.code: label for label in taxonomy.labels}
@@ -320,43 +146,26 @@ def _validate_classification(
         unknown_semantics=list(model_result.unknown_semantics),
         review_diagnostics=list(model_result.review_diagnostics),
     )
-    _validate_units(model_result, context, state)
-    apply_fallback_precedence(
-        state.valid_units,
-        set(taxonomy.validation_rules.fallback_label_codes),
-    )
-    _validate_unknown_evidence(
-        state.unknown_semantics,
-        request.comment,
-        state.hard_reasons,
-    )
-    state.problem_codes, state.positive_codes = _project_label_codes(
-        state.valid_units,
-        taxonomy,
-        labels,
-    )
-    state.semantic_relations, state.comment_summary = compile_comment_semantics(
-        state.valid_units,
-        taxonomy,
-        labels,
-    )
-    state.primary_codes = _validate_primary_codes(
-        _project_primary_codes(model_result, taxonomy),
-        state.problem_codes,
-        taxonomy,
-        state,
-    )
-    _append_classification_reviews(
-        request.reason,
-        request.analysis_context,
-        model_result,
-        context,
-        state,
-    )
-    state.hard_reasons = _unique(state.hard_reasons)
-    state.soft_reasons = _unique(state.soft_reasons)
+    return context, state
 
-    result = ValidatedClassification(
+
+def _unknown_review_reasons(state: _ValidationState) -> list[str]:
+    return [
+        f"未知语义: {item.reason}"
+        if item.disposition == SemanticDisposition.TAXONOMY_GAP
+        else f"未映射语义[{item.disposition.value}]: {item.reason}"
+        for item in state.unknown_semantics
+        if item.disposition
+        in {SemanticDisposition.TAXONOMY_GAP, SemanticDisposition.MAPPING_UNCERTAIN}
+    ]
+
+
+def _classification_result(
+    request: _ValidationRequest,
+    state: _ValidationState,
+) -> ValidatedClassification:
+    model_result = request.model_result
+    return ValidatedClassification(
         extracted_facts=model_result.extracted_facts,
         fact_mappings=model_result.fact_mappings,
         dimension_decisions=model_result.dimension_decisions,
@@ -372,27 +181,66 @@ def _validate_classification(
         status=_status_for(state),
         review_reasons=state.hard_reasons
         + state.soft_reasons
-        + [
-            (
-                f"未知语义: {item.reason}"
-                if item.disposition == SemanticDisposition.TAXONOMY_GAP
-                else f"未映射语义[{item.disposition.value}]: {item.reason}"
-            )
-            for item in state.unknown_semantics
-            if item.disposition
-            in {
-                SemanticDisposition.TAXONOMY_GAP,
-                SemanticDisposition.MAPPING_UNCERTAIN,
-            }
-        ],
+        + _unknown_review_reasons(state),
         model_name=request.model_name,
         prompt_version=request.prompt_version,
-        taxonomy_version=taxonomy.version,
+        taxonomy_version=request.taxonomy.version,
     )
+
+
+def _validate_classification(
+    request: _ValidationRequest,
+) -> tuple[ValidatedClassification, list[str]]:
+    context, state = _prepare_validation(request)
+    _validate_units(request.model_result, context, state)
+    apply_fallback_precedence(
+        state.valid_units,
+        set(request.taxonomy.validation_rules.fallback_label_codes),
+    )
+    _validate_unknown_evidence(
+        state.unknown_semantics,
+        request.comment,
+        state.hard_reasons,
+    )
+    state.problem_codes, state.positive_codes = _project_label_codes(
+        state.valid_units,
+        request.taxonomy,
+        context.labels,
+    )
+    state.semantic_relations, state.comment_summary = compile_comment_semantics(
+        state.valid_units,
+        request.taxonomy,
+        context.labels,
+    )
+    state.primary_codes = _validate_primary_codes(
+        _project_primary_codes(request.model_result, request.taxonomy),
+        state.problem_codes,
+        request.taxonomy,
+        state,
+    )
+    _append_classification_reviews(
+        request.reason,
+        request.analysis_context,
+        request.model_result,
+        context,
+        state,
+    )
+    state.hard_reasons = _unique(state.hard_reasons)
+    state.soft_reasons = _unique(state.soft_reasons)
+
+    result = _classification_result(request, state)
     return result, state.hard_reasons
 
 
 for _entry in (
+    _is_problem_unit,
+    _project_label_codes,
+    _project_primary_codes,
+    _validate_primary_codes,
+    _has_evidence_overlap,
+    _conflict_reasons,
+    _append_classification_reviews,
+    _status_for,
     _unique,
     _ValidationState,
     _ValidationContext,
