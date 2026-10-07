@@ -1,0 +1,156 @@
+/* 结果与系统页面：以当前状态、关键内容和下一步操作为视觉主线。 */
+.classification-results-page .page-heading,
+.review-batch-page .page-heading,
+.audit-page .page-heading,
+.model-preference-page .page-heading {
+  margin-bottom: 18px;
+}
+
+.classification-results-page .result-pool-filters,
+.review-batch-page .review-batch-filters,
+.review-batch-page .review-record-filters {
+  min-height: 58px;
+  padding: 8px 10px;
+  border-color: #d9e3dd;
+  border-radius: 11px;
+  box-shadow: 0 4px 15px rgb(25 52 40 / 4%);
+}
+
+.classification-results-page .result-pool-card,
+.review-batch-page .review-batch-list-card,
+.review-batch-page .review-record-card {
+  border-color: #d9e3dd;
+  border-radius: 13px;
+  box-shadow: 0 10px 26px rgb(25 52 40 / 5%);
+}
+
+.classification-results-page .result-pool-head,
+.review-batch-page .review-batch-table-head,
+.review-batch-page .review-record-table-head {
+  min-height: 46px;
+  padding-inline: 18px;
+  background: #f5f8f6;
+}
+
+.classification-results-page .result-pool-row,
+.review-batch-page .review-batch-row,
+.review-batch-page .review-record-row {
+  padding-inline: 18px;
+}
+
+.classification-results-page .result-pool-row:hover,
+.review-batch-page .review-batch-row:hover,
+.review-batch-page .review-record-row:hover {
+  background: #f8fcfa;
+  box-shadow: inset 3px 0 0 #9acabb;
+}
+
+.classification-results-page .result-pool-row {
+  min-height: 88px;
+}
+
+.classification-results-page .result-state-cell small {
+  max-width: 142px;
+  color: #7a6650;
+}
+
+.classification-results-page .result-row-actions {
+  min-width: 0;
+}
+
+.classification-results-page .result-detail-header {
+  border-color: #d9e3dd;
+  border-radius: 13px;
+  box-shadow: 0 10px 26px rgb(25 52 40 / 5%);
+}
+
+.classification-results-page .result-summary-grid {
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid #d9e3dd;
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.classification-results-page .result-summary-grid > div {
+  border: 0;
+  border-right: 1px solid var(--line-soft);
+  border-radius: 0;
+  background: transparent;
+}
+
+.classification-results-page .result-summary-grid > div:last-child {
+  border-right: 0;
+}
+
+.classification-results-page .result-version-review-panel {
+  border-color: #d9e3dd;
+  border-radius: 13px;
+  box-shadow: 0 10px 26px rgb(25 52 40 / 5%);
+}
+
+.classification-results-page .result-version-review-panel > header {
+  min-height: 86px;
+  padding-inline: 20px;
+  background: linear-gradient(90deg, #fbfdfc, #f3f9f6);
+}
+
+.review-batch-page .review-batch-workspace-header {
+  padding: 22px 24px;
+  border-color: #d9e3dd;
+  border-radius: 13px;
+  box-shadow: 0 10px 26px rgb(25 52 40 / 5%);
+}
+
+.review-batch-page .review-batch-header-actions {
+  align-self: center;
+}
+
+.review-batch-page .review-batch-progress {
+  gap: 0;
+  margin: 14px 0;
+  overflow: hidden;
+  border: 1px solid #d9e3dd;
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 4px 16px rgb(25 52 40 / 4%);
+}
+
+.review-batch-page .review-batch-progress > div {
+  min-height: 78px;
+  padding: 15px 18px;
+  border: 0;
+  border-right: 1px solid var(--line-soft);
+  border-radius: 0;
+  background: transparent;
+}
+
+.review-batch-page .review-batch-progress > div:last-child {
+  border-right: 0;
+}
+
+.review-batch-page .review-batch-progress b {
+  font-size: 22px;
+}
+
+.review-batch-page .review-batch-readonly {
+  min-height: 46px;
+  margin-bottom: 14px;
+  border-color: #b8dfcf;
+  border-radius: 10px;
+}
+
+.review-batch-page .review-record-card .empty-state,
+.review-batch-page .review-batch-list-card .empty-state {
+  min-height: 320px;
+  margin: 14px;
+}
+
+.review-batch-page .review-record-drawer {
+  width: min(560px, 100vw);
+}
+
+.review-batch-page .review-drawer-scroll > section {
+  border-color: #dfe7e2;
+  box-shadow: 0 2px 8px rgb(25 52 40 / 3%);
+}
