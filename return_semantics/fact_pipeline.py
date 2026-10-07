@@ -11,6 +11,18 @@ from return_semantics.fact_classification import (
 from return_semantics.fact_classification import (
     compile_fact_classification as compile_fact_classification,
 )
+from return_semantics.fact_coverage_audit import (
+    _audit_fact_coverage as _audit_fact_coverage,
+)
+from return_semantics.fact_execution import (
+    _extract_primary_facts as _extract_primary_facts,
+)
+from return_semantics.fact_execution import (
+    _ModelCallAccumulator as _ModelCallAccumulator,
+)
+from return_semantics.fact_execution import (
+    _validated_stage as _validated_stage,
+)
 from return_semantics.fact_extraction import (
     CoverageMergeResult as CoverageMergeResult,
 )
@@ -19,9 +31,15 @@ from return_semantics.fact_extraction import (
 )
 from return_semantics.fact_extraction import (
     _messages,
-    _normalize_fact_branch_codes,
-    _restore_evidence_spans,
-    _validate_facts,
+)
+from return_semantics.fact_extraction import (
+    _normalize_fact_branch_codes as _normalize_fact_branch_codes,
+)
+from return_semantics.fact_extraction import (
+    _restore_evidence_spans as _restore_evidence_spans,
+)
+from return_semantics.fact_extraction import (
+    _validate_facts as _validate_facts,
 )
 from return_semantics.fact_extraction import (
     coverage_audit_messages as coverage_audit_messages,
@@ -61,8 +79,10 @@ from return_semantics.fact_mapping import (
     _adjudication_payload,
     _decision_payload,
     _mapping_messages,
-    _mapping_payload,
     _parse_model_fact_mappings,
+)
+from return_semantics.fact_mapping import (
+    _mapping_payload as _mapping_payload,
 )
 from return_semantics.fact_mapping import (
     _overlapping_fact_identity as _overlapping_fact_identity,
@@ -72,167 +92,10 @@ from return_semantics.fact_mapping import (
 )
 from return_semantics.model_client import ModelCallResult, ModelClient
 from return_semantics.schemas import (
-    ExtractedFact,
-    FactExtraction,
-    FactExtractionSource,
     ListingClaimsConfig,
     ModelClassification,
-    ReviewDiagnostic,
     TaxonomyConfig,
 )
-
-
-class _ModelCallAccumulator:
-    def __init__(
-        self,
-        generate: Callable,
-        *,
-        model_name: str,
-        reasoning_effort: str,
-        should_cancel: Callable[[], bool] | None,
-    ) -> None:
-        self.generate = generate
-        self.model_name = model_name
-        self.reasoning_effort = reasoning_effort
-        self.should_cancel = should_cancel
-        self.usage: dict[str, int] = {}
-        self.metrics: dict[str, int] = {}
-        self.calls = 0
-
-    def __call__(self, messages: list[dict[str, str]]) -> dict:
-        if self.should_cancel is not None and self.should_cancel():
-            raise FactPipelineCancelled("事实识别已取消")
-        response = self.generate(
-            messages,
-            model=self.model_name,
-            reasoning_effort=self.reasoning_effort,
-        )
-        self.calls += 1
-        for target, values in (
-            (self.usage, response.usage),
-            (self.metrics, response.metrics),
-        ):
-            for key, value in values.items():
-                target[key] = target.get(key, 0) + value
-        return response.payload
-
-
-def _extract_primary_facts(
-    payload: dict,
-    *,
-    taxonomy: TaxonomyConfig,
-    comment: str,
-) -> list[ExtractedFact]:
-    normalized = dict(payload)
-    if isinstance(normalized.get("facts"), list):
-        normalized["facts"] = [
-            {
-                **item,
-                "extraction_source": FactExtractionSource.PRIMARY,
-            }
-            if isinstance(item, dict)
-            else item
-            for item in normalized["facts"]
-        ]
-    facts = _normalize_fact_branch_codes(
-        FactExtraction.model_validate(normalized).facts,
-        taxonomy,
-    )
-    facts = _restore_evidence_spans(facts, comment)
-    _validate_facts(facts, comment, taxonomy)
-    _mapping_payload(facts, taxonomy)
-    return facts
-
-
-def _audit_fact_coverage(
-    facts: list[ExtractedFact],
-    *,
-    comment: str,
-    taxonomy: TaxonomyConfig,
-    call: Callable,
-    metrics: dict[str, int],
-) -> CoverageMergeResult:
-    metrics["coverage_audit_added_facts"] = 0
-    metrics["coverage_audit_rejected_facts"] = 0
-    metrics["coverage_audit_failures"] = 0
-    metrics["coverage_audit_repair_calls"] = 0
-    metrics["coverage_audit_repaired_facts"] = 0
-    try:
-        response = call(coverage_audit_messages(comment, facts, taxonomy))
-        merged = merge_coverage_facts(
-            facts,
-            response,
-            comment=comment,
-            taxonomy=taxonomy,
-        )
-    except FactPipelineCancelled:
-        raise
-    except Exception as exc:
-        metrics["coverage_audit_failures"] += 1
-        return CoverageMergeResult(
-            facts=facts,
-            added=0,
-            rejected=0,
-            diagnostics=[
-                ReviewDiagnostic(
-                    code="COVERAGE_AUDIT_FAILED",
-                    detail=f"覆盖审计未完成：{exc}",
-                    action="SYSTEM_RERUN",
-                )
-            ],
-        )
-    if merged.rejections:
-        metrics["coverage_audit_repair_calls"] = 1
-        try:
-            response = call(
-                coverage_correction_messages(
-                    comment,
-                    merged.facts,
-                    merged.rejections,
-                    taxonomy,
-                )
-            )
-            validate_coverage_correction(response, merged.rejected)
-            repaired = merge_coverage_facts(
-                merged.facts,
-                response,
-                comment=comment,
-                taxonomy=taxonomy,
-            )
-        except FactPipelineCancelled:
-            raise
-        except Exception as exc:
-            merged = CoverageMergeResult(
-                facts=merged.facts,
-                added=merged.added,
-                rejected=merged.rejected,
-                diagnostics=[
-                    diagnostic.model_copy(
-                        update={
-                            "detail": (
-                                f"{diagnostic.detail}；覆盖审计自动修复未完成：{exc}"
-                            )
-                        }
-                    )
-                    for diagnostic in merged.diagnostics
-                ],
-                rejections=merged.rejections,
-            )
-        else:
-            metrics["coverage_audit_repaired_facts"] = repaired.added
-            merged = CoverageMergeResult(
-                facts=repaired.facts,
-                added=len(repaired.facts) - len(facts),
-                rejected=repaired.rejected,
-                diagnostics=repaired.diagnostics,
-                rejections=repaired.rejections,
-            )
-
-    metrics["coverage_audit_added_facts"] = merged.added
-    metrics["coverage_audit_rejected_facts"] = merged.rejected
-    if merged.rejected:
-        metrics["coverage_audit_failures"] = 1
-    return merged
 
 
 def _adjudicate_classification(
@@ -413,29 +276,6 @@ def classify_facts(
     return ModelCallResult(classification, model_name, caller.usage, metrics)
 
 
-def _validated_stage(
-    messages: list[dict[str, str]],
-    call: Callable,
-    validate: Callable,
-    recover: Callable | None = None,
-):
-    """只修复失败阶段一次，不重新支付已通过阶段的模型调用。"""
-    try:
-        return validate(call(messages))
-    except ValueError as exc:
-        correction = {
-            "role": "user",
-            "content": f"上次输出未通过校验：{exc}。请修复并重发完整JSON，不改写输入事实。",
-        }
-        repaired = call([*messages, correction])
-        try:
-            return validate(repaired)
-        except ValueError:
-            if recover is None:
-                raise
-            return recover(repaired)
-
-
 def _dimension_decision_messages(payload: dict) -> list[dict[str, str]]:
     return _messages(
         "根据全部事实、候选映射与维度契约生成最终维度结论，输出schema规定JSON。"
@@ -456,3 +296,14 @@ def _dimension_decision_messages(payload: dict) -> list[dict[str, str]]:
         "未来意图、预测、假设、否认和未测试事实不能支持已确认verdict。",
         payload,
     )
+
+
+# 保留原辅助入口的模块归属及可调用签名。
+for _entry in (
+    _ModelCallAccumulator,
+    _extract_primary_facts,
+    _validated_stage,
+    _audit_fact_coverage,
+):
+    _entry.__module__ = __name__
+del _entry
