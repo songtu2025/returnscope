@@ -1,0 +1,126 @@
+.page-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  min-height: 74px;
+  margin-bottom: 22px;
+}
+.page-heading h1 {
+  margin: 4px 0 5px;
+  color: #14221d;
+  font-size: 26px;
+  line-height: 1.2;
+  letter-spacing: -0.035em;
+}
+.page-heading > div > span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.eyebrow {
+  margin: 0;
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+.eyebrow.light {
+  color: #7cdbc0;
+}
+.heading-action {
+  display: flex;
+  gap: 8px;
+}
+.primary-button,
+.secondary-button,
+.danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 13px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+.primary-button {
+  border: 1px solid var(--green);
+  color: #fff;
+  background: var(--green);
+  box-shadow: 0 5px 13px rgba(18, 118, 91, 0.13);
+}
+.primary-button:hover {
+  border-color: var(--green-dark);
+  background: var(--green-dark);
+}
+.secondary-button {
+  border: 1px solid var(--line);
+  color: #34443d;
+  background: #fff;
+}
+.secondary-button:hover {
+  border-color: #aebcb5;
+  background: #f8faf8;
+}
+.danger-button {
+  border: 1px solid #ebc8c4;
+  color: var(--red);
+  background: #fff;
+}
+.danger-button:hover {
+  background: var(--red-pale);
+}
+.primary-button:disabled,
+.secondary-button:disabled,
+.danger-button:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+.full-button {
+  width: 100%;
+  margin-top: 4px;
+}
+.segmented {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 3px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #eff2ef;
+}
+.segmented.compact {
+  margin: 13px;
+}
+.segmented button {
+  min-height: 28px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 6px;
+  color: #728079;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.segmented button.active {
+  color: #26352f;
+  background: #fff;
+  box-shadow: 0 1px 5px rgba(20, 35, 29, 0.09);
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+.detail-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
