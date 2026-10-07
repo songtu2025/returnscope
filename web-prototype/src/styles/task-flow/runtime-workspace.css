@@ -1,0 +1,175 @@
+/* 任务列表与单个任务工作区共享状态口径，分开呈现。 */
+.task-runtime-workspace > [hidden] {
+  display: none;
+}
+.task-runtime-workspace .task-detail-panel {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+.task-back-button,
+.task-inline-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--green-dark);
+  font-size: 12px;
+  cursor: pointer;
+}
+.task-back-button {
+  margin: 0 0 12px;
+  min-height: 32px;
+}
+.task-runtime-workspace .task-command-header {
+  margin-bottom: 20px;
+  padding: 8px 4px;
+  align-items: flex-start;
+}
+.task-runtime-workspace .task-title-row h2 {
+  font-size: 28px;
+  letter-spacing: -0.6px;
+}
+.task-runtime-workspace .task-detail-summary p {
+  margin-top: 10px;
+}
+.task-runtime-workspace .task-overview-band {
+  margin: 0 0 26px;
+  border-radius: 12px;
+}
+.task-runtime-workspace .task-overview-metrics {
+  padding: 20px 8px;
+}
+.task-runtime-workspace .task-overview-metrics > div {
+  gap: 9px;
+  padding-inline: 22px;
+}
+.task-runtime-workspace .task-overview-metrics span,
+.task-runtime-workspace .task-overview-metrics small {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.task-runtime-workspace .task-overview-metrics b {
+  font-size: 28px;
+}
+.task-runtime-workspace .task-overview-metrics b small {
+  font-size: 12px;
+  font-weight: 400;
+}
+.task-runtime-workspace .task-detail-tabs {
+  margin-top: 0;
+  gap: 30px;
+}
+.task-runtime-workspace .task-detail-tabs button {
+  font-size: 14px;
+  padding: 14px 0;
+}
+.task-runtime-workspace .task-detail-tab-panel {
+  padding-top: 20px;
+}
+.task-runtime-workspace .segment-board.listing-queue {
+  margin: 0;
+}
+.task-runtime-workspace .task-action-banner {
+  margin-bottom: 18px;
+  grid-template-columns: auto 1fr;
+}
+.task-runtime-workspace .task-action-banner p {
+  margin: 6px 0;
+}
+.task-runtime-workspace .task-status-badge.paused,
+.task-runtime-workspace .segment-status.paused {
+  color: #66736e;
+  background: #edf0ee;
+}
+.task-registry-results {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.task-registry-results b {
+  font-weight: 500;
+}
+.task-registry-results small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.task-registry-results .task-issue-text {
+  color: #976321;
+}
+.task-runtime-workspace .task-registry-row {
+  min-height: 98px;
+  padding-block: 15px;
+}
+.task-runtime-workspace .task-registry-identity b {
+  font-size: 14px;
+}
+.task-runtime-workspace .task-registry-table {
+  overflow: visible;
+}
+.task-attention-filter {
+  margin-left: auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.task-attention-filter input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--green);
+}
+.task-registry-filter-menu,
+.listing-execution-settings {
+  position: relative;
+}
+.task-registry-filter-menu summary,
+.listing-execution-settings summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  background: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+.task-registry-filter-menu summary::-webkit-details-marker,
+.listing-execution-settings summary::-webkit-details-marker {
+  display: none;
+}
+.task-registry-filter-menu .task-registry-controls,
+.listing-execution-settings .parallelism-control {
+  position: absolute;
+  z-index: 15;
+  right: 0;
+  top: calc(100% + 8px);
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+  white-space: nowrap;
+}
+.task-registry-filter-menu .task-registry-controls {
+  display: grid;
+  gap: 10px;
+  min-width: 220px;
+}
+.task-registry-filter-menu .task-registry-controls select {
+  width: 100%;
+}
