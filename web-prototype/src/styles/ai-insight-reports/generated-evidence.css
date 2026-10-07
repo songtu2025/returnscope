@@ -1,0 +1,154 @@
+.ai-report-information-lead {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 8px 28px;
+  align-items: start;
+}
+
+.ai-report-information-lead > div {
+  grid-row: 1 / 3;
+  display: grid;
+  padding-right: 24px;
+  border-right: 1px solid #dfe6e2;
+}
+
+.ai-report-information-lead span,
+.ai-report-information-lead small {
+  color: #78847e;
+  font-size: 10px;
+}
+
+.ai-report-information-lead strong {
+  margin: 5px 0 2px;
+  color: #176d53;
+  font-family: Georgia, serif;
+  font-size: 34px;
+}
+
+.ai-report-information-lead > p {
+  margin: 0;
+  color: #56635c;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.ai-report-information-lead > p:first-of-type {
+  color: #293b31;
+  font-size: 16px;
+}
+
+.ai-report-missing-diagnostic {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 24px;
+  padding: 12px 14px;
+  border-left: 3px solid #c8892c;
+  color: #75531f;
+  background: #fff9ed;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.ai-report-opinion-figure {
+  margin: 30px 0 0;
+  padding: 20px 0 8px;
+  border-top: 1px solid #dfe6e2;
+  border-bottom: 1px solid #dfe6e2;
+}
+
+.ai-report-opinion-figure figcaption {
+  display: grid;
+  gap: 4px;
+}
+
+.ai-report-opinion-figure figcaption b {
+  color: #304139;
+  font-size: 13px;
+}
+
+.ai-report-opinion-figure figcaption span {
+  color: #7b8781;
+  font-size: 10px;
+}
+
+.ai-report-opinion-chart {
+  height: 210px;
+  margin-top: 12px;
+}
+
+.ai-report-featured-quote {
+  position: relative;
+  max-width: 720px;
+  margin: 28px 0 0;
+  padding: 0 0 0 40px;
+  border: 0;
+}
+
+.ai-report-featured-quote svg {
+  position: absolute;
+  top: 2px;
+  left: 0;
+  color: #afc9be;
+}
+
+.ai-report-featured-quote p {
+  margin: 0;
+  color: #3d4e45;
+  font-family: Georgia, "Noto Serif SC", serif;
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+.ai-report-featured-quote cite {
+  display: block;
+  margin-top: 8px;
+  color: #829088;
+  font-size: 10px;
+  font-style: normal;
+}
+
+.ai-generated-report .ai-report-quote-details {
+  margin-top: 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.ai-generated-report .ai-report-quote-details summary {
+  padding: 6px 0;
+}
+
+.ai-generated-report .ai-report-quote-details > div {
+  padding: 8px 0 0 40px;
+}
+
+.ai-report-source-note {
+  margin-top: 22px;
+  border-top: 1px solid #e7ece9;
+}
+
+.ai-report-source-note > span {
+  display: block;
+  padding: 11px 0 5px;
+  color: #7a8780;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.ai-generated-report .ai-report-evidence-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  padding-bottom: 10px;
+  border: 0;
+}
+
+.ai-generated-report .ai-report-evidence-list > span {
+  padding: 9px 12px 9px 0;
+  border: 0;
+  border-bottom: 1px solid #edf1ef;
+  border-radius: 0;
+  background: transparent;
+}
