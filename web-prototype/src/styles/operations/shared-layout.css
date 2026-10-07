@@ -1,0 +1,36 @@
+/* 数据资产与系统治理共享样式 */
+.import-rules-card > header,
+.quality-pair-card > header,
+.quality-plan-heading,
+.quality-issues-card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--desktop-section-gap);
+}
+.import-rules-card > header > div,
+.quality-pair-card > header > div,
+.quality-plan-heading > div,
+.quality-issues-card > header > div {
+  display: grid;
+  gap: 4px;
+}
+.import-rules-card > header span,
+.quality-pair-card > header span,
+.quality-plan-heading span,
+.quality-issues-card > header span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.import-rule-list,
+.dataset-reference-list,
+.audit-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+.import-rules-error,
+.dataset-reference-error,
+.audit-error {
+  min-height: 112px;
+}

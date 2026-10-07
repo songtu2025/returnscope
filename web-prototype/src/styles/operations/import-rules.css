@@ -1,0 +1,50 @@
+.import-rule-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.import-rule-item {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 11px;
+}
+.import-rule-item > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.import-rule-item h3 {
+  margin: 8px 0 3px;
+}
+.import-rule-item > header p,
+.import-rule-item > header code {
+  color: var(--muted);
+  font-size: 11px;
+}
+.import-rule-item > header code {
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+.import-rule-item dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0 0;
+}
+.import-rule-item dl > div {
+  min-width: 0;
+  padding: 9px;
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+.import-rule-item dt {
+  color: var(--muted);
+  font-size: 11px;
+}
+.import-rule-item dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.5;
+}

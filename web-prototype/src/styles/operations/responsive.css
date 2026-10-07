@@ -1,0 +1,14 @@
+@media (max-width: 1180px) {
+  .import-rule-list {
+    grid-template-columns: 1fr;
+  }
+  .quality-count-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .quality-issue-table article {
+    grid-template-columns: 120px repeat(2, minmax(100px, 1fr)) 80px;
+  }
+  .audit-filter-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
