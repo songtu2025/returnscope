@@ -21,10 +21,21 @@ from return_semantics.data_files import _return_column_score as _return_column_s
 from return_semantics.data_files import _select_columns as _select_columns
 from return_semantics.data_files import read_return_csv as read_return_csv
 from return_semantics.data_files import read_return_xlsx as read_return_xlsx
-
-PRODUCT_COLUMNS = ["MSKU", "店铺/站点", "Listing"]
-PRODUCT_CATEGORY_COLUMNS = ["品类A", "品类B"]
-PRODUCT_DETAIL_COLUMNS = ["产品名称", "SKU"]
+from return_semantics.product_matching import (
+    PRODUCT_CATEGORY_COLUMNS as PRODUCT_CATEGORY_COLUMNS,
+)
+from return_semantics.product_matching import PRODUCT_COLUMNS as PRODUCT_COLUMNS
+from return_semantics.product_matching import (
+    PRODUCT_DETAIL_COLUMNS as PRODUCT_DETAIL_COLUMNS,
+)
+from return_semantics.product_matching import _primary_store, _product_scope_lookup
+from return_semantics.product_matching import (
+    _product_category_lookup as _product_category_lookup,
+)
+from return_semantics.product_matching import (
+    _read_product_dimensions as _read_product_dimensions,
+)
+from return_semantics.product_matching import resolve_sku_aliases as resolve_sku_aliases
 
 
 @dataclass(frozen=True)
@@ -82,93 +93,6 @@ def load_product_dimensions(
     return products.loc[products["店铺/站点"].eq(store) & listing_mask].reset_index(
         drop=True
     )
-
-
-def _read_product_dimensions(product_path: Path) -> pd.DataFrame:
-    products = pd.read_excel(
-        product_path,
-        sheet_name="产品信息汇总表",
-        dtype=str,
-    ).fillna("")
-    missing = [column for column in PRODUCT_COLUMNS if column not in products.columns]
-    if missing:
-        raise ValueError(f"商品维度缺少字段: {', '.join(missing)}")
-    for column in PRODUCT_CATEGORY_COLUMNS:
-        if column not in products.columns:
-            products[column] = ""
-    for column in PRODUCT_DETAIL_COLUMNS:
-        if column not in products.columns:
-            products[column] = ""
-    selected_columns = (
-        PRODUCT_COLUMNS + PRODUCT_DETAIL_COLUMNS + PRODUCT_CATEGORY_COLUMNS
-    )
-    products = products[selected_columns].copy()
-    for column in selected_columns:
-        products[column] = products[column].astype(str).str.strip()
-    return products
-
-
-def _product_category_lookup(products: pd.DataFrame) -> pd.DataFrame:
-    category_rows = products.loc[
-        products["MSKU"].ne(""),
-        ["MSKU", "品类A", "品类B"],
-    ].drop_duplicates()
-    conflicts = category_rows.groupby("MSKU")[["品类A", "品类B"]].nunique()
-    conflicts = conflicts.loc[conflicts.max(axis=1).gt(1)]
-    if not conflicts.empty:
-        raise ValueError(f"MSKU 对应多个品类: {conflicts.index.tolist()[:10]}")
-    return category_rows.drop_duplicates(subset=["MSKU"]).set_index("MSKU")
-
-
-def resolve_sku_aliases(
-    records: pd.DataFrame,
-    valid_pairs: frozenset[tuple[str, str]],
-) -> pd.DataFrame:
-    known_product = pd.Series(
-        [
-            (store, sku) in valid_pairs
-            for store, sku in zip(
-                records["store"],
-                records["sku"],
-                strict=True,
-            )
-        ],
-        index=records.index,
-    )
-    known_pairs = records.loc[
-        known_product & records["asin"].ne(""),
-        ["store", "asin", "sku"],
-    ].drop_duplicates()
-    sku_counts = known_pairs.groupby(["store", "asin"])["sku"].nunique()
-    ambiguous_keys = set(sku_counts.loc[sku_counts.gt(1)].index.tolist())
-    if ambiguous_keys:
-        known_pairs = known_pairs.loc[
-            [
-                (store, asin) not in ambiguous_keys
-                for store, asin in zip(
-                    known_pairs["store"],
-                    known_pairs["asin"],
-                    strict=True,
-                )
-            ]
-        ]
-
-    alias_lookup = known_pairs.set_index(["store", "asin"])["sku"].to_dict()
-    resolved = records.copy()
-    unresolved = [
-        (store, sku) not in valid_pairs
-        for store, sku in zip(
-            resolved["store"],
-            resolved["sku"],
-            strict=True,
-        )
-    ]
-    unresolved_rows = resolved.loc[unresolved, ["store", "asin", "sku"]]
-    resolved.loc[unresolved, "sku"] = [
-        alias_lookup.get((store, asin), sku)
-        for store, asin, sku in unresolved_rows.itertuples(index=False, name=None)
-    ]
-    return resolved
 
 
 def _prepare_return_records(return_path: Path) -> pd.DataFrame:
@@ -308,23 +232,8 @@ def load_return_dataset(
     records = resolve_sku_aliases(records, valid_pairs)
     if listing is not None:
         records = records.loc[records["sku"].isin(mskus)].copy()
-    lookup_rows = products[
-        ["MSKU", "Listing", "产品名称", "SKU", "品类A", "品类B"]
-    ].drop_duplicates()
-    conflicts = lookup_rows.groupby("MSKU")[
-        ["Listing", "产品名称", "SKU", "品类A", "品类B"]
-    ].nunique()
-    if not conflicts.loc[conflicts.max(axis=1).gt(1)].empty:
-        raise ValueError("同一店铺内 MSKU 对应多个商品信息")
-    lookup_rows = lookup_rows.drop_duplicates("MSKU").rename(
-        columns={
-            "MSKU": "matched_msku",
-            "Listing": "listing",
-            "产品名称": "product_name",
-            "SKU": "product_sku",
-            "品类A": "category_a",
-            "品类B": "category_b",
-        }
+    lookup_rows = _product_scope_lookup(
+        products, "MSKU", "同一店铺内 MSKU 对应多个商品信息"
     )
     records = records.merge(
         lookup_rows,
@@ -356,47 +265,13 @@ def load_return_dataset_auto(
         raise ValueError("商品目录中没有可用于自动匹配的 MSKU")
     records = _prepare_return_records(return_path)
 
-    store_scores: dict[str, int] = {}
-    for explicit_store, count in (
-        records.loc[records["input_store"].ne(""), "input_store"].value_counts().items()
-    ):
-        store_scores[str(explicit_store)] = int(count)
-    ordered_scores = sorted(store_scores.items(), key=lambda item: (-item[1], item[0]))
-    primary_store = ""
-    if ordered_scores and (
-        len(ordered_scores) == 1 or ordered_scores[0][1] > ordered_scores[1][1]
-    ):
-        primary_store = ordered_scores[0][0]
+    primary_store = _primary_store(records)
 
     records["store"] = records["input_store"]
     valid_pairs = frozenset(zip(products["店铺/站点"], products["MSKU"], strict=True))
     records = resolve_sku_aliases(records, valid_pairs)
-    lookup_rows = products[
-        [
-            "店铺/站点",
-            "MSKU",
-            "Listing",
-            "产品名称",
-            "SKU",
-            "品类A",
-            "品类B",
-        ]
-    ].drop_duplicates()
-    conflicts = lookup_rows.groupby(["店铺/站点", "MSKU"])[
-        ["Listing", "产品名称", "SKU", "品类A", "品类B"]
-    ].nunique()
-    if not conflicts.loc[conflicts.max(axis=1).gt(1)].empty:
-        raise ValueError("同一店铺内 MSKU 对应多个商品范围或品类")
-    lookup_rows = lookup_rows.drop_duplicates(["店铺/站点", "MSKU"]).rename(
-        columns={
-            "店铺/站点": "store",
-            "MSKU": "matched_msku",
-            "Listing": "listing",
-            "产品名称": "product_name",
-            "SKU": "product_sku",
-            "品类A": "category_a",
-            "品类B": "category_b",
-        }
+    lookup_rows = _product_scope_lookup(
+        products, ["店铺/站点", "MSKU"], "同一店铺内 MSKU 对应多个商品范围或品类"
     )
     records = records.merge(
         lookup_rows,
@@ -422,3 +297,7 @@ _return_column_score.__module__ = __name__
 _select_columns.__module__ = __name__
 read_return_csv.__module__ = __name__
 read_return_xlsx.__module__ = __name__
+
+_product_category_lookup.__module__ = __name__
+_read_product_dimensions.__module__ = __name__
+resolve_sku_aliases.__module__ = __name__
