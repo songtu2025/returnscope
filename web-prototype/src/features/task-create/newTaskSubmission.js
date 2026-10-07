@@ -1,4 +1,5 @@
 import { api } from "../../api";
+import { errorStatus } from "../../shared/api/requestErrors";
 import { serverStateKeys } from "../../shared/serverState";
 
 /** @typedef {import("./taskCreateContracts").TaskForm} TaskForm */
@@ -87,10 +88,7 @@ function handleTaskCreationFailure(
   error,
   { setPrepared, setPreflight, setUnresolvedPolicy, setSubmitError, notify },
 ) {
-  const status =
-    typeof error === "object" && error !== null && "status" in error
-      ? error.status
-      : undefined;
+  const status = errorStatus(error);
   const message = error instanceof Error ? error.message : "暂时无法创建任务，请重试。";
   if (status === 409) {
     setPrepared(true);
