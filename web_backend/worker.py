@@ -9,10 +9,10 @@ from typing import Any
 from web_backend.agent_runner import AgentRunner
 from web_backend.database import Database
 from web_backend.security import utc_now
+from web_backend.task_contracts import SEGMENT_USER_LIMIT as USER_SEGMENT_LIMIT
 from web_backend.tasks.worker_recovery import TaskWorkerRecoveryMixin
 from web_backend.worker_health import WorkerHealthMixin, WorkerHealthState
 
-USER_SEGMENT_LIMIT = 3
 logger = logging.getLogger(__name__)
 
 
