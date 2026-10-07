@@ -8,8 +8,13 @@ from return_semantics.data import ReturnDataset
 from web_backend.common import add_audit, json_text, new_id
 from web_backend.database import Database
 from web_backend.security import utc_now
-from web_backend.task_contracts import SEGMENT_USER_LIMIT, TaskPlanConflict
+from web_backend.task_contracts import TaskPlanConflict
 from web_backend.task_plan_service import TaskPlanService
+from web_backend.tasks.creation_plan import (
+    initial_creation_state,
+    validate_creation_options,
+    validate_creation_plan,
+)
 from web_backend.tasks.snapshots import TaskSnapshotsMixin
 
 
@@ -43,10 +48,7 @@ class TaskCreationMixin(TaskSnapshotsMixin):
         max_parallel_segments: int = 3,
     ) -> dict[str, Any]:
         policy = unresolved_policy or "block_all"
-        if policy not in {"block_all", "run_ready"}:
-            raise ValueError("未解决品类策略仅支持 block_all 或 run_ready")
-        if not 1 <= max_parallel_segments <= SEGMENT_USER_LIMIT:
-            raise ValueError("Listing 并行数必须在 1 到 3 之间")
+        validate_creation_options(policy, max_parallel_segments)
         prepared = self.plan_service.prepare(
             dataset_version_id=dataset_version_id,
             product_version_id=product_version_id,
@@ -55,18 +57,7 @@ class TaskCreationMixin(TaskSnapshotsMixin):
             config_version_id=config_version_id,
             model_policy=model_policy,
         )
-        current_hash = str(prepared.response["plan_hash"])
-        if plan_hash is not None and plan_hash != current_hash:
-            raise TaskPlanConflict("执行计划已变化，请重新预检后再创建任务")
-        missing_category_comments = int(
-            prepared.response.get("missing_category_comment_count", 0)
-        )
-        if missing_category_comments:
-            raise ValueError(
-                "所选数据中有 "
-                f"{missing_category_comments} 条有效评论对应商品缺少品类A或品类B，"
-                "请先补齐商品目录后再创建任务"
-            )
+        current_hash = validate_creation_plan(prepared.response, plan_hash)
         returns = prepared.returns
         products = prepared.products
         config = prepared.config
@@ -78,18 +69,9 @@ class TaskCreationMixin(TaskSnapshotsMixin):
         planned_segments = list(prepared.response["segments"])
         has_blocked = int(prepared.response["blocked_count"]) > 0
         block_all = policy == "block_all" and has_blocked
-        if not planned_segments:
-            initial_status = "completed"
-            initial_stage = "分析完成"
-            initial_message = "本次数据均为不分析记录，未创建 Listing 执行片段"
-        else:
-            initial_status = "blocked" if block_all else "queued"
-            initial_stage = "等待品类处理" if block_all else "等待运行"
-            initial_message = (
-                "存在未解决品类，等待补充或调整处理策略"
-                if block_all
-                else "任务已进入 Listing 队列"
-            )
+        initial_status, initial_stage, initial_message = initial_creation_state(
+            planned_segments, block_all
+        )
         ordered_segment_keys = self._validated_segment_order(
             planned_segments,
             segment_order,
