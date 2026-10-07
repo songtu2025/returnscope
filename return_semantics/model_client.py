@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from return_semantics.model_cache import JsonlCache as JsonlCache
+from return_semantics.model_payload import _output_text_parts
 from return_semantics.model_payload import (
     flatten_integer_metrics as flatten_integer_metrics,
 )
@@ -120,35 +121,14 @@ class Sub2APIClient:
         reasoning_effort: str | None = None,
     ) -> JsonModelCallResult:
         model_name = model or self.settings.model
-        payload: dict[str, Any] = {
-            "model": model_name,
-            "input": messages,
-            "reasoning": {"effort": reasoning_effort or self.settings.reasoning_effort},
-        }
-        if self.settings.use_fast:
-            payload["service_tier"] = "fast"
-        if self.settings.prompt_cache_key:
-            payload["prompt_cache_key"] = self.settings.prompt_cache_key
-
+        payload = self._request_payload(messages, model_name, reasoning_effort)
         last_error: Exception | None = None
         timeout_failures = 0
         started_at = time.monotonic()
         for attempt in range(self.settings.retries + 1):
             try:
                 response = self._post(payload)
-                content = self._extract_output_text(response)
-                result_payload = parse_json_object(content)
-                usage = flatten_integer_metrics(response.get("usage", {}))
-                return JsonModelCallResult(
-                    payload=result_payload,
-                    model_name=str(response.get("model", model_name)),
-                    usage=usage,
-                    metrics={
-                        "attempts": attempt + 1,
-                        "retries": attempt,
-                        "latency_ms": int((time.monotonic() - started_at) * 1000),
-                    },
-                )
+                return self._response_result(response, model_name, attempt, started_at)
             except (
                 KeyError,
                 TypeError,
@@ -160,43 +140,79 @@ class Sub2APIClient:
                 last_error = exc
                 if isinstance(exc, TimeoutError):
                     timeout_failures += 1
-                if attempt >= self.settings.retries:
+                if not self._can_retry(exc, attempt, timeout_failures):
                     break
-                if timeout_failures > 1:
-                    break
-                if isinstance(exc, ModelHTTPError) and (
-                    exc.status_code < 500 and exc.status_code not in {408, 409, 429}
-                ):
-                    break
-
-                if isinstance(exc, ModelHTTPError) and exc.retry_after is not None:
-                    delay_seconds = exc.retry_after
-                else:
-                    base_delay = min(
-                        self.settings.retry_base_seconds * (2**attempt),
-                        self.settings.retry_max_seconds,
-                    )
-                    delay_seconds = base_delay + random.uniform(
-                        0,
-                        base_delay * 0.25,
-                    )
-                time.sleep(delay_seconds)
-
+                time.sleep(self._retry_delay(exc, attempt))
         raise RuntimeError(f"Sub2API 调用失败: {last_error}") from last_error
+
+    def _request_payload(
+        self,
+        messages: list[dict[str, str]],
+        model_name: str,
+        reasoning_effort: str | None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "model": model_name,
+            "input": messages,
+            "reasoning": {"effort": reasoning_effort or self.settings.reasoning_effort},
+        }
+        if self.settings.use_fast:
+            payload["service_tier"] = "fast"
+        if self.settings.prompt_cache_key:
+            payload["prompt_cache_key"] = self.settings.prompt_cache_key
+        return payload
+
+    def _response_result(
+        self,
+        response: dict[str, Any],
+        model_name: str,
+        attempt: int,
+        started_at: float,
+    ) -> JsonModelCallResult:
+        content = self._extract_output_text(response)
+        result_payload = parse_json_object(content)
+        usage = flatten_integer_metrics(response.get("usage", {}))
+        return JsonModelCallResult(
+            payload=result_payload,
+            model_name=str(response.get("model", model_name)),
+            usage=usage,
+            metrics={
+                "attempts": attempt + 1,
+                "retries": attempt,
+                "latency_ms": int((time.monotonic() - started_at) * 1000),
+            },
+        )
+
+    def _can_retry(
+        self,
+        exc: Exception,
+        attempt: int,
+        timeout_failures: int,
+    ) -> bool:
+        if attempt >= self.settings.retries:
+            return False
+        if timeout_failures > 1:
+            return False
+        if isinstance(exc, ModelHTTPError) and (
+            exc.status_code < 500 and exc.status_code not in {408, 409, 429}
+        ):
+            return False
+        return True
+
+    def _retry_delay(self, exc: Exception, attempt: int) -> float:
+        if isinstance(exc, ModelHTTPError) and exc.retry_after is not None:
+            return exc.retry_after
+        base_delay = min(
+            self.settings.retry_base_seconds * (2**attempt),
+            self.settings.retry_max_seconds,
+        )
+        return base_delay + random.uniform(0, base_delay * 0.25)
 
     @staticmethod
     def _extract_output_text(response: dict[str, Any]) -> str:
         parts = []
         for item in response.get("output", []):
-            if not isinstance(item, dict):
-                continue
-            for content in item.get("content", []):
-                if not isinstance(content, dict):
-                    continue
-                if content.get("type") == "output_text":
-                    text = content.get("text")
-                    if isinstance(text, str):
-                        parts.append(text)
+            parts.extend(_output_text_parts(item))
 
         output_text = "".join(parts).strip()
         if not output_text:

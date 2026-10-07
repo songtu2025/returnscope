@@ -69,3 +69,17 @@ def parse_json_object(content: str) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError("模型返回的 JSON 顶层必须是对象")
     return payload
+
+
+def _output_text_parts(item: Any) -> list[str]:
+    if not isinstance(item, dict):
+        return []
+    parts = []
+    for content in item.get("content", []):
+        if not isinstance(content, dict):
+            continue
+        if content.get("type") == "output_text":
+            text = content.get("text")
+            if isinstance(text, str):
+                parts.append(text)
+    return parts
