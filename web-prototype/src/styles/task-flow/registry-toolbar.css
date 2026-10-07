@@ -1,0 +1,116 @@
+/* 任务创建与运行路由专属样式 */
+.task-layout {
+  display: grid;
+  gap: 16px;
+}
+.task-list-panel {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+}
+.task-registry {
+  overflow: visible;
+}
+.task-registry-toolbar {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) auto;
+  gap: 12px;
+  padding: 16px 16px 10px;
+}
+.task-registry-search {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 9px;
+  height: 38px;
+  margin: 0;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  background: #fff;
+  font-weight: 400;
+}
+.task-registry-search:focus-within {
+  border-color: #61a98e;
+  box-shadow: 0 0 0 3px rgba(18, 118, 91, 0.09);
+}
+.task-registry-search input {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 13px;
+}
+.task-registry-search > button {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  place-items: center;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+.task-registry-controls {
+  display: flex;
+  gap: 8px;
+}
+.task-registry-controls select {
+  min-width: 142px;
+  height: 38px;
+  padding: 0 32px 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  background: #fff;
+  font-size: 13px;
+  font-weight: 650;
+}
+.task-registry-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 0 16px 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.task-registry-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.task-registry-tabs button:hover {
+  color: var(--green-dark);
+  background: #f3f8f5;
+}
+.task-registry-tabs button.active {
+  color: #fff;
+  background: var(--green);
+}
+.task-registry-tabs span {
+  min-width: 19px;
+  padding: 1px 5px;
+  border-radius: 10px;
+  color: inherit;
+  background: rgba(103, 120, 112, 0.12);
+  font-size: 11px;
+  text-align: center;
+}
+.task-registry-tabs button.active span {
+  background: rgba(255, 255, 255, 0.2);
+}
