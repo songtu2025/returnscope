@@ -4,27 +4,25 @@ from collections.abc import Callable
 from typing import Any
 
 from return_semantics.analysis_context import analysis_context_from_snapshot
-from web_backend.common import json_text, json_value
+from web_backend.common import json_text
 from web_backend.database import Database
 from web_backend.security import utc_now
 from web_backend.task_contracts import TaskPlanConflict, _ReplanSegmentSyncContext
-from web_backend.task_creation import _SegmentInsertContext
 from web_backend.task_plan_service import TaskPlanService
 from web_backend.task_state import summarize_task_status
+from web_backend.tasks.creation_plan import validate_unresolved_policy
+from web_backend.tasks.replan_segments import TaskReplanSegmentsMixin
 
 
-class TaskReplanMixin:
+class TaskReplanMixin(TaskReplanSegmentsMixin):
     database: Database
     plan_service: TaskPlanService
     get: Callable[..., dict[str, Any] | None]
     _snapshot_model_policy: Callable[..., dict[str, Any] | None]
-    _dataset_version_snapshot: Callable[..., dict[str, Any]]
-    _model_config_snapshot: Callable[..., dict[str, Any]]
+    _updated_replan_snapshot: Callable[..., tuple[dict[str, Any], dict[str, Any]]]
     _execution_plan_snapshot: Callable[..., dict[str, Any]]
     _insert_audit: Callable[..., None]
     _status_text: Callable[..., tuple[str, str]]
-    _insert_segment: Callable[..., None]
-    _variants_for_keys: Callable[..., list[dict[str, Any]]]
     _validate_task_revision: Callable[..., None]
 
     def replan_preflight(
@@ -114,21 +112,15 @@ class TaskReplanMixin:
             ]
             task_status = summarize_task_status(statuses) if statuses else "completed"
             stage, message = self._status_text(task_status)
-            snapshot = json_value(row["snapshot_json"], {})
-            old_plan = snapshot.get("execution_plan", {})
-            history = snapshot.setdefault("execution_plan_history", [])
-            history.append(
-                {
-                    "plan": old_plan,
+            snapshot, old_plan = self._updated_replan_snapshot(
+                row,
+                prepared,
+                model_policy,
+                history_entry={
                     "replanned_at": now,
                     "actor_id": actor_id,
                     "reason": clean_reason,
-                }
-            )
-            snapshot["products"] = self._dataset_version_snapshot(prepared.products)
-            snapshot["config"] = self._model_config_snapshot(
-                prepared.config,
-                model_policy,
+                },
             )
             segment_order = [
                 str(value["segment_key"])
@@ -215,8 +207,7 @@ class TaskReplanMixin:
         clean_reason = reason.strip()
         if not clean_reason:
             raise ValueError("请填写重新规划原因")
-        if unresolved_policy not in {"block_all", "run_ready"}:
-            raise ValueError("未解决品类策略仅支持 block_all 或 run_ready")
+        validate_unresolved_policy(unresolved_policy)
         source = self.get(task_id)
         if source is None:
             raise ValueError("任务不存在")
@@ -256,88 +247,3 @@ class TaskReplanMixin:
         if row["status"] not in {"blocked", "partial"}:
             raise ValueError("仅阻断或部分完成的任务可以重新规划")
         return row
-
-    @staticmethod
-    def _preserved_replan_segments(
-        old_segments: list[Any],
-        planned_segments: dict[str, Any],
-        planned_keys: dict[str, list[str]],
-    ) -> dict[str, Any]:
-        preserved: dict[str, Any] = {}
-        protected_statuses = {"completed", "completed_with_errors"}
-        for old_segment in old_segments:
-            agent_key = str(old_segment["agent_key"])
-            segment_key = str(old_segment["segment_key"])
-            if (
-                agent_key == "unknown"
-                or old_segment["status"] not in protected_statuses
-                or segment_key not in planned_segments
-            ):
-                continue
-            keys = set(json_value(old_segment["classification_keys_json"], []))
-            new_keys = set(planned_keys.get(segment_key, []))
-            if not keys or not keys.issubset(new_keys):
-                raise TaskPlanConflict(
-                    f"已完成片段 {segment_key} 的数据范围发生变化，不能覆盖原结果"
-                )
-            preserved[segment_key] = old_segment
-        return preserved
-
-    def _sync_replan_segments(
-        self,
-        connection: Any,
-        task_id: str,
-        context: _ReplanSegmentSyncContext,
-    ) -> None:
-        for old_segment in context.old_segments:
-            if str(old_segment["segment_key"]) not in context.preserved:
-                connection.execute(
-                    "DELETE FROM task_segments WHERE id = ?",
-                    (old_segment["id"],),
-                )
-
-        preserved_keys_by_segment = {
-            segment_key: set(json_value(segment["classification_keys_json"], []))
-            for segment_key, segment in context.preserved.items()
-        }
-        has_blocked = int(context.prepared.response["blocked_count"]) > 0
-        next_execution_order = max(
-            (int(value["execution_order"]) for value in context.preserved.values()),
-            default=0,
-        )
-        insert_context = _SegmentInsertContext(
-            task_id=task_id,
-            unresolved_policy=context.unresolved_policy,
-            has_blocked=has_blocked,
-            created_at=context.now,
-        )
-        for planned_segment_key, segment in context.planned_segments.items():
-            remaining_keys = [
-                key
-                for key in context.planned_keys.get(planned_segment_key, [])
-                if key not in preserved_keys_by_segment.get(planned_segment_key, set())
-            ]
-            if not remaining_keys:
-                continue
-            segment_key = planned_segment_key
-            if planned_segment_key in context.preserved:
-                segment_key = f"{planned_segment_key}:{context.current_hash[:12]}"
-            next_execution_order += 1
-            self._insert_segment(
-                connection,
-                segment={
-                    **segment,
-                    "segment_key": segment_key,
-                    "record_count": int(
-                        sum(context.record_counts.get(key, 0) for key in remaining_keys)
-                    ),
-                    "unique_comments": len(remaining_keys),
-                    "variants": self._variants_for_keys(
-                        context.prepared.dataset,
-                        remaining_keys,
-                    ),
-                },
-                classification_keys=remaining_keys,
-                execution_order=next_execution_order,
-                context=insert_context,
-            )

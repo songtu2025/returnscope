@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from web_backend.common import json_value
+
+if TYPE_CHECKING:
+    from web_backend.task_plan_service import PreparedTaskPlan
 
 
 class TaskSnapshotsMixin:
@@ -83,3 +88,27 @@ class TaskSnapshotsMixin:
             "secondary_effort": config.get("secondary_effort") or "high",
             "cheap_audit_percent": config.get("cheap_audit_percent", 5),
         }
+
+    def _updated_replan_snapshot(
+        self,
+        row: Any,
+        prepared: PreparedTaskPlan,
+        model_policy: dict[str, Any] | None,
+        *,
+        history_entry: dict[str, str],
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        snapshot = json_value(row["snapshot_json"], {})
+        old_plan = snapshot.get("execution_plan", {})
+        history = snapshot.setdefault("execution_plan_history", [])
+        history.append(
+            {
+                "plan": old_plan,
+                **history_entry,
+            }
+        )
+        snapshot["products"] = self._dataset_version_snapshot(prepared.products)
+        snapshot["config"] = self._model_config_snapshot(
+            prepared.config,
+            model_policy,
+        )
+        return snapshot, old_plan
