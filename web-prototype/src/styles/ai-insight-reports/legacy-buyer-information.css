@@ -1,0 +1,237 @@
+.ai-report-buyer-grid {
+  display: grid;
+  grid-template-columns: 150px minmax(190px, 0.8fr) minmax(240px, 1.2fr);
+  gap: 8px;
+}
+
+.ai-report-buyer-metric,
+.ai-report-opinions,
+.ai-report-counter-note {
+  min-height: 102px;
+  padding: 10px;
+  border: 1px solid #e0e7e3;
+  border-radius: 7px;
+  background: #fbfcfb;
+}
+
+.ai-report-buyer-metric {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+}
+
+.ai-report-buyer-metric span,
+.ai-report-buyer-metric small {
+  color: #748079;
+  font-size: 8px;
+}
+
+.ai-report-buyer-metric strong {
+  margin-top: 3px;
+  color: #145f49;
+  font-size: 20px;
+}
+
+.ai-report-buyer-metric b {
+  color: #2e4238;
+  font-size: 11px;
+}
+
+.ai-report-opinions {
+  display: flex;
+  align-content: flex-start;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.ai-report-opinions h4 {
+  flex-basis: 100%;
+}
+
+.ai-report-opinions span {
+  height: fit-content;
+  padding: 5px 6px;
+  border: 1px solid #c7dcd3;
+  border-radius: 5px;
+  color: #315c4a;
+  background: #fff;
+  font-size: 8px;
+}
+
+.ai-report-counter-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  color: #6e5030;
+  background: #fffaf2;
+}
+
+.ai-report-counter-note svg {
+  flex: 0 0 auto;
+  color: #aa6911;
+}
+
+.ai-report-counter-note p {
+  margin: 0;
+  font-size: 8px;
+  line-height: 1.6;
+}
+
+.ai-report-routing {
+  display: grid;
+  grid-template-columns: 90px auto repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 9px;
+  border: 1px solid #dfe7e2;
+  border-radius: 7px;
+  background: #f9fbfa;
+}
+
+.ai-report-routing > span {
+  color: #2b4237;
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.ai-report-routing svg {
+  color: #839089;
+}
+
+.ai-report-routing > div {
+  display: grid;
+  gap: 2px;
+  min-height: 44px;
+  padding: 7px;
+  border: 1px solid #cfe0d8;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.ai-report-routing b {
+  color: #305043;
+  font-size: 8px;
+}
+
+.ai-report-routing small {
+  color: #7c8982;
+  font-size: 7px;
+}
+
+.ai-report-quotes {
+  margin-top: 8px;
+  padding: 9px;
+  border: 1px solid #e0e7e3;
+  border-radius: 7px;
+}
+
+.ai-report-quotes h4 {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ai-report-quotes button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 5px;
+  border: 0;
+  border-top: 1px solid #edf1ee;
+  color: #56635c;
+  background: #fff;
+  font-size: 8px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ai-report-quotes button b {
+  flex: 0 0 auto;
+  color: #166b52;
+}
+
+.ai-report-sensitivity {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr auto;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.ai-report-sensitivity > div,
+.ai-report-sensitivity > strong {
+  padding: 10px;
+  border: 1px solid #dfe6e2;
+  border-radius: 7px;
+  background: #fbfcfb;
+}
+
+.ai-report-sensitivity > div > span {
+  color: #748079;
+  font-size: 8px;
+}
+
+.ai-report-sensitivity > div > strong {
+  display: block;
+  margin-top: 2px;
+  color: #21362c;
+  font-size: 16px;
+}
+
+.ai-report-sensitivity > div b {
+  color: #32443b;
+  font-size: 9px;
+}
+
+.ai-report-sensitivity svg {
+  margin-right: 4px;
+  color: #176f56;
+  vertical-align: middle;
+}
+
+.ai-report-sensitivity .unstable svg {
+  color: #a96910;
+}
+
+.ai-report-sensitivity p {
+  margin: 4px 0 0;
+  color: #6e7b74;
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.ai-report-sensitivity > strong.confidence {
+  display: grid;
+  min-width: 110px;
+  color: #9a6011;
+  background: #fff7e9;
+  font-size: 10px;
+  place-items: center;
+}
+
+.ai-report-action-table .priority {
+  display: inline-grid;
+  min-width: 28px;
+  height: 20px;
+  border-radius: 4px;
+  font-size: 8px;
+  font-weight: 750;
+  place-items: center;
+}
+
+.ai-report-action-table .p0 {
+  color: #a34632;
+  background: #fff0ed;
+}
+
+.ai-report-action-table .p1 {
+  color: #9a6411;
+  background: #fff5e5;
+}
+
+.ai-report-action-table .p2 {
+  color: #2c6288;
+  background: #edf5fb;
+}
