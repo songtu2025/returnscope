@@ -1,0 +1,208 @@
+.ai-report-business-issues {
+  display: grid;
+  gap: 22px;
+  margin-top: 28px;
+}
+
+.ai-report-business-issue {
+  overflow: hidden;
+  border: 1px solid #dce5e0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.ai-report-business-issue > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 20px 22px 17px;
+  border-bottom: 1px solid #e5ebe7;
+  background: #f8fbf9;
+}
+
+.ai-report-business-issue > header > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.ai-report-business-issue > header span,
+.ai-report-business-issue > header p {
+  margin: 0;
+  color: #78867e;
+  font-size: 10px;
+}
+
+.ai-report-business-issue > header > div:first-child > span {
+  color: #247057;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.ai-report-business-issue > header h4 {
+  margin: 0;
+  color: #22352b;
+  font-size: 17px;
+}
+
+.ai-report-business-issue-share {
+  display: grid;
+  gap: 3px;
+  text-align: right;
+}
+
+.ai-report-business-issue-share strong {
+  color: #176d53;
+  font-family: Georgia, serif;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.ai-report-business-issue-metrics {
+  display: grid;
+  grid-template-columns: 1.4fr repeat(2, minmax(0, 1fr));
+  border-bottom: 1px solid #e5ebe7;
+}
+
+.ai-report-business-issue-metrics > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 17px 22px;
+}
+
+.ai-report-business-issue-metrics > div + div {
+  border-left: 1px solid #e5ebe7;
+}
+
+.ai-report-business-issue-metrics span,
+.ai-report-business-issue-metrics small {
+  overflow: hidden;
+  color: #7a8780;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-report-business-issue-metrics strong {
+  overflow: hidden;
+  color: #2a4035;
+  font-size: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-report-business-hotspots {
+  padding: 14px 22px;
+  border-bottom: 1px solid #e5ebe7;
+}
+
+.ai-report-business-hotspots > div {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.5fr) repeat(3, minmax(80px, 0.6fr));
+  gap: 14px;
+  align-items: center;
+  min-height: 34px;
+  color: #4f6057;
+  font-size: 11px;
+}
+
+.ai-report-business-hotspots > div + div {
+  border-top: 1px solid #edf1ef;
+}
+
+.ai-report-business-hotspots .ai-report-business-hotspot-heading {
+  min-height: 25px;
+  color: #859089;
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.ai-report-business-hotspots strong {
+  color: #176d53;
+}
+
+.ai-report-business-context {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.9fr);
+  gap: 24px;
+  padding: 18px 22px;
+  border-bottom: 1px solid #e5ebe7;
+}
+
+.ai-report-business-context > div > span {
+  color: #52645a;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.ai-report-business-context ul {
+  display: grid;
+  gap: 7px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ai-report-business-context li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #34473d;
+  font-size: 11px;
+}
+
+.ai-report-business-context li small,
+.ai-report-business-context > div > p {
+  color: #7a8780;
+  font-size: 10px;
+}
+
+.ai-report-business-context blockquote {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 10px;
+  margin: 0;
+  padding: 15px 17px;
+  border-left: 3px solid #89ad9d;
+  background: #f6f9f7;
+}
+
+.ai-report-business-context blockquote svg {
+  color: #5a8a76;
+}
+
+.ai-report-business-context blockquote p,
+.ai-report-business-context blockquote cite {
+  margin: 0;
+  color: #44564d;
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.ai-report-business-context blockquote cite {
+  grid-column: 2;
+  color: #819087;
+  font-size: 9px;
+  font-style: normal;
+}
+
+.ai-report-business-issue > footer {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  gap: 12px;
+  padding: 15px 22px;
+  background: #fbfcfb;
+}
+
+.ai-report-business-issue > footer b {
+  color: #247057;
+  font-size: 10px;
+}
+
+.ai-report-business-issue > footer p {
+  margin: 0;
+  color: #485a50;
+  font-size: 11px;
+  line-height: 1.65;
+}
