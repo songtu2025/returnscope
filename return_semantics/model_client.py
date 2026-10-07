@@ -10,6 +10,13 @@ from pathlib import Path
 from typing import Any
 
 from return_semantics.model_cache import JsonlCache as JsonlCache
+from return_semantics.model_payload import (
+    flatten_integer_metrics as flatten_integer_metrics,
+)
+from return_semantics.model_payload import (
+    normalize_model_payload as normalize_model_payload,
+)
+from return_semantics.model_payload import parse_json_object as parse_json_object
 from return_semantics.model_results import JsonModelCallResult as JsonModelCallResult
 from return_semantics.model_results import ModelCallResult as ModelCallResult
 from return_semantics.model_results import ModelClient as ModelClient
@@ -56,22 +63,6 @@ class RequestRateLimiter:
             time.sleep(wait_seconds)
 
 
-def flatten_integer_metrics(
-    values: dict[str, Any],
-    prefix: str = "",
-) -> dict[str, int]:
-    output: dict[str, int] = {}
-    for key, value in values.items():
-        metric_name = f"{prefix}.{key}" if prefix else key
-        if isinstance(value, bool):
-            continue
-        if isinstance(value, int):
-            output[metric_name] = value
-        elif isinstance(value, dict):
-            output.update(flatten_integer_metrics(value, metric_name))
-    return output
-
-
 def _retry_after_seconds(error: urllib.error.HTTPError) -> float | None:
     value = error.headers.get("Retry-After") if error.headers else None
     if not value:
@@ -80,71 +71,6 @@ def _retry_after_seconds(error: urllib.error.HTTPError) -> float | None:
         return max(0.0, float(value))
     except ValueError:
         return None
-
-
-def normalize_model_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    normalized = dict(payload)
-    semantic_units = list(normalized.get("semantic_units", []))
-    unknown_semantics = []
-
-    for item in normalized.get("unknown_semantics", []):
-        if isinstance(item, str):
-            unknown_semantics.append(
-                {
-                    "opinion": item,
-                    "evidence": item,
-                    "reason": "模型未提供未映射原因",
-                }
-            )
-        elif isinstance(item, dict) and item.get("label_code"):
-            semantic_units.append(item)
-        elif isinstance(item, dict) and "opinion" in item and "evidence" in item:
-            unknown_semantics.append(
-                {
-                    "opinion": item["opinion"],
-                    "evidence": item["evidence"],
-                    "reason": item.get(
-                        "reason",
-                        "模型未提供未映射原因",
-                    ),
-                }
-            )
-        elif isinstance(item, dict) and "description" in item and "evidence" in item:
-            unknown_semantics.append(
-                {
-                    "opinion": item["description"],
-                    "evidence": item["evidence"],
-                    "reason": item.get(
-                        "reason",
-                        "模型未提供未映射原因",
-                    ),
-                }
-            )
-        elif isinstance(item, dict) and "text" in item:
-            normalized_item = dict(item)
-            text = normalized_item.pop("text")
-            normalized_item.setdefault("opinion", text)
-            normalized_item.setdefault("evidence", text)
-            unknown_semantics.append(normalized_item)
-        else:
-            unknown_semantics.append(item)
-
-    normalized["semantic_units"] = semantic_units
-    normalized["unknown_semantics"] = unknown_semantics
-    return normalized
-
-
-def parse_json_object(content: str) -> dict[str, Any]:
-    text = content.strip()
-    if text.startswith("```") and text.endswith("```"):
-        lines = text.splitlines()
-        if len(lines) >= 3:
-            text = "\n".join(lines[1:-1]).strip()
-
-    payload = json.loads(text)
-    if not isinstance(payload, dict):
-        raise ValueError("模型返回的 JSON 顶层必须是对象")
-    return payload
 
 
 class Sub2APIClient:
@@ -313,6 +239,9 @@ def create_model_client(
 
 # 保留已有导入入口和类型序列化路径，模块内部按职责独立实现。
 for _entry in (
+    flatten_integer_metrics,
+    normalize_model_payload,
+    parse_json_object,
     load_dotenv,
     _read_int_env,
     _read_float_env,
