@@ -28,19 +28,11 @@ const REVIEW_FILTER_FIELDS = [
   ["order-id", "筛选 order-id", "order-id", "orderId"],
 ];
 
-/**
- * @param {{batch: ReviewBatch, pending: number, readOnly: boolean, onBack: () => void, onOpenSource: () => void, onOpenDerived: () => void, onCreateDashboard: () => void, onOpenPublish: () => void}} props
- */
-export function ReviewBatchSummary({
-  batch,
-  pending,
-  readOnly,
-  onBack,
-  onOpenSource,
-  onOpenDerived,
-  onCreateDashboard,
-  onOpenPublish,
-}) {
+/** @typedef {{batch: ReviewBatch, pending: number, readOnly: boolean, onBack: () => void, onOpenSource: () => void, onOpenDerived: () => void, onCreateDashboard: () => void, onOpenPublish: () => void}} ReviewSummaryProps */
+
+/** @param {ReviewSummaryProps} props */
+export function ReviewBatchSummary(props) {
+  const { batch, pending, readOnly, onBack } = props;
   return (
     <>
       <Button
@@ -63,68 +55,9 @@ export function ReviewBatchSummary({
             {batch.creator_name || "未提供"} · 批次修订 #{batch.revision}
           </p>
         </div>
-        <div className="review-batch-header-actions">
-          <Button onClick={onOpenSource}>查看来源版本</Button>
-          {readOnly ? (
-            <>
-              <Button
-                type="primary"
-                icon={<CaretRight size={16} />}
-                iconPlacement="end"
-                onClick={onOpenDerived}
-              >
-                查看衍生版本
-              </Button>
-              <Button icon={<ChartBar size={17} />} onClick={onCreateDashboard}>
-                创建分析看板
-              </Button>
-            </>
-          ) : (
-            <Button
-              type="primary"
-              disabled={pending > 0 || Number(batch.record_count || 0) === 0}
-              title={
-                Number(batch.record_count || 0) === 0
-                  ? "该历史批次没有可处理记录，不能发布"
-                  : pending > 0
-                    ? `还剩 ${pending} 条需处理，全部处理后才能发布`
-                    : ""
-              }
-              onClick={onOpenPublish}
-            >
-              {Number(batch.record_count || 0) === 0
-                ? "无可处理记录"
-                : pending > 0
-                  ? `还剩 ${pending} 条需处理`
-                  : "发布派生版本"}
-            </Button>
-          )}
-        </div>
+        <ReviewBatchActions {...props} />
       </header>
-
-      <section className="review-batch-progress" aria-label="复核批次进度">
-        <div>
-          <span>批次记录</span>
-          <b>{Number(batch.record_count || 0).toLocaleString()}</b>
-        </div>
-        <div>
-          <span>已确认 / 修改</span>
-          <b>{Number(batch.resolved_count || 0).toLocaleString()}</b>
-        </div>
-        <div>
-          <span>已排除</span>
-          <b>{Number(batch.excluded_count || 0).toLocaleString()}</b>
-        </div>
-        <div className={pending ? "has-pending" : "is-complete"}>
-          <span>待处理</span>
-          <b>{pending.toLocaleString()}</b>
-        </div>
-        <div>
-          <span>最后更新</span>
-          <b>{formatTime(batch.updated_at)}</b>
-        </div>
-      </section>
-
+      <ReviewBatchProgress batch={batch} pending={pending} />
       {readOnly && (
         <div className="review-batch-readonly" role="status">
           <CheckCircle size={18} />
@@ -132,6 +65,90 @@ export function ReviewBatchSummary({
         </div>
       )}
     </>
+  );
+}
+
+/** @param {ReviewBatch} batch @param {number} pending */
+function reviewPublishState(batch, pending) {
+  if (Number(batch.record_count || 0) === 0) {
+    return { label: "无可处理记录", title: "该历史批次没有可处理记录，不能发布" };
+  }
+  if (pending > 0) {
+    return {
+      label: `还剩 ${pending} 条需处理`,
+      title: `还剩 ${pending} 条需处理，全部处理后才能发布`,
+    };
+  }
+  return { label: "发布派生版本", title: "" };
+}
+
+/** @param {ReviewSummaryProps} props */
+function ReviewBatchActions({
+  batch,
+  pending,
+  readOnly,
+  onOpenSource,
+  onOpenDerived,
+  onCreateDashboard,
+  onOpenPublish,
+}) {
+  const publishState = reviewPublishState(batch, pending);
+  return (
+    <div className="review-batch-header-actions">
+      <Button onClick={onOpenSource}>查看来源版本</Button>
+      {readOnly ? (
+        <>
+          <Button
+            type="primary"
+            icon={<CaretRight size={16} />}
+            iconPlacement="end"
+            onClick={onOpenDerived}
+          >
+            查看衍生版本
+          </Button>
+          <Button icon={<ChartBar size={17} />} onClick={onCreateDashboard}>
+            创建分析看板
+          </Button>
+        </>
+      ) : (
+        <Button
+          type="primary"
+          disabled={pending > 0 || Number(batch.record_count || 0) === 0}
+          title={publishState.title}
+          onClick={onOpenPublish}
+        >
+          {publishState.label}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/** @param {{batch: ReviewBatch, pending: number}} props */
+function ReviewBatchProgress({ batch, pending }) {
+  return (
+    <section className="review-batch-progress" aria-label="复核批次进度">
+      <div>
+        <span>批次记录</span>
+        <b>{Number(batch.record_count || 0).toLocaleString()}</b>
+      </div>
+      <div>
+        <span>已确认 / 修改</span>
+        <b>{Number(batch.resolved_count || 0).toLocaleString()}</b>
+      </div>
+      <div>
+        <span>已排除</span>
+        <b>{Number(batch.excluded_count || 0).toLocaleString()}</b>
+      </div>
+      <div className={pending ? "has-pending" : "is-complete"}>
+        <span>待处理</span>
+        <b>{pending.toLocaleString()}</b>
+      </div>
+      <div>
+        <span>最后更新</span>
+        <b>{formatTime(batch.updated_at)}</b>
+      </div>
+    </section>
   );
 }
 

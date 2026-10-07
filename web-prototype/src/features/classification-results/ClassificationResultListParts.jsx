@@ -29,15 +29,16 @@ function productNames(result) {
 }
 
 /**
- * @param {{
+ * @typedef {{
  *   result: ClassificationResultVersion,
  *   onOpen: () => void,
  *   onPrimary: () => void,
  *   selectable: boolean,
  *   selected: boolean,
  *   onToggle: () => void
- * }} props
+ * }} ResultPoolRowProps
  */
+/** @param {ResultPoolRowProps} props */
 export function ResultPoolRow({
   result,
   onOpen,
@@ -46,11 +47,45 @@ export function ResultPoolRow({
   selected,
   onToggle,
 }) {
-  const names = productNames(result);
   const policy = resultActionPolicy(result);
-  const disabledReason = policy.dashboardSelectable ? "" : policy.blockingReason;
   return (
     <article className={`result-pool-row ${selected ? "is-selected" : ""}`} role="row">
+      <ResultPoolStatus
+        result={result}
+        policy={policy}
+        selectable={selectable}
+        selected={selected}
+        onToggle={onToggle}
+      />
+      <ResultPoolMetadata result={result} onOpen={onOpen} />
+      <div className="result-row-actions">
+        <Button
+          size="small"
+          disabled={policy.primary.disabled}
+          title={policy.primary.disabled ? policy.blockingReason : ""}
+          icon={<CaretRight size={15} />}
+          iconPlacement="end"
+          onClick={onPrimary}
+        >
+          {policy.primary.label}
+        </Button>
+        <a
+          className="secondary-button compact-button"
+          href={api.classificationResultDownloadUrl(result.version_id)}
+        >
+          <DownloadSimple size={15} />
+          下载
+        </a>
+      </div>
+    </article>
+  );
+}
+
+/** @param {Pick<ResultPoolRowProps, "result" | "selectable" | "selected" | "onToggle"> & {policy: ReturnType<typeof resultActionPolicy>}} props */
+function ResultPoolStatus({ result, policy, selectable, selected, onToggle }) {
+  const disabledReason = policy.dashboardSelectable ? "" : policy.blockingReason;
+  return (
+    <>
       {selectable && (
         <Checkbox
           className="result-selection-cell"
@@ -71,6 +106,15 @@ export function ResultPoolRow({
             : `版本发布：${PUBLISH_LABELS[result.publish_status] ?? result.publish_status ?? "未提供"}`}
         </small>
       </div>
+    </>
+  );
+}
+
+/** @param {Pick<ResultPoolRowProps, "result" | "onOpen">} props */
+function ResultPoolMetadata({ result, onOpen }) {
+  const names = productNames(result);
+  return (
+    <>
       <div className="result-listing-cell">
         <button className="text-button result-listing-link" onClick={onOpen}>
           {result.listing || "未提供 Listing"}
@@ -94,26 +138,7 @@ export function ResultPoolRow({
           {result.standard_version ? ` · V${result.standard_version}` : ""}
         </span>
       </div>
-      <div className="result-row-actions">
-        <Button
-          size="small"
-          disabled={policy.primary.disabled}
-          title={policy.primary.disabled ? policy.blockingReason : ""}
-          icon={<CaretRight size={15} />}
-          iconPlacement="end"
-          onClick={onPrimary}
-        >
-          {policy.primary.label}
-        </Button>
-        <a
-          className="secondary-button compact-button"
-          href={api.classificationResultDownloadUrl(result.version_id)}
-        >
-          <DownloadSimple size={15} />
-          下载
-        </a>
-      </div>
-    </article>
+    </>
   );
 }
 
