@@ -9,7 +9,12 @@ from return_semantics.analysis_context import (
     USER_FEEDBACK_CONTEXT,
     validate_analysis_context,
 )
-from return_semantics.schemas import ListingClaimsConfig, SubjectCode, TaxonomyConfig
+from return_semantics.schemas import (
+    LabelDefinition,
+    ListingClaimsConfig,
+    SubjectCode,
+    TaxonomyConfig,
+)
 from return_semantics.taxonomy_hierarchy import label_path
 
 PROMPT_VERSION = "category-semantic-v5"
@@ -51,6 +56,28 @@ def recognition_fingerprint(taxonomy: TaxonomyConfig) -> str:
     ).hexdigest()
 
 
+def _json_label_entry(
+    label: LabelDefinition, taxonomy: TaxonomyConfig, sentiments: str
+) -> dict[str, Any]:
+    entry: dict[str, Any] = {
+        "编码": label.code,
+        "名称": label.name,
+        "完整路径": label_path(taxonomy, label.code),
+        "允许评价方向": sentiments,
+    }
+    if label.description.strip():
+        entry["判定说明"] = label.description
+    if taxonomy.recognition_profile == "legacy_v3" and label.keywords:
+        entry["英文关键词"] = label.keywords
+    if label.exclusions:
+        entry["排除说明"] = label.exclusions
+    if label.examples:
+        entry["判定示例"] = [item.model_dump(mode="json") for item in label.examples]
+    if label.allowed_claim_ids:
+        entry["允许承诺编号"] = label.allowed_claim_ids
+    return entry
+
+
 def _label_catalog(taxonomy: TaxonomyConfig) -> str:
     lines = []
     for label in taxonomy.labels:
@@ -69,24 +96,7 @@ def _label_catalog(taxonomy: TaxonomyConfig) -> str:
                 fields.append(",".join(label.keywords))
             lines.append("|".join(fields))
             continue
-        entry: dict[str, Any] = {
-            "编码": label.code,
-            "名称": label.name,
-            "完整路径": label_path(taxonomy, label.code),
-            "允许评价方向": sentiments,
-        }
-        if label.description.strip():
-            entry["判定说明"] = label.description
-        if taxonomy.recognition_profile == "legacy_v3" and label.keywords:
-            entry["英文关键词"] = label.keywords
-        if label.exclusions:
-            entry["排除说明"] = label.exclusions
-        if label.examples:
-            entry["判定示例"] = [
-                item.model_dump(mode="json") for item in label.examples
-            ]
-        if label.allowed_claim_ids:
-            entry["允许承诺编号"] = label.allowed_claim_ids
+        entry = _json_label_entry(label, taxonomy, sentiments)
         lines.append(json.dumps(entry, ensure_ascii=False))
     return "\n".join(lines)
 
@@ -117,6 +127,21 @@ def _instruction_catalog(taxonomy: TaxonomyConfig) -> str:
         f"{index}. {instruction}"
         for index, instruction in enumerate(taxonomy.instructions, start=1)
     )
+
+
+def _semantic_requirements(taxonomy: TaxonomyConfig) -> str:
+    requirements = ""
+    for field in (
+        "evidence_requirements",
+        "implicit_evidence_rules",
+        "claim_evidence_requirements",
+    ):
+        for rule in getattr(taxonomy.validation_rules, field):
+            if rule.semantic_requirement:
+                requirements += (
+                    f"\n{rule.label_code} 的语义边界：{rule.semantic_requirement}"
+                )
+    return requirements
 
 
 def build_messages(
@@ -215,16 +240,7 @@ JSON 输出示例：
 """.strip()
 
     if taxonomy.recognition_profile == "semantic_v1":
-        for field in (
-            "evidence_requirements",
-            "implicit_evidence_rules",
-            "claim_evidence_requirements",
-        ):
-            for rule in getattr(taxonomy.validation_rules, field):
-                if rule.semantic_requirement:
-                    system_prompt += (
-                        f"\n{rule.label_code} 的语义边界：{rule.semantic_requirement}"
-                    )
+        system_prompt += _semantic_requirements(taxonomy)
         system_prompt += """
 
 语义判定约束：

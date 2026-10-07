@@ -5,6 +5,7 @@ from return_semantics.schemas import (
     SemanticDisposition,
     SemanticUnit,
     TaxonomyConfig,
+    TaxonomyValidationRules,
     UnknownSemantic,
 )
 
@@ -102,13 +103,12 @@ def unknown_semantic_from_unit(
     )
 
 
-def normalize_semantic_unit(
+def _unknown_for_missing_evidence(
     unit: SemanticUnit,
     taxonomy: TaxonomyConfig,
-) -> tuple[SemanticUnit | None, UnknownSemantic | None]:
-    evidence = unit.evidence.lower()
-    rules = taxonomy.validation_rules
-
+    rules: TaxonomyValidationRules,
+    evidence: str,
+) -> UnknownSemantic | None:
     for evidence_rule in rules.evidence_requirements:
         if (
             taxonomy.recognition_profile == "semantic_v1"
@@ -118,13 +118,21 @@ def normalize_semantic_unit(
         if unit.label_code == evidence_rule.label_code and not any(
             cue.lower() in evidence for cue in evidence_rule.cues
         ):
-            return None, unknown_semantic_from_unit(
+            return unknown_semantic_from_unit(
                 unit,
                 opinion=evidence_rule.unknown_opinion,
                 reason=evidence_rule.unknown_reason,
                 disposition=SemanticDisposition.MAPPING_UNCERTAIN,
             )
+    return None
 
+
+def _apply_implicit_evidence(
+    unit: SemanticUnit,
+    taxonomy: TaxonomyConfig,
+    rules: TaxonomyValidationRules,
+    evidence: str,
+) -> SemanticUnit:
     for implicit_rule in rules.implicit_evidence_rules:
         if (
             taxonomy.recognition_profile == "semantic_v1"
@@ -135,7 +143,15 @@ def normalize_semantic_unit(
             cue.lower() in evidence for cue in implicit_rule.cues
         ):
             unit = unit.model_copy(update={"implicit": True})
+    return unit
 
+
+def _apply_claim_evidence(
+    unit: SemanticUnit,
+    taxonomy: TaxonomyConfig,
+    rules: TaxonomyValidationRules,
+    evidence: str,
+) -> SemanticUnit:
     for claim_rule in rules.claim_evidence_requirements:
         if (
             taxonomy.recognition_profile == "semantic_v1"
@@ -153,5 +169,18 @@ def normalize_semantic_unit(
                     "claim_id": None,
                 }
             )
+    return unit
 
+
+def normalize_semantic_unit(
+    unit: SemanticUnit,
+    taxonomy: TaxonomyConfig,
+) -> tuple[SemanticUnit | None, UnknownSemantic | None]:
+    evidence = unit.evidence.lower()
+    rules = taxonomy.validation_rules
+    unknown = _unknown_for_missing_evidence(unit, taxonomy, rules, evidence)
+    if unknown is not None:
+        return None, unknown
+    unit = _apply_implicit_evidence(unit, taxonomy, rules, evidence)
+    unit = _apply_claim_evidence(unit, taxonomy, rules, evidence)
     return unit, None
