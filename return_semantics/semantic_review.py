@@ -1,11 +1,39 @@
 from __future__ import annotations
 
 import hashlib
-import re
-from collections import Counter
 from typing import cast
 
 from return_semantics.schemas import ProcessingStatus, TaxonomyConfig
+from return_semantics.semantic_review_coverage import (
+    _coverage_evidence as _coverage_evidence,
+)
+from return_semantics.semantic_review_coverage import (
+    _coverage_summary as _coverage_summary,
+)
+from return_semantics.semantic_review_coverage import (
+    _unexplained_fragments as _unexplained_fragments,
+)
+from return_semantics.semantic_review_diagnostics import (
+    _DETAILS_NOT_APPLICABLE as _DETAILS_NOT_APPLICABLE,
+)
+from return_semantics.semantic_review_diagnostics import (
+    _DETAILS_NOT_RETAINED as _DETAILS_NOT_RETAINED,
+)
+from return_semantics.semantic_review_diagnostics import (
+    _DIAGNOSTIC_METADATA as _DIAGNOSTIC_METADATA,
+)
+from return_semantics.semantic_review_diagnostics import (
+    _SYSTEM_REVIEW_REASON_PREFIXES as _SYSTEM_REVIEW_REASON_PREFIXES,
+)
+from return_semantics.semantic_review_diagnostics import (
+    _failure_diagnostic as _failure_diagnostic,
+)
+from return_semantics.semantic_review_diagnostics import (
+    _structured_failure_diagnostic as _structured_failure_diagnostic,
+)
+from return_semantics.semantic_review_diagnostics import (
+    _system_review_reasons as _system_review_reasons,
+)
 from return_semantics.semantic_review_items import (
     _NO_TAG_DISPOSITIONS as _NO_TAG_DISPOSITIONS,
 )
@@ -87,196 +115,6 @@ _BUSINESS_REVIEW_STATUSES = {
     ProcessingStatus.MANUAL_REVIEW.value,
     ProcessingStatus.UNKNOWN_SEMANTIC.value,
 }
-
-_SYSTEM_REVIEW_REASON_PREFIXES = (
-    "覆盖审计失败",
-    "二次模型调用失败:",
-    "二次模型结果未通过程序校验",
-    "两次模型的语义结果不一致",
-    "低成本模型与主模型结果不一致",
-    "风险复核模型缺失",
-)
-
-_DETAILS_NOT_RETAINED = "NOT_RETAINED"
-_DETAILS_NOT_APPLICABLE = "NOT_APPLICABLE"
-
-_DIAGNOSTIC_METADATA = {
-    "COVERAGE_AUDIT_FAILED": (
-        "SEMANTIC_ANALYSIS_QUALITY",
-        "可能存在用户反馈漏抽",
-        "请核对疑似漏抽片段；没有片段时请系统重跑。",
-    ),
-    "MODEL_RESULT_MISMATCH": (
-        "SEMANTIC_ANALYSIS_QUALITY",
-        "两次模型结果不一致",
-        "请核对两次模型的逐项差异；没有差异明细时请系统重跑。",
-    ),
-    "LABEL_RULE_REVIEW_REQUIRED": (
-        "SEMANTIC_ANALYSIS_QUALITY",
-        "标签规则要求人工判断",
-        "请业务员核对原文证据是否足以支持该标签，并确认保留或修改标签。",
-    ),
-    "SECONDARY_MODEL_MISSING": (
-        "TECHNICAL_CONFIGURATION",
-        "风险复核模型未配置",
-        "已使用主模型完成复核；无需业务员核验，请管理员补充风险复核模型配置。",
-    ),
-    "SECONDARY_MODEL_TIMEOUT": (
-        "TECHNICAL_RUNTIME",
-        "风险复核调用超时",
-        "无需业务员核验；请系统重试风险复核。",
-    ),
-    "SECONDARY_MODEL_CALL_FAILED": (
-        "TECHNICAL_RUNTIME",
-        "风险复核调用失败",
-        "无需业务员核验；请系统重试风险复核。",
-    ),
-    "SECONDARY_RESULT_INVALID": (
-        "TECHNICAL_RUNTIME",
-        "风险复核结果校验失败",
-        "无需业务员核验；请系统重新执行风险复核。",
-    ),
-    "MODEL_RUN_TIMEOUT": (
-        "TECHNICAL_RUNTIME",
-        "模型分析超时",
-        "无需业务员核验；请系统重跑本条分析。",
-    ),
-    "MODEL_RUN_FAILED": (
-        "TECHNICAL_RUNTIME",
-        "模型分析未完成",
-        "无需业务员核验；请系统重跑本条分析。",
-    ),
-}
-
-
-def _unexplained_fragments(source_text: str, evidence: list[str]) -> list[str]:
-    if not source_text.strip():
-        return []
-    covered = [False] * len(source_text)
-    for span in dict.fromkeys(item.strip() for item in evidence if item.strip()):
-        words = re.split(r"\s+", span)
-        pattern = r"\s+".join(re.escape(word) for word in words)
-        for match in re.finditer(pattern, source_text, flags=re.IGNORECASE):
-            covered[match.start() : match.end()] = [True] * (
-                match.end() - match.start()
-            )
-
-    remainder = "".join(
-        " " if is_covered else char
-        for char, is_covered in zip(source_text, covered, strict=True)
-    )
-    fragments = []
-    for fragment in re.split(r"[\r\n.!?;,:。！？；，：]+", remainder):
-        normalized = " ".join(fragment.split()).strip("-_/|()[]{}'“”‘’")
-        if normalized and any(character.isalnum() for character in normalized):
-            fragments.append(normalized)
-    return fragments
-
-
-def _system_review_reasons(result: object) -> list[str]:
-    reasons = [_text(reason) for reason in _list(result, "review_reasons")]
-    return list(
-        dict.fromkeys(
-            reason
-            for reason in reasons
-            if reason.startswith(_SYSTEM_REVIEW_REASON_PREFIXES)
-        )
-    )
-
-
-def _failure_diagnostic(reason: str, *, model_error: bool = False) -> dict[str, object]:
-    normalized = reason.casefold()
-    is_timeout = (
-        "超时" in reason or "timeout" in normalized or "timed out" in normalized
-    )
-    if model_error:
-        code = "MODEL_RUN_TIMEOUT" if is_timeout else "MODEL_RUN_FAILED"
-    elif reason.startswith("覆盖审计失败"):
-        code = "COVERAGE_AUDIT_FAILED"
-    elif reason.startswith(
-        ("两次模型的语义结果不一致", "低成本模型与主模型结果不一致")
-    ):
-        code = "MODEL_RESULT_MISMATCH"
-    elif reason.startswith("风险复核模型缺失"):
-        code = "SECONDARY_MODEL_MISSING"
-    elif reason.startswith("二次模型调用失败:"):
-        code = (
-            "SECONDARY_MODEL_TIMEOUT" if is_timeout else "SECONDARY_MODEL_CALL_FAILED"
-        )
-    else:
-        code = "SECONDARY_RESULT_INVALID"
-
-    domain, title, action = _DIAGNOSTIC_METADATA[code]
-    if code == "COVERAGE_AUDIT_FAILED":
-        action = (
-            "当前结果未保留疑似漏抽的原文片段，业务员无法据此判断；"
-            "请系统重跑并保留疑似漏抽片段。"
-        )
-    elif code == "MODEL_RESULT_MISMATCH":
-        action = (
-            "当前结果未保留两次模型的差异明细，业务员无法据此判断；"
-            "请系统重跑并保留逐项差异。"
-        )
-    return {
-        "diagnostic_domain": domain,
-        "diagnostic_code": code,
-        "diagnostic_title": title,
-        "detail_status": (
-            _DETAILS_NOT_RETAINED
-            if code in {"COVERAGE_AUDIT_FAILED", "MODEL_RESULT_MISMATCH"}
-            else _DETAILS_NOT_APPLICABLE
-        ),
-        "action": action,
-        "business_review_required": False,
-    }
-
-
-def _structured_failure_diagnostic(value: object) -> dict[str, object]:
-    code = _text(_get(value, "code")) or "ANALYSIS_DIAGNOSTIC"
-    evidence_text = _text(_get(value, "evidence_text"))
-    primary_result = _text(_get(value, "primary_result"))
-    secondary_result = _text(_get(value, "secondary_result"))
-    detail = _text(_get(value, "detail"))
-    action = _text(_get(value, "action"))
-
-    domain, title, default_action = _DIAGNOSTIC_METADATA.get(
-        code,
-        _DIAGNOSTIC_METADATA["MODEL_RUN_FAILED"],
-    )
-
-    if code == "COVERAGE_AUDIT_FAILED":
-        has_details = bool(evidence_text)
-    elif code in {"MODEL_RESULT_MISMATCH", "LABEL_RULE_REVIEW_REQUIRED"}:
-        has_details = bool(evidence_text or primary_result or secondary_result)
-    else:
-        has_details = False
-    is_system_action = action in {"SYSTEM_RERUN", "SYSTEM_RETRY", "ADMIN_CONFIG"}
-    if is_system_action and code == "COVERAGE_AUDIT_FAILED":
-        action_text = "无需业务员判断本次运行异常；请系统重跑，疑似片段仅用于定位。"
-    elif is_system_action and code == "MODEL_RESULT_MISMATCH":
-        action_text = "无需业务员判断本次运行异常；请系统重跑，差异明细仅用于定位。"
-    else:
-        action_text = default_action if not action or is_system_action else action
-    return {
-        "diagnostic_domain": domain,
-        "diagnostic_code": code,
-        "diagnostic_title": title,
-        "detail_status": (
-            "AVAILABLE"
-            if has_details
-            else _DETAILS_NOT_APPLICABLE
-            if domain != "SEMANTIC_ANALYSIS_QUALITY"
-            else _DETAILS_NOT_RETAINED
-        ),
-        "evidence_text": evidence_text,
-        "primary_result": primary_result,
-        "secondary_result": secondary_result,
-        "detail": detail,
-        "action": action_text,
-        "business_review_required": domain == "SEMANTIC_ANALYSIS_QUALITY"
-        and has_details
-        and not is_system_action,
-    }
 
 
 def _analysis_failure_item(
@@ -463,35 +301,6 @@ def _analysis_failure_items(
     return items
 
 
-def _coverage_evidence(items: list[dict[str, object]]) -> list[str]:
-    evidence: list[str] = []
-    for item in items:
-        raw_evidence = item.pop("_coverage_evidence", [])
-        if isinstance(raw_evidence, list):
-            evidence.extend(str(value) for value in raw_evidence if str(value))
-    return evidence
-
-
-def _coverage_summary(
-    items: list[dict[str, object]], unexplained: list[str]
-) -> dict[str, object]:
-    counts = Counter(_text(item["disposition"]) for item in items)
-    return {
-        "total": len(items),
-        "mapped": counts[MAPPED],
-        "no_tag_needed": counts[NO_TAG_NEEDED],
-        "taxonomy_gap": counts[TAXONOMY_GAP],
-        "true_ambiguity": counts[TRUE_AMBIGUITY],
-        "analysis_failure": counts[ANALYSIS_FAILURE],
-        "unexplained_fragment_count": len(unexplained),
-        "complete": not unexplained
-        and not any(
-            counts[disposition]
-            for disposition in (TAXONOMY_GAP, TRUE_AMBIGUITY, ANALYSIS_FAILURE)
-        ),
-    }
-
-
 def build_semantic_review_view(
     result: object,
     source_text: str,
@@ -618,3 +427,15 @@ def requires_business_review(
         )
         == BUSINESS_REVIEW_REQUIRED
     )
+
+
+# 既有辅助入口直接复用职责模块，保留导入路径。
+for _entry in (
+    _system_review_reasons,
+    _failure_diagnostic,
+    _structured_failure_diagnostic,
+    _unexplained_fragments,
+    _coverage_evidence,
+    _coverage_summary,
+):
+    _entry.__module__ = __name__
