@@ -1,0 +1,158 @@
+.ai-decision-detail {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.ai-decision-detail-header,
+.ai-decision-question,
+.ai-decision-trust > div,
+.ai-decision-recommendation > header,
+.ai-decision-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.ai-decision-detail-header span,
+.ai-decision-detail-header p {
+  color: #738078;
+  font-size: 10px;
+}
+
+.ai-decision-detail-header span {
+  color: #16745a;
+  font-weight: 700;
+}
+
+.ai-decision-detail-header h3 {
+  margin: 3px 0;
+  font-size: 21px;
+  line-height: 1.25;
+}
+
+.ai-decision-detail-header p {
+  margin: 0;
+}
+
+.ai-decision-question {
+  padding: 13px 15px;
+  border-radius: 8px;
+  background: #e6f3ee;
+}
+
+.ai-decision-question span {
+  color: #147258;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.ai-decision-question h4 {
+  margin: 4px 0 0;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.ai-decision-question > b {
+  min-width: 76px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  color: #39735f;
+  background: #fff;
+  font-size: 10px;
+  text-align: center;
+}
+
+.ai-decision-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.ai-decision-metric {
+  display: grid;
+  gap: 3px;
+  min-height: 90px;
+  padding: 13px 14px;
+  border: 1px solid #d9e1dd;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.ai-decision-metric span,
+.ai-decision-metric small {
+  color: #77837d;
+  font-size: 10px;
+}
+
+.ai-decision-metric strong {
+  color: #17251e;
+  font-size: 25px;
+  line-height: 1.2;
+}
+
+.ai-decision-metric.risk strong,
+.ai-decision-metric.risk small {
+  color: #c54b3b;
+}
+
+.ai-decision-trust {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.85fr) minmax(280px, 1.35fr);
+  gap: 16px;
+  padding: 12px 15px;
+  border: 1px solid #edd7b3;
+  border-radius: 8px;
+  background: #fff3de;
+}
+
+.ai-decision-trust.passed {
+  border-color: #b9ded0;
+  background: #edf8f4;
+}
+
+.ai-decision-trust > div {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.ai-decision-trust > div svg {
+  color: #b16b12;
+}
+
+.ai-decision-trust > div span {
+  color: #8c5d1b;
+  font-size: 10px;
+}
+
+.ai-decision-trust > div strong {
+  color: #a8610f;
+  font-size: 18px;
+}
+
+.ai-decision-trust > div small {
+  flex: 1 0 100%;
+  color: #9b6c2c;
+  font-size: 9px;
+}
+
+.ai-decision-trust ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  color: #38483f;
+  font-size: 10px;
+  list-style: none;
+}
+
+.ai-decision-trust li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ai-decision-trust li.warning {
+  color: #b36816;
+}
