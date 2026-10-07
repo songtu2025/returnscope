@@ -1,0 +1,102 @@
+.snapshot-storage-overview {
+  display: grid;
+  grid-template-columns: minmax(230px, 1fr) minmax(380px, 1.6fr) auto;
+  gap: 18px;
+  align-items: center;
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid #b9d9cf;
+  border-radius: 9px;
+  background: #f3faf7;
+}
+
+.snapshot-storage-title {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  color: var(--green);
+}
+
+.snapshot-storage-title span,
+.snapshot-storage-title b,
+.snapshot-storage-title small {
+  display: block;
+}
+
+.snapshot-storage-title b {
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.snapshot-storage-title small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.snapshot-storage-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.snapshot-storage-metrics > span {
+  min-width: 0;
+  padding: 0 12px;
+  border-left: 1px solid #cfe1db;
+}
+
+.snapshot-storage-metrics small,
+.snapshot-storage-metrics b {
+  display: block;
+}
+
+.snapshot-storage-metrics small {
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.snapshot-storage-metrics b {
+  margin-top: 4px;
+  color: var(--ink);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.snapshot-storage-manage {
+  white-space: nowrap;
+}
+
+.snapshot-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 0 12px;
+  color: var(--muted);
+  background: #fbfcfb;
+  font-size: 9px;
+}
+
+.snapshot-pagination > div {
+  display: flex;
+  gap: 6px;
+}
+
+.snapshot-pagination button {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--ink);
+  background: #fff;
+  cursor: pointer;
+  place-items: center;
+}
+
+.snapshot-pagination button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
