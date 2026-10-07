@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
 
-from return_semantics.fact_execution import _extract_primary_facts, _validated_stage
+from return_semantics.fact_execution import (
+    _extract_primary_facts,
+    _FactExecutionContext,
+    _validated_stage,
+)
 from return_semantics.fact_extraction import (
     CoverageMergeResult,
     FactPipelineCancelled,
@@ -14,14 +17,6 @@ from return_semantics.fact_extraction import (
     validate_coverage_correction,
 )
 from return_semantics.schemas import ExtractedFact, ReviewDiagnostic, TaxonomyConfig
-
-
-@dataclass(frozen=True, kw_only=True)
-class _CoverageAuditContext:
-    comment: str
-    taxonomy: TaxonomyConfig
-    call: Callable
-    metrics: dict[str, int]
 
 
 def _coverage_audit_failed(
@@ -66,7 +61,7 @@ def _repair_fact_coverage(
     merged: CoverageMergeResult,
     *,
     original_count: int,
-    context: _CoverageAuditContext,
+    context: _FactExecutionContext,
 ) -> CoverageMergeResult:
     context.metrics["coverage_audit_repair_calls"] = 1
     try:
@@ -128,7 +123,7 @@ def _audit_fact_coverage(
         metrics["coverage_audit_failures"] += 1
         return _coverage_audit_failed(facts, exc)
     if merged.rejections:
-        context = _CoverageAuditContext(
+        context = _FactExecutionContext(
             comment=comment, taxonomy=taxonomy, call=call, metrics=metrics
         )
         merged = _repair_fact_coverage(

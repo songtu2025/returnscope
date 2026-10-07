@@ -18,6 +18,7 @@ from return_semantics.fact_coverage_audit import _extract_audited_facts
 from return_semantics.fact_execution import (
     _extract_primary_facts as _extract_primary_facts,
 )
+from return_semantics.fact_execution import _FactExecutionContext
 from return_semantics.fact_execution import (
     _ModelCallAccumulator as _ModelCallAccumulator,
 )
@@ -104,7 +105,6 @@ from return_semantics.fact_stages import (
 )
 from return_semantics.fact_stages import (
     _classify_fact_stages,
-    _FactStageContext,
     _finalize_fact_review,
 )
 from return_semantics.fact_stages import (
@@ -148,7 +148,7 @@ def classify_facts(
     facts = coverage_merge.facts
     classification = ModelClassification()
     if facts:
-        context = _FactStageContext(
+        context = _FactExecutionContext(
             comment=comment, taxonomy=taxonomy, call=call, metrics=metrics
         )
         classification = _classify_fact_stages(facts, context=context)

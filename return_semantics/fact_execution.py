@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from return_semantics.fact_extraction import (
     FactPipelineCancelled,
@@ -15,6 +16,14 @@ from return_semantics.schemas import (
     FactExtractionSource,
     TaxonomyConfig,
 )
+
+
+@dataclass(frozen=True, kw_only=True)
+class _FactExecutionContext:
+    comment: str
+    taxonomy: TaxonomyConfig
+    call: Callable
+    metrics: dict[str, int]
 
 
 class _ModelCallAccumulator:

@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
 
 from return_semantics.dimension_decisions import compile_dimension_decisions
 from return_semantics.fact_classification import (
     compile_evidence_label_adjudications,
     compile_fact_classification,
 )
-from return_semantics.fact_execution import _validated_stage
+from return_semantics.fact_execution import _FactExecutionContext, _validated_stage
 from return_semantics.fact_extraction import CoverageMergeResult, _messages
 from return_semantics.fact_mapping import (
     EvidenceLabelAdjudication,
@@ -27,14 +26,6 @@ from return_semantics.schemas import (
     ModelClassification,
     TaxonomyConfig,
 )
-
-
-@dataclass(frozen=True, kw_only=True)
-class _FactStageContext:
-    comment: str
-    taxonomy: TaxonomyConfig
-    call: Callable
-    metrics: dict[str, int]
 
 
 def _adjudications_for_review(
@@ -108,7 +99,7 @@ def _map_fact_classification(
     facts: list[ExtractedFact],
     payload: dict,
     *,
-    context: _FactStageContext,
+    context: _FactExecutionContext,
 ) -> ModelClassification:
     def compile_mapping(response: dict) -> ModelClassification:
         return compile_fact_classification(
@@ -138,7 +129,7 @@ def _decide_fact_dimensions(
     classification: ModelClassification,
     facts: list[ExtractedFact],
     *,
-    context: _FactStageContext,
+    context: _FactExecutionContext,
 ) -> ModelClassification:
     decision_payload = _decision_payload(
         facts, classification.fact_mappings, context.taxonomy
@@ -172,7 +163,7 @@ def _decide_fact_dimensions(
 def _classify_fact_stages(
     facts: list[ExtractedFact],
     *,
-    context: _FactStageContext,
+    context: _FactExecutionContext,
 ) -> ModelClassification:
     payload = _mapping_payload(facts, context.taxonomy)
     classification = _map_fact_classification(facts, payload, context=context)
