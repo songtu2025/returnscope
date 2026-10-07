@@ -206,50 +206,6 @@
   font-style: normal;
 }
 
-.return-insight-coverage {
-  align-self: stretch;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  min-width: 190px;
-  padding: 0 8px;
-  color: #405049;
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.return-insight-coverage span {
-  margin-left: 5px;
-  color: #9a6815;
-}
-
-.return-insight-groups {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.return-insight-groups button {
-  min-height: 32px;
-  padding: 0 15px;
-  border: 1px solid #dce2dd;
-  border-radius: 999px;
-  color: #435049;
-  background: #fff;
-  font-weight: 650;
-  cursor: pointer;
-}
-
-.return-insight-groups button:hover {
-  border-color: #9acabb;
-}
-
-.return-insight-groups button.active {
-  border-color: #0d684f;
-  color: #fff;
-  background: #0d684f;
-}
-
 .return-reason-ranking,
 .return-insight-card {
   overflow: hidden;
@@ -360,38 +316,6 @@
   text-align: right;
 }
 
-.return-insight-conclusion {
-  display: grid;
-  grid-template-columns: auto minmax(360px, 1fr) repeat(3, minmax(94px, 130px));
-  align-items: center;
-  gap: 14px;
-  min-height: 62px;
-  padding: 8px 14px;
-  border: 1px solid #aed5c7;
-  border-radius: 9px;
-  color: #23352e;
-  background: #f1f8f5;
-}
-
-.return-insight-conclusion > svg {
-  box-sizing: content-box;
-  padding: 8px;
-  border: 1px solid #77b7a3;
-  border-radius: 50%;
-  color: #0d684f;
-}
-
-.return-insight-conclusion p {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.return-insight-conclusion p strong {
-  margin: 0 3px;
-  color: #0d684f;
-}
-
 .return-insight-stat {
   display: grid;
   gap: 1px;
@@ -410,109 +334,13 @@
   font-size: 10px;
 }
 
-.return-insight-analysis-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-  gap: 10px;
-}
-
-.return-insight-trend,
-.return-insight-products {
+.return-insight-trend {
   min-height: 244px;
 }
 
 .return-insight-chart {
   height: 174px;
   padding: 5px 10px 0 6px;
-}
-
-.return-insight-chart-legend {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  color: #647169;
-  font-size: 10px;
-}
-
-.return-insight-chart-legend i {
-  width: 22px;
-  height: 2px;
-  background: #12765b;
-}
-
-.return-insight-product-table {
-  padding: 4px 10px 0;
-}
-
-.return-insight-product-head,
-.return-insight-product-table > button {
-  display: grid;
-  grid-template-columns: minmax(180px, 1.4fr) repeat(3, minmax(72px, 0.7fr));
-  align-items: center;
-  gap: 8px;
-  min-height: 30px;
-  padding: 0 8px;
-}
-
-.return-insight-product-head {
-  color: #75817b;
-  font-size: 10px;
-}
-
-.return-insight-product-table > button {
-  width: 100%;
-  border: 0;
-  border-top: 1px solid #edf0ee;
-  color: #34423c;
-  background: #fff;
-  font-size: 11px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.return-insight-product-table > button:first-of-type {
-  background: #f0f7f4;
-}
-
-.return-insight-product-table > button:hover {
-  background: #e8f4ef;
-}
-
-.return-insight-product-table b {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.return-insight-co-reasons {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 42px;
-  margin: 5px 10px 0;
-  padding-top: 5px;
-  border-top: 1px solid #edf0ee;
-}
-
-.return-insight-co-reasons > b {
-  margin-right: auto;
-  color: #27362f;
-  font-size: 11px;
-}
-
-.return-insight-co-reasons button,
-.return-insight-co-reasons > span {
-  padding: 5px 8px;
-  border: 1px solid #bcd8ce;
-  border-radius: 6px;
-  color: #285342;
-  background: #f7fbf9;
-  font-size: 10px;
-}
-
-.return-insight-co-reasons button {
-  cursor: pointer;
 }
 
 .return-insight-evidence > header div {
@@ -575,25 +403,6 @@
 
 .return-insight-evidence-table article p {
   margin: 0;
-}
-
-.return-insight-labels {
-  display: flex;
-  gap: 4px;
-  min-width: 0;
-}
-
-.return-insight-labels span {
-  overflow: hidden;
-  max-width: 84px;
-  padding: 3px 6px;
-  border: 1px solid #9bc9b8;
-  border-radius: 5px;
-  color: #0d684f;
-  background: #f6fbf9;
-  font-size: 10px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .return-insight-evidence-table .text-button {

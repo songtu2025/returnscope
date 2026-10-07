@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { api } from "../../api";
+import { errorDetailMessage as errorMessage } from "../../shared/api/requestErrors";
 import { serverStateKeys } from "../../shared/serverState";
 import { datePresets } from "./mysqlReturnDates";
 import { mysqlImportReadiness } from "./mysqlImportReadiness";
@@ -20,11 +21,6 @@ import { mysqlImportReadiness } from "./mysqlImportReadiness";
  * }}
  */
 const mysqlReturnApi = api;
-
-/** @param {unknown} error */
-function errorMessage(error) {
-  return error instanceof Error ? error.message : String(error);
-}
 
 /** @param {Partial<MysqlReturnFormState> | undefined} draft */
 function initialForm(draft) {
