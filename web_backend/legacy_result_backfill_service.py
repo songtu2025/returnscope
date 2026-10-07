@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import hashlib
-import json
-from pathlib import Path
 from typing import Any
 
-from web_backend.agent_runner import AgentRunner, IncompleteResultCheckpoint
-from web_backend.common import json_text, json_value, new_id
+from web_backend.agent_runner import AgentRunner
+from web_backend.common import json_text, new_id
 from web_backend.database import Database
 from web_backend.security import utc_now
+from web_backend.tasks.legacy_backfill_preview import LegacyBackfillPreviewMixin
 
 SYSTEM_ACTOR_ID = "system-legacy-result-backfill"
 PREVIEW_VERSION = "legacy-classification-result-backfill-v1"
@@ -18,7 +17,7 @@ class LegacyResultBackfillConflict(ValueError):
     pass
 
 
-class LegacyResultBackfillService:
+class LegacyResultBackfillService(LegacyBackfillPreviewMixin):
     def __init__(self, database: Database, runner: AgentRunner) -> None:
         self.database = database
         self.runner = runner
@@ -31,23 +30,7 @@ class LegacyResultBackfillService:
             "already_published": [],
         }
         for row in self._rows():
-            item = self._base_item(row)
-            if row["result_version_id"] or row["result_publish_status"] == "published":
-                buckets["already_published"].append(item)
-                continue
-            try:
-                inspected = self.runner.inspect_completed_result(
-                    str(row["task_id"]),
-                    str(row["segment_id"]),
-                )
-                item.update(inspected)
-                category = "ready"
-            except IncompleteResultCheckpoint as exc:
-                item["reason"] = str(exc)
-                category = "incomplete"
-            except Exception as exc:
-                item["reason"] = str(exc)[:500]
-                category = "unavailable"
+            category, item = self._inspect_backfill_item(row)
             buckets[category].append(item)
 
         for items in buckets.values():
@@ -98,25 +81,10 @@ class LegacyResultBackfillService:
         ]
         skipped.extend(preview["unavailable"])
         skipped.extend(preview["incomplete"])
+        outcomes = {"success": success, "failed": failed, "skipped": skipped}
         for item in preview["ready"]:
-            task_id = str(item["task_id"])
-            segment_id = str(item["segment_id"])
-            try:
-                prepared = self._mark_publishing(task_id, segment_id, clean_hash)
-                if not prepared:
-                    skipped.append({**item, "reason": "片段状态已变化"})
-                    continue
-                version = self.runner.retry_result_publish(task_id, segment_id)
-                success.append(
-                    {
-                        **item,
-                        "result_version_id": version["version_id"],
-                        "version": version["version"],
-                        "quality_status": version["quality_status"],
-                    }
-                )
-            except Exception as exc:
-                failed.append({**item, "reason": str(exc)[:500]})
+            category, outcome = self._apply_ready_item(item, clean_hash)
+            outcomes[category].append(outcome)
         return {
             "mode": "apply",
             "preview_hash": clean_hash,
@@ -129,6 +97,27 @@ class LegacyResultBackfillService:
             "failed": failed,
             "skipped": skipped,
         }
+
+    def _apply_ready_item(
+        self,
+        item: dict[str, Any],
+        clean_hash: str,
+    ) -> tuple[str, dict[str, Any]]:
+        task_id = str(item["task_id"])
+        segment_id = str(item["segment_id"])
+        try:
+            prepared = self._mark_publishing(task_id, segment_id, clean_hash)
+            if not prepared:
+                return "skipped", {**item, "reason": "片段状态已变化"}
+            version = self.runner.retry_result_publish(task_id, segment_id)
+            return "success", {
+                **item,
+                "result_version_id": version["version_id"],
+                "version": version["version"],
+                "quality_status": version["quality_status"],
+            }
+        except Exception as exc:
+            return "failed", {**item, "reason": str(exc)[:500]}
 
     def _rows(self) -> list[dict[str, Any]]:
         with self.database.connect() as connection:
@@ -163,89 +152,6 @@ class LegacyResultBackfillService:
                 """
             ).fetchall()
         return [dict(row) for row in rows]
-
-    @staticmethod
-    def _base_item(row: dict[str, Any]) -> dict[str, Any]:
-        scope = json_value(row.get("scope_json"), {})
-        snapshot = json_value(row.get("snapshot_json"), {})
-        normalized_scope = json.dumps(
-            scope,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-        normalized_snapshot = json.dumps(
-            snapshot,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-        snapshot_scope = snapshot.get("scope", {}) if isinstance(snapshot, dict) else {}
-        snapshot_scope_mode = (
-            snapshot_scope.get("mode") if isinstance(snapshot_scope, dict) else None
-        )
-        try:
-            raw_keys = json_value(row["classification_keys_json"], [])
-            classification_keys = (
-                sorted({str(value) for value in raw_keys})
-                if isinstance(raw_keys, list)
-                else []
-            )
-        except (TypeError, ValueError, json.JSONDecodeError):
-            classification_keys = []
-        checkpoint_path = Path(str(row.get("result_json_path") or ""))
-        checkpoint_hash = (
-            hashlib.sha256(checkpoint_path.read_bytes()).hexdigest()
-            if checkpoint_path.is_file()
-            else None
-        )
-        fingerprint = {
-            "segment_id": str(row["segment_id"]),
-            "task_id": str(row["task_id"]),
-            "status": str(row["status"]),
-            "result_version_id": row["result_version_id"],
-            "result_publish_status": row["result_publish_status"],
-            "dataset_version_id": str(row["dataset_version_id"]),
-            "product_version_id": str(row["product_version_id"]),
-            "dataset_sha256": str(row["dataset_sha256"]),
-            "product_sha256": str(row["product_sha256"]),
-            "task_store": row["store"],
-            "task_listing": row["task_listing"],
-            "snapshot_scope_mode": snapshot_scope_mode,
-            "snapshot_sha256": hashlib.sha256(
-                normalized_snapshot.encode("utf-8")
-            ).hexdigest(),
-            "segment_scope_json": normalized_scope,
-            "agent_key": str(row["agent_key"]),
-            "logic_version": row["logic_version"],
-            "taxonomy_version": str(row["taxonomy_version"]),
-            "model_policy_version": row["model_policy_version"],
-            "claims_version": row["claims_version"],
-            "result_version": int(row["result_version"] or 0),
-            "classification_keys": classification_keys,
-            "checkpoint_path": str(row.get("result_json_path") or ""),
-            "checkpoint_sha256": checkpoint_hash,
-        }
-        return {
-            "segment_id": str(row["segment_id"]),
-            "task_id": str(row["task_id"]),
-            "segment_key": str(row["segment_key"]),
-            "listing": scope.get("listing") or row["task_listing"],
-            "agent_key": str(row["agent_key"]),
-            "status": str(row["status"]),
-            "result_publish_status": row["result_publish_status"],
-            "result_version_id": row["result_version_id"],
-            "classification_key_count": len(classification_keys),
-            "_fingerprint": fingerprint,
-        }
-
-    @staticmethod
-    def _public_item(item: dict[str, Any]) -> dict[str, Any]:
-        return {
-            key: value
-            for key, value in item.items()
-            if key not in {"_fingerprint", "checkpoint_path"}
-        }
 
     def _mark_publishing(
         self,
