@@ -1,0 +1,182 @@
+.progress-hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  margin: 18px 24px 0;
+  padding: 18px 20px 23px;
+  overflow: hidden;
+  border: 1px solid #cae0d7;
+  border-radius: 10px;
+  background: linear-gradient(120deg, #f1faf6, #fbfdfc);
+}
+.progress-copy > span {
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+.progress-copy h3 {
+  margin: 6px 0 4px;
+  font-size: 16px;
+}
+.progress-copy p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.progress-number {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: baseline;
+  color: var(--green-dark);
+  font-variant-numeric: tabular-nums;
+}
+.progress-number strong {
+  font-size: 32px;
+  line-height: 1;
+  letter-spacing: -0.07em;
+}
+.progress-number > span {
+  margin-left: 2px;
+  font-size: 12px;
+  font-weight: 800;
+}
+.progress-number small {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+}
+.hero-progress {
+  position: absolute;
+  inset: auto 0 0;
+  height: 5px;
+  background: #dfeae5;
+}
+.hero-progress span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #0e7055, #3eb38a);
+  transition: width 0.3s ease;
+}
+.stage-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin: 0;
+  padding: 20px 24px 18px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.stage-strip > div {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #9ca6a1;
+}
+.stage-strip > div:not(:last-child)::after {
+  position: absolute;
+  top: 11px;
+  left: 28px;
+  right: 7px;
+  height: 1px;
+  background: #dfe4e1;
+  content: "";
+}
+.stage-strip > div span {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid #d8dfdb;
+  border-radius: 50%;
+  background: #fff;
+  font-size: 12px;
+}
+.stage-strip > div b {
+  position: relative;
+  z-index: 1;
+  padding-right: 7px;
+  background: #fff;
+  font-size: 12px;
+}
+.stage-strip > div.active {
+  color: var(--green-dark);
+}
+.stage-strip > div.active span {
+  border-color: #9dceb9;
+  background: var(--green-pale);
+}
+.stage-strip > div.done::after {
+  background: #7dbba3;
+}
+.content-card {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+.event-card {
+  grid-area: events;
+  min-height: 430px;
+}
+.card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.card-heading h3 {
+  margin: 0;
+  font-size: 12px;
+}
+.card-heading p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.event-dot {
+  position: relative;
+  display: block;
+  width: 7px;
+  height: 7px;
+  margin-top: 3px;
+  border-radius: 50%;
+  background: #94a099;
+}
+.event-dot::after {
+  position: absolute;
+  top: 9px;
+  left: 3px;
+  width: 1px;
+  height: 29px;
+  background: #e3e8e5;
+  content: "";
+}
+.event-dot.completed {
+  background: var(--green);
+}
+.event-dot.failed {
+  background: var(--red);
+}
+.info-row {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  align-items: start;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line-soft);
+}
+.info-row span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.info-row b {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
