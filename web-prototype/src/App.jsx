@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { SWRConfig } from "swr";
 import { Pulse, ArrowRight, WarningCircle } from "@phosphor-icons/react";
 import { ApiError, api } from "./api";
@@ -7,19 +7,7 @@ import { GlobalSearch } from "./app/GlobalSearch";
 import { navigateHash, useHashRoute } from "./app/hashRouter";
 import { Sidebar } from "./app/Sidebar";
 import { Topbar } from "./app/Topbar";
-import {
-  WorkbenchPage,
-  TaskCreatePage,
-  TaskRuntimePage,
-  ReviewCenter,
-  DataAssetsPage,
-  ClassificationStandardsPage,
-  ResultsPage,
-  ClassificationResultsPage,
-  AnalysisDashboardPage,
-  SystemSettingsPage,
-} from "./app/pageModules";
-import { InlineLoading, PageLoadingState } from "./components/SharedUi";
+import { AppPages } from "./app/AppPages";
 import { Toast } from "./components/Toast";
 import { SESSION_EXPIRED_EVENT } from "./shared/api/request";
 import { serverStateConfig } from "./shared/serverState";
@@ -174,130 +162,13 @@ function App() {
           </>
         }
       >
-        <Suspense
-          fallback={
-            <div className="standard-page">
-              <PageLoadingState label="正在加载页面…" />
-            </div>
-          }
-        >
-          {page === "workbench" && <WorkbenchPage onNavigate={navigate} />}
-          {page === "task-create" && (
-            <TaskCreatePage
-              route={route}
-              onNavigate={navigate}
-              notify={notify}
-              onChanged={refreshSystem}
-              userId={user.id}
-            />
-          )}
-          {page === "analysis-tasks" && (
-            <TaskRuntimePage
-              route={route}
-              notify={notify}
-              onNavigate={navigate}
-              onChanged={refreshSystem}
-            />
-          )}
-          {page === "review" && (
-            <>
-              <div className="legacy-review-notice" role="status">
-                <div>
-                  <b>旧版单记录复核</b>
-                  <span>仅用于历史任务，与新版复核批次和派生版本相互独立。</span>
-                </div>
-                <button
-                  className="secondary-button"
-                  onClick={() => navigate("review-center")}
-                >
-                  进入分类结果复核记录
-                </button>
-              </div>
-              <ReviewCenter
-                notify={notify}
-                onChanged={refreshSystem}
-                focus={
-                  route.query.review
-                    ? {
-                        kind: "review",
-                        id: route.query.review,
-                        status: route.query.status,
-                      }
-                    : null
-                }
-              />
-            </>
-          )}
-          {page === "data-assets" && (
-            <DataAssetsPage
-              route={route}
-              notify={notify}
-              onNavigate={navigate}
-              userId={user.id}
-            />
-          )}
-          {page === "classification-standards" && (
-            <ClassificationStandardsPage route={route} notify={notify} />
-          )}
-          {page === "legacy-results" && (
-            <Suspense fallback={<InlineLoading label="正在加载旧版任务分析…" />}>
-              <div className="legacy-results-notice" role="status">
-                <div>
-                  <b>旧版任务分析</b>
-                  <span>此页面仅用于兼容历史任务，不是新版分析看板。</span>
-                </div>
-                <div className="legacy-results-actions">
-                  <button
-                    className="secondary-button"
-                    onClick={() => navigate("analysis-dashboards")}
-                  >
-                    进入新版分析看板
-                  </button>
-                  <button
-                    className="secondary-button"
-                    onClick={() => navigate("classification-results")}
-                  >
-                    查看分类结果
-                  </button>
-                </div>
-              </div>
-              <ResultsPage
-                notify={notify}
-                onNavigate={navigate}
-                focus={
-                  route.query.task_id
-                    ? {
-                        kind: "result",
-                        id: route.query.task_id,
-                        listing: route.query.listing,
-                      }
-                    : null
-                }
-              />
-            </Suspense>
-          )}
-          {page === "classification-results" && (
-            <Suspense
-              fallback={
-                <div className="standard-page classification-results-page">
-                  <PageLoadingState label="正在加载分类结果池…" />
-                </div>
-              }
-            >
-              <ClassificationResultsPage
-                notify={notify}
-                route={route}
-                userId={user.id}
-              />
-            </Suspense>
-          )}
-          {page === "analysis-dashboards" && (
-            <AnalysisDashboardPage route={route} notify={notify} userId={user.id} />
-          )}
-          {page === "settings" && (
-            <SystemSettingsPage route={route} notify={notify} currentUser={user} />
-          )}
-        </Suspense>
+        <AppPages
+          route={route}
+          user={user}
+          notify={notify}
+          navigate={navigate}
+          refreshSystem={refreshSystem}
+        />
       </AppShell>
     </SWRConfig>
   );
