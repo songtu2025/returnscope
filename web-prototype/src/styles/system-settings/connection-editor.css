@@ -1,0 +1,111 @@
+.api-layout {
+  display: grid;
+  grid-template-columns: 210px minmax(660px, 1fr) 220px;
+  min-height: 740px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+}
+.connection-list {
+  border-right: 1px solid var(--line);
+  background: #f8faf8;
+}
+.panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 44px;
+  padding: 0 13px;
+  border-bottom: 1px solid var(--line);
+}
+.panel-title span {
+  font-size: 13px;
+  font-weight: 800;
+}
+.panel-title small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.connection-list > button {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 92px;
+  padding: 13px;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+.connection-list > button.active {
+  background: #fff;
+  box-shadow: inset 3px 0 var(--green);
+}
+.connection-list > button div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.connection-list > button b {
+  font-size: 13px;
+}
+.connection-list > button em {
+  padding: 3px 5px;
+  border-radius: 7px;
+  color: var(--green);
+  background: var(--green-pale);
+  font-size: 10px;
+  font-style: normal;
+}
+.connection-list > button > span {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.connection-list > button small {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 5px;
+  color: #8d9993;
+  font-size: 11px;
+}
+.connection-list > button small i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #a1aaa6;
+}
+.connection-list > button small i.online {
+  background: #28aa7f;
+}
+.api-editor {
+  min-width: 0;
+  padding: 18px 19px 76px;
+}
+.api-editor > header {
+  display: flex;
+  justify-content: space-between;
+  min-height: 68px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--line);
+}
+.config-change-note {
+  display: block;
+  max-width: 520px;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.config-section {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+.config-fields {
+  display: grid;
+  grid-template-columns: 0.8fr 1.3fr 1fr;
+  gap: 10px;
+}

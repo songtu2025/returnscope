@@ -114,7 +114,9 @@ import { TeamPage } from "../src/pages/TeamPage";
 import { NewTaskPage, TaskMonitor } from "../src/pages/Tasks";
 import { SESSION_EXPIRED_EVENT } from "../src/shared/api/request";
 import { serverStateKeys } from "../src/shared/serverState";
-import systemSettingsStyles from "../src/styles/system-settings.css?raw";
+import { readStyles } from "./styleSource";
+
+const systemSettingsStyles = readStyles("src/styles/system-settings.css");
 
 function SystemSettingsRouteHarness() {
   const { route } = useHashRoute();
