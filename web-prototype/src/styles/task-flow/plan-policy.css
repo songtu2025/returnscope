@@ -1,0 +1,63 @@
+.segment-variants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.segment-variants span {
+  padding: 4px 7px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.72);
+  font-size: 10px;
+}
+.plan-policy {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #d9dfdb;
+  border-radius: 9px;
+}
+.plan-policy legend {
+  padding: 0 5px;
+  color: #4d5b54;
+  font-size: 11px;
+  font-weight: 800;
+}
+.plan-policy label {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.plan-policy input {
+  width: 16px;
+  height: 16px;
+  margin: 1px 0 0;
+}
+.plan-policy span,
+.plan-policy b {
+  display: block;
+}
+.plan-policy span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+.plan-policy b {
+  margin-bottom: 2px;
+  color: var(--ink);
+  font-size: 12px;
+}
+.segment-board {
+  margin: 20px 22px 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f9fbf9;
+}
