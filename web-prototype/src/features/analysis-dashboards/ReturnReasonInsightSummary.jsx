@@ -1,16 +1,7 @@
-import {
-  CalendarBlank,
-  ShieldCheck,
-  TrendUp,
-  WarningCircle,
-} from "@phosphor-icons/react";
-import { SEMANTIC_STATUS_LABELS } from "../classification-results/semanticResultPresentation";
-import {
-  COMMENT_STATUS_ORDER,
-  filterOptions,
-  formatPercent,
-} from "./returnReasonInsightPresentation";
 import { analysisContextTerms } from "./analysisContextPresentation";
+import { ReturnReasonSummaryFilters } from "./ReturnReasonSummaryFilters";
+import { ReturnReasonSummaryTrust } from "./ReturnReasonSummaryTrust";
+import { ReturnReasonCommentStatuses } from "./ReturnReasonCommentStatuses";
 
 /** @typedef {import("./analysisDashboardContracts").DashboardInsights} DashboardInsights */
 /** @typedef {import("./analysisDashboardContracts").DashboardRoute} DashboardRoute */
@@ -19,164 +10,34 @@ import { analysisContextTerms } from "./analysisContextPresentation";
 /** @typedef {{route: DashboardRoute, data: DashboardInsights, dateRange: InsightDateRange, options: InsightFilterOptions, includedCount: number, pendingCount: number, statusCounts: Record<string, number> | null, analysisContext: string, loading: boolean, error?: string, onRetry: () => void | Promise<void>, onUpdateFilters: (changes: Partial<DashboardRoute>) => void}} ReturnReasonInsightSummaryProps */
 
 /** @param {ReturnReasonInsightSummaryProps} props */
-export function ReturnReasonInsightSummary({
-  route,
-  data,
-  dateRange,
-  options,
-  includedCount,
-  pendingCount,
-  statusCounts,
-  analysisContext,
-  loading,
-  error,
-  onRetry,
-  onUpdateFilters,
-}) {
-  const terms = analysisContextTerms(analysisContext);
-  const feedbackGroups = data.counting_basis === "feedback_group";
+export function ReturnReasonInsightSummary(props) {
+  const terms = analysisContextTerms(props.analysisContext);
+  const feedbackGroups = props.data.counting_basis === "feedback_group";
   const countUnit = feedbackGroups ? "个反馈组" : "条";
   return (
     <>
-      <section className="return-insight-filters" aria-label={terms.filterAria}>
-        <label className="return-insight-date-filter">
-          <span>时间</span>
-          <div>
-            <CalendarBlank size={17} />
-            <input
-              aria-label="开始日期"
-              type="date"
-              value={route.dateFrom || dateRange.date_from || ""}
-              min={dateRange.date_from || undefined}
-              max={route.dateTo || dateRange.date_to || undefined}
-              onChange={(event) =>
-                onUpdateFilters({ dateFrom: event.target.value, problem: "" })
-              }
-            />
-            <i>至</i>
-            <input
-              aria-label="结束日期"
-              type="date"
-              value={route.dateTo || dateRange.date_to || ""}
-              min={route.dateFrom || dateRange.date_from || undefined}
-              max={dateRange.date_to || undefined}
-              onChange={(event) =>
-                onUpdateFilters({ dateTo: event.target.value, problem: "" })
-              }
-            />
-          </div>
-        </label>
-        <InsightSelect
-          label="Listing"
-          value={route.listing}
-          values={options.listings}
-          allLabel="全部 Listing"
-          onChange={(listing) =>
-            onUpdateFilters({
-              listing,
-              productName: "",
-              productSku: "",
-              problem: "",
-            })
-          }
-        />
-        <InsightSelect
-          label="产品"
-          value={route.productName}
-          values={options.product_names}
-          allLabel="全部产品"
-          onChange={(productName) =>
-            onUpdateFilters({ productName, productSku: "", problem: "" })
-          }
-        />
-        <InsightSelect
-          label="SKU"
-          value={route.productSku}
-          values={options.product_skus}
-          allLabel="全部 SKU"
-          onChange={(productSku) => onUpdateFilters({ productSku, problem: "" })}
-        />
-      </section>
-
-      <section className="return-insight-trust" aria-label="数据可信度">
-        <div>
-          <ShieldCheck size={19} weight="duotone" />
-          <span>{terms.includedLabel}</span>
-          <b>
-            {includedCount.toLocaleString()} {countUnit}
-          </b>
-        </div>
-        <div>
-          <TrendUp size={18} />
-          <span>问题标签覆盖</span>
-          <b>{formatPercent(data.summary?.label_coverage ?? data.label_coverage)}</b>
-        </div>
-        <div className={pendingCount ? "warning" : ""}>
-          <WarningCircle size={18} />
-          <span>待复核</span>
-          <b>
-            {pendingCount.toLocaleString()} {countUnit}
-          </b>
-        </div>
-        <p
-          className={loading || error ? "return-insight-refresh-message" : undefined}
-          role={loading ? "status" : error ? "alert" : undefined}
-        >
-          {loading ? (
-            "正在更新筛选结果，当前显示上一次结果…"
-          ) : error ? (
-            <>
-              更新失败，当前显示上一次结果。
-              <button type="button" className="text-button" onClick={onRetry}>
-                重试
-              </button>
-            </>
-          ) : (
-            <>
-              同一{feedbackGroups ? "反馈组" : terms.recordUnit}
-              可命中多个原因，占比之和可能超过 100%。
-              {data.group_alignment === "unified-v1" && " 跨版本已统一一级分组。"}
-            </>
-          )}
-        </p>
-      </section>
-
-      {statusCounts && (
-        <section className="return-comment-statuses" aria-label="评论级结论分布">
-          <header>
-            <b>评论级结论</b>
-            <span>
-              互斥口径，每{feedbackGroups ? "个反馈组" : "条评论"}只进入一种状态
-            </span>
-          </header>
-          <div>
-            {COMMENT_STATUS_ORDER.map((status) => (
-              <article key={status} className={`is-${status.toLowerCase()}`}>
-                <span>{SEMANTIC_STATUS_LABELS[status]}</span>
-                <b>{Number(statusCounts[status] || 0).toLocaleString()}</b>
-                <small>{feedbackGroups ? "个反馈组" : "条评论"}</small>
-              </article>
-            ))}
-          </div>
-        </section>
-      )}
+      <ReturnReasonSummaryFilters
+        route={props.route}
+        dateRange={props.dateRange}
+        options={props.options}
+        onUpdateFilters={props.onUpdateFilters}
+        terms={terms}
+      />
+      <ReturnReasonSummaryTrust
+        data={props.data}
+        includedCount={props.includedCount}
+        pendingCount={props.pendingCount}
+        loading={props.loading}
+        error={props.error}
+        onRetry={props.onRetry}
+        terms={terms}
+        feedbackGroups={feedbackGroups}
+        countUnit={countUnit}
+      />
+      <ReturnReasonCommentStatuses
+        statusCounts={props.statusCounts}
+        feedbackGroups={feedbackGroups}
+      />
     </>
-  );
-}
-
-/** @param {{label: string, value: string, values?: string[], allLabel: string, onChange: (value: string) => void}} props */
-function InsightSelect({ label, value, values, allLabel, onChange }) {
-  return (
-    <label className="return-insight-select">
-      <span>{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)}>
-        <option value="">{allLabel}</option>
-        {filterOptions(values).map((item) => (
-          <option key={item} value={item}>
-            {item}
-          </option>
-        ))}
-      </select>
-    </label>
   );
 }
