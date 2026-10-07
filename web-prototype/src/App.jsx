@@ -1,72 +1,30 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { SWRConfig } from "swr";
-import {
-  Pulse,
-  ArrowRight,
-  MagnifyingGlass,
-  SignOut,
-  WarningCircle,
-} from "@phosphor-icons/react";
+import { Pulse, ArrowRight, WarningCircle } from "@phosphor-icons/react";
 import { ApiError, api } from "./api";
 import { AppShell } from "./app/AppShell";
 import { GlobalSearch } from "./app/GlobalSearch";
 import { navigateHash, useHashRoute } from "./app/hashRouter";
-import { PRIMARY_NAV_ITEMS, SETTINGS_NAV_ITEM } from "./app/navigation";
+import { Sidebar } from "./app/Sidebar";
+import { Topbar } from "./app/Topbar";
+import {
+  WorkbenchPage,
+  TaskCreatePage,
+  TaskRuntimePage,
+  ReviewCenter,
+  DataAssetsPage,
+  ClassificationStandardsPage,
+  ResultsPage,
+  ClassificationResultsPage,
+  AnalysisDashboardPage,
+  SystemSettingsPage,
+} from "./app/pageModules";
 import { InlineLoading, PageLoadingState } from "./components/SharedUi";
 import { Toast } from "./components/Toast";
-import { classNames } from "./lib/presentation";
 import { SESSION_EXPIRED_EVENT } from "./shared/api/request";
 import { serverStateConfig } from "./shared/serverState";
 import { AuthPages } from "./pages/AuthPages";
 
-const loadWorkbenchPage = () =>
-  import("./features/workbench/WorkbenchPage").then((module) => ({
-    default: module.WorkbenchPage,
-  }));
-const WorkbenchPage = lazy(loadWorkbenchPage);
-const loadTaskCreatePage = () =>
-  import("./features/task-create/TaskCreatePage").then((module) => ({
-    default: module.TaskCreatePage,
-  }));
-const TaskCreatePage = lazy(loadTaskCreatePage);
-const loadTaskRuntimePage = () =>
-  import("./features/task-runtime/TaskRuntimePage").then((module) => ({
-    default: module.TaskRuntimePage,
-  }));
-const TaskRuntimePage = lazy(loadTaskRuntimePage);
-const ReviewCenter = lazy(() =>
-  import("./pages/ReviewCenter").then((module) => ({
-    default: module.ReviewCenter,
-  })),
-);
-const loadDataAssetsPage = () =>
-  import("./features/data-management/DataAssetsPage").then((module) => ({
-    default: module.DataAssetsPage,
-  }));
-const DataAssetsPage = lazy(loadDataAssetsPage);
-const loadClassificationStandardsPage = () =>
-  import("./features/classification-standards/ClassificationStandardsPage").then(
-    (module) => ({ default: module.ClassificationStandardsPage }),
-  );
-const ClassificationStandardsPage = lazy(loadClassificationStandardsPage);
-const ResultsPage = lazy(() =>
-  import("./pages/ResultsPage").then((module) => ({ default: module.ResultsPage })),
-);
-const loadClassificationResultsPage = () =>
-  import("./pages/ClassificationResultsPage").then((module) => ({
-    default: module.ClassificationResultsPage,
-  }));
-const ClassificationResultsPage = lazy(loadClassificationResultsPage);
-const loadAnalysisDashboardPage = () =>
-  import("./features/analysis-dashboards/AnalysisDashboardPage").then((module) => ({
-    default: module.AnalysisDashboardPage,
-  }));
-const AnalysisDashboardPage = lazy(loadAnalysisDashboardPage);
-const loadSystemSettingsPage = () =>
-  import("./features/system-settings/SystemSettingsPage").then((module) => ({
-    default: module.SystemSettingsPage,
-  }));
-const SystemSettingsPage = lazy(loadSystemSettingsPage);
 const PUBLIC_AUTH_PAGES = new Set([
   "login",
   "forgot-password",
@@ -75,30 +33,10 @@ const PUBLIC_AUTH_PAGES = new Set([
   "change-email",
 ]);
 
-/** @type {Record<string, () => Promise<unknown>>} */
-const PAGE_PRELOADERS = {
-  workbench: loadWorkbenchPage,
-  "data-assets": loadDataAssetsPage,
-  "classification-standards": loadClassificationStandardsPage,
-  "analysis-tasks": loadTaskRuntimePage,
-  "classification-results": loadClassificationResultsPage,
-  "analysis-dashboards": loadAnalysisDashboardPage,
-  settings: loadSystemSettingsPage,
-};
-
-/** @param {string} page */
-function preloadPage(page) {
-  const loader = PAGE_PRELOADERS[page];
-  if (loader) void loader();
-}
-
-/** @typedef {import("./app/navigation").NavigationFocus} NavigationFocus */
-/** @typedef {import("./app/navigation").NavigationItem} NavigationItem */
-/** @typedef {{id: string, email: string, display_name: string, is_admin?: boolean}} CurrentUser */
-/** @typedef {{warnings?: string[], pending_review_batches?: number, pending_review_batch_count?: number, review_batch_pending_count?: number, my_running_segments?: number, my_running_tasks?: number}} SystemStatus */
-/** @typedef {{message: string, tone: string}} ToastState */
-/** @typedef {(message: string, tone?: string) => void} Notify */
-/** @typedef {(destination: string, focus?: NavigationFocus | null) => void} Navigate */
+/** @typedef {import("./app/appContracts").CurrentUser} CurrentUser */
+/** @typedef {import("./app/appContracts").SystemStatus} SystemStatus */
+/** @typedef {import("./app/appContracts").ToastState} ToastState */
+/** @typedef {import("./app/appContracts").Notify} Notify */
 function App() {
   const [user, setUser] = useState(/** @type {CurrentUser | null} */ (null));
   const [booting, setBooting] = useState(true);
@@ -377,121 +315,4 @@ function LoadingScreen() {
   );
 }
 
-/** @param {{page: string, system: SystemStatus | null, onNavigate: Navigate}} props */
-export function Sidebar({ page, system, onNavigate }) {
-  const activePage =
-    page === "legacy-results"
-      ? "analysis-dashboards"
-      : page === "task-create"
-        ? "analysis-tasks"
-        : page === "review" || page === "review-center"
-          ? "classification-results"
-          : page;
-  const pendingReviewBatches = Number(
-    system?.pending_review_batches ??
-      system?.pending_review_batch_count ??
-      system?.review_batch_pending_count ??
-      0,
-  );
-  return (
-    <aside className="sidebar">
-      <div className="brand">
-        <img src="/assets/brand-mark-160.png" alt="" />
-        <div>
-          <strong>用户语义分析</strong>
-          <span>智能体工作台</span>
-        </div>
-      </div>
-      <nav className="primary-nav" aria-label="主导航">
-        {PRIMARY_NAV_ITEMS.map((item) => (
-          <SidebarNavItem
-            item={item}
-            active={activePage === item.id}
-            badge={item.id === "classification-results" ? pendingReviewBatches : null}
-            onNavigate={onNavigate}
-            key={item.id}
-          />
-        ))}
-      </nav>
-      <nav className="sidebar-utility-nav" aria-label="系统管理">
-        <SidebarNavItem
-          item={SETTINGS_NAV_ITEM}
-          active={activePage === SETTINGS_NAV_ITEM.id}
-          onNavigate={onNavigate}
-        />
-      </nav>
-    </aside>
-  );
-}
-
-/** @param {{item: NavigationItem, active: boolean, badge?: number | null, onNavigate: Navigate}} props */
-function SidebarNavItem({
-  item: { id, label, icon: Icon },
-  active,
-  badge = null,
-  onNavigate,
-}) {
-  return (
-    <button
-      className={classNames("nav-item", active && "active")}
-      onClick={() => onNavigate(id)}
-      onMouseEnter={() => preloadPage(id)}
-      onFocus={() => preloadPage(id)}
-      aria-current={active ? "page" : undefined}
-    >
-      <Icon
-        className="sidebar-nav-icon"
-        size={20}
-        weight={active ? "duotone" : "regular"}
-        aria-hidden="true"
-      />
-      <span>{label}</span>
-      {badge != null && badge > 0 && <em>{badge > 99 ? "99+" : badge}</em>}
-    </button>
-  );
-}
-
-/** @param {{user: CurrentUser, system: SystemStatus | null, onRefresh: () => Promise<void>, onNavigate: Navigate, onSearch: () => void, onLogout: () => void | Promise<void>}} props */
-export function Topbar({ user, system, onRefresh, onNavigate, onSearch, onLogout }) {
-  return (
-    <header className="topbar">
-      <button
-        className="topbar-search"
-        onClick={onSearch}
-        aria-label="查找任务、数据或复核记录"
-        title="全局搜索（Ctrl K）"
-      >
-        <MagnifyingGlass size={18} />
-        <span>查找任务、数据或复核记录</span>
-        <kbd>Ctrl K</kbd>
-      </button>
-      <div className="topbar-actions">
-        <button
-          className="capacity-chip"
-          onClick={async () => {
-            await onRefresh();
-            onNavigate("analysis-tasks");
-          }}
-          title="查看进行中的分析任务"
-        >
-          <span>我的运行 Listing</span>
-          <strong>
-            {system?.my_running_segments ?? system?.my_running_tasks ?? 0}/3
-          </strong>
-        </button>
-        <div className="user-block" title={`${user.display_name} · ${user.email}`}>
-          <span>{user.display_name?.slice(0, 1)}</span>
-          <div>
-            <b>{user.display_name}</b>
-            <small>{user.email}</small>
-          </div>
-        </div>
-        <button className="icon-button" onClick={onLogout} aria-label="退出登录">
-          <SignOut size={20} />
-        </button>
-      </div>
-    </header>
-  );
-}
-
-export { App };
+export { App, Sidebar, Topbar };
