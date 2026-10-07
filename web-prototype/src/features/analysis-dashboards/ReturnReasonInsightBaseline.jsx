@@ -90,7 +90,9 @@ function BaselineComparisonTable({ data }) {
             <tr key={row.key}>
               <th scope="row">{row.label}</th>
               <td>
-                {row.count.toLocaleString()} / {row.total?.toLocaleString() ?? "--"}
+                {/* 保留原分隔符的文本节点，避免格式化合并空格后改变数字间距。 */}
+                {row.count.toLocaleString()}
+                {" /"} {row.total?.toLocaleString() ?? "--"}
                 {row.total ? ` = ${formatPercent((row.count / row.total) * 100)}` : ""}
               </td>
               <td>
