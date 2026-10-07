@@ -1,0 +1,70 @@
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
+  padding: 24px;
+  color: var(--muted);
+  text-align: center;
+}
+.empty-state .ant-empty-image {
+  height: auto;
+  margin-bottom: 11px;
+  line-height: 0;
+}
+.empty-state .ant-empty-image svg {
+  color: #9fb4ab;
+}
+.empty-state-copy {
+  display: grid;
+  justify-items: center;
+}
+.empty-state-copy b {
+  color: #55635c;
+  font-size: 14px;
+}
+.empty-state-copy span {
+  margin-top: 5px;
+  max-width: 230px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.inline-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 100px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.muted-line {
+  margin: 12px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.toast {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 390px;
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid #bcd7cc;
+  border-radius: 9px;
+  color: var(--green-dark);
+  background: #f3fbf7;
+  box-shadow: 0 10px 35px rgba(16, 42, 33, 0.16);
+  font-size: 13px;
+  font-weight: 700;
+}
+.toast.error {
+  color: var(--red);
+  border-color: #e9c1bc;
+  background: #fff5f4;
+}
