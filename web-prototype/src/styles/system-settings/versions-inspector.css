@@ -1,0 +1,102 @@
+.config-inspector {
+  padding: 14px;
+  border-left: 1px solid var(--line);
+  background: #f8faf8;
+}
+.config-inspector .content-card {
+  margin-bottom: 10px;
+}
+.config-version-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.config-version-list button {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 2px 6px;
+  width: 100%;
+  padding: 7px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+}
+.config-version-list button.active {
+  border-color: #9fc8b7;
+  background: var(--green-pale);
+}
+.config-version-list b {
+  grid-row: 1 / 4;
+  color: var(--green-dark);
+  font-size: 12px;
+}
+.config-version-list span,
+.config-version-list small,
+.config-version-list em {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.config-version-list em {
+  color: var(--green-dark);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+}
+.config-diff-row {
+  display: grid;
+  grid-template-columns: 1fr 12px 1fr;
+  gap: 4px;
+  padding: 7px 0;
+  border-top: 1px solid var(--line-soft);
+  font-size: 11px;
+}
+.config-diff-row b {
+  grid-column: 1 / -1;
+  color: var(--muted);
+}
+.config-diff-row span {
+  overflow-wrap: anywhere;
+}
+.config-diff-row svg {
+  color: var(--green);
+}
+.large-connection-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px;
+  border-radius: 8px;
+  color: #7b6543;
+  background: var(--amber-pale);
+  font-size: 13px;
+}
+.large-connection-status span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #c58a35;
+}
+.large-connection-status.online {
+  color: var(--green-dark);
+  background: var(--green-pale);
+}
+.large-connection-status.online span {
+  background: #24aa7e;
+}
+.inspector-copy {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+  color: #5d6963;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.inspector-copy svg {
+  flex: 0 0 auto;
+  color: var(--green);
+}

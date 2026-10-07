@@ -1,0 +1,167 @@
+.model-config-row {
+  display: grid;
+  grid-template-columns: 27px minmax(150px, 1fr) minmax(150px, 0.85fr) 130px;
+  align-items: center;
+  gap: 10px;
+  min-height: 78px;
+  padding: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+.model-config-row.primary {
+  margin: 0 -8px;
+  padding: 10px 18px;
+  border: 1px solid #cce0d7;
+  border-radius: 8px;
+  background: #f4faf7;
+}
+.model-number {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: var(--green-dark);
+  background: var(--green-pale);
+  font-size: 12px;
+  font-weight: 800;
+}
+.model-config-row > div:nth-child(2) b {
+  display: block;
+  font-size: 13px;
+}
+.model-config-row > div:nth-child(2) b em {
+  margin-left: 5px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  color: var(--green);
+  background: var(--green-pale);
+  font-size: 10px;
+  font-style: normal;
+}
+.model-config-row > div:nth-child(2) small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.model-config-row input,
+.model-config-row select {
+  height: 31px;
+  font-size: 12px;
+}
+.effort-picker > span {
+  display: block;
+  margin-bottom: 5px;
+  color: #56645d;
+  font-size: 12px;
+  font-weight: 700;
+}
+.effort-picker > div {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 3px;
+  border-radius: 7px;
+  background: #e9eeeb;
+}
+.effort-picker button {
+  height: 25px;
+  border: 0;
+  border-radius: 5px;
+  color: #77837d;
+  background: transparent;
+  font-size: 12px;
+  cursor: pointer;
+}
+.effort-picker button.active {
+  color: var(--green-dark);
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(16, 40, 31, 0.1);
+  font-weight: 800;
+}
+.model-editor-form {
+  gap: 16px;
+}
+.model-effort-selector {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.model-effort-selector legend {
+  margin-bottom: 7px;
+  color: #56645d;
+  font-size: 13px;
+  font-weight: 700;
+}
+.model-effort-selector > div {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+.model-effort-selector button {
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: #67756e;
+  background: #fff;
+  cursor: pointer;
+}
+.model-effort-selector button.active {
+  border-color: #9bc6b4;
+  color: var(--green-dark);
+  background: var(--green-pale);
+  font-weight: 800;
+}
+.runtime-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  padding-top: 16px;
+}
+.runtime-grid input {
+  height: 32px;
+}
+.config-change-reason {
+  padding: 14px 0;
+}
+.config-change-reason > label {
+  font-size: 12px;
+}
+.config-change-reason textarea {
+  min-height: 62px;
+  resize: vertical;
+}
+.sticky-config-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-height: 60px;
+  padding: 10px 18px;
+  border-top: 1px solid var(--line);
+  background: rgba(250, 251, 250, 0.97);
+  backdrop-filter: blur(12px);
+}
+.api-editor {
+  position: relative;
+}
+.sticky-config-bar > div {
+  flex: 1;
+}
+.validation-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--amber);
+  font-size: 12px;
+}
+.validation-state.validated {
+  color: var(--green);
+}
+.validation-state.failed {
+  color: var(--red);
+}
