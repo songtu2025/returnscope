@@ -13,7 +13,7 @@ export const QUALITY_GATE_LABELS = /** @type {Record<string, string>} */ ({
   blocked: "质量阻断",
 });
 
-export const STAGE_LABELS = /** @type {Record<string, string>} */ ({
+const STAGE_LABELS = /** @type {Record<string, string>} */ ({
   queued: "等待生成",
   preparing_evidence: "正在准备确定性证据",
   calling_model: "模型正在解释证据",
