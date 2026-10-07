@@ -1,0 +1,189 @@
+/* 创建任务工作区：筛选、检查与启动保持在同一页面。 */
+.new-task-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.task-step-actions {
+  position: sticky;
+  z-index: 5;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 0;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+  background: var(--canvas);
+}
+
+.task-step-actions > span {
+  flex: 1;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.new-task-page > .task-config-panel,
+.new-task-page > .task-plan-workspace {
+  margin-bottom: 20px;
+}
+
+.task-advanced-settings {
+  margin-top: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.task-advanced-settings > summary {
+  padding: 13px 16px;
+  color: var(--green-dark);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.task-advanced-body {
+  padding: 0 16px 16px;
+}
+
+.task-model-policy-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.task-data-step .task-upload-source {
+  max-width: none;
+  margin-bottom: 0;
+}
+
+.task-data-step .existing-source-picker {
+  margin-bottom: 0;
+}
+
+.new-task-page .page-heading h1:focus {
+  outline: none;
+}
+
+.standard-page.new-task-page {
+  width: 100%;
+  max-width: none;
+  gap: 0;
+  padding-top: 8px;
+}
+.new-task-page .page-heading {
+  min-height: 54px;
+  margin-bottom: 16px;
+}
+.new-task-page .page-heading-compact {
+  min-height: 0;
+}
+.new-task-page .task-config-panel {
+  box-shadow: none;
+}
+.new-task-page .task-config-section {
+  padding: 20px 24px;
+}
+.task-data-entry-options {
+  display: inline-flex;
+  gap: 3px;
+  padding: 4px;
+  margin-bottom: 16px;
+  border-radius: 9px;
+  background: var(--surface-soft);
+}
+.task-data-entry-options > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 6px 17px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+}
+.task-data-entry-options > button.active {
+  color: var(--green-dark);
+  background: #fff;
+  box-shadow: 0 1px 4px #102c2014;
+}
+.new-task-page .task-plan-workspace {
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  border-radius: 0;
+  box-shadow: none;
+  margin-top: 8px;
+}
+.new-task-page .task-plan-layout,
+.new-task-page .task-plan-main {
+  padding: 0;
+  display: block;
+}
+.new-task-page .plan-state {
+  margin: 16px 0 8px;
+  padding: 12px 0;
+  border: 0;
+  background: transparent;
+}
+.new-task-page .plan-state b {
+  font-size: 18px;
+}
+.new-task-page .plan-scope-summary {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  font-size: 13px;
+}
+.task-count-line {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.new-task-page .excluded-plan {
+  background: var(--surface-soft);
+  border-color: var(--line);
+}
+.new-task-page .task-scope-confirmation {
+  background: transparent;
+  border: 0;
+  padding: 8px 0;
+}
+.new-task-page .task-title-input {
+  max-width: none;
+}
+.new-task-page .task-step-actions {
+  min-height: 70px;
+  margin-top: 0;
+  padding: 12px 4px;
+}
+.new-task-page .task-step-actions > button {
+  min-width: 128px;
+}
+.task-settings-lock {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 0 0 24px;
+}
+
+.new-task-page .execution-plan {
+  gap: 8px;
+  margin: 8px 0;
+}
+.new-task-page .task-advanced-settings {
+  margin-top: 8px;
+}
+.new-task-page .task-scope-confirmation span {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.new-task-page input[type="checkbox"],
+.new-task-page input[type="radio"] {
+  accent-color: var(--green);
+}
