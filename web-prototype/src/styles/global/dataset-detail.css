@@ -1,0 +1,223 @@
+.dataset-detail {
+  min-width: 0;
+  padding: 21px;
+}
+.dataset-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+.dataset-header h2,
+.api-editor header h2,
+.result-header h2 {
+  margin: 7px 0 3px;
+  font-size: 17px;
+}
+.dataset-header p,
+.api-editor header p,
+.result-header p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.dataset-header > div:last-child {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+}
+.asset-type {
+  display: inline-flex;
+  min-height: 20px;
+  align-items: center;
+  padding: 0 7px;
+  border-radius: 10px;
+  color: var(--green-dark);
+  background: var(--green-pale);
+  font-size: 11px;
+  font-weight: 800;
+}
+.dimension-table-card {
+  margin-top: 13px;
+}
+.dimension-table {
+  max-height: 270px;
+  overflow-y: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+}
+.dimension-table > div {
+  display: grid;
+  grid-template-columns: 0.8fr 0.9fr 0.7fr 1.4fr 0.55fr;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 9px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 12px;
+}
+.dimension-table > div:first-child {
+  border-top: 0;
+}
+.dimension-table .table-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  min-height: 29px;
+  color: #7d8983;
+  background: #f4f7f5;
+  font-size: 11px;
+  font-weight: 700;
+}
+.dimension-table > div > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dimension-table code {
+  font-size: 12px;
+  font-weight: 500;
+}
+.dimension-table button {
+  width: fit-content;
+  padding: 4px 7px;
+  border: 1px solid #bdd5cb;
+  border-radius: 5px;
+  color: var(--green);
+  background: #f5fbf8;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.dimension-table .dimension-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0;
+  padding: 24px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+.schema-table > div {
+  display: grid;
+  grid-template-columns: 1.4fr 0.8fr 0.65fr;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 8px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 12px;
+}
+.schema-table .table-head,
+.member-table .table-head {
+  min-height: 28px;
+  color: #87938d;
+  background: #f6f8f6;
+  font-size: 11px;
+  font-weight: 700;
+}
+.schema-table code {
+  color: #33433c;
+  font-size: 12px;
+}
+.schema-table em {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--green);
+  font-style: normal;
+}
+.version-list > div {
+  display: grid;
+  grid-template-columns: 35px 1fr auto;
+  gap: 9px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line-soft);
+}
+.version-list > div > span {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 27px;
+  border-radius: 6px;
+  color: var(--green-dark);
+  background: var(--green-pale);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 12px;
+  font-weight: 700;
+}
+.version-list b {
+  display: block;
+  max-width: 210px;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.version-list p {
+  margin: 3px 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.version-list small {
+  color: #909b95;
+  font-size: 11px;
+}
+.version-list em {
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 9px;
+  color: var(--green);
+  background: var(--green-pale);
+  font-size: 11px;
+  font-style: normal;
+  line-height: 18px;
+}
+.version-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.version-actions a {
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--green);
+  background: #fff;
+}
+.version-actions a:hover {
+  border-color: #a8c9bb;
+  background: #f3faf6;
+}
+.data-audit-list > div {
+  padding: 10px 0;
+  border-top: 1px solid var(--line-soft);
+}
+.data-audit-list b {
+  font-size: 13px;
+}
+.data-audit-list p {
+  display: grid;
+  grid-template-columns: 90px 1fr 14px 1fr;
+  align-items: center;
+  gap: 7px;
+  margin: 7px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.data-audit-list code {
+  overflow: hidden;
+  padding: 5px 6px;
+  border-radius: 5px;
+  background: #f4f6f4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.data-audit-list small {
+  color: #87928d;
+  font-size: 11px;
+}
