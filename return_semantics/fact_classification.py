@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
+from return_semantics.fact_adjudication import (
+    _adjudicated_fact_mappings,
+    _adjudications_by_fact,
+)
 from return_semantics.fact_extraction import (
     _evidence,
     _fact_assertion,
@@ -7,14 +13,10 @@ from return_semantics.fact_extraction import (
     _validate_facts,
 )
 from return_semantics.fact_mapping import (
-    EvidenceLabelAdjudication,
     EvidenceLabelAdjudications,
     FactMappings,
-    _adjudicated_mapping,
-    _can_be_adjudicated,
     _fact_identity,
     _mapping_can_form_terminal,
-    _normalized_adjudication,
     _retain_fact_unit,
     _validate_coverage,
     _validated_mapping_label,
@@ -50,6 +52,15 @@ from return_semantics.schemas import (
 from return_semantics.semantic_guardrails import apply_fallback_precedence
 
 
+@dataclass(frozen=True, kw_only=True)
+class _FactCompilationContext:
+    taxonomy: TaxonomyConfig
+    labels: dict[str, LabelDefinition]
+    allowed: dict[str, list[str]]
+    recover_mapping_errors: bool
+    comment: str
+
+
 def compile_evidence_label_adjudications(
     classification: ModelClassification,
     adjudications: EvidenceLabelAdjudications,
@@ -61,73 +72,16 @@ def compile_evidence_label_adjudications(
     recovery_metrics: dict[str, int] | None = None,
 ) -> ModelClassification:
     """裁决为每个可终态事实确定唯一映射或处置，并重建结果。"""
-    candidate_ids = {
-        fact.fact_id
-        for fact in classification.extracted_facts
-        if _can_be_adjudicated(fact) and fact.product_ref.startswith("CURRENT")
-    }
-    grouped_decisions: dict[str, list[EvidenceLabelAdjudication]] = {}
-    for item in adjudications.adjudications:
-        grouped_decisions.setdefault(item.fact_id, []).append(item)
-    valid_coverage = set(grouped_decisions) == candidate_ids and all(
-        len(items) == 1 for items in grouped_decisions.values()
+    decisions = _adjudications_by_fact(
+        classification, adjudications, recover_invalid_actions
     )
-    if not valid_coverage and not recover_invalid_actions:
-        raise ValueError("每个可形成终态的具体事实必须且只能有一条最终裁决")
-    decisions = {
-        fact_id: (
-            grouped_decisions[fact_id][0]
-            if len(grouped_decisions.get(fact_id, [])) == 1
-            else EvidenceLabelAdjudication(
-                fact_id=fact_id,
-                action="REVIEW",
-                reason="该事实缺少唯一裁决动作",
-            )
-        )
-        for fact_id in candidate_ids
-    }
-
-    facts_by_id = {fact.fact_id: fact for fact in classification.extracted_facts}
-    labels_by_code = {label.code: label for label in taxonomy.labels}
-    fallback_codes = set(taxonomy.validation_rules.fallback_label_codes)
-    mappings = []
-    recovery_count = 0
-    for mapping in classification.fact_mappings:
-        if mapping.fact_id not in candidate_ids:
-            mappings.append(mapping)
-            continue
-        item, recovered_format = _normalized_adjudication(
-            mapping,
-            decisions[mapping.fact_id],
-            allowed_codes=allowed[mapping.fact_id],
-        )
-        try:
-            resolved = _adjudicated_mapping(
-                mapping,
-                item,
-                fact=facts_by_id[item.fact_id],
-                labels_by_code=labels_by_code,
-                allowed=allowed,
-                fallback_codes=fallback_codes,
-            )
-        except ValueError as exc:
-            if not recover_invalid_actions:
-                raise
-            resolved = _adjudicated_mapping(
-                mapping,
-                EvidenceLabelAdjudication(
-                    fact_id=mapping.fact_id,
-                    action="REVIEW",
-                    reason=f"该事实的裁决动作无法唯一恢复：{exc}",
-                ),
-                fact=facts_by_id[mapping.fact_id],
-                labels_by_code=labels_by_code,
-                allowed=allowed,
-                fallback_codes=fallback_codes,
-            )
-        else:
-            recovery_count += int(recovered_format)
-        mappings.append(resolved)
+    mappings, recovery_count = _adjudicated_fact_mappings(
+        classification,
+        decisions,
+        taxonomy=taxonomy,
+        allowed=allowed,
+        recover_invalid_actions=recover_invalid_actions,
+    )
     result = compile_fact_classification(
         classification.extracted_facts,
         FactMappings(mappings=mappings),
@@ -141,6 +95,66 @@ def compile_evidence_label_adjudications(
             recovery_metrics.get("adjudication_format_recoveries", 0) + recovery_count
         )
     return result
+
+
+def _compile_fact_units(
+    result: ModelClassification,
+    facts: list[ExtractedFact],
+    by_id: dict[str, FactMapping],
+    *,
+    context: _FactCompilationContext,
+) -> None:
+    seen: dict[tuple, int] = {}
+    for fact in facts:
+        mapping = by_id[fact.fact_id]
+        evidence = _evidence(fact, context.comment)
+        outcome, skip_labels = _fact_mapping_outcome(
+            fact, mapping, evidence, context.taxonomy
+        )
+        if outcome is not None:
+            result.unknown_semantics.append(outcome)
+        if skip_labels:
+            continue
+        _append_fact_units(
+            result,
+            seen,
+            fact,
+            mapping,
+            evidence,
+            context.labels,
+            context.allowed,
+            context.recover_mapping_errors,
+            context.comment,
+        )
+
+
+def _finalize_fact_classification(
+    result: ModelClassification,
+    comment: str,
+    taxonomy: TaxonomyConfig,
+) -> None:
+    suppressed_fallback_ids = apply_fallback_precedence(
+        result.semantic_units,
+        set(taxonomy.validation_rules.fallback_label_codes),
+    )
+    _append_suppressed_fallback_outcomes(result, suppressed_fallback_ids, comment)
+    _complete_fact_outcomes(result, comment=comment)
+    _normalize_fact_mapping_outcomes(result)
+    retained_codes = {unit.label_code for unit in result.semantic_units}
+    result.primary_label_codes = [
+        code for code in result.primary_label_codes if code in retained_codes
+    ]
+    result.needs_review = bool(
+        result.review_reasons
+        or any(
+            item.disposition
+            in {
+                SemanticDisposition.TAXONOMY_GAP,
+                SemanticDisposition.MAPPING_UNCERTAIN,
+            }
+            for item in result.unknown_semantics
+        )
+    )
 
 
 def compile_fact_classification(
@@ -165,54 +179,42 @@ def compile_fact_classification(
     result = ModelClassification(
         extracted_facts=facts, fact_mappings=effective_mappings
     )
-    seen: dict[tuple, int] = {}
-    for fact in facts:
-        mapping = by_id[fact.fact_id]
-        evidence = _evidence(fact, comment)
-        outcome, skip_labels = _fact_mapping_outcome(
-            fact,
-            mapping,
-            evidence,
-            taxonomy,
-        )
-        if outcome is not None:
-            result.unknown_semantics.append(outcome)
-        if skip_labels:
-            continue
-        _append_fact_units(
-            result,
-            seen,
-            fact,
-            mapping,
-            evidence,
-            labels,
-            allowed,
-            recover_mapping_errors,
-            comment,
-        )
-    suppressed_fallback_ids = apply_fallback_precedence(
-        result.semantic_units,
-        set(taxonomy.validation_rules.fallback_label_codes),
+    _compile_fact_units(
+        result,
+        facts,
+        by_id,
+        context=_FactCompilationContext(
+            taxonomy=taxonomy,
+            labels=labels,
+            allowed=allowed,
+            recover_mapping_errors=recover_mapping_errors,
+            comment=comment,
+        ),
     )
-    _append_suppressed_fallback_outcomes(result, suppressed_fallback_ids, comment)
-    _complete_fact_outcomes(result, comment=comment)
-    _normalize_fact_mapping_outcomes(result)
-    retained_codes = {unit.label_code for unit in result.semantic_units}
-    result.primary_label_codes = [
-        code for code in result.primary_label_codes if code in retained_codes
-    ]
-    result.needs_review = bool(
-        result.review_reasons
-        or any(
-            item.disposition
-            in {
-                SemanticDisposition.TAXONOMY_GAP,
-                SemanticDisposition.MAPPING_UNCERTAIN,
-            }
-            for item in result.unknown_semantics
-        )
-    )
+    _finalize_fact_classification(result, comment, taxonomy)
     return result
+
+
+def _fact_semantic_unit(
+    fact: ExtractedFact,
+    mapping: FactMapping,
+    code: str,
+    evidence: str,
+    assertion: AssertionCode,
+) -> SemanticUnit:
+    return SemanticUnit(
+        subject=fact.subject,
+        label_code=code,
+        opinion=fact.opinion,
+        sentiment=fact.sentiment,
+        assertion=assertion,
+        part=fact.part,
+        evidence=evidence,
+        implicit=False,
+        decision_reason=mapping.reason or "原子事实直接支持该末端标签",
+        **_fact_context(fact),
+        fact_ids=[fact.fact_id],
+    )
 
 
 def _append_fact_units(
@@ -244,19 +246,7 @@ def _append_fact_units(
         if not _mapping_can_form_terminal(fact, mapping):
             continue
         assertion = _fact_assertion(fact)
-        unit = SemanticUnit(
-            subject=fact.subject,
-            label_code=code,
-            opinion=fact.opinion,
-            sentiment=fact.sentiment,
-            assertion=assertion,
-            part=fact.part,
-            evidence=evidence,
-            implicit=False,
-            decision_reason=mapping.reason or "原子事实直接支持该末端标签",
-            **_fact_context(fact),
-            fact_ids=[fact.fact_id],
-        )
+        unit = _fact_semantic_unit(fact, mapping, code, evidence, assertion)
         _retain_fact_unit(
             result.semantic_units,
             seen,
