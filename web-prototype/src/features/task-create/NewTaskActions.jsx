@@ -1,5 +1,6 @@
 import { CaretRight, Check, WarningCircle } from "@phosphor-icons/react";
 import Button from "antd/es/button";
+import { useRef } from "react";
 
 /** @typedef {import("./taskCreateContracts").DataVersion} DataVersion */
 /** @typedef {import("./taskCreateContracts").MysqlFormState} MysqlFormState */
@@ -22,9 +23,10 @@ export function TaskLaunchActions({
   onSubmit,
   onPrepareExisting,
 }) {
+  const statusRef = useRef(/** @type {HTMLSpanElement | null} */ (null));
   return (
     <footer className={prepared ? "task-launch-actions" : "task-step-actions"}>
-      <span role="status" id="task-action-status">
+      <span ref={statusRef} role="status" id="task-action-status" tabIndex={-1}>
         {launchStatusText({
           prepared,
           dataEntryMode,
@@ -39,7 +41,10 @@ export function TaskLaunchActions({
           className="primary-button"
           disabled={submitting || !canContinue}
           aria-describedby="task-action-status"
-          onClick={onSubmit}
+          onClick={() => {
+            statusRef.current?.focus();
+            void onSubmit();
+          }}
         >
           {submitting ? "正在创建…" : submitError ? "重试创建" : submitLabel}
         </Button>

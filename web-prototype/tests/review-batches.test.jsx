@@ -818,6 +818,26 @@ test("可选择本页待处理记录并批量排除", async () => {
   );
 });
 
+test("复核抽屉关闭恢复入口焦点，未保存修改需确认", async () => {
+  render(page(baseBatch, [baseRecord]));
+  const trigger = await screen.findByRole("button", { name: "处理" });
+  await userEvent.click(trigger);
+  await userEvent.keyboard("{Escape}");
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(trigger).toHaveFocus();
+  await userEvent.click(trigger);
+  const reason = screen.getByPlaceholderText("必填：说明确认、修改或排除的判断依据");
+  await userEvent.type(reason, "保留我的判断");
+  await userEvent.keyboard("{Escape}");
+  expect(screen.getByRole("button", { name: "继续编辑" })).toHaveFocus();
+  await userEvent.click(screen.getByRole("button", { name: "继续编辑" }));
+  expect(reason).toHaveValue("保留我的判断");
+  await userEvent.keyboard("{Escape}");
+  await userEvent.click(screen.getByRole("button", { name: "放弃修改并关闭" }));
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(trigger).toHaveFocus();
+});
+
 test("单条处理后可直接进入下一条待处理记录", async () => {
   const secondRecord = {
     ...baseRecord,
@@ -840,6 +860,9 @@ test("单条处理后可直接进入下一条待处理记录", async () => {
   await userEvent.click(screen.getByRole("button", { name: "保存并下一条" }));
 
   expect(await screen.findByRole("dialog", { name: "ORDER-003" })).toBeVisible();
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "关闭复核抽屉" })).toHaveFocus(),
+  );
 });
 
 test("单条 409 保留我的输入并可基于服务器新 revision 重试", async () => {
@@ -881,6 +904,9 @@ test("单条 409 保留我的输入并可基于服务器新 revision 重试", as
   expect(await screen.findByText("服务器最新")).toBeVisible();
   expect(screen.getByText("修订 #2")).toBeVisible();
   expect(screen.getByText("我的未保存")).toBeVisible();
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "关闭复核抽屉" })).toHaveFocus(),
+  );
   expect(screen.getAllByText("实物证据指向偏大")).toHaveLength(2);
   expect(reason).toHaveValue("实物证据指向偏大");
 

@@ -138,6 +138,7 @@ test("数据源保持20条分页上界与筛选的原路由参数", async () => 
   expect(screen.queryByText("SYNTHETIC 0")).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "下一页" })).toBeDisabled();
   await user.click(screen.getByRole("button", { name: "上一页" }));
+  expect(screen.getByLabelText("第 2 页")).toHaveFocus();
   expect(onRouteChange).toHaveBeenLastCalledWith({ page: 1 });
   await user.selectOptions(
     screen.getByRole("combobox", { name: "按数据状态筛选" }),

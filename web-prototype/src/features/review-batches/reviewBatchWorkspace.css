@@ -74,6 +74,18 @@
   grid-template-columns: minmax(190px, 1.4fr) 120px repeat(4, minmax(110px, 0.8fr)) auto;
 }
 
+@media (max-width: 1279px) {
+  .review-record-filters {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .review-record-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .review-record-table-head,
 .review-record-row {
   display: grid;

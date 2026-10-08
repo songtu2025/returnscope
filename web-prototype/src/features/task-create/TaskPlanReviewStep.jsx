@@ -1,4 +1,5 @@
 import { CheckCircle, WarningCircle } from "@phosphor-icons/react";
+import { useEffect, useRef } from "react";
 import {
   ExecutionPlanSummary,
   PreflightProgress,
@@ -31,8 +32,16 @@ export function TaskPlanReviewStep({
   scopeConfirmed,
   onScopeConfirmationChange,
 }) {
+  const workspaceRef = useRef(/** @type {HTMLDivElement | null} */ (null));
+  const retryFocus = useRef(false);
+  useEffect(() => {
+    if (retryFocus.current && preflight.status !== "loading") {
+      retryFocus.current = false;
+      workspaceRef.current?.focus();
+    }
+  }, [preflight.status]);
   return (
-    <div className="task-plan-workspace">
+    <div ref={workspaceRef} className="task-plan-workspace" tabIndex={-1}>
       <div className="task-plan-layout">
         <section className="task-plan-main">
           {preflight.status === "loading" && <PreflightProgress />}
@@ -46,7 +55,11 @@ export function TaskPlanReviewStep({
               <button
                 type="button"
                 className="secondary-button"
-                onClick={onRetryPreflight}
+                onClick={() => {
+                  retryFocus.current = true;
+                  workspaceRef.current?.focus();
+                  void onRetryPreflight();
+                }}
               >
                 重新检查
               </button>

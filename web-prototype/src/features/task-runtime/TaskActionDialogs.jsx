@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { X } from "@phosphor-icons/react";
+import { useEffect, useRef, useState } from "react";
 
 import { Modal } from "../../components/SharedUi";
 export { SegmentCancelDialog, SegmentRetryDialog } from "./SegmentActionDialogs";
@@ -14,6 +13,18 @@ export function TaskRenameDialog({ task, onClose, onSave }) {
   const [title, setTitle] = useState(task.title);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const titleRef = useRef(/** @type {HTMLInputElement | null} */ (null));
+  const continueRef = useRef(/** @type {HTMLButtonElement | null} */ (null));
+  useEffect(() => {
+    (confirmClose ? continueRef : titleRef).current?.focus();
+  }, [confirmClose]);
+  const close = () => {
+    if (saving) return;
+    if (confirmClose) setConfirmClose(false);
+    else if (title !== task.title || note) setConfirmClose(true);
+    else onClose();
+  };
 
   /** @param {import("react").FormEvent<HTMLFormElement>} event */
   const submit = async (event) => {
@@ -27,34 +38,33 @@ export function TaskRenameDialog({ task, onClose, onSave }) {
   };
 
   return (
-    <div
-      className="modal-backdrop"
-      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
-    >
-      <section
-        className="modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label="修改任务名称"
-      >
-        <header>
-          <div>
-            <p className="eyebrow">协作修改</p>
-            <h2>修改任务名称</h2>
+    <Modal eyebrow="协作修改" title="修改任务名称" onClose={close}>
+      {confirmClose ? (
+        <div className="modal-form">
+          <p>尚未保存的名称和修改原因会丢失，是否放弃修改？</p>
+          <div className="modal-actions">
+            <button
+              ref={continueRef}
+              className="secondary-button"
+              onClick={() => setConfirmClose(false)}
+            >
+              继续编辑
+            </button>
+            <button className="danger-button" onClick={onClose}>
+              放弃修改并关闭
+            </button>
           </div>
-          <button onClick={onClose} aria-label="关闭">
-            <X size={18} />
-          </button>
-        </header>
+        </div>
+      ) : (
         <form className="modal-form" onSubmit={submit}>
           <label>
             任务名称
             <input
+              ref={titleRef}
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               maxLength={120}
               required
-              autoFocus
             />
           </label>
           <label>
@@ -72,7 +82,7 @@ export function TaskRenameDialog({ task, onClose, onSave }) {
             数据、模型与分析范围属于不可变运行快照；名称修改会记录操作人和修改前后内容。
           </p>
           <div className="modal-actions">
-            <button type="button" className="secondary-button" onClick={onClose}>
+            <button type="button" className="secondary-button" onClick={close}>
               取消
             </button>
             <button className="primary-button" disabled={saving}>
@@ -80,8 +90,8 @@ export function TaskRenameDialog({ task, onClose, onSave }) {
             </button>
           </div>
         </form>
-      </section>
-    </div>
+      )}
+    </Modal>
   );
 }
 

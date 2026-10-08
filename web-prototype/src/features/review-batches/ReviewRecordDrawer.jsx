@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Button from "antd/es/button";
 import { X } from "@phosphor-icons/react";
+import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { ReviewRecordEvidence } from "./ReviewRecordEvidence";
 import { ReviewRecordEditor } from "./ReviewRecordEditor";
 import { values, valueText } from "./reviewRecordPresentation";
@@ -35,54 +36,53 @@ export function ReviewRecordDrawer({
   onContinueWithServer,
 }) {
   const closeRef = useRef(/** @type {HTMLButtonElement | null} */ (null));
-  const drawerRef = useRef(/** @type {HTMLElement | null} */ (null));
-  const onCloseRef = useRef(onClose);
+  const continueRef = useRef(/** @type {HTMLButtonElement | null} */ (null));
   const [labelQuery, setLabelQuery] = useState("");
+  const [confirmClose, setConfirmClose] = useState(false);
   const editable = !readOnly && record.workflow_status === "pending";
+  const draftSignature = JSON.stringify([
+    mode,
+    labelCode,
+    reason,
+    assessment,
+    semanticItemReviews,
+    addedSemanticItems,
+    coverageStatus,
+  ]);
+  const initialDraft = useRef({ id: record.id, signature: draftSignature });
+  const close = () => {
+    if (saving) return;
+    if (confirmClose) setConfirmClose(false);
+    else if (editable && initialDraft.current.signature !== draftSignature)
+      setConfirmClose(true);
+    else onClose();
+  };
+  const { dialogRef: drawerRef } = useDialogFocus({ open: true, onClose: close });
 
   useEffect(() => {
-    setLabelQuery("");
-  }, [record.id]);
+    if (initialDraft.current.id !== record.id) {
+      initialDraft.current = { id: record.id, signature: draftSignature };
+      setLabelQuery("");
+      setConfirmClose(false);
+    }
+  }, [record.id, draftSignature]);
 
   useEffect(() => {
-    onCloseRef.current = onClose;
-  }, [onClose]);
+    if (confirmClose) continueRef.current?.focus();
+    else if (!drawerRef.current?.contains(document.activeElement))
+      closeRef.current?.focus();
+  }, [confirmClose, drawerRef]);
 
   useEffect(() => {
-    const returnFocus =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    closeRef.current?.focus();
-    /** @param {KeyboardEvent} event */
-    const handleKey = (event) => {
-      if (event.key === "Escape") {
-        onCloseRef.current();
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const focusable = Array.from(
-        /** @type {NodeListOf<HTMLElement>} */ (
-          drawerRef.current?.querySelectorAll(
-            'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-          ) ?? []
-        ),
-      );
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last?.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first?.focus();
-      }
-    };
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("keydown", handleKey);
-      returnFocus?.focus();
-    };
-  }, []);
+    // 保存和冲突刷新可能移除或禁用原控件，保留仍可操作的焦点。
+    if (
+      !saving &&
+      (!drawerRef.current?.contains(document.activeElement) ||
+        document.activeElement?.matches(":disabled"))
+    ) {
+      closeRef.current?.focus();
+    }
+  }, [record.id, conflict, saving, drawerRef]);
 
   return (
     <div className="review-drawer-layer">
@@ -92,6 +92,7 @@ export function ReviewRecordDrawer({
         role="dialog"
         aria-modal="true"
         aria-labelledby="review-record-drawer-title"
+        tabIndex={-1}
       >
         <header>
           <div>
@@ -105,41 +106,58 @@ export function ReviewRecordDrawer({
             type="text"
             icon={<X size={20} />}
             aria-label="关闭复核抽屉"
-            onClick={onClose}
+            data-dialog-initial-focus
+            onClick={close}
           />
         </header>
         <div className="review-drawer-scroll">
-          <ReviewRecordEvidence
-            record={record}
-            labels={labels}
-            editable={editable}
-            semanticItemReviews={semanticItemReviews}
-            addedSemanticItems={addedSemanticItems}
-            coverageStatus={coverageStatus}
-            onSemanticItemReviews={onSemanticItemReviews}
-            onAddedSemanticItems={onAddedSemanticItems}
-            onCoverageStatus={onCoverageStatus}
-          />
-          <ReviewRecordEditor
-            labels={labels}
-            editable={editable}
-            mode={mode}
-            labelCode={labelCode}
-            reason={reason}
-            conflict={conflict}
-            saving={saving}
-            assessment={assessment}
-            labelQuery={labelQuery}
-            onLabelQuery={setLabelQuery}
-            onMode={onMode}
-            onAssessment={onAssessment}
-            onLabelCode={onLabelCode}
-            onReason={onReason}
-            onSave={onSave}
-            onSaveAndNext={onSaveAndNext}
-            onUseServer={onUseServer}
-            onContinueWithServer={onContinueWithServer}
-          />
+          {confirmClose ? (
+            <section className="review-conflict-panel" role="alert">
+              <p>尚未保存的复核修改会丢失，是否放弃修改？</p>
+              <div>
+                <Button ref={continueRef} onClick={() => setConfirmClose(false)}>
+                  继续编辑
+                </Button>
+                <Button danger onClick={onClose}>
+                  放弃修改并关闭
+                </Button>
+              </div>
+            </section>
+          ) : (
+            <>
+              <ReviewRecordEvidence
+                record={record}
+                labels={labels}
+                editable={editable}
+                semanticItemReviews={semanticItemReviews}
+                addedSemanticItems={addedSemanticItems}
+                coverageStatus={coverageStatus}
+                onSemanticItemReviews={onSemanticItemReviews}
+                onAddedSemanticItems={onAddedSemanticItems}
+                onCoverageStatus={onCoverageStatus}
+              />
+              <ReviewRecordEditor
+                labels={labels}
+                editable={editable}
+                mode={mode}
+                labelCode={labelCode}
+                reason={reason}
+                conflict={conflict}
+                saving={saving}
+                assessment={assessment}
+                labelQuery={labelQuery}
+                onLabelQuery={setLabelQuery}
+                onMode={onMode}
+                onAssessment={onAssessment}
+                onLabelCode={onLabelCode}
+                onReason={onReason}
+                onSave={onSave}
+                onSaveAndNext={onSaveAndNext}
+                onUseServer={onUseServer}
+                onContinueWithServer={onContinueWithServer}
+              />
+            </>
+          )}
         </div>
       </aside>
     </div>

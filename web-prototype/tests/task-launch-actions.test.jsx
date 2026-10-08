@@ -2,9 +2,51 @@ import { cleanup, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 import { TaskLaunchActions } from "../src/features/task-create/NewTaskActions";
+import { TaskPlanReviewStep } from "../src/features/task-create/TaskPlanReviewStep";
 import { renderWithServerState as render } from "./renderWithServerState";
 
 afterEach(() => cleanup());
+
+test("重新检查时焦点留在计划区域，完成后不会落回页面根节点", async () => {
+  const props = {
+    preflight: { status: "error", data: null, error: "合成计划过期" },
+    onRetryPreflight: vi.fn(),
+    categoryCompletionRequired: false,
+    blocked: false,
+    countMismatch: false,
+    noExecutable: false,
+    partialPlan: false,
+    planCounts: { executable: 0, notAnalyzed: 0 },
+    dataQuality: null,
+    unresolvedPolicy: "block_all",
+    onPolicyChange: vi.fn(),
+    onResolveCategories: vi.fn(),
+    segmentOrder: [],
+    onSegmentOrderChange: vi.fn(),
+    requiresScopeConfirmation: false,
+    scopeConfirmed: false,
+    onScopeConfirmationChange: vi.fn(),
+  };
+  const view = render(<TaskPlanReviewStep {...props} />);
+  await userEvent.click(screen.getByRole("button", { name: "重新检查" }));
+  const workspace = view.container.querySelector(".task-plan-workspace");
+  expect(workspace).toHaveFocus();
+  expect(props.onRetryPreflight).toHaveBeenCalledOnce();
+  view.rerender(
+    <TaskPlanReviewStep
+      {...props}
+      preflight={{ status: "loading", data: null, error: "" }}
+    />,
+  );
+  expect(workspace).toHaveFocus();
+  view.rerender(
+    <TaskPlanReviewStep
+      {...props}
+      preflight={{ status: "idle", data: null, error: "" }}
+    />,
+  );
+  expect(workspace).toHaveFocus();
+});
 
 function actions(changes = {}) {
   return {
@@ -97,4 +139,12 @@ test("数据库准备按钮仍提交原表单，已有数据和正式创建使�
   expect(submit).toHaveAttribute("aria-describedby", "task-action-status");
   await user.click(submit);
   expect(props.onSubmit).toHaveBeenCalledOnce();
+  expect(screen.getByRole("status")).toHaveFocus();
+  view.rerender(
+    <TaskLaunchActions {...props} prepared submitting canContinue={false} />,
+  );
+  expect(screen.getByRole("status")).toHaveFocus();
+  view.rerender(<TaskLaunchActions {...props} prepared submitError="合成创建失败" />);
+  expect(screen.getByRole("status")).toHaveFocus();
+  expect(screen.getByRole("button", { name: "重试创建" })).toBeEnabled();
 });

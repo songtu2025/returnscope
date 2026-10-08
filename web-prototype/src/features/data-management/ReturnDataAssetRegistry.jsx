@@ -9,6 +9,7 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react";
 import Input from "antd/es/input";
+import { useRef } from "react";
 import { formatTime } from "../../lib/presentation";
 import {
   dataStatus,
@@ -126,6 +127,7 @@ function RegistryRecord({ source, expanded, selectSource, expandedContent }) {
 
 /** @param {PaginationProps} props */
 function RegistryPagination({ page, totalPages, filteredCount, onRouteChange }) {
+  const pageRef = useRef(/** @type {HTMLElement | null} */ (null));
   return (
     <footer className="returns-registry-footer">
       <span>共 {filteredCount} 个数据源</span>
@@ -134,16 +136,24 @@ function RegistryPagination({ page, totalPages, filteredCount, onRouteChange }) 
           <button
             aria-label="上一页"
             disabled={page === 1}
-            onClick={() => onRouteChange({ page: page - 1 })}
+            onClick={() => {
+              if (page === 2) pageRef.current?.focus();
+              onRouteChange({ page: page - 1 });
+            }}
           >
             <CaretLeft size={16} />
           </button>
-          <b>{page}</b>
+          <b ref={pageRef} tabIndex={-1} aria-label={`第 ${page} 页`}>
+            {page}
+          </b>
           <span>/ {totalPages}</span>
           <button
             aria-label="下一页"
             disabled={page === totalPages}
-            onClick={() => onRouteChange({ page: page + 1 })}
+            onClick={() => {
+              if (page + 1 === totalPages) pageRef.current?.focus();
+              onRouteChange({ page: page + 1 });
+            }}
           >
             <CaretRight size={16} />
           </button>

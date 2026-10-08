@@ -1,5 +1,6 @@
 import { cleanup, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 import {
   SegmentCancelDialog,
@@ -148,4 +149,43 @@ test("修改名称保留独立名称与原因输入，并只提交修订号", as
   });
   expect(title).toHaveValue("合成新任务");
   expect(screen.getByLabelText("修改原因")).toHaveValue("合成更名原因");
+});
+
+test("更名弹窗限制焦点，未保存关闭需确认，关闭后回到入口", async () => {
+  function Workspace() {
+    const [open, setOpen] = useState(false);
+    return (
+      <>
+        <button onClick={() => setOpen(true)}>更名入口</button>
+        {open && (
+          <TaskRenameDialog
+            task={task}
+            onSave={vi.fn()}
+            onClose={() => setOpen(false)}
+          />
+        )}
+      </>
+    );
+  }
+  const user = userEvent.setup();
+  render(<Workspace />);
+  const trigger = screen.getByRole("button", { name: "更名入口" });
+  await user.click(trigger);
+  expect(screen.getByLabelText("任务名称")).toHaveFocus();
+  await user.tab({ shift: true });
+  expect(screen.getByRole("button", { name: "关闭" })).toHaveFocus();
+  await user.tab({ shift: true });
+  expect(screen.getByRole("button", { name: "保存修改" })).toHaveFocus();
+  await user.keyboard("{Escape}");
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(trigger).toHaveFocus();
+  await user.click(trigger);
+  await user.type(screen.getByLabelText("修改原因"), "合成草稿");
+  await user.keyboard("{Escape}");
+  expect(screen.getByRole("button", { name: "继续编辑" })).toHaveFocus();
+  await user.click(screen.getByRole("button", { name: "继续编辑" }));
+  expect(screen.getByLabelText("修改原因")).toHaveValue("合成草稿");
+  await user.keyboard("{Escape}");
+  await user.click(screen.getByRole("button", { name: "放弃修改并关闭" }));
+  expect(trigger).toHaveFocus();
 });

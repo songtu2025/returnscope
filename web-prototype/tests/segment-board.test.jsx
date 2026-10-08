@@ -59,6 +59,10 @@ test("每页20条，搜索跨全部Listing并重置页码，数据减少后修�
   await user.click(screen.getByRole("button", { name: "下一页" }));
   expect(view.container.querySelectorAll("article.listing-row")).toHaveLength(5);
   expect(screen.getByText("SYNTHETIC-24")).toBeVisible();
+  expect(screen.getByLabelText("第 2 页")).toHaveFocus();
+  await user.click(screen.getByRole("button", { name: "上一页" }));
+  expect(screen.getByLabelText("第 1 页")).toHaveFocus();
+  await user.click(screen.getByRole("button", { name: "下一页" }));
   await user.type(screen.getByRole("textbox", { name: "搜索 Listing" }), "SYNTHETIC-5");
   await waitFor(() =>
     expect(view.container.querySelectorAll("article.listing-row")).toHaveLength(1),
