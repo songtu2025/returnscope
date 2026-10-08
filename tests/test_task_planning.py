@@ -122,11 +122,16 @@ def _database_with_inputs(tmp_path: Path) -> tuple[Database, Path, Path]:
             connection.execute(
                 """
                 INSERT INTO datasets(
-                    id, name, kind, current_version, created_by,
+                    id, name, kind, usage_scope, current_version, created_by,
                     created_at, updated_at
-                ) VALUES (?, ?, ?, 1, 'user-1', '2026-01-01', '2026-01-01')
+                ) VALUES (?, ?, ?, ?, 1, 'user-1', '2026-01-01', '2026-01-01')
                 """,
-                (f"dataset-{kind}", kind, kind),
+                (
+                    f"dataset-{kind}",
+                    kind,
+                    kind,
+                    "task_input" if kind == "returns" else "managed",
+                ),
             )
             connection.execute(
                 """
@@ -2568,3 +2573,15 @@ def test_model_policy_checks_cheap_then_primary_then_secondary(tmp_path: Path) -
                 (key,),
             )
     assert service._apply_model_policy(config, policy)["secondary_model"] == "secondary"
+
+
+def test_new_task_rejects_retired_managed_source(tmp_path: Path) -> None:
+    database, _, _ = _database_with_inputs(tmp_path)
+    with database.transaction() as connection:
+        connection.execute(
+            "UPDATE datasets SET usage_scope = 'managed' WHERE kind = 'returns'"
+        )
+    with pytest.raises(ValueError, match="长期反馈数据源已下线"):
+        TaskService(database).preflight(
+            "version-returns", "version-products", "SEEKWAY:US", "L1", "config-1"
+        )

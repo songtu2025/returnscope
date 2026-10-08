@@ -85,13 +85,6 @@ test.each([
     "准备分析",
     false,
   ],
-  [{ dataEntryMode: "existing" }, "请选择本次分析数据", "准备分析", true],
-  [
-    { dataEntryMode: "upload", selectedReturns: { row_count: 0 } },
-    "已选 0 条用户反馈",
-    "准备分析",
-    false,
-  ],
   [{ prepared: true }, "合成计划状态", "合成开始分析", false],
   [
     { prepared: true, submitting: true, submitError: "合成错误" },
@@ -108,7 +101,7 @@ test.each([
   expect(button.disabled).toBe(disabled);
 });
 
-test("数据库准备按钮仍提交原表单，已有数据和正式创建使用各自回调", async () => {
+test("数据库准备提交表单，正式创建使用提交回调", async () => {
   const user = userEvent.setup();
   const onFormSubmit = vi.fn((event) => event.preventDefault());
   const props = actions({ mysqlState: { busy: "", ready: true, rowCount: 3 } });
@@ -124,16 +117,6 @@ test("数据库准备按钮仍提交原表单，已有数据和正式创建使�
   await user.click(button);
   expect(onFormSubmit).toHaveBeenCalledOnce();
   expect(props.onPrepareExisting).not.toHaveBeenCalled();
-  view.rerender(
-    <TaskLaunchActions
-      {...props}
-      dataEntryMode="existing"
-      selectedReturns={{ row_count: 3 }}
-    />,
-  );
-  await user.click(screen.getByRole("button", { name: "准备分析" }));
-  expect(props.onPrepareExisting).toHaveBeenCalledOnce();
-  expect(props.onSubmit).not.toHaveBeenCalled();
   view.rerender(<TaskLaunchActions {...props} prepared />);
   const submit = screen.getByRole("button", { name: "合成开始分析" });
   expect(submit).toHaveAttribute("aria-describedby", "task-action-status");

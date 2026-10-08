@@ -5,29 +5,14 @@ from typing import Any
 
 import pandas as pd
 
-from web_backend.common import json_text, json_value, new_id
+from web_backend.common import json_text, new_id
 from web_backend.database import Database
 from web_backend.dataset_files import (
     _inspect_file_with_frame,
-    _return_source_key,
     _sha256_file,
 )
 
 STAGING_TTL_MINUTES = 30
-
-
-def return_inspection_matches(rows: list[Any], source_key: str) -> list[dict[str, Any]]:
-    matches = []
-    for row in rows:
-        item = dict(row)
-        item_quality = json_value(item.pop("quality_json", None), {})
-        item_source_key = str(item.get("source_key") or "") or _return_source_key(
-            item_quality.get("stores", [])
-        )
-        if source_key and item_source_key == source_key:
-            item["source_key"] = item_source_key
-            matches.append(item)
-    return matches
 
 
 def persist_return_inspection(
@@ -78,7 +63,7 @@ class DatasetFilePreparationMixin:
     ) -> dict[str, Any]:
         inspected_frame: pd.DataFrame | None = None
         # 仅复用同次导入在服务端产生的检查结果，修改文件后必须重新检查。
-        if inspection is not None and not metadata["default_store"]:
+        if inspection is not None:
             row_count = inspection["row_count"]
             column_count = inspection["column_count"]
             schema = inspection["schema"]

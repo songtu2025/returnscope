@@ -71,35 +71,12 @@ ROUTE_CASES = (
         args=("version-1",),
     ),
     RouteCase(
-        service_method="storage_summary",
-        path="/api/dataset-storage",
-        request={"params": {"dataset_ids": "dataset-1,dataset-2"}},
-        kwargs={
-            "dataset_ids": ["dataset-1", "dataset-2"],
-            "retention_days": 30,
-            "retain_latest": 2,
-        },
-    ),
-    RouteCase(
-        service_method="cleanup_storage",
-        path="/api/dataset-storage/cleanup",
-        method="POST",
-        request={"json": {"dataset_ids": ["dataset-1"]}},
-        kwargs={
-            "dataset_ids": ["dataset-1"],
-            "retention_days": 30,
-            "retain_latest": 2,
-            "actor_id": "42",
-        },
-    ),
-    RouteCase(
         service_method="import_staged_returns",
         path="/api/return-imports",
         method="POST",
         request={"json": IMPORT_BODY},
         kwargs={
             **IMPORT_BODY,
-            "dataset_id": "",
             "name": "",
             "change_note": "",
             "actor_id": "42",
@@ -152,8 +129,6 @@ ERROR_STATUSES = {
     "list_versions": (None, None, None, None),
     "references": (404, 404, 404, None),
     "product_scopes": (400, 400, 400, None),
-    "storage_summary": (400, 400, 400, None),
-    "cleanup_storage": (400, 400, 400, None),
     "import_staged_returns": (400, 400, 400, None),
     "get": (None, None, None, None),
     "preview_rows": (400, 400, 400, None),
@@ -254,18 +229,6 @@ def test_dataset_routes_preserve_exception_mapping(
     ]
 
 
-@pytest.mark.parametrize("user", ({"id": 42}, {"id": 42, "is_admin": False}))
-def test_storage_cleanup_requires_admin_before_any_write(
-    harness: SimpleNamespace, user: dict[str, Any]
-) -> None:
-    harness.client.app.dependency_overrides[synthetic_user] = lambda: user
-    case = CASES_BY_METHOD["cleanup_storage"]
-    response = harness.client.post(case.path, **case.request)
-    assert response.status_code == 403
-    assert response.json() == {"detail": "仅系统管理员可清理快照存储"}
-    assert harness.service.mock_calls == harness.mysql.mock_calls == []
-
-
 @pytest.mark.parametrize(
     ("include", "expected"),
     [
@@ -312,20 +275,6 @@ def test_missing_dataset_returns_404(harness: SimpleNamespace) -> None:
             {"page": 3, "page_size": 200},
             ("version-1",),
             {"page": 3, "page_size": 200},
-        ),
-        (
-            "storage_summary",
-            {
-                "dataset_ids": "dataset-1, dataset-2,",
-                "retention_days": 7,
-                "retain_latest": 1,
-            },
-            (),
-            {
-                "dataset_ids": ["dataset-1", " dataset-2", ""],
-                "retention_days": 7,
-                "retain_latest": 1,
-            },
         ),
         (
             "preview_rows",
@@ -393,11 +342,6 @@ def test_mysql_payload_keeps_dates_and_optional_filters(
         ("schema", {"refresh": "invalid"}, 422),
         ("references", {"page": 0}, 422),
         ("references", {"page_size": 201}, 422),
-        ("storage_summary", {"dataset_ids": ""}, 422),
-        ("storage_summary", {"retention_days": 6}, 422),
-        ("storage_summary", {"retention_days": 3651}, 422),
-        ("storage_summary", {"retain_latest": 0}, 422),
-        ("storage_summary", {"retain_latest": 51}, 422),
         ("get", {"include": "unsupported"}, 400),
         ("get", {"include": "x" * 101}, 422),
         ("preview_rows", {"offset": -1}, 422),
@@ -422,8 +366,6 @@ def test_invalid_dataset_queries_do_not_call_services(
     [
         ("preview", {"mapping": {str(i): "column" for i in range(11)}}),
         ("import_returns", {"date_from": "invalid"}),
-        ("cleanup_storage", {"dataset_ids": []}),
-        ("cleanup_storage", {"retention_days": 6}),
         ("import_staged_returns", {"inspection_id": ""}),
         ("update_product_row", {"row_index": -1}),
         ("update_product_row", {"expected_version": 0}),
@@ -441,3 +383,43 @@ def test_invalid_dataset_bodies_do_not_call_services(
     response = harness.client.request(case.method, case.path, json=payload)
     assert response.status_code == 422
     assert harness.service.mock_calls == harness.mysql.mock_calls == []
+
+
+@pytest.mark.parametrize(
+    "path", ["/api/dataset-storage", "/api/dataset-storage/cleanup"]
+)
+def test_retired_storage_routes_are_unavailable(
+    harness: SimpleNamespace, path: str
+) -> None:
+    response = harness.client.request(
+        "GET" if path.endswith("storage") else "POST", path
+    )
+    assert response.status_code == 404
+    assert harness.service.mock_calls == []
+
+
+def test_generic_upload_rejects_feedback_without_saving_file(
+    harness: SimpleNamespace,
+) -> None:
+    response = harness.client.post(
+        "/api/datasets",
+        data={"name": "合成源", "kind": "returns"},
+        files={"file": ("synthetic.csv", b"synthetic", "text/csv")},
+    )
+    assert response.status_code == 400
+    assert harness.service.mock_calls == []
+    assert not (harness.settings.data_dir / "tmp").exists()
+
+
+def test_version_upload_rejects_feedback_without_saving_file(
+    harness: SimpleNamespace,
+) -> None:
+    harness.service.get.return_value = {"kind": "returns"}
+    response = harness.client.post(
+        "/api/datasets/source/versions",
+        data={"change_note": "合成变更"},
+        files={"file": ("synthetic.csv", b"synthetic", "text/csv")},
+    )
+    assert response.status_code == 400
+    harness.service.add_version.assert_not_called()
+    assert not (harness.settings.data_dir / "tmp").exists()

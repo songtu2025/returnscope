@@ -7,7 +7,6 @@ from fastapi.responses import FileResponse
 
 from web_backend.api_contracts.datasets import (
     CategoryCompletionRequest,
-    DatasetStorageCleanupRequest,
     DimensionRowUpdateRequest,
     MySQLReturnImportRequest,
     ReturnImportRequest,
@@ -51,7 +50,6 @@ def create_dataset_router(
     mysql_service = MySQLReturnService(dataset_service, settings)
     _register_mysql_import_routes(router, mysql_service, current_user)
     _register_dataset_version_queries(router, dataset_service, current_user)
-    _register_dataset_storage_routes(router, dataset_service, current_user)
     _register_return_import_routes(router, dataset_service, settings, current_user)
     _register_dataset_read_routes(router, dataset_service, current_user)
     _register_dataset_upload_routes(router, dataset_service, settings, current_user)
@@ -148,47 +146,6 @@ def _register_dataset_version_queries(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-def _register_dataset_storage_routes(
-    router: APIRouter,
-    dataset_service: DatasetService,
-    current_user: Callable[..., dict[str, Any]],
-) -> None:
-    User = Annotated[dict[str, Any], Depends(current_user)]
-
-    @router.get("/api/dataset-storage")
-    def dataset_storage_summary(
-        _user: User,
-        dataset_ids: str = Query(min_length=1, max_length=10000),
-        retention_days: int = Query(default=30, ge=7, le=3650),
-        retain_latest: int = Query(default=2, ge=1, le=50),
-    ) -> dict[str, Any]:
-        try:
-            return dataset_service.storage_summary(
-                dataset_ids=dataset_ids.split(","),
-                retention_days=retention_days,
-                retain_latest=retain_latest,
-            )
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    @router.post("/api/dataset-storage/cleanup")
-    def cleanup_dataset_storage(
-        payload: DatasetStorageCleanupRequest,
-        user: User,
-    ) -> dict[str, Any]:
-        if not user.get("is_admin"):
-            raise HTTPException(status_code=403, detail="仅系统管理员可清理快照存储")
-        try:
-            return dataset_service.cleanup_storage(
-                dataset_ids=payload.dataset_ids,
-                retention_days=payload.retention_days,
-                retain_latest=payload.retain_latest,
-                actor_id=str(user["id"]),
-            )
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
 def _register_return_import_routes(
     router: APIRouter,
     dataset_service: DatasetService,
@@ -234,7 +191,6 @@ def _register_return_import_routes(
                 inspection_id=payload.inspection_id,
                 actor_id=str(user["id"]),
                 mode=payload.mode,
-                dataset_id=payload.dataset_id,
                 name=payload.name,
                 change_note=payload.change_note,
             )
@@ -300,8 +256,12 @@ def _register_dataset_upload_routes(
         file: Annotated[UploadFile, File()],
         description: Annotated[str, Form(max_length=500)] = "",
         change_note: Annotated[str, Form(max_length=500)] = "",
-        default_store: Annotated[str, Form(max_length=100)] = "",
     ) -> dict[str, Any]:
+        if kind != "products":
+            raise HTTPException(
+                status_code=400,
+                detail="用户反馈请通过分析任务导入，数据资产仅维护商品信息",
+            )
         suffix = Path(file.filename or "upload").suffix.lower()
         temp_path = settings.data_dir / "tmp" / f"{secrets.token_hex(12)}{suffix}"
         try:
@@ -315,7 +275,6 @@ def _register_dataset_upload_routes(
                 content_type=_upload_content_type(file, suffix),
                 change_note=change_note,
                 actor_id=str(user["id"]),
-                default_store=default_store,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -328,8 +287,12 @@ def _register_dataset_upload_routes(
         user: User,
         file: Annotated[UploadFile, File()],
         change_note: Annotated[str, Form(min_length=1, max_length=500)],
-        default_store: Annotated[str, Form(max_length=100)] = "",
     ) -> dict[str, Any]:
+        dataset = dataset_service.get(dataset_id)
+        if dataset and dataset["kind"] != "products":
+            raise HTTPException(
+                status_code=400, detail="任务输入快照不能更新，请重新导入"
+            )
         suffix = Path(file.filename or "upload").suffix.lower()
         temp_path = settings.data_dir / "tmp" / f"{secrets.token_hex(12)}{suffix}"
         try:
@@ -341,7 +304,6 @@ def _register_dataset_upload_routes(
                 content_type=_upload_content_type(file, suffix),
                 change_note=change_note,
                 actor_id=str(user["id"]),
-                default_store=default_store,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -2,39 +2,17 @@ import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
-const {
-  importRules,
-  managedDatasets,
-  dataset,
-  datasetStorageSummary,
-  cleanupDatasetStorage,
-  datasetRows,
-  datasetDownloadUrl,
-  inspectReturnImport,
-  importReturns,
-  dataVersionReferences,
-} = vi.hoisted(() => ({
-  importRules: vi.fn(),
-  managedDatasets: vi.fn(),
-  dataset: vi.fn(),
-  datasetStorageSummary: vi.fn(),
-  cleanupDatasetStorage: vi.fn(),
-  datasetRows: vi.fn(),
-  datasetDownloadUrl: vi.fn(),
-  inspectReturnImport: vi.fn(),
-  importReturns: vi.fn(),
-  dataVersionReferences: vi.fn(),
-}));
+const { importRules, inspectReturnImport, importReturns, dataVersionReferences } =
+  vi.hoisted(() => ({
+    importRules: vi.fn(),
+    inspectReturnImport: vi.fn(),
+    importReturns: vi.fn(),
+    dataVersionReferences: vi.fn(),
+  }));
 
 vi.mock("../src/shared/api/dataApi", () => ({
   dataApi: {
     importRules,
-    managedDatasets,
-    dataset,
-    datasetStorageSummary,
-    cleanupDatasetStorage,
-    datasetRows,
-    datasetDownloadUrl,
   },
 }));
 vi.mock("../src/api", () => ({
@@ -42,21 +20,12 @@ vi.mock("../src/api", () => ({
 }));
 
 import { ImportRulesPage } from "../src/features/data-management/ImportRulesPage";
-import { ReturnDataAssetsPage } from "../src/features/data-management/ReturnDataAssetsPage";
-import { SourceDetail } from "../src/features/data-management/ReturnDataAssetDetail";
 import { ReturnImportDialog } from "../src/features/task-create/ReturnImportDialog";
-import { DatasetUploadDialog } from "../src/components/DatasetUploadDialog";
 import { DatasetReferences } from "../src/features/data-management/DatasetReferences";
 import { renderWithServerState as render } from "./renderWithServerState";
 
 beforeEach(() => {
   importRules.mockReset();
-  managedDatasets.mockReset();
-  dataset.mockReset();
-  datasetStorageSummary.mockReset();
-  cleanupDatasetStorage.mockReset();
-  datasetRows.mockReset();
-  datasetDownloadUrl.mockReset();
   inspectReturnImport.mockReset();
   importReturns.mockReset();
   dataVersionReferences.mockReset();
@@ -64,189 +33,6 @@ beforeEach(() => {
 });
 
 afterEach(() => cleanup());
-
-function syntheticReturnSource(index, sourceKey = `synthetic-${index}`) {
-  return {
-    id: `synthetic-${index}`,
-    source_key: sourceKey,
-    name: `SYNTHETIC ${index}`,
-    kind: "returns",
-    current_version: 1,
-    row_count: index + 1,
-    quality: {
-      stores: ["SYNTHETIC:US"],
-      matching_key_ready_rate: index === 20 ? 50 : 100,
-    },
-  };
-}
-
-test("数据源成员合并后按需并发读取，折叠仅在数据源路由变化时重置", async () => {
-  const user = userEvent.setup();
-  const sources = [
-    syntheticReturnSource(0, "synthetic-group"),
-    syntheticReturnSource(1, "synthetic-group"),
-    syntheticReturnSource(2),
-  ];
-  managedDatasets.mockResolvedValue(sources);
-  dataset.mockImplementation(async (id) => sources.find((source) => source.id === id));
-  const onRouteChange = vi.fn();
-  const props = { notify: vi.fn(), onRouteChange };
-  const view = render(
-    <ReturnDataAssetsPage {...props} route={{ query: { dataset: "synthetic-1" } }} />,
-  );
-  expect(await screen.findByText("当前数据摘要")).toBeVisible();
-  expect(screen.getByText("2 个数据源")).toBeVisible();
-  expect(dataset.mock.calls).toEqual([
-    ["synthetic-0", { include: "versions,imports" }],
-    ["synthetic-1", { include: "versions,imports" }],
-  ]);
-  await user.click(screen.getByRole("button", { name: "收起详情" }));
-  expect(onRouteChange).not.toHaveBeenCalled();
-  view.rerender(
-    <ReturnDataAssetsPage
-      {...props}
-      route={{ query: { dataset: "synthetic-1", q: " SYNTHETIC ", tab: "snapshots" } }}
-    />,
-  );
-  expect(screen.queryByText("当前数据摘要")).not.toBeInTheDocument();
-  expect(dataset).toHaveBeenCalledTimes(2);
-  view.rerender(
-    <ReturnDataAssetsPage {...props} route={{ query: { dataset: "synthetic-2" } }} />,
-  );
-  expect(await screen.findByText("当前数据摘要")).toBeVisible();
-  expect(dataset).toHaveBeenLastCalledWith("synthetic-2", {
-    include: "versions,imports",
-  });
-});
-
-test("数据源保持20条分页上界与筛选的原路由参数", async () => {
-  const user = userEvent.setup();
-  const sources = Array.from({ length: 21 }, (_, index) =>
-    syntheticReturnSource(index),
-  );
-  managedDatasets.mockResolvedValue(sources);
-  dataset.mockImplementation(async (id) => sources.find((source) => source.id === id));
-  const onRouteChange = vi.fn();
-  render(
-    <ReturnDataAssetsPage
-      route={{ query: { page: 999, status: "invalid" } }}
-      notify={vi.fn()}
-      onRouteChange={onRouteChange}
-    />,
-  );
-  expect(await screen.findByText("SYNTHETIC 20")).toBeVisible();
-  expect(screen.queryByText("SYNTHETIC 0")).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "下一页" })).toBeDisabled();
-  await user.click(screen.getByRole("button", { name: "上一页" }));
-  expect(screen.getByLabelText("第 2 页")).toHaveFocus();
-  expect(onRouteChange).toHaveBeenLastCalledWith({ page: 1 });
-  await user.selectOptions(
-    screen.getByRole("combobox", { name: "按数据状态筛选" }),
-    "attention",
-  );
-  expect(onRouteChange).toHaveBeenLastCalledWith({ status: "attention", page: 1 });
-  await user.type(screen.getByRole("textbox", { name: "搜索用户反馈数据源" }), " ");
-  expect(onRouteChange).toHaveBeenLastCalledWith({ q: " ", page: 1 });
-});
-
-async function openSyntheticSnapshot() {
-  const source = {
-    id: "synthetic-source",
-    version_id: "synthetic-current",
-    row_count: 2,
-    versions: [{ id: "synthetic-history", version: 3, original_name: "SYNTHETIC.csv" }],
-  };
-  datasetStorageSummary.mockResolvedValue({
-    version_count: 1,
-    logical_bytes: 0,
-    physical_bytes: 0,
-    duplicate_groups: 0,
-    dedup_reclaimable_bytes: 0,
-    expired_versions: 0,
-    expired_reclaimable_bytes: 0,
-    current_versions: 1,
-    task_referenced_versions: 0,
-    task_reference_count: 0,
-    retention_days: 30,
-    retain_latest: 2,
-    can_cleanup: false,
-  });
-  datasetDownloadUrl.mockReturnValue("/synthetic-download?version=3");
-  const user = userEvent.setup();
-  render(<SourceDetail source={source} notify={vi.fn()} initiallyShowTrace />);
-  await user.click(
-    screen.getByRole("button", { name: "查看历史快照内容：SYNTHETIC.csv" }),
-  );
-  return { user, dialog: screen.getByRole("dialog", { name: "历史快照内容" }) };
-}
-
-test("快照保持数据源回退、首行列顺序与零值展示", async () => {
-  datasetRows.mockResolvedValue({
-    records: [
-      { _row_index: 0, zero: 0, empty: " ", comment: null },
-      { _row_index: 5, zero: 2, empty: "", comment: "SYNTHETIC", extra: "后续行字段" },
-    ],
-    source_total: 20,
-  });
-  const { dialog } = await openSyntheticSnapshot();
-  const table = await within(dialog).findByRole("table");
-  expect(
-    within(table)
-      .getAllByRole("columnheader")
-      .map((cell) => cell.textContent),
-  ).toEqual(["#", "zero", "comment"]);
-  const rows = within(table).getAllByRole("row");
-  expect(
-    within(rows[1])
-      .getAllByRole("cell")
-      .map((cell) => cell.textContent),
-  ).toEqual(["1", "—", "—"]);
-  expect(within(rows[1]).getAllByRole("cell")[1]).toHaveAttribute("title", "");
-  expect(
-    within(rows[2])
-      .getAllByRole("cell")
-      .map((cell) => cell.textContent),
-  ).toEqual(["6", "2", "SYNTHETIC"]);
-  expect(datasetRows).toHaveBeenCalledWith(
-    "synthetic-source",
-    "",
-    0,
-    10,
-    { version: 3 },
-    expect.objectContaining({ signal: expect.anything() }),
-  );
-  expect(within(dialog).getByRole("link", { name: "下载此快照" })).toHaveAttribute(
-    "href",
-    "/synthetic-download?version=3",
-  );
-});
-
-test.each([new Error("合成读取错误"), { message: "对象错误" }])(
-  "快照错误保持原反馈：%s",
-  async (error) => {
-    datasetRows.mockRejectedValue(error);
-    const { dialog } = await openSyntheticSnapshot();
-    const titles = await within(dialog).findAllByText("快照读取失败");
-    expect(titles[0]).toBeVisible();
-    if (error instanceof Error) {
-      expect(within(dialog).getByText(error.message)).toBeVisible();
-    } else {
-      expect(titles).toHaveLength(2);
-      expect(titles[1]).toBeVisible();
-    }
-  },
-);
-
-test("关闭待完成快照请求时取消原信号", async () => {
-  datasetRows.mockReturnValue(new Promise(() => {}));
-  const { user, dialog } = await openSyntheticSnapshot();
-  expect(within(dialog).getByText("正在读取该快照…")).toBeVisible();
-  const signal = datasetRows.mock.calls[0][5].signal;
-  expect(signal.aborted).toBe(false);
-  await user.click(within(dialog).getByRole("button", { name: "关闭" }));
-  expect(signal.aborted).toBe(true);
-  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-});
 
 test("导入规则页只读展示真实系统规则与折叠技术信息", async () => {
   importRules.mockResolvedValue({
@@ -293,227 +79,6 @@ test("导入规则失败只提供真实重试", async () => {
   expect(importRules).toHaveBeenCalledTimes(2);
 });
 
-test("退货数据源页集中展示当前状态并从详情按需查看历史", async () => {
-  const user = userEvent.setup();
-  const summary = {
-    id: "returns-1",
-    source_key: "senwayzon-ca-us",
-    name: "SENWAYZON CA、SENWAYZON US 退货数据",
-    source_name: "SENWAYZON CA、SENWAYZON US 退货数据",
-    version_id: "returns-v6",
-    row_count: 26439,
-    task_reference_count: 3,
-    updated_at: "2026-08-25T04:32:00Z",
-    quality: {
-      stores: ["SENWAYZON:CA", "SENWAYZON:US"],
-      valid_comment_rows: 19789,
-      matching_key_ready_rate: 100,
-    },
-  };
-  managedDatasets.mockResolvedValue([summary]);
-  dataset.mockResolvedValue({
-    ...summary,
-    creator_name: "数据管理员",
-    imports: [
-      {
-        id: "import-1",
-        resulting_version_id: "returns-v6",
-        mode: "append",
-        original_name: "returns-0825.csv",
-        row_count: 2184,
-        imported_row_count: 1067,
-        skipped_row_count: 1117,
-        creator_name: "数据管理员",
-        created_at: "2026-08-25T04:32:00Z",
-      },
-    ],
-    versions: [
-      {
-        id: "returns-v6",
-        dataset_id: "returns-1",
-        version: 6,
-        original_name: "returns-0825.csv",
-        row_count: 26439,
-        creator_name: "数据管理员",
-        change_note: "日常增量导入",
-        created_at: "2026-08-25T04:32:00Z",
-      },
-      {
-        id: "returns-v5",
-        dataset_id: "returns-1",
-        version: 5,
-        original_name: "returns-0824.csv",
-        row_count: 25372,
-        creator_name: "数据管理员",
-        change_note: "首次导入",
-        created_at: "2026-08-24T04:32:00Z",
-      },
-      {
-        id: "returns-v4",
-        dataset_id: "returns-1",
-        version: 4,
-        original_name: "returns-0823.csv",
-        row_count: 24980,
-        created_at: "2026-08-23T04:32:00Z",
-      },
-      {
-        id: "returns-v3",
-        dataset_id: "returns-1",
-        version: 3,
-        original_name: "returns-0822.csv",
-        row_count: 24110,
-        created_at: "2026-08-22T04:32:00Z",
-      },
-      {
-        id: "returns-v2",
-        dataset_id: "returns-1",
-        version: 2,
-        original_name: "returns-0821.csv",
-        row_count: 23720,
-        created_at: "2026-08-21T04:32:00Z",
-      },
-      {
-        id: "returns-v1",
-        dataset_id: "returns-1",
-        version: 1,
-        original_name: "returns-0820.csv",
-        row_count: 22950,
-        created_at: "2026-08-20T04:32:00Z",
-      },
-    ],
-  });
-  datasetStorageSummary.mockResolvedValue({
-    version_count: 6,
-    logical_bytes: 503867830,
-    physical_bytes: 251933915,
-    current_versions: 1,
-    task_referenced_versions: 3,
-    task_reference_count: 3,
-    duplicate_groups: 2,
-    dedup_reclaimable_bytes: 82112954,
-    expired_versions: 0,
-    expired_reclaimable_bytes: 0,
-    retention_days: 30,
-    retain_latest: 2,
-    can_cleanup: true,
-  });
-  datasetRows.mockResolvedValue({
-    records: [
-      {
-        "order-id": "O-1001",
-        sku: "SMRG106-Carmine-L",
-        "customer-comments": "尺码偏小",
-        _row_index: 0,
-      },
-    ],
-    source_total: 26439,
-    version: 6,
-  });
-  datasetDownloadUrl.mockReturnValue("/api/datasets/returns-1/download?version=6");
-  inspectReturnImport.mockResolvedValue({
-    inspection_id: "inspection-1",
-    original_name: "returns-0826.csv",
-    suggested_name: "SENWAYZON 退货数据",
-    row_count: 500,
-    stores: ["SENWAYZON:CA", "SENWAYZON:US"],
-    quality: { valid_comment_rows: 480, missing_store_rows: 0 },
-    matches: [
-      {
-        dataset_id: "returns-1",
-        dataset_name: "SENWAYZON 退货数据",
-        row_count: 26439,
-      },
-    ],
-  });
-
-  render(
-    <ReturnDataAssetsPage
-      route={{ query: {} }}
-      notify={vi.fn()}
-      onRouteChange={vi.fn()}
-    />,
-  );
-
-  expect(
-    await screen.findByRole("heading", { name: "用户反馈数据源管理" }),
-  ).toBeVisible();
-  expect(screen.getByText("SENWAYZON CA、SENWAYZON US 退货数据")).toBeVisible();
-  expect(screen.getByText("SENWAYZON:CA · SENWAYZON:US")).toBeVisible();
-  expect(screen.getByText("3 个任务")).toBeVisible();
-  expect(await screen.findByText("最近导入摘要")).toBeVisible();
-  expect(screen.getByText("日常增量导入")).toBeVisible();
-  expect(dataset).toHaveBeenCalledTimes(1);
-  expect(dataset).toHaveBeenCalledWith(
-    "returns-1",
-    expect.objectContaining({ include: "versions,imports" }),
-  );
-  expect(screen.queryByText("历史快照")).not.toBeInTheDocument();
-
-  const detailButton = screen.getByRole("button", { name: "收起详情" });
-  expect(detailButton).toHaveAttribute("aria-expanded", "true");
-  await user.click(detailButton);
-  expect(screen.queryByText("最近导入摘要")).not.toBeInTheDocument();
-  const reopenButton = screen.getByRole("button", { name: "查看详情" });
-  expect(reopenButton).toHaveAttribute("aria-expanded", "false");
-  await user.click(reopenButton);
-  expect(await screen.findByText("最近导入摘要")).toBeVisible();
-  expect(screen.getByRole("button", { name: "收起详情" })).toHaveAttribute(
-    "aria-expanded",
-    "true",
-  );
-
-  await user.click(screen.getByRole("button", { name: "查看追溯记录" }));
-  expect(screen.getByText(/完整快照/)).toBeVisible();
-  expect(screen.getByText("当前快照")).toBeVisible();
-  expect(screen.getAllByText("历史快照")).toHaveLength(4);
-  expect(await screen.findByText("240 MiB")).toBeVisible();
-  expect(screen.getByText("78 MiB")).toBeVisible();
-  expect(screen.getByText("第 1 / 2 页")).toBeVisible();
-
-  await user.click(screen.getByRole("button", { name: "下一页快照" }));
-  expect(screen.getByText(/returns-0820\.csv/)).toBeVisible();
-  await user.click(screen.getByRole("button", { name: "上一页快照" }));
-
-  await user.click(screen.getByRole("button", { name: "管理存储" }));
-  const storageDialog = screen.getByRole("dialog", { name: "快照存储管理" });
-  const cleanupButton = within(storageDialog).getByRole("button", {
-    name: "开始安全清理",
-  });
-  expect(cleanupButton).toBeDisabled();
-  await user.click(within(storageDialog).getByRole("checkbox"));
-  expect(cleanupButton).toBeEnabled();
-  await user.click(within(storageDialog).getByRole("button", { name: "关闭" }));
-
-  await user.click(
-    screen.getByRole("button", { name: /查看当前快照内容：returns-0825.csv/ }),
-  );
-  const snapshotDialog = await screen.findByRole("dialog", {
-    name: "当前快照内容",
-  });
-  expect(within(snapshotDialog).getByText("O-1001")).toBeVisible();
-  expect(within(snapshotDialog).getByText("尺码偏小")).toBeVisible();
-  expect(within(snapshotDialog).getByText("日常增量导入")).toBeVisible();
-  expect(
-    within(snapshotDialog).getByRole("link", { name: "下载此快照" }),
-  ).toHaveAttribute("href", "/api/datasets/returns-1/download?version=6");
-  expect(datasetRows).toHaveBeenCalledWith(
-    "returns-1",
-    "",
-    0,
-    10,
-    { version: 6 },
-    expect.objectContaining({ signal: expect.anything() }),
-  );
-  await user.click(within(snapshotDialog).getByRole("button", { name: "关闭" }));
-
-  await user.click(screen.getByRole("button", { name: "导入新批次" }));
-  const fileInput = document.querySelector('input[type="file"]');
-  await user.upload(fileInput, new File(["a,b"], "returns-0826.csv"));
-  await user.click(screen.getByRole("button", { name: "检查文件" }));
-  expect(await screen.findByText("追加到已有数据源")).toBeVisible();
-  expect(screen.queryByText("仅分析本批")).not.toBeInTheDocument();
-});
-
 test("退货文件检查失败后可重新选择 XLSX 修正文件", async () => {
   const user = userEvent.setup();
   const correctedFile = new File(["xlsx"], "returns.xlsx", {
@@ -531,7 +96,7 @@ test("退货文件检查失败后可重新选择 XLSX 修正文件", async () =>
       matches: [],
     });
 
-  render(<ReturnImportDialog purpose="asset" onClose={vi.fn()} onDone={vi.fn()} />);
+  render(<ReturnImportDialog onClose={vi.fn()} onDone={vi.fn()} />);
 
   const fileInput = document.querySelector('input[type="file"]');
   await user.upload(fileInput, new File(["broken"], "returns.csv"));
@@ -559,7 +124,7 @@ test("退货文件检查失败后可重新选择 XLSX 修正文件", async () =>
   expect(screen.getByRole("button", { name: "检查文件" })).toBeDisabled();
 });
 
-async function inspectSyntheticImport(purpose, overrides = {}, onDone = vi.fn()) {
+async function inspectSyntheticImport(_purpose, overrides = {}, onDone = vi.fn()) {
   const user = userEvent.setup();
   inspectReturnImport.mockResolvedValue({
     inspection_id: "synthetic-inspection",
@@ -571,7 +136,7 @@ async function inspectSyntheticImport(purpose, overrides = {}, onDone = vi.fn())
     matches: [],
     ...overrides,
   });
-  render(<ReturnImportDialog purpose={purpose} onClose={vi.fn()} onDone={onDone} />);
+  render(<ReturnImportDialog onClose={vi.fn()} onDone={onDone} />);
   await user.upload(
     document.querySelector('input[type="file"]'),
     new File(["synthetic"], "SYNTHETIC.csv"),
@@ -581,39 +146,19 @@ async function inspectSyntheticImport(purpose, overrides = {}, onDone = vi.fn())
   return user;
 }
 
-test.each([
-  ["task", "仅分析本批", "analyze_only", false, "导入并分析本批"],
-  ["task", "建立长期数据源", "create", false, "建立数据源并选中"],
-  ["asset", "追加到已有数据源", "append", true, "追加并选中完整数据"],
-  ["asset", "替换当前数据", "replace", true, "替换并选中新快照"],
-])(
-  "文件导入%s/%s保持模式、目标和提交字段",
-  async (purpose, label, mode, hasMatch, submitLabel) => {
-    const matches = hasMatch
-      ? [{ dataset_id: "synthetic-source", dataset_name: "合成已有源", row_count: 4 }]
-      : [];
-    const result = { version_id: "synthetic-version", mode };
-    importReturns.mockResolvedValue(result);
-    const onDone = vi.fn();
-    const user = await inspectSyntheticImport(purpose, { matches }, onDone);
-    await user.click(screen.getByRole("radio", { name: new RegExp(`^${label}`) }));
-    if (purpose === "asset")
-      expect(
-        screen.queryByRole("radio", { name: /^仅分析本批/ }),
-      ).not.toBeInTheDocument();
-    if (mode !== "analyze_only")
-      await user.type(screen.getByLabelText("变更说明（可选）"), "  合成变更  ");
-    await user.click(screen.getByRole("button", { name: submitLabel }));
-    await waitFor(() => expect(onDone).toHaveBeenCalledWith(result));
-    expect(importReturns).toHaveBeenCalledExactlyOnceWith({
-      inspection_id: "synthetic-inspection",
-      mode,
-      dataset_id: hasMatch ? "synthetic-source" : "",
-      name: "合成数据源",
-      change_note: mode === "analyze_only" ? "" : "合成变更",
-    });
-  },
-);
+test("任务上传仅支持分析本批，提交不携带长期数据源字段", async () => {
+  const onDone = vi.fn();
+  const result = { version_id: "synthetic-version", mode: "analyze_only" };
+  importReturns.mockResolvedValue(result);
+  const user = await inspectSyntheticImport("task", {}, onDone);
+  expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "导入并分析本批" }));
+  await waitFor(() => expect(onDone).toHaveBeenCalledWith(result));
+  expect(importReturns).toHaveBeenCalledExactlyOnceWith({
+    inspection_id: "synthetic-inspection",
+    mode: "analyze_only",
+  });
+});
 
 test("重复批次允许直接复用，店铺缺失仍阻断提交", async () => {
   const duplicate = { dataset_name: "合成已有源" };
@@ -631,52 +176,13 @@ test("重复批次允许直接复用，店铺缺失仍阻断提交", async () =>
   expect(importReturns).not.toHaveBeenCalled();
 });
 
-test("导入完成回调失败时保留模式、目标和修改说明以便重试", async () => {
-  importReturns.mockResolvedValue({ version_id: "synthetic-version" });
-  const onDone = vi.fn().mockRejectedValue(new Error("合成后续处理失败"));
-  const user = await inspectSyntheticImport(
-    "asset",
-    {
-      matches: [
-        { dataset_id: "synthetic-source", dataset_name: "合成已有源", row_count: 4 },
-      ],
-    },
-    onDone,
-  );
-  await user.click(screen.getByRole("radio", { name: /^替换当前数据/ }));
-  await user.type(screen.getByLabelText("变更说明（可选）"), "  合成说明  ");
-  await user.click(screen.getByRole("button", { name: "替换并选中新快照" }));
-  expect(
-    await screen.findByText("合成后续处理失败 请检查导入方式和目标数据源后重试。"),
-  ).toBeVisible();
-  expect(screen.getByRole("radio", { name: /^替换当前数据/ })).toBeChecked();
-  expect(screen.getByLabelText("目标数据源")).toHaveValue("synthetic-source");
-  expect(screen.getByLabelText("变更说明（可选）")).toHaveValue("  合成说明  ");
-  expect(screen.getByRole("button", { name: "替换并选中新快照" })).toBeEnabled();
-});
-
-test("两个退货上传入口都声明支持 CSV 和 XLSX", () => {
-  const { unmount } = render(
-    <ReturnImportDialog purpose="asset" onClose={vi.fn()} onDone={vi.fn()} />,
-  );
+test("任务上传支持 CSV 和 XLSX", () => {
+  const { unmount } = render(<ReturnImportDialog onClose={vi.fn()} onDone={vi.fn()} />);
   expect(document.querySelector('input[type="file"]')).toHaveAttribute(
     "accept",
     ".csv,.xlsx",
   );
   unmount();
-
-  render(
-    <DatasetUploadDialog
-      dialog={{ mode: "create", kind: "returns" }}
-      onClose={vi.fn()}
-      onDone={vi.fn()}
-    />,
-  );
-  expect(document.querySelector('input[type="file"]')).toHaveAttribute(
-    "accept",
-    ".csv,.xlsx",
-  );
-  expect(screen.getByText("选择 CSV 或 XLSX 文件")).toBeVisible();
 });
 
 test("数据版本引用显示历史任务固化快照并精确跳转", async () => {

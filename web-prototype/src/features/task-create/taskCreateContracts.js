@@ -62,7 +62,7 @@
  * @typedef {Object} TaskDraft
  * @property {number} [step]
  * @property {boolean} [resumePreflight]
- * @property {"existing" | "upload" | "mysql"} [dataEntryMode]
+ * @property {"upload" | "mysql"} [dataEntryMode]
  * @property {string} [selectedDataLabel]
  * @property {Partial<import("./mysqlReturnContracts").MysqlReturnFormState>} [mysqlDraft]
  * @property {Partial<TaskForm>} [form]
@@ -109,14 +109,9 @@
  * @typedef {Object} ReturnImportResult
  * @property {string} version_id
  * @property {boolean} [duplicate]
- * @property {"analyze_only" | "create" | "append" | "replace"} [mode]
+ * @property {"analyze_only"} [mode]
  * @property {{imported_row_count?: number, skipped_row_count?: number}} [summary]
- * @property {{id: string}} [dataset]
- *
- * @typedef {Object} ReturnImportMatch
- * @property {string} dataset_id
- * @property {string} dataset_name
- * @property {number} row_count
+ * @property {{id: string, name?: string}} [dataset]
  *
  * @typedef {Object} ReturnImportInspection
  * @property {string} inspection_id
@@ -125,7 +120,6 @@
  * @property {string[]} [stores]
  * @property {number} row_count
  * @property {{valid_comment_rows?: number, missing_store_rows?: number}} [quality]
- * @property {ReturnImportMatch[]} [matches]
  * @property {{dataset_name: string}} [duplicate]
  */
 

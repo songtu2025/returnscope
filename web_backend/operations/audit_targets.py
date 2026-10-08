@@ -133,7 +133,7 @@ def _analysis_target(
         target = resolver(entity_type, entity_id, source)
         if target is not None:
             return target
-    if entity_type == "dataset":
+    if entity_type == "dataset" and source["kind"] == "products":
         return {
             "route": "data",
             "dataset_id": entity_id,

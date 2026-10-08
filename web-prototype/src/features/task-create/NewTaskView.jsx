@@ -22,8 +22,8 @@ import { TaskPlanReviewStep } from "./TaskPlanReviewStep";
 /**
  * @typedef {Object} NewTaskViewProps
  * @property {import("react").RefObject<HTMLHeadingElement | null>} headingRef
- * @property {{loading: boolean, error: string, ready: boolean, onRetry: () => void, onNavigate: import("../../app/navigation").Navigate, returns: DataVersion[], products: DataVersion[], publishedConfigs: PublishedConfig[]}} setup
- * @property {{form: TaskForm, updateForm: (form: TaskForm) => void, selectedReturns?: DataVersion, dataEntryMode: "mysql" | "upload" | "existing", selectedDataLabel: string, onDataEntryModeChange: (mode: "mysql" | "upload" | "existing") => void, setSelectedDataLabel: import("react").Dispatch<import("react").SetStateAction<string>>, mysqlDraft?: Partial<MysqlReturnFormState>, setMysqlDraft: import("react").Dispatch<import("react").SetStateAction<Partial<MysqlReturnFormState> | undefined>>, setMysqlState: import("react").Dispatch<import("react").SetStateAction<MysqlFormState>>, mysqlState: MysqlFormState, prepared: boolean, scopeLabel: string, onInvalidateMysql: () => void}} data
+ * @property {{loading: boolean, error: string, ready: boolean, onRetry: () => void, onNavigate: import("../../app/navigation").Navigate, products: DataVersion[], publishedConfigs: PublishedConfig[]}} setup
+ * @property {{form: TaskForm, updateForm: (form: TaskForm) => void, selectedReturns?: DataVersion, dataEntryMode: "mysql" | "upload", selectedDataLabel: string, onDataEntryModeChange: (mode: "mysql" | "upload") => void, mysqlDraft?: Partial<MysqlReturnFormState>, setMysqlDraft: import("react").Dispatch<import("react").SetStateAction<Partial<MysqlReturnFormState> | undefined>>, setMysqlState: import("react").Dispatch<import("react").SetStateAction<MysqlFormState>>, mysqlState: MysqlFormState, prepared: boolean, scopeLabel: string, onInvalidateMysql: () => void}} data
  * @property {{preflight: TaskPreflightState, runPreflight: () => void | Promise<void>, state: TaskPlanViewState, counts: TaskPlanCounts, dataQuality: TaskDataQuality | null, unresolvedPolicy: string, onPolicyChange: (policy: string) => void, resolveCategories: () => void, segmentOrder: string[], setSegmentOrder: import("react").Dispatch<import("react").SetStateAction<string[]>>, scopeConfirmed: boolean, setScopeConfirmed: import("react").Dispatch<import("react").SetStateAction<boolean>>}} plan
  * @property {{confirmationRef: import("react").RefObject<HTMLHeadingElement | null>, selectedConfig?: PublishedConfig, availableModels: AvailableModel[], modelPolicy: TaskModelPolicy, selectConnection: (configId: string) => void, updateModelPolicy: (changes: Record<string, string | number>) => void, submitError: string, submitting: boolean}} configuration
  * @property {{open: boolean, onOpen: () => void, onClose: () => void, onDone: (result: ReturnImportResult, source: "mysql" | "upload") => void | Promise<void>}} upload
@@ -46,7 +46,6 @@ export function NewTaskView({
     ready,
     onRetry: onRetrySetup,
     onNavigate,
-    returns,
     products,
     publishedConfigs,
   } = setup;
@@ -57,7 +56,6 @@ export function NewTaskView({
     dataEntryMode,
     selectedDataLabel,
     onDataEntryModeChange,
-    setSelectedDataLabel,
     mysqlDraft,
     setMysqlDraft,
     setMysqlState,
@@ -120,21 +118,17 @@ export function NewTaskView({
         <SetupBlock
           onNavigate={onNavigate}
           onUploadReturns={onUploadReturns}
-          hasReturns={returns.length > 0}
+          hasReturns={Boolean(selectedReturns)}
           hasProducts={products.length > 0}
           hasConfig={publishedConfigs.length > 0}
         />
       )}
       {!loadingSetup && ready && (
         <TaskDataStep
-          form={form}
-          onFormChange={updateForm}
-          returns={returns}
           selectedReturns={selectedReturns}
           dataEntryMode={dataEntryMode}
           selectedDataLabel={selectedDataLabel}
           onDataEntryModeChange={onDataEntryModeChange}
-          onSelectedDataLabelChange={setSelectedDataLabel}
           onUploadReturns={onUploadReturns}
           mysqlDraft={mysqlDraft}
           onMysqlDraftChange={setMysqlDraft}

@@ -25,11 +25,11 @@ def list_import_rules() -> dict[str, list[dict[str, Any]]]:
             "source": "system",
             "file_extensions": sorted(ALLOWED_EXTENSIONS["returns"]),
             "worksheet": None,
-            "required_columns": list(RETURN_COLUMNS),
-            "optional_columns": [RETURN_STORE_COLUMN],
+            "required_columns": [*RETURN_COLUMNS, RETURN_STORE_COLUMN],
+            "optional_columns": [],
             "match_key": [RETURN_STORE_COLUMN, "sku"],
             "notes": [
-                "店铺/站点为可选字段，上传时可统一补充空值",
+                "用于分析任务的输入快照，不保存为长期反馈数据源；请在文件中填写店铺/站点",
             ],
         },
         {

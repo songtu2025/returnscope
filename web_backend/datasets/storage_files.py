@@ -21,19 +21,6 @@ class StorageFilesMixin:
     database: Database
     settings: Settings
 
-    @staticmethod
-    def _path_size(path_value: str, fallback: int) -> int:
-        path = Path(path_value)
-        return path.stat().st_size if path.exists() else int(fallback)
-
-    def _uploads_size(self) -> int:
-        uploads_root = self.settings.data_dir / "uploads"
-        if not uploads_root.exists():
-            return 0
-        return sum(
-            path.stat().st_size for path in uploads_root.rglob("*") if path.is_file()
-        )
-
     def _blob_path(self, digest: str, suffix: str) -> Path:
         return self.settings.data_dir / "uploads" / "blobs" / f"{digest}{suffix}"
 
@@ -86,42 +73,3 @@ class StorageFilesMixin:
             finally:
                 temporary.unlink(missing_ok=True)
         return destination
-
-    def _remove_unreferenced_preview(self, digest: str) -> None:
-        with self.database.connect() as connection:
-            referenced = connection.execute(
-                """
-                SELECT 1
-                FROM dataset_versions v
-                JOIN datasets d ON d.id = v.dataset_id
-                WHERE v.sha256 = ? AND d.kind = 'products'
-                LIMIT 1
-                """,
-                (digest,),
-            ).fetchone()
-        if referenced is None:
-            try:
-                self._preview_path(digest).unlink(missing_ok=True)
-            except OSError as error:
-                logger.warning("商品预览清理失败: error_type=%s", type(error).__name__)
-
-    def _safe_unlink_unreferenced(self, path_value: str) -> int:
-        path = Path(path_value)
-        uploads_root = (self.settings.data_dir / "uploads").resolve()
-        try:
-            resolved = path.resolve()
-            if not resolved.is_relative_to(uploads_root):
-                return 0
-        except OSError as error:
-            logger.warning("存储文件路径解析失败: error_type=%s", type(error).__name__)
-            return 0
-        with self.database.connect() as connection:
-            referenced = connection.execute(
-                "SELECT 1 FROM dataset_versions WHERE file_path = ? LIMIT 1",
-                (path_value,),
-            ).fetchone()
-        if referenced is not None or not path.exists():
-            return 0
-        size = path.stat().st_size
-        path.unlink()
-        return size

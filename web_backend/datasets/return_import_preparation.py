@@ -1,19 +1,9 @@
 import shutil
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from web_backend.common import json_text, new_id
-
-
-def validate_return_target(target: Mapping[str, Any] | None, source_key: str) -> None:
-    if target is None or target["kind"] != "returns":
-        raise ValueError("请选择有效的用户反馈数据源")
-    if target.get("usage_scope") != "managed":
-        raise ValueError("一次性任务数据不能作为长期数据源更新")
-    target_source_key = str(target.get("source_key") or "")
-    if target_source_key and source_key and target_source_key != source_key:
-        raise ValueError("上传文件与所选数据源的店铺/站点不一致")
+from web_backend.common import json_text
 
 
 def archive_return_source(
@@ -42,101 +32,22 @@ def archive_return_source(
 
 class ReturnImportPreparationMixin:
     get: Callable[..., dict[str, Any] | None]
-    _prepare_return_version: Callable[..., dict[str, Any]]
-
-    def _prepare_non_appended_return_import(
-        self,
-        mode: str,
-        target: dict[str, Any] | None,
-        source_path: Path,
-        inspection: dict[str, Any],
-        options: dict[str, str],
-    ) -> tuple[str, str, str, str, dict[str, Any]]:
-        if mode in {"analyze_only", "create"}:
-            effective_dataset_id = new_id("ds")
-            dataset_name = options["name"].strip() or str(inspection["suggested_name"])
-            dataset_description = (
-                "仅用于一次分析的用户反馈数据"
-                if mode == "analyze_only"
-                else "持续维护的用户反馈数据源"
-            )
-            usage_scope = "task_input" if mode == "analyze_only" else "managed"
-            prepared = self._prepare_return_version(
-                source_path=source_path,
-                original_name=options["original_name"],
-                content_type=options["content_type"],
-                change_note=options["generated_note"] or "首次导入用户反馈数据",
-                inspection=inspection,
-            )
-        else:
-            assert target is not None
-            effective_dataset_id = options["dataset_id"]
-            dataset_name = str(target["name"])
-            dataset_description = str(target["description"])
-            usage_scope = str(target["usage_scope"])
-            prepared = self._prepare_return_version(
-                source_path=source_path,
-                original_name=options["original_name"],
-                content_type=options["content_type"],
-                change_note=options["generated_note"] or "替换当前用户反馈数据",
-            )
-        return (
-            effective_dataset_id,
-            dataset_name,
-            dataset_description,
-            usage_scope,
-            prepared,
-        )
 
     def _return_import_result(
         self,
         outcome: dict[str, Any],
-        target: dict[str, Any] | None,
         inspection: dict[str, Any],
-        mode: str,
         summary: dict[str, int],
     ) -> dict[str, Any]:
         result_dataset_id = str(outcome["dataset_id"])
-        refreshed = self.get(result_dataset_id) or target or {}
+        refreshed = self.get(result_dataset_id) or {}
         return {
             "dataset": refreshed,
             "version_id": str(outcome["version_id"]),
             "duplicate": bool(outcome["duplicate"]),
-            "mode": mode,
+            "mode": "analyze_only",
             "inspection": inspection,
             "summary": summary,
-        }
-
-    def _duplicate_return_import(
-        self,
-        *,
-        mode: str,
-        dataset_id: str,
-        inspection: dict[str, Any],
-    ) -> dict[str, Any] | None:
-        duplicate = inspection.get("duplicate")
-        if not isinstance(duplicate, dict):
-            return None
-        duplicate_in_target = (
-            mode == "analyze_only"
-            or (mode == "create" and duplicate.get("usage_scope") == "managed")
-            or str(duplicate["dataset_id"]) == dataset_id
-        )
-        if not duplicate_in_target:
-            return None
-        existing = self.get(str(duplicate["dataset_id"]))
-        if existing is None:
-            return None
-        return {
-            "dataset": existing,
-            "version_id": str(duplicate["version_id"]),
-            "duplicate": True,
-            "mode": mode,
-            "inspection": inspection,
-            "summary": {
-                "imported_row_count": 0,
-                "skipped_row_count": int(inspection["row_count"]),
-            },
         }
 
     @staticmethod
@@ -144,10 +55,8 @@ class ReturnImportPreparationMixin:
         connection: Any,
         *,
         raw_sha256: str,
-        mode: str,
-        dataset_id: str,
     ) -> dict[str, Any] | None:
-        params = (raw_sha256, mode, mode, mode, dataset_id)
+        params = (raw_sha256,)
         duplicate = connection.execute(
             """
             SELECT i.id AS import_id, i.dataset_id,
@@ -157,11 +66,7 @@ class ReturnImportPreparationMixin:
             FROM dataset_imports i
             JOIN datasets d ON d.id = i.dataset_id
             WHERE i.raw_sha256 = ? AND d.archived_at IS NULL
-              AND (
-                  ? = 'analyze_only'
-                  OR (? = 'create' AND d.usage_scope = 'managed')
-                  OR (? IN ('append', 'replace') AND i.dataset_id = ?)
-              )
+              AND d.kind = 'returns' AND d.usage_scope = 'task_input'
             ORDER BY i.created_at DESC, i.id DESC
             LIMIT 1
             """,
@@ -177,11 +82,7 @@ class ReturnImportPreparationMixin:
                 FROM dataset_versions v
                 JOIN datasets d ON d.id = v.dataset_id
                 WHERE v.sha256 = ? AND d.archived_at IS NULL
-                  AND (
-                      ? = 'analyze_only'
-                      OR (? = 'create' AND d.usage_scope = 'managed')
-                      OR (? IN ('append', 'replace') AND v.dataset_id = ?)
-                  )
+                  AND d.kind = 'returns' AND d.usage_scope = 'task_input'
                 ORDER BY v.created_at DESC, v.id DESC
                 LIMIT 1
                 """,

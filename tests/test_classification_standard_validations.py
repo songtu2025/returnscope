@@ -261,11 +261,16 @@ def _seed_result(
             connection.execute(
                 """
                 INSERT INTO datasets(
-                    id, name, kind, current_version,
+                    id, name, kind, usage_scope, current_version,
                     created_by, created_at, updated_at
-                ) VALUES (?, ?, ?, 1, 'user-1', 'now', 'now')
+                ) VALUES (?, ?, ?, ?, 1, 'user-1', 'now', 'now')
                 """,
-                (dataset_id, dataset_id, kind),
+                (
+                    dataset_id,
+                    dataset_id,
+                    kind,
+                    "task_input" if kind == "returns" else "managed",
+                ),
             )
             connection.execute(
                 """

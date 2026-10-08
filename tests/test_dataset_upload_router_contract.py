@@ -12,7 +12,7 @@ from web_backend.routers.datasets import XLSX_CONTENT_TYPE
 
 UPLOAD_CASES = (
     ("inspect_return_import", "/api/return-imports/inspect", {}, 200),
-    ("create", "/api/datasets", {"name": "合成数据", "kind": "returns"}, 201),
+    ("create", "/api/datasets", {"name": "合成数据", "kind": "products"}, 201),
     (
         "add_version",
         "/api/datasets/dataset-1/versions",
@@ -31,6 +31,7 @@ def test_upload_routes_preserve_file_metadata_and_cleanup(
     form: dict[str, str],
     status: int,
 ) -> None:
+    harness.service.get.return_value = {"kind": "products"}
     captured: dict[str, Any] = {}
 
     def capture(*args: Any, **kwargs: Any) -> dict[str, str]:
@@ -59,20 +60,19 @@ def test_upload_routes_preserve_file_metadata_and_cleanup(
             "original_name": "synthetic.CSV",
             "content_type": "text/csv",
             "actor_id": "42",
-            "default_store": "",
             "change_note": form.get("change_note", ""),
         }
         if service_method == "create":
-            expected_kwargs.update(name="合成数据", kind="returns", description="")
+            expected_kwargs.update(name="合成数据", kind="products", description="")
         else:
             expected_kwargs["dataset_id"] = "dataset-1"
         assert source.parent == harness.settings.data_dir / "tmp"
         assert not source.exists()
     assert captured["args"] == expected_args
     assert captured["kwargs"] == expected_kwargs
-    assert harness.service.mock_calls == [
-        getattr(call, service_method)(*expected_args, **expected_kwargs)
-    ]
+    assert harness.service.mock_calls == (
+        [call.get("dataset-1")] if service_method == "add_version" else []
+    ) + [getattr(call, service_method)(*expected_args, **expected_kwargs)]
     assert harness.mysql.mock_calls == []
 
 
@@ -87,6 +87,7 @@ def test_upload_errors_preserve_mapping_and_remove_temporary_files(
     form: dict[str, str],
     error_type: type[Exception],
 ) -> None:
+    harness.service.get.return_value = {"kind": "products"}
     captured = []
     error = error_type("合成上传异常")
 
@@ -119,6 +120,7 @@ def test_upload_size_limit_is_enforced_before_service_call(
     path: str,
     form: dict[str, str],
 ) -> None:
+    harness.service.get.return_value = {"kind": "products"}
     monkeypatch.setattr(
         "web_backend.routers.datasets.MAX_UPLOAD_BYTES", len(CONTENT) - 1
     )
@@ -127,7 +129,10 @@ def test_upload_size_limit_is_enforced_before_service_call(
     )
     assert response.status_code == 400
     assert response.json() == {"detail": "单个文件不能超过 200 MB"}
-    assert harness.service.mock_calls == harness.mysql.mock_calls == []
+    assert harness.service.mock_calls == (
+        [call.get("dataset-1")] if "/versions" in path else []
+    )
+    assert harness.mysql.mock_calls == []
     assert list(harness.settings.data_dir.rglob("*.csv")) == []
 
 
@@ -199,6 +204,7 @@ def test_upload_content_type_fallback_keeps_current_precedence(
 def test_upload_routes_forward_optional_form_values(
     harness: SimpleNamespace, service_method: str
 ) -> None:
+    harness.service.get.return_value = {"kind": "products"}
     case = next(case for case in UPLOAD_CASES if case[0] == service_method)
     form = {**case[2], "default_store": "S1", "change_note": "指定变更原因"}
     if service_method == "create":
@@ -209,7 +215,7 @@ def test_upload_routes_forward_optional_form_values(
     )
     assert response.status_code == 201
     forwarded = getattr(harness.service, service_method).call_args.kwargs
-    assert forwarded["default_store"] == "S1"
+    assert "default_store" not in forwarded
     assert forwarded["change_note"] == "指定变更原因"
     if service_method == "create":
         assert forwarded["description"] == "合成说明"

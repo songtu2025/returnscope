@@ -17,15 +17,6 @@ export const serverStateKeys = {
     datasetId,
     include,
   ],
-  returnSources: ["data-assets", "returns", "list"],
-  /** @param {string} sourceId @param {string[]} memberIds */
-  returnSourceDetails: (sourceId, memberIds) => [
-    "data-assets",
-    "returns",
-    "detail",
-    sourceId,
-    memberIds,
-  ],
   taskCreateSetup: ["task-create", "setup"],
   mysqlReturnSchema: ["task-create", "mysql-return-schema"],
   /** @param {string} taskId */

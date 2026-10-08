@@ -15,7 +15,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from test_classification_result_pool import _seed_result_context
 
-import web_backend.dataset_service as dataset_service_module
 import web_backend.datasets.preview as dataset_preview_module
 from return_semantics.data import (
     PRODUCT_COLUMNS,
@@ -23,7 +22,6 @@ from return_semantics.data import (
     RETURN_STORE_COLUMN,
     SOURCE_ORIGIN_COLUMN,
     _prepare_return_records,
-    read_return_file,
 )
 from web_backend.dataset_service import DatasetService
 from web_backend.routers.datasets import create_dataset_router
@@ -75,7 +73,7 @@ def test_return_loader_preserves_optional_source_origin_id(tmp_path: Path) -> No
     assert records.loc[0, SOURCE_ORIGIN_COLUMN] == "12345"
 
 
-def _create_managed_returns(
+def _create_task_input(
     service: DatasetService,
     source: Path,
 ) -> dict[str, object]:
@@ -260,7 +258,7 @@ def test_staged_return_import_enforces_owner_retry_and_single_use(
             mode="invalid",
         )
     except ValueError as exc:
-        assert "未知" in str(exc)
+        assert "仅支持" in str(exc)
     else:
         raise AssertionError("无效导入应失败")
     assert source.exists()
@@ -403,42 +401,6 @@ def test_import_source_file_cleanup_keeps_unlink_failure(
     assert not caplog.records
 
 
-@pytest.mark.parametrize("failure", ["preview_unlink", "path_resolve"])
-def test_storage_file_cleanup_logs_only_error_type(
-    tmp_path: Path, monkeypatch, caplog, failure: str
-) -> None:
-    context = _seed_result_context(tmp_path)
-    service = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
-    target = (
-        service._preview_path("SYNTHETIC-DIGEST")
-        if failure == "preview_unlink"
-        else tmp_path / "uploads" / "SYNTHETIC-source.csv"
-    )
-    method = "unlink" if failure == "preview_unlink" else "resolve"
-    original = getattr(Path, method)
-
-    def fail_target(path, *args, **kwargs):
-        if path == target:
-            raise OSError("SYNTHETIC-CONFIDENTIAL")
-        return original(path, *args, **kwargs)
-
-    monkeypatch.setattr(Path, method, fail_target)
-    if failure == "preview_unlink":
-        assert service._remove_unreferenced_preview("SYNTHETIC-DIGEST") is None
-    else:
-        assert service._safe_unlink_unreferenced(str(target)) == 0
-    records = [
-        item
-        for item in caplog.records
-        if item.name == "web_backend.datasets.storage_files"
-    ]
-    assert len(records) == 1
-    assert "error_type=OSError" in records[0].getMessage()
-    assert records[0].exc_info is None
-    assert "SYNTHETIC-CONFIDENTIAL" not in caplog.text
-    assert str(target) not in caplog.text
-
-
 def test_return_import_recognizes_identity_and_separates_task_input(
     tmp_path: Path,
 ) -> None:
@@ -453,7 +415,7 @@ def test_return_import_recognizes_identity_and_separates_task_input(
     inspection = service.inspect_return_import(source, source.name)
     assert inspection["source_key"] == "SENWAYZON:US"
     assert inspection["suggested_name"] == "SENWAYZON US 用户反馈数据"
-    assert inspection["matches"] == []
+    assert "matches" not in inspection
 
     one_off = service.import_returns(
         source_path=source,
@@ -464,7 +426,7 @@ def test_return_import_recognizes_identity_and_separates_task_input(
     )
     assert one_off["dataset"]["usage_scope"] == "task_input"
     assert one_off["dataset"]["source_name"] == "SENWAYZON US 用户反馈数据"
-    assert service.list("returns", "managed")
+    assert not service.list("returns", "managed")
     assert one_off["dataset"]["id"] not in {
         item["id"] for item in service.list("returns", "managed")
     }
@@ -500,66 +462,6 @@ def test_return_xlsx_import_uses_matching_sheet(tmp_path: Path) -> None:
     )
 
 
-def test_return_xlsx_append_creates_csv_snapshot(tmp_path: Path) -> None:
-    context = _seed_result_context(tmp_path)
-    service = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
-    initial = tmp_path / "initial.csv"
-    incoming = tmp_path / "incoming.xlsx"
-    _write_returns(initial, [_return_row("O-1", "偏小")])
-    _write_returns_xlsx(incoming, [_return_row("O-2", "不够保暖")])
-    dataset_id = str(_create_managed_returns(service, initial)["id"])
-
-    result = service.import_returns(
-        source_path=incoming,
-        original_name=incoming.name,
-        content_type=(
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        ),
-        mode="append",
-        dataset_id=dataset_id,
-        actor_id="user-1",
-    )
-    version = service.version_file(dataset_id)
-    preview = service.preview_rows(dataset_id)
-
-    assert result["summary"] == {"imported_row_count": 1, "skipped_row_count": 0}
-    assert version["original_name"] == "incoming.csv"
-    assert version["content_type"] == "text/csv"
-    assert Path(str(version["file_path"])).suffix == ".csv"
-    assert [record["order-id"] for record in preview["records"]] == ["O-1", "O-2"]
-
-
-def test_return_xlsx_default_store_preserves_workbook(tmp_path: Path) -> None:
-    context = _seed_result_context(tmp_path)
-    service = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
-    source = tmp_path / "missing-store.xlsx"
-    row = _return_row("O-1", "偏小")
-    row.pop(RETURN_STORE_COLUMN)
-    _write_returns_xlsx(source, [row])
-
-    created = service.create(
-        name="测试退货数据",
-        kind="returns",
-        description="",
-        source_path=source,
-        original_name=source.name,
-        content_type=(
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        ),
-        change_note="首次导入",
-        actor_id="user-1",
-        default_store="SENWAYZON:US",
-    )
-    version = service.version_file(str(created["id"]))
-    frame = read_return_file(Path(str(version["file_path"])))
-
-    assert frame.iloc[0][RETURN_STORE_COLUMN] == "SENWAYZON:US"
-    assert pd.ExcelFile(Path(str(version["file_path"]))).sheet_names == [
-        "说明",
-        "退货明细",
-    ]
-
-
 def test_return_import_does_not_fill_missing_store(tmp_path: Path) -> None:
     context = _seed_result_context(tmp_path)
     service = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
@@ -573,6 +475,16 @@ def test_return_import_does_not_fill_missing_store(tmp_path: Path) -> None:
     assert inspection["stores"] == []
     assert inspection["source_key"] == ""
     assert inspection["quality"]["missing_store_rows"] == 1
+    before = service.list("returns")
+    with pytest.raises(ValueError, match="缺少店铺/站点"):
+        service.import_returns(
+            source_path=source,
+            original_name=source.name,
+            content_type="text/csv",
+            mode="analyze_only",
+            actor_id="user-1",
+        )
+    assert service.list("returns") == before
 
 
 def test_return_preview_reads_only_requested_prefix(
@@ -586,7 +498,7 @@ def test_return_preview_reads_only_requested_prefix(
         source,
         [_return_row(f"O-{index}", "偏小") for index in range(20)],
     )
-    created = _create_managed_returns(service, source)
+    created = _create_task_input(service, source)
     original = dataset_preview_module.read_return_file
     observed: list[int | None] = []
 
@@ -602,54 +514,7 @@ def test_return_preview_reads_only_requested_prefix(
     assert [record["_row_index"] for record in preview["records"]] == [5, 6]
 
 
-def test_return_import_appends_without_repeating_rows(tmp_path: Path) -> None:
-    context = _seed_result_context(tmp_path)
-    service = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
-    first = tmp_path / "senwayzon-first.csv"
-    second = tmp_path / "senwayzon-second.csv"
-    first_rows = [_return_row("O-1", "偏小"), _return_row("O-2", "不够保暖")]
-    _write_returns(first, first_rows)
-    _write_returns(second, [first_rows[1], _return_row("O-3", "抓握不好")])
-
-    created = service.import_returns(
-        source_path=first,
-        original_name=first.name,
-        content_type="text/csv",
-        mode="create",
-        actor_id="user-1",
-    )
-    dataset_id = created["dataset"]["id"]
-    inspection = service.inspect_return_import(second, second.name)
-    assert [item["dataset_id"] for item in inspection["matches"]] == [dataset_id]
-
-    appended = service.import_returns(
-        source_path=second,
-        original_name=second.name,
-        content_type="text/csv",
-        mode="append",
-        dataset_id=dataset_id,
-        actor_id="user-1",
-    )
-    assert appended["summary"] == {
-        "imported_row_count": 1,
-        "skipped_row_count": 1,
-    }
-    assert appended["dataset"]["row_count"] == 3
-    assert appended["dataset"]["current_version"] == 2
-    assert [item["mode"] for item in appended["dataset"]["imports"]] == [
-        "append",
-        "create",
-    ]
-
-    first_snapshot = service.preview_rows(dataset_id, limit=10, version=1)
-    current_snapshot = service.preview_rows(dataset_id, limit=10)
-    assert first_snapshot["version"] == 1
-    assert first_snapshot["source_total"] == 2
-    assert current_snapshot["version"] == 2
-    assert current_snapshot["source_total"] == 3
-
-
-@pytest.mark.parametrize("mode", ["create", "analyze_only"])
+@pytest.mark.parametrize("mode", ["analyze_only"])
 def test_new_return_import_rolls_back_when_audit_insert_fails(
     tmp_path: Path,
     mode: str,
@@ -675,39 +540,6 @@ def test_new_return_import_rolls_back_when_audit_insert_fails(
     _assert_stored_files_exist(context.database)
 
 
-@pytest.mark.parametrize("mode", ["append", "replace"])
-def test_existing_return_import_rolls_back_when_audit_insert_fails(
-    tmp_path: Path,
-    mode: str,
-) -> None:
-    context = _seed_result_context(tmp_path)
-    service = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
-    initial = tmp_path / "initial.csv"
-    incoming = tmp_path / f"{mode}.csv"
-    _write_returns(initial, [_return_row("O-1", "偏小")])
-    _write_returns(incoming, [_return_row("O-2", "不够保暖")])
-    created = _create_managed_returns(service, initial)
-    dataset_id = str(created["id"])
-    before = _database_counts(context.database)
-    before_version = int(created["current_version"])
-    _fail_import_audit(context.database)
-
-    with pytest.raises(sqlite3.IntegrityError, match="injected import audit failure"):
-        service.import_returns(
-            source_path=incoming,
-            original_name=incoming.name,
-            content_type="text/csv",
-            mode=mode,
-            dataset_id=dataset_id,
-            actor_id="user-1",
-        )
-
-    assert _database_counts(context.database) == before
-    assert service.get(dataset_id)["current_version"] == before_version
-    assert not any((tmp_path / "imports").rglob("source.csv"))
-    _assert_stored_files_exist(context.database)
-
-
 def test_return_import_preserves_audit_actions_and_file_references(
     tmp_path: Path,
 ) -> None:
@@ -724,20 +556,10 @@ def test_return_import_preserves_audit_actions_and_file_references(
         source_path=initial,
         original_name=initial.name,
         content_type="text/csv",
-        mode="create",
+        mode="analyze_only",
         actor_id="user-1",
     )
     dataset_id = str(created["dataset"]["id"])
-    for mode, source in (("append", appended), ("replace", replaced)):
-        service.import_returns(
-            source_path=source,
-            original_name=source.name,
-            content_type="text/csv",
-            mode=mode,
-            dataset_id=dataset_id,
-            actor_id="user-1",
-        )
-
     with context.database.connect() as connection:
         audit_rows = connection.execute(
             """
@@ -751,10 +573,6 @@ def test_return_import_preserves_audit_actions_and_file_references(
         "add_version",
         "create",
         "import_returns",
-        "add_version",
-        "import_returns",
-        "add_version",
-        "import_returns",
     ]
     import_audits = [
         json.loads(row["after_json"])
@@ -762,9 +580,7 @@ def test_return_import_preserves_audit_actions_and_file_references(
         if row["action"] == "import_returns"
     ]
     assert [item["mode"] for item in import_audits] == [
-        "create",
-        "append",
-        "replace",
+        "analyze_only",
     ]
     assert all(
         set(item)
@@ -781,60 +597,7 @@ def test_return_import_preserves_audit_actions_and_file_references(
     _assert_stored_files_exist(context.database)
 
 
-def test_concurrent_return_appends_merge_from_latest_version(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    context = _seed_result_context(tmp_path)
-    service = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
-    initial = tmp_path / "initial.csv"
-    first_append = tmp_path / "first-append.csv"
-    second_append = tmp_path / "second-append.csv"
-    _write_returns(initial, [_return_row("O-1", "偏小")])
-    _write_returns(first_append, [_return_row("O-2", "不够保暖")])
-    _write_returns(second_append, [_return_row("O-3", "抓握不好")])
-    created = _create_managed_returns(service, initial)
-    dataset_id = str(created["id"])
-
-    _synchronize_first_import_commits(service, monkeypatch)
-
-    def append(source_path: Path) -> dict[str, object]:
-        return service.import_returns(
-            source_path=source_path,
-            original_name=source_path.name,
-            content_type="text/csv",
-            mode="append",
-            dataset_id=dataset_id,
-            actor_id="user-1",
-        )
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        futures = [
-            executor.submit(append, first_append),
-            executor.submit(append, second_append),
-        ]
-        results = [future.result(timeout=10) for future in futures]
-
-    current = service.preview_rows(dataset_id, limit=10)
-    assert current["version"] == 3
-    assert current["source_total"] == 3
-    assert {record["order-id"] for record in current["records"]} == {
-        "O-1",
-        "O-2",
-        "O-3",
-    }
-    assert [result["summary"] for result in results] == [
-        {"imported_row_count": 1, "skipped_row_count": 0},
-        {"imported_row_count": 1, "skipped_row_count": 0},
-    ]
-    imported = service.get(dataset_id)["imports"]
-    append_version_ids = {
-        item["resulting_version_id"] for item in imported if item["mode"] == "append"
-    }
-    assert len(append_version_ids) == 2
-
-
-@pytest.mark.parametrize("mode", ["create", "append"])
+@pytest.mark.parametrize("mode", ["analyze_only"])
 def test_staged_retry_after_response_failure_is_idempotent(
     tmp_path: Path,
     monkeypatch,
@@ -842,11 +605,6 @@ def test_staged_retry_after_response_failure_is_idempotent(
 ) -> None:
     context = _seed_result_context(tmp_path)
     service = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
-    dataset_id = ""
-    if mode == "append":
-        initial = tmp_path / "initial.csv"
-        _write_returns(initial, [_return_row("O-1", "偏小")])
-        dataset_id = str(_create_managed_returns(service, initial)["id"])
     source = tmp_path / f"staged-{mode}.csv"
     _write_returns(source, [_return_row("O-2", "不够保暖")])
     inspection = service.inspect_return_import(
@@ -877,7 +635,6 @@ def test_staged_retry_after_response_failure_is_idempotent(
             inspection_id=inspection_id,
             actor_id="user-1",
             mode=mode,
-            dataset_id=dataset_id,
         )
 
     with context.database.connect() as connection:
@@ -903,7 +660,6 @@ def test_staged_retry_after_response_failure_is_idempotent(
         inspection_id=inspection_id,
         actor_id="user-1",
         mode=mode,
-        dataset_id=dataset_id,
     )
 
     assert retried["duplicate"] is True
@@ -931,86 +687,20 @@ def test_staged_retry_after_response_failure_is_idempotent(
     assert Path(str(persisted_imports[0]["raw_file_path"])).is_file()
 
 
-def test_concurrent_identical_appends_reuse_committed_import(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    context = _seed_result_context(tmp_path)
-    service = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
-    initial = tmp_path / "initial.csv"
-    incoming = tmp_path / "same-append.csv"
-    _write_returns(initial, [_return_row("O-1", "偏小")])
-    _write_returns(incoming, [_return_row("O-2", "不够保暖")])
-    dataset_id = str(_create_managed_returns(service, initial)["id"])
-    inspection = service.inspect_return_import(incoming, incoming.name)
-    before = _database_counts(context.database)
-    _synchronize_first_import_commits(service, monkeypatch)
-
-    def append() -> dict[str, object]:
-        return service.import_returns(
-            source_path=incoming,
-            original_name=incoming.name,
-            content_type="text/csv",
-            mode="append",
-            dataset_id=dataset_id,
-            actor_id="user-1",
-            _inspection=inspection,
-        )
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        futures = [executor.submit(append), executor.submit(append)]
-        results = [future.result(timeout=10) for future in futures]
-
-    with context.database.connect() as connection:
-        imports = connection.execute(
-            """
-            SELECT resulting_version_id, raw_sha256, raw_file_path
-            FROM dataset_imports WHERE dataset_id = ? AND mode = 'append'
-            """,
-            (dataset_id,),
-        ).fetchall()
-        audit_actions = connection.execute(
-            """
-            SELECT action FROM audit_logs
-            WHERE entity_type = 'dataset' AND entity_id = ? ORDER BY rowid
-            """,
-            (dataset_id,),
-        ).fetchall()
-    assert len(imports) == 1
-    assert imports[0]["raw_sha256"] == inspection["raw_sha256"]
-    assert Path(str(imports[0]["raw_file_path"])).is_file()
-    assert {result["version_id"] for result in results} == {
-        imports[0]["resulting_version_id"]
-    }
-    assert sorted(result["duplicate"] for result in results) == [False, True]
-    assert _database_counts(context.database) == {
-        **before,
-        "dataset_versions": before["dataset_versions"] + 1,
-        "dataset_imports": before["dataset_imports"] + 1,
-        "audit_logs": before["audit_logs"] + 2,
-    }
-    assert [row["action"] for row in audit_actions][-2:] == [
-        "add_version",
-        "import_returns",
-    ]
-
-
 def test_authoritative_duplicate_check_reuses_legacy_version(tmp_path: Path) -> None:
     context = _seed_result_context(tmp_path)
     service = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
     source = tmp_path / "legacy-duplicate.csv"
     _write_returns(source, [_return_row("O-1", "偏小")])
     stale_inspection = service.inspect_return_import(source, source.name)
-    created = _create_managed_returns(service, source)
-    dataset_id = str(created["id"])
+    created = _create_task_input(service, source)
     before = _database_counts(context.database)
 
     result = service.import_returns(
         source_path=source,
         original_name=source.name,
         content_type="text/csv",
-        mode="append",
-        dataset_id=dataset_id,
+        mode="analyze_only",
         actor_id="user-1",
         _inspection=stale_inspection,
     )
@@ -1018,67 +708,6 @@ def test_authoritative_duplicate_check_reuses_legacy_version(tmp_path: Path) -> 
     assert result["duplicate"] is True
     assert result["version_id"] == created["versions"][0]["id"]
     assert _database_counts(context.database) == before
-
-
-def test_concurrent_append_rechecks_source_key_inside_transaction(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    context = _seed_result_context(tmp_path)
-    service = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
-    initial = tmp_path / "initial.csv"
-    first = tmp_path / "first-store.csv"
-    second = tmp_path / "second-store.csv"
-    initial_row = _return_row("O-1", "偏小")
-    initial_row[RETURN_STORE_COLUMN] = ""
-    second_row = _return_row("O-3", "抓握不好")
-    second_row[RETURN_STORE_COLUMN] = "OTHER:US"
-    _write_returns(initial, [initial_row])
-    _write_returns(first, [_return_row("O-2", "不够保暖")])
-    _write_returns(second, [second_row])
-    dataset_id = str(_create_managed_returns(service, initial)["id"])
-    inspections = {
-        source: service.inspect_return_import(source, source.name)
-        for source in (first, second)
-    }
-    _synchronize_first_import_commits(service, monkeypatch)
-
-    def append(source: Path) -> dict[str, object]:
-        return service.import_returns(
-            source_path=source,
-            original_name=source.name,
-            content_type="text/csv",
-            mode="append",
-            dataset_id=dataset_id,
-            actor_id="user-1",
-            _inspection=inspections[source],
-        )
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        futures = [executor.submit(append, source) for source in (first, second)]
-        results = []
-        errors = []
-        for future in futures:
-            try:
-                results.append(future.result(timeout=10))
-            except ValueError as exc:
-                errors.append(exc)
-
-    assert len(results) == 1
-    assert len(errors) == 1
-    assert str(errors[0]) == "上传文件与所选数据源的店铺/站点不一致"
-    with context.database.connect() as connection:
-        dataset = connection.execute(
-            "SELECT current_version, source_key FROM datasets WHERE id = ?",
-            (dataset_id,),
-        ).fetchone()
-        imports = connection.execute(
-            "SELECT source_key FROM dataset_imports WHERE dataset_id = ?",
-            (dataset_id,),
-        ).fetchall()
-    assert dataset["current_version"] == 2
-    assert len(imports) == 1
-    assert dataset["source_key"] == imports[0]["source_key"]
 
 
 def test_return_import_copy_failure_cleans_unique_source_directory(
@@ -1090,7 +719,7 @@ def test_return_import_copy_failure_cleans_unique_source_directory(
     source = tmp_path / "copy-failure.csv"
     _write_returns(source, [_return_row("O-1", "偏小")])
     before = _database_counts(context.database)
-    original_copy = dataset_service_module.shutil.copy2
+    original_copy = shutil.copy2
 
     def failing_copy(source_path, destination, *args, **kwargs):
         destination_path = Path(destination)
@@ -1099,13 +728,13 @@ def test_return_import_copy_failure_cleans_unique_source_directory(
             raise OSError("injected copy failure")
         return original_copy(source_path, destination, *args, **kwargs)
 
-    monkeypatch.setattr(dataset_service_module.shutil, "copy2", failing_copy)
+    monkeypatch.setattr(shutil, "copy2", failing_copy)
     with pytest.raises(OSError, match="injected copy failure"):
         service.import_returns(
             source_path=source,
             original_name=source.name,
             content_type="text/csv",
-            mode="create",
+            mode="analyze_only",
             actor_id="user-1",
         )
 
@@ -1127,7 +756,7 @@ def test_blob_copy_failure_removes_temporary_file(
         Path(destination).write_bytes(b"partial")
         raise OSError("injected blob copy failure")
 
-    monkeypatch.setattr(dataset_service_module.shutil, "copy2", failing_copy)
+    monkeypatch.setattr(shutil, "copy2", failing_copy)
     with pytest.raises(OSError, match="injected blob copy failure"):
         service._ensure_blob(source, digest)
 
@@ -1150,7 +779,7 @@ def test_concurrent_blob_writes_publish_complete_content(
     content = source.read_bytes()
     digest = hashlib.sha256(content).hexdigest()
     destination = service._blob_path(digest, source.suffix)
-    original_copy = dataset_service_module.shutil.copy2
+    original_copy = shutil.copy2
     both_copied = threading.Barrier(3)
     publish_gate = threading.Event()
 
@@ -1161,7 +790,7 @@ def test_concurrent_blob_writes_publish_complete_content(
             raise TimeoutError("等待发布 Blob 超时")
         return result
 
-    monkeypatch.setattr(dataset_service_module.shutil, "copy2", synchronized_copy)
+    monkeypatch.setattr(shutil, "copy2", synchronized_copy)
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         futures = [
@@ -1185,159 +814,88 @@ def test_concurrent_blob_writes_publish_complete_content(
     assert not list(paths[0].parent.glob(f"{paths[0].name}.blob_*"))
 
 
-def test_dataset_versions_reuse_identical_blob(tmp_path: Path) -> None:
+@pytest.mark.parametrize("mode", ["create", "append", "replace"])
+def test_retired_import_modes_cannot_write(tmp_path: Path, mode: str) -> None:
     context = _seed_result_context(tmp_path)
     service = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
-    source = tmp_path / "same-content.csv"
-    _write_returns(source, [_return_row("O-1", "偏小")])
+    before = _database_counts(context.database)
+    with pytest.raises(ValueError, match="长期数据源导入已下线"):
+        service.import_returns(
+            source_path=tmp_path / "unused.csv",
+            original_name="unused.csv",
+            content_type="text/csv",
+            mode=mode,
+            actor_id="user-1",
+        )
+    assert _database_counts(context.database) == before
 
-    created = _create_managed_returns(service, source)
-    service.add_version(
-        dataset_id=str(created["id"]),
+
+def test_same_file_never_reuses_managed_source(tmp_path: Path) -> None:
+    context = _seed_result_context(tmp_path)
+    service = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
+    source = tmp_path / "managed.csv"
+    _write_returns(source, [_return_row("O-1", "合成反馈")])
+    old = _create_task_input(service, source)
+    with context.database.transaction() as connection:
+        connection.execute(
+            "UPDATE datasets SET usage_scope = 'managed' WHERE id = ?", (old["id"],)
+        )
+    inspection = service.inspect_return_import(source, source.name)
+    assert inspection["duplicate"] is None
+    result = service.import_returns(
         source_path=source,
         original_name=source.name,
         content_type="text/csv",
-        change_note="重复内容",
+        mode="analyze_only",
         actor_id="user-1",
+        _inspection=inspection,
     )
-
-    with context.database.connect() as connection:
-        rows = connection.execute(
-            """
-            SELECT file_path, sha256 FROM dataset_versions
-            WHERE dataset_id = ? ORDER BY version
-            """,
-            (created["id"],),
-        ).fetchall()
-
-    assert len(rows) == 2
-    assert rows[0]["file_path"] == rows[1]["file_path"]
-    assert rows[0]["sha256"] == rows[1]["sha256"]
-    assert Path(str(rows[0]["file_path"])).parent.name == "blobs"
+    assert result["dataset"]["id"] != old["id"]
+    assert result["dataset"]["usage_scope"] == "task_input"
+    assert result["duplicate"] is False
 
 
-def test_storage_cleanup_deduplicates_legacy_files(tmp_path: Path) -> None:
+def test_transaction_rechecks_lifecycle_after_inspection(tmp_path: Path) -> None:
     context = _seed_result_context(tmp_path)
     service = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
-    source = tmp_path / "duplicate.csv"
-    _write_returns(source, [_return_row("O-1", "偏小")])
-    created = _create_managed_returns(service, source)
-    service.add_version(
-        dataset_id=str(created["id"]),
+    source = tmp_path / "changed-scope.csv"
+    _write_returns(source, [_return_row("O-1", "合成反馈")])
+    old = _create_task_input(service, source)
+    stale = service.inspect_return_import(source, source.name)
+    assert stale["duplicate"] is not None
+    with context.database.transaction() as connection:
+        connection.execute(
+            "UPDATE datasets SET usage_scope = 'managed' WHERE id = ?", (old["id"],)
+        )
+    result = service.import_returns(
         source_path=source,
         original_name=source.name,
         content_type="text/csv",
-        change_note="重复内容",
+        mode="analyze_only",
         actor_id="user-1",
+        _inspection=stale,
     )
-
-    with context.database.connect() as connection:
-        rows = connection.execute(
-            """
-            SELECT id, file_path FROM dataset_versions
-            WHERE dataset_id = ? ORDER BY version
-            """,
-            (created["id"],),
-        ).fetchall()
-    legacy_dir = tmp_path / "uploads" / "legacy"
-    legacy_dir.mkdir(parents=True)
-    legacy_paths = [legacy_dir / "v1.csv", legacy_dir / "v2.csv"]
-    for row, legacy_path in zip(rows, legacy_paths, strict=True):
-        shutil.copy2(str(row["file_path"]), legacy_path)
-        with context.database.transaction(immediate=True) as connection:
-            connection.execute(
-                "UPDATE dataset_versions SET file_path = ? WHERE id = ?",
-                (str(legacy_path), row["id"]),
-            )
-
-    before = service.storage_summary([str(created["id"])])
-    result = service.cleanup_storage(
-        dataset_ids=[str(created["id"])],
-        retention_days=30,
-        retain_latest=2,
-        actor_id="user-1",
-    )
-
-    assert before["duplicate_groups"] == 1
-    assert before["dedup_reclaimable_bytes"] == source.stat().st_size
-    assert result["deduplicated_files"] == 2
-    assert result["pruned_versions"] == 0
-    assert result["freed_bytes"] == source.stat().st_size * 2
-    assert all(not path.exists() for path in legacy_paths)
-    with context.database.connect() as connection:
-        stored_paths = connection.execute(
-            """
-            SELECT DISTINCT file_path FROM dataset_versions
-            WHERE dataset_id = ?
-            """,
-            (created["id"],),
-        ).fetchall()
-    assert len(stored_paths) == 1
-    assert Path(str(stored_paths[0]["file_path"])).exists()
+    assert result["dataset"]["id"] != old["id"]
 
 
-def test_storage_cleanup_protects_current_and_referenced_versions(
-    tmp_path: Path,
-) -> None:
+def test_concurrent_task_uploads_deduplicate_inside_transaction(tmp_path: Path) -> None:
     context = _seed_result_context(tmp_path)
     service = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
-    source = tmp_path / "retention.csv"
-    _write_returns(source, [_return_row("O-1", "偏小")])
-    created = _create_managed_returns(service, source)
-    dataset_id = str(created["id"])
-    for version in range(2, 5):
-        _write_returns(source, [_return_row(f"O-{version}", f"问题-{version}")])
-        service.add_version(
-            dataset_id=dataset_id,
+    source = tmp_path / "parallel.csv"
+    _write_returns(source, [_return_row("O-1", "合成反馈")])
+    inspection = service.inspect_return_import(source, source.name)
+
+    def upload():
+        return service.import_returns(
             source_path=source,
             original_name=source.name,
             content_type="text/csv",
-            change_note=f"版本 {version}",
+            mode="analyze_only",
             actor_id="user-1",
+            _inspection=inspection,
         )
 
-    with context.database.transaction(immediate=True) as connection:
-        versions = connection.execute(
-            """
-            SELECT id, version FROM dataset_versions
-            WHERE dataset_id = ? ORDER BY version
-            """,
-            (dataset_id,),
-        ).fetchall()
-        version_ids = {int(row["version"]): str(row["id"]) for row in versions}
-        connection.execute(
-            """
-            UPDATE dataset_versions SET created_at = '2000-01-01T00:00:00+00:00'
-            WHERE dataset_id = ?
-            """,
-            (dataset_id,),
-        )
-        connection.execute(
-            "UPDATE tasks SET dataset_version_id = ? WHERE id = 'task-1'",
-            (version_ids[3],),
-        )
-
-    before = service.storage_summary(
-        [dataset_id],
-        retention_days=30,
-        retain_latest=1,
-    )
-    result = service.cleanup_storage(
-        dataset_ids=[dataset_id],
-        retention_days=30,
-        retain_latest=1,
-        actor_id="user-1",
-    )
-
-    assert before["expired_versions"] == 2
-    assert result["pruned_versions"] == 2
-    with context.database.connect() as connection:
-        remaining = connection.execute(
-            """
-            SELECT version FROM dataset_versions
-            WHERE dataset_id = ? ORDER BY version
-            """,
-            (dataset_id,),
-        ).fetchall()
-    assert [int(row["version"]) for row in remaining] == [3, 4]
-    assert result["after"]["task_referenced_versions"] == 1
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: upload(), range(2)))
+    assert len({result["version_id"] for result in results}) == 1
+    assert sum(result["duplicate"] for result in results) == 1

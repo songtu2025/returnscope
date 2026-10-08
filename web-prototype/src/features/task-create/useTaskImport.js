@@ -26,9 +26,7 @@ export function useTaskImport({
   const [mysqlDraft, setMysqlDraft] = useState(
     /** @type {Partial<MysqlReturnFormState> | undefined} */ (draft?.mysqlDraft),
   );
-  const [dataEntryMode, setDataEntryMode] = useState(
-    draft?.dataEntryMode ?? (draft?.form?.dataset_version_id ? "existing" : "mysql"),
-  );
+  const [dataEntryMode, setDataEntryMode] = useState(draft?.dataEntryMode ?? "mysql");
   const [selectedDataLabel, setSelectedDataLabel] = useState(
     draft?.selectedDataLabel ?? "",
   );
@@ -49,7 +47,7 @@ export function useTaskImport({
       dataset_version_id: result.version_id,
       title:
         current.title ||
-        `${source === "mysql" ? mysqlDraft?.store || "全部店铺" : "用户反馈数据"} · 用户语义分析`,
+        `${source === "mysql" ? mysqlDraft?.store || "全部店铺" : result.dataset?.name || "用户反馈数据"} · 用户语义分析`,
     }));
     setUploadOpen(false);
     onChanged();

@@ -10,7 +10,7 @@ import { primaryPlanStore } from "./newTaskPolicy";
 /** @typedef {import("./productMatchPolicy").ProductMatchDraft} ProductMatchDraft */
 
 /**
- * @param {{dataEntryMode: "existing" | "upload" | "mysql", form: TaskForm, invalidatePreflight: () => void, mysqlDraft?: Partial<MysqlReturnFormState>, notify: (message: string, type?: "success" | "error") => void, onDraftChange?: (draft: TaskDraft) => void, onNavigate: import("../../app/navigation").Navigate, preflight: TaskPreflightState, products: DataVersion[], selectedDataLabel: string, selectedProducts?: DataVersion, selectedReturns?: DataVersion, setForm: import("react").Dispatch<import("react").SetStateAction<TaskForm>>, setSubmitting: import("react").Dispatch<import("react").SetStateAction<boolean>>, setVersions: import("react").Dispatch<import("react").SetStateAction<DataVersion[]>>}} options
+ * @param {{dataEntryMode: "upload" | "mysql", form: TaskForm, invalidatePreflight: () => void, mysqlDraft?: Partial<MysqlReturnFormState>, notify: (message: string, type?: "success" | "error") => void, onDraftChange?: (draft: TaskDraft) => void, onNavigate: import("../../app/navigation").Navigate, preflight: TaskPreflightState, products: DataVersion[], selectedDataLabel: string, selectedProducts?: DataVersion, selectedReturns?: DataVersion, setForm: import("react").Dispatch<import("react").SetStateAction<TaskForm>>, setSubmitting: import("react").Dispatch<import("react").SetStateAction<boolean>>, setVersions: import("react").Dispatch<import("react").SetStateAction<DataVersion[]>>}} options
  */
 
 export function useProductMatching({

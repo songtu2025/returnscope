@@ -5,7 +5,6 @@
 @import "./styles/global/page-controls.css";
 @import "./styles/global/progress-and-content.css";
 @import "./styles/global/forms-and-tabs.css";
-@import "./styles/global/return-sources.css";
 @import "./styles/global/dataset-detail.css";
 @import "./styles/global/product-assets.css";
 @import "./styles/global/result-delivery.css";
@@ -15,10 +14,4 @@
 @import "./styles/global/feedback.css";
 @import "./styles/global/result-quality.css";
 @import "./styles/global/task-return-input.css";
-@import "./styles/global/return-registry-filters.css";
-@import "./styles/global/return-registry-records.css";
-@import "./styles/global/return-snapshots.css";
-@import "./styles/global/snapshot-storage.css";
-@import "./styles/global/snapshot-cleanup.css";
-@import "./styles/global/snapshot-preview.css";
 @import "./styles/global/asset-responsive.css";

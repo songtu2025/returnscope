@@ -5,7 +5,6 @@ import { taskPlanCounts } from "../task-planning/taskPlanPolicy";
 import { TaskLaunchActions } from "./NewTaskActions";
 import { NewTaskView } from "./NewTaskView";
 import {
-  canonicalManagedReturns,
   normalizeReturnVersion,
   resolveTaskModelPolicy,
   taskConnectionPolicy,
@@ -78,9 +77,8 @@ export function NewTaskPage({
   });
 
   const allReturns = versions
-    .filter((item) => item.kind === "returns")
+    .filter((item) => item.kind === "returns" && item.usage_scope === "task_input")
     .map(normalizeReturnVersion);
-  const returns = canonicalManagedReturns(allReturns);
   const products = versions.filter((item) => item.kind === "products");
   const publishedConfigs = configs.flatMap((item) =>
     item.active_version ? [{ ...item.active_version, connection_name: item.name }] : [],
@@ -161,6 +159,25 @@ export function NewTaskPage({
   const selectedReturns = allReturns.find(
     (item) => item.version_id === form.dataset_version_id,
   );
+  useEffect(() => {
+    if (loadingSetup || setupError || !form.dataset_version_id || selectedReturns)
+      return;
+    setPrepared(false);
+    invalidatePreflight();
+    setForm((current) => ({ ...current, dataset_version_id: "" }));
+    notify(
+      "草稿中的分析数据已失效，请重新读取数据库或上传文件；其他设置已保留。",
+      "error",
+    );
+  }, [
+    loadingSetup,
+    setupError,
+    form.dataset_version_id,
+    selectedReturns,
+    invalidatePreflight,
+    setForm,
+    notify,
+  ]);
   const selectedProducts = products.find(
     (item) => item.version_id === form.product_version_id,
   );
@@ -244,15 +261,6 @@ export function NewTaskPage({
       submitError={submitError}
       submitLabel={submitLabel}
       onSubmit={submit}
-      onPrepareExisting={() => {
-        if (!selectedReturns) return;
-        focusAfterPreparation.current = true;
-        setForm((current) => ({
-          ...current,
-          title: current.title || `${selectedReturns.dataset_name} · 用户语义分析`,
-        }));
-        setPrepared(true);
-      }}
     />
   );
   const scopeLabel = taskDataScopeLabel({
@@ -283,7 +291,6 @@ export function NewTaskPage({
           ready,
           onRetry: setSetupAttempt,
           onNavigate,
-          returns,
           products,
           publishedConfigs,
         }}
@@ -293,15 +300,12 @@ export function NewTaskPage({
           selectedReturns,
           dataEntryMode,
           selectedDataLabel,
-          onDataEntryModeChange: (
-            /** @type {"mysql" | "upload" | "existing"} */ nextMode,
-          ) => {
+          onDataEntryModeChange: (/** @type {"mysql" | "upload"} */ nextMode) => {
             if (nextMode === dataEntryMode) return;
             setDataEntryMode(nextMode);
             setSelectedDataLabel("");
             updateForm({ ...form, dataset_version_id: "" });
           },
-          setSelectedDataLabel,
           mysqlDraft,
           setMysqlDraft,
           setMysqlState,

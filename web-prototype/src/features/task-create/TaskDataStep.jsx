@@ -1,35 +1,29 @@
 import { useEffect, useState } from "react";
-import { Database, FileArrowUp, FolderOpen, UploadSimple } from "@phosphor-icons/react";
+import { Database, FileArrowUp, UploadSimple } from "@phosphor-icons/react";
 import { MysqlReturnImportForm } from "./MysqlReturnImportForm";
 
 /** @typedef {import("./taskCreateContracts").DataVersion} DataVersion */
 /** @typedef {import("./mysqlReturnContracts").MysqlFormState} MysqlFormState */
-/** @typedef {import("./taskCreateContracts").TaskForm} TaskForm */
 /** @typedef {import("./mysqlReturnContracts").MysqlImportResult} MysqlImportResult */
 /** @typedef {import("./mysqlReturnContracts").MysqlReturnFormState} MysqlReturnFormState */
-/** @typedef {readonly ["mysql" | "upload" | "existing", string, import("react").ElementType]} DataEntryOption */
+/** @typedef {readonly ["mysql" | "upload", string, import("react").ElementType]} DataEntryOption */
 
 /** @type {readonly DataEntryOption[]} */
 const DATA_ENTRY_OPTIONS = [
   ["mysql", "数据库", Database],
   ["upload", "上传文件", FileArrowUp],
-  ["existing", "已有数据", FolderOpen],
 ];
 
 /**
- * @typedef {{form: TaskForm, onFormChange: (form: TaskForm) => void, returns: DataVersion[], selectedReturns?: DataVersion, dataEntryMode: "mysql" | "upload" | "existing", selectedDataLabel: string, onDataEntryModeChange: (mode: "mysql" | "upload" | "existing") => void, onSelectedDataLabelChange: (label: string) => void, onUploadReturns: () => void, mysqlDraft?: Partial<MysqlReturnFormState>, onMysqlDraftChange: (draft: MysqlReturnFormState) => void, onMysqlDone: (result: MysqlImportResult) => void | Promise<void>, onMysqlStateChange: (state: MysqlFormState) => void, onInvalidateMysql: () => void, busy: boolean, prepared: boolean, scopeLabel: string, children?: import("react").ReactNode}} TaskDataStepProps
+ * @typedef {{selectedReturns?: DataVersion, dataEntryMode: "mysql" | "upload", selectedDataLabel: string, onDataEntryModeChange: (mode: "mysql" | "upload") => void, onUploadReturns: () => void, mysqlDraft?: Partial<MysqlReturnFormState>, onMysqlDraftChange: (draft: MysqlReturnFormState) => void, onMysqlDone: (result: MysqlImportResult) => void | Promise<void>, onMysqlStateChange: (state: MysqlFormState) => void, onInvalidateMysql: () => void, busy: boolean, prepared: boolean, scopeLabel: string, children?: import("react").ReactNode}} TaskDataStepProps
  */
 
 /** @param {TaskDataStepProps} props */
 export function TaskDataStep({
-  form,
-  onFormChange,
-  returns,
   selectedReturns,
   dataEntryMode,
   selectedDataLabel,
   onDataEntryModeChange,
-  onSelectedDataLabelChange,
   onUploadReturns,
   mysqlDraft,
   onMysqlDraftChange,
@@ -93,24 +87,12 @@ export function TaskDataStep({
               disabled={busy}
             />
           ) : (
-            <>
-              {dataEntryMode === "upload" ? (
-                <TaskUploadSource
-                  selectedReturns={selectedReturns}
-                  selectedDataLabel={selectedDataLabel}
-                  onUploadReturns={onUploadReturns}
-                  busy={busy}
-                />
-              ) : (
-                <ExistingTaskSourcePicker
-                  form={form}
-                  onFormChange={onFormChange}
-                  returns={returns}
-                  onSelectedDataLabelChange={onSelectedDataLabelChange}
-                  busy={busy}
-                />
-              )}
-            </>
+            <TaskUploadSource
+              selectedReturns={selectedReturns}
+              selectedDataLabel={selectedDataLabel}
+              onUploadReturns={onUploadReturns}
+              busy={busy}
+            />
           )}
         </div>
         {children}
@@ -145,46 +127,6 @@ function TaskUploadSource({
         <UploadSimple size={17} />
         {selectedReturns ? "更换文件" : "选择文件"}
       </button>
-    </div>
-  );
-}
-
-/** @param {Pick<TaskDataStepProps, "form" | "onFormChange" | "returns" | "onSelectedDataLabelChange" | "busy">} props */
-function ExistingTaskSourcePicker({
-  form,
-  onFormChange,
-  returns,
-  onSelectedDataLabelChange,
-  busy,
-}) {
-  return (
-    <div className="task-data-picker existing-source-picker">
-      <label className="task-config-choice">
-        已有数据源
-        <select
-          value={form.dataset_version_id}
-          disabled={busy}
-          onChange={(event) => {
-            onFormChange({
-              ...form,
-              dataset_version_id: event.target.value,
-            });
-            onSelectedDataLabelChange(event.target.value ? "当前完整数据" : "");
-          }}
-        >
-          <option value="">请选择数据源</option>
-          {returns.map((item) => (
-            <option key={item.version_id} value={item.version_id}>
-              {item.dataset_name} · {item.row_count.toLocaleString()} 条记录
-            </option>
-          ))}
-        </select>
-      </label>
-      {!returns.length && (
-        <p className="return-import-intro">
-          还没有保存的数据，可以从数据库读取或上传文件。
-        </p>
-      )}
     </div>
   );
 }

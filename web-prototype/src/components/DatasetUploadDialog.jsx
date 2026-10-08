@@ -11,17 +11,13 @@ import { Modal } from "./SharedUi";
  *   dialog: UploadDialog,
  *   onClose: () => void,
  *   onDone: (result: unknown) => void | Promise<void>,
- *   storeOptions?: string[],
  * }} props
  */
-export function DatasetUploadDialog({ dialog, onClose, onDone, storeOptions = [] }) {
+export function DatasetUploadDialog({ dialog, onClose, onDone }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [note, setNote] = useState("");
   const [file, setFile] = useState(/** @type {File | null} */ (null));
-  const [defaultStore, setDefaultStore] = useState(
-    dialog.mode === "version" && storeOptions.length === 1 ? storeOptions[0] : "",
-  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const kind = dialog.mode === "create" ? dialog.kind : dialog.dataset.kind;
@@ -38,9 +34,6 @@ export function DatasetUploadDialog({ dialog, onClose, onDone, storeOptions = []
     const body = new FormData();
     body.append("file", file);
     body.append("change_note", note);
-    if (kind === "returns" && defaultStore) {
-      body.append("default_store", defaultStore);
-    }
     try {
       let result;
       if (dialog.mode === "create") {
@@ -63,9 +56,7 @@ export function DatasetUploadDialog({ dialog, onClose, onDone, storeOptions = []
     <Modal
       title={
         dialog.mode === "create"
-          ? kind === "returns"
-            ? "导入用户反馈数据"
-            : "导入产品信息"
+          ? "导入产品信息"
           : `为 ${dialog.dataset.name} 创建新版本`
       }
       onClose={onClose}
@@ -74,7 +65,7 @@ export function DatasetUploadDialog({ dialog, onClose, onDone, storeOptions = []
         {dialog.mode === "create" && (
           <>
             <label>
-              {kind === "returns" ? "用户反馈数据名称" : "产品信息名称"}
+              产品信息名称
               <input
                 value={name}
                 onChange={(event) => setName(event.target.value)}
@@ -95,33 +86,14 @@ export function DatasetUploadDialog({ dialog, onClose, onDone, storeOptions = []
         <label className="file-drop">
           <input
             type="file"
-            accept={kind === "returns" ? ".csv,.xlsx" : ".xlsx"}
+            accept=".xlsx"
             onChange={(event) => setFile(event.target.files?.[0] ?? null)}
           />
           <UploadSimple size={25} />
-          <b>
-            {file?.name ?? `选择 ${kind === "returns" ? "CSV 或 XLSX" : "XLSX"} 文件`}
-          </b>
+          <b>{file?.name ?? "选择 XLSX 文件"}</b>
           <span>最大 200 MB，上传后自动检查必需字段</span>
         </label>
-        {kind === "returns" && (
-          <label>
-            缺失店铺/站点时补充为（可选）
-            <input
-              value={defaultStore}
-              onChange={(event) => setDefaultStore(event.target.value)}
-              list="return-store-options"
-              maxLength={100}
-              placeholder="输入店铺/站点"
-            />
-            <small>仅填补空值，不会覆盖文件中已有的店铺/站点。</small>
-            <datalist id="return-store-options">
-              {storeOptions.map((store) => (
-                <option value={store} key={store} />
-              ))}
-            </datalist>
-          </label>
-        )}
+
         <label>
           版本说明
           <input

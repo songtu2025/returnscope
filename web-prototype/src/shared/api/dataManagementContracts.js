@@ -21,19 +21,6 @@
  *
  * @typedef {{
  *   id: string,
- *   mode: string,
- *   original_name: string,
- *   created_at?: string,
- *   row_count?: number,
- *   imported_row_count?: number,
- *   skipped_row_count?: number,
- *   creator_name?: string,
- *   change_note?: string,
- *   resulting_version_id?: string,
- * }} DatasetImport
- *
- * @typedef {{
- *   id: string,
  *   name: string,
  *   kind: string,
  *   source_key?: string,
@@ -46,14 +33,12 @@
  *   updated_at?: string,
  *   quality?: DatasetQuality,
  *   versions?: DatasetVersion[],
- *   imports?: DatasetImport[],
  *   task_reference_count?: number,
  *   member_ids?: string[],
  *   schema?: unknown[],
  *   column_count?: number,
  *   audit?: DatasetAuditEntry[],
  * }} DatasetRecord
- * @typedef {DatasetRecord & {member_ids: string[]}} DatasetSource
  *
  * @typedef {{values?: Record<string, string | number | null>, items?: unknown[], store?: string, note?: string, row_index?: number}} DatasetAuditSide
  * @typedef {{id: string, action: string, actor_name?: string, created_at?: string, before?: DatasetAuditSide, after?: DatasetAuditSide}} DatasetAuditEntry
@@ -102,17 +87,6 @@
  *   facets?: {stores?: string[], categories?: string[]},
  * }} DatasetRowsPage
  *
- * @typedef {{
- *   version_count: number,
- *   physical_bytes: number,
- *   task_referenced_versions: number,
- *   dedup_reclaimable_bytes: number,
- *   expired_versions: number,
- *   retention_days: number,
- *   retain_latest: number,
- *   can_cleanup: boolean,
- * }} DatasetStorageSummary
- * @typedef {{after: DatasetStorageSummary, freed_bytes: number}} DatasetStorageCleanup
  */
 
 export {};

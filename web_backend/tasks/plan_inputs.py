@@ -52,7 +52,7 @@ class TaskPlanInputsMixin:
         with self.database.connect() as connection:
             returns_row = connection.execute(
                 """
-                SELECT v.*, d.name AS dataset_name, d.kind
+                SELECT v.*, d.name AS dataset_name, d.kind, d.usage_scope
                 FROM dataset_versions v
                 JOIN datasets d ON d.id = v.dataset_id
                 WHERE v.id = ? AND d.archived_at IS NULL
@@ -61,7 +61,7 @@ class TaskPlanInputsMixin:
             ).fetchone()
             products_row = connection.execute(
                 """
-                SELECT v.*, d.name AS dataset_name, d.kind
+                SELECT v.*, d.name AS dataset_name, d.kind, d.usage_scope
                 FROM dataset_versions v
                 JOIN datasets d ON d.id = v.dataset_id
                 WHERE v.id = ? AND d.archived_at IS NULL
@@ -91,6 +91,8 @@ class TaskPlanInputsMixin:
                 ).fetchone()
         if returns_row is None or returns_row["kind"] != "returns":
             raise ValueError("请选择有效的用户反馈数据版本")
+        if returns_row["usage_scope"] != "task_input":
+            raise ValueError("长期反馈数据源已下线，请重新读取数据库或上传文件")
         if products_row is None or products_row["kind"] != "products":
             raise ValueError("请选择有效的商品维度版本")
         if config_row is None or config_row["published_at"] is None:

@@ -115,11 +115,18 @@ def _seed_result_context(tmp_path: Path) -> SimpleNamespace:
             connection.execute(
                 """
                 INSERT INTO datasets(
-                    id, name, kind, current_version, created_by,
+                    id, name, kind, usage_scope, current_version, created_by,
                     created_at, updated_at
-                ) VALUES (?, ?, ?, 1, 'user-1', ?, ?)
+                ) VALUES (?, ?, ?, ?, 1, 'user-1', ?, ?)
                 """,
-                (dataset_id, name, kind, now, now),
+                (
+                    dataset_id,
+                    name,
+                    kind,
+                    "task_input" if kind == "returns" else "managed",
+                    now,
+                    now,
+                ),
             )
         connection.execute(
             """

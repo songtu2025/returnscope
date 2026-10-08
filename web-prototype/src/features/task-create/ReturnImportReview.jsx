@@ -1,25 +1,16 @@
 import { CheckCircle, Info, UploadSimple, WarningCircle } from "@phosphor-icons/react";
-import { ReturnImportSelection } from "./ReturnImportSelection";
 /** @typedef {import("./taskCreateContracts").ReturnImportInspection} ReturnImportInspection */
-/** @typedef {import("./ReturnImportSelection").ImportSelection} ImportSelection */
-/** @typedef {import("./ReturnImportSelection").ImportActions} ImportActions */
+/** @typedef {{duplicate?: ReturnImportInspection["duplicate"], missingStoreRows: number, submitting: boolean, submitLabel: string, error: string}} ImportSelection */
+/** @typedef {{onClose: () => void, onSubmit: () => void | Promise<void>, onChangeFile: () => void}} ImportActions */
 
 /** @param {{inspection: ReturnImportInspection, selection: ImportSelection, actions: ImportActions}} props */
 export function ReturnImportReview({ inspection, selection, actions }) {
-  const { mode, duplicate, missingStoreRows, submitting, submitLabel, error } =
-    selection;
+  const { duplicate, missingStoreRows, submitting, submitLabel, error } = selection;
   return (
     <div className="return-import-review">
       <ImportDetection inspection={inspection} onChangeFile={actions.onChangeFile} />
 
       <ImportNotices duplicate={duplicate} missingStoreRows={missingStoreRows} />
-      <ReturnImportSelection selection={selection} actions={actions} />
-      {mode === "replace" && (
-        <div className="return-import-notice warning">
-          <WarningCircle size={18} weight="fill" />
-          <span>替换会改变该数据源的当前数据；历史快照和已创建任务不会被修改。</span>
-        </div>
-      )}
       {error && <ImportError message={error} />}
       <div className="modal-actions">
         <button type="button" className="secondary-button" onClick={actions.onClose}>
@@ -69,7 +60,7 @@ function ImportDetection({ inspection, onChangeFile }) {
       </header>
       <dl>
         <div>
-          <dt>识别的数据源</dt>
+          <dt>识别的分析数据</dt>
           <dd>{inspection.suggested_name}</dd>
         </div>
         <div>
@@ -100,7 +91,7 @@ function ImportNotices({ duplicate, missingStoreRows }) {
           <Info size={18} weight="fill" />
           <span>
             这份文件已经导入到“{duplicate.dataset_name}
-            ”。选择“仅分析本批”时会直接复用， 不会再创建重复数据。
+            ”。本次任务会直接复用这份输入快照。
           </span>
         </div>
       )}

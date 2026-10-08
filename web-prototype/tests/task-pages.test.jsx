@@ -39,23 +39,19 @@ afterEach(() => {
   window.sessionStorage.clear();
 });
 
-test("任务创建页将数据版本写入用户草稿并保留业务归属", () => {
+test("旧数据源版本链接不再自动选数", () => {
+  const notify = vi.fn();
   render(
     <TaskCreatePage
       route={{ query: { dataset_version: "returns-v7" } }}
-      notify={vi.fn()}
+      notify={notify}
       onNavigate={vi.fn()}
       onChanged={vi.fn()}
       userId="user-1"
     />,
   );
-
-  expect(screen.queryByRole("navigation", { name: "面包屑" })).not.toBeInTheDocument();
-  expect(newTaskPageProbe.mock.calls.at(-1)[0].draft).toMatchObject({
-    dataEntryMode: "existing",
-    selectedDataLabel: "当前完整数据",
-    form: { dataset_version_id: "returns-v7" },
-  });
+  expect(newTaskPageProbe.mock.calls.at(-1)[0].draft).toBeNull();
+  expect(notify).toHaveBeenCalledWith(expect.stringContaining("入口已下线"), "error");
 });
 
 test("重新进入任务创建页时保留已选数据和输入", () => {
@@ -81,20 +77,21 @@ test("重新进入任务创建页时保留已选数据和输入", () => {
   );
 
   expect(newTaskPageProbe.mock.calls.at(-1)[0].draft).toMatchObject({
-    dataEntryMode: "existing",
-    selectedDataLabel: "当前完整数据",
-    form: { title: "待创建任务", dataset_version_id: "returns-v6" },
+    dataEntryMode: "mysql",
+    selectedDataLabel: "",
+    form: { title: "待创建任务", dataset_version_id: "" },
   });
   expect(readTaskDraft("user-1")).toMatchObject({
-    dataEntryMode: "existing",
-    selectedDataLabel: "当前完整数据",
-    form: { dataset_version_id: "returns-v6" },
+    dataEntryMode: "mysql",
+    selectedDataLabel: "",
+    form: { dataset_version_id: "" },
   });
 });
 
 test("商品修复返回任务创建页时保留待恢复的退货版本", () => {
   writeTaskDraft("user-1", {
     step: 3,
+    dataEntryMode: "mysql",
     resumePreflight: true,
     form: { dataset_version_id: "returns-v6" },
   });
@@ -153,7 +150,7 @@ test("创建类似任务时只继承名称和模型策略", async () => {
   await waitFor(() => expect(newTaskPageProbe).toHaveBeenCalled());
   expect(newTaskPageProbe.mock.calls.at(-1)[0].draft).toMatchObject({
     step: 1,
-    dataEntryMode: "existing",
+    dataEntryMode: "mysql",
     selectedDataLabel: "",
     form: {
       title: "历史分析任务（副本）",

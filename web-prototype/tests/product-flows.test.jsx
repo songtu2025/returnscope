@@ -256,6 +256,31 @@ beforeEach(() => {
 
 afterEach(() => cleanup());
 
+async function prepareTaskUpload(user) {
+  apiMock.inspectReturnImport.mockResolvedValue({
+    inspection_id: "flow-inspection",
+    original_name: "synthetic.csv",
+    suggested_name: "8月退货数据",
+    row_count: 12,
+    stores: ["SEEKWAY:US"],
+    quality: { valid_comment_rows: 12, missing_store_rows: 0 },
+  });
+  apiMock.importReturns.mockResolvedValue({
+    version_id: "returns-v1",
+    dataset: { id: "returns-dataset", name: "8月退货数据", usage_scope: "task_input" },
+    mode: "analyze_only",
+  });
+  await user.click(screen.getByRole("button", { name: "上传文件" }));
+  await user.click(screen.getByRole("button", { name: "选择文件" }));
+  await user.upload(
+    document.querySelector('input[type="file"]'),
+    new File(["synthetic"], "synthetic.csv"),
+  );
+  await user.click(screen.getByRole("button", { name: "检查文件" }));
+  await screen.findByText("文件检查完成");
+  await user.click(screen.getByRole("button", { name: "导入并分析本批" }));
+}
+
 describe("关键用户流程", () => {
   test("运行配置加载完成前不显示缺失准备提示", async () => {
     let resolveVersions;
@@ -548,6 +573,7 @@ describe("关键用户流程", () => {
       {
         id: "return-hidden",
         kind: "returns",
+        usage_scope: "task_input",
         name: "隐藏退货源",
         current_version: 1,
         row_count: 1,
@@ -1012,6 +1038,7 @@ describe("关键用户流程", () => {
     apiMock.dataVersions.mockResolvedValue([
       {
         kind: "returns",
+        usage_scope: "task_input",
         version_id: "returns-v1",
         dataset_name: "8月退货数据",
         version: 1,
@@ -1096,11 +1123,7 @@ describe("关键用户流程", () => {
     expect(screen.queryByLabelText(/^已有数据源/)).not.toBeInTheDocument();
     expect(screen.getByText("选择店铺和日期，查看本次分析范围")).toBeVisible();
     expect(planButton).toBeDisabled();
-    await user.click(screen.getByRole("button", { name: /已有数据/ }));
-    await user.selectOptions(screen.getByLabelText(/^已有数据源/), "returns-v1");
-    expect(planButton).toBeEnabled();
-    expect(screen.queryByLabelText("任务名称")).not.toBeInTheDocument();
-    await user.click(planButton);
+    await prepareTaskUpload(user);
     expect(await screen.findByText("将分析 8 组评论")).toBeVisible();
     expect(apiMock.preflightTask).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1122,7 +1145,7 @@ describe("关键用户流程", () => {
     ).toBeEnabled();
     expect(screen.queryByRole("group", { name: "数据来源" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "查看或修改数据" }));
-    expect(screen.getByLabelText(/^已有数据源/)).toHaveValue("returns-v1");
+    expect(screen.getByRole("button", { name: "更换文件" })).toBeVisible();
     await user.click(screen.getByRole("button", { name: "收起数据详情" }));
     expect(apiMock.preflightTask).toHaveBeenCalledOnce();
 
@@ -1187,6 +1210,7 @@ describe("关键用户流程", () => {
     const initialVersions = [
       {
         kind: "returns",
+        usage_scope: "task_input",
         dataset_id: "returns-old",
         version_id: "returns-v1",
         dataset_name: "原退货数据",
@@ -1207,6 +1231,7 @@ describe("关键用户流程", () => {
     const updatedVersions = [
       {
         kind: "returns",
+        usage_scope: "task_input",
         dataset_id: "returns-new",
         version_id: "returns-new-v1",
         dataset_name: "新站点退货数据",
@@ -1295,9 +1320,6 @@ describe("关键用户流程", () => {
     expect(body).toEqual({
       inspection_id: "inspection-task-1",
       mode: "analyze_only",
-      dataset_id: "",
-      name: "新站点退货数据",
-      change_note: "",
     });
     expect(onChanged).toHaveBeenCalledOnce();
     expect(notify).toHaveBeenCalledWith("用户反馈数据已导入并自动选中");
@@ -1308,6 +1330,7 @@ describe("关键用户流程", () => {
     apiMock.dataVersions.mockResolvedValue([
       {
         kind: "returns",
+        usage_scope: "task_input",
         version_id: "returns-v1",
         dataset_name: "退货数据",
         version: 1,
@@ -1381,9 +1404,7 @@ describe("关键用户流程", () => {
 
     render(<NewTaskPage notify={vi.fn()} onChanged={vi.fn()} onNavigate={vi.fn()} />);
     await screen.findByRole("region", { name: "选择分析数据" });
-    await user.click(screen.getByRole("button", { name: /已有数据/ }));
-    await user.selectOptions(screen.getByLabelText(/^已有数据源/), "returns-v1");
-    await user.click(screen.getByRole("button", { name: /准备分析/ }));
+    await prepareTaskUpload(user);
     expect(await screen.findByText("需要处理")).toBeVisible();
     expect(await screen.findByText("鞋履 / 未知鞋型 · 3 条")).toBeVisible();
     const startButton = screen.getByRole("button", {
@@ -1419,6 +1440,7 @@ describe("关键用户流程", () => {
     apiMock.dataVersions.mockResolvedValueOnce([
       {
         kind: "returns",
+        usage_scope: "task_input",
         version_id: "returns-v1",
         dataset_name: "退货数据",
         version: 1,
@@ -1438,6 +1460,27 @@ describe("关键用户流程", () => {
     apiMock.dataVersions.mockResolvedValueOnce([
       {
         kind: "returns",
+        usage_scope: "task_input",
+        version_id: "returns-v1",
+        dataset_name: "退货数据",
+        version: 1,
+        current_version: 1,
+        row_count: 12,
+      },
+      {
+        kind: "products",
+        dataset_id: "products-dataset",
+        version_id: "products-v1",
+        dataset_name: "商品维度",
+        version: 1,
+        current_version: 1,
+        row_count: 6,
+      },
+    ]);
+    apiMock.dataVersions.mockResolvedValueOnce([
+      {
+        kind: "returns",
+        usage_scope: "task_input",
         version_id: "returns-v1",
         dataset_name: "退货数据",
         version: 1,
@@ -1538,9 +1581,7 @@ describe("关键用户流程", () => {
       <NewTaskPage notify={vi.fn()} onChanged={vi.fn()} onNavigate={onNavigate} />,
     );
     await screen.findByRole("region", { name: "选择分析数据" });
-    await user.click(screen.getByRole("button", { name: /已有数据/ }));
-    await user.selectOptions(screen.getByLabelText(/^已有数据源/), "returns-v1");
-    await user.click(screen.getByRole("button", { name: /准备分析/ }));
+    await prepareTaskUpload(user);
     await user.click(
       await screen.findByRole("button", { name: /处理 3 个商品匹配异常/ }),
     );

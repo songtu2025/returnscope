@@ -98,8 +98,9 @@ def _write_input_files(tmp_path: Path) -> tuple[Path, Path]:
         "quantity": "1",
         "reason": "Too large",
         "customer-comments": "鞋子太大。",
+        RETURN_STORE_COLUMN: "SEEKWAY:US",
     }
-    pd.DataFrame([row], columns=RETURN_COLUMNS).to_csv(
+    pd.DataFrame([row], columns=[*RETURN_COLUMNS, RETURN_STORE_COLUMN]).to_csv(
         returns_path,
         index=False,
         encoding="utf-8-sig",
@@ -130,10 +131,21 @@ def _upload_dataset(
 ) -> dict[str, object]:
     with path.open("rb") as file_handle:
         response = client.post(
-            "/api/datasets",
+            "/api/return-imports/inspect" if kind == "returns" else "/api/datasets",
             data={"name": name, "kind": kind},
             files={"file": (path.name, file_handle)},
         )
+    if kind == "returns":
+        assert response.status_code == 200, response.text
+        response = client.post(
+            "/api/return-imports",
+            json={
+                "inspection_id": response.json()["inspection_id"],
+                "mode": "analyze_only",
+            },
+        )
+        assert response.status_code == 201, response.text
+        return response.json()["dataset"]
     assert response.status_code == 201, response.text
     return response.json()
 
@@ -326,7 +338,7 @@ def test_product_edit_rejections_do_not_create_partial_versions(
         assert rows["total"] == 0
 
 
-def test_return_version_fills_only_missing_store_values(tmp_path: Path) -> None:
+def test_task_input_cannot_be_updated_through_dataset_versions(tmp_path: Path) -> None:
     settings = Settings(
         data_dir=tmp_path / "runtime",
         database_path=tmp_path / "runtime" / "app.db",
@@ -366,15 +378,9 @@ def test_return_version_fills_only_missing_store_values(tmp_path: Path) -> None:
                 files={"file": (version_path.name, file_handle)},
             )
 
-        assert response.status_code == 201, response.text
-        updated = response.json()
-        assert updated["current_version"] == 2
-        assert updated["quality"]["matching_key_ready_rows"] == 2
-        assert updated["quality"]["missing_store_rows"] == 0
-        assert updated["quality"]["stores"] == ["SEEKWAY:CA", "SEEKWAY:US"]
+        assert response.status_code == 400, response.text
         rows = client.get(f"/api/datasets/{returns['id']}/rows", params={"limit": 10})
         assert [item[RETURN_STORE_COLUMN] for item in rows.json()["records"]] == [
-            "SEEKWAY:CA",
             "SEEKWAY:US",
         ]
         first_snapshot = client.get(

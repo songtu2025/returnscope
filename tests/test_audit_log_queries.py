@@ -170,11 +170,7 @@ def test_global_audit_filters_targets_and_dashboard_audit(tmp_path: Path) -> Non
             "route": "classification-results",
             "result_version_id": "result-version-2",
         },
-        ("dataset", "dataset-returns"): {
-            "route": "data",
-            "dataset_id": "dataset-returns",
-            "view": "returns",
-        },
+        ("dataset", "dataset-returns"): None,
         ("dataset", "dataset-products"): {
             "route": "data",
             "dataset_id": "dataset-products",

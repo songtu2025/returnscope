@@ -15,7 +15,6 @@ from web_backend.dataset_files import (
     DatasetRevisionConflict as DatasetRevisionConflict,
 )
 from web_backend.dataset_files import (
-    _fill_missing_return_store,
     _return_source_key,
     _return_source_name,
     _sha256_file,
@@ -26,21 +25,16 @@ from web_backend.dataset_files import (
 from web_backend.dataset_product_workbook import DatasetProductWorkbookMixin
 from web_backend.dataset_return_import import DatasetReturnImportMixin
 from web_backend.dataset_return_versions import (
-    RETURN_APPEND_MAX_ATTEMPTS as RETURN_APPEND_MAX_ATTEMPTS,
-)
-from web_backend.dataset_return_versions import (
     DatasetReturnVersionMixin,
 )
-from web_backend.dataset_storage import DatasetStorageMixin
-from web_backend.dataset_storage import shutil as shutil
 from web_backend.datasets.catalog import _DatasetCatalog
 from web_backend.datasets.preview import _DatasetPreview
 from web_backend.datasets.references import _DatasetReferences
 from web_backend.datasets.return_inspection import (
     DatasetFilePreparationMixin,
     persist_return_inspection,
-    return_inspection_matches,
 )
+from web_backend.datasets.storage_files import StorageFilesMixin
 from web_backend.security import utc_now
 from web_backend.settings import Settings
 
@@ -49,7 +43,7 @@ class DatasetService(
     _DatasetCatalog,
     _DatasetReferences,
     _DatasetPreview,
-    DatasetStorageMixin,
+    StorageFilesMixin,
     DatasetReturnVersionMixin,
     DatasetReturnImportMixin,
     DatasetProductWorkbookMixin,
@@ -74,28 +68,10 @@ class DatasetService(
         stores = [str(value) for value in quality.get("stores", [])]
         source_key = _return_source_key(stores)
         with self.database.connect() as connection:
-            rows = connection.execute(
-                """
-                SELECT d.id AS dataset_id, d.name AS dataset_name,
-                       d.source_key, d.current_version,
-                       v.id AS version_id, v.row_count, v.quality_json,
-                       v.created_at AS version_created_at
-                FROM datasets d
-                JOIN dataset_versions v
-                  ON v.dataset_id = d.id AND v.version = d.current_version
-                WHERE d.kind = 'returns'
-                  AND d.usage_scope = 'managed'
-                  AND d.archived_at IS NULL
-                ORDER BY d.updated_at DESC, d.id
-                """
-            ).fetchall()
             duplicate = self._find_duplicate_return_import(
                 connection,
                 raw_sha256=raw_sha256,
-                mode="analyze_only",
-                dataset_id="",
             )
-        matches = return_inspection_matches(rows, source_key)
         inspection = {
             "original_name": original_name,
             "raw_sha256": raw_sha256,
@@ -106,7 +82,6 @@ class DatasetService(
             "stores": stores,
             "source_key": source_key,
             "suggested_name": _return_source_name(stores, original_name),
-            "matches": matches,
             "duplicate": dict(duplicate) if duplicate is not None else None,
         }
         if actor_id is not None:
@@ -126,11 +101,13 @@ class DatasetService(
         content_type: str,
         change_note: str,
         actor_id: str,
-        default_store: str = "",
         source_key: str = "",
-        usage_scope: str = "managed",
+        usage_scope: str = "",
         _inspection: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        usage_scope = usage_scope or ("task_input" if kind == "returns" else "managed")
+        if kind == "returns" and usage_scope != "task_input":
+            raise ValueError("长期反馈数据源已下线，请通过分析任务导入数据")
         dataset_id = new_id("ds")
         now = utc_now()
         with self.database.transaction(immediate=True) as connection:
@@ -162,7 +139,6 @@ class DatasetService(
                 content_type=content_type,
                 change_note=change_note or "创建首个版本",
                 actor_id=actor_id,
-                default_store=default_store,
                 _inspection=_inspection,
             )
         except Exception:
@@ -188,7 +164,6 @@ class DatasetService(
         change_note: str,
         actor_id: str,
         expected_current_version: int | None = None,
-        default_store: str = "",
         _inspection: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         with self.database.connect() as connection:
@@ -199,8 +174,10 @@ class DatasetService(
         if dataset is None:
             raise ValueError("数据集不存在")
         kind = str(dataset["kind"])
-        if kind == "returns":
-            _fill_missing_return_store(source_path, default_store)
+        if kind == "returns" and (
+            dataset["usage_scope"] != "task_input" or dataset["current_version"] != 0
+        ):
+            raise ValueError("任务输入快照不能更新，请在分析任务中重新导入")
         prepared = self._prepare_dataset_file(
             source_path,
             kind,
@@ -209,7 +186,6 @@ class DatasetService(
                 "original_name": original_name,
                 "content_type": content_type,
                 "change_note": change_note,
-                "default_store": default_store,
             },
         )
         version_id = str(prepared["id"])
@@ -233,7 +209,6 @@ class DatasetService(
             after={
                 "version": version,
                 "version_id": version_id,
-                "default_store": default_store.strip(),
             },
         )
         return self.get(dataset_id) or {}

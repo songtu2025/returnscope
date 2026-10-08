@@ -7,7 +7,7 @@ import { useRef } from "react";
 /** @typedef {readonly [boolean, string, string, () => void]} SetupRow */
 
 /**
- * @param {{prepared: boolean, dataEntryMode: "mysql" | "upload" | "existing", mysqlState: MysqlFormState, selectedReturns?: DataVersion, submitting: boolean, canContinue: boolean, launchStatus: string, submitError: string, submitLabel: string, onSubmit: () => void | Promise<void>, onPrepareExisting: () => void}} props
+ * @param {{prepared: boolean, dataEntryMode: "mysql" | "upload", mysqlState: MysqlFormState, selectedReturns?: DataVersion, submitting: boolean, canContinue: boolean, launchStatus: string, submitError: string, submitLabel: string, onSubmit: () => void | Promise<void>}} props
  */
 
 export function TaskLaunchActions({
@@ -21,7 +21,6 @@ export function TaskLaunchActions({
   submitError,
   submitLabel,
   onSubmit,
-  onPrepareExisting,
 }) {
   const statusRef = useRef(/** @type {HTMLSpanElement | null} */ (null));
   return (
@@ -58,21 +57,12 @@ export function TaskLaunchActions({
         >
           {mysqlState.busy === "import" ? "正在准备…" : "准备分析"}
         </Button>
-      ) : (
-        <Button
-          type="primary"
-          className="primary-button"
-          disabled={!selectedReturns || submitting}
-          onClick={onPrepareExisting}
-        >
-          准备分析
-        </Button>
-      )}
+      ) : null}
     </footer>
   );
 }
 
-/** @param {{prepared: boolean, dataEntryMode: "mysql" | "upload" | "existing", mysqlState: MysqlFormState, selectedReturns?: DataVersion, launchStatus: string}} state */
+/** @param {{prepared: boolean, dataEntryMode: "mysql" | "upload", mysqlState: MysqlFormState, selectedReturns?: DataVersion, launchStatus: string}} state */
 function launchStatusText({
   prepared,
   dataEntryMode,

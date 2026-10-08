@@ -51,22 +51,6 @@ export function taskConnectionPolicy(publishedConfigs, configId) {
   };
 }
 
-/** @param {DataVersion[]} items @returns {DataVersion[]} */
-export function canonicalManagedReturns(items) {
-  const grouped = new Map(/** @type {[string, DataVersion][]} */ ([]));
-  items
-    .filter(
-      (item) =>
-        item.usage_scope !== "task_input" && item.version === item.current_version,
-    )
-    .forEach((item) => {
-      const stores = item.quality?.stores ?? [];
-      const key = item.source_key || stores.slice().sort().join("|") || item.dataset_id;
-      if (!grouped.has(key)) grouped.set(key, item);
-    });
-  return [...grouped.values()];
-}
-
 /** @param {DataVersion} item @returns {DataVersion} */
 export function normalizeReturnVersion(item) {
   const stores = item.quality?.stores ?? [];
@@ -86,20 +70,13 @@ function returnSourceName(stores, fallback) {
 /** @param {ReturnImportResult} result */
 export function importSelectionLabel(result) {
   if (result.duplicate) return "已导入批次 · 直接复用";
-  if (result.mode === "append") return "合并后的当前完整数据";
-  if (result.mode === "replace") return "替换后的当前完整数据";
-  if (result.mode === "create") return "新建数据源 · 当前完整数据";
   return "本次上传数据";
 }
 
 /** @param {ReturnImportResult} result */
 export function importNotification(result) {
   if (result.duplicate) return "文件已导入过，已直接复用现有数据";
-  const imported = Number(result.summary?.imported_row_count ?? 0).toLocaleString();
-  const skipped = Number(result.summary?.skipped_row_count ?? 0).toLocaleString();
-  return result.mode === "append"
-    ? `已追加 ${imported} 行，跳过 ${skipped} 行重复记录`
-    : "用户反馈数据已导入并自动选中";
+  return "用户反馈数据已导入并自动选中";
 }
 
 /** @param {TaskExecutionPlan | null | undefined} plan */
@@ -152,7 +129,7 @@ export function taskPlanViewState(preflight, unresolvedPolicy, scopeConfirmed) {
 }
 
 /**
- * @param {{dataEntryMode: "mysql" | "upload" | "existing", mysqlDraft?: Partial<import("./mysqlReturnContracts").MysqlReturnFormState>, selectedReturns?: DataVersion, selectedDataLabel: string}} data
+ * @param {{dataEntryMode: "mysql" | "upload", mysqlDraft?: Partial<import("./mysqlReturnContracts").MysqlReturnFormState>, selectedReturns?: DataVersion, selectedDataLabel: string}} data
  */
 export function taskDataScopeLabel({
   dataEntryMode,
@@ -162,5 +139,5 @@ export function taskDataScopeLabel({
 }) {
   return dataEntryMode === "mysql"
     ? `${mysqlDraft?.store || mysqlDraft?.default_store || "全部店铺"} · ${mysqlDraft?.date_from || "不限开始日期"} — ${mysqlDraft?.date_to || "不限结束日期"}${mysqlDraft?.sku ? ` · 商品：${mysqlDraft.sku}` : ""}`
-    : `${dataEntryMode === "upload" ? "上传文件" : "已有数据"} · ${selectedReturns?.dataset_name || selectedDataLabel}${selectedReturns?.version ? ` · 版本 ${selectedReturns.version}` : ""}`;
+    : `上传文件 · ${selectedReturns?.dataset_name || selectedDataLabel}${selectedReturns?.version ? ` · 版本 ${selectedReturns.version}` : ""}`;
 }

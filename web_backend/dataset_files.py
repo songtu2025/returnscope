@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from openpyxl import load_workbook
 
 from return_semantics.data import (
     PRODUCT_CATEGORY_COLUMNS,
@@ -91,50 +90,6 @@ def _inspect_returns(path: Path) -> tuple[pd.DataFrame, dict[str, Any]]:
         .tolist(),
     }
     return frame, quality
-
-
-def _fill_missing_return_store(path: Path, default_store: str) -> None:
-    clean_store = default_store.strip()
-    if not clean_store:
-        return
-    frame = read_return_file(path)
-    if path.suffix.lower() == ".xlsx":
-        _fill_missing_return_store_xlsx(
-            path,
-            str(frame.attrs["worksheet_name"]),
-            clean_store,
-        )
-        return
-    if RETURN_STORE_COLUMN not in frame.columns:
-        frame[RETURN_STORE_COLUMN] = clean_store
-    else:
-        stores = frame[RETURN_STORE_COLUMN].fillna("").astype(str).str.strip()
-        frame.loc[stores.eq(""), RETURN_STORE_COLUMN] = clean_store
-    frame.to_csv(path, index=False, encoding="utf-8-sig")
-
-
-def _fill_missing_return_store_xlsx(
-    path: Path,
-    sheet_name: str,
-    default_store: str,
-) -> None:
-    workbook = load_workbook(path)
-    try:
-        sheet = workbook[sheet_name]
-        headers = [str(cell.value or "").strip() for cell in sheet[1]]
-        if RETURN_STORE_COLUMN in headers:
-            column_index = headers.index(RETURN_STORE_COLUMN) + 1
-            sheet.cell(row=1, column=column_index).value = RETURN_STORE_COLUMN
-        else:
-            column_index = sheet.max_column + 1
-            sheet.cell(row=1, column=column_index).value = RETURN_STORE_COLUMN
-        for row_index in range(2, sheet.max_row + 1):
-            cell = sheet.cell(row=row_index, column=column_index)
-            if not str(cell.value or "").strip():
-                cell.value = default_store
-        workbook.save(path)
-    finally:
-        workbook.close()
 
 
 def _inspect_products(path: Path) -> tuple[pd.DataFrame, dict[str, Any]]:

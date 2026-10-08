@@ -35,6 +35,7 @@ class ClassificationStandardValidationRawSourcesMixin:
                   ON v.dataset_id = d.id AND v.version = d.current_version
                 WHERE d.archived_at IS NULL
                   AND d.kind IN ('returns', 'products')
+                  AND (d.kind = 'products' OR d.usage_scope = 'task_input')
                 ORDER BY v.created_at DESC, v.id
                 """
             ).fetchall()

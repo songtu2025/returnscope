@@ -15,7 +15,6 @@ class MySQLReturnImportRequest(BaseModel):
 class ReturnImportRequest(BaseModel):
     inspection_id: str = Field(min_length=1, max_length=100)
     mode: str
-    dataset_id: str = Field(default="", max_length=100)
     name: str = Field(default="", max_length=100)
     change_note: str = Field(default="", max_length=500)
 
@@ -41,9 +40,3 @@ class CategoryCompletionRequest(BaseModel):
     store: str = Field(default="", max_length=100)
     items: list[CategoryCompletionItem] = Field(min_length=1, max_length=500)
     change_note: str = Field(min_length=1, max_length=500)
-
-
-class DatasetStorageCleanupRequest(BaseModel):
-    dataset_ids: list[str] = Field(min_length=1, max_length=100)
-    retention_days: int = Field(default=30, ge=7, le=3650)
-    retain_latest: int = Field(default=2, ge=1, le=50)

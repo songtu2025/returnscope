@@ -5,9 +5,6 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
-
-from return_semantics.data import read_return_file
 from web_backend.common import insert_audit, json_text, new_id
 from web_backend.database import Database
 from web_backend.dataset_files import (
@@ -20,8 +17,6 @@ from web_backend.settings import Settings
 
 logger = logging.getLogger(__name__)
 
-RETURN_APPEND_MAX_ATTEMPTS = 3
-
 
 class DatasetReturnVersionMixin:
     database: Database
@@ -29,7 +24,6 @@ class DatasetReturnVersionMixin:
     get: Callable[..., dict[str, Any] | None]
     _ensure_blob: Callable[..., Path]
     _find_duplicate_return_import: Callable[..., dict[str, Any] | None]
-    _validate_return_import_target: Callable[..., None]
 
     def _prepare_return_version(
         self,
@@ -92,55 +86,6 @@ class DatasetReturnVersionMixin:
             "change_note": change_note,
         }
 
-    def _prepare_appended_return_version(
-        self,
-        *,
-        target: dict[str, Any],
-        incoming_frame: pd.DataFrame,
-        original_name: str,
-        change_note: str,
-    ) -> tuple[dict[str, Any], int, int, int]:
-        expected_version = int(target["current_version"])
-        current_version = next(
-            value
-            for value in target["versions"]
-            if value["version"] == expected_version
-        )
-        with self.database.connect() as connection:
-            current_row = connection.execute(
-                "SELECT file_path FROM dataset_versions WHERE id = ?",
-                (current_version["id"],),
-            ).fetchone()
-        current_frame = read_return_file(Path(str(current_row["file_path"])))
-        columns = list(dict.fromkeys([*current_frame.columns, *incoming_frame.columns]))
-        current_frame = current_frame.reindex(columns=columns)
-        current_incoming = incoming_frame.reindex(columns=columns)
-        clean_current = current_frame.drop_duplicates(ignore_index=True)
-        merged = pd.concat(
-            [clean_current, current_incoming],
-            ignore_index=True,
-        ).drop_duplicates(ignore_index=True)
-        imported_row_count = max(len(merged) - len(clean_current), 0)
-        skipped_row_count = max(len(current_incoming) - imported_row_count, 0)
-        merge_path = self.settings.data_dir / "tmp" / f"{new_id('merge')}.csv"
-        merge_path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            merged.to_csv(merge_path, index=False, encoding="utf-8-sig")
-            prepared = self._prepare_return_version(
-                source_path=merge_path,
-                original_name=f"{Path(original_name).stem}.csv",
-                content_type="text/csv",
-                change_note=change_note or "追加一批用户反馈数据",
-            )
-        finally:
-            merge_path.unlink(missing_ok=True)
-        return (
-            prepared,
-            imported_row_count,
-            skipped_row_count,
-            expected_version,
-        )
-
     @staticmethod
     def _insert_prepared_version(
         connection: Any,
@@ -202,24 +147,18 @@ class DatasetReturnVersionMixin:
     def _commit_return_import(
         self,
         *,
-        mode: str,
         dataset_id: str,
         dataset_name: str,
-        dataset_description: str,
-        usage_scope: str,
         source_key: str,
         prepared: dict[str, Any],
         import_record: dict[str, Any],
         actor_id: str,
-        expected_current_version: int | None,
     ) -> dict[str, Any]:
         now = utc_now()
         with self.database.transaction(immediate=True) as connection:
             duplicate = self._find_duplicate_return_import(
                 connection,
                 raw_sha256=str(import_record["raw_sha256"]),
-                mode=mode,
-                dataset_id=dataset_id,
             )
             if duplicate is not None:
                 return {
@@ -227,38 +166,22 @@ class DatasetReturnVersionMixin:
                     "version_id": str(duplicate["version_id"]),
                     "duplicate": True,
                 }
-            self._validate_return_import_target(
-                connection,
-                mode=mode,
-                dataset_id=dataset_id,
-                source_key=source_key,
+            connection.execute(
+                """
+                INSERT INTO datasets(
+                    id, name, kind, description, source_key, usage_scope,
+                    current_version, created_by, created_at, updated_at
+                ) VALUES (?, ?, 'returns', '本次分析输入快照', ?, 'task_input', 0, ?, ?, ?)
+                """,
+                (dataset_id, dataset_name, source_key or None, actor_id, now, now),
             )
-            if mode in {"analyze_only", "create"}:
-                connection.execute(
-                    """
-                    INSERT INTO datasets(
-                        id, name, kind, description, source_key, usage_scope,
-                        current_version, created_by, created_at, updated_at
-                    ) VALUES (?, ?, 'returns', ?, ?, ?, 0, ?, ?, ?)
-                    """,
-                    (
-                        dataset_id,
-                        dataset_name,
-                        dataset_description,
-                        source_key or None,
-                        usage_scope,
-                        actor_id,
-                        now,
-                        now,
-                    ),
-                )
             version = self._insert_prepared_version(
                 connection,
                 dataset_id=dataset_id,
                 prepared=prepared,
                 actor_id=actor_id,
                 now=now,
-                expected_current_version=expected_current_version,
+                expected_current_version=0,
             )
             insert_audit(
                 connection,
@@ -273,16 +196,15 @@ class DatasetReturnVersionMixin:
                 },
                 created_at=now,
             )
-            if mode in {"analyze_only", "create"}:
-                insert_audit(
-                    connection,
-                    "dataset",
-                    dataset_id,
-                    "create",
-                    actor_id,
-                    after={"name": dataset_name, "kind": "returns"},
-                    created_at=now,
-                )
+            insert_audit(
+                connection,
+                "dataset",
+                dataset_id,
+                "create",
+                actor_id,
+                after={"name": dataset_name, "kind": "returns"},
+                created_at=now,
+            )
             connection.execute(
                 """
                 UPDATE datasets
@@ -305,7 +227,7 @@ class DatasetReturnVersionMixin:
                     import_record["id"],
                     dataset_id,
                     prepared["id"],
-                    mode,
+                    "analyze_only",
                     import_record["raw_file_path"],
                     import_record["original_name"],
                     import_record["content_type"],
@@ -330,7 +252,7 @@ class DatasetReturnVersionMixin:
                 actor_id,
                 after={
                     "import_id": import_record["id"],
-                    "mode": mode,
+                    "mode": "analyze_only",
                     "version_id": prepared["id"],
                     "raw_sha256": import_record["raw_sha256"],
                     "imported_row_count": import_record["imported_row_count"],
@@ -343,65 +265,6 @@ class DatasetReturnVersionMixin:
                 "version_id": str(prepared["id"]),
                 "duplicate": False,
             }
-
-    def _commit_appended_return_import(
-        self,
-        *,
-        dataset_id: str,
-        target: dict[str, Any],
-        source_path: Path,
-        original_name: str,
-        change_note: str,
-        source_key: str,
-        import_record: dict[str, Any],
-        actor_id: str,
-    ) -> tuple[dict[str, Any], int, int, dict[str, Any]]:
-        incoming_frame = read_return_file(source_path)
-        current_target = target
-        for attempt in range(RETURN_APPEND_MAX_ATTEMPTS):
-            (
-                prepared,
-                imported_row_count,
-                skipped_row_count,
-                expected_version,
-            ) = self._prepare_appended_return_version(
-                target=current_target,
-                incoming_frame=incoming_frame,
-                original_name=original_name,
-                change_note=change_note,
-            )
-            import_record["imported_row_count"] = imported_row_count
-            import_record["skipped_row_count"] = skipped_row_count
-            try:
-                outcome = self._commit_return_import(
-                    mode="append",
-                    dataset_id=dataset_id,
-                    dataset_name=str(target["name"]),
-                    dataset_description=str(target["description"]),
-                    usage_scope=str(target["usage_scope"]),
-                    source_key=source_key,
-                    prepared=prepared,
-                    import_record=import_record,
-                    actor_id=actor_id,
-                    expected_current_version=expected_version,
-                )
-                return (
-                    prepared,
-                    imported_row_count,
-                    skipped_row_count,
-                    outcome,
-                )
-            except DatasetRevisionConflict as exc:
-                if attempt + 1 >= RETURN_APPEND_MAX_ATTEMPTS:
-                    raise DatasetRevisionConflict(
-                        "用户反馈数据已被其他用户连续修改，请刷新后重试"
-                    ) from exc
-                refreshed = self.get(dataset_id, include={"versions"})
-                if refreshed is None:
-                    raise ValueError("用户反馈数据源不存在") from exc
-                current_target = refreshed
-
-        raise DatasetRevisionConflict("用户反馈数据已被其他用户连续修改，请刷新后重试")
 
     @staticmethod
     def _cleanup_import_source(raw_destination: Path) -> None:

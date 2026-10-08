@@ -333,8 +333,8 @@ def test_import_rules_follow_runtime_constants_and_hash_is_stable() -> None:
         "products-standard-v1",
     ]
     returns, products = first["items"]
-    assert returns["required_columns"] == RETURN_COLUMNS
-    assert returns["optional_columns"] == [RETURN_STORE_COLUMN]
+    assert returns["required_columns"] == [*RETURN_COLUMNS, RETURN_STORE_COLUMN]
+    assert returns["optional_columns"] == []
     assert returns["file_extensions"] == sorted(ALLOWED_EXTENSIONS["returns"])
     assert returns["worksheet"] is None
     assert returns["match_key"] == [RETURN_STORE_COLUMN, "sku"]
@@ -385,10 +385,8 @@ def test_new_read_apis_require_login_and_keep_pagination_contract(
     )
     assert references.status_code == 200
     assert references.json()["page_size"] == 1
-    managed_returns = client.get(
-        "/api/datasets?kind=returns&usage_scope=managed"
-    ).json()
-    assert managed_returns[0]["task_reference_count"] == references.json()["total"]
+    task_inputs = client.get("/api/datasets?kind=returns&usage_scope=task_input").json()
+    assert task_inputs[0]["task_reference_count"] == references.json()["total"]
     assert client.get("/api/audit-logs?page=1&page_size=1").status_code == 200
     invalid_date = client.get("/api/audit-logs?date_to=2026-02-30")
     assert invalid_date.status_code == 400

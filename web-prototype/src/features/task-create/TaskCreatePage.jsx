@@ -41,54 +41,74 @@ export function TaskCreatePage({ route, notify, onNavigate, onChanged, userId })
     );
   }, [notify, templateError]);
 
-  const draft = useMemo(() => {
-    const stored = readTaskDraft(userId);
-    if (templateTask) {
-      const config = /** @type {Partial<TaskModelPolicy>} */ (
-        templateTask.snapshot?.config ?? {}
-      );
-      const next = /** @type {TaskDraft} */ ({
-        step: 1,
-        resumePreflight: false,
-        dataEntryMode: "existing",
-        selectedDataLabel: "",
-        form: {
-          title: `${templateTask.title}（副本）`.slice(0, 120),
-          dataset_version_id: "",
-          product_version_id: "",
-          config_version_id: templateTask.config_version_id,
-          store: "",
-          listing: "",
-          model_policy: {
-            connection_id: config.connection_id ?? "",
-            cheap_model: config.cheap_model ?? "",
-            cheap_effort: config.cheap_effort ?? "low",
-            primary_model: config.primary_model ?? "",
-            primary_effort: config.primary_effort ?? "medium",
-            secondary_model: config.secondary_model ?? "",
-            secondary_effort: config.secondary_effort ?? "high",
-            cheap_audit_percent: config.cheap_audit_percent ?? 5,
+  const draft = useMemo(
+    /** @returns {TaskDraft | null} */ () => {
+      const stored = readTaskDraft(userId);
+      if (templateTask) {
+        const config = /** @type {Partial<TaskModelPolicy>} */ (
+          templateTask.snapshot?.config ?? {}
+        );
+        const next = /** @type {TaskDraft} */ ({
+          step: 1,
+          resumePreflight: false,
+          dataEntryMode: "mysql",
+          selectedDataLabel: "",
+          form: {
+            title: `${templateTask.title}（副本）`.slice(0, 120),
+            dataset_version_id: "",
+            product_version_id: "",
+            config_version_id: templateTask.config_version_id,
+            store: "",
+            listing: "",
+            model_policy: {
+              connection_id: config.connection_id ?? "",
+              cheap_model: config.cheap_model ?? "",
+              cheap_effort: config.cheap_effort ?? "low",
+              primary_model: config.primary_model ?? "",
+              primary_effort: config.primary_effort ?? "medium",
+              secondary_model: config.secondary_model ?? "",
+              secondary_effort: config.secondary_effort ?? "high",
+              cheap_audit_percent: config.cheap_audit_percent ?? 5,
+            },
           },
-        },
-      });
-      writeTaskDraft(userId, next);
-      return next;
+        });
+        writeTaskDraft(userId, next);
+        return next;
+      }
+      if (
+        !stored ||
+        (stored.dataEntryMode !== "mysql" && stored.dataEntryMode !== "upload") ||
+        route.query.dataset_version
+      ) {
+        return stored
+          ? {
+              ...stored,
+              step: 1,
+              resumePreflight: false,
+              dataEntryMode: "mysql",
+              selectedDataLabel: "",
+              form: { ...stored.form, dataset_version_id: "" },
+            }
+          : null;
+      }
+      return stored;
+    },
+    [route.query.dataset_version, templateTask, userId],
+  );
+
+  useEffect(() => {
+    const stored = readTaskDraft(userId);
+    if (
+      route.query.dataset_version ||
+      (stored && stored.dataEntryMode !== "mysql" && stored.dataEntryMode !== "upload")
+    ) {
+      if (draft) writeTaskDraft(userId, draft);
+      notify(
+        "已有数据源入口已下线，请重新读取数据库或上传文件；其他草稿设置已保留。",
+        "error",
+      );
     }
-    if (!route.query.dataset_version) return stored;
-    const next = /** @type {TaskDraft} */ ({
-      ...stored,
-      step: 1,
-      resumePreflight: false,
-      dataEntryMode: "existing",
-      selectedDataLabel: "当前完整数据",
-      form: {
-        ...stored?.form,
-        dataset_version_id: route.query.dataset_version,
-      },
-    });
-    writeTaskDraft(userId, next);
-    return next;
-  }, [route.query.dataset_version, templateTask, userId]);
+  }, [draft, notify, route.query.dataset_version, userId]);
 
   const navigate = useCallback(
     /** @type {import("../../app/navigation").Navigate} */

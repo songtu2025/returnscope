@@ -6,7 +6,6 @@ import { AntdProvider } from "../../components/AntdProvider";
 import { ProductMasterWorkspace } from "./ProductMasterWorkspace";
 import { readTaskDraft, updateTaskDraft } from "../task-create/taskDraftStorage";
 import { ImportRulesPage } from "./ImportRulesPage";
-import { ReturnDataAssetsPage } from "./ReturnDataAssetsPage";
 
 /** @typedef {import("./productMasterContracts").Navigate} Navigate */
 /** @typedef {import("./productMasterContracts").TaskRepairContext} TaskRepairContext */
@@ -17,11 +16,13 @@ import { ReturnDataAssetsPage } from "./ReturnDataAssetsPage";
  */
 export function DataAssetsPage({ route, notify, onNavigate, userId }) {
   const requestedView = route.query.view || "products";
-  const view = requestedView === "quality" ? "products" : requestedView;
+  const view = ["quality", "returns"].includes(requestedView)
+    ? "products"
+    : requestedView;
   const taskDraft = readTaskDraft(userId);
 
   useEffect(() => {
-    if (requestedView === "quality") {
+    if (["quality", "returns"].includes(requestedView)) {
       navigateHash("data-assets", { view: "products" });
     }
   }, [requestedView]);
@@ -45,17 +46,6 @@ export function DataAssetsPage({ route, notify, onNavigate, userId }) {
   const updateRoute = (changes) =>
     navigateHash("data-assets", { ...route.query, ...changes });
 
-  if (view === "returns") {
-    return (
-      <AntdProvider>
-        <ReturnDataAssetsPage
-          route={route}
-          notify={notify}
-          onRouteChange={updateRoute}
-        />
-      </AntdProvider>
-    );
-  }
   if (view === "rules") return <ImportRulesPage />;
 
   return (
