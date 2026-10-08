@@ -6,7 +6,7 @@
 
 .ai-report-primary-action > span {
   color: #a9cdbf;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.12em;
 }
@@ -34,7 +34,7 @@
 .ai-report-primary-action > div b,
 .ai-report-primary-action details summary {
   color: #b8d3c8;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .ai-report-primary-action > div p,
@@ -91,18 +91,18 @@
   display: block;
   margin-top: 8px;
   color: #75827b;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.6;
 }
 
 .ai-report-followup-actions details {
   margin-top: 8px;
   color: #77847d;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .ai-report-followup-actions details p {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .ai-generated-report .ai-report-boundary {
@@ -123,7 +123,7 @@
 
 .ai-generated-report .ai-report-boundary ul {
   margin-top: 4px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .ai-report-limitations {
@@ -135,7 +135,7 @@
   align-items: center;
   gap: 7px;
   color: #7d6a4a;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -147,7 +147,7 @@
   padding-top: 12px;
   border-top: 1px solid #e4e9e6;
   color: #7d6a4a;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.6;
 }
 
@@ -182,7 +182,7 @@
 
 .ai-report-attempt-history > summary small {
   color: #7b8881;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .ai-report-attempt-list {
@@ -217,12 +217,12 @@
 
 .ai-report-attempt-list small {
   color: #7b8881;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .ai-report-attempt-list strong {
   color: #69776f;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .ai-report-attempt-list strong.failed {

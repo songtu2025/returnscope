@@ -20,7 +20,7 @@
 .ai-report-big-number span,
 .ai-report-big-number small {
   color: #75817b;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .ai-report-big-number strong {
@@ -65,7 +65,7 @@
 
 .ai-report-buyer-metric span,
 .ai-report-buyer-metric small {
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .ai-report-buyer-metric strong {
@@ -89,12 +89,12 @@
 .ai-report-opinions > b {
   margin-right: 4px;
   color: #536159;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .ai-report-opinions span {
   padding: 6px 8px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .ai-report-quote-details {
@@ -111,7 +111,7 @@
   gap: 7px;
   padding: 11px 14px;
   color: #466057;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
   list-style: none;
@@ -133,7 +133,7 @@
   border-left: 3px solid #b9d4c8;
   color: #56655d;
   background: #fff;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.65;
 }
 
@@ -141,7 +141,7 @@
   display: block;
   margin-top: 5px;
   color: #89948f;
-  font-size: 9px;
+  font-size: 12px;
   font-style: normal;
 }
 
@@ -161,7 +161,7 @@
 
 .ai-report-hypothesis-grid span {
   color: #9a6516;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 750;
 }
 
@@ -175,7 +175,7 @@
 .ai-report-hypothesis-grid p {
   margin: 6px 0 0;
   color: #706b60;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.6;
 }
 
@@ -187,18 +187,18 @@
 
 .ai-report-quotes h4 {
   margin-bottom: 7px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .ai-report-quotes button {
   padding: 10px 6px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .ai-report-action-table .priority {
   min-width: 32px;
   height: 23px;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .ai-report-boundary {
@@ -243,7 +243,7 @@
   margin: 3px 0 0;
   padding-left: 18px;
   color: #5f6d65;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.6;
 }
 
@@ -253,7 +253,7 @@
   border-radius: 7px;
   color: #76501d;
   background: #fff3df;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.65;
 }
 
@@ -261,7 +261,7 @@
   padding: 16px;
   border: 1px dashed #d7e0db;
   border-radius: 8px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .ai-report-footer {
@@ -269,7 +269,7 @@
   max-width: 940px;
   min-height: 40px;
   margin: 0 auto;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .ai-report-footer span + span::before {

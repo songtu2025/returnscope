@@ -205,7 +205,7 @@
   border: 1px solid #e8c58f;
   border-radius: 10px;
   background: var(--amber-pale);
-  color: var(--amber);
+  color: #8b5415;
 }
 
 .excluded-listing-summary p {

@@ -20,7 +20,7 @@
 .ai-report-structure-figure figcaption span,
 .ai-report-structure-figure figcaption small {
   color: #77847d;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .ai-report-structure-figure figcaption strong {
@@ -69,11 +69,11 @@
 
 .ai-generated-report .ai-report-size-bars b {
   color: #2b4036;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .ai-generated-report .ai-report-size-bars em {
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .ai-report-implication {
@@ -88,7 +88,7 @@
 
 .ai-report-implication span {
   color: #176d53;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -122,7 +122,7 @@
 
 .ai-report-delta-strip span {
   color: #68766e;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 750;
 }
 
@@ -145,7 +145,7 @@
 .ai-report-delta-strip p {
   margin: 0;
   color: #8a958f;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .ai-generated-report .ai-report-trend-figure {
@@ -167,7 +167,7 @@
 
 .ai-generated-report .ai-report-chart-legend span b {
   color: #34473d;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .ai-report-benchmark-section {
@@ -186,8 +186,8 @@
 
 .ai-report-subheading p {
   margin: 5px 0 0;
-  color: #77837d;
-  font-size: 11px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .ai-report-benchmark-figure {
@@ -210,8 +210,8 @@
 
 .ai-report-benchmark-figure figcaption span,
 .ai-report-benchmark-figure > p {
-  color: #7b8781;
-  font-size: 10px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .ai-report-benchmark-figure figcaption b {
@@ -221,7 +221,7 @@
 
 .ai-report-benchmark-figure figcaption > strong {
   color: #5c6962;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .ai-report-benchmark-chart {

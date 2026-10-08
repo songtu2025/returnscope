@@ -17,8 +17,8 @@
 
 .ai-decision-detail-header span,
 .ai-decision-detail-header p {
-  color: #738078;
-  font-size: 10px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .ai-decision-detail-header span {
@@ -44,7 +44,7 @@
 
 .ai-decision-question span {
   color: #147258;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -60,7 +60,7 @@
   border-radius: 999px;
   color: #39735f;
   background: #fff;
-  font-size: 10px;
+  font-size: 12px;
   text-align: center;
 }
 
@@ -82,8 +82,8 @@
 
 .ai-decision-metric span,
 .ai-decision-metric small {
-  color: #77837d;
-  font-size: 10px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .ai-decision-metric strong {
@@ -94,7 +94,7 @@
 
 .ai-decision-metric.risk strong,
 .ai-decision-metric.risk small {
-  color: #c54b3b;
+  color: var(--red);
 }
 
 .ai-decision-trust {
@@ -123,18 +123,18 @@
 
 .ai-decision-trust > div span {
   color: #8c5d1b;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .ai-decision-trust > div strong {
-  color: #a8610f;
+  color: #8b5415;
   font-size: 18px;
 }
 
 .ai-decision-trust > div small {
   flex: 1 0 100%;
-  color: #9b6c2c;
-  font-size: 9px;
+  color: #8b5415;
+  font-size: 12px;
 }
 
 .ai-decision-trust ul {
@@ -143,7 +143,7 @@
   margin: 0;
   padding: 0;
   color: #38483f;
-  font-size: 10px;
+  font-size: 12px;
   list-style: none;
 }
 
@@ -154,5 +154,5 @@
 }
 
 .ai-decision-trust li.warning {
-  color: #b36816;
+  color: #8b5415;
 }

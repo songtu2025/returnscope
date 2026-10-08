@@ -30,7 +30,7 @@
 .ai-report-business-issue > header p {
   margin: 0;
   color: #78867e;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .ai-report-business-issue > header > div:first-child > span {
@@ -78,8 +78,8 @@
 .ai-report-business-issue-metrics span,
 .ai-report-business-issue-metrics small {
   overflow: hidden;
-  color: #7a8780;
-  font-size: 10px;
+  color: var(--muted);
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -104,7 +104,7 @@
   align-items: center;
   min-height: 34px;
   color: #4f6057;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .ai-report-business-hotspots > div + div {
@@ -114,7 +114,7 @@
 .ai-report-business-hotspots .ai-report-business-hotspot-heading {
   min-height: 25px;
   color: #859089;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 750;
 }
 
@@ -132,7 +132,7 @@
 
 .ai-report-business-context > div > span {
   color: #52645a;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -149,13 +149,13 @@
   justify-content: space-between;
   gap: 12px;
   color: #34473d;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .ai-report-business-context li small,
 .ai-report-business-context > div > p {
-  color: #7a8780;
-  font-size: 10px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .ai-report-business-context blockquote {
@@ -176,14 +176,14 @@
 .ai-report-business-context blockquote cite {
   margin: 0;
   color: #44564d;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.65;
 }
 
 .ai-report-business-context blockquote cite {
   grid-column: 2;
   color: #819087;
-  font-size: 9px;
+  font-size: 12px;
   font-style: normal;
 }
 
@@ -197,12 +197,12 @@
 
 .ai-report-business-issue > footer b {
   color: #247057;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .ai-report-business-issue > footer p {
   margin: 0;
   color: #485a50;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.65;
 }

@@ -17,7 +17,7 @@
 .ai-decision-recommendation header p {
   margin-top: 4px;
   color: #65736c;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .ai-decision-recommendation header > span {
@@ -25,7 +25,7 @@
   border-radius: 999px;
   color: #16765b;
   background: #e5f3ed;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -45,7 +45,7 @@
   border-radius: 6px;
   color: #596860;
   background: #fff;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .ai-decision-error {
@@ -72,7 +72,7 @@
   color: #314139;
   background: #fff;
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -98,14 +98,14 @@
   display: grid;
   gap: 2px;
   margin-left: auto;
-  color: #718078;
-  font-size: 9px;
+  color: var(--muted);
+  font-size: 12px;
   text-align: right;
 }
 
 .ai-decision-actions > div b {
   color: #14775a;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 @media (max-width: 1180px) {

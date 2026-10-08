@@ -82,7 +82,7 @@
 }
 .task-runtime-workspace .task-status-badge.paused,
 .task-runtime-workspace .segment-status.paused {
-  color: #66736e;
+  color: #59675f;
   background: #edf0ee;
 }
 .task-registry-results {
@@ -97,7 +97,7 @@
 }
 .task-registry-results small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 .task-registry-results .task-issue-text {
   color: #976321;

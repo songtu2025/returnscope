@@ -40,7 +40,7 @@
 
 .ai-report-cover > div:first-child > span {
   color: #678078;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -55,8 +55,8 @@
 
 .ai-report-cover p {
   margin: 0;
-  color: #748079;
-  font-size: 10px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .ai-report-cover-status {
@@ -73,7 +73,7 @@
   border-radius: 6px;
   color: #225541;
   background: #f5faf7;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .ai-report-cover-status strong {
@@ -102,7 +102,7 @@
 
 .ai-report-executive > header small {
   color: #839089;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .ai-report-executive > div {
@@ -133,7 +133,7 @@
   border-radius: 50%;
   color: #fff;
   background: #176e55;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 750;
   place-items: center;
 }
@@ -141,13 +141,13 @@
 .ai-report-summary-item b {
   display: block;
   color: #24362e;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .ai-report-summary-item p {
   margin: 4px 0 0;
   color: #68756e;
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.55;
 }
 
@@ -181,12 +181,12 @@
 
 .ai-report-reading span {
   color: #728079;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .ai-report-reading b {
   color: #24362e;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .ai-report-reading .warning svg,
@@ -199,7 +199,7 @@
   max-width: 520px;
   margin: 0;
   color: #637068;
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.55;
   text-align: right;
 }
@@ -230,7 +230,7 @@
 .ai-report-evidence-key > b {
   margin-bottom: 4px;
   color: #55645c;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .ai-report-chapters button {
@@ -240,7 +240,7 @@
   border-left: 2px solid transparent;
   color: #627068;
   background: transparent;
-  font-size: 9px;
+  font-size: 12px;
   text-align: left;
   cursor: pointer;
 }
@@ -290,6 +290,9 @@
 .ai-report-section-heading p {
   margin: 3px 0 0;
   color: #738079;
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.5;
+}
+.ai-insight-report .recharts-tooltip-wrapper {
+  font-size: 12px;
 }

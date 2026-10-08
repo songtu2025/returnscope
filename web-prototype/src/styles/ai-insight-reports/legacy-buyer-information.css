@@ -22,8 +22,8 @@
 
 .ai-report-buyer-metric span,
 .ai-report-buyer-metric small {
-  color: #748079;
-  font-size: 8px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .ai-report-buyer-metric strong {
@@ -34,7 +34,7 @@
 
 .ai-report-buyer-metric b {
   color: #2e4238;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .ai-report-opinions {
@@ -55,7 +55,7 @@
   border-radius: 5px;
   color: #315c4a;
   background: #fff;
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .ai-report-counter-note {
@@ -73,7 +73,7 @@
 
 .ai-report-counter-note p {
   margin: 0;
-  font-size: 8px;
+  font-size: 12px;
   line-height: 1.6;
 }
 
@@ -91,7 +91,7 @@
 
 .ai-report-routing > span {
   color: #2b4237;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 750;
 }
 
@@ -111,12 +111,12 @@
 
 .ai-report-routing b {
   color: #305043;
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .ai-report-routing small {
-  color: #7c8982;
-  font-size: 7px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .ai-report-quotes {
@@ -143,7 +143,7 @@
   border-top: 1px solid #edf1ee;
   color: #56635c;
   background: #fff;
-  font-size: 8px;
+  font-size: 12px;
   text-align: left;
   cursor: pointer;
 }
@@ -169,8 +169,8 @@
 }
 
 .ai-report-sensitivity > div > span {
-  color: #748079;
-  font-size: 8px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .ai-report-sensitivity > div > strong {
@@ -182,7 +182,7 @@
 
 .ai-report-sensitivity > div b {
   color: #32443b;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .ai-report-sensitivity svg {
@@ -198,7 +198,7 @@
 .ai-report-sensitivity p {
   margin: 4px 0 0;
   color: #6e7b74;
-  font-size: 8px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -207,7 +207,7 @@
   min-width: 110px;
   color: #9a6011;
   background: #fff7e9;
-  font-size: 10px;
+  font-size: 12px;
   place-items: center;
 }
 
@@ -216,7 +216,7 @@
   min-width: 28px;
   height: 20px;
   border-radius: 4px;
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 750;
   place-items: center;
 }

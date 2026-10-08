@@ -18,8 +18,8 @@
 }
 
 .ai-decision-evidence > header span {
-  color: #7b8781;
-  font-size: 10px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .ai-decision-evidence-columns {
@@ -55,7 +55,7 @@
   margin: 0;
   padding: 0;
   color: #33443b;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.5;
   list-style: none;
 }
@@ -82,12 +82,12 @@
   border-radius: 7px;
   color: #65736c;
   background: #fff;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.55;
 }
 
 .ai-decision-evidence-columns .ai-decision-hypothesis {
-  color: #a46010;
+  color: #8b5415;
   background: #fff1d9;
 }
 
@@ -99,8 +99,8 @@
   gap: 12px;
   padding: 9px 13px;
   border-top: 1px solid #e4e9e6;
-  color: #6f7c75;
-  font-size: 9px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .ai-decision-evidence details {
@@ -157,6 +157,6 @@
 }
 
 .ai-decision-evidence details li span {
-  color: #738078;
+  color: var(--muted);
   font-weight: 400;
 }

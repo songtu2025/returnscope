@@ -135,6 +135,18 @@
   background: #fff;
   border-radius: 0 0 12px 12px;
 }
+
+.task-model-settings .task-config-choice small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+#task-action-status:focus-visible,
+.task-plan-workspace:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 4px;
+}
 .task-launch-actions {
   display: flex;
   align-items: center;

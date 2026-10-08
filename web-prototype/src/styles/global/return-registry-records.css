@@ -14,7 +14,7 @@
   padding: 0 18px;
   border-bottom: 1px solid var(--line-soft);
   color: #4f5d56;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -39,7 +39,7 @@
   min-height: 74px;
   padding: 9px 18px;
   color: #48564f;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .returns-registry-record.expanded .returns-registry-row {
@@ -49,6 +49,11 @@
 .returns-registry-row > b {
   color: var(--ink);
   font-size: 12px;
+}
+
+.returns-registry-row > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .returns-registry-name {
@@ -88,13 +93,13 @@
 
 .returns-source-status b {
   color: var(--ink);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .returns-source-status small {
   margin-top: 3px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.35;
 }
 
@@ -107,7 +112,7 @@
   border: 0;
   color: var(--green);
   background: transparent;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   cursor: pointer;
 }
@@ -149,5 +154,5 @@
 .returns-source-expanded-detail > header span {
   margin-top: 4px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
 }

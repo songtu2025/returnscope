@@ -27,7 +27,7 @@ function BenchmarkPlot({ group, baseline, upperBound }) {
           type="number"
           domain={[0, upperBound]}
           tickFormatter={(value) => `${value}%`}
-          tick={{ fill: "#7a867f", fontSize: 10 }}
+          tick={{ fill: "#66736d", fontSize: 12 }}
           tickLine={false}
           axisLine={false}
         />
@@ -35,7 +35,7 @@ function BenchmarkPlot({ group, baseline, upperBound }) {
           type="category"
           dataKey="value"
           width={170}
-          tick={{ fill: "#34463d", fontSize: 10 }}
+          tick={{ fill: "#34463d", fontSize: 12 }}
           tickLine={false}
           axisLine={false}
         />
@@ -60,7 +60,7 @@ function BenchmarkPlot({ group, baseline, upperBound }) {
             position="right"
             formatter={percent}
             fill="#435249"
-            fontSize={10}
+            fontSize={12}
           />
         </Bar>
       </BarChart>

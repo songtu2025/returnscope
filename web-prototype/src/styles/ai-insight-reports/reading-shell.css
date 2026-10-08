@@ -18,7 +18,7 @@
 
 .ai-report-cover > div:first-child > span {
   color: #176e55;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.12em;
 }
 
@@ -49,7 +49,7 @@
 .ai-report-cover-status span,
 .ai-report-cover-status strong {
   padding: 7px 10px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .ai-report-chapters {
@@ -72,7 +72,7 @@
   border-radius: 7px;
   color: #5f6d65;
   background: transparent;
-  font-size: 11px;
+  font-size: 12px;
   text-align: center;
 }
 
@@ -130,7 +130,7 @@
 
 .ai-report-eyebrow {
   color: #176e55;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 750;
   letter-spacing: 0.12em;
 }
@@ -173,7 +173,7 @@
   border-radius: 5px;
   color: #526159;
   background: #eef2f0;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 750;
 }
 
@@ -222,8 +222,8 @@
 }
 
 .ai-report-trust-strip span {
-  color: #748079;
-  font-size: 9px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .ai-report-trust-strip b {
@@ -240,7 +240,7 @@
   margin: 0;
   padding: 10px 14px;
   color: #6b7771;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.55;
 }
 
@@ -272,6 +272,6 @@
 
 .ai-report-section-heading p {
   margin-top: 5px;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.6;
 }

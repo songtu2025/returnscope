@@ -54,7 +54,7 @@ function SizeTrendPlot({ sizeTrend }) {
         <XAxis
           dataKey="period_start"
           tickFormatter={shortDate}
-          tick={{ fill: "#66736c", fontSize: 10 }}
+          tick={{ fill: "#66736c", fontSize: 12 }}
           tickLine={false}
           axisLine={{ stroke: "#cfd9d3" }}
           minTickGap={34}
@@ -62,7 +62,7 @@ function SizeTrendPlot({ sizeTrend }) {
         <YAxis
           domain={[0, "auto"]}
           tickFormatter={(value) => `${value}%`}
-          tick={{ fill: "#66736c", fontSize: 10 }}
+          tick={{ fill: "#66736c", fontSize: 12 }}
           tickLine={false}
           axisLine={false}
           width={38}

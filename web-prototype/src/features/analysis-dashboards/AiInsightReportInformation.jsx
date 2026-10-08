@@ -31,7 +31,7 @@ function OpinionChart({ rows }) {
           type="category"
           dataKey="opinion"
           width={165}
-          tick={{ fill: "#34463d", fontSize: 10 }}
+          tick={{ fill: "#34463d", fontSize: 12 }}
           tickLine={false}
           axisLine={false}
         />
@@ -44,7 +44,7 @@ function OpinionChart({ rows }) {
             position="right"
             formatter={(value) => `${number(value).toLocaleString()} 条`}
             fill="#58655e"
-            fontSize={10}
+            fontSize={12}
           />
         </Bar>
       </BarChart>

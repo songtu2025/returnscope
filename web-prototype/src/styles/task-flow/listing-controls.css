@@ -20,7 +20,7 @@
 .task-secondary-section header p {
   margin: 4px 0 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .listing-queue-toolbar {
@@ -100,7 +100,7 @@
   min-height: 38px;
   padding: 0 14px;
   background: #f6f8f7;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .listing-row {
@@ -116,7 +116,7 @@
   width: 24px;
   height: 24px;
   border-radius: 6px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .listing-updated {
@@ -127,14 +127,14 @@
 }
 
 .listing-updated b {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
 }
 
 .listing-updated small {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .listing-action-groups {
@@ -145,7 +145,7 @@
   min-height: 30px;
   padding-inline: 9px;
   border-radius: 6px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .listing-resume-button {
@@ -171,12 +171,12 @@
 
 .listing-row-detail span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .listing-row-detail b {
   margin-top: 4px;
-  font-size: 11px;
+  font-size: 12px;
   overflow-wrap: anywhere;
 }
 
@@ -195,13 +195,18 @@
   gap: 18px;
   padding: 9px 2px 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .listing-table-footer > div {
   display: flex;
   align-items: center;
   gap: 7px;
+}
+
+.listing-table-footer b:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 3px;
 }
 
 .listing-table-footer .icon-button {
@@ -217,5 +222,5 @@
   border-radius: 6px;
   color: #fff;
   background: var(--green);
-  font-size: 11px;
+  font-size: 12px;
 }

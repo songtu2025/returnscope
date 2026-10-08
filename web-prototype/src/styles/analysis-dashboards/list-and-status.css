@@ -3,6 +3,11 @@
   align-items: flex-end;
   gap: 9px;
 }
+
+.analysis-dashboard-page .page-heading span,
+.analysis-dashboard-page .page-heading button {
+  font-size: 12px;
+}
 .dashboard-list-filters {
   display: grid;
   grid-template-columns: minmax(240px, 640px) 180px max-content;
@@ -20,7 +25,7 @@
   gap: 4px;
   min-width: 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 .dashboard-filter-field > span {
@@ -94,7 +99,7 @@
 }
 .dashboard-list-head {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   background: #f5f7f5;
   border-bottom: 1px solid var(--line);
@@ -116,11 +121,13 @@
 }
 .dashboard-list-row small,
 .dashboard-list-row span {
+  font-size: 12px;
   overflow: hidden;
   color: var(--muted);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.dashboard-list-row .dashboard-status.active,
 .dashboard-status {
   display: inline-flex;
   align-items: center;
@@ -130,7 +137,7 @@
   border-radius: 999px;
   color: var(--green-dark);
   background: var(--green-pale);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
 }
 .dashboard-status.building {
@@ -161,7 +168,7 @@
 }
 .return-comment-statuses > header span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 .return-comment-statuses > div {
   display: grid;
@@ -180,7 +187,7 @@
 .return-comment-statuses article > span,
 .return-comment-statuses article > small {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 .return-comment-statuses article > b {
   grid-row: 1 / 3;

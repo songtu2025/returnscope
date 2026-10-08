@@ -30,7 +30,7 @@
 .ai-report-scope-metric span,
 .ai-report-scope-metric small {
   color: #78847e;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .ai-report-scope-metric strong {
@@ -74,13 +74,13 @@
 
 .ai-report-size-bars b {
   color: #2b3c33;
-  font-size: 11px;
+  font-size: 12px;
   text-align: right;
 }
 
 .ai-report-size-bars em {
-  color: #748079;
-  font-size: 10px;
+  color: var(--muted);
+  font-size: 12px;
   font-style: normal;
   text-align: right;
 }
@@ -99,7 +99,7 @@
   border: 0;
   border-radius: 0;
   color: #415048;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .ai-report-table caption {
@@ -115,14 +115,14 @@
 .ai-report-table td > b {
   display: block;
   color: #2b3b33;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .ai-report-table td > small {
   display: block;
   margin-top: 3px;
   color: #839089;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .ai-report-signal-pill {
@@ -132,7 +132,7 @@
   border-radius: 5px;
   color: #466057;
   background: #edf4f0;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.45;
 }
 
@@ -150,7 +150,7 @@
 
 .ai-report-callout span {
   color: #17674f;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 750;
 }
 
@@ -189,7 +189,7 @@
 .ai-report-trend-figure figcaption span,
 .ai-report-trend-figure > p {
   color: #78857e;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .ai-report-trend-chart {

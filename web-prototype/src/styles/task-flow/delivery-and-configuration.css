@@ -25,7 +25,7 @@
 .delivery-counts span {
   margin-top: 2px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .delivery-button {
@@ -70,7 +70,7 @@
 .task-config-details summary span {
   margin-top: 3px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .task-config-details summary svg {
@@ -123,7 +123,7 @@
 }
 .task-upload-source span {
   color: var(--green);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
 }
@@ -138,7 +138,7 @@
 .task-upload-source small {
   margin-top: 4px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.5;
 }
 .task-data-upload {

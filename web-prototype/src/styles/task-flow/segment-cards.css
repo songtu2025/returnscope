@@ -35,7 +35,7 @@
   border-radius: 10px;
   color: var(--green-dark);
   background: var(--green-pale);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
 }
 .plan-segments article.blocked > div:first-child > span,
@@ -67,7 +67,7 @@
 .segment-item header p {
   margin: 0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 .plan-segments article > strong {
   display: block;
@@ -78,7 +78,7 @@
   margin: 8px 0 0;
   padding-left: 17px;
   color: #5b6862;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.55;
 }
 .segment-order-actions {
@@ -108,7 +108,7 @@
 .segment-order-actions span {
   margin-left: 3px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 .unresolved-plan {
   display: grid;
@@ -122,7 +122,7 @@
 }
 .unresolved-plan p {
   margin: 4px 0 0;
-  font-size: 11px;
+  font-size: 12px;
 }
 .unresolved-plan .secondary-button {
   margin-top: 10px;
@@ -139,5 +139,5 @@
 }
 .excluded-plan p {
   margin: 4px 0 0;
-  font-size: 11px;
+  font-size: 12px;
 }
