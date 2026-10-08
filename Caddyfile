@@ -3,7 +3,22 @@
     request_body {
         max_size 210MB
     }
-    reverse_proxy app:8000
+    route {
+        @api path /api/*
+        header @api >Cache-Control "no-store"
+        @frontend not path /api/*
+        header @frontend Cache-Control "no-cache" {
+            match status 2xx 3xx
+        }
+        header Cache-Control "no-store" {
+            match status 4xx 5xx
+        }
+        reverse_proxy app:8000
+    }
+    handle_errors {
+        header Cache-Control "no-store"
+        respond "{err.status_code} {err.status_text}" {err.status_code}
+    }
     log {
         output stdout
         format json
@@ -17,8 +32,4 @@
         Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
         -Server
     }
-    @api path /api/*
-    header @api Cache-Control "no-store"
-    @assets path /assets/*
-    header @assets Cache-Control "public, max-age=31536000, immutable"
 }
