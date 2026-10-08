@@ -98,7 +98,7 @@
  * @typedef {{items: AuditLogEntry[], total: number}} AuditLogPage
  *
  * @typedef {{id: string, action: string, before?: {active?: boolean}, after?: {active?: boolean, note?: string}, actor_name?: string, created_at?: string}} UserAuditEntry
- * @typedef {{id: string, display_name: string, email: string, active: boolean, audit?: UserAuditEntry[]}} TeamUser
+ * @typedef {{id: string, display_name: string, email: string, active: boolean, last_seen_at?: string | null, audit?: UserAuditEntry[]}} TeamUser
  * @typedef {{id: string, email: string, expires_at: string, created_by: string, created_at: string}} TeamInvitation
  */
 

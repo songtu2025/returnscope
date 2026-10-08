@@ -16,6 +16,19 @@ import { classNames, formatTime } from "../lib/presentation";
 /** @typedef {{current_password: string, new_password: string}} PasswordForm */
 /** @typedef {Error & {status?: number}} TeamRequestError */
 
+/** @param {string | null | undefined} value */
+function formatLastLoginTime(value) {
+  if (!value) return "--";
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return "--";
+  // 固定转换到 UTC+8，避免浏览器所在地时区影响登录时间。
+  const utcOffsetMilliseconds = 8 * 60 * 60 * 1000;
+  return new Date(timestamp + utcOffsetMilliseconds)
+    .toISOString()
+    .slice(0, 19)
+    .replace("T", " ");
+}
+
 /** @param {unknown} error @returns {TeamRequestError} */
 function requestError(error) {
   return error instanceof Error
@@ -227,13 +240,19 @@ export function TeamPage({
                 <h3 id="member-list-title">团队成员</h3>
                 <span>{users.length} 个账号</span>
               </div>
-              <div className="access-table-scroll">
+              <div
+                className="access-table-scroll"
+                role="region"
+                aria-label="团队成员表格"
+                tabIndex={0}
+              >
                 <table className="member-table" aria-label="团队成员">
                   <thead>
                     <tr>
                       <th scope="col">用户</th>
                       <th scope="col">邮箱</th>
                       <th scope="col">状态</th>
+                      <th scope="col">最后登录时间（UTC+8）</th>
                       <th scope="col">操作</th>
                     </tr>
                   </thead>
@@ -265,6 +284,9 @@ export function TeamPage({
                             <em className={user.active ? "online" : ""}>
                               {user.active ? "启用" : "停用"}
                             </em>
+                          </td>
+                          <td className="member-last-login">
+                            {formatLastLoginTime(user.last_seen_at)}
                           </td>
                           <td>
                             <div className="member-actions">
@@ -307,7 +329,7 @@ export function TeamPage({
                     })}
                     {users.length === 0 && (
                       <tr className="team-empty-row">
-                        <td colSpan={4}>暂无用户账号</td>
+                        <td colSpan={5}>暂无用户账号</td>
                       </tr>
                     )}
                   </tbody>

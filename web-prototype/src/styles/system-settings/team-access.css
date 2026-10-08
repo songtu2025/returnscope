@@ -74,16 +74,30 @@
   color: var(--ink);
 }
 .member-table th:nth-child(1) {
-  width: 28%;
+  width: 20%;
 }
 .member-table th:nth-child(2) {
-  width: 34%;
+  width: 28%;
 }
 .member-table th:nth-child(3) {
-  width: 12%;
+  width: 9%;
 }
 .member-table th:nth-child(4) {
-  width: 26%;
+  width: 22%;
+}
+.member-table th:nth-child(5) {
+  width: 21%;
+}
+.member-table {
+  min-width: 900px;
+}
+.member-table td:nth-child(1),
+.member-table td:nth-child(2) {
+  overflow-wrap: anywhere;
+}
+.member-last-login {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .invitation-table th:nth-child(1) {
   width: 34%;

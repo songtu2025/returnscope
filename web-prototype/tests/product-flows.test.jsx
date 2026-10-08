@@ -3175,6 +3175,36 @@ describe("关键用户流程", () => {
     expect(screen.getByText("访问控制台")).toBeVisible();
     expect(screen.getByRole("table", { name: "团队成员" })).toBeVisible();
     expect(screen.getByRole("table", { name: "待注册邀请" })).toBeVisible();
+    expect(screen.getByText("暂无用户账号")).toHaveAttribute("colspan", "5");
+  });
+
+  test("最后登录时间固定显示 UTC+8，跨日和空记录正确展示", async () => {
+    const loginTimes = [
+      "2026-10-08T16:30:25Z",
+      "2026-10-08T10:30:25-05:00",
+      null,
+      undefined,
+    ];
+    apiMock.users.mockResolvedValue(
+      loginTimes.map((last_seen_at, index) => ({
+        id: `user-${index + 1}`,
+        display_name: `合成成员 ${index + 1}`,
+        email: `member${index + 1}@example.com`,
+        active: true,
+        last_seen_at,
+      })),
+    );
+    render(<TeamPage notify={vi.fn()} currentUser={{ id: "user-1" }} />);
+    const table = await screen.findByRole("table", { name: "团队成员" });
+    expect(
+      within(table).getByRole("columnheader", { name: "最后登录时间（UTC+8）" }),
+    ).toBeVisible();
+    const rows = within(table).getAllByRole("row").slice(1);
+    ["2026-10-09 00:30:25", "2026-10-08 23:30:25", "--", "--"].forEach(
+      (expected, index) => {
+        expect(within(rows[index]).getAllByRole("cell")[3]).toHaveTextContent(expected);
+      },
+    );
   });
 
   test("用户数据加载完成前不显示零用户状态", async () => {
