@@ -1,4 +1,10 @@
 /* 分类结果池 */
+.result-creation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .dashboard-selection-notice {
   display: flex;
   align-items: center;
@@ -63,32 +69,6 @@
 
 .dashboard-selection-bar span {
   color: var(--muted);
-  font-size: 12px;
-}
-
-.insight-selection-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 58px;
-  padding: 9px 12px 9px 16px;
-  border-bottom: 1px solid #b8d8cc;
-  background: #f1faf6;
-}
-
-.insight-selection-bar > div {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-  margin-right: auto;
-  color: var(--green-dark);
-}
-
-.insight-selection-bar > div span {
-  padding-left: 12px;
-  border-left: 1px solid #c7ddd4;
-  color: #5c6b64;
   font-size: 12px;
 }
 

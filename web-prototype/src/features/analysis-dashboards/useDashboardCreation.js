@@ -38,7 +38,17 @@ export function useDashboardCreation({ route, updateRoute, notify, userId }) {
   const [choices, setChoices] = useState(
     /** @returns {Record<string, string>} */ () => ({}),
   );
-  const [form, setForm] = useState({ name: "", description: "", reason: "" });
+  const [form, setFormState] = useState(
+    () => selection?.dashboard_form ?? { name: "", description: "", reason: "" },
+  );
+  /** @param {{name: string, description: string, reason: string}} next */
+  const setForm = (next) => {
+    setFormState(next);
+    updateDashboardSelection(userId, route.selectionToken, (current) => ({
+      ...current,
+      dashboard_form: next,
+    }));
+  };
   const [submitting, setSubmitting] = useState(false);
   const [confirmationMessage, setConfirmationMessage] = useState("");
   const generationRef = useRef(0);
@@ -94,17 +104,18 @@ export function useDashboardCreation({ route, updateRoute, notify, userId }) {
     [selection?.filters, updateRoute],
   );
 
+  const needsPreflight = route.step === "check" || !state.plan;
   useEffect(() => {
     if (resultVersionIds.length === 0) {
       setState({ loading: false, error: "", plan: null });
       return undefined;
     }
-    if (route.step === "check") runPreflight(resultVersionIds, true);
+    if (needsPreflight) runPreflight(resultVersionIds, true);
     return () => {
       generationRef.current += 1;
       controllerRef.current?.abort();
     };
-  }, [resultVersionIds, route.step, runPreflight]);
+  }, [resultVersionIds, needsPreflight, runPreflight]);
 
   const { conflicts, blockers, warnings, currentSources, summary, isVersionCreation } =
     dashboardCreationPlan(state.plan, selection, resultVersionIds);

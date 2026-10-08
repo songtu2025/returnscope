@@ -34,6 +34,9 @@ vi.mock("../src/shared/api/dashboardApi", () => ({
 }));
 
 import { ClassificationResultsPage } from "../src/pages/ClassificationResultsPage";
+import { AnalysisDashboardPage } from "../src/features/analysis-dashboards/AnalysisDashboardPage";
+import { useHashRoute } from "../src/app/hashRouter";
+import { readDashboardSelection } from "../src/features/analysis-dashboards/dashboardSelectionStorage";
 import { ResultVersionReviewPanel } from "../src/features/review-batches/ResultVersionReviewPanel";
 import { renderWithServerState as render } from "./renderWithServerState";
 
@@ -53,6 +56,16 @@ const resultVersion = {
   product_version: 4,
   published_at: "2026-08-12T08:00:00Z",
 };
+
+function ResultCreationHarness({ notify = vi.fn() }) {
+  const { route } = useHashRoute();
+  if (route.page === "analysis-dashboards") {
+    return route.query.selection_token ? (
+      <AnalysisDashboardPage route={route} notify={notify} userId="user-1" />
+    ) : null;
+  }
+  return <ClassificationResultsPage route={route} notify={notify} userId="user-1" />;
+}
 
 const record = {
   source_record_id: "returns-v3:2",
@@ -117,6 +130,7 @@ const groupOf = (value) => ({
 });
 
 beforeEach(() => {
+  sessionStorage.clear();
   window.location.hash = "classification-results";
   Object.values(apiMock).forEach((mock) => mock.mockReset());
   Object.values(dashboardApiMock).forEach((mock) => mock.mockReset());
@@ -482,7 +496,10 @@ test("看板选择允许需复核版本并明确按可用范围统计", async ()
   });
   render(<ClassificationResultsPage notify={vi.fn()} userId="user-1" />);
 
-  await userEvent.click(await screen.findByRole("button", { name: "新建分析看板" }));
+  expect(await screen.findByRole("button", { name: "新建分析看板" })).toBeDisabled();
+  await userEvent.click(
+    await screen.findByRole("checkbox", { name: "选择 DERIVED 结果 v2" }),
+  );
   expect(screen.getByRole("checkbox", { name: "选择 DERIVED 结果 v2" })).toBeEnabled();
   expect(screen.getByRole("checkbox", { name: "选择 REVIEW 结果 v1" })).toBeEnabled();
   const blockedCheckbox = screen.getByRole("checkbox", {
@@ -502,9 +519,7 @@ test("从分类结果快速确认并创建 AI 洞察报告任务", async () => {
   const user = userEvent.setup();
   const notify = vi.fn();
   sessionStorage.clear();
-  render(
-    <ClassificationResultsPage route={{ query: {} }} notify={notify} userId="user-1" />,
-  );
+  render(<ResultCreationHarness notify={notify} />);
 
   const selectionCheckbox = await screen.findByRole("checkbox", {
     name: "选择 SR001 结果 v1",
@@ -513,7 +528,7 @@ test("从分类结果快速确认并创建 AI 洞察报告任务", async () => {
   expect(selectionCell).toBeVisible();
   await user.click(selectionCell);
   expect(selectionCheckbox).toBeChecked();
-  expect(screen.getByText("已选 1 项")).toBeVisible();
+  expect(screen.getByText("已选 1 个结果版本")).toBeVisible();
   await user.click(screen.getByRole("button", { name: "生成 AI 洞察" }));
 
   const dialog = await screen.findByRole("dialog", {
@@ -546,6 +561,201 @@ test("从分类结果快速确认并创建 AI 洞察报告任务", async () => {
   expect(window.location.hash).toContain("version=dashboard-version-ai-insight");
   expect(window.location.hash).toContain("tab=report");
   expect(window.location.hash).toContain("report=report-ai-insight");
+});
+
+test("两个创建入口共用跨页选择，取消后保留看板草稿", async () => {
+  const user = userEvent.setup();
+  apiMock.classificationResults.mockResolvedValue({
+    items: [resultVersion],
+    total: 21,
+    page: 1,
+    page_size: 20,
+  });
+  render(<ResultCreationHarness />);
+  expect(screen.getByRole("button", { name: "新建分析看板" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "生成 AI 洞察" })).toBeDisabled();
+  await user.click(await screen.findByRole("checkbox", { name: "选择 SR001 结果 v1" }));
+  const token = new URLSearchParams(window.location.hash.split("?")[1]).get(
+    "selection_token",
+  );
+  apiMock.classificationResults.mockResolvedValue({
+    items: [
+      { ...resultVersion, version_id: "classification-version-2", listing: "SR002" },
+    ],
+    total: 21,
+    page: 2,
+    page_size: 20,
+  });
+  await user.click(screen.getByRole("button", { name: "下一页" }));
+  await user.click(await screen.findByRole("checkbox", { name: "选择 SR002 结果 v1" }));
+  expect(screen.getByText("已选 2 个结果版本")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "检查并生成" })).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "新建分析看板" }));
+  await user.type(await screen.findByLabelText("看板名称"), "每周反馈看板");
+  await user.type(screen.getByLabelText("生成原因"), "经营复盘");
+  await user.click(screen.getByRole("button", { name: /返回选择分类结果/ }));
+  expect(await screen.findByText("已选 2 个结果版本")).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "新建分析看板" }));
+  expect(await screen.findByLabelText("看板名称")).toHaveValue("每周反馈看板");
+  expect(screen.getByLabelText("生成原因")).toHaveValue("经营复盘");
+  await user.click(screen.getByRole("button", { name: /返回选择分类结果/ }));
+  await user.click(await screen.findByRole("button", { name: "生成 AI 洞察" }));
+  const dialog = await screen.findByRole("dialog", { name: "生成 AI 洞察报告" });
+  await user.click(await within(dialog).findByRole("button", { name: "中" }));
+  await user.click(within(dialog).getByRole("button", { name: "取消" }));
+  expect(await screen.findByText("已选 2 个结果版本")).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "生成 AI 洞察" }));
+  const restored = await screen.findByRole("dialog", { name: "生成 AI 洞察报告" });
+  expect(await within(restored).findByRole("button", { name: "中" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  expect(readDashboardSelection("user-1", token).selected).toHaveLength(2);
+  expect(dashboardApiMock.dashboardPreflight).toHaveBeenLastCalledWith(
+    {
+      result_version_ids: ["classification-version-1", "classification-version-2"],
+      filters: {},
+    },
+    expect.any(Object),
+  );
+  await user.click(within(restored).getByRole("button", { name: "开始生成" }));
+  await waitFor(() =>
+    expect(dashboardApiMock.createInsightReportFromResults).toHaveBeenCalledWith(
+      expect.objectContaining({
+        result_version_ids: ["classification-version-1", "classification-version-2"],
+        reasoning_effort: "medium",
+      }),
+    ),
+  );
+  expect(readDashboardSelection("user-1", token)).toBeNull();
+});
+
+test("AI 洞察处理版本冲突后仅提交选定版本，失败可重试", async () => {
+  const user = userEvent.setup();
+  apiMock.classificationResults.mockResolvedValue({
+    items: [
+      resultVersion,
+      { ...resultVersion, version_id: "classification-version-2", version: 2 },
+    ],
+    total: 2,
+    page: 1,
+    page_size: 20,
+  });
+  dashboardApiMock.dashboardPreflight.mockImplementation(({ result_version_ids }) =>
+    Promise.resolve({
+      plan_hash: `plan-${result_version_ids.join("-")}`,
+      ready: result_version_ids.length === 1,
+      conflicts:
+        result_version_ids.length === 2
+          ? [{ store_site: "SEEKWAY:US", listing: "SR001", result_version_ids }]
+          : [],
+      summary: { record_count: 3 },
+    }),
+  );
+  dashboardApiMock.createInsightReportFromResults.mockRejectedValueOnce(
+    new Error("暂时无法提交"),
+  );
+  render(<ResultCreationHarness />);
+  await user.click(await screen.findByRole("checkbox", { name: "选择 SR001 结果 v1" }));
+  await user.click(screen.getByRole("checkbox", { name: "选择 SR001 结果 v2" }));
+  await user.click(screen.getByRole("button", { name: "生成 AI 洞察" }));
+  expect(await screen.findByText("同一 Listing 选择了多个结果版本")).toBeVisible();
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: /确认冲突选择/ }));
+  expect(screen.getByText("请为每个冲突 Listing 选择一个结果版本。")).toBeVisible();
+  await user.click(screen.getByRole("radio", { name: /结果 v2/ }));
+  await user.click(screen.getByRole("button", { name: /确认冲突选择/ }));
+  const dialog = await screen.findByRole("dialog", { name: "生成 AI 洞察报告" });
+  await user.click(await within(dialog).findByRole("button", { name: "开始生成" }));
+  expect(await within(dialog).findByText("暂时无法提交")).toBeVisible();
+  expect(within(dialog).getByRole("button", { name: "开始生成" })).toBeEnabled();
+  await user.click(within(dialog).getByRole("button", { name: "开始生成" }));
+  await waitFor(() =>
+    expect(dashboardApiMock.createInsightReportFromResults).toHaveBeenCalledTimes(2),
+  );
+  expect(dashboardApiMock.createInsightReportFromResults).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      result_version_ids: ["classification-version-2"],
+      plan_hash: "plan-classification-version-2",
+    }),
+  );
+});
+
+test("为已有看板选择新版本时保留目标，清空后禁用创建", async () => {
+  const { createDashboardSelection } =
+    await import("../src/features/analysis-dashboards/dashboardSelectionStorage");
+  const token = createDashboardSelection("user-1", {
+    target_dashboard_id: "existing-dashboard",
+    expected_revision: 3,
+  });
+  window.location.hash = `#classification-results?selection_token=${token}`;
+  const user = userEvent.setup();
+  render(<ResultCreationHarness />);
+  await user.click(await screen.findByRole("checkbox", { name: "选择 SR001 结果 v1" }));
+  expect(
+    screen.queryByRole("button", { name: "生成 AI 洞察" }),
+  ).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "创建看板新版本" }));
+  expect(await screen.findByText("基于新分类结果创建版本")).toBeVisible();
+  expect(readDashboardSelection("user-1", token).target_dashboard_id).toBe(
+    "existing-dashboard",
+  );
+  await user.click(screen.getByRole("button", { name: /返回选择分类结果/ }));
+  await user.click(await screen.findByRole("button", { name: "清空" }));
+  expect(screen.getByRole("button", { name: "创建看板新版本" })).toBeDisabled();
+});
+
+test("AI 提交期间防止重复操作，计划过期后保留参数并再次确认", async () => {
+  const user = userEvent.setup();
+  const expired = new Error("计划已过期");
+  expired.status = 409;
+  let rejectSubmission;
+  dashboardApiMock.createInsightReportFromResults.mockImplementationOnce(
+    () =>
+      new Promise((_resolve, reject) => {
+        rejectSubmission = reject;
+      }),
+  );
+  dashboardApiMock.dashboardPreflight
+    .mockResolvedValueOnce({
+      ready: true,
+      plan_hash: "old-plan",
+      summary: { record_count: 3 },
+    })
+    .mockResolvedValue({
+      ready: true,
+      plan_hash: "new-plan",
+      summary: { record_count: 3 },
+    });
+  render(<ResultCreationHarness />);
+  await user.click(await screen.findByRole("checkbox", { name: "选择 SR001 结果 v1" }));
+  await user.click(screen.getByRole("button", { name: "生成 AI 洞察" }));
+  const dialog = await screen.findByRole("dialog", { name: "生成 AI 洞察报告" });
+  await user.click(await within(dialog).findByRole("button", { name: "中" }));
+  await user.dblClick(within(dialog).getByRole("button", { name: "开始生成" }));
+  expect(dashboardApiMock.createInsightReportFromResults).toHaveBeenCalledTimes(1);
+  expect(within(dialog).getByRole("button", { name: "正在提交…" })).toBeDisabled();
+  expect(within(dialog).getByRole("button", { name: "取消" })).toBeDisabled();
+  await user.keyboard("{Escape}");
+  expect(dialog).toBeVisible();
+  await act(async () => rejectSubmission(expired));
+  const refreshed = await screen.findByRole("dialog", { name: "生成 AI 洞察报告" });
+  expect(await within(refreshed).findByText(/已保留模型选择并重新检查/)).toBeVisible();
+  expect(within(refreshed).getByRole("button", { name: "中" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  expect(within(refreshed).getByRole("button", { name: "开始生成" })).toBeEnabled();
+  await user.click(within(refreshed).getByRole("button", { name: "开始生成" }));
+  await waitFor(() =>
+    expect(dashboardApiMock.createInsightReportFromResults).toHaveBeenCalledTimes(2),
+  );
+  expect(dashboardApiMock.createInsightReportFromResults).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      plan_hash: "new-plan",
+      reasoning_effort: "medium",
+    }),
+  );
 });
 
 test("刷新恢复产品名称下钻且切换产品不会混入其他订单", async () => {

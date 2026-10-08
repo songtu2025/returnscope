@@ -145,35 +145,10 @@ function ResultPoolMetadata({ result, onOpen }) {
 /**
  * @param {{
  *   selected: SelectedResult[],
- *   totals: { records: number, units: number },
- *   onCancel: () => void,
- *   onGenerate: () => void
+ *   onClear: () => void
  * }} props
  */
-export function InsightSelectionBar({ selected, totals, onCancel, onGenerate }) {
-  return (
-    <div className="insight-selection-bar" role="status">
-      <div>
-        <b>已选 {selected.length} 项</b>
-        <span>{totals.records.toLocaleString()} 条记录</span>
-        <span>{totals.units.toLocaleString()} 个分类单元</span>
-      </div>
-      <Button type="primary" onClick={onGenerate}>
-        生成 AI 洞察
-      </Button>
-      <Button onClick={onCancel}>取消选择</Button>
-    </div>
-  );
-}
-
-/**
- * @param {{
- *   selected: SelectedResult[],
- *   onClear: () => void,
- *   onContinue: () => void
- * }} props
- */
-export function DashboardSelectionBar({ selected, onClear, onContinue }) {
+export function DashboardSelectionBar({ selected, onClear }) {
   const listingCount = new Set(
     selected.map((item) => `${item.store_site}::${item.listing}`),
   ).size;
@@ -185,15 +160,6 @@ export function DashboardSelectionBar({ selected, onClear, onContinue }) {
       </div>
       <Button type="text" disabled={!selected.length} onClick={onClear}>
         清空
-      </Button>
-      <Button
-        type="primary"
-        disabled={!selected.length}
-        icon={<CaretRight size={17} />}
-        iconPlacement="end"
-        onClick={onContinue}
-      >
-        检查并生成
       </Button>
     </aside>
   );

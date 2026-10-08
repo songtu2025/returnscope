@@ -1,5 +1,4 @@
-import { ResultPoolInsightDialog } from "./ResultPoolInsightDialog";
-import { ChartBar } from "@phosphor-icons/react";
+import { ChartBar, Sparkle } from "@phosphor-icons/react";
 import { PageHeading } from "../../components/SharedUi";
 import { DashboardSelectionBar } from "./ClassificationResultListParts";
 import { ResultWorkspaceNav } from "./ResultWorkspaceNav";
@@ -13,13 +12,11 @@ export function ClassificationResultList(props) {
   const context = { ...props, ...state };
   const {
     route,
-    updateRoute,
-    selectionIntent,
+    isVersionCreation,
     selectedResults,
-    startSelection,
     clearSelection,
     continueToDashboard,
-    insightOpen,
+    continueToInsight,
     hasNewResults,
     load,
   } = context;
@@ -33,23 +30,42 @@ export function ClassificationResultList(props) {
         title="分类结果池"
         description="每个已完成 Listing 独立发布结果版本，可在网页查看订单级分类与证据。"
         action={
-          <button className="primary-button" onClick={startSelection}>
-            <ChartBar size={18} /> 新建分析看板
-          </button>
+          <div className="result-creation-actions">
+            <button
+              className="primary-button"
+              disabled={!selectedResults.length}
+              title={selectedResults.length ? "" : "请先勾选结果版本"}
+              onClick={continueToDashboard}
+            >
+              <ChartBar size={18} />{" "}
+              {isVersionCreation ? "创建看板新版本" : "新建分析看板"}
+            </button>
+            {!isVersionCreation && (
+              <button
+                className="secondary-button"
+                disabled={!selectedResults.length}
+                title={selectedResults.length ? "" : "请先勾选结果版本"}
+                onClick={continueToInsight}
+              >
+                <Sparkle size={18} /> 生成 AI 洞察
+              </button>
+            )}
+          </div>
         }
       />
 
-      {route.selectionToken && selectionIntent === "dashboard" && (
+      {route.selectionToken && (
         <div className="dashboard-selection-notice" role="status">
           <div>
-            <b>正在选择看板数据</b>
+            <b>
+              {isVersionCreation
+                ? "正在为现有看板选择新版本数据"
+                : "当前勾选结果可用于分析看板或 AI 洞察"}
+            </b>
             <span>“需复核”版本也可加入；看板会自动排除待复核和已排除记录。</span>
           </div>
-          <button
-            className="text-button"
-            onClick={() => updateRoute({ selectionToken: "" })}
-          >
-            退出选择
+          <button className="text-button" onClick={() => clearSelection(true)}>
+            取消选择
           </button>
         </div>
       )}
@@ -66,14 +82,12 @@ export function ClassificationResultList(props) {
       <ResultPoolFilters {...context} />
 
       <ResultPoolContent {...context} />
-      {route.selectionToken && selectionIntent === "dashboard" && (
+      {selectedResults.length > 0 && (
         <DashboardSelectionBar
           selected={selectedResults}
-          onClear={clearSelection}
-          onContinue={continueToDashboard}
+          onClear={() => clearSelection()}
         />
       )}
-      {insightOpen && <ResultPoolInsightDialog {...context} />}
     </div>
   );
 }

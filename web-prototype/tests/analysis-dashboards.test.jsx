@@ -80,6 +80,9 @@ function DashboardHarness({ userId = "user-1" }) {
 
 function ResultsHarness({ userId = "user-1" }) {
   const { route } = useHashRoute();
+  if (route.page === "analysis-dashboards" && route.query.selection_token) {
+    return <AnalysisDashboardPage route={route} notify={vi.fn()} userId={userId} />;
+  }
   return route.page === "classification-results" ? (
     <ClassificationResultsPage route={route} notify={vi.fn()} userId={userId} />
   ) : null;

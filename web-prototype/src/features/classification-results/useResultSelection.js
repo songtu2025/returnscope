@@ -10,20 +10,9 @@ import { isDashboardSelectable, resultVersionId } from "./resultActionPolicy";
 import { runResultPrimaryAction } from "./resultSelectionActions";
 
 /** @typedef {import("./classificationResultListContracts").ClassificationResultVersion} ClassificationResultVersion */
-/** @typedef {import("./classificationResultListContracts").DashboardSelectionItem} DashboardSelectionItem */
 /** @typedef {import("./classificationResultListContracts").DashboardSelection} DashboardSelection */
 /** @typedef {import("./classificationResultListContracts").ClassificationResultListProps} ClassificationResultListProps */
 
-/** @param {DashboardSelectionItem[]} selected */
-function selectedResultTotals(selected) {
-  return selected.reduce(
-    (total, item) => ({
-      records: total.records + Number(item.record_count || 0),
-      units: total.units + Number(item.unit_count || 0),
-    }),
-    { records: 0, units: 0 },
-  );
-}
 /** @param {Pick<ClassificationResultListProps,"route"|"updateRoute"|"userId">} props */
 export function useResultSelection({ route, updateRoute, userId }) {
   const [selection, setSelection] = useState(
@@ -34,19 +23,10 @@ export function useResultSelection({ route, updateRoute, userId }) {
     setSelection(readDashboardSelection(userId, route.selectionToken));
   }, [route.selectionToken, userId]);
 
-  const startSelection = () => {
-    const token = createDashboardSelection(userId, { intent: "dashboard" });
-    updateRoute({ selectionToken: token, page: 1 });
-  };
-
   const selectedResults = useMemo(() => selection?.selected ?? [], [selection]);
-  const selectionIntent = selection?.intent ?? "dashboard";
+  const isVersionCreation = Boolean(selection?.target_dashboard_id);
   const selectedIds = useMemo(
     () => new Set(selectedResults.map((item) => item.result_version_id)),
-    [selectedResults],
-  );
-  const selectedTotals = useMemo(
-    () => selectedResultTotals(selectedResults),
     [selectedResults],
   );
 
@@ -55,7 +35,6 @@ export function useResultSelection({ route, updateRoute, userId }) {
     if (!isDashboardSelectable(result)) return;
     if (!route.selectionToken) {
       const token = createDashboardSelection(userId, {
-        intent: "insight",
         selected: [selectionItem(result)],
       });
       setSelection(readDashboardSelection(userId, token));
@@ -94,7 +73,14 @@ export function useResultSelection({ route, updateRoute, userId }) {
     if (exit) updateRoute({ selectionToken: "" });
   };
 
-  const continueToDashboard = () => {
+  /** @param {"dashboard" | "insight"} intent */
+  const continueToCreation = (intent) => {
+    if (!selectedResults.length) return;
+    const next = updateDashboardSelection(userId, route.selectionToken, (current) => ({
+      ...current,
+      intent: isVersionCreation ? "dashboard" : intent,
+    }));
+    setSelection(next);
     navigateHash("analysis-dashboards", {
       selection_token: route.selectionToken,
       step: "check",
@@ -106,14 +92,13 @@ export function useResultSelection({ route, updateRoute, userId }) {
     runResultPrimaryAction(result, { route, updateRoute, userId });
 
   return {
-    selectionIntent,
+    isVersionCreation,
     selectedResults,
     selectedIds,
-    selectedTotals,
-    startSelection,
     toggleSelection,
     clearSelection,
-    continueToDashboard,
+    continueToDashboard: () => continueToCreation("dashboard"),
+    continueToInsight: () => continueToCreation("insight"),
     runPrimaryAction,
   };
 }

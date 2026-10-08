@@ -16,6 +16,7 @@
  * @typedef {Object} DashboardPlan
  * @property {string} plan_hash
  * @property {boolean} ready
+ * @property {Record<string, string | string[] | null>} [filters]
  * @property {DashboardConflict[]} [conflicts]
  * @property {DashboardNotice[]} [blockers]
  * @property {DashboardNotice[]} [warnings]

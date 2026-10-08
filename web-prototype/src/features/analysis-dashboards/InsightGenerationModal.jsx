@@ -47,12 +47,7 @@ export function InsightGenerationModal({
   const selectedModel = models.find((model) => model.id === form.modelId);
   const supportedEfforts = selectedModel?.supported_efforts ?? [];
   const canSubmit =
-    !loading &&
-    !submitting &&
-    !error &&
-    ready &&
-    includedRecords > 0 &&
-    Boolean(form.modelId);
+    !loading && !submitting && ready && includedRecords > 0 && Boolean(form.modelId);
 
   /** @param {string} modelId */
   const changeModel = (modelId) => {
@@ -71,7 +66,9 @@ export function InsightGenerationModal({
       eyebrow=""
       title="生成 AI 洞察报告"
       description="确认本次分析范围和运行参数"
-      onClose={onClose}
+      onClose={() => {
+        if (!submitting) onClose();
+      }}
     >
       {loading ? (
         <InlineLoading label="正在核对数据范围与可用模型…" />
@@ -171,7 +168,12 @@ export function InsightGenerationModal({
           <footer className="insight-generation-actions">
             <div />
             <div>
-              <button type="button" className="secondary-button" onClick={onClose}>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={submitting}
+                onClick={onClose}
+              >
                 取消
               </button>
               <button type="submit" className="primary-button" disabled={!canSubmit}>

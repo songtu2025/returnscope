@@ -1,6 +1,6 @@
 import { ResultPoolStatus } from "./ResultPoolStatus";
 import { Pagination } from "./ClassificationResultCommon";
-import { InsightSelectionBar, ResultPoolRow } from "./ClassificationResultListParts";
+import { ResultPoolRow } from "./ClassificationResultListParts";
 import { resultVersionId } from "./resultActionPolicy";
 
 /** @typedef {import("./classificationResultListContracts").ResultPoolContext} ResultPoolContext */
@@ -10,14 +10,9 @@ export function ResultPoolContent(context) {
   const {
     route,
     updateRoute,
-    selectionIntent,
-    selectedResults,
     selectedIds,
-    selectedTotals,
     toggleSelection,
-    clearSelection,
     runPrimaryAction,
-    openInsightDialog,
     data,
     loading,
     error,
@@ -30,14 +25,6 @@ export function ResultPoolContent(context) {
       <ResultPoolStatus {...context} />{" "}
       {data && data.items.length > 0 && !error && (
         <>
-          {selectionIntent === "insight" && selectedResults.length > 0 && (
-            <InsightSelectionBar
-              selected={selectedResults}
-              totals={selectedTotals}
-              onCancel={() => clearSelection(true)}
-              onGenerate={openInsightDialog}
-            />
-          )}
           <div
             className={`result-pool-table is-selecting ${loading ? "is-loading" : ""}`}
           >

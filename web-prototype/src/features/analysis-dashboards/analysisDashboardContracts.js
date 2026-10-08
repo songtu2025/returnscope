@@ -127,6 +127,8 @@
  * @property {"dashboard" | "insight"} [intent]
  * @property {string} [target_dashboard_id]
  * @property {number} [expected_revision]
+ * @property {{name: string, description: string, reason: string}} [dashboard_form]
+ * @property {InsightGenerationForm} [insight_form]
  * @property {string} [updated_at]
  *
  * @typedef {Object} DashboardSelectionSource

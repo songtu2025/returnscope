@@ -1,12 +1,11 @@
 import { useResultSelection } from "./useResultSelection";
-import { useResultInsight } from "./useResultInsight";
 import { useEffect, useMemo, useState } from "react";
 import { useClassificationResultListData } from "./useClassificationResultListData";
 
 /** @typedef {import("./classificationResultListContracts").ClassificationResultListProps} ClassificationResultListProps */
 
 /** @param {import("./classificationResultListContracts").ClassificationResultListProps} props */
-export function useResultPoolWorkspace({ route, updateRoute, notify, userId }) {
+export function useResultPoolWorkspace({ route, updateRoute, userId }) {
   const [filters, setFilters] = useState({
     q: route.q,
     storeSite: route.storeSite,
@@ -14,31 +13,6 @@ export function useResultPoolWorkspace({ route, updateRoute, notify, userId }) {
     qualityStatus: route.qualityStatus,
   });
   const selection = useResultSelection({ route, updateRoute, userId });
-  const insight = useResultInsight({
-    notify,
-    selectedResults: selection.selectedResults,
-    clearSelection: selection.clearSelection,
-  });
-  const {
-    selectionIntent,
-    selectedResults,
-    selectedIds,
-    selectedTotals,
-    startSelection,
-    toggleSelection,
-    clearSelection,
-    continueToDashboard,
-    runPrimaryAction,
-  } = selection;
-  const {
-    insightOpen,
-    setInsightOpen,
-    insightState,
-    insightForm,
-    setInsightForm,
-    openInsightDialog,
-    submitInsight,
-  } = insight;
   useEffect(() => {
     setFilters({
       q: route.q,
@@ -83,22 +57,7 @@ export function useResultPoolWorkspace({ route, updateRoute, notify, userId }) {
   return {
     filters,
     setFilters,
-    selectionIntent,
-    selectedResults,
-    selectedIds,
-    selectedTotals,
-    startSelection,
-    toggleSelection,
-    clearSelection,
-    continueToDashboard,
-    runPrimaryAction,
-    insightOpen,
-    setInsightOpen,
-    insightState,
-    insightForm,
-    setInsightForm,
-    openInsightDialog,
-    submitInsight,
+    ...selection,
     data,
     loading,
     error,
