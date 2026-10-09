@@ -1,3 +1,4 @@
+import { useDismissibleDetails } from "../../hooks/useDismissibleDetails";
 import {
   CaretDown,
   CheckCircle,
@@ -99,6 +100,7 @@ function ModelServiceRuntimeActions({
   onEditLimits,
   onOpenVersions,
 }) {
+  const { detailsProps, summaryProps } = useDismissibleDetails({ menu: true });
   return (
     <div className="model-service-runtime-actions">
       {activeVersion ? (
@@ -133,8 +135,8 @@ function ModelServiceRuntimeActions({
         </Button>
       )}
       {selectedConnection && (
-        <details className="model-service-more">
-          <summary role="button" aria-haspopup="menu">
+        <details {...detailsProps} className="model-service-more">
+          <summary {...summaryProps} role="button" aria-haspopup="menu">
             更多 <CaretDown size={15} />
           </summary>
           <div

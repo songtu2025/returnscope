@@ -1,3 +1,4 @@
+import { useDismissibleDetails } from "../../hooks/useDismissibleDetails";
 import { ArrowLeft } from "@phosphor-icons/react";
 
 /** @typedef {import("./classificationStandardWorkspaceContracts").StandardWorkspaceContext} StandardWorkspaceContext */
@@ -13,6 +14,7 @@ export function StandardWorkspaceHeader({
   busy,
   onDelete,
 }) {
+  const { detailsProps, summaryProps } = useDismissibleDetails({ menu: true });
   return (
     <div className="standard-subpage-heading editor-heading">
       <button
@@ -34,8 +36,8 @@ export function StandardWorkspaceHeader({
         </span>
       </div>
       {detail && (detail.status === "active" || detail.delete_mode === "delete") && (
-        <details className="standard-more-menu">
-          <summary>更多</summary>
+        <details {...detailsProps} className="standard-more-menu">
+          <summary {...summaryProps}>更多</summary>
           <button type="button" disabled={Boolean(busy)} onClick={onDelete}>
             {detail.delete_mode === "delete" ? "删除标准" : "停用标准"}
           </button>

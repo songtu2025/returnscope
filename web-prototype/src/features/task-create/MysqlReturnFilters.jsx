@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useDismissibleDetails } from "../../hooks/useDismissibleDetails";
 import { CaretDown } from "@phosphor-icons/react";
 import { datePresets } from "./mysqlReturnDates";
 
@@ -14,30 +14,12 @@ export function MysqlReturnFilters({
   update,
   invalidDateRange,
 }) {
-  const [skuOpen, setSkuOpen] = useState(false);
-  const skuRef = useRef(/** @type {HTMLDetailsElement | null} */ (null));
-  const dateRef = useRef(/** @type {HTMLDetailsElement | null} */ (null));
-  const inputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const filtersDisabled = busy === "import" || disabled || loading;
-
-  useEffect(() => {
-    if (!skuOpen) return undefined;
-    if (dateRef.current) dateRef.current.open = false;
-    inputRef.current?.focus();
-    /** @param {PointerEvent} event */
-    const closeOutside = (event) => {
-      if (event.target instanceof Node && !skuRef.current?.contains(event.target)) {
-        setSkuOpen(false);
-      }
-    };
-    document.addEventListener("pointerdown", closeOutside);
-    return () => document.removeEventListener("pointerdown", closeOutside);
-  }, [skuOpen]);
-
-  const closeSku = () => {
-    setSkuOpen(false);
-    skuRef.current?.querySelector("summary")?.focus();
-  };
+  const dates = useDismissibleDetails({ disabled: filtersDisabled });
+  const sku = useDismissibleDetails({
+    initialFocus: "input",
+    disabled: filtersDisabled,
+  });
 
   return (
     <fieldset
@@ -67,8 +49,8 @@ export function MysqlReturnFilters({
           />
         )}
       </label>
-      <details ref={dateRef} className="mysql-date-filter">
-        <summary onClick={() => setSkuOpen(false)}>
+      <details {...dates.detailsProps} className="mysql-date-filter">
+        <summary {...dates.summaryProps}>
           反馈日期{" "}
           <b>
             {form.date_from || "不限起始"} — {form.date_to || "不限结束"}
@@ -81,11 +63,8 @@ export function MysqlReturnFilters({
                 key={label}
                 type="button"
                 aria-pressed={form.date_from === date_from && form.date_to === date_to}
-                onClick={(event) => {
-                  update({ date_from, date_to });
-                  const details = event.currentTarget.closest("details");
-                  if (details instanceof HTMLDetailsElement) details.open = false;
-                }}
+                data-close-details
+                onClick={() => update({ date_from, date_to })}
               >
                 {label}
               </button>
@@ -119,39 +98,18 @@ export function MysqlReturnFilters({
             type="button"
             className="text-button"
             disabled={invalidDateRange}
-            onClick={(event) => {
-              const details = event.currentTarget.closest("details");
-              if (details instanceof HTMLDetailsElement) details.open = false;
-            }}
+            data-close-details
           >
             完成
           </button>
         </div>
       </details>
-      <details
-        ref={skuRef}
-        open={skuOpen}
-        className="mysql-more-filter"
-        onBlur={(event) => {
-          if (!event.currentTarget.contains(event.relatedTarget)) setSkuOpen(false);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Escape" && skuOpen) {
-            event.preventDefault();
-            event.stopPropagation();
-            closeSku();
-          }
-        }}
-      >
+      <details {...sku.detailsProps} className="mysql-more-filter">
         <summary
-          aria-expanded={skuOpen}
+          {...sku.summaryProps}
           aria-controls="mysql-sku-popover"
           aria-disabled={filtersDisabled}
           title={form.sku ? `商品：${form.sku}` : "指定商品"}
-          onClick={(event) => {
-            event.preventDefault();
-            if (!filtersDisabled) setSkuOpen((current) => !current);
-          }}
         >
           <span>{form.sku ? `商品：${form.sku}` : "指定商品"}</span>
           <CaretDown size={14} aria-hidden="true" />
@@ -159,7 +117,6 @@ export function MysqlReturnFilters({
         <label id="mysql-sku-popover">
           SKU / MSKU（精确匹配）
           <input
-            ref={inputRef}
             aria-label="SKU / MSKU（精确匹配）"
             aria-describedby="mysql-sku-hint"
             value={form.sku}
@@ -170,7 +127,7 @@ export function MysqlReturnFilters({
               // Enter 只结束商品输入，不提交取数表单；输入法确认时保留浮层。
               event.preventDefault();
               if (!event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229) {
-                closeSku();
+                sku.close();
               }
             }}
           />

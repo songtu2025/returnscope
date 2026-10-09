@@ -1,3 +1,4 @@
+import { useDismissibleDetails } from "../../hooks/useDismissibleDetails";
 import {
   Archive,
   ArrowClockwise,
@@ -89,9 +90,10 @@ function TaskExecutionActions({ task, summary, onPause, onRetry, showListings })
 
 /** @param {Pick<TaskDetailHeaderProps, "task" | "onRetry" | "onArchive" | "onOpenRename" | "onOpenCancel">} props */
 function TaskMoreActions({ task, onRetry, onArchive, onOpenRename, onOpenCancel }) {
+  const { detailsProps, summaryProps } = useDismissibleDetails({ menu: true });
   return (
-    <details className="task-more-actions">
-      <summary aria-label="更多任务操作" title="更多任务操作">
+    <details {...detailsProps} className="task-more-actions">
+      <summary {...summaryProps} aria-label="更多任务操作" title="更多任务操作">
         <DotsThreeVertical size={19} />
       </summary>
       <div>

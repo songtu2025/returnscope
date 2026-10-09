@@ -1,3 +1,4 @@
+import { useDismissibleDetails } from "../../hooks/useDismissibleDetails";
 import {
   Archive,
   ArrowCounterClockwise,
@@ -129,13 +130,14 @@ function RegistryActions({
   onCreateSimilar,
   onArchive,
 }) {
+  const { detailsProps, summaryProps } = useDismissibleDetails({ menu: true });
   return (
     <span role="cell" className="task-registry-actions">
       <button type="button" className="task-open-action" onClick={onOpen}>
         查看
       </button>
-      <details>
-        <summary aria-label={`更多任务操作：${task.title}`}>
+      <details {...detailsProps}>
+        <summary {...summaryProps} aria-label={`更多任务操作：${task.title}`}>
           <DotsThreeVertical size={18} />
         </summary>
         <div className="task-registry-menu">

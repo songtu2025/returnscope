@@ -244,6 +244,11 @@ test("归档分组恢复传false，查看和创建类似任务传原对象", asy
   fireEvent.click(screen.getByLabelText("更多任务操作：SYNTHETIC archive"));
   await user.click(screen.getByRole("button", { name: "创建类似任务" }));
   expect(props.onCreateSimilar).toHaveBeenCalledExactlyOnceWith(archived);
+  expect(screen.getByLabelText("更多任务操作：SYNTHETIC archive")).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+  await user.click(screen.getByLabelText("更多任务操作：SYNTHETIC archive"));
   await user.click(screen.getByRole("button", { name: "恢复任务" }));
   expect(props.onArchive).toHaveBeenCalledExactlyOnceWith([archived.id], false);
 });

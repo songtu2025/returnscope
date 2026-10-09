@@ -1,3 +1,4 @@
+import { useDismissibleDetails } from "../../hooks/useDismissibleDetails";
 import { ArrowCounterClockwise, Copy } from "@phosphor-icons/react";
 import Button from "antd/es/button";
 /** @typedef {import("./ClassificationLabelWorkbench").ClassificationLabelWorkbenchProps} WorkbenchProps */
@@ -27,17 +28,14 @@ function LabelCode({ label, notify }) {
 }
 /** @param {Pick<Controller,"published"|"setPending"> & Pick<WorkbenchProps,"content"|"busy">} props */
 function LabelRetirementMenu({ busy, content, published, setPending }) {
+  const { detailsProps, summaryProps } = useDismissibleDetails({ menu: true });
   return (
-    <details className="standard-more-menu">
-      <summary>更多</summary>
+    <details {...detailsProps} className="standard-more-menu">
+      <summary {...summaryProps}>更多</summary>
       <button
         type="button"
         disabled={Boolean(busy) || content.labels.length <= 1}
-        onClick={(event) => {
-          const menu = event.currentTarget.closest("details");
-          if (menu) menu.open = false;
-          setPending({ type: "retire" });
-        }}
+        onClick={() => setPending({ type: "retire" })}
       >
         {published ? "停用标签" : "移除新标签"}
       </button>

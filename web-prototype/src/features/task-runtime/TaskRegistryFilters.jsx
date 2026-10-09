@@ -1,3 +1,4 @@
+import { useDismissibleDetails } from "../../hooks/useDismissibleDetails";
 import { MagnifyingGlass, SlidersHorizontal, X } from "@phosphor-icons/react";
 
 /** @typedef {import("./taskMonitorContracts").TaskListState} TaskListState */
@@ -19,9 +20,10 @@ const FILTERS = [
 /** @param {Pick<TaskRegistryFiltersProps, "viewState" | "onViewStateChange" | "owners">} props */
 function RegistrySortMenu({ viewState, onViewStateChange, owners }) {
   const { owner, sort } = viewState;
+  const { detailsProps, summaryProps } = useDismissibleDetails();
   return (
-    <details className="task-registry-filter-menu">
-      <summary>
+    <details {...detailsProps} className="task-registry-filter-menu">
+      <summary {...summaryProps}>
         <SlidersHorizontal size={17} /> 筛选与排序{owner !== "all" ? " · 1" : ""}
       </summary>
       <div className="task-registry-controls">

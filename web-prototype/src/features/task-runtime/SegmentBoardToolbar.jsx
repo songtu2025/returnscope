@@ -1,3 +1,4 @@
+import { useDismissibleDetails } from "../../hooks/useDismissibleDetails";
 import { MagnifyingGlass } from "@phosphor-icons/react";
 
 /** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
@@ -21,9 +22,10 @@ function ParallelismSettings({ task, parallelism }) {
     ownerRunningSegments,
     onParallelism,
   } = parallelism;
+  const { detailsProps, summaryProps } = useDismissibleDetails();
   return (
-    <details className="listing-execution-settings">
-      <summary>执行设置</summary>
+    <details {...detailsProps} className="listing-execution-settings">
+      <summary {...summaryProps}>执行设置</summary>
       <div className="parallelism-control" aria-label="Listing 并行数">
         <span>运行配额</span>
         <b>
