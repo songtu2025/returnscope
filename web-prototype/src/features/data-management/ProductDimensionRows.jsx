@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import useSWR from "swr";
 import { ArrowClockwise, MagnifyingGlass } from "@phosphor-icons/react";
 import Button from "antd/es/button";
 import Input from "antd/es/input";
 import { api } from "../../api";
-import { InlineLoading } from "../../components/SharedUi";
+import { ProductLoadFeedback } from "./ProductLoadFeedback";
 
 import { ProductDimensionEditDialog } from "./ProductDimensionEditDialog";
 import { ProductDimensionTable } from "./ProductDimensionTable";
@@ -22,7 +23,6 @@ function requestError(error) {
 
 /** @param {{dataset: DatasetRecord, notify: (message: string, tone?: string) => void, onChanged: (dataset: DatasetRecord) => void}} props */
 export function ProductDimensionRows({ dataset, notify, onChanged }) {
-  const [data, setData] = useState(/** @type {DatasetRowsPage | null} */ (null));
   const [editing, setEditing] = useState(/** @type {DatasetRow | null} */ (null));
   const [query, setQuery] = useState("");
   const [draftQuery, setDraftQuery] = useState("");
@@ -32,19 +32,33 @@ export function ProductDimensionRows({ dataset, notify, onChanged }) {
   const [saving, setSaving] = useState(false);
   const [changeNote, setChangeNote] = useState("");
   const pageSize = 15;
-  const load = useCallback(
+  const {
+    data = null,
+    error,
+    isLoading,
+    isValidating,
+    mutate,
+  } = useSWR(
+    [
+      "data-assets",
+      "products",
+      "rows",
+      dataset.id,
+      dataset.current_version,
+      { query, page, store, category },
+    ],
     () =>
-      api
-        .datasetRows(dataset.id, query, (page - 1) * pageSize, pageSize, {
-          store,
-          category,
-        })
-        .then(setData),
-    [category, dataset.id, page, query, store],
+      api.datasetRows(dataset.id, query, (page - 1) * pageSize, pageSize, {
+        store,
+        category,
+      }),
+    { revalidateOnFocus: false },
   );
+  const load = () =>
+    mutate((current) => current, { revalidate: true, throwOnError: false });
   useEffect(() => {
-    load().catch((error) => notify(error.message, "error"));
-  }, [load, notify, dataset.current_version]);
+    if (error) notify(requestError(error).message, "error");
+  }, [error, notify]);
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize));
   const pageStart = Math.min(Math.max(1, page - 2), Math.max(1, totalPages - 4));
   const visiblePages = Array.from(
@@ -108,9 +122,14 @@ export function ProductDimensionRows({ dataset, notify, onChanged }) {
         category={category}
         setCategory={setCategory}
         load={load}
-        notify={notify}
+        loading={isValidating}
       />
-      {!data && <InlineLoading label="读取产品信息…" />}
+      <ProductLoadFeedback
+        error={error}
+        loading={isLoading || isValidating}
+        hasData={Boolean(data)}
+        onRetry={load}
+      />
       {data && (
         <ProductDimensionTable
           data={data}
@@ -218,7 +237,7 @@ function ProductDimensionFilters({
   );
 }
 
-/** @param {{data: DatasetRowsPage | null, dataset: DatasetRecord, draftQuery: string, setDraftQuery: (value: string) => void, setPage: (value: number) => void, setQuery: (value: string) => void, store: string, setStore: (value: string) => void, category: string, setCategory: (value: string) => void, load: () => Promise<void>, notify: (message: string, tone?: string) => void}} props */
+/** @param {{data: DatasetRowsPage | null, dataset: DatasetRecord, draftQuery: string, setDraftQuery: (value: string) => void, setPage: (value: number) => void, setQuery: (value: string) => void, store: string, setStore: (value: string) => void, category: string, setCategory: (value: string) => void, load: () => Promise<unknown>, loading: boolean}} props */
 function ProductDimensionToolbar({
   data,
   dataset,
@@ -231,7 +250,7 @@ function ProductDimensionToolbar({
   category,
   setCategory,
   load,
-  notify,
+  loading,
 }) {
   return (
     <div className="dimension-table-toolbar">
@@ -254,7 +273,8 @@ function ProductDimensionToolbar({
         <Button
           autoInsertSpace={false}
           icon={<ArrowClockwise size={15} />}
-          onClick={() => load().catch((error) => notify(error.message, "error"))}
+          disabled={loading}
+          onClick={() => load()}
         >
           刷新
         </Button>

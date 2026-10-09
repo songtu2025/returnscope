@@ -54,7 +54,7 @@ test("旧数据源版本链接不再自动选数", () => {
   expect(notify).toHaveBeenCalledWith(expect.stringContaining("入口已下线"), "error");
 });
 
-test("重新进入任务创建页时保留已选数据和输入", () => {
+test("旧数据源草稿迁移后清除数据版本并保留其他输入", () => {
   writeTaskDraft("user-1", {
     step: 1,
     resumePreflight: false,

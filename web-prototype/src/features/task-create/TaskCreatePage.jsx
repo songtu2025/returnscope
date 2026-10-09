@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import "../../styles/task-flow.css";
 import useSWR from "swr";
 
@@ -41,8 +41,9 @@ export function TaskCreatePage({ route, notify, onNavigate, onChanged, userId })
     );
   }, [notify, templateError]);
 
-  const draft = useMemo(
-    /** @returns {TaskDraft | null} */ () => {
+  const migrationNotified = useRef(false);
+  const { draft, requiresMigration } = useMemo(
+    /** @returns {{draft: TaskDraft | null, requiresMigration: boolean}} */ () => {
       const stored = readTaskDraft(userId);
       if (templateTask) {
         const config = /** @type {Partial<TaskModelPolicy>} */ (
@@ -73,14 +74,18 @@ export function TaskCreatePage({ route, notify, onNavigate, onChanged, userId })
           },
         });
         writeTaskDraft(userId, next);
-        return next;
+        return { draft: next, requiresMigration: false };
       }
-      if (
-        !stored ||
-        (stored.dataEntryMode !== "mysql" && stored.dataEntryMode !== "upload") ||
-        route.query.dataset_version
-      ) {
-        return stored
+      // 迁移判定与草稿同时读取，避免子组件保存后丢失旧来源信息。
+      const requiresMigration = Boolean(
+        route.query.dataset_version ||
+        (stored &&
+          stored.dataEntryMode !== "mysql" &&
+          stored.dataEntryMode !== "upload"),
+      );
+      if (requiresMigration) {
+        /** @type {TaskDraft | null} */
+        const migratedDraft = stored
           ? {
               ...stored,
               step: 1,
@@ -90,25 +95,24 @@ export function TaskCreatePage({ route, notify, onNavigate, onChanged, userId })
               form: { ...stored.form, dataset_version_id: "" },
             }
           : null;
+        return { draft: migratedDraft, requiresMigration };
       }
-      return stored;
+      return { draft: stored, requiresMigration: false };
     },
     [route.query.dataset_version, templateTask, userId],
   );
 
   useEffect(() => {
-    const stored = readTaskDraft(userId);
-    if (
-      route.query.dataset_version ||
-      (stored && stored.dataEntryMode !== "mysql" && stored.dataEntryMode !== "upload")
-    ) {
+    if (!requiresMigration) migrationNotified.current = false;
+    if (requiresMigration && !migrationNotified.current) {
+      migrationNotified.current = true;
       if (draft) writeTaskDraft(userId, draft);
       notify(
         "已有数据源入口已下线，请重新读取数据库或上传文件；其他草稿设置已保留。",
         "error",
       );
     }
-  }, [draft, notify, route.query.dataset_version, userId]);
+  }, [draft, notify, requiresMigration, userId]);
 
   const navigate = useCallback(
     /** @type {import("../../app/navigation").Navigate} */

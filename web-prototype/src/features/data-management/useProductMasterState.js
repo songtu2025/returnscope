@@ -16,12 +16,14 @@ export function useProductMasterState({ notify, focus, routeDetailTab = "" }) {
   const {
     data: datasets = [],
     error: datasetsError,
+    isLoading: datasetsLoading,
     mutate: mutateDatasets,
   } = useSWR(serverStateKeys.productDatasets, () => api.datasets("products"));
   const detailInclude = detailTab === "impact" ? "versions,audit" : "versions";
   const {
     data: selected = null,
     error: detailError,
+    isLoading: detailLoading,
     mutate: mutateSelected,
   } = useSWR(
     selectedId ? serverStateKeys.productDataset(selectedId, detailInclude) : null,
@@ -29,23 +31,26 @@ export function useProductMasterState({ notify, focus, routeDetailTab = "" }) {
       if (!selectedId) return null;
       return api.dataset(selectedId, { include: detailInclude });
     },
-    { keepPreviousData: true },
   );
-
+  const focusedId = focus?.datasetKind === "products" ? focus.id : undefined;
   useEffect(() => {
-    setSelectedId((current) =>
-      datasets.some((item) => item.id === current)
-        ? current
-        : (datasets[0]?.id ?? null),
+    setSelectedId(
+      (current) =>
+        focusedId ??
+        (datasets.some((item) => item.id === current)
+          ? current
+          : (datasets[0]?.id ?? null)),
     );
-  }, [datasets]);
+  }, [datasets, focusedId]);
   useEffect(() => {
     if (["rows", "versions", "impact"].includes(routeDetailTab)) {
       setDetailTab(routeDetailTab);
     } else if (["audit", "references"].includes(routeDetailTab)) {
       setDetailTab("impact");
+    } else {
+      setDetailTab("rows");
     }
-  }, [routeDetailTab]);
+  }, [routeDetailTab, focusedId]);
   useEffect(() => {
     if (!datasetsError) return;
     notify(
@@ -60,14 +65,27 @@ export function useProductMasterState({ notify, focus, routeDetailTab = "" }) {
       "error",
     );
   }, [detailError, notify]);
-  useEffect(() => {
-    if (!focus || focus.datasetKind !== "products") return;
-    setSelectedId(focus.id ?? null);
-    setDetailTab("rows");
-  }, [focus]);
-
   const { dimensionAudit, currentVersionId } = productMasterSelection(selected);
+  const loadState = productMasterLoadState({
+    datasetsLoading,
+    datasets,
+    selectedId,
+    detailLoading,
+    datasetsError,
+    detailError,
+  });
   return {
+    ...loadState,
+    retry: () =>
+      datasetsError
+        ? mutateDatasets((current) => current, {
+            revalidate: true,
+            throwOnError: false,
+          })
+        : mutateSelected((current) => current, {
+            revalidate: true,
+            throwOnError: false,
+          }),
     selectedId,
     setSelectedId,
     dialog,
@@ -80,6 +98,25 @@ export function useProductMasterState({ notify, focus, routeDetailTab = "" }) {
     mutateSelected,
     dimensionAudit,
     currentVersionId,
+  };
+}
+
+/** @param {{datasetsLoading: boolean, datasets: DatasetRecord[], selectedId: string | null, detailLoading: boolean, datasetsError: unknown, detailError: unknown}} state */
+function productMasterLoadState({
+  datasetsLoading,
+  datasets,
+  selectedId,
+  detailLoading,
+  datasetsError,
+  detailError,
+}) {
+  return {
+    loading: Boolean(
+      datasetsLoading ||
+      (datasets.length && !selectedId) ||
+      (selectedId && detailLoading),
+    ),
+    error: datasetsError ?? detailError,
   };
 }
 

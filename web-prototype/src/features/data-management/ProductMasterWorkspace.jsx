@@ -2,6 +2,7 @@ import { Database, UploadSimple } from "@phosphor-icons/react";
 import Button from "antd/es/button";
 import { DatasetUploadDialog } from "../../components/DatasetUploadDialog";
 import { EmptyState, PageHeading } from "../../components/SharedUi";
+import { ProductLoadFeedback } from "./ProductLoadFeedback";
 import { DataAssetTabs } from "./DataAssetTabs";
 import { useProductMasterState } from "./useProductMasterState";
 import { ProductMasterHeader } from "./ProductMasterHeader";
@@ -36,6 +37,7 @@ export function ProductMasterWorkspace(props) {
         action={
           <Button
             type="primary"
+            disabled={state.loading || Boolean(state.error)}
             icon={<UploadSimple size={18} />}
             onClick={() =>
               setDialog(
@@ -59,7 +61,14 @@ export function ProductMasterWorkspace(props) {
         currentVersionId={currentVersionId}
       />{" "}
       <section className="dataset-detail">
-        {!selected && (
+        <ProductLoadFeedback
+          error={state.error}
+          loading={state.loading}
+          hasData={Boolean(selected)}
+          label="正在读取产品信息…"
+          onRetry={state.retry}
+        />
+        {!selected && !state.error && !state.loading && (
           <EmptyState
             icon={Database}
             title="尚未建立产品信息"

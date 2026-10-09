@@ -8,7 +8,7 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
 import { renderWithServerState as render } from "./renderWithServerState";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -41,6 +41,7 @@ const { apiMock } = vi.hoisted(() => ({
     datasets: vi.fn(),
     dataset: vi.fn(),
     datasetRows: vi.fn(),
+    dataVersionReferences: vi.fn(),
     datasetDownloadUrl: vi.fn(),
     completeProductCategories: vi.fn(),
     dataVersions: vi.fn(),
@@ -108,6 +109,12 @@ import { ModelServicePage } from "../src/features/system-settings/ModelServicePa
 import { ModelPreferencePage } from "../src/features/system-settings/ModelPreferencePage";
 import { SystemSettingsPage } from "../src/features/system-settings/SystemSettingsPage";
 import { ProductMasterWorkspace } from "../src/features/data-management/ProductMasterWorkspace";
+import { ProductDimensionRows } from "../src/features/data-management/ProductDimensionRows";
+import { TaskCreatePage } from "../src/features/task-create/TaskCreatePage";
+import {
+  readTaskDraft,
+  writeTaskDraft,
+} from "../src/features/task-create/taskDraftStorage";
 import { ReviewCenter } from "../src/pages/ReviewCenter";
 import { ResultsPage } from "../src/pages/ResultsPage";
 import { TeamPage } from "../src/pages/TeamPage";
@@ -117,6 +124,311 @@ import { serverStateKeys } from "../src/shared/serverState";
 import { readStyles } from "./styleSource";
 
 const systemSettingsStyles = readStyles("src/styles/system-settings.css");
+
+describe("商品页面和旧任务草稿的恢复", () => {
+  const product = {
+    id: "synthetic-products",
+    kind: "products",
+    name: "合成商品信息",
+    current_version: 1,
+    row_count: 1,
+    column_count: 3,
+    schema: ["MSKU", "Listing", "产品名称"],
+    audit: [],
+    versions: [{ id: "synthetic-products-v1", version: 1 }],
+  };
+  const rows = {
+    records: [
+      { _row_index: 0, MSKU: "SYNTHETIC-1", Listing: "DEMO", 产品名称: "合成商品" },
+    ],
+    total: 1,
+    facets: { stores: [], categories: [] },
+  };
+  const props = { notify: vi.fn(), onNavigate: vi.fn(), focus: null };
+
+  beforeEach(() => {
+    apiMock.datasets.mockResolvedValue([product]);
+    apiMock.dataset.mockResolvedValue(product);
+    apiMock.datasetRows.mockResolvedValue(rows);
+    apiMock.datasetDownloadUrl.mockReturnValue("/synthetic-download");
+    apiMock.dataVersionReferences.mockResolvedValue({ items: [], total: 0 });
+  });
+
+  test("真实任务创建子组件保存迁移草稿后仍提示一次", async () => {
+    const userId = "synthetic-draft-user";
+    const notify = vi.fn();
+    writeTaskDraft(userId, {
+      step: 3,
+      resumePreflight: true,
+      dataEntryMode: "existing",
+      selectedDataLabel: "旧数据源",
+      form: { title: "合成草稿任务", dataset_version_id: "retired-version" },
+    });
+    const page = () => (
+      <TaskCreatePage
+        route={{ query: {} }}
+        userId={userId}
+        notify={notify}
+        onNavigate={vi.fn()}
+        onChanged={vi.fn()}
+      />
+    );
+    try {
+      const { rerender } = render(page());
+      await waitFor(() =>
+        expect(readTaskDraft(userId)).toMatchObject({
+          dataEntryMode: "mysql",
+          resumePreflight: false,
+          form: { title: "合成草稿任务", dataset_version_id: "" },
+        }),
+      );
+      expect(notify).toHaveBeenCalledWith(
+        expect.stringContaining("入口已下线"),
+        "error",
+      );
+      rerender(page());
+      expect(
+        notify.mock.calls.filter(([message]) => message.includes("入口已下线")),
+      ).toHaveLength(1);
+    } finally {
+      window.sessionStorage.clear();
+    }
+  });
+
+  test("商品数据源列表失败不能误报无商品且可以重试", async () => {
+    apiMock.datasets.mockRejectedValueOnce(new Error("合成列表故障"));
+    render(<ProductMasterWorkspace {...props} />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("合成列表故障");
+    expect(screen.queryByText("尚未建立产品信息")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "导入产品信息" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "重试" }));
+    expect(await screen.findByText("SYNTHETIC-1")).toBeVisible();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "更新产品信息" })).toBeEnabled();
+  });
+
+  test.each(["mysql", "upload"])(
+    "真实创建页恢复有效 %s 草稿时不提示迁移",
+    async (dataEntryMode) => {
+      const userId = "synthetic-valid-draft-user";
+      const notify = vi.fn();
+      const draft = {
+        step: 1,
+        resumePreflight: false,
+        dataEntryMode,
+        selectedDataLabel: "合成任务输入",
+        form: { title: "合成有效草稿", dataset_version_id: "synthetic-task-v1" },
+      };
+      apiMock.dataVersions.mockResolvedValue([
+        {
+          kind: "returns",
+          usage_scope: "task_input",
+          version_id: "synthetic-task-v1",
+          name: "合成任务输入",
+          version: 1,
+          row_count: 1,
+        },
+      ]);
+      writeTaskDraft(userId, draft);
+      try {
+        render(
+          <TaskCreatePage
+            route={{ query: {} }}
+            userId={userId}
+            notify={notify}
+            onNavigate={vi.fn()}
+            onChanged={vi.fn()}
+          />,
+        );
+        await waitFor(() =>
+          expect(screen.queryByText("正在读取数据与模型配置…")).not.toBeInTheDocument(),
+        );
+        expect(readTaskDraft(userId)).toMatchObject(draft);
+        expect(notify).not.toHaveBeenCalled();
+      } finally {
+        window.sessionStorage.clear();
+      }
+    },
+  );
+
+  test("商品列表加载期间不显示空状态，成功空列表才允许导入", async () => {
+    let resolveList;
+    apiMock.datasets.mockReturnValue(
+      new Promise((resolve) => {
+        resolveList = resolve;
+      }),
+    );
+    render(<ProductMasterWorkspace {...props} />);
+    expect(screen.getByText("正在读取产品信息…")).toBeVisible();
+    expect(screen.queryByText("尚未建立产品信息")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "导入产品信息" })).toBeDisabled();
+    await act(async () => resolveList([]));
+    expect(await screen.findByText("尚未建立产品信息")).toBeVisible();
+    expect(screen.getByRole("button", { name: "导入首个产品信息版本" })).toBeEnabled();
+  });
+
+  test("商品详情失败不能误报无商品且可以重试", async () => {
+    apiMock.dataset.mockRejectedValueOnce(new Error("合成详情故障"));
+    render(<ProductMasterWorkspace {...props} />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("合成详情故障");
+    expect(screen.queryByText("尚未建立产品信息")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "导入产品信息" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "重试" }));
+    expect(await screen.findByText("SYNTHETIC-1")).toBeVisible();
+  });
+
+  test.each(["list", "detail"])(
+    "商品 %s 后台刷新失败保留已读取内容",
+    async (source) => {
+      function RefreshProbe() {
+        const { mutate } = useSWRConfig();
+        const key =
+          source === "list"
+            ? serverStateKeys.productDatasets
+            : serverStateKeys.productDataset(product.id, "versions");
+        return (
+          <button
+            onClick={() =>
+              mutate(key, (current) => current, {
+                revalidate: true,
+                throwOnError: false,
+              })
+            }
+          >
+            模拟后台刷新
+          </button>
+        );
+      }
+      render(
+        <>
+          <ProductMasterWorkspace {...props} />
+          <RefreshProbe />
+        </>,
+      );
+      expect(await screen.findByText("SYNTHETIC-1")).toBeVisible();
+      const request = source === "list" ? apiMock.datasets : apiMock.dataset;
+      request.mockRejectedValueOnce(new Error("合成后台刷新故障"));
+      await userEvent.click(screen.getByRole("button", { name: "模拟后台刷新" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent("刷新失败");
+      expect(screen.getByText("SYNTHETIC-1")).toBeVisible();
+      expect(screen.queryByText("尚未建立产品信息")).not.toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "重试" }));
+      await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    },
+  );
+
+  test("商品行首次失败结束加载且重试恢复", async () => {
+    apiMock.datasetRows.mockRejectedValueOnce(new Error("合成商品行故障"));
+    render(<ProductMasterWorkspace {...props} />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("合成商品行故障");
+    expect(screen.queryByText("读取产品信息…")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "重试" }));
+    expect(await screen.findByText("SYNTHETIC-1")).toBeVisible();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  test("刷新失败保留同条件内容和搜索输入且可以恢复", async () => {
+    const user = userEvent.setup();
+    render(<ProductMasterWorkspace {...props} />);
+    const input = await screen.findByRole("textbox", { name: "搜索产品信息" });
+    await user.type(input, "合成{Enter}");
+    await waitFor(() =>
+      expect(apiMock.datasetRows).toHaveBeenLastCalledWith(product.id, "合成", 0, 15, {
+        store: "",
+        category: "",
+      }),
+    );
+    apiMock.datasetRows.mockRejectedValueOnce(new Error("合成刷新故障"));
+    await user.click(screen.getByRole("button", { name: "刷新" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("刷新失败");
+    expect(screen.getByText("SYNTHETIC-1")).toBeVisible();
+    expect(input).toHaveValue("合成");
+    await user.click(screen.getByRole("button", { name: "重试" }));
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    expect(apiMock.datasetRows).toHaveBeenLastCalledWith(product.id, "合成", 0, 15, {
+      store: "",
+      category: "",
+    });
+  });
+
+  test.each([
+    ["impact", "变更追踪与影响"],
+    ["versions", "版本历史"],
+    ["audit", "变更追踪与影响"],
+    ["references", "变更追踪与影响"],
+  ])("商品定位保留显式标签 %s 和引用上下文", async (tab, label) => {
+    const focus = { kind: "dataset", datasetKind: "products", id: product.id };
+    const pageProps = {
+      ...props,
+      focus,
+      routeDetailTab: tab,
+      routeReferenceVersion: "synthetic-products-v1",
+      routeReferencePage: 2,
+    };
+    const { rerender } = render(<ProductMasterWorkspace {...pageProps} />);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: label })).toHaveClass("active"),
+    );
+    rerender(<ProductMasterWorkspace {...pageProps} focus={{ ...focus }} />);
+    expect(screen.getByRole("button", { name: label })).toHaveClass("active");
+    if (tab !== "versions") {
+      await waitFor(() =>
+        expect(apiMock.dataVersionReferences).toHaveBeenCalledWith(
+          "synthetic-products-v1",
+          { page: 2, page_size: 20 },
+          expect.anything(),
+        ),
+      );
+    }
+  });
+
+  test("普通重渲染不覆盖用户主动选择的商品标签", async () => {
+    const focus = { kind: "dataset", datasetKind: "products", id: product.id };
+    const { rerender } = render(<ProductMasterWorkspace {...props} focus={focus} />);
+    await userEvent.click(await screen.findByRole("button", { name: "版本历史" }));
+    rerender(<ProductMasterWorkspace {...props} focus={{ ...focus }} />);
+    expect(screen.getByRole("button", { name: "版本历史" })).toHaveClass("active");
+  });
+
+  test("筛选切换后不能把旧商品行显示成新结果", async () => {
+    const user = userEvent.setup();
+    render(<ProductMasterWorkspace {...props} />);
+    const input = await screen.findByRole("textbox", { name: "搜索产品信息" });
+    apiMock.datasetRows.mockRejectedValueOnce(new Error("合成筛选故障"));
+    await user.type(input, "新条件{Enter}");
+    await screen.findByRole("alert");
+    expect(screen.queryByText("SYNTHETIC-1")).not.toBeInTheDocument();
+  });
+
+  test("切换商品后迟到的旧请求不能覆盖新商品", async () => {
+    let resolveOld;
+    apiMock.datasetRows.mockImplementation((id) =>
+      id === product.id
+        ? new Promise((resolve) => {
+            resolveOld = resolve;
+          })
+        : Promise.resolve({
+            ...rows,
+            records: [{ ...rows.records[0], MSKU: "NEW-SYNTHETIC" }],
+          }),
+    );
+    const rowProps = { notify: vi.fn(), onChanged: vi.fn() };
+    const { rerender } = render(
+      <ProductDimensionRows dataset={product} {...rowProps} />,
+    );
+    await waitFor(() => expect(resolveOld).toBeDefined());
+    rerender(
+      <ProductDimensionRows
+        dataset={{ ...product, id: "new-synthetic-products" }}
+        {...rowProps}
+      />,
+    );
+    expect(await screen.findByText("NEW-SYNTHETIC")).toBeVisible();
+    await act(async () => resolveOld(rows));
+    expect(screen.getByText("NEW-SYNTHETIC")).toBeVisible();
+    expect(screen.queryByText("SYNTHETIC-1")).not.toBeInTheDocument();
+  });
+});
 
 function SystemSettingsRouteHarness() {
   const { route } = useHashRoute();
