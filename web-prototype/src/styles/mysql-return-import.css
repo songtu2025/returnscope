@@ -233,11 +233,27 @@
   font-weight: 500;
 }
 .mysql-more-filter > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 10px 0;
   color: var(--green);
+}
+.mysql-more-filter > summary span {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.mysql-more-filter > summary svg {
+  flex-shrink: 0;
+}
+.mysql-more-filter[open] > summary svg {
+  transform: rotate(180deg);
+}
+.mysql-more-filter > summary[aria-disabled="true"] {
+  cursor: default;
+  color: var(--muted);
 }
 .mysql-date-popover,
 .mysql-more-filter > label {

@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from "react";
+import { CaretDown } from "@phosphor-icons/react";
 import { datePresets } from "./mysqlReturnDates";
 
 /** @typedef {ReturnType<typeof import("./useMysqlReturnImport").useMysqlReturnImport>} MysqlImportState */
@@ -12,9 +14,34 @@ export function MysqlReturnFilters({
   update,
   invalidDateRange,
 }) {
+  const [skuOpen, setSkuOpen] = useState(false);
+  const skuRef = useRef(/** @type {HTMLDetailsElement | null} */ (null));
+  const dateRef = useRef(/** @type {HTMLDetailsElement | null} */ (null));
+  const inputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
+  const filtersDisabled = busy === "import" || disabled || loading;
+
+  useEffect(() => {
+    if (!skuOpen) return undefined;
+    if (dateRef.current) dateRef.current.open = false;
+    inputRef.current?.focus();
+    /** @param {PointerEvent} event */
+    const closeOutside = (event) => {
+      if (event.target instanceof Node && !skuRef.current?.contains(event.target)) {
+        setSkuOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    return () => document.removeEventListener("pointerdown", closeOutside);
+  }, [skuOpen]);
+
+  const closeSku = () => {
+    setSkuOpen(false);
+    skuRef.current?.querySelector("summary")?.focus();
+  };
+
   return (
     <fieldset
-      disabled={busy === "import" || disabled || loading}
+      disabled={filtersDisabled}
       className="mysql-filter-toolbar"
       aria-label="分析范围"
     >
@@ -40,8 +67,8 @@ export function MysqlReturnFilters({
           />
         )}
       </label>
-      <details className="mysql-date-filter">
-        <summary>
+      <details ref={dateRef} className="mysql-date-filter">
+        <summary onClick={() => setSkuOpen(false)}>
           反馈日期{" "}
           <b>
             {form.date_from || "不限起始"} — {form.date_to || "不限结束"}
@@ -101,16 +128,51 @@ export function MysqlReturnFilters({
           </button>
         </div>
       </details>
-      <details className="mysql-more-filter">
-        <summary>{form.sku ? `商品：${form.sku}` : "指定商品"}</summary>
-        <label>
+      <details
+        ref={skuRef}
+        open={skuOpen}
+        className="mysql-more-filter"
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) setSkuOpen(false);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && skuOpen) {
+            event.preventDefault();
+            event.stopPropagation();
+            closeSku();
+          }
+        }}
+      >
+        <summary
+          aria-expanded={skuOpen}
+          aria-controls="mysql-sku-popover"
+          aria-disabled={filtersDisabled}
+          title={form.sku ? `商品：${form.sku}` : "指定商品"}
+          onClick={(event) => {
+            event.preventDefault();
+            if (!filtersDisabled) setSkuOpen((current) => !current);
+          }}
+        >
+          <span>{form.sku ? `商品：${form.sku}` : "指定商品"}</span>
+          <CaretDown size={14} aria-hidden="true" />
+        </summary>
+        <label id="mysql-sku-popover">
           SKU / MSKU（精确匹配）
           <input
+            ref={inputRef}
             aria-label="SKU / MSKU（精确匹配）"
             aria-describedby="mysql-sku-hint"
             value={form.sku}
             maxLength={200}
             onChange={(event) => update({ sku: event.target.value })}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return;
+              // Enter 只结束商品输入，不提交取数表单；输入法确认时保留浮层。
+              event.preventDefault();
+              if (!event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229) {
+                closeSku();
+              }
+            }}
           />
           <small id="mysql-sku-hint">仅分析指定商品，留空则分析全部商品。</small>
         </label>

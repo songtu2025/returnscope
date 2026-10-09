@@ -128,6 +128,149 @@ test("自动预览后准备分析，筛选修改立即使旧范围失效", async
   await waitFor(() => expect(onDone).toHaveBeenCalledWith({ version_id: "mysql-v1" }));
 });
 
+test("商品浮层点击开关并自动聚焦，重新打开保留筛选", async () => {
+  const user = userEvent.setup();
+  render(<ImportView onDone={vi.fn()} draft={{ sku: "SKU-1" }} />);
+  await screen.findByText("尺码偏小");
+  const trigger = screen.getByText("商品：SKU-1").closest("summary");
+  const input = screen.getByLabelText("SKU / MSKU（精确匹配）");
+  await user.click(trigger);
+  expect(input).toHaveFocus();
+  expect(trigger).toHaveAttribute("aria-expanded", "true");
+  await user.click(trigger);
+  expect(trigger).toHaveAttribute("aria-expanded", "false");
+  await user.click(trigger);
+  expect(input).toHaveValue("SKU-1");
+  expect(input).toHaveFocus();
+  expect(apiMock.previewMysqlReturns).toHaveBeenCalledTimes(1);
+});
+
+test("点击商品浮层外部收起并继续操作外部字段", async () => {
+  const user = userEvent.setup();
+  render(<ImportView onDone={vi.fn()} draft={{ sku: "SKU-1" }} />);
+  await screen.findByText("数据连接与字段 · 已就绪");
+  const trigger = screen.getByText("商品：SKU-1").closest("summary");
+  await user.click(trigger);
+  const store = screen.getByRole("textbox", { name: "店铺/站点", exact: true });
+  await user.click(store);
+  expect(trigger).toHaveAttribute("aria-expanded", "false");
+  expect(store).toHaveFocus();
+  expect(screen.getByLabelText("SKU / MSKU（精确匹配）")).toHaveValue("SKU-1");
+});
+
+test.each(["Escape", "Enter"])(
+  "商品输入按%s收起并返回焦点，不提交分析",
+  async (key) => {
+    const user = userEvent.setup();
+    const onDone = vi.fn();
+    render(<ImportView onDone={onDone} draft={{ sku: "SKU-1" }} />);
+    await screen.findByText("尺码偏小");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "准备分析" })).toBeEnabled(),
+    );
+    const trigger = screen.getByText("商品：SKU-1").closest("summary");
+    await user.click(trigger);
+    await user.keyboard(`{${key}}`);
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(trigger).toHaveFocus();
+    expect(screen.getByLabelText("SKU / MSKU（精确匹配）")).toHaveValue("SKU-1");
+    expect(apiMock.importMysqlReturns).not.toHaveBeenCalled();
+    expect(onDone).not.toHaveBeenCalled();
+  },
+);
+
+test.each([{ isComposing: true }, { keyCode: 229 }])(
+  "输入法确认商品时保留浮层且不提交",
+  async (composition) => {
+    const user = userEvent.setup();
+    render(<ImportView onDone={vi.fn()} />);
+    await screen.findByText("尺码偏小");
+    const trigger = screen.getByText("指定商品").closest("summary");
+    await user.click(trigger);
+    const input = screen.getByLabelText("SKU / MSKU（精确匹配）");
+    expect(fireEvent.keyDown(input, { key: "Enter", ...composition })).toBe(false);
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(input).toHaveFocus();
+    expect(apiMock.importMysqlReturns).not.toHaveBeenCalled();
+  },
+);
+
+test("Tab离开商品浮层时收起且不抢回焦点", async () => {
+  const user = userEvent.setup();
+  render(
+    <>
+      {/* 模拟浏览器原生折叠样式，避免 jsdom 将隐藏字段纳入 Tab 顺序。 */}
+      <style>{"details:not([open]) > :not(summary) { display: none; }"}</style>
+      <ImportView onDone={vi.fn()} />
+    </>,
+  );
+  await screen.findByText("数据连接与字段 · 已就绪");
+  const trigger = screen.getByText("指定商品").closest("summary");
+  await user.click(trigger);
+  await user.tab({ shift: true });
+  expect(trigger).toHaveFocus();
+  expect(trigger).toHaveAttribute("aria-expanded", "true");
+  await user.tab({ shift: true });
+  expect(trigger).toHaveAttribute("aria-expanded", "false");
+  expect(
+    screen.getByText("反馈日期", { exact: true }).closest("summary"),
+  ).toHaveFocus();
+  await user.click(trigger);
+  await user.tab();
+  expect(trigger).toHaveAttribute("aria-expanded", "false");
+  expect(screen.getByText("数据连接与字段 · 已就绪").closest("summary")).toHaveFocus();
+});
+
+test("商品和日期浮层互斥且保留已有条件", async () => {
+  const user = userEvent.setup();
+  render(
+    <ImportView onDone={vi.fn()} draft={{ sku: "SKU-1", date_from: "2026-08-01" }} />,
+  );
+  await screen.findByText("数据连接与字段 · 已就绪");
+  const sku = screen.getByText("商品：SKU-1").closest("summary");
+  const date = screen.getByText("反馈日期", { exact: true }).closest("summary");
+  await user.click(date);
+  expect(screen.getByLabelText("开始日期")).toBeVisible();
+  await user.click(sku);
+  expect(screen.getByLabelText("开始日期")).not.toBeVisible();
+  expect(screen.getByLabelText("SKU / MSKU（精确匹配）")).toHaveFocus();
+  await user.click(date);
+  expect(sku).toHaveAttribute("aria-expanded", "false");
+  expect(screen.getByLabelText("开始日期")).toBeVisible();
+  expect(screen.getByLabelText("开始日期")).toHaveValue("2026-08-01");
+  expect(screen.getByLabelText("SKU / MSKU（精确匹配）")).toHaveValue("SKU-1");
+});
+
+test("清空商品后恢复全部商品预览，关闭浮层不撤销输入", async () => {
+  const user = userEvent.setup();
+  render(<ImportView onDone={vi.fn()} draft={{ sku: "SKU-1" }} />);
+  await screen.findByText("尺码偏小");
+  await user.click(screen.getByText("商品：SKU-1"));
+  await user.clear(screen.getByLabelText("SKU / MSKU（精确匹配）"));
+  await user.keyboard("{Enter}");
+  expect(screen.getByText("指定商品").closest("summary")).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+  await waitFor(() =>
+    expect(apiMock.previewMysqlReturns).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sku: "" }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    ),
+  );
+  expect(apiMock.importMysqlReturns).not.toHaveBeenCalled();
+});
+
+test("筛选禁用时不能展开商品浮层", async () => {
+  const user = userEvent.setup();
+  render(<ImportView onDone={vi.fn()} disabled />);
+  await screen.findByText("数据连接与字段 · 已就绪");
+  const trigger = screen.getByText("指定商品").closest("summary");
+  await user.click(trigger);
+  expect(trigger).toHaveAttribute("aria-expanded", "false");
+  expect(trigger).toHaveAttribute("aria-disabled", "true");
+});
+
 test.each([
   ["近7天", "2024-02-24", "2024-03-01"],
   ["近30天", "2024-02-01", "2024-03-01"],
