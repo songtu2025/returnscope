@@ -185,7 +185,7 @@ function DashboardDetailSources({ data, version }) {
           <span>分类结果版本</span>
           <span>产品信息版本</span>
           <span>记录数</span>
-          <span>质量</span>
+          <span>发布状态</span>
         </div>
         {sources.map((source, index) => (
           <div key={source.result_version_id || source.version_id || index}>
@@ -196,11 +196,7 @@ function DashboardDetailSources({ data, version }) {
               {productCatalogVersionLabel(source)}
             </span>
             <span>{Number(source.record_count || 0).toLocaleString()}</span>
-            <span>
-              {source.quality_status === "ready"
-                ? "可用"
-                : source.quality_status || "未提供"}
-            </span>
+            <span>{source.publish_status === "published" ? "已发布" : "未发布"}</span>
           </div>
         ))}
       </div>

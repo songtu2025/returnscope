@@ -5,6 +5,45 @@
   padding: 0;
   list-style: none;
 }
+
+.dashboard-quality-scope {
+  min-width: 0;
+  margin: 16px 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.dashboard-quality-scope legend {
+  padding: 0 4px;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+.dashboard-quality-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.dashboard-quality-options label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  min-height: 32px;
+  gap: 8px;
+  font-size: 14px;
+}
+.dashboard-quality-options input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--green);
+}
+.dashboard-quality-scope small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
 .dashboard-create-steps li {
   display: flex;
   align-items: center;

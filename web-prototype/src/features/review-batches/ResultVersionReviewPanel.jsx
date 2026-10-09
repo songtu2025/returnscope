@@ -5,10 +5,7 @@ import Input from "antd/es/input";
 
 import { navigateHash } from "../../app/hashRouter";
 import { Modal } from "../../components/SharedUi";
-import {
-  activeReviewBatch,
-  resultActionPolicy,
-} from "../classification-results/resultActionPolicy";
+import { activeReviewBatch } from "../classification-results/resultActionPolicy";
 import { AntdProvider } from "../../components/AntdProvider";
 import { ResultVersionHistory } from "./ResultVersionHistory";
 import { useResultVersionReview } from "./useResultVersionReview";
@@ -29,14 +26,14 @@ function batchId(item) {
 
 /**
  * @param {{latest?: ResultVersion, isLatest: boolean, draft?: ReviewBatch | null,
- *   policyState: string, onSelectVersion: (versionId: string) => void,
+ *   published: boolean, onSelectVersion: (versionId: string) => void,
  *   openBatch: (batch: ReviewBatch) => void, onCreate: () => void}} props
  */
 function ResultVersionActions({
   latest,
   isLatest,
   draft,
-  policyState,
+  published,
   onSelectVersion,
   openBatch,
   onCreate,
@@ -61,16 +58,12 @@ function ResultVersionActions({
         >
           进入复核批次
         </Button>
-      ) : policyState === "needs_review" ? (
+      ) : published ? (
         <Button type="primary" onClick={onCreate}>
           创建复核批次
         </Button>
-      ) : policyState === "unusable" ? (
-        <span className="result-version-ready">当前版本不可用，不能创建复核批次</span>
-      ) : policyState === "review-derived" ? (
-        <span className="result-version-ready">复核派生版本已发布</span>
       ) : (
-        <span className="result-version-ready">当前版本无需复核</span>
+        <span className="result-version-ready">当前版本尚未发布</span>
       )}
     </div>
   );
@@ -191,7 +184,7 @@ export function ResultVersionReviewPanel({
   const latest = history.at(-1);
   const isLatest = !latest || versionId(latest) === result.version_id;
   const draft = activeReviewBatch(state.batches);
-  const policy = resultActionPolicy(result, { activeBatch: draft });
+  const published = result.publish_status === "published";
 
   useEffect(() => {
     if (requestedAction !== "review" || state.loading || state.error) return;
@@ -200,7 +193,7 @@ export function ResultVersionReviewPanel({
       openBatch(draft);
       return;
     }
-    if (policy.state === "needs_review") {
+    if (published) {
       setReason("");
       setCreateOpen(true);
     }
@@ -208,7 +201,7 @@ export function ResultVersionReviewPanel({
     draft,
     onActionHandled,
     openBatch,
-    policy.state,
+    published,
     requestedAction,
     setCreateOpen,
     setReason,
@@ -233,7 +226,7 @@ export function ResultVersionReviewPanel({
             latest={latest}
             isLatest={isLatest}
             draft={draft}
-            policyState={policy.state}
+            published={published}
             onSelectVersion={onSelectVersion}
             openBatch={openBatch}
             onCreate={() => {

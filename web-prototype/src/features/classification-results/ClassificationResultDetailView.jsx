@@ -13,7 +13,7 @@ import { ResultDetailRecords } from "./ResultDetailRecords";
 /** @param {ResultDetailViewProps} props */
 export function ClassificationResultDetailView(props) {
   const presentation = resultDetailPresentation(props);
-  const actions = resultDetailActions({ ...props, policy: presentation.policy });
+  const actions = resultDetailActions(props);
   const context = { ...props, ...presentation, ...actions };
   const {
     route,

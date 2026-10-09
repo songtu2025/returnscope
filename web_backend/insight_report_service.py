@@ -88,7 +88,7 @@ class InsightReportService(_InsightReportCreation, _InsightReportExecution):
         model = self._resolve_model(model_id, reasoning_effort)
         plan = self.dashboard_service.preflight(result_version_ids, filters)
         if int(plan.get("summary", {}).get("record_count") or 0) <= 0:
-            raise ValueError("当前范围没有可用于生成报告的已审核记录")
+            raise ValueError("所选统计范围没有记录，请调整范围")
         listings = sorted(
             {
                 str(source.get("listing"))

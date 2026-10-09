@@ -1,16 +1,15 @@
 import Button from "antd/es/button";
-import { ChartBar, DownloadSimple, ListChecks } from "@phosphor-icons/react";
+import { ChartBar, DownloadSimple } from "@phosphor-icons/react";
 import { api } from "../../api";
 import { formatTime } from "../../lib/presentation";
 import { PUBLISH_LABELS } from "./classificationResultConstants";
 
 /** @param {import("./classificationResultDetailContracts").ResultDetailContext} context */
 export function ResultDetailHeader(context) {
-  const { result, policy } = context;
+  const { result } = context;
   return (
     <header className="result-detail-header">
       <div>
-        <span className={`result-quality-badge ${policy.state}`}>{policy.label}</span>
         <span className="result-publish-note">
           版本发布：
           {PUBLISH_LABELS[result.publish_status] ?? result.publish_status ?? "未提供"}
@@ -31,34 +30,18 @@ export function ResultDetailHeader(context) {
 
 /** @param {import("./classificationResultDetailContracts").ResultDetailContext} context */
 function ResultDetailActions(context) {
-  const { result, createDashboardFromResult, policy, runPrimaryAction } = context;
+  const { result, policy, runPrimaryAction } = context;
   return (
     <div className="result-detail-actions">
       <Button
         type="primary"
         disabled={policy.primary.disabled}
         title={policy.primary.disabled ? policy.blockingReason : ""}
-        icon={
-          policy.primary.kind === "create-dashboard" ? (
-            <ChartBar size={18} />
-          ) : (
-            <ListChecks size={18} />
-          )
-        }
+        icon={<ChartBar size={18} />}
         onClick={runPrimaryAction}
       >
         {policy.primary.label}
       </Button>
-      {policy.secondary?.kind === "create-dashboard" && (
-        <Button
-          disabled={policy.secondary.disabled}
-          title={policy.secondary.disabled ? policy.blockingReason : ""}
-          icon={<ChartBar size={18} />}
-          onClick={createDashboardFromResult}
-        >
-          {policy.secondary.label}
-        </Button>
-      )}
       <a
         className="secondary-button"
         href={api.classificationResultDownloadUrl(result.version_id)}

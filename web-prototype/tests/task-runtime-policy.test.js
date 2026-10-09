@@ -7,7 +7,7 @@ import {
   taskSummary,
 } from "../src/features/task-runtime/taskRegistryPolicy";
 
-test("执行完成不等于结果可用，发布失败和复核分别统计", () => {
+test("按发布情况统计结果，发布失败仍提示需处理", () => {
   const summary = taskSummary({
     status: "paused",
     metrics: { review_count: 0 },
@@ -36,11 +36,8 @@ test("执行完成不等于结果可用，发布失败和复核分别统计", ()
   expect(summary).toMatchObject({
     total: 7,
     generated: 4,
-    ready: 1,
-    reviews: 1,
-    unusable: 1,
-    unknown: 1,
-    issues: 3,
+    issues: 1,
+    resultDescription: "3 个已发布 · 1 个旧结果",
     remaining: 3,
   });
 });
@@ -103,7 +100,7 @@ test.each([
   },
 );
 
-test("质量说明按可用、需复核、不可用、未知排序，旧结果仍计入生成数", () => {
+test("不因历史版本质量判定提示异常，旧结果仍计入生成数", () => {
   const segments = ["ready", "review_required", "unusable", "unknown"].map(
     (result_quality_status) => ({
       agent_key: "synthetic",
@@ -119,12 +116,25 @@ test("质量说明按可用、需复核、不可用、未知排序，旧结果�
   });
   expect(taskSummary({ status: "completed", segments })).toMatchObject({
     generated: 5,
-    ready: 1,
-    reviews: 1,
-    unusable: 1,
-    unknown: 2,
-    resultDescription: "1 个可用 · 1 个需复核 · 1 个不可用 · 2 个质量未确认",
+    needsAttention: false,
+    issues: 0,
+    resultDescription: "4 个已发布 · 1 个旧结果",
   });
+});
+
+test("发布完成仍保留真实系统异常提示", () => {
+  expect(
+    taskSummary({
+      status: "completed",
+      segments: [
+        {
+          status: "completed",
+          result_publish_status: "published",
+          system_failure_count: 2,
+        },
+      ],
+    }),
+  ).toMatchObject({ needsAttention: true, issues: 1 });
 });
 
 test("归档分组与最终状态选择保持独立，搜索覆盖原有六字段", () => {

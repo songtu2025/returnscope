@@ -115,7 +115,11 @@ def version_list_filters(
     quality_status = filters.get("quality_status")
     if quality_status:
         validate_quality_status(quality_status)
-        where.append("v.quality_status = ?")
+        where.append(
+            "EXISTS (SELECT 1 FROM classification_result_records quality_record "
+            "WHERE quality_record.result_version_id = v.id "
+            "AND quality_record.quality_status = ?)"
+        )
         params.append(quality_status)
     return " AND ".join(where), params
 

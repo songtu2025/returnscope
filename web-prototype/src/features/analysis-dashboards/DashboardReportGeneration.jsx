@@ -32,6 +32,11 @@ export function DashboardReportGeneration({
       pendingRecords={Number(reportSummary.pending_review_record_count || 0)}
       excludedRecords={Number(reportSummary.excluded_record_count || 0)}
       analysisContext={analysisContext}
+      scopeStatuses={
+        Array.isArray(selectedVersion?.filters?.quality_status)
+          ? selectedVersion.filters.quality_status
+          : ["ready"]
+      }
     />
   );
 }

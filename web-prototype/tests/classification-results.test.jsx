@@ -420,17 +420,17 @@ test("结果池使用服务端筛选并展示多产品名称", async () => {
   expect(await screen.findByText("产品表权威名称")).toBeVisible();
   expect(screen.getByText("另有 1 个产品名称")).toBeVisible();
   const filters = screen.getByRole("region", { name: "分类结果筛选" });
-  for (const label of ["关键词", "店铺/站点", "Listing", "结果质量"]) {
+  for (const label of ["关键词", "店铺/站点", "Listing", "记录情况"]) {
     expect(within(filters).getByText(label, { selector: "span" })).toBeVisible();
   }
 
   await user.type(screen.getByRole("textbox", { name: "搜索分类结果" }), "水鞋");
-  const qualitySelect = screen.getByRole("combobox", { name: "结果质量" });
+  const qualitySelect = screen.getByRole("combobox", { name: "记录情况" });
   fireEvent.mouseDown(
     qualitySelect.closest(".ant-select").querySelector(".ant-select-content"),
   );
   await user.click(
-    await screen.findByText("需复核", {
+    await screen.findByText("含待复核记录", {
       selector: ".ant-select-item-option-content",
     }),
   );
@@ -505,14 +505,9 @@ test("看板选择允许需复核版本并明确按可用范围统计", async ()
   const blockedCheckbox = screen.getByRole("checkbox", {
     name: "选择 BLOCKED 结果 v1",
   });
-  expect(blockedCheckbox).toBeDisabled();
-  const blockedSelectionCell = blockedCheckbox.closest("label.result-selection-cell");
-  expect(blockedCheckbox.parentElement).toHaveAttribute(
-    "title",
-    "分类结果不可用于看板",
-  );
-  expect(within(blockedSelectionCell).getByText("分类结果不可用于看板")).toBeVisible();
-  expect(screen.getByText(/自动排除待复核和已排除记录/)).toBeVisible();
+  expect(blockedCheckbox).toBeEnabled();
+  expect(screen.queryByText("分类结果不可用于看板")).not.toBeInTheDocument();
+  expect(screen.getByText(/统计范围可在确认时调整/)).toBeVisible();
 });
 
 test("从分类结果快速确认并创建 AI 洞察报告任务", async () => {
@@ -537,7 +532,7 @@ test("从分类结果快速确认并创建 AI 洞察报告任务", async () => {
   expect(within(dialog).getByLabelText("模型")).toHaveDisplayValue(
     "GPT-5.6 · OpenAI 主接入",
   );
-  expect(within(dialog).getByText(/待复核 1 条、已排除 1 条/)).toBeVisible();
+  expect(within(dialog).getByText(/待处理 1 条.*已忽略 1 条/)).toBeVisible();
   expect(within(dialog).getByRole("button", { name: "高" })).toHaveAttribute(
     "aria-pressed",
     "true",
@@ -918,10 +913,8 @@ test("需复核且没有问题标签时以复核为主操作并说明订单现�
 
   render(<ClassificationResultsPage notify={vi.fn()} />);
 
-  expect(
-    await screen.findByText("需复核", { selector: ".result-quality-badge" }),
-  ).toBeVisible();
-  expect(screen.getByRole("button", { name: "创建复核批次" })).toBeEnabled();
+  expect(await screen.findByRole("heading", { name: "SR001 分类结果" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "创建分析看板" })).toBeEnabled();
   expect(
     screen.queryByRole("button", { name: "基于此版本创建看板" }),
   ).not.toBeInTheDocument();
@@ -939,7 +932,8 @@ test("需复核且没有问题标签时以复核为主操作并说明订单现�
   ).toBeVisible();
   expect(within(problemColumn).queryByText("暂无数据")).not.toBeInTheDocument();
 
-  await userEvent.click(screen.getByRole("button", { name: "创建复核批次" }));
+  await userEvent.click(screen.getByRole("button", { name: "版本历史与复核" }));
+  await userEvent.click(await screen.findByRole("button", { name: "创建复核批次" }));
   expect(
     await screen.findByRole("heading", {
       name: "基于分类结果 v1 创建批次",
@@ -977,9 +971,7 @@ test("真正没有记录时问题栏保持通用空态", async () => {
 
   render(<ClassificationResultsPage notify={vi.fn()} />);
 
-  expect(
-    await screen.findByText("可用", { selector: ".result-quality-badge" }),
-  ).toBeVisible();
+  expect(await screen.findByRole("heading", { name: "SR001 分类结果" })).toBeVisible();
   const problemColumn = screen.getByText("问题").closest(".drilldown-column");
   expect(within(problemColumn).getByText("暂无数据")).toBeVisible();
   expect(within(problemColumn).queryByText("尚未形成问题标签")).not.toBeInTheDocument();
@@ -1000,8 +992,11 @@ test("复核派生结果显示明确状态、主操作和看板次操作", async
 
   render(<ClassificationResultsPage notify={vi.fn()} userId="user-1" />);
 
-  expect(await screen.findByText("复核已发布")).toBeVisible();
-  expect(screen.getByRole("button", { name: "查看衍生版本" })).toBeEnabled();
+  expect(await screen.findByRole("heading", { name: "SR001 分类结果" })).toBeVisible();
+  expect(screen.queryByText("复核已发布")).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "查看衍生版本" }),
+  ).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "创建分析看板" })).toBeEnabled();
 });
 

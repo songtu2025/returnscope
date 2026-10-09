@@ -14,7 +14,7 @@ from web_backend.result_state import result_delivery_state
     [
         ("ready", "ready", True, None),
         ("review_required", "needs_review", True, None),
-        ("unusable", "unusable", False, "unusable"),
+        ("unusable", "unusable", True, None),
     ],
 )
 def test_result_list_detail_and_history_share_delivery_state(

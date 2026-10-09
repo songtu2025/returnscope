@@ -87,6 +87,10 @@ def _prepare_scope(
         and not clean_date_from
         and not clean_date_to
         and not {key for key in context["filters"] if key != "quality_status"}
+        and (
+            not context["filters"].get("quality_status")
+            or context["filters"]["quality_status"] == ["ready"]
+        )
         and context["counting_basis"] != "feedback_group"
     )
     return PreparedInsightScope(

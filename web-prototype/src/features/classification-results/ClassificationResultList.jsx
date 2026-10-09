@@ -62,7 +62,9 @@ export function ClassificationResultList(props) {
                 ? "正在为现有看板选择新版本数据"
                 : "当前勾选结果可用于分析看板或 AI 洞察"}
             </b>
-            <span>“需复核”版本也可加入；看板会自动排除待复核和已排除记录。</span>
+            <span>
+              已发布版本均可选择；默认仅纳入可用记录，统计范围可在确认时调整。
+            </span>
           </div>
           <button className="text-button" onClick={() => clearSelection(true)}>
             取消选择

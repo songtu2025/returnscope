@@ -28,7 +28,7 @@ def lifecycle(tmp_path, monkeypatch):
         patch.setattr(test_insight_reports, "_seed_result_context", lambda _: context)
         patch.setattr(test_insight_reports, "_publish", lambda _: base)
         _, dashboard, reports, captured = test_insight_reports._service_context(
-            tmp_path
+            tmp_path, filters={"quality_status": ["review_required"]}
         )
     reviews = ReviewService(context.database)
     batch = reviews.create_batch(str(base["version_id"]), "user-1", "验证跨模块复核")
@@ -119,11 +119,11 @@ def test_review_publication_reaches_dashboard_and_report_without_snapshot_drift(
     old_records = lifecycle.results.records(base_id)
     old_report = _complete_report(lifecycle.dashboard, lifecycle.reports)
     _assert_report_source(old_report, lifecycle.dashboard, base_id)
-    assert old_version["summary"]["record_count"] == 0
+    assert old_version["summary"]["record_count"] == 2
+    assert old_version["filters"] == {"quality_status": ["review_required"]}
     assert old_version["summary"]["pending_review_record_count"] == 2
-    assert [issue["id"] for issue in old_report["content"]["issues"]] == [
-        "issue.scope.coverage"
-    ]
+    assert "reason.FIT_TOO_SMALL_U1" in old_report["evidence"]["catalog"]
+    assert "reason.FIT_TOO_LARGE_U1" not in old_report["evidence"]["catalog"]
 
     derived = _publish_correction(lifecycle, item_adjustment)
     current = _advance_dashboard(lifecycle, derived)
@@ -323,7 +323,7 @@ def test_failed_report_retry_uses_original_scope_after_review_publication(
     lifecycle.reports.run(retried["id"])
     completed = lifecycle.reports.get(retried["id"])
     _assert_report_source(completed, lifecycle.dashboard, lifecycle.base["version_id"])
-    assert completed["content"]["issues"][0]["id"] == "issue.scope.coverage"
+    assert completed["content"]["issues"][0]["id"] == "issue.reason.FIT_TOO_SMALL_U1"
     assert completed["evidence"] == failed["evidence"]
     assert completed["version_no"] == 1
     latest = _complete_report(current, lifecycle.reports)

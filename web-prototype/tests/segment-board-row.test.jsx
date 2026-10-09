@@ -108,7 +108,7 @@ test("已发布结果使用分类版本下载，旧结果使用原任务片段�
     "href",
     "/api/tasks/synthetic-task/segments/synthetic-key/download",
   );
-  expect(screen.getByText("旧结果 · 质量未确认")).toBeVisible();
+  expect(screen.getByText("旧结果")).toBeVisible();
 });
 
 test("结果生成失败显示短错误，并等待重试返回后释放操作标记", async () => {

@@ -95,7 +95,13 @@ export function useDashboardInsightCreation(context) {
   /** @param {import("react").FormEvent<HTMLFormElement>} event */
   const submitInsight = async (event) => {
     event.preventDefault();
-    if (submissionRef.current || !insightForm.modelId || state.plan?.ready !== true)
+    if (
+      submissionRef.current ||
+      !insightForm.modelId ||
+      state.loading ||
+      state.error ||
+      state.plan?.ready !== true
+    )
       return;
     submissionRef.current = true;
     setInsightState((current) => ({ ...current, submitting: true, error: "" }));

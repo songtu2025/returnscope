@@ -142,7 +142,7 @@ class ParentResultMixin:
                 return "分析完成", f"分析完成，{review_count} 条结果需要人工复核"
             return "分析完成", "分析完成，无需人工复核"
         if status == "partial":
-            return "部分完成", "已有可交付结果，仍有片段待处理"
+            return "部分完成", "已有分类结果，仍有片段待处理"
         if status == "blocked":
             return "等待处理", "当前没有可执行片段，请处理失败或未知品类"
         if status == "running":

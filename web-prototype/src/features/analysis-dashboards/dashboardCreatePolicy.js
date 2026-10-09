@@ -65,13 +65,13 @@ function plannedSources(plan, selection, ids) {
 export function dashboardPlanStep(plan) {
   return (plan.conflicts ?? []).length ? "conflicts" : "confirm";
 }
-/** @param {{loading:boolean,error:string}} state @param {import("./dashboardCreateContracts").DashboardCreateRoute} route @param {DashboardSelection | null} selection @param {string[]} ids */
+/** @param {{loading:boolean,error:string,plan?: DashboardPlan | null}} state @param {import("./dashboardCreateContracts").DashboardCreateRoute} route @param {DashboardSelection | null} selection @param {string[]} ids */
 export function dashboardCreationStage(state, route, selection, ids) {
   const ready = !state.loading && !state.error;
   return {
     hasSelection: Boolean(selection) && ids.length > 0,
     showConflicts: ready && route.step === "conflicts",
-    showConfirmation: ready && route.step === "confirm",
+    showConfirmation: (ready || Boolean(state.plan)) && route.step === "confirm",
   };
 }
 

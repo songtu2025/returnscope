@@ -54,9 +54,26 @@ export function useDashboardCreation({ route, updateRoute, notify, userId }) {
   const generationRef = useRef(0);
   /** @type {import("react").RefObject<AbortController | null>} */
   const controllerRef = useRef(null);
+  const qualityStatuses = Array.isArray(selection?.filters?.quality_status)
+    ? selection.filters.quality_status
+    : ["ready"];
+  /** @param {string[]} statuses */
+  const setQualityStatuses = (statuses) => {
+    generationRef.current += 1;
+    controllerRef.current?.abort();
+    const next = updateDashboardSelection(userId, route.selectionToken, (current) => ({
+      ...current,
+      filters: { ...current.filters, quality_status: statuses },
+    }));
+    setSelection(next);
+    setState((current) => ({ ...current, loading: true, error: "" }));
+  };
 
   useEffect(() => {
-    setSelection(readDashboardSelection(userId, route.selectionToken));
+    const next = readDashboardSelection(userId, route.selectionToken);
+    setSelection((current) =>
+      JSON.stringify(current) === JSON.stringify(next) ? current : next,
+    );
   }, [route.selectionToken, userId]);
 
   const resultVersionIds = useMemo(() => {
@@ -104,22 +121,21 @@ export function useDashboardCreation({ route, updateRoute, notify, userId }) {
     [selection?.filters, updateRoute],
   );
 
-  const needsPreflight = route.step === "check" || !state.plan;
   useEffect(() => {
     if (resultVersionIds.length === 0) {
       setState({ loading: false, error: "", plan: null });
       return undefined;
     }
-    if (needsPreflight) runPreflight(resultVersionIds, true);
+    runPreflight(resultVersionIds, true);
     return () => {
       generationRef.current += 1;
       controllerRef.current?.abort();
     };
-  }, [resultVersionIds, needsPreflight, runPreflight]);
+  }, [resultVersionIds, runPreflight]);
 
   const { conflicts, blockers, warnings, currentSources, summary, isVersionCreation } =
     dashboardCreationPlan(state.plan, selection, resultVersionIds);
-  const resolveConflicts = async () => {
+  const resolveConflicts = () => {
     if (conflicts.some((conflict, index) => !choices[conflictId(conflict, index)])) {
       setConfirmationMessage("请为每个冲突 Listing 选择一个结果版本。");
       return;
@@ -139,13 +155,8 @@ export function useDashboardCreation({ route, updateRoute, notify, userId }) {
         resolved_result_version_ids: [...new Set(resolvedIds)],
       }),
     );
-    const plan = await runPreflight(next.resolved_result_version_ids ?? [], false);
     setSelection(next);
-    if (plan && (plan.conflicts ?? []).length === 0) {
-      updateRoute({ step: "confirm" });
-    } else if (plan) {
-      setConfirmationMessage("服务端仍检测到冲突，请重新选择。");
-    }
+    updateRoute({ step: "check" });
   };
 
   /** @param {string | undefined} targetDashboardId */
@@ -175,6 +186,7 @@ export function useDashboardCreation({ route, updateRoute, notify, userId }) {
   };
   const submit = async () => {
     if (!selection) return;
+    if (state.loading || state.error || state.plan?.ready !== true) return;
     if (!hasDashboardCreationReason(form, isVersionCreation)) return;
     const targetDashboardId = selection.target_dashboard_id;
     setSubmitting(true);
@@ -213,6 +225,8 @@ export function useDashboardCreation({ route, updateRoute, notify, userId }) {
     setChoices,
     form,
     setForm,
+    qualityStatuses,
+    setQualityStatuses,
     submitting,
     confirmationMessage,
     resultVersionIds,

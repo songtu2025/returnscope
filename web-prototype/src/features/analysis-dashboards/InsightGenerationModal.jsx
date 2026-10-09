@@ -23,6 +23,8 @@ import { analysisContextTerms } from "./analysisContextPresentation";
  * @property {number} pendingRecords
  * @property {number} excludedRecords
  * @property {string} analysisContext
+ * @property {import("react").ReactNode} [scopeControl]
+ * @property {string[]} [scopeStatuses]
  */
 
 /** @param {InsightGenerationModalProps} props */
@@ -42,6 +44,8 @@ export function InsightGenerationModal({
   pendingRecords,
   excludedRecords,
   analysisContext,
+  scopeControl,
+  scopeStatuses = ["ready"],
 }) {
   const terms = analysisContextTerms(analysisContext);
   const selectedModel = models.find((model) => model.id === form.modelId);
@@ -74,6 +78,7 @@ export function InsightGenerationModal({
         <InlineLoading label="正在核对数据范围与可用模型…" />
       ) : (
         <form className="insight-generation-form" onSubmit={onSubmit}>
+          {scopeControl}
           <div className="insight-generation-fields">
             <span className="insight-field-label">数据范围</span>
             <div className="insight-field-value">
@@ -84,13 +89,17 @@ export function InsightGenerationModal({
               </small>
             </div>
 
-            <span className="insight-field-label">排除数据</span>
+            <span className="insight-field-label">记录状态</span>
             <div className="insight-field-value">
               <b>
-                待复核 {pendingRecords.toLocaleString()} 条、已排除{" "}
+                待处理 {pendingRecords.toLocaleString()} 条（含待复核和不可用）、已忽略{" "}
                 {excludedRecords.toLocaleString()} 条
               </b>
-              <small>不会参与本次报告生成</small>
+              <small>
+                {scopeStatuses.length === 1 && scopeStatuses[0] === "ready"
+                  ? "本次仅纳入可用记录"
+                  : "按你选择的记录状态纳入；记录状态保持原样"}
+              </small>
             </div>
 
             <label className="insight-field-label" htmlFor="insight-model">
@@ -156,7 +165,7 @@ export function InsightGenerationModal({
           {!error && includedRecords <= 0 && (
             <div className="insight-generation-error" role="alert">
               <WarningCircle size={17} />
-              <span>当前范围没有可用于生成报告的已审核记录。</span>
+              <span>当前所选范围没有记录，请调整统计范围。</span>
             </div>
           )}
 

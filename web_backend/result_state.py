@@ -29,13 +29,6 @@ def result_delivery_state(
         }
         dashboard_blockers.append(reason)
 
-    if delivery_status == "unusable":
-        reason = {
-            "code": "unusable",
-            "message": "分类结果不可交付",
-        }
-        dashboard_blockers.append(reason)
-
     return {
         "delivery_status": delivery_status,
         "publish_origin": (

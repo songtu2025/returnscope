@@ -119,9 +119,10 @@ function DashboardCoverageNote({ summary }) {
         {summary.counting_basis === "feedback_group" ? "个反馈组" : "条记录"}
       </b>
       <span>
-        待复核 {Number(summary.pending_review_record_count || 0).toLocaleString()}{" "}
+        待处理 {Number(summary.pending_review_record_count || 0).toLocaleString()}{" "}
         {summary.counting_basis === "feedback_group" ? "个反馈组" : "条"}
-        ；已排除 {Number(summary.excluded_record_count || 0).toLocaleString()}{" "}
+        （含待复核和不可用）；已忽略{" "}
+        {Number(summary.excluded_record_count || 0).toLocaleString()}{" "}
         {summary.counting_basis === "feedback_group" ? "个反馈组" : "条"}。
       </span>
     </div>
@@ -141,6 +142,8 @@ function DashboardCreateSubmit({
       className="primary-button dashboard-submit-button"
       disabled={
         submitting ||
+        state.loading ||
+        Boolean(state.error) ||
         blockers.length > 0 ||
         state.plan?.ready !== true ||
         !hasDashboardCreationReason(form, isVersionCreation) ||

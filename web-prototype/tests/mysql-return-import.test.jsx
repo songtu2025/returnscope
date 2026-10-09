@@ -213,7 +213,9 @@ test("Tab离开商品浮层时收起且不抢回焦点", async () => {
   await user.tab({ shift: true });
   expect(trigger).toHaveAttribute("aria-expanded", "false");
   expect(
-    screen.getByText("反馈日期", { exact: true }).closest("summary"),
+    within(trigger.closest("fieldset"))
+      .getByText("反馈日期", { exact: true })
+      .closest("summary"),
   ).toHaveFocus();
   await user.click(trigger);
   await user.tab();

@@ -5,10 +5,19 @@ import {
   resultSourceVersionNumber,
 } from "./dashboardFields";
 import { itemVersionId } from "./dashboardCreatePolicy";
+import { DashboardQualityScope } from "./DashboardQualityScope";
 
-/** @param {import("./dashboardCreateContracts").DashboardCreateContext} context */
+/** @param {import("./dashboardCreateContracts").DashboardCreateContext & {showQualityScope?: boolean}} context */
 export function DashboardPlanSources(context) {
-  const { blockers, warnings, currentSources } = context;
+  const {
+    blockers,
+    warnings,
+    currentSources,
+    qualityStatuses,
+    setQualityStatuses,
+    submitting,
+    showQualityScope = true,
+  } = context;
   return (
     <div className="dashboard-confirm-main">
       <header>
@@ -18,6 +27,13 @@ export function DashboardPlanSources(context) {
           <span>请核对每个 Listing 使用的结果版本，再生成不可变数据集。</span>
         </div>
       </header>
+      {showQualityScope && (
+        <DashboardQualityScope
+          statuses={qualityStatuses}
+          onChange={setQualityStatuses}
+          disabled={submitting}
+        />
+      )}
       {blockers.length > 0 && (
         <div className="dashboard-blockers" role="alert">
           <b>仍有阻断项</b>
@@ -30,7 +46,7 @@ export function DashboardPlanSources(context) {
       )}
       {warnings.length > 0 && (
         <div className="dashboard-warnings" role="status">
-          <b>当前看板将按可用范围生成</b>
+          <b>请核对统计范围</b>
           {warnings.map((warning, index) => (
             <span key={warning.type || index}>
               {warning.message || String(warning)}

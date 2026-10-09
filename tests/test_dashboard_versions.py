@@ -101,8 +101,8 @@ def test_preflight_hash_is_stable_and_blocks_invalid_sources(tmp_path: Path) -> 
     changed = service.preflight([version_id], {})
     assert changed["ready"] is True
     assert changed["blockers"] == []
-    assert changed["warnings"][0]["type"] == "quality_review_pending"
-    assert changed["filters"] == {"quality_status": ["ready"]}
+    assert changed["warnings"] == []
+    assert changed["filters"] == {}
     assert (
         changed["plan_hash"]
         != service.preflight(
@@ -260,15 +260,125 @@ def test_preflight_blocks_duplicate_listing_and_review_required(
     }
     review_version = _publish(review_context)
     partial = service.preflight([str(review_version["version_id"])], {})
-    assert partial["ready"] is True
-    assert partial["blockers"] == []
-    assert partial["warnings"][0]["type"] == "quality_review_pending"
+    assert partial["ready"] is False
+    assert partial["blockers"] == [
+        {"type": "empty_scope", "message": "所选统计范围没有记录，请调整范围"}
+    ]
+    assert partial["warnings"][0]["type"] == "quality_scope_limited"
     assert partial["filters"] == {"quality_status": ["ready"]}
     assert partial["summary"]["record_count"] == 0
     assert partial["summary"]["pending_review_record_count"] == 2
     assert partial["summary"]["comment_count"] == 0
     assert partial["summary"]["total_comment_count"] == 2
     assert partial["summary"]["pending_review_comment_count"] == 2
+
+
+@pytest.mark.parametrize("status", ["review_required", "unusable", "excluded"])
+def test_explicit_record_scope_can_create_and_matches_insight_data(
+    tmp_path: Path,
+    status: str,
+) -> None:
+    context, version, service = _ready_result(tmp_path)
+    source_id = str(version["version_id"])
+    with context.database.transaction() as connection:
+        connection.execute(
+            "UPDATE classification_result_versions SET quality_status = 'unusable' "
+            "WHERE id = ?",
+            (source_id,),
+        )
+        connection.execute(
+            "UPDATE classification_result_records SET quality_status = ? "
+            "WHERE result_version_id = ? AND order_id = 'ORDER-OTHER'",
+            (status, source_id),
+        )
+    default_plan, default_dashboard = _create_dashboard(service, source_id)
+    assert default_plan["ready"] is True
+    assert default_plan["filters"] == {"quality_status": ["ready"]}
+    assert default_plan["summary"]["record_count"] == 1
+    filters = {"quality_status": ["ready", status]}
+    plan, dashboard = _create_dashboard(service, source_id, filters)
+    dashboard_id = str(dashboard["id"])
+    version_id = str(dashboard["version"]["version_id"])
+    assert plan["ready"] is True
+    assert plan["plan_hash"] != default_plan["plan_hash"]
+    assert dashboard["version"]["filters"] == plan["filters"]
+    assert plan["summary"]["record_count"] == 2
+    records = service.records(dashboard_id, version_id)
+    assert records["total"] == 3
+    assert {record["quality_status"] for record in records["items"]} == {
+        "ready",
+        status,
+    }
+    for report_mode in (False, True):
+        insights = service.insights(dashboard_id, version_id, report_mode=report_mode)
+        assert insights["summary"]["record_count"] == 2
+        assert insights["total_record_count"] == 2
+        assert insights["reasons"][0]["record_count"] == 2
+    old = service.get(str(default_dashboard["id"]))
+    assert old["version"]["summary"]["record_count"] == 1
+    assert old["version"]["filters"] == {"quality_status": ["ready"]}
+
+
+def test_api_allows_unusable_records_without_fabricating_classifications(
+    tmp_path: Path,
+) -> None:
+    context = _seed_result_context(tmp_path)
+    result = context.results[context.key]
+    context.results = {
+        context.key: result.model_copy(
+            update={
+                "status": ProcessingStatus.MODEL_ERROR,
+                "semantic_units": [],
+                "problem_label_codes": [],
+                "primary_label_codes": [],
+                "review_reasons": ["合成系统异常"],
+            }
+        )
+    }
+    source_id = str(_publish(context)["version_id"])
+    service = DashboardService(context.database)
+    app = FastAPI()
+    app.include_router(create_dashboard_router(service, lambda: {"id": "user-1"}))
+    client = TestClient(app)
+    common = {"result_version_ids": [source_id], "filters": {}}
+    default_plan = client.post("/api/dashboard-plans/preflight", json=common).json()
+    assert default_plan["ready"] is False
+    assert default_plan["blockers"][0]["type"] == "empty_scope"
+    request = {
+        **common,
+        "name": "自主选择范围",
+        "description": "",
+        "reason": "接口验收",
+        "plan_hash": default_plan["plan_hash"],
+    }
+    blocked = client.post("/api/analysis-dashboards", json=request)
+    assert blocked.status_code == 409
+    assert "存在阻断" in blocked.json()["detail"]
+    filters = {"quality_status": ["unusable"]}
+    plan = client.post(
+        "/api/dashboard-plans/preflight", json={**common, "filters": filters}
+    ).json()
+    assert plan["ready"] is True
+    stale = client.post(
+        "/api/analysis-dashboards", json={**request, "filters": filters}
+    )
+    assert stale.status_code == 409
+    created = client.post(
+        "/api/analysis-dashboards",
+        json={
+            **request,
+            "filters": filters,
+            "plan_hash": plan["plan_hash"],
+        },
+    )
+    assert created.status_code == 201
+    dashboard = created.json()
+    version_id = str(dashboard["version"]["version_id"])
+    insights = service.insights(str(dashboard["id"]), version_id, report_mode=True)
+    assert insights["total_record_count"] == 2
+    assert insights["reasons"] == []
+    assert insights["summary"]["label_coverage"] == 0
+    assert service.records(str(dashboard["id"]), version_id)["total"] == 3
 
 
 def test_create_and_new_version_are_atomic_and_keep_old_version(

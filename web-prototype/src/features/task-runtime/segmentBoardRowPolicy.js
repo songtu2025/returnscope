@@ -1,7 +1,3 @@
-import {
-  resultState,
-  resultStateLabel,
-} from "../classification-results/resultActionPolicy";
 import { isPublishedResult, resultPublishStatus } from "./taskSegmentPolicy";
 
 /** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
@@ -46,21 +42,14 @@ export function canRetrySegment(task, segment) {
 export function segmentResultPresentation(segment) {
   const displayStatus = segment.display_status || segment.status;
   const publishStatus = resultPublishStatus(segment);
-  const qualityResult = {
-    result_state: segment.result_state,
-    result_quality_status: segment.result_quality_status,
-    source_review_batch_id: segment.source_review_batch_id,
-    publish_status: publishStatus,
-  };
-  const qualityState = resultState(qualityResult);
-  const qualityLabel = resultStateLabel(qualityResult);
+  const qualityState = publishStatus === "published" ? "ready" : "unknown";
   const stateLabel =
     publishStatus === "publishing"
       ? "正在生成结果"
       : publishStatus === "failed"
         ? "结果生成失败"
         : publishStatus === "published"
-          ? qualityLabel
+          ? "已发布"
           : (SEGMENT_STATUS_LABELS[displayStatus] ?? displayStatus);
   const stateDescription =
     publishStatus === "publishing"

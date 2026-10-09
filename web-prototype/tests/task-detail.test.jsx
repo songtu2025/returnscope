@@ -116,7 +116,7 @@ test("历史任务配置回退到基础字段，并保留默认并行数与空�
   expect(screen.getAllByText("— · v—")).toHaveLength(2);
 });
 
-test("总览展示评论进度、结果质量，并通过需处理入口切换 Listing", async () => {
+test("总览展示评论进度和发布情况，并通过需处理入口切换 Listing", async () => {
   render(
     <TaskDetail
       {...detailProps({
@@ -139,7 +139,7 @@ test("总览展示评论进度、结果质量，并通过需处理入口切换 L
   const overview = screen.getByRole("region", { name: "任务运行总览" });
   expect(within(overview).getByText("50%")).toBeVisible();
   expect(within(overview).getByText("1,000 / 2,000 组评论")).toBeVisible();
-  expect(within(overview).getByText("1 个可用")).toBeVisible();
+  expect(within(overview).getByText("1 个已发布")).toBeVisible();
   await userEvent.click(screen.getByRole("button", { name: "查看需处理事项" }));
   expect(
     within(screen.getByLabelText("合成 Listing 面板")).getByText("attention"),

@@ -57,16 +57,16 @@ def _report_payload() -> dict:
     }
 
 
-def _service_context(tmp_path, client_payload=None, client_error=None):
+def _service_context(tmp_path, client_payload=None, client_error=None, filters=None):
     context = _seed_result_context(tmp_path)
     version = _publish(context)
     dashboard_service = DashboardService(context.database)
-    plan = dashboard_service.preflight([str(version["version_id"])], {})
+    plan = dashboard_service.preflight([str(version["version_id"])], filters or {})
     dashboard = dashboard_service.create(
         name="退货问题看板",
         description="测试报告生成",
         result_version_ids=[str(version["version_id"])],
-        filters={},
+        filters=filters or {},
         plan_hash=plan["plan_hash"],
         reason="测试报告",
         actor_id="user-1",
@@ -566,6 +566,56 @@ def test_result_entry_creates_dashboard_and_report(tmp_path) -> None:
     assert created["dashboard"]["name"] == "AI 洞察 · L1"
     assert created["report"]["status"] == "queued"
     assert created["report"]["dashboard_id"] == created["dashboard"]["id"]
+
+
+@pytest.mark.parametrize("include_pending", [False, True])
+def test_report_creation_preserves_user_selected_record_scope(
+    tmp_path, include_pending
+) -> None:
+    context, _dashboard, service, captured = _service_context(tmp_path)
+    with context.database.transaction() as connection:
+        source_id = str(
+            connection.execute(
+                "SELECT id FROM classification_result_versions LIMIT 1"
+            ).fetchone()[0]
+        )
+        connection.execute(
+            "UPDATE classification_result_versions SET quality_status = 'unusable'"
+        )
+        connection.execute(
+            "UPDATE classification_units SET quality_status = 'review_required'"
+        )
+        connection.execute(
+            "UPDATE classification_result_records SET quality_status = 'review_required'"
+        )
+    filters = {"quality_status": ["review_required"]} if include_pending else {}
+    plan = service.dashboard_service.preflight([source_id], filters)
+    arguments = dict(
+        result_version_ids=[source_id],
+        filters=filters,
+        plan_hash=plan["plan_hash"],
+        model_id="model-1",
+        reasoning_effort="high",
+        actor_id="user-1",
+    )
+    if not include_pending:
+        with pytest.raises(ValueError, match="所选统计范围没有记录"):
+            service.create_from_results(**arguments)
+        assert captured == {}
+        return
+    created = service.create_from_results(**arguments)
+    dashboard = created["dashboard"]
+    assert dashboard["version"]["filters"] == filters
+    assert dashboard["version"]["summary"]["record_count"] == 2
+    assert (
+        created["report"]["dashboard_version_id"] == dashboard["version"]["version_id"]
+    )
+    assert captured == {}
+    analysis = service.dashboard_service.insights(
+        str(dashboard["id"]), str(dashboard["version"]["version_id"]), report_mode=True
+    )
+    assert analysis["total_record_count"] == 2
+    assert analysis["reasons"][0]["record_count"] == 2
 
 
 @pytest.mark.parametrize("multi_source", [False, True])

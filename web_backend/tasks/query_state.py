@@ -18,7 +18,7 @@ class TaskQueryStateMixin:
             "running": ("语义分析", "Listing 片段正在运行"),
             "paused": ("已暂停", "未完成 Listing 已暂停"),
             "completed": ("分析完成", "全部任务片段已经完成"),
-            "partial": ("部分完成", "已有可交付结果，仍有片段待处理"),
+            "partial": ("部分完成", "已有分类结果，仍有片段待处理"),
             "blocked": ("等待品类处理", "当前没有可执行的任务片段"),
             "cancelled": ("已取消", "未完成 Listing 已取消"),
             "failed": ("运行失败", "Listing 片段运行失败"),

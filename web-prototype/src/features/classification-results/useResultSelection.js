@@ -88,8 +88,7 @@ export function useResultSelection({ route, updateRoute, userId }) {
   };
 
   /** @param {ClassificationResultVersion} result */
-  const runPrimaryAction = (result) =>
-    runResultPrimaryAction(result, { route, updateRoute, userId });
+  const runPrimaryAction = (result) => runResultPrimaryAction(result, { userId });
 
   return {
     isVersionCreation,

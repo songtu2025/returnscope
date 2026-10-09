@@ -82,7 +82,7 @@ export function DashboardList({ route, updateRoute, userId }) {
       <PageHeading
         eyebrow="可追溯分析交付"
         title="分析看板"
-        description="从已发布、可用的分类结果版本生成不可变看板数据集。"
+        description="从已发布的分类结果版本选择统计范围，生成不可变看板数据集。"
         action={
           <button className="primary-button" onClick={chooseResults}>
             <ChartBar size={18} /> 选择分类结果
@@ -161,7 +161,7 @@ function DashboardListResults(context) {
           description={
             route.q || route.status
               ? "调整筛选条件后重新查询。"
-              : "先选择已发布、可用的分类结果版本生成第一份看板。"
+              : "先选择已发布的分类结果版本生成第一份看板。"
           }
         />
       )}

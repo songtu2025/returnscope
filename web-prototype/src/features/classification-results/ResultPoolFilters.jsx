@@ -41,16 +41,16 @@ export function ResultPoolFilters(context) {
         />
       </label>
       <label className="result-filter-field">
-        <span>结果质量</span>
+        <span>记录情况</span>
         <Select
-          aria-label="结果质量"
+          aria-label="记录情况"
           value={filters.qualityStatus}
           onChange={(qualityStatus) => setFilters({ ...filters, qualityStatus })}
           options={[
-            { value: "", label: "全部质量状态" },
-            { value: "ready", label: "可用" },
-            { value: "review_required", label: "需复核" },
-            { value: "unusable", label: "不可用" },
+            { value: "", label: "全部记录情况" },
+            { value: "ready", label: "含可用记录" },
+            { value: "review_required", label: "含待复核记录" },
+            { value: "unusable", label: "含不可用记录" },
           ]}
         />
       </label>

@@ -23,7 +23,7 @@ function SegmentResultCells({ segment, presentation }) {
         >
           {publishStatus || isLegacyResult(segment)
             ? isLegacyResult(segment)
-              ? "旧结果 · 质量未确认"
+              ? "旧结果"
               : stateLabel
             : "未生成"}
         </span>

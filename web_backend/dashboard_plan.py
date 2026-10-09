@@ -48,6 +48,10 @@ def build_plan(
         eligible_sources,
         feedback_groups=True,
     )
+    if not summary["record_count"]:
+        blockers.append(
+            {"type": "empty_scope", "message": "所选统计范围没有记录，请调整范围"}
+        )
     plan = {
         "ready": not blockers and not conflicts,
         "blockers": blockers,
@@ -110,31 +114,8 @@ def _source_issues(
                     "message": "分类结果版本尚未发布",
                 }
             )
-        if source["quality_status"] == "review_required":
-            warnings.append(
-                {
-                    "type": "quality_review_pending",
-                    "result_version_id": source["result_version_id"],
-                    "quality_status": source["quality_status"],
-                    "message": (
-                        "该版本仍有待复核数据；看板仅统计质量状态为 ready 的记录"
-                    ),
-                }
-            )
-        elif source["quality_status"] != "ready":
-            blockers.append(
-                {
-                    "type": "quality_not_ready",
-                    "result_version_id": source["result_version_id"],
-                    "quality_status": source["quality_status"],
-                    "message": "分类结果质量状态不是 ready",
-                }
-            )
     eligible_sources = [
-        source
-        for source in sources
-        if source["publish_status"] == "published"
-        and source["quality_status"] in {"ready", "review_required"}
+        source for source in sources if source["publish_status"] == "published"
     ]
     return blockers, warnings, eligible_sources
 
@@ -180,15 +161,16 @@ def _apply_quality_scope(
             ).fetchone()
             is not None
         )
+    # 所有记录均可用时无需过滤；否则默认只纳入可用记录，保留用户的显式选择。
+    if has_non_ready_records and not normalized_filters.get("quality_status"):
+        normalized_filters["quality_status"] = ["ready"]
     if has_non_ready_records and not warnings:
         warnings.append(
             {
                 "type": "quality_scope_limited",
-                "message": "该版本含已排除数据；看板仅统计质量状态为 ready 的记录",
+                "message": "来源包含待复核、不可用或已忽略记录；请核对所选统计范围，是否采用由你决定。",
             }
         )
-    if warnings or has_non_ready_records:
-        normalized_filters["quality_status"] = ["ready"]
 
 
 def _plan_hash(result_version_ids: list[str], plan: dict[str, Any]) -> str:

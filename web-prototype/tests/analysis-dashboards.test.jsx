@@ -438,7 +438,7 @@ test("筛选更新时明确标记旧结果并在失败后保留结果", async ()
   view.rerender(<ReturnReasonInsights {...props} loading={false} error="请求超时" />);
   expect(region).toHaveAttribute("aria-busy", "false");
   expect(screen.getByRole("alert")).toHaveTextContent("更新失败，当前显示上一次结果");
-  expect(screen.getByText("有效反馈")).toBeVisible();
+  expect(screen.getByText("纳入反馈")).toBeVisible();
   await user.click(screen.getByRole("button", { name: "重试" }));
   expect(onRetry).toHaveBeenCalledOnce();
 });
@@ -1245,7 +1245,7 @@ test("详情组件与数据加载共用固定的页头和正文占位", async ()
     });
   });
   expect(screen.queryByText("正在打开分析看板…")).not.toBeInTheDocument();
-  expect(screen.getByText("有效反馈")).toBeVisible();
+  expect(screen.getByText("纳入反馈")).toBeVisible();
 });
 
 test("详情正文读取失败时保留页头和重试入口", async () => {
@@ -1267,7 +1267,7 @@ test("详情正文读取失败时保留页头和重试入口", async () => {
   expect(screen.queryByText("正在打开分析看板…")).not.toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "重新加载" }));
-  expect(await screen.findByText("有效反馈")).toBeVisible();
+  expect(await screen.findByText("纳入反馈")).toBeVisible();
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
 
@@ -1316,7 +1316,7 @@ test("切换具体原因仅请求明细，失败和重试期间保留旧诊断",
   expect(await screen.findByText("原因详情更新中 · 显示上次结果")).toBeVisible();
   expect(screen.getByRole("heading", { name: "原因一" })).toBeVisible();
   expect(screen.getByRole("button", { name: "原因二，更新中" })).toBeVisible();
-  expect(screen.getByText("有效反馈")).toBeVisible();
+  expect(screen.getByText("纳入反馈")).toBeVisible();
   expect(
     dashboardApiMock.analysisDashboardInsights.mock.calls.filter(
       ([, , filters]) => filters.part === "full",
@@ -1728,6 +1728,146 @@ test("分类结果可直接创建真实AI报告任务并进入报告页", async 
   expect(window.location.hash).toContain("report=report-insight");
 });
 
+test.each(["dashboard", "insight"])(
+  "%s 默认仅可用，改变范围重新核对并保留表单与焦点",
+  async (intent) => {
+    const user = userEvent.setup();
+    const token = createDashboardSelection("user-1", {
+      intent,
+      selected: [
+        { result_version_id: "result-v1", listing: "L001", quality_status: "unusable" },
+      ],
+    });
+    let finishPreflight;
+    dashboardApiMock.dashboardPreflight
+      .mockResolvedValueOnce(
+        planFor(["result-v1"], { filters: { quality_status: ["ready"] } }),
+      )
+      .mockImplementation(
+        ({ filters }) =>
+          new Promise((resolve) => {
+            finishPreflight = () =>
+              resolve(
+                planFor(["result-v1"], {
+                  filters,
+                  plan_hash: "expanded-scope",
+                  summary: { record_count: 14, unit_count: 4 },
+                }),
+              );
+          }),
+      );
+    dashboardApiMock.createAnalysisDashboard.mockResolvedValue({
+      id: "selected-scope",
+      version: { version_id: "version-scope" },
+    });
+    dashboardApiMock.createInsightReportFromResults.mockResolvedValue({
+      dashboard: { id: "selected-scope", version: { version_id: "version-scope" } },
+      report: { id: "selected-report", status: "queued" },
+    });
+    window.location.hash = `#analysis-dashboards?selection_token=${token}&step=check`;
+    render(<DashboardHarness />);
+    const ready = await screen.findByRole("checkbox", { name: "可用", exact: true });
+    expect(ready).toBeChecked();
+    expect(ready).toBeDisabled();
+    if (intent === "dashboard") {
+      await user.type(screen.getByLabelText("看板名称"), "选择范围看板");
+      await user.type(screen.getByLabelText("生成原因"), "自主纳入待处理记录");
+    } else {
+      await screen.findByLabelText("模型");
+      await user.click(screen.getByRole("button", { name: "中", exact: true }));
+    }
+    const review = screen.getByRole("checkbox", { name: "需复核", exact: true });
+    await user.click(review);
+    const submitLabel = intent === "dashboard" ? "确认生成分析看板" : "开始生成";
+    expect(screen.getByRole("button", { name: submitLabel })).toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: "需复核", exact: true })).toBe(review);
+    expect(review).toHaveFocus();
+    await waitFor(() => expect(finishPreflight).toBeTypeOf("function"));
+    await act(async () => finishPreflight());
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: submitLabel })).toBeEnabled(),
+    );
+    expect(readDashboardSelection("user-1", token).filters).toEqual({
+      quality_status: ["ready", "review_required"],
+    });
+    if (intent === "dashboard")
+      expect(screen.getByLabelText("看板名称")).toHaveValue("选择范围看板");
+    else
+      expect(screen.getByRole("button", { name: "中", exact: true })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+    await user.click(screen.getByRole("button", { name: submitLabel }));
+    const request =
+      intent === "dashboard"
+        ? dashboardApiMock.createAnalysisDashboard
+        : dashboardApiMock.createInsightReportFromResults;
+    await waitFor(() =>
+      expect(request).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filters: { quality_status: ["ready", "review_required"] },
+          plan_hash: "expanded-scope",
+          ...(intent === "insight" ? { reasoning_effort: "medium" } : {}),
+        }),
+      ),
+    );
+  },
+);
+
+test("快速返回原范围仍重新核对，迟到响应不能替换当前计划", async () => {
+  const user = userEvent.setup();
+  const token = createDashboardSelection("user-1", {
+    selected: [{ result_version_id: "result-v1" }],
+  });
+  const pending = [];
+  dashboardApiMock.dashboardPreflight
+    .mockResolvedValueOnce(
+      planFor(["result-v1"], { filters: { quality_status: ["ready"] } }),
+    )
+    .mockImplementation(
+      ({ filters }) =>
+        new Promise((resolve) =>
+          pending.push(() =>
+            resolve(
+              planFor(["result-v1"], {
+                filters,
+                plan_hash:
+                  filters.quality_status.length === 1
+                    ? "returned-scope"
+                    : "stale-expanded-scope",
+              }),
+            ),
+          ),
+        ),
+    );
+  dashboardApiMock.createAnalysisDashboard.mockResolvedValue({
+    id: "selected-scope",
+    version: { version_id: "selected-version" },
+  });
+  window.location.hash = `#analysis-dashboards?selection_token=${token}&step=check`;
+  render(<DashboardHarness />);
+  await screen.findByText("执行计划已生成");
+  await user.type(screen.getByLabelText("看板名称"), "快速切换");
+  await user.type(screen.getByLabelText("生成原因"), "核对当前计划");
+  const review = screen.getByRole("checkbox", { name: "需复核", exact: true });
+  await user.click(review);
+  await waitFor(() => expect(pending).toHaveLength(1));
+  await user.click(review);
+  await waitFor(() => expect(pending).toHaveLength(2));
+  expect(screen.getByRole("button", { name: "确认生成分析看板" })).toBeDisabled();
+  await act(async () => pending[1]());
+  await act(async () => pending[0]());
+  await user.click(screen.getByRole("button", { name: "确认生成分析看板" }));
+  await waitFor(() =>
+    expect(dashboardApiMock.createAnalysisDashboard).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filters: { quality_status: ["ready"] },
+        plan_hash: "returned-scope",
+      }),
+    ),
+  );
+});
+
 test("冲突必须逐组单选后才能创建不可变看板", async () => {
   const user = userEvent.setup();
   const second = { ...readyResult, version_id: "result-v2", version: 2 };
@@ -1874,9 +2014,9 @@ test("需复核来源可创建看板并展示实际纳入范围", async () => {
   window.location.hash = `#analysis-dashboards?selection_token=${token}&step=check`;
   render(<DashboardHarness />);
 
-  expect(await screen.findByText("当前看板将按可用范围生成")).toBeVisible();
+  expect(await screen.findByText("请核对统计范围")).toBeVisible();
   expect(screen.getByText(/纳入 6 \/\s*10 条记录/)).toBeVisible();
-  expect(screen.getByText(/待复核 3 条；已排除 1 条/)).toBeVisible();
+  expect(screen.getByText(/待处理 3 条.*已忽略 1 条/)).toBeVisible();
   expect(screen.getByRole("button", { name: "确认生成分析看板" })).toBeDisabled();
   await userEvent.type(screen.getByLabelText("看板名称"), "部分数据看板");
   await userEvent.type(screen.getByLabelText("生成原因"), "先观察已可用数据");

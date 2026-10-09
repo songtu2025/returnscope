@@ -44,6 +44,26 @@ def test_blank_search_and_out_of_range_page_keep_total(context) -> None:
     assert empty == {"items": [], "total": 1, "page": 2, "page_size": 1}
 
 
+def test_record_status_filter_ignores_overall_version_quality(context) -> None:
+    version_id = context.version["version_id"]
+    with context.database.transaction() as connection:
+        connection.execute(
+            "UPDATE classification_result_versions SET quality_status = 'unusable' "
+            "WHERE id = ?",
+            (version_id,),
+        )
+        connection.execute(
+            "UPDATE classification_result_records SET quality_status = 'review_required' "
+            "WHERE result_version_id = ? AND order_id = 'ORDER-OTHER'",
+            (version_id,),
+        )
+    for status in ("ready", "review_required"):
+        result = context.service.list(quality_status=status)
+        assert result["total"] == 1
+        assert result["items"][0]["version_id"] == version_id
+    assert context.service.list(quality_status="unusable")["total"] == 0
+
+
 def test_filters_combine_before_pagination(context) -> None:
     _publish(_clone_publishable_segment(context, "other"))
     with context.database.transaction() as connection:

@@ -1,45 +1,8 @@
-import { navigateHash } from "../../app/hashRouter";
-
 /** @typedef {import("./classificationResultDetailContracts").ResultDetailViewProps} ResultDetailViewProps */
 
-/** @param {Pick<ResultDetailViewProps,"route"|"updateRoute"|"result"|"createDashboardFromResult"|"openOrderRecords"> & {policy:ReturnType<typeof import("./resultActionPolicy").resultActionPolicy>}} props */
-export function resultDetailActions({
-  route,
-  updateRoute,
-  result,
-  createDashboardFromResult,
-  openOrderRecords,
-  policy,
-}) {
-  const runPrimaryAction = () => {
-    if (policy.primary.kind === "create-dashboard") {
-      createDashboardFromResult();
-      return;
-    }
-    if (policy.primary.kind === "enter-review") {
-      navigateHash("classification-results", {
-        view: "reviews",
-        review_batch_id: policy.primary.reviewBatchId,
-        result_version_id: result.version_id,
-        task_id: route.taskId || result.source_task_id,
-        segment_id: route.segmentId || result.source_segment_id,
-        listing: route.listing,
-      });
-      return;
-    }
-    if (policy.primary.kind === "create-review") {
-      updateRoute({ tab: "history", action: "review" });
-      return;
-    }
-    if (policy.primary.kind === "repair-source") {
-      navigateHash("analysis-tasks", {
-        task_id: policy.primary.taskId,
-        segment_id: route.segmentId,
-      });
-      return;
-    }
-    openOrderRecords();
-  };
+/** @param {Pick<ResultDetailViewProps,"updateRoute"|"createDashboardFromResult">} props */
+export function resultDetailActions({ updateRoute, createDashboardFromResult }) {
+  const runPrimaryAction = createDashboardFromResult;
 
   /** @param {string} version */
   const selectVersion = (version) =>

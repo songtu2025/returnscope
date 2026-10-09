@@ -2746,7 +2746,7 @@ describe("关键用户流程", () => {
     );
 
     const publishedRow = screen.getByRole("row", { name: /PUBLISHED/ });
-    expect(within(publishedRow).getByText("可用")).toBeVisible();
+    expect(within(publishedRow).getByText("已发布")).toBeVisible();
     expect(within(publishedRow).getByText("已完成")).toBeVisible();
     expect(
       within(publishedRow).getByRole("button", { name: "查看分类结果" }),
@@ -2755,7 +2755,7 @@ describe("关键用户流程", () => {
     expect(within(publishedRow).getByRole("link", { name: "下载" })).toBeVisible();
 
     const reviewRow = screen.getByRole("row", { name: /REVIEW/ });
-    expect(within(reviewRow).getByText("需复核")).toBeVisible();
+    expect(within(reviewRow).getByText("已发布")).toBeVisible();
     expect(within(reviewRow).getByText("完成但有异常")).toBeVisible();
     expect(
       within(reviewRow).getByRole("button", { name: "查看分类结果" }),
@@ -2765,14 +2765,14 @@ describe("关键用户流程", () => {
     ).not.toBeInTheDocument();
 
     const unusableRow = screen.getByRole("row", { name: /UNUSABLE/ });
-    expect(within(unusableRow).getByText("不可用")).toBeVisible();
+    expect(within(unusableRow).getByText("已发布")).toBeVisible();
     expect(within(unusableRow).getByText("已完成")).toBeVisible();
     expect(
       within(unusableRow).getByRole("button", { name: "查看分类结果" }),
     ).toBeEnabled();
   });
 
-  test("全部 Listing 已交付但存在模型异常时引导进入结果治理", async () => {
+  test("全部 Listing 已发布但仍保留真实模型异常的处理入口", async () => {
     const task = {
       id: "task-delivered-with-errors",
       title: "已交付异常任务",
@@ -2824,7 +2824,7 @@ describe("关键用户流程", () => {
     expect(await screen.findByRole("button", { name: "查看已有结果" })).toBeVisible();
     expect(
       within(screen.getByRole("region", { name: "任务运行总览" })).getByText(
-        "1 个需复核",
+        "1 个已发布",
       ),
     ).toBeVisible();
     expect(
@@ -4253,7 +4253,7 @@ describe("关键用户流程", () => {
     expect(await screen.findByText("延迟返回任务")).toBeVisible();
   });
 
-  test("只看需处理独立于执行状态，主动暂停不算异常", async () => {
+  test("只看需处理按执行异常判断，版本质量和主动暂停不算异常", async () => {
     const tasks = [
       {
         id: "review-running",
@@ -4284,14 +4284,15 @@ describe("关键用户流程", () => {
     render(<TaskMonitor notify={vi.fn()} onNavigate={vi.fn()} onChanged={vi.fn()} />);
     await screen.findByRole("table", { name: "任务管理表" });
     await userEvent.click(screen.getByRole("checkbox", { name: "只看需处理" }));
-    expect(screen.getByText("运行中有待复核")).toBeVisible();
+    expect(screen.queryByText("运行中有待复核")).not.toBeInTheDocument();
     expect(screen.getByText("失败任务")).toBeVisible();
     expect(screen.queryByText("正常暂停")).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "未结束" }));
-    expect(screen.getByText("运行中有待复核")).toBeVisible();
+    expect(screen.queryByText("运行中有待复核")).not.toBeInTheDocument();
     expect(screen.queryByText("失败任务")).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("checkbox", { name: "只看需处理" }));
     expect(screen.getByText("正常暂停")).toBeVisible();
+    expect(screen.getByText("运行中有待复核")).toBeVisible();
     expect(apiMock.task).not.toHaveBeenCalled();
   });
 

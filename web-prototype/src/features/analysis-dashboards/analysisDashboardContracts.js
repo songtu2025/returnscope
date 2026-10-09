@@ -40,6 +40,7 @@
  * @property {boolean} [is_current]
  * @property {string} [source_change_summary]
  * @property {DashboardSummary} [summary]
+ * @property {Record<string, string | string[] | null>} [filters]
  *
  * @typedef {Object} DashboardListItem
  * @property {string} [id]
@@ -69,6 +70,7 @@
  * @property {string} [listing]
  * @property {number} [record_count]
  * @property {string} [quality_status]
+ * @property {string} [publish_status]
  * @property {"returns" | "review" | "user_feedback"} [analysis_context]
  *
  * @typedef {Object} ReportIssue

@@ -101,9 +101,7 @@ function ResultPoolStatus({ result, policy, selectable, selected, onToggle }) {
       <div className="result-state-cell">
         <span className={`result-quality-badge ${policy.state}`}>{policy.label}</span>
         <small>
-          {policy.state === "needs_review"
-            ? "可先建立已可用数据看板，也可继续复核"
-            : `版本发布：${PUBLISH_LABELS[result.publish_status] ?? result.publish_status ?? "未提供"}`}
+          {`版本发布：${PUBLISH_LABELS[result.publish_status] ?? result.publish_status ?? "未提供"}`}
         </small>
       </div>
     </>

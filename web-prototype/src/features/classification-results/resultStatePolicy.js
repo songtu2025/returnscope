@@ -54,7 +54,7 @@ export const RESULT_STATE_LABELS = {
  * @param {string} key
  * @returns {string}
  */
-export function compatibilityString(result, key) {
+function compatibilityString(result, key) {
   const value = result?.[key];
   return typeof value === "string" ? value : "";
 }
@@ -87,33 +87,9 @@ export function resultStateLabel(result) {
   return RESULT_STATE_LABELS[resultState(result)];
 }
 
-/** @param {ResultPolicyInput | null | undefined} result @returns {string} */
-export function resultBlockingReason(result) {
-  if (Array.isArray(result?.blocking_reasons)) {
-    const messages = result.blocking_reasons
-      .map((reason) => (typeof reason === "string" ? reason : reason?.message))
-      .filter(Boolean);
-    if (messages.length) return messages.join("；");
-  }
-  const supplied =
-    compatibilityString(result, "blocking_reason") ||
-    compatibilityString(result, "action_blocking_reason") ||
-    compatibilityString(result, "unusable_reason") ||
-    compatibilityString(result, "quality_reason");
-  if (supplied) return supplied;
-
-  return stateBlockingReason(resultState(result));
-}
-
 /** @param {ResultPolicyInput | null | undefined} result @returns {boolean} */
 export function isDashboardSelectable(result) {
-  const eligibleState = ["ready", "needs_review", "review-derived"].includes(
-    resultState(result),
-  );
-  if (typeof result?.dashboard_eligibility === "boolean") {
-    return eligibleState && result.dashboard_eligibility;
-  }
-  return eligibleState;
+  return result?.publish_status === "published";
 }
 
 /** @param {ResultPolicyInput | null | undefined} result */
@@ -132,18 +108,4 @@ function isReviewDerivedResult(result) {
     result?.publish_origin === "review-derived" ||
     (result?.source_review_batch_id && result?.publish_status === "published"),
   );
-}
-
-/** @param {ResultState} state @returns {string} */
-function stateBlockingReason(state) {
-  if (state === "needs_review") {
-    return "当前版本仍有待复核数据；可先创建仅统计已可用数据的分析看板。";
-  }
-  if (state === "unusable") {
-    return "当前版本不可用于复核或分析看板，请返回来源任务修复数据或重新分类。";
-  }
-  if (state === "unknown") {
-    return "后端未返回可识别的结果质量状态，暂不能继续操作。";
-  }
-  return "";
 }

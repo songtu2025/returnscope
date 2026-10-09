@@ -1119,9 +1119,19 @@ def test_bulk_exclusion_is_auditable_and_does_not_block_publication(
         [derived["version_id"]],
         {},
     )
-    assert plan["ready"] is True
+    assert plan["ready"] is False
+    assert plan["blockers"] == [
+        {"type": "empty_scope", "message": "所选统计范围没有记录，请调整范围"}
+    ]
     assert plan["filters"] == {"quality_status": ["ready"]}
     assert plan["summary"]["record_count"] == 0
+
+    selected = DashboardService(context.database).preflight(
+        [derived["version_id"]],
+        {"quality_status": ["excluded"]},
+    )
+    assert selected["ready"] is True
+    assert selected["summary"]["record_count"] == 2
     assert plan["summary"]["total_record_count"] == 2
     assert plan["summary"]["excluded_record_count"] == 2
 

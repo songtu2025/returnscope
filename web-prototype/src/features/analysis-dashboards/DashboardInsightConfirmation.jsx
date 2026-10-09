@@ -1,6 +1,7 @@
 import { InsightGenerationModal } from "./InsightGenerationModal";
 import { dashboardAnalysisContext } from "./analysisContextPresentation";
 import { navigateHash } from "../../app/hashRouter";
+import { DashboardQualityScope } from "./DashboardQualityScope";
 
 /** @param {import("./dashboardCreateContracts").DashboardCreateContext & ReturnType<typeof import("./useDashboardInsightCreation").useDashboardInsightCreation>} context */
 export function DashboardInsightConfirmation(context) {
@@ -14,6 +15,8 @@ export function DashboardInsightConfirmation(context) {
     summary,
     route,
     blockers,
+    qualityStatuses,
+    setQualityStatuses,
   } = context;
   return (
     <InsightGenerationModal
@@ -30,7 +33,7 @@ export function DashboardInsightConfirmation(context) {
       loading={insightState.loading}
       submitting={insightState.submitting}
       error={blockers[0]?.message || insightState.error}
-      ready={state.plan?.ready === true}
+      ready={!state.loading && !state.error && state.plan?.ready === true}
       scopeLabel={
         currentSources.length === 1
           ? `${currentSources[0].listing || "未提供 Listing"} · ${currentSources[0].product_names?.[0] || "未提供产品名称"}`
@@ -40,6 +43,14 @@ export function DashboardInsightConfirmation(context) {
       unitCount={Number(summary.unit_count || 0)}
       pendingRecords={Number(summary.pending_review_record_count || 0)}
       excludedRecords={Number(summary.excluded_record_count || 0)}
+      scopeControl={
+        <DashboardQualityScope
+          statuses={qualityStatuses}
+          onChange={setQualityStatuses}
+          disabled={insightState.submitting}
+        />
+      }
+      scopeStatuses={qualityStatuses}
       analysisContext={dashboardAnalysisContext(currentSources, null)}
     />
   );

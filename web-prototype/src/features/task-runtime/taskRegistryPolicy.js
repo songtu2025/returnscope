@@ -1,5 +1,4 @@
 import { STATUS_LABELS } from "../../constants";
-import { resultState } from "../classification-results/resultActionPolicy";
 import {
   isLegacyResult,
   isPublishedResult,
@@ -35,8 +34,7 @@ export function segmentNeedsAttention(segment) {
   return (
     ["failed", "blocked", "completed_with_errors"].includes(segment.status) ||
     resultPublishStatus(segment) === "failed" ||
-    (isPublishedResult(segment) &&
-      ["needs_review", "unusable"].includes(resultState(segment))) ||
+    Number(segment.system_failure_count || 0) > 0 ||
     (segment.status === "paused" && Boolean(segment.error))
   );
 }
@@ -47,25 +45,13 @@ function taskResultCounts(task, executable) {
   const legacy = executable.filter(isLegacyResult);
   const generated = published.length + legacy.length;
   const total = task.segments ? executable.length : (task.listing_count ?? 0);
-  const ready = published.filter((segment) =>
-    ["ready", "review-derived"].includes(resultState(segment)),
-  ).length;
-  const reviews = published.filter(
-    (segment) => resultState(segment) === "needs_review",
-  ).length;
-  const unusable = published.filter(
-    (segment) => resultState(segment) === "unusable",
-  ).length;
-  const unknown = generated - ready - reviews - unusable;
   const resultDescription = [
-    ready > 0 && `${ready} 个可用`,
-    reviews > 0 && `${reviews} 个需复核`,
-    unusable > 0 && `${unusable} 个不可用`,
-    unknown > 0 && `${unknown} 个质量未确认`,
+    published.length > 0 && `${published.length} 个已发布`,
+    legacy.length > 0 && `${legacy.length} 个旧结果`,
   ]
     .filter(Boolean)
     .join(" · ");
-  return { total, generated, ready, reviews, unusable, unknown, resultDescription };
+  return { total, generated, resultDescription };
 }
 
 /** @param {AnalysisTask} task */
@@ -84,8 +70,7 @@ function isPartiallyQueued(task) {
 export function taskSummary(task) {
   const segments = task.segments ?? [];
   const executable = segments.filter((segment) => segment.agent_key !== "unknown");
-  const { total, generated, ready, reviews, unusable, unknown, resultDescription } =
-    taskResultCounts(task, executable);
+  const { total, generated, resultDescription } = taskResultCounts(task, executable);
   const issues = executable.filter(segmentNeedsAttention).length;
   const excluded = segments.some((segment) => segment.agent_key === "unknown");
   const needsAttention =
@@ -100,10 +85,6 @@ export function taskSummary(task) {
   return {
     total,
     generated,
-    ready,
-    reviews,
-    unusable,
-    unknown,
     issues,
     needsAttention,
     remaining: Math.max(total - generated, 0),

@@ -28,20 +28,8 @@ export function resultDetailPresentation({
     unusableRecords,
   );
   const totalRecords = Number(result.record_count || 0);
-  const reviewBatchId =
-    typeof result.review_batch_id === "string" ? result.review_batch_id : "";
-  const reviewBatchStatus =
-    typeof result.review_batch_status === "string"
-      ? result.review_batch_status
-      : "draft";
-  const policy = resultActionPolicy(result, {
-    taskId: route.taskId,
-    activeBatch: reviewBatchId
-      ? { id: reviewBatchId, status: reviewBatchStatus }
-      : null,
-  });
+  const policy = resultActionPolicy(result);
   const allNeedReviewWithoutProblems = needsReviewWithoutProblems(
-    policy,
     recordsLoading,
     drilldowns,
     reviewRecords,
@@ -72,16 +60,10 @@ function resultModelErrorCount(summary) {
     (item) => item.processing_status === "MODEL_ERROR",
   )?.record_count;
 }
-/** @param {ReturnType<typeof resultActionPolicy>} policy @param {boolean} recordsLoading @param {ResultDetailViewProps["drilldowns"]} drilldowns @param {number|undefined} reviewRecords @param {ResultDetailViewProps["result"]} result */
-function needsReviewWithoutProblems(
-  policy,
-  recordsLoading,
-  drilldowns,
-  reviewRecords,
-  result,
-) {
+/** @param {boolean} recordsLoading @param {ResultDetailViewProps["drilldowns"]} drilldowns @param {number|undefined} reviewRecords @param {ResultDetailViewProps["result"]} result */
+function needsReviewWithoutProblems(recordsLoading, drilldowns, reviewRecords, result) {
   return (
-    policy.state === "needs_review" &&
+    Number(reviewRecords) === Number(result.record_count) &&
     !recordsLoading &&
     drilldowns.problem.length === 0 &&
     Number(reviewRecords || result.record_count || 0) > 0
