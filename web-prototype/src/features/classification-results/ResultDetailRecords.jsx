@@ -1,5 +1,6 @@
 import Button from "antd/es/button";
 import Input from "antd/es/input";
+import { useId } from "react";
 import { MagnifyingGlass } from "@phosphor-icons/react";
 import { EmptyState, InlineLoading } from "../../components/SharedUi";
 import { Pagination, ResultError } from "./ClassificationResultCommon";
@@ -71,9 +72,10 @@ function ResultRecordEmpty({ isUserFeedback }) {
 /** @param {import("./classificationResultDetailContracts").ResultDetailContext} context */
 function ResultRecordHeading(context) {
   const { updateRoute, records, orderInput, setOrderInput, isUserFeedback } = context;
+  const orderInputId = useId();
   return (
     <header>
-      <div>
+      <div className="result-record-heading">
         <b>{isUserFeedback ? "用户反馈记录" : "订单级分类记录"}</b>
         <span>
           {Number(records?.total || 0).toLocaleString()} 组反馈 · 关联
@@ -81,23 +83,28 @@ function ResultRecordHeading(context) {
         </span>
       </div>
       <div className="result-record-tools">
-        <ResultRecordFilters {...context} />
-        <div className="record-order-search">
-          <Input
-            aria-label="搜索 order-id"
-            placeholder="输入 order-id 精确查询"
-            value={orderInput}
-            onChange={(event) => setOrderInput(event.target.value)}
-            onPressEnter={() =>
-              updateRoute({ orderId: orderInput.trim(), recordPage: 1 })
-            }
-          />
-          <Button
-            onClick={() => updateRoute({ orderId: orderInput.trim(), recordPage: 1 })}
-          >
-            查询
-          </Button>
-        </div>
+        <ResultRecordFilters {...context}>
+          <div className="record-order-search">
+            <div className="result-record-field">
+              <label htmlFor={orderInputId}>订单号</label>
+              <Input
+                id={orderInputId}
+                aria-label="搜索 order-id"
+                placeholder="输入 order-id 精确查询"
+                value={orderInput}
+                onChange={(event) => setOrderInput(event.target.value)}
+                onPressEnter={() =>
+                  updateRoute({ orderId: orderInput.trim(), recordPage: 1 })
+                }
+              />
+            </div>
+            <Button
+              onClick={() => updateRoute({ orderId: orderInput.trim(), recordPage: 1 })}
+            >
+              查询
+            </Button>
+          </div>
+        </ResultRecordFilters>
       </div>
     </header>
   );

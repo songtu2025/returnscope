@@ -77,18 +77,29 @@ test("已忽略记录的行内状态与筛选选项一致", () => {
 });
 
 test("两个筛选器提供与记录标签相同的完整状态选项", async () => {
+  const user = userEvent.setup();
   render(<RecordFiltersHarness />);
   await screen.findByText("当前条件没有反馈记录");
+  await user.click(screen.getByRole("combobox", { name: "结果状态" }));
+  const qualityOptions = document.getElementById(
+    screen.getByLabelText("结果状态").getAttribute("aria-controls"),
+  );
   expect(
-    within(screen.getByLabelText("结果状态"))
+    within(qualityOptions)
       .getAllByRole("option")
       .map((el) => el.textContent),
   ).toEqual(["全部状态", "可用", "需复核", "不可用", "已忽略"]);
+  await user.keyboard("{Escape}");
+  await user.click(screen.getByRole("combobox", { name: "语义类型" }));
+  const semanticOptions = document.getElementById(
+    screen.getByLabelText("语义类型").getAttribute("aria-controls"),
+  );
   expect(
-    within(screen.getByLabelText("语义类型"))
+    within(semanticOptions)
       .getAllByRole("option")
       .map((el) => el.textContent),
   ).toEqual(["全部类型", "仅正向", "仅负向", "混合表现", "疑似冲突", "无确定评价"]);
+  await user.keyboard("{Escape}");
   expect(screen.getByRole("button", { name: "清除结果筛选" })).toBeDisabled();
 });
 
@@ -112,8 +123,12 @@ test("URL 恢复组合条件且版本质量筛选不会污染记录状态", asyn
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     ),
   );
-  expect(screen.getByLabelText("结果状态")).toHaveValue("unusable");
-  expect(screen.getByLabelText("语义类型")).toHaveValue("NEGATIVE");
+  expect(screen.getByLabelText("结果状态").closest(".ant-select")).toHaveTextContent(
+    "不可用",
+  );
+  expect(screen.getByLabelText("语义类型").closest(".ant-select")).toHaveTextContent(
+    "仅负向",
+  );
   expect(apiMock.classificationResultDrilldown).toHaveBeenCalledWith(
     "synthetic-version",
     "problem",
@@ -128,8 +143,10 @@ test("筛选立即查询、重置页码且清除时保留其他条件", async ()
     "classification-results?result_version_id=synthetic-version&record_page=3&order_id=ORDER&product_sku=SKU";
   render(<RecordFiltersHarness />);
   await screen.findByText("当前条件没有反馈记录");
-  await user.selectOptions(screen.getByLabelText("结果状态"), "review_required");
-  await user.selectOptions(screen.getByLabelText("语义类型"), "MIXED");
+  await user.click(screen.getByRole("combobox", { name: "结果状态" }));
+  await user.click(screen.getByRole("option", { name: "需复核" }));
+  await user.click(screen.getByRole("combobox", { name: "语义类型" }));
+  await user.click(screen.getByRole("option", { name: "混合表现" }));
   await waitFor(() =>
     expect(apiMock.classificationResultRecordGroups).toHaveBeenLastCalledWith(
       "synthetic-version",
@@ -159,7 +176,9 @@ test("筛选立即查询、重置页码且清除时保留其他条件", async ()
   );
   expect(window.location.hash).not.toContain("record_page");
   expect(window.location.hash).not.toContain("comment_status");
-  expect(screen.getByLabelText("语义类型")).toHaveValue("");
+  expect(screen.getByLabelText("语义类型").closest(".ant-select")).toHaveTextContent(
+    "全部类型",
+  );
 });
 
 test("hash 历史变化同步筛选器和查询参数", async () => {
@@ -170,8 +189,12 @@ test("hash 历史变化同步筛选器和查询参数", async () => {
       "classification-results?result_version_id=synthetic-version&record_quality_status=excluded&comment_status=NO_CONFIRMED";
     window.dispatchEvent(new HashChangeEvent("hashchange"));
   });
-  expect(screen.getByLabelText("结果状态")).toHaveValue("excluded");
-  expect(screen.getByLabelText("语义类型")).toHaveValue("NO_CONFIRMED");
+  expect(screen.getByLabelText("结果状态").closest(".ant-select")).toHaveTextContent(
+    "已忽略",
+  );
+  expect(screen.getByLabelText("语义类型").closest(".ant-select")).toHaveTextContent(
+    "无确定评价",
+  );
   await waitFor(() =>
     expect(apiMock.classificationResultRecordGroups).toHaveBeenLastCalledWith(
       "synthetic-version",
@@ -193,8 +216,12 @@ test("查询失败保留条件并提供原条件重试", async () => {
     "classification-results?result_version_id=synthetic-version&record_quality_status=unusable&comment_status=CONFLICT";
   render(<RecordFiltersHarness notify={notify} />);
   expect(await screen.findByRole("alert")).toHaveTextContent("合成请求失败");
-  expect(screen.getByLabelText("结果状态")).toHaveValue("unusable");
-  expect(screen.getByLabelText("语义类型")).toHaveValue("CONFLICT");
+  expect(screen.getByLabelText("结果状态").closest(".ant-select")).toHaveTextContent(
+    "不可用",
+  );
+  expect(screen.getByLabelText("语义类型").closest(".ant-select")).toHaveTextContent(
+    "疑似冲突",
+  );
   await userEvent.click(screen.getByRole("button", { name: "重试" }));
   await screen.findByText("当前条件没有反馈记录");
   expect(apiMock.classificationResultRecordGroups).toHaveBeenLastCalledWith(
@@ -215,7 +242,8 @@ test("筛选期间旧请求被取消，迟到响应不能覆盖新结果", async
   render(<RecordFiltersHarness />);
   await waitFor(() => expect(completeOld).toBeTypeOf("function"));
   const oldSignal = apiMock.classificationResultRecordGroups.mock.calls[0][2].signal;
-  await userEvent.selectOptions(screen.getByLabelText("结果状态"), "unusable");
+  await userEvent.click(screen.getByRole("combobox", { name: "结果状态" }));
+  await userEvent.click(screen.getByRole("option", { name: "不可用" }));
   await screen.findByText("当前条件没有反馈记录");
   expect(oldSignal.aborted).toBe(true);
   await act(async () => completeOld({ items: [], total: 99, source_total: 100 }));

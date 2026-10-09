@@ -127,12 +127,12 @@
 }
 .result-drilldown-card > header b,
 .result-drilldown-card > header span,
-.result-record-card > header b,
-.result-record-card > header span {
+.result-record-heading > b,
+.result-record-heading > span {
   display: block;
 }
 .result-drilldown-card > header span,
-.result-record-card > header span {
+.result-record-heading > span {
   margin-top: 3px;
   color: var(--muted);
   font-size: 11px;
@@ -195,35 +195,49 @@
 }
 .record-order-search {
   display: flex;
-  gap: 7px;
-  width: min(300px, 100%);
+  flex: 1 1 220px;
+  align-items: flex-end;
+  gap: var(--desktop-field-gap);
+  min-width: 220px;
 }
 .result-record-card > header {
-  flex-wrap: wrap;
-}
-.result-record-tools,
-.result-record-filters {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
 }
 .result-record-tools {
-  justify-content: flex-end;
-  max-width: 100%;
+  min-width: 0;
 }
-.result-record-filters label {
+.result-record-filters {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.result-record-field {
+  display: flex;
+  flex-direction: column;
   gap: 6px;
+  min-width: 0;
+}
+.result-record-field > label {
+  margin: 0;
+  color: var(--muted);
   font-size: 12px;
 }
-.result-record-filters select {
-  width: 120px;
-  height: 32px;
+.result-record-filters > .result-record-field {
+  flex: 0 0 150px;
+}
+.result-record-field .ant-select {
+  width: 100%;
+}
+.record-order-search > .result-record-field {
+  flex: 1;
 }
 .record-order-search .ant-input {
   min-width: 0;
+  height: 36px;
+  min-height: 36px;
 }
 .result-record-head,
 .result-record-row {
