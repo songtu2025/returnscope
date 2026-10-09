@@ -34,7 +34,15 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
   useEffect(() => setOrderInput(route.orderId), [route.orderId]);
   useEffect(
     () => setSelectedGroup(null),
-    [route.orderId, route.problem, route.productName, route.productSku, route.version],
+    [
+      route.orderId,
+      route.problem,
+      route.productName,
+      route.productSku,
+      route.recordQualityStatus,
+      route.commentStatus,
+      route.version,
+    ],
   );
 
   const {
@@ -44,6 +52,8 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
     drilldowns,
     loading,
     recordsLoading,
+    recordsError,
+    retryRecords,
     error,
     retry,
   } = useClassificationResultDetailData({ route, notify });
@@ -98,6 +108,8 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
       records={records}
       drilldowns={drilldowns}
       recordsLoading={recordsLoading}
+      recordsError={recordsError}
+      retryRecords={retryRecords}
       orderInput={orderInput}
       setOrderInput={setOrderInput}
       selectedGroup={selectedGroup}

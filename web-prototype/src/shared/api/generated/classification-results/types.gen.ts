@@ -1798,6 +1798,10 @@ export type ListRecordGroupsApiClassificationResultsVersionIdRecordGroupsGetData
      * Quality Status
      */
     quality_status?: string | null;
+    /**
+     * Comment Status
+     */
+    comment_status?: string | null;
   };
   url: "/api/classification-results/{version_id}/record-groups";
 };
@@ -1876,6 +1880,10 @@ export type ListRecordsApiClassificationResultsVersionIdRecordsGetData = {
      * Quality Status
      */
     quality_status?: string | null;
+    /**
+     * Comment Status
+     */
+    comment_status?: string | null;
   };
   url: "/api/classification-results/{version_id}/records";
 };

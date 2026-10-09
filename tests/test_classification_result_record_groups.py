@@ -8,6 +8,7 @@ import pytest
 from test_classification_result_pool import _publish, _seed_result_context
 
 from web_backend.classification_result_service import ClassificationResultService
+from web_backend.common import json_text, json_value
 
 
 @pytest.fixture
@@ -111,3 +112,85 @@ def test_group_queries_are_constant_and_enrichment_runs_once_per_group(
     ]
     assert len(reads) == queries
     assert len([sql for sql in reads if sql.lstrip().startswith("WITH filtered")]) == 2
+
+
+@pytest.mark.parametrize(
+    "semantic_status", ["POSITIVE", "NEGATIVE", "MIXED", "CONFLICT", "NO_CONFIRMED"]
+)
+@pytest.mark.parametrize(
+    "quality", ["ready", "review_required", "unusable", "excluded"]
+)
+def test_result_filters_match_display_status_and_preserve_group_counts(
+    context, semantic_status, quality
+) -> None:
+    version_id = context.version["version_id"]
+    with context.database.transaction() as connection:
+        row = connection.execute(
+            "SELECT classification_json FROM classification_units"
+        ).fetchone()
+        payload = json_value(row[0], {})
+        payload["comment_summary"] = {
+            "status": semantic_status,
+            "fact_ids": ["synthetic-fact"],
+        }
+        connection.execute(
+            "UPDATE classification_units SET classification_json = ?, quality_status = ?",
+            (json_text(payload), quality),
+        )
+        connection.execute(
+            "UPDATE classification_result_records SET quality_status = ?", (quality,)
+        )
+    filters = {"quality_status": quality, "comment_status": semantic_status}
+    first = context.service.record_groups(version_id, page_size=1, **filters)
+    assert (first["total"], first["source_total"]) == (2, 3)
+    assert first["items"][0]["member_count"] == 2
+    assert first["items"][0]["record"]["comment_summary_status"] == semantic_status
+    second = context.service.record_groups(version_id, page=2, page_size=1, **filters)
+    assert second["items"][0]["members"][0]["source_row"] == 4
+    records = context.service.records(version_id, page_size=1, **filters)
+    assert records["total"] == 3
+    assert records["items"][0]["comment_summary_status"] == semantic_status
+    mismatched = "unusable" if quality != "unusable" else "ready"
+    empty = context.service.record_groups(
+        version_id, **{**filters, "quality_status": mismatched}
+    )
+    assert (empty["total"], empty["source_total"], empty["items"]) == (0, 0, [])
+
+
+def test_legacy_semantics_use_existing_projection_before_pagination(context) -> None:
+    version_id = context.version["version_id"]
+    with context.database.transaction() as connection:
+        connection.execute(
+            "UPDATE classification_units SET classification_json = "
+            "json_remove(classification_json, '$.comment_summary')"
+        )
+    result = context.service.record_groups(
+        version_id, comment_status="NEGATIVE", order_id="ORDER-OTHER", page_size=1
+    )
+    assert (result["total"], result["source_total"]) == (1, 1)
+    assert result["items"][0]["record"]["comment_summary_status"] == "NEGATIVE"
+    assert result["items"][0]["members"][0]["source_row"] == 4
+    empty = context.service.record_groups(version_id, comment_status="POSITIVE")
+    assert empty["items"] == []
+
+
+def test_semantic_filter_calculates_duplicate_units_once_per_request(
+    context, monkeypatch
+) -> None:
+    from web_backend.classification_results import record_filters
+
+    calculate = Mock(wraps=record_filters.classification_comment_status)
+    monkeypatch.setattr(record_filters, "classification_comment_status", calculate)
+    result = context.service.record_groups(
+        context.version["version_id"], comment_status="NEGATIVE"
+    )
+    assert result["total"] == 2
+    assert calculate.call_count == 1
+
+
+@pytest.mark.parametrize("method", ["records", "record_groups"])
+def test_invalid_semantic_filter_is_rejected(context, method) -> None:
+    with pytest.raises(ValueError, match="comment_status 不合法"):
+        getattr(context.service, method)(
+            context.version["version_id"], comment_status="UNKNOWN"
+        )

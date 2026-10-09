@@ -2,11 +2,31 @@
 
 from __future__ import annotations
 
+import sqlite3
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
-from return_semantics.schemas import TaxonomyConfig
+from return_semantics.schemas import CommentSummaryStatus, TaxonomyConfig
 from return_semantics.taxonomy_hierarchy import descendant_label_codes
-from web_backend.classification_result_payload import PAGE_SIZE_MAX, QUALITY_STATUSES
+from web_backend.classification_result_payload import (
+    PAGE_SIZE_MAX,
+    QUALITY_STATUSES,
+    classification_comment_status,
+)
+from web_backend.common import json_value
+
+
+def register_comment_status_filter(
+    connection: sqlite3.Connection, taxonomy: TaxonomyConfig | None
+) -> None:
+    """在本次查询连接中复用展示口径，兼容没有显式摘要的旧结果。"""
+
+    @lru_cache(maxsize=None)
+    def comment_status(payload: str) -> str:
+        return classification_comment_status(json_value(payload, {}), taxonomy)
+
+    # 缓存仅随本次连接存活，重复源明细和计数查询不重复计算同一结果。
+    connection.create_function("result_comment_status", 1, comment_status)
 
 
 class ClassificationResultRecordFiltersMixin:
@@ -51,6 +71,21 @@ class ClassificationResultRecordFiltersMixin:
             self._validate_quality_status(quality_status)
             where.append("r.quality_status = ?")
             params.append(quality_status)
+        comment_status = filters.get("comment_status")
+        if comment_status:
+            if comment_status not in [status.value for status in CommentSummaryStatus]:
+                raise ValueError("comment_status 不合法")
+            where.append(
+                """
+                EXISTS (
+                    SELECT 1 FROM classification_units semantic_unit
+                    WHERE semantic_unit.result_version_id = r.result_version_id
+                      AND semantic_unit.classification_key = r.classification_key
+                      AND result_comment_status(semantic_unit.classification_json) = ?
+                )
+                """
+            )
+            params.append(comment_status)
         problem = filters.get("problem")
         if problem:
             taxonomy = self.taxonomy(version_id)

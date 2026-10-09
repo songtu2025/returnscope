@@ -2,8 +2,9 @@ import Button from "antd/es/button";
 import Input from "antd/es/input";
 import { MagnifyingGlass } from "@phosphor-icons/react";
 import { EmptyState, InlineLoading } from "../../components/SharedUi";
-import { Pagination } from "./ClassificationResultCommon";
+import { Pagination, ResultError } from "./ClassificationResultCommon";
 import { ResultRecordRow } from "./ClassificationResultDetailParts";
+import { ResultRecordFilters } from "./ResultRecordFilters";
 
 /** @param {import("./classificationResultDetailContracts").ResultDetailContext} context */
 export function ResultDetailRecords(context) {
@@ -12,6 +13,8 @@ export function ResultDetailRecords(context) {
     result,
     records,
     recordsLoading,
+    recordsError,
+    retryRecords,
     openEvidence,
     isUserFeedback,
     totalPages,
@@ -22,8 +25,9 @@ export function ResultDetailRecords(context) {
     <section className="result-record-card" id="classification-order-records">
       <ResultRecordHeading {...context} />
 
+      {recordsError && <ResultError message={recordsError} onRetry={retryRecords} />}
       {recordsLoading && !records && <InlineLoading label="正在读取订单记录…" />}
-      {!recordsLoading && records?.items?.length === 0 && (
+      {!recordsError && !recordsLoading && records?.items?.length === 0 && (
         <ResultRecordEmpty isUserFeedback={isUserFeedback} />
       )}
       {records && records.items.length > 0 && (
@@ -59,7 +63,7 @@ function ResultRecordEmpty({ isUserFeedback }) {
     <EmptyState
       icon={MagnifyingGlass}
       title={isUserFeedback ? "当前条件没有反馈记录" : "当前条件没有订单记录"}
-      description="调整问题、产品名称、产品SKU或order-id后重试。"
+      description="调整筛选条件后重试，也可使用上方“清除结果筛选”恢复全部状态和类型。"
     />
   );
 }
@@ -76,21 +80,24 @@ function ResultRecordHeading(context) {
           {Number(records?.source_total || 0).toLocaleString()} 条源明细
         </span>
       </div>
-      <div className="record-order-search">
-        <Input
-          aria-label="搜索 order-id"
-          placeholder="输入 order-id 精确查询"
-          value={orderInput}
-          onChange={(event) => setOrderInput(event.target.value)}
-          onPressEnter={() =>
-            updateRoute({ orderId: orderInput.trim(), recordPage: 1 })
-          }
-        />
-        <Button
-          onClick={() => updateRoute({ orderId: orderInput.trim(), recordPage: 1 })}
-        >
-          查询
-        </Button>
+      <div className="result-record-tools">
+        <ResultRecordFilters {...context} />
+        <div className="record-order-search">
+          <Input
+            aria-label="搜索 order-id"
+            placeholder="输入 order-id 精确查询"
+            value={orderInput}
+            onChange={(event) => setOrderInput(event.target.value)}
+            onPressEnter={() =>
+              updateRoute({ orderId: orderInput.trim(), recordPage: 1 })
+            }
+          />
+          <Button
+            onClick={() => updateRoute({ orderId: orderInput.trim(), recordPage: 1 })}
+          >
+            查询
+          </Button>
+        </div>
       </div>
     </header>
   );

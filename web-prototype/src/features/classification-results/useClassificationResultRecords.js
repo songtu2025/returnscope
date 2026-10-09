@@ -18,9 +18,13 @@ export function useClassificationResultRecords({ route, notify }) {
       product_name: route.productName,
       product_sku: route.productSku,
       order_id: route.orderId,
+      quality_status: route.recordQualityStatus,
+      comment_status: route.commentStatus,
     }),
     [
       route.orderId,
+      route.recordQualityStatus,
+      route.commentStatus,
       route.pageSize,
       route.problem,
       route.productName,
@@ -77,6 +81,7 @@ export function useClassificationResultRecords({ route, notify }) {
     data: recordData,
     error: recordsError,
     isLoading: recordsLoading,
+    mutate,
   } = useSWR(
     route.tab === "history"
       ? null
@@ -94,5 +99,7 @@ export function useClassificationResultRecords({ route, notify }) {
     records: recordData?.records ?? null,
     drilldowns: recordData?.drilldowns ?? emptyDrilldowns,
     recordsLoading: route.tab === "history" ? false : recordsLoading,
+    recordsError: recordsError ? errorMessage(recordsError) : "",
+    retryRecords: () => void mutate(),
   };
 }

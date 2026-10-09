@@ -41,13 +41,13 @@ ROUTES = [
         "/{version_id}/records",
         "list_records",
         "records",
-        "version_id,page,page_size,order_id,listing,product_name,source_sku,matched_msku,product_sku,asin,problem,quality_status",
+        "version_id,page,page_size,order_id,listing,product_name,source_sku,matched_msku,product_sku,asin,problem,quality_status,comment_status",
     ),
     (
         "/{version_id}/record-groups",
         "list_record_groups",
         "record_groups",
-        "version_id,page,page_size,order_id,listing,product_name,source_sku,matched_msku,product_sku,asin,problem,quality_status",
+        "version_id,page,page_size,order_id,listing,product_name,source_sku,matched_msku,product_sku,asin,problem,quality_status,comment_status",
     ),
     (
         "/{version_id}/drilldown",
@@ -243,6 +243,7 @@ def test_record_filters_are_forwarded_without_loss(
         "asin": "ASIN-1",
         "problem": "FIT_TOO_SMALL_U1",
         "quality_status": "ready",
+        "comment_status": "NEGATIVE",
     }
     response = harness.client.get(_path(harness, suffix), params=filters)
     assert response.status_code == 200, response.text
@@ -376,3 +377,14 @@ def test_standard_service_injection_and_default_remain_compatible(
     assert harness.standard_mock.taxonomy_for_result_version.call_count == (
         1 if mode == "injected" else 0
     )
+
+
+@pytest.mark.parametrize(
+    "suffix", ["/{version_id}/records", "/{version_id}/record-groups"]
+)
+def test_semantic_filter_validation_is_enforced_by_api(harness, suffix) -> None:
+    response = harness.client.get(
+        _path(harness, suffix), params={"comment_status": "INVALID"}
+    )
+    assert response.status_code == 400
+    assert response.json() == {"detail": "comment_status 不合法"}

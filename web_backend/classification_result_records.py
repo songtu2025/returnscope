@@ -12,6 +12,9 @@ from web_backend.classification_result_payload import (
 from web_backend.classification_results.record_drilldowns import (
     ClassificationResultRecordDrilldownsMixin,
 )
+from web_backend.classification_results.record_filters import (
+    register_comment_status_filter,
+)
 from web_backend.classification_results.record_groups import (
     assemble_record_groups,
     fetch_record_group_page,
@@ -50,6 +53,8 @@ class _ClassificationResultRecords(
         select_sql = self._records_select()
         taxonomy = self.taxonomy(version_id)
         with self.database.connect() as connection:
+            if filters.get("comment_status"):
+                register_comment_status_filter(connection, taxonomy)
             total = int(
                 connection.execute(
                     f"SELECT COUNT(*) FROM classification_result_records r "
@@ -88,11 +93,13 @@ class _ClassificationResultRecords(
         self.get(version_id)
         page, page_size = self._validate_page(page, page_size)
         where_sql, params = self._record_filters(version_id, filters)
+        taxonomy = self.taxonomy(version_id)
         with self.database.connect() as connection:
+            if filters.get("comment_status"):
+                register_comment_status_filter(connection, taxonomy)
             totals, rows = fetch_record_group_page(
                 connection, (where_sql, params), page, page_size
             )
-        taxonomy = self.taxonomy(version_id)
         groups = assemble_record_groups(
             rows,
             lambda value: self._enrich_record(self._serialize_record(value), taxonomy),

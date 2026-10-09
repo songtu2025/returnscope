@@ -918,7 +918,9 @@ test("需复核且没有问题标签时以复核为主操作并说明订单现�
 
   render(<ClassificationResultsPage notify={vi.fn()} />);
 
-  expect(await screen.findByText("需复核")).toBeVisible();
+  expect(
+    await screen.findByText("需复核", { selector: ".result-quality-badge" }),
+  ).toBeVisible();
   expect(screen.getByRole("button", { name: "创建复核批次" })).toBeEnabled();
   expect(
     screen.queryByRole("button", { name: "基于此版本创建看板" }),
@@ -975,7 +977,9 @@ test("真正没有记录时问题栏保持通用空态", async () => {
 
   render(<ClassificationResultsPage notify={vi.fn()} />);
 
-  expect(await screen.findByText("可用")).toBeVisible();
+  expect(
+    await screen.findByText("可用", { selector: ".result-quality-badge" }),
+  ).toBeVisible();
   const problemColumn = screen.getByText("问题").closest(".drilldown-column");
   expect(within(problemColumn).getByText("暂无数据")).toBeVisible();
   expect(within(problemColumn).queryByText("尚未形成问题标签")).not.toBeInTheDocument();

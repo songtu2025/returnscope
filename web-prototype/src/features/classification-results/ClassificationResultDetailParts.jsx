@@ -123,8 +123,10 @@ export function ResultRecordRow({ group, analysisContext, onOpen }) {
         </span>
       </div>
       <div>
-        <span className={`result-quality-badge ${resultState(record)}`}>
-          {resultStateLabel(record)}
+        <span
+          className={`result-quality-badge ${record.quality_status === "excluded" ? "excluded" : resultState(record)}`}
+        >
+          {record.quality_status === "excluded" ? "已忽略" : resultStateLabel(record)}
         </span>
         <SemanticStatusBadge status={semanticRecordStatus(record)} />
         <b>

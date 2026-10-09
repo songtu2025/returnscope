@@ -40,6 +40,8 @@ export function ClassificationResultDetailView(props) {
             productName: "",
             productSku: "",
             orderId: "",
+            recordQualityStatus: "",
+            commentStatus: "",
           })
         }
       >

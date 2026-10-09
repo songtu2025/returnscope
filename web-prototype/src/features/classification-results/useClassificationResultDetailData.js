@@ -13,6 +13,8 @@ export function useClassificationResultDetailData({ route, notify }) {
     drilldowns: records.drilldowns,
     loading: overview.loading,
     recordsLoading: records.recordsLoading,
+    recordsError: records.recordsError,
+    retryRecords: records.retryRecords,
     error: overview.error,
     retry: overview.retry,
   };

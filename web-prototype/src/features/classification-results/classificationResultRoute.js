@@ -15,6 +15,8 @@ import { RESULT_PAGE_SIZES } from "./classificationResultConstants";
  * @property {string} storeSite
  * @property {string} listing
  * @property {string} qualityStatus
+ * @property {string} recordQualityStatus
+ * @property {string} commentStatus
  * @property {string} problem
  * @property {string} productName
  * @property {string} productSku
@@ -54,6 +56,8 @@ export function classificationResultRouteState(query) {
     storeSite: queryValue(query, "store_site"),
     listing: queryValue(query, "listing"),
     qualityStatus: queryValue(query, "quality_status"),
+    recordQualityStatus: queryValue(query, "record_quality_status"),
+    commentStatus: queryValue(query, "comment_status"),
     problem: queryValue(query, "problem"),
     productName: queryValue(query, "product_name"),
     productSku: queryValue(query, "product_sku"),
@@ -79,6 +83,8 @@ export function writeClassificationResultRoute(route) {
     store_site: route.storeSite,
     listing: route.listing,
     quality_status: route.qualityStatus,
+    record_quality_status: route.recordQualityStatus,
+    comment_status: route.commentStatus,
     problem: route.problem,
     product_name: route.productName,
     product_sku: route.productSku,

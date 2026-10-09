@@ -196,7 +196,31 @@
 .record-order-search {
   display: flex;
   gap: 7px;
-  width: min(360px, 45%);
+  width: min(300px, 100%);
+}
+.result-record-card > header {
+  flex-wrap: wrap;
+}
+.result-record-tools,
+.result-record-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.result-record-tools {
+  justify-content: flex-end;
+  max-width: 100%;
+}
+.result-record-filters label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.result-record-filters select {
+  width: 120px;
+  height: 32px;
 }
 .record-order-search .ant-input {
   min-width: 0;
