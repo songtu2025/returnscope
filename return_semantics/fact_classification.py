@@ -121,10 +121,7 @@ def _compile_fact_units(
             fact,
             mapping,
             evidence,
-            context.labels,
-            context.allowed,
-            context.recover_mapping_errors,
-            context.comment,
+            context=context,
         )
 
 
@@ -223,16 +220,14 @@ def _append_fact_units(
     fact: ExtractedFact,
     mapping: FactMapping,
     evidence: str,
-    labels: dict[str, LabelDefinition],
-    allowed: dict[str, list[str]],
-    recover_mapping_errors: bool,
-    comment: str,
+    *,
+    context: _FactCompilationContext,
 ) -> None:
     for code in dict.fromkeys(mapping.label_codes):
         try:
-            _validated_mapping_label(fact, code, labels, allowed)
+            _validated_mapping_label(fact, code, context.labels, context.allowed)
         except ValueError as exc:
-            if not recover_mapping_errors:
+            if not context.recover_mapping_errors:
                 raise
             result.unknown_semantics.append(
                 _unmapped_semantic(
@@ -252,7 +247,7 @@ def _append_fact_units(
             seen,
             _fact_identity(fact, code),
             unit,
-            comment,
+            context.comment,
         )
         if (
             fact.is_primary_reason

@@ -19,20 +19,18 @@ def find_taxonomy_sample_leaks(
     issues: list[dict[str, str]] = []
     seen: set[tuple[str, str, str, str]] = set()
     fields = [
-        (*field, *_text_fingerprint(field[2])) for field in _taxonomy_fields(taxonomy)
+        (*field, _text_fingerprint(field[2])) for field in _taxonomy_fields(taxonomy)
     ]
     for sample in samples:
         review_id = str(sample.get("review_id") or "").strip()
         comment = str(sample.get("comment") or "").strip()
-        normalized_comment, comment_shingles = _text_fingerprint(comment)
-        for label, field, value, normalized_value, value_shingles in fields:
+        comment_fingerprint = _text_fingerprint(comment)
+        for label, field, value, value_fingerprint in fields:
             match_type = _match_type(
                 value,
-                normalized_value,
-                value_shingles,
+                value_fingerprint,
                 review_id,
-                normalized_comment,
-                comment_shingles,
+                comment_fingerprint,
             )
             if match_type is None:
                 continue
@@ -91,19 +89,15 @@ def _taxonomy_fields(
 
 def _match_type(
     value: str,
-    normalized_value: str,
-    value_shingles: set[str],
+    value_fingerprint: tuple[str, set[str]],
     review_id: str,
-    normalized_comment: str,
-    comment_shingles: set[str],
+    comment_fingerprint: tuple[str, set[str]],
 ) -> str | None:
     if _contains_sample_identifier(value, review_id):
         return "review_id"
     if _has_high_text_overlap(
-        normalized_value,
-        value_shingles,
-        normalized_comment,
-        comment_shingles,
+        *value_fingerprint,
+        *comment_fingerprint,
     ):
         return "long_text"
     return None

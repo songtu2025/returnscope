@@ -23,7 +23,6 @@ def _semantic_topic(
     left: SemanticUnit,
     right: SemanticUnit,
     taxonomy: TaxonomyConfig,
-    labels: dict[str, LabelDefinition],
 ) -> str | None:
     if left.label_code == right.label_code:
         return left.label_code
@@ -47,9 +46,8 @@ def _relation_for_pair(
     left_ref: str,
     right_ref: str,
     taxonomy: TaxonomyConfig,
-    labels: dict[str, LabelDefinition],
 ) -> SemanticRelation | None:
-    if _semantic_topic(left, right, taxonomy, labels) is None:
+    if _semantic_topic(left, right, taxonomy) is None:
         return None
     relation_type: SemanticRelationType | None = None
     reason = ""
@@ -90,7 +88,8 @@ def compile_comment_semantics(
     labels: dict[str, LabelDefinition],
 ) -> tuple[list[SemanticRelation], CommentSummary]:
     """把已确认原子事实编译为评论级关系和摘要。"""
-    relations = _compile_relations(units, taxonomy, labels)
+    # 保留标签字典参数以兼容现有调用；关系判断只使用标签代码和体系规则。
+    relations = _compile_relations(units, taxonomy)
     return relations, _comment_summary(units, relations)
 
 
@@ -115,7 +114,6 @@ def _scopes_differ(left: SemanticUnit, right: SemanticUnit) -> bool:
 def _compile_relations(
     units: list[SemanticUnit],
     taxonomy: TaxonomyConfig,
-    labels: dict[str, LabelDefinition],
 ) -> list[SemanticRelation]:
     indexed_units = list(enumerate(units, start=1))
     relations: list[SemanticRelation] = []
@@ -127,7 +125,6 @@ def _compile_relations(
             left.fact_id or f"UNIT:{left_index}",
             right.fact_id or f"UNIT:{right_index}",
             taxonomy,
-            labels,
         )
         if relation is None:
             continue
