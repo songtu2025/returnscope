@@ -1868,7 +1868,7 @@ test("快速返回原范围仍重新核对，迟到响应不能替换当前计�
   });
   window.location.hash = `#analysis-dashboards?selection_token=${token}&step=check`;
   render(<DashboardHarness />);
-  await screen.findByText("执行计划已生成");
+  await screen.findByText("所选分类结果");
   await user.type(screen.getByLabelText("看板名称"), "快速切换");
   const review = screen.getByRole("checkbox", { name: "需复核", exact: true });
   await user.click(review);
@@ -1948,7 +1948,7 @@ test("冲突必须逐组单选后才能创建不可变看板", async () => {
   expect(screen.getByText("产品信息版本未记录")).toBeVisible();
   await user.click(screen.getByRole("radio", { name: /结果 v2/ }));
   await user.click(screen.getByRole("button", { name: /确认冲突选择/ }));
-  expect(await screen.findByText("执行计划已生成")).toBeVisible();
+  expect(await screen.findByText("所选分类结果")).toBeVisible();
 
   await user.type(screen.getByLabelText("看板名称"), "美国站退货看板");
   await user.click(screen.getByRole("button", { name: "确认生成分析看板" }));
@@ -1990,7 +1990,7 @@ test("创建409保留输入并刷新计划后要求再次确认", async () => {
   window.location.hash = `#analysis-dashboards?selection_token=${token}&step=check`;
   render(<DashboardHarness />);
 
-  expect(await screen.findByText("执行计划已生成")).toBeVisible();
+  expect(await screen.findByText("所选分类结果")).toBeVisible();
   await user.type(screen.getByLabelText("看板名称"), "不能丢失的名称");
   await user.click(screen.getByRole("button", { name: "确认生成分析看板" }));
 

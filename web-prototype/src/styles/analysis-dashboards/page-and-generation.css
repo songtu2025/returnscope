@@ -207,16 +207,62 @@
 }
 
 .dashboard-scope-feedback {
-  margin: 0 0 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 132px;
+  gap: 12px;
+  margin: 12px 0 0;
 }
 .dashboard-scope-update {
-  min-height: 20px;
-  margin: 0 0 6px;
+  grid-column: 2;
+  grid-row: 1;
+  margin: 0;
   color: var(--muted);
   font-size: 12px;
   line-height: 20px;
+  text-align: right;
 }
 .dashboard-scope-feedback .dashboard-coverage-note {
-  min-height: 64px;
+  grid-column: 1;
+  grid-row: 1;
   margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  line-height: 20px;
+}
+.dashboard-scope-feedback .dashboard-coverage-note span {
+  color: var(--muted);
+}
+.dashboard-confirm-main > .dashboard-source-heading {
+  justify-content: space-between;
+  gap: 12px;
+}
+.dashboard-source-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 0;
+  font-size: 12px;
+}
+.dashboard-source-summary b {
+  color: var(--ink);
+}
+.dashboard-confirm-main .dashboard-quality-scope {
+  margin: 16px 0 0;
+  padding: 0;
+  border: 0;
+}
+.dashboard-confirm-main .dashboard-quality-scope legend {
+  float: left;
+  margin: 7px 16px 0 0;
+  padding: 0;
+  font-size: 13px;
+}
+.dashboard-confirm-main .dashboard-quality-scope small {
+  clear: both;
+  padding-top: 4px;
+}
+.dashboard-confirm-main .dashboard-source-mapping .dashboard-source-head {
+  font-size: 12px;
 }

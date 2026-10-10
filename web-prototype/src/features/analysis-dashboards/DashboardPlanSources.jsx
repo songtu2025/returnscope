@@ -27,22 +27,53 @@ export function DashboardPlanSources(context) {
       !showQualityScope ||
       !["quality_scope_limited", "quality_review_pending"].includes(warning.type || ""),
   );
+  const sourceTable = (
+    <div className="dashboard-source-mapping">
+      <div className="dashboard-source-head">
+        <span>店铺/站点</span>
+        <span>Listing</span>
+        <span>结果版本</span>
+        <span>产品信息版本</span>
+        <span>记录数</span>
+        <span>发布时间</span>
+      </div>
+      {currentSources.map((source) => (
+        <div key={itemVersionId(source)}>
+          <span>{source.store_site || "未提供"}</span>
+          <b>{source.listing || "未提供"}</b>
+          <span>v{resultSourceVersionNumber(source) ?? "-"}</span>
+          <span title={productCatalogVersionLabel(source)}>
+            {productCatalogVersionLabel(source)}
+          </span>
+          <span>{Number(source.record_count || 0).toLocaleString()}</span>
+          <span>{formatTime(source.published_at)}</span>
+        </div>
+      ))}
+    </div>
+  );
   return (
     <div className="dashboard-confirm-main">
-      <header>
-        <CheckCircle size={24} />
-        <div>
-          <b>执行计划已生成</b>
-          <span>请核对每个 Listing 使用的结果版本，再生成不可变数据集。</span>
-        </div>
+      <header className={showQualityScope ? "dashboard-source-heading" : undefined}>
+        {showQualityScope ? (
+          <>
+            <b>所选分类结果</b>
+            <DashboardSourceSummary
+              resultVersionIds={resultVersionIds}
+              currentSources={currentSources}
+              summary={summary}
+            />
+          </>
+        ) : (
+          <>
+            <CheckCircle size={24} />
+            <div>
+              <b>执行计划已生成</b>
+              <span>请核对每个 Listing 使用的结果版本，再生成不可变数据集。</span>
+            </div>
+          </>
+        )}
       </header>
-      {showQualityScope && (
-        <DashboardPlanStats
-          resultVersionIds={resultVersionIds}
-          currentSources={currentSources}
-          summary={summary}
-        />
-      )}
+      {showQualityScope && sourceTable}
       {showQualityScope && (
         <DashboardQualityScope
           statuses={qualityStatuses}
@@ -82,54 +113,23 @@ export function DashboardPlanSources(context) {
           ))}
         </div>
       )}
-      <div className="dashboard-source-mapping">
-        <div className="dashboard-source-head">
-          <span>店铺/站点</span>
-          <span>Listing</span>
-          <span>结果版本</span>
-          <span>产品信息版本</span>
-          <span>记录数</span>
-          <span>发布时间</span>
-        </div>
-        {currentSources.map((source) => (
-          <div key={itemVersionId(source)}>
-            <span>{source.store_site || "未提供"}</span>
-            <b>{source.listing || "未提供"}</b>
-            <span>v{resultSourceVersionNumber(source) ?? "-"}</span>
-            <span title={productCatalogVersionLabel(source)}>
-              {productCatalogVersionLabel(source)}
-            </span>
-            <span>{Number(source.record_count || 0).toLocaleString()}</span>
-            <span>{formatTime(source.published_at)}</span>
-          </div>
-        ))}
-      </div>
+      {!showQualityScope && sourceTable}
       {children}
     </div>
   );
 }
 
 /** @param {Pick<Parameters<typeof DashboardPlanSources>[0], "resultVersionIds" | "currentSources" | "summary" >} props */
-function DashboardPlanStats({ resultVersionIds, currentSources, summary }) {
+function DashboardSourceSummary({ resultVersionIds, currentSources, summary }) {
   return (
-    <div className="dashboard-plan-stats">
+    <p className="dashboard-source-summary">
       <span>
-        结果版本
-        <b>{summary.source_count ?? resultVersionIds.length}</b>
+        <b>{summary.source_count ?? resultVersionIds.length}</b> 个版本
       </span>
       <span>
-        Listing
-        <b>{summary.listing_count ?? currentSources.length}</b>
+        <b>{summary.listing_count ?? currentSources.length}</b> 个 Listing
       </span>
-      <span>
-        {summary.counting_basis === "feedback_group" ? "反馈组" : "记录"}
-        <b>
-          {summary.record_count == null
-            ? "暂无统计"
-            : Number(summary.record_count).toLocaleString()}
-        </b>
-      </span>
-    </div>
+    </p>
   );
 }
 /** @param {Pick<Parameters<typeof DashboardPlanSources>[0], "summary" >} props */

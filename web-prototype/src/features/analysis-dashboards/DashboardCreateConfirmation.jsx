@@ -14,7 +14,13 @@ export function DashboardCreateConfirmation(context) {
     submit,
   } = context;
   return (
-    <div className="dashboard-confirm-form">
+    <div
+      className={
+        isVersionCreation
+          ? "dashboard-confirm-form"
+          : "dashboard-confirm-form dashboard-confirm-form-inline"
+      }
+    >
       {!isVersionCreation && (
         <label>
           看板名称
@@ -45,11 +51,6 @@ export function DashboardCreateConfirmation(context) {
             <span>新版本会保留旧版本，历史看板不会自动漂移。</span>
           </div>
         )}
-        {confirmationMessage && (
-          <p className="dashboard-form-error" role="alert">
-            {confirmationMessage}
-          </p>
-        )}
         <DashboardCreateSubmit
           state={state}
           form={form}
@@ -59,6 +60,11 @@ export function DashboardCreateConfirmation(context) {
           submit={submit}
         />
       </footer>
+      {confirmationMessage && (
+        <p className="dashboard-form-error" role="alert">
+          {confirmationMessage}
+        </p>
+      )}
     </div>
   );
 }

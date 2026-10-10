@@ -34,6 +34,12 @@
 }
 
 @media (max-width: 900px) {
+  .dashboard-confirm-form-inline {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dashboard-confirm-main > .dashboard-source-heading {
+    flex-wrap: wrap;
+  }
   .analysis-dashboard-page .dashboard-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
