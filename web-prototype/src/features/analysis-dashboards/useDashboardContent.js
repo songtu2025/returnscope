@@ -84,7 +84,13 @@ export function useDashboardContent({ route, updateRoute }) {
       if (contentGenerationRef.current !== generation) return;
       if ("resetCategory" in result) {
         updateRoute(
-          { labelGroup: "", problem: "", recordPage: 1, reasonPage: 0 },
+          {
+            labelGroup: "",
+            problem: "",
+            recordPage: 1,
+            reasonPage: 0,
+            hierarchyPage: 1,
+          },
           { replace: true },
         );
         return;

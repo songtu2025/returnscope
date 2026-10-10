@@ -52,6 +52,7 @@ export function ReturnReasonInsightExplorer(props) {
         terms={terms}
       />
       <ReturnReasonExplorerHierarchy
+        page={route.hierarchyPage}
         hierarchy={props.hierarchy}
         taxonomyLabels={props.taxonomyLabels}
         activeReason={view.activeReason}

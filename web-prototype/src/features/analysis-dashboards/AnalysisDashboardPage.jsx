@@ -32,6 +32,7 @@ function routeState(query) {
   const step =
     query.step === "conflicts" || query.step === "confirm" ? query.step : "check";
   const reasonPage = number("reason_page");
+  const hierarchyPage = number("hierarchy_page");
   return {
     dashboardId: query.dashboard || "",
     versionId: query.version || "",
@@ -46,6 +47,8 @@ function routeState(query) {
     pageSize: PAGE_SIZES.includes(number("page_size")) ? number("page_size") : 20,
     recordPage: Math.max(number("record_page") || 1, 1),
     reasonPage: Number.isSafeInteger(reasonPage) && reasonPage > 0 ? reasonPage : 0,
+    hierarchyPage:
+      Number.isSafeInteger(hierarchyPage) && hierarchyPage > 0 ? hierarchyPage : 1,
     problem: query.problem || "",
     labelGroup: query.label_group || "",
     subject: query.subject || "",
@@ -76,6 +79,7 @@ function writeRoute(route, options) {
       page_size: route.pageSize !== 20 ? route.pageSize : "",
       record_page: route.recordPage > 1 ? route.recordPage : "",
       reason_page: route.reasonPage > 0 ? route.reasonPage : "",
+      hierarchy_page: route.hierarchyPage > 1 ? route.hierarchyPage : "",
       problem: route.problem,
       label_group: route.labelGroup,
       subject: route.subject,

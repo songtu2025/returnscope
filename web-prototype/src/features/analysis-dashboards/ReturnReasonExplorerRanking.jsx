@@ -178,17 +178,21 @@ function HierarchyChoice({ node, taxonomyLabels, activeReason, onUpdateRoute }) 
   );
 }
 
-/** @param {{hierarchy: InsightHierarchyNode[], taxonomyLabels: Map<string, ReviewLabel>, activeReason?: InsightReason, onUpdateRoute: (changes: Partial<DashboardRoute>) => void}} props */
+/** @param {{page: number, hierarchy: InsightHierarchyNode[], taxonomyLabels: Map<string, ReviewLabel>, activeReason?: InsightReason, onUpdateRoute: (changes: Partial<DashboardRoute>) => void}} props */
 export function ReturnReasonExplorerHierarchy({
+  page,
   hierarchy,
   taxonomyLabels,
   activeReason,
   onUpdateRoute,
 }) {
   if (!hierarchy.length) return null;
+  const pageCount = Math.ceil(hierarchy.length / REASON_PAGE_SIZE);
+  const currentPage = Math.min(page || 1, pageCount);
+  const pageStart = (currentPage - 1) * REASON_PAGE_SIZE;
   return (
     <section
-      className="return-reason-ranking return-hierarchy-ranking"
+      className={`return-reason-ranking return-hierarchy-ranking${pageCount > 1 ? " is-paginated" : ""}`}
       aria-label="标签层级统计"
     >
       <header>
@@ -199,7 +203,7 @@ export function ReturnReasonExplorerHierarchy({
         <span>{hierarchy.length} 项</span>
       </header>
       <ol>
-        {hierarchy.map((node) => (
+        {hierarchy.slice(pageStart, pageStart + REASON_PAGE_SIZE).map((node) => (
           <HierarchyChoice
             key={node.value}
             node={node}
@@ -209,6 +213,17 @@ export function ReturnReasonExplorerHierarchy({
           />
         ))}
       </ol>
+      {pageCount > 1 && (
+        <Pagination
+          page={currentPage}
+          pageSize={REASON_PAGE_SIZE}
+          total={hierarchy.length}
+          totalPages={pageCount}
+          onPage={(hierarchyPage) => onUpdateRoute({ hierarchyPage })}
+          showTotal={false}
+          simple
+        />
+      )}
     </section>
   );
 }

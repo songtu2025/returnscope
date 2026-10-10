@@ -14,6 +14,7 @@
  * @property {number} pageSize
  * @property {number} recordPage
  * @property {number} reasonPage
+ * @property {number} hierarchyPage
  * @property {string} problem
  * @property {string} labelGroup
  * @property {string} subject

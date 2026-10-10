@@ -32,6 +32,7 @@ export function ReturnReasonInsights(props) {
       problem: changes.problem ?? route.problem,
       recordPage: 1,
       reasonPage: 0,
+      hierarchyPage: 1,
     });
   return (
     <div

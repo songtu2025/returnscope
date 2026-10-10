@@ -180,6 +180,7 @@ test("具体原因按十项分页，保持全局排名并在筛选后定位选�
     subject: "PRODUCT",
     labelGroup: "",
     reasonPage: 0,
+    hierarchyPage: 1,
     problem: "",
     recordPage: 1,
   });
@@ -270,6 +271,7 @@ test("切换原因时立即按链接定位，仍尊重手动页码和无效原�
     subject: "PRODUCT",
     labelGroup: "",
     reasonPage: 0,
+    hierarchyPage: 1,
     problem: "",
     recordPage: 1,
   });
@@ -738,6 +740,83 @@ beforeEach(() => {
 });
 
 afterEach(() => cleanup());
+
+test("层级分页保留网址页码，完整翻阅且不影响原因分页或重新请求数据", async () => {
+  const user = userEvent.setup();
+  const nodes = Array.from({ length: 39 }, (_, index) => ({
+    value: `NODE_${index + 1}`,
+    label_name: `合成标签${index + 1}`,
+    label_path: ["合成功能", `合成标签${index + 1}`],
+    record_count: 39 - index,
+  }));
+  dashboardApiMock.analysisDashboardInsights.mockResolvedValue({
+    reasons: nodes.map((node) => ({
+      ...node,
+      label: node.label_name,
+      percentage: 1,
+    })),
+    hierarchy_problems: nodes,
+    taxonomy: {
+      labels: nodes.map((node) => ({ code: node.value, name: node.label_name })),
+    },
+  });
+  window.location.hash =
+    "#analysis-dashboards?dashboard=dashboard-default&version=dashboard-version-default&reason_page=2&hierarchy_page=3";
+  const view = render(<DashboardHarness />);
+  const hierarchySection = await screen.findByRole("region", { name: "标签层级统计" });
+  const reasonSection = screen.getByText("具体反馈原因").closest("section");
+  const counts = dashboardApiMock.analysisDashboardInsights.mock.calls.length;
+  expect(
+    within(hierarchySection).getByRole("navigation", {
+      name: "分页，第 3 页，共 4 页",
+    }),
+  ).toBeVisible();
+  expect(
+    within(reasonSection).getByRole("navigation", { name: "分页，第 2 页，共 4 页" }),
+  ).toBeVisible();
+  const visited = [];
+  for (let page = 1; page <= 4; page += 1) {
+    const jump = within(hierarchySection).getByRole("textbox", { name: "跳至" });
+    await user.clear(jump);
+    await user.type(jump, String(page));
+    fireEvent.keyUp(jump, { key: "Enter", keyCode: 13 });
+    await waitFor(() =>
+      expect(
+        within(hierarchySection).getByRole("navigation", {
+          name: `分页，第 ${page} 页，共 4 页`,
+        }),
+      ).toBeVisible(),
+    );
+    visited.push(
+      ...[...hierarchySection.querySelectorAll("ol li b")].map(
+        (node) => node.textContent,
+      ),
+    );
+    expect(hierarchySection.querySelectorAll("ol li")).toHaveLength(
+      page === 4 ? 9 : 10,
+    );
+    expect(
+      within(reasonSection).getByRole("navigation", { name: "分页，第 2 页，共 4 页" }),
+    ).toBeVisible();
+  }
+  expect(visited).toEqual(nodes.map((node) => node.label_path.join(" → ")));
+  expect(
+    within(hierarchySection).getByRole("button", { name: "下一页" }),
+  ).toBeDisabled();
+  expect(window.location.hash).toContain("hierarchy_page=4");
+  expect(dashboardApiMock.analysisDashboardInsights).toHaveBeenCalledTimes(counts);
+  view.unmount();
+  render(<DashboardHarness />);
+  const restored = await screen.findByRole("region", { name: "标签层级统计" });
+  expect(
+    within(restored).getByRole("navigation", { name: "分页，第 4 页，共 4 页" }),
+  ).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "重置", exact: true }));
+  await waitFor(() => expect(window.location.hash).not.toContain("hierarchy_page"));
+  expect(
+    within(restored).getByRole("navigation", { name: "分页，第 1 页，共 4 页" }),
+  ).toBeVisible();
+});
 
 test.each([
   {

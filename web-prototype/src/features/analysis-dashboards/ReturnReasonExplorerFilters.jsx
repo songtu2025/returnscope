@@ -10,6 +10,7 @@ function ExplorerHeader({ onUpdateRoute }) {
     onUpdateRoute({
       subject: "",
       reasonPage: 0,
+      hierarchyPage: 1,
       labelGroup: "",
       problem: "",
       recordPage: 1,
@@ -39,6 +40,7 @@ function SubjectSelector({ subjects, selectedSubject, onUpdateRoute }) {
       subject,
       labelGroup: "",
       reasonPage: 0,
+      hierarchyPage: 1,
       problem: "",
       recordPage: 1,
     });
@@ -89,6 +91,7 @@ function ReasonGroups({ route, groups, terms, onUpdateRoute }) {
                 problem: "",
                 recordPage: 1,
                 reasonPage: 0,
+                hierarchyPage: 1,
               })
             }
           >

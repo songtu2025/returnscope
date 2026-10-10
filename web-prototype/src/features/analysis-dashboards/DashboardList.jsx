@@ -204,6 +204,7 @@ function DashboardListTable({
                 tab: "overview",
                 page: 1,
                 reasonPage: 0,
+                hierarchyPage: 1,
                 subject: "",
               })
             }

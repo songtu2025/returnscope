@@ -118,6 +118,7 @@ export function DashboardDetail(props) {
               tab: "overview",
               recordPage: 1,
               reasonPage: 0,
+              hierarchyPage: 1,
               problem: "",
               labelGroup: "",
               subject: "",

@@ -17,6 +17,7 @@ vi.mock("../src/api", () => ({ api: apiMock }));
 
 import { ClassificationResultsPage } from "../src/pages/ClassificationResultsPage";
 import { ReturnReasonInsights } from "../src/features/analysis-dashboards/ReturnReasonInsights";
+import { ReturnReasonExplorerHierarchy } from "../src/features/analysis-dashboards/ReturnReasonExplorerRanking";
 import { ReviewRecordRow } from "../src/features/review-batches/ReviewRecordComponents";
 import { renderWithServerState as render } from "./renderWithServerState";
 
@@ -78,23 +79,22 @@ test("结果页保留全部层级节点并将父节点作为筛选编码", async
   await waitFor(() => expect(window.location.hash).toContain("problem=CAT_13"));
 });
 
-test("看板展示全部父级去重计数，只有末端进入原因诊断", async () => {
+test("看板层级按十项分页展示父级去重计数，只有末端进入原因诊断", async () => {
   const user = userEvent.setup();
   const updateRoute = vi.fn();
-  render(
-    <ReturnReasonInsights
-      route={{}}
-      updateRoute={updateRoute}
-      data={{
-        reasons: [{ value: "COLD", label: "不保暖", record_count: 1, percentage: 100 }],
-        hierarchy_problems: [...hierarchy, leaf],
-        taxonomy: {
-          structure_version: 2,
-          labels: [{ code: "COLD", name: "不保暖", label_path: leaf.label_path }],
-        },
-      }}
-    />,
-  );
+  const props = {
+    route: {},
+    updateRoute,
+    data: {
+      reasons: [{ value: "COLD", label: "不保暖", record_count: 1, percentage: 100 }],
+      hierarchy_problems: [...hierarchy, leaf],
+      taxonomy: {
+        structure_version: 2,
+        labels: [{ code: "COLD", name: "不保暖", label_path: leaf.label_path }],
+      },
+    },
+  };
+  const view = render(<ReturnReasonInsights {...props} />);
   const reasons = screen.getByText("具体反馈原因").closest("section");
   expect(
     within(reasons).getByRole("button", {
@@ -103,7 +103,13 @@ test("看板展示全部父级去重计数，只有末端进入原因诊断", as
   ).toBeVisible();
   const section = screen.getByRole("region", { name: "标签层级统计" });
   expect(section).toHaveClass("return-hierarchy-ranking");
-  expect(within(section).getAllByRole("button")).toHaveLength(15);
+  expect(section.querySelectorAll("ol li")).toHaveLength(10);
+  expect(within(section).getByRole("button", { name: "上一页" })).toBeDisabled();
+  await user.click(within(section).getByRole("button", { name: "下一页" }));
+  expect(updateRoute).toHaveBeenLastCalledWith({ hierarchyPage: 2 }, { replace: true });
+  view.rerender(<ReturnReasonInsights {...props} route={{ hierarchyPage: 2 }} />);
+  expect(section.querySelectorAll("ol li")).toHaveLength(5);
+  expect(within(section).getByRole("button", { name: "下一页" })).toBeDisabled();
   expect(
     within(section).getByRole("button", { name: "功能 → 分类13 1 条" }),
   ).toBeDisabled();
@@ -114,6 +120,32 @@ test("看板展示全部父级去重计数，只有末端进入原因诊断", as
     { problem: "COLD", recordPage: 1, reasonPage: 0 },
     { replace: true },
   );
+});
+
+test.each([0, 1, 10, 11, 39])("层级%s项时正确隐藏分页或收敛越界页码", (total) => {
+  const nodes = Array.from({ length: total }, (_, index) => ({
+    ...leaf,
+    value: `LEAF_${index}`,
+  }));
+  const view = render(
+    <ReturnReasonExplorerHierarchy
+      hierarchy={nodes}
+      page={99}
+      taxonomyLabels={new Map()}
+      onUpdateRoute={vi.fn()}
+    />,
+  );
+  expect(view.container.querySelectorAll("ol li")).toHaveLength(
+    total === 0 ? 0 : ((total - 1) % 10) + 1,
+  );
+  if (total > 10) {
+    const pages = Math.ceil(total / 10);
+    expect(
+      screen.getByRole("navigation", { name: `分页，第 ${pages} 页，共 ${pages} 页` }),
+    ).toBeVisible();
+  } else {
+    expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
+  }
 });
 
 test("复核记录优先展示所属版本的标签路径", () => {
