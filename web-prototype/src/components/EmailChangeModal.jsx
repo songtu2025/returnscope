@@ -1,3 +1,4 @@
+import { errorMessage } from "../shared/api/requestErrors";
 import { useState } from "react";
 import { EnvelopeSimple, WarningCircle } from "@phosphor-icons/react";
 
@@ -5,11 +6,6 @@ import { api } from "../api";
 import { Modal } from "./SharedUi";
 
 const EMAIL_PATTERN = /^\S+@\S+\.\S+$/;
-
-/** @param {unknown} error */
-function errorMessage(error) {
-  return error instanceof Error ? error.message : "请求失败";
-}
 
 /**
  * @param {{currentEmail: string, onClose: () => void, notify: (message: string, tone?: string) => void}} props

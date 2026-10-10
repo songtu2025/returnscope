@@ -22,6 +22,22 @@ class ReviewBatchConflict(ValueError):
     pass
 
 
+@dataclass(frozen=True, kw_only=True)
+class ReviewRecordChange:
+    """一次复核修改的版本、操作者、修改内容和留痕时间。"""
+
+    expected_revision: int
+    actor_id: str
+    action: str
+    label_code: str | None
+    note: str
+    now: str
+    review_assessment: dict[str, str | None] | None = None
+    semantic_item_reviews: list[dict[str, Any]] | None = None
+    added_semantic_items: list[dict[str, Any]] | None = None
+    coverage_status: str | None = None
+
+
 @dataclass(frozen=True)
 class _BatchPublishRequest:
     batch_id: str

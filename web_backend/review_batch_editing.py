@@ -6,7 +6,11 @@ from typing import Any
 from web_backend.common import json_text
 from web_backend.review_batches.creation import _ReviewBatchCreation
 from web_backend.review_batches.record_editing import _ReviewRecordEditing
-from web_backend.review_contracts import ReviewBatchConflict, RevisionConflict
+from web_backend.review_contracts import (
+    ReviewBatchConflict,
+    ReviewRecordChange,
+    RevisionConflict,
+)
 from web_backend.security import utc_now
 
 
@@ -58,16 +62,18 @@ class ReviewBatchEditingMixin(_ReviewBatchCreation, _ReviewRecordEditing):
                     connection,
                     row,
                     result_version_id=str(batch["base_result_version_id"]),
-                    expected_revision=expected_revision,
-                    actor_id=actor_id,
-                    action=resolved_action,
-                    label_code=label_code,
-                    note=clean_note,
-                    now=now,
-                    review_assessment=review_assessment,
-                    semantic_item_reviews=semantic_item_reviews,
-                    added_semantic_items=added_semantic_items,
-                    coverage_status=coverage_status,
+                    change=ReviewRecordChange(
+                        expected_revision=expected_revision,
+                        actor_id=actor_id,
+                        action=resolved_action,
+                        label_code=label_code,
+                        note=clean_note,
+                        now=now,
+                        review_assessment=review_assessment,
+                        semantic_item_reviews=semantic_item_reviews,
+                        added_semantic_items=added_semantic_items,
+                        coverage_status=coverage_status,
+                    ),
                 )
                 connection.execute(
                     """
@@ -156,13 +162,15 @@ class ReviewBatchEditingMixin(_ReviewBatchCreation, _ReviewRecordEditing):
                         connection,
                         row,
                         result_version_id=str(batch["base_result_version_id"]),
-                        expected_revision=expected_by_id[review_id],
-                        actor_id=actor_id,
-                        action=action,
-                        label_code=label_code,
-                        note=clean_note,
-                        now=now,
-                        review_assessment=review_assessment,
+                        change=ReviewRecordChange(
+                            expected_revision=expected_by_id[review_id],
+                            actor_id=actor_id,
+                            action=action,
+                            label_code=label_code,
+                            note=clean_note,
+                            now=now,
+                            review_assessment=review_assessment,
+                        ),
                     )
                     changes.append(
                         {

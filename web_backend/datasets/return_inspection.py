@@ -82,13 +82,13 @@ class DatasetFilePreparationMixin:
         if kind == "products":
             self._ensure_product_preview(destination, digest, inspected_frame)
         return self._prepared_version(
-            destination=destination,
-            original_name=metadata["original_name"],
-            content_type=metadata["content_type"],
-            change_note=metadata["change_note"].strip(),
-            digest=digest,
-            row_count=row_count,
-            column_count=column_count,
-            schema=schema,
-            quality=quality,
+            destination,
+            {**metadata, "change_note": metadata["change_note"].strip()},
+            {
+                "raw_sha256": digest,
+                "row_count": row_count,
+                "column_count": column_count,
+                "schema": schema,
+                "quality": quality,
+            },
         )

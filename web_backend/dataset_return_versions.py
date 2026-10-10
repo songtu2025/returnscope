@@ -9,81 +9,35 @@ from web_backend.common import insert_audit, json_text, new_id
 from web_backend.database import Database
 from web_backend.dataset_files import (
     DatasetRevisionConflict,
-    _inspect_file_with_frame,
-    _sha256_file,
 )
 from web_backend.security import utc_now
-from web_backend.settings import Settings
 
 logger = logging.getLogger(__name__)
 
 
 class DatasetReturnVersionMixin:
     database: Database
-    settings: Settings
     get: Callable[..., dict[str, Any] | None]
-    _ensure_blob: Callable[..., Path]
     _find_duplicate_return_import: Callable[..., dict[str, Any] | None]
-
-    def _prepare_return_version(
-        self,
-        *,
-        source_path: Path,
-        original_name: str,
-        content_type: str,
-        change_note: str,
-        inspection: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        if inspection is None:
-            _, row_count, column_count, schema, quality = _inspect_file_with_frame(
-                source_path,
-                "returns",
-            )
-            digest = _sha256_file(source_path)
-        else:
-            row_count = int(inspection["row_count"])
-            column_count = int(inspection["column_count"])
-            schema = inspection["schema"]
-            quality = inspection["quality"]
-            digest = str(inspection["raw_sha256"])
-        destination = self._ensure_blob(source_path, digest)
-        return self._prepared_version(
-            destination=destination,
-            original_name=original_name,
-            content_type=content_type,
-            change_note=change_note,
-            digest=digest,
-            row_count=row_count,
-            column_count=column_count,
-            schema=schema,
-            quality=quality,
-        )
 
     @staticmethod
     def _prepared_version(
-        *,
         destination: Path,
-        original_name: str,
-        content_type: str,
-        change_note: str,
-        digest: str,
-        row_count: int,
-        column_count: int,
-        schema: list[dict[str, str]],
-        quality: dict[str, Any],
+        metadata: dict[str, str],
+        inspection: dict[str, Any],
     ) -> dict[str, Any]:
         return {
             "id": new_id("dsv"),
             "file_path": str(destination),
-            "original_name": original_name,
-            "content_type": content_type,
+            "original_name": metadata["original_name"],
+            "content_type": metadata["content_type"],
             "size_bytes": destination.stat().st_size,
-            "sha256": digest,
-            "row_count": row_count,
-            "column_count": column_count,
-            "schema_json": json_text(schema),
-            "quality_json": json_text(quality),
-            "change_note": change_note,
+            "sha256": inspection["raw_sha256"],
+            "row_count": inspection["row_count"],
+            "column_count": inspection["column_count"],
+            "schema_json": json_text(inspection["schema"]),
+            "quality_json": json_text(inspection["quality"]),
+            "change_note": metadata["change_note"],
         }
 
     @staticmethod

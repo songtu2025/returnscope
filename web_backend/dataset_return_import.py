@@ -24,7 +24,7 @@ class DatasetReturnImportMixin(ReturnImportPreparationMixin):
     get: Callable[..., dict[str, Any] | None]
     inspect_return_import: Callable[..., dict[str, Any]]
     _commit_return_import: Callable[..., dict[str, Any]]
-    _prepare_return_version: Callable[..., dict[str, Any]]
+    _prepare_dataset_file: Callable[..., dict[str, Any]]
     _cleanup_import_source: Callable[..., None]
 
     def _cleanup_staged_imports(self) -> None:
@@ -151,12 +151,15 @@ class DatasetReturnImportMixin(ReturnImportPreparationMixin):
                     "skipped_row_count": skipped_row_count,
                 },
             )
-            prepared = self._prepare_return_version(
-                source_path=source_path,
-                original_name=original_name,
-                content_type=content_type,
-                change_note=generated_note or "导入本次分析数据",
-                inspection=inspection,
+            prepared = self._prepare_dataset_file(
+                source_path,
+                "returns",
+                inspection,
+                {
+                    "original_name": original_name,
+                    "content_type": content_type,
+                    "change_note": generated_note or "导入本次分析数据",
+                },
             )
             outcome = self._commit_return_import(
                 dataset_id=effective_dataset_id,

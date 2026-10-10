@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Annotated, Any, Callable
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from web_backend.api_contracts.classification_result_queries import (
+    ResultVersionQuery,
+)
 from web_backend.api_contracts.classification_results import (
     ClassificationResultListResponse,
     ClassificationResultSummaryResponse,
@@ -32,22 +35,10 @@ def register_result_version_routes(
         response_model_exclude_unset=True,
     )
     def list_results(
-        page: int = Query(default=1, ge=1),
-        page_size: int = Query(default=50, ge=1, le=200),
-        q: str | None = Query(default=None),
-        store_site: str | None = Query(default=None),
-        listing: str | None = Query(default=None),
-        quality_status: str | None = Query(default=None),
+        query: Annotated[ResultVersionQuery, Query()],
     ) -> dict[str, Any]:
         try:
-            return result_service.list(
-                page=page,
-                page_size=page_size,
-                q=q,
-                store_site=store_site,
-                listing=listing,
-                quality_status=quality_status,
-            )
+            return result_service.list(**query.model_dump())
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 

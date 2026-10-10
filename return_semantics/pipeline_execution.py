@@ -11,7 +11,7 @@ from return_semantics.pipeline_models import PipelineRun
 from return_semantics.schemas import ValidatedClassification
 
 if TYPE_CHECKING:
-    from return_semantics.pipeline import _CommentClassifier
+    from return_semantics.pipeline_classifier import _CommentClassifier
 
 
 def _classify_selected_comments(

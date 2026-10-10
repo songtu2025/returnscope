@@ -12,6 +12,7 @@ from web_backend.database import Database
 from web_backend.review_batch_editing import ReviewBatchEditingMixin
 from web_backend.review_batches import record_editing as editing_module
 from web_backend.review_batches import semantic_validation as validation_module
+from web_backend.review_contracts import ReviewRecordChange
 from web_backend.review_service import ReviewService
 
 NOW = "2026-10-01T00:00:00+00:00"
@@ -63,7 +64,10 @@ def _run_update(
         **overrides,
     }
     return context.editor._update_batch_record_row(
-        context.connection, context.row, **arguments
+        context.connection,
+        context.row,
+        result_version_id=arguments.pop("result_version_id"),
+        change=ReviewRecordChange(**arguments),
     )
 
 
