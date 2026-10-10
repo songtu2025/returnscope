@@ -11,6 +11,7 @@ from web_backend.backup import restore_backup
 from web_backend.classification_result_queries import system_rerun_counts
 from web_backend.database import Database
 from web_backend.database_migrations import (
+    AUTH_ACTION_TOKEN_MIGRATION_SQL,
     CLASSIFICATION_UNIT_RERUN_MIGRATION,
     CLASSIFICATION_UNIT_RERUN_MIGRATION_CHECKSUM,
     RESULT_SOURCE_ORIGIN_MIGRATION,
@@ -73,6 +74,85 @@ def test_result_source_origin_migration_keeps_existing_rows(tmp_path: Path) -> N
     assert tuple(record) == ("version:2", None)
     assert migration["checksum"] == RESULT_SOURCE_ORIGIN_MIGRATION_CHECKSUM
     connection.close()
+
+
+@pytest.mark.parametrize("kind", ["auth", "email"])
+@pytest.mark.parametrize(
+    "failure_statement", ["CREATE TABLE", "INSERT INTO app_migrations", "RELEASE"]
+)
+@pytest.mark.parametrize("outer_transaction", [False, True])
+def test_token_migration_failure_preserves_schema_rows_and_transaction(
+    kind: str, failure_statement: str, outer_transaction: bool
+) -> None:
+    class FailingConnection(sqlite3.Connection):
+        failed = False
+
+        def execute(self, sql, parameters=()):
+            if " ".join(sql.split()).startswith(failure_statement) and not self.failed:
+                self.failed = True
+                raise RuntimeError("合成迁移故障")
+            return super().execute(sql, parameters)
+
+    connection = sqlite3.connect(":memory:", factory=FailingConnection)
+    connection.row_factory = sqlite3.Row
+    try:
+        connection.executescript(
+            """
+            CREATE TABLE users(id TEXT PRIMARY KEY);
+            CREATE TABLE app_migrations(
+                migration_id TEXT PRIMARY KEY, checksum TEXT NOT NULL,
+                status TEXT NOT NULL, applied_at TEXT NOT NULL
+            );
+            """
+        )
+        if kind == "email":
+            connection.executescript(AUTH_ACTION_TOKEN_MIGRATION_SQL)
+            connection.execute(
+                """
+                INSERT INTO auth_action_tokens(
+                    id, email, purpose, token_hash, expires_at, created_at
+                ) VALUES (
+                    'synthetic-token', 'qa@example.invalid', 'invitation',
+                    'synthetic-hash', '2099-01-01', '2000-01-01'
+                );
+                """
+            )
+        connection.commit()
+        if outer_transaction:
+            connection.execute("BEGIN")
+        before_schema = connection.execute(
+            "SELECT name, sql FROM sqlite_master ORDER BY name"
+        ).fetchall()
+        before_tokens = (
+            connection.execute("SELECT * FROM auth_action_tokens").fetchall()
+            if kind == "email"
+            else []
+        )
+        migration = (
+            Database._migrate_auth_action_tokens
+            if kind == "auth"
+            else Database._migrate_email_change_tokens
+        )
+
+        with pytest.raises(RuntimeError, match="合成迁移故障"):
+            migration(connection)
+
+        assert connection.failed
+        assert (
+            connection.execute(
+                "SELECT name, sql FROM sqlite_master ORDER BY name"
+            ).fetchall()
+            == before_schema
+        )
+        assert connection.execute("SELECT * FROM app_migrations").fetchall() == []
+        assert connection.in_transaction is outer_transaction
+        if kind == "email":
+            assert (
+                connection.execute("SELECT * FROM auth_action_tokens").fetchall()
+                == before_tokens
+            )
+    finally:
+        connection.close()
 
 
 def test_production_requires_explicit_result_origin_migration(tmp_path: Path) -> None:

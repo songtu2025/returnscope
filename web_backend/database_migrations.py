@@ -7,6 +7,10 @@ from pathlib import Path
 
 from web_backend.classification_unit_semantics import migrate_unit_semantics
 from web_backend.database_schema import SCHEMA
+from web_backend.database_sql_migrations import (
+    RegisteredSqlMigration,
+    apply_sql_migration,
+)
 from web_backend.database_table_rebuilds import DatabaseTableRebuilds
 
 CLASSIFICATION_UNIT_RERUN_MIGRATION = "20260919_classification_unit_rerun_state"
@@ -209,69 +213,29 @@ class DatabaseMigrations(DatabaseTableRebuilds):
 
     @staticmethod
     def _migrate_auth_action_tokens(connection: sqlite3.Connection) -> None:
-        migration = connection.execute(
-            "SELECT checksum FROM app_migrations WHERE migration_id = ?",
-            (AUTH_ACTION_TOKEN_MIGRATION,),
-        ).fetchone()
-        if migration is not None:
-            if migration["checksum"] != AUTH_ACTION_TOKEN_MIGRATION_CHECKSUM:
-                raise RuntimeError("身份操作令牌迁移校验失败")
-            return
-
-        connection.execute("SAVEPOINT migrate_auth_action_tokens")
-        try:
-            for statement in AUTH_ACTION_TOKEN_MIGRATION_SQL.split(";"):
-                if statement.strip():
-                    connection.execute(statement)
-            connection.execute(
-                """
-                INSERT INTO app_migrations(
-                    migration_id, checksum, status, applied_at
-                ) VALUES (?, ?, 'applied', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-                """,
-                (
-                    AUTH_ACTION_TOKEN_MIGRATION,
-                    AUTH_ACTION_TOKEN_MIGRATION_CHECKSUM,
-                ),
-            )
-            connection.execute("RELEASE migrate_auth_action_tokens")
-        except Exception:
-            connection.execute("ROLLBACK TO migrate_auth_action_tokens")
-            connection.execute("RELEASE migrate_auth_action_tokens")
-            raise
+        apply_sql_migration(
+            connection,
+            RegisteredSqlMigration(
+                AUTH_ACTION_TOKEN_MIGRATION,
+                AUTH_ACTION_TOKEN_MIGRATION_CHECKSUM,
+                AUTH_ACTION_TOKEN_MIGRATION_SQL,
+            ),
+            savepoint="migrate_auth_action_tokens",
+            checksum_error="身份操作令牌迁移校验失败",
+        )
 
     @staticmethod
     def _migrate_email_change_tokens(connection: sqlite3.Connection) -> None:
-        migration = connection.execute(
-            "SELECT checksum FROM app_migrations WHERE migration_id = ?",
-            (EMAIL_CHANGE_TOKEN_MIGRATION,),
-        ).fetchone()
-        if migration is not None:
-            if migration["checksum"] != EMAIL_CHANGE_TOKEN_MIGRATION_CHECKSUM:
-                raise RuntimeError("邮箱变更令牌迁移校验失败")
-            return
-
-        connection.execute("SAVEPOINT migrate_email_change_tokens")
-        try:
-            for statement in EMAIL_CHANGE_TOKEN_MIGRATION_SQL.split(";"):
-                if statement.strip():
-                    connection.execute(statement)
-            connection.execute(
-                """
-                INSERT INTO app_migrations(
-                    migration_id, checksum, status, applied_at
-                ) VALUES (?, ?, 'applied', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-                """,
-                (
-                    EMAIL_CHANGE_TOKEN_MIGRATION,
-                    EMAIL_CHANGE_TOKEN_MIGRATION_CHECKSUM,
-                ),
-            )
-            connection.execute("RELEASE migrate_email_change_tokens")
-        except Exception:
-            connection.execute("ROLLBACK TO migrate_email_change_tokens")
-            connection.execute("RELEASE migrate_email_change_tokens")
-            raise
+        apply_sql_migration(
+            connection,
+            RegisteredSqlMigration(
+                EMAIL_CHANGE_TOKEN_MIGRATION,
+                EMAIL_CHANGE_TOKEN_MIGRATION_CHECKSUM,
+                EMAIL_CHANGE_TOKEN_MIGRATION_SQL,
+            ),
+            savepoint="migrate_email_change_tokens",
+            checksum_error="邮箱变更令牌迁移校验失败",
+        )
 
     @staticmethod
     def _migrate_user_columns(connection: sqlite3.Connection) -> None:
