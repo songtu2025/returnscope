@@ -7,8 +7,6 @@ from typing import Any
 from web_backend.common import json_value
 from web_backend.database import Database
 from web_backend.operations.audit_targets import (
-    _analysis_target,
-    _configuration_target,
     _target,
     _target_context,
 )
@@ -111,8 +109,6 @@ class AuditLogService:
 
     _target_context = staticmethod(_target_context)
     _target = staticmethod(_target)
-    _analysis_target = staticmethod(_analysis_target)
-    _configuration_target = staticmethod(_configuration_target)
 
     @staticmethod
     def _date_boundary(value: str, *, is_end: bool) -> tuple[str, bool]:
