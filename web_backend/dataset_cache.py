@@ -13,6 +13,8 @@ from return_semantics.data import (
     load_return_dataset_auto,
 )
 
+_DATASET_CACHE_CAPACITY = 8
+
 _cache: OrderedDict[tuple[str, ...], ReturnDataset] = OrderedDict()
 _lock = threading.RLock()
 
@@ -65,6 +67,6 @@ def load_cached_dataset(
                 )
             _cache[key] = dataset
         _cache.move_to_end(key)
-        while len(_cache) > 8:
+        while len(_cache) > _DATASET_CACHE_CAPACITY:
             _cache.popitem(last=False)
         return dataset
