@@ -1,15 +1,11 @@
 from __future__ import annotations
 
-import builtins
 import sqlite3
 from typing import Any
 
 from web_backend.common import insert_audit, json_text, new_id
 from web_backend.dashboard_common import (
     DashboardConflict,
-)
-from web_backend.dashboard_support import (
-    mixed_hierarchy,
 )
 from web_backend.database import Database
 
@@ -118,10 +114,3 @@ class _DashboardVersionStorage:
             after,
             now,
         )
-
-    @staticmethod
-    def _mixed_hierarchy(
-        connection: sqlite3.Connection,
-        sources: builtins.list[dict[str, Any]],
-    ) -> bool:
-        return mixed_hierarchy(connection, sources)

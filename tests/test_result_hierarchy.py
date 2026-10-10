@@ -15,6 +15,7 @@ from web_backend.classification_result_service import ClassificationResultServic
 from web_backend.classification_standard_service import ClassificationStandardService
 from web_backend.common import json_text
 from web_backend.dashboard_service import DashboardService
+from web_backend.dashboard_support import mixed_hierarchy
 from web_backend.result_hierarchy import result_taxonomy
 from web_backend.review_service import ReviewService
 
@@ -161,7 +162,7 @@ def test_result_paths_use_bound_snapshot_and_missing_binding_stays_unknown(
         == "历史根节点"
     )
     with context.database.connect() as connection:
-        assert DashboardService._mixed_hierarchy(
+        assert mixed_hierarchy(
             connection,
             [
                 {
