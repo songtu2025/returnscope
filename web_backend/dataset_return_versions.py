@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,16 @@ from web_backend.dataset_files import (
 from web_backend.security import utc_now
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, kw_only=True)
+class DatasetVersionWrite:
+    """同一次版本写入的内容、操作者及并发校验条件。"""
+
+    dataset_id: str
+    prepared: dict[str, Any]
+    actor_id: str
+    expected_current_version: int | None = None
 
 
 class DatasetReturnVersionMixin:
@@ -43,13 +54,11 @@ class DatasetReturnVersionMixin:
     @staticmethod
     def _insert_prepared_version(
         connection: Any,
-        *,
-        dataset_id: str,
-        prepared: dict[str, Any],
-        actor_id: str,
+        write: DatasetVersionWrite,
         now: str,
-        expected_current_version: int | None,
     ) -> int:
+        dataset_id = write.dataset_id
+        prepared = write.prepared
         current = connection.execute(
             "SELECT current_version FROM datasets WHERE id = ?",
             (dataset_id,),
@@ -57,8 +66,8 @@ class DatasetReturnVersionMixin:
         if current is None:
             raise ValueError("数据集不存在")
         if (
-            expected_current_version is not None
-            and int(current["current_version"]) != expected_current_version
+            write.expected_current_version is not None
+            and int(current["current_version"]) != write.expected_current_version
         ):
             raise DatasetRevisionConflict("商品维度已被其他用户修改，请刷新后重试")
         version = int(current["current_version"]) + 1
@@ -84,7 +93,7 @@ class DatasetReturnVersionMixin:
                 prepared["schema_json"],
                 prepared["quality_json"],
                 prepared["change_note"],
-                actor_id,
+                write.actor_id,
                 now,
             ),
         )
@@ -101,13 +110,14 @@ class DatasetReturnVersionMixin:
     def _commit_return_import(
         self,
         *,
-        dataset_id: str,
+        write: DatasetVersionWrite,
         dataset_name: str,
         source_key: str,
-        prepared: dict[str, Any],
         import_record: dict[str, Any],
-        actor_id: str,
     ) -> dict[str, Any]:
+        dataset_id = write.dataset_id
+        prepared = write.prepared
+        actor_id = write.actor_id
         now = utc_now()
         with self.database.transaction(immediate=True) as connection:
             duplicate = self._find_duplicate_return_import(
@@ -131,11 +141,8 @@ class DatasetReturnVersionMixin:
             )
             version = self._insert_prepared_version(
                 connection,
-                dataset_id=dataset_id,
-                prepared=prepared,
-                actor_id=actor_id,
-                now=now,
-                expected_current_version=0,
+                write,
+                now,
             )
             insert_audit(
                 connection,

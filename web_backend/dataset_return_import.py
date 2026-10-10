@@ -8,6 +8,7 @@ from typing import Any
 
 from web_backend.common import json_value, new_id
 from web_backend.database import Database
+from web_backend.dataset_return_versions import DatasetVersionWrite
 from web_backend.datasets.return_import_preparation import (
     ReturnImportPreparationMixin,
     archive_return_source,
@@ -162,12 +163,15 @@ class DatasetReturnImportMixin(ReturnImportPreparationMixin):
                 },
             )
             outcome = self._commit_return_import(
-                dataset_id=effective_dataset_id,
+                write=DatasetVersionWrite(
+                    dataset_id=effective_dataset_id,
+                    prepared=prepared,
+                    actor_id=actor_id,
+                    expected_current_version=0,
+                ),
                 dataset_name=name.strip() or str(inspection["suggested_name"]),
                 source_key=str(inspection["source_key"]),
-                prepared=prepared,
                 import_record=import_record,
-                actor_id=actor_id,
             )
         except Exception:
             self._cleanup_import_source(raw_destination)

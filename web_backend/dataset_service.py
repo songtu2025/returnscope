@@ -26,6 +26,7 @@ from web_backend.dataset_product_workbook import DatasetProductWorkbookMixin
 from web_backend.dataset_return_import import DatasetReturnImportMixin
 from web_backend.dataset_return_versions import (
     DatasetReturnVersionMixin,
+    DatasetVersionWrite,
 )
 from web_backend.datasets.catalog import _DatasetCatalog
 from web_backend.datasets.preview import _DatasetPreview
@@ -194,11 +195,13 @@ class DatasetService(
             now = utc_now()
             version = self._insert_prepared_version(
                 connection,
-                dataset_id=dataset_id,
-                prepared=prepared,
-                actor_id=actor_id,
+                write=DatasetVersionWrite(
+                    dataset_id=dataset_id,
+                    prepared=prepared,
+                    actor_id=actor_id,
+                    expected_current_version=expected_current_version,
+                ),
                 now=now,
-                expected_current_version=expected_current_version,
             )
         add_audit(
             self.database,
