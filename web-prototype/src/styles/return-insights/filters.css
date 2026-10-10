@@ -1,0 +1,209 @@
+/* 退货原因洞察：方案 2 的紧凑桌面分析视图。 */
+.return-insight-page-header > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.return-insight-page-header h1 {
+  margin: 0;
+  color: #15211d;
+  font-size: 27px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.return-insight-page-header > div:first-child > span {
+  overflow: hidden;
+  max-width: 360px;
+  color: #66736d;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.return-insight-info-button.active {
+  border-color: #9acabb;
+  color: #0d5d47;
+  background: #eff8f4;
+}
+
+.return-insight-info-button {
+  min-height: 34px;
+  padding-inline: 12px;
+}
+
+.return-insight-data-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid #cfe0d8;
+  border-radius: 10px;
+  background: #f7fbf9;
+  box-shadow: 0 5px 16px rgb(25 52 40 / 4%);
+}
+
+.return-insight-data-info > div {
+  display: grid;
+  gap: 2px;
+  min-width: 260px;
+  margin-right: auto;
+}
+
+.return-insight-data-info > div b {
+  color: #24342d;
+  font-size: 13px;
+}
+
+.return-insight-data-info > div span {
+  color: #718078;
+  font-size: 11px;
+}
+
+.return-insight-data-info label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #66736d;
+  font-size: 12px;
+}
+
+.return-insight-data-info select {
+  min-width: 106px;
+  height: 34px;
+  border: 1px solid #d6dfda;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.return-insight-secondary-tabs {
+  margin-bottom: 14px;
+}
+
+.return-insight-content {
+  display: grid;
+  gap: 10px;
+}
+
+.return-insight-baseline-info {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.return-insight-baseline-info h3 {
+  margin: 0 0 8px;
+}
+
+.return-insight-baseline-info p {
+  margin: 6px 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.return-insight-baseline-table {
+  overflow-x: auto;
+}
+
+.return-insight-baseline-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.return-insight-baseline-table caption {
+  padding: 8px 0;
+  text-align: left;
+}
+
+.return-insight-baseline-table th,
+.return-insight-baseline-table td {
+  padding: 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.return-insight-baseline-table th:first-child {
+  text-align: left;
+}
+
+.return-insight-refresh-body {
+  display: grid;
+  gap: 10px;
+}
+
+.return-insight-filters {
+  --desktop-control-height: var(--desktop-compact-height);
+  display: grid;
+  grid-template-columns:
+    minmax(280px, 1.2fr) minmax(140px, 0.7fr)
+    minmax(150px, 0.8fr) minmax(150px, 0.8fr) auto;
+  align-items: end;
+  gap: 8px;
+  min-height: 58px;
+  padding: 8px 10px;
+  border: 1px solid #dce2dd;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 4px 14px rgb(25 52 40 / 4%);
+}
+
+.return-insight-select,
+.return-insight-date-filter {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  color: #6b7771;
+  font-size: 11px;
+}
+
+.return-insight-select select {
+  width: 100%;
+  height: var(--desktop-control-height);
+  padding: 0 30px 0 10px;
+  overflow: hidden;
+  border: 1px solid #dce2dd;
+  border-radius: 7px;
+  color: #25332d;
+  background: #fff;
+  text-overflow: ellipsis;
+}
+
+.return-insight-date-filter > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--desktop-control-height);
+  padding: 0 9px;
+  border: 1px solid #dce2dd;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.return-insight-date-filter svg {
+  flex: 0 0 auto;
+  color: #56655e;
+}
+
+.return-insight-date-filter input {
+  min-width: 0;
+  width: 112px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  color: #25332d;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+}
+
+.return-insight-date-filter i {
+  color: #8a958f;
+  font-style: normal;
+}

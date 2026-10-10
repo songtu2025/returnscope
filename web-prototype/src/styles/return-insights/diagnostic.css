@@ -1,0 +1,229 @@
+.return-insight-explorer .return-reason-ranking {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  margin-top: 15px;
+  overflow: visible;
+  border: 0;
+  border-top: 1px solid #e5ebe7;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.return-insight-explorer .return-reason-ranking > header {
+  min-height: 50px;
+  padding: 9px 0 4px;
+  border: 0;
+}
+
+.return-insight-explorer .return-reason-ranking h3 {
+  color: #283a32;
+  font-size: 12px;
+}
+
+.return-insight-explorer .return-reason-ranking header p,
+.return-insight-explorer .return-reason-ranking header span {
+  color: #7a8780;
+  font-size: 9px;
+}
+
+.return-insight-explorer .return-reason-ranking ol {
+  display: grid;
+  min-height: 0;
+  padding: 0;
+}
+
+.return-insight-explorer .return-reason-ranking.is-paginated ol {
+  flex: 1;
+  min-height: 380px;
+  grid-auto-rows: minmax(38px, 1fr);
+}
+
+.return-insight-explorer .return-reason-ranking .result-pagination {
+  justify-content: center;
+  gap: 6px;
+  min-height: 46px;
+  padding: 6px 0;
+}
+
+.return-insight-explorer .return-reason-ranking li button {
+  grid-template-columns: 18px minmax(0, 1fr) 70px;
+  min-height: 38px;
+  padding: 4px 7px;
+}
+
+.return-insight-explorer .return-reason-ranking li button.active {
+  box-shadow: inset 3px 0 #166f56;
+}
+
+.return-insight-explorer .return-reason-ranking li button.is-pending strong {
+  color: #0d5d47;
+}
+
+.return-insight-explorer .return-reason-ranking li button > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.return-insight-explorer .return-reason-ranking li b {
+  font-size: 11px;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.return-insight-explorer .return-reason-ranking li strong {
+  font-size: 10px;
+}
+
+.return-insight-diagnostic {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 14px;
+  background: #fff;
+}
+
+.return-diagnostic-header {
+  gap: 14px;
+  padding-bottom: 11px;
+  border-bottom: 1px solid #e6ece8;
+}
+
+.return-diagnostic-title p {
+  color: #7a8780;
+  font-size: 9px;
+}
+
+.return-diagnostic-title p[role] {
+  color: #0d5d47;
+  font-size: 11px;
+}
+
+.return-diagnostic-title p[role="alert"] {
+  color: #8a5c16;
+}
+
+.return-diagnostic-title p .text-button {
+  margin-left: 6px;
+}
+
+.return-diagnostic-title h2 {
+  margin-top: 1px;
+  color: #17271f;
+  font-size: 20px;
+}
+
+.return-diagnostic-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(92px, 1fr));
+  margin-left: auto;
+}
+
+.return-diagnostic-metrics .return-insight-stat {
+  min-width: 100px;
+  padding: 0 15px;
+  border-left: 1px solid #dce5e0;
+  text-align: left;
+}
+
+.return-diagnostic-metrics .return-insight-stat strong {
+  font-size: 15px;
+}
+
+.return-diagnostic-header > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 31px;
+  padding: 0 10px;
+  border: 1px solid #d6dfda;
+  border-radius: 7px;
+  color: #4c5b53;
+  background: #fff;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.return-diagnostic-header > button.active {
+  border-color: #9acabb;
+  color: #0c6048;
+  background: #eff8f4;
+}
+
+.return-diagnostic-definition {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid #c9ded5;
+  border-radius: 7px;
+  color: #4d5d55;
+  background: #f5faf7;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.return-diagnostic-definition b {
+  flex: 0 0 auto;
+  color: #174d3c;
+}
+
+.return-diagnostic-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(350px, 0.95fr);
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.return-diagnostic-overview .return-insight-card {
+  min-height: 254px;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.return-diagnostic-overview .return-insight-card > header {
+  min-height: 45px;
+  padding: 8px 10px;
+}
+
+.return-diagnostic-overview .return-insight-card h3 {
+  font-size: 12px;
+}
+
+.return-diagnostic-overview .return-insight-card header span {
+  font-size: 9px;
+}
+
+.return-diagnostic-overview .return-insight-card header b {
+  color: #0e694f;
+  font-size: 10px;
+}
+
+.return-diagnostic-overview .return-insight-chart {
+  height: 170px;
+}
+
+.return-insight-trend > footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 30px;
+  color: #637169;
+  font-size: 9px;
+}
+
+.return-insight-trend > footer i {
+  width: 18px;
+  height: 2px;
+  background: #12765b;
+}
+
+.return-insight-trend > footer span {
+  margin-left: auto;
+  margin-right: 10px;
+  color: #89938e;
+}

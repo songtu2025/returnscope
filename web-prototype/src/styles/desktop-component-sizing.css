@@ -1,0 +1,148 @@
+/* 全站桌面端尺寸基线：以 1280 × 720 分类结果页为准 */
+.standard-page {
+  min-width: 0;
+  padding-right: var(--desktop-page-padding);
+  padding-left: var(--desktop-page-padding);
+}
+.page-heading {
+  min-height: 74px;
+  margin-bottom: var(--desktop-section-gap);
+}
+.page-heading h1 {
+  margin-bottom: 6px;
+}
+.content-card {
+  padding: var(--desktop-card-padding);
+}
+.primary-button,
+.secondary-button,
+.danger-button {
+  min-height: var(--desktop-control-height);
+}
+.compact-button {
+  min-height: var(--desktop-compact-height);
+}
+.icon-button {
+  width: var(--desktop-control-height);
+  height: var(--desktop-control-height);
+}
+.empty-state {
+  min-height: var(--desktop-empty-height);
+  padding: var(--desktop-detail-padding);
+}
+
+/* 工作台 */
+
+/* 数据资产 */
+.data-asset-strip {
+  gap: 10px;
+  min-height: var(--desktop-filter-height);
+  padding: 10px 12px;
+}
+.dataset-selector > button {
+  min-width: 156px;
+  min-height: var(--desktop-control-height);
+  padding: 6px 10px;
+}
+.dataset-selector > button.active {
+  min-width: 280px;
+}
+.dataset-selector > .dataset-selector-add {
+  min-width: 120px;
+}
+.data-page .dataset-detail {
+  margin-top: var(--desktop-section-gap);
+}
+.data-page .dataset-header {
+  gap: var(--desktop-section-gap);
+  padding: var(--desktop-card-padding);
+}
+.dataset-view-tabs {
+  min-height: var(--desktop-table-head-height);
+  padding: 0 var(--desktop-card-padding);
+}
+.dataset-view-tabs button {
+  min-height: var(--desktop-table-head-height);
+}
+.dataset-view {
+  padding: var(--desktop-card-padding);
+}
+.dimension-table-toolbar {
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.data-page .dimension-search {
+  height: var(--desktop-control-height);
+}
+.data-page .dimension-table > div {
+  min-height: var(--desktop-record-height);
+}
+.data-page .dimension-table .table-head {
+  min-height: var(--desktop-table-head-height);
+}
+.dimension-pagination button {
+  min-width: var(--desktop-compact-height);
+  height: var(--desktop-compact-height);
+}
+
+/* 分析任务 */
+.progress-hero {
+  margin: var(--desktop-section-gap) var(--desktop-detail-padding) 0;
+  padding: var(--desktop-card-padding) var(--desktop-detail-padding) 22px;
+}
+.stage-strip {
+  padding: var(--desktop-section-gap) var(--desktop-detail-padding);
+}
+
+/* 分类结果、复核中心与分析看板 */
+.result-pool-filters,
+.review-batch-filters,
+.review-record-filters,
+.dashboard-list-filters {
+  gap: 10px;
+  min-height: var(--desktop-filter-height);
+  margin: 0 0 var(--desktop-section-gap);
+  padding: 10px 12px;
+}
+.result-pool-head,
+.result-record-head,
+.review-batch-table-head,
+.review-record-table-head,
+.dashboard-list-head {
+  min-height: var(--desktop-table-head-height);
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.result-pool-row,
+.result-record-row,
+.review-batch-row,
+.review-record-row,
+.dashboard-list-row {
+  min-height: var(--desktop-business-row-height);
+}
+.result-pool-row,
+.result-record-row,
+.review-batch-row,
+.review-record-row,
+.dashboard-list-row {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+.result-detail-header,
+.review-batch-workspace-header,
+.dashboard-conflict-page,
+.dashboard-confirm-main {
+  padding: var(--desktop-detail-padding);
+}
+.review-batch-progress,
+.dashboard-create-steps {
+  gap: 10px;
+  margin-bottom: var(--desktop-section-gap);
+}
+.review-batch-list-card .empty-state,
+.review-record-card .empty-state,
+.dashboard-list-card .empty-state,
+.dashboard-create-empty,
+.dashboard-unavailable-state {
+  min-height: var(--desktop-empty-height);
+}
