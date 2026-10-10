@@ -3,14 +3,13 @@ import { commentStatusCounts, orderGroups } from "./returnReasonInsightPresentat
 /** @param {import("./analysisDashboardContracts").DashboardInsights} data */
 function explorerPresentation(data) {
   const reasons = data.reasons ?? [];
-  const hierarchy = data.hierarchy_problems ?? [];
   const taxonomyLabels = new Map(
     (data.taxonomy?.labels ?? []).map((label) => [label.code, label]),
   );
   const selected = data.selected_reason;
   const subjects = data.subject_breakdown ?? [];
   const groups = orderGroups(data.category_groups ?? []);
-  return { reasons, hierarchy, taxonomyLabels, selected, subjects, groups };
+  return { reasons, taxonomyLabels, selected, subjects, groups };
 }
 
 /** @param {import("./analysisDashboardContracts").DashboardInsights} data */

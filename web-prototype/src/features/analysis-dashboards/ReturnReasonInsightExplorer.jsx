@@ -1,15 +1,13 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { analysisContextTerms } from "./analysisContextPresentation";
 import { reasonPagePresentation } from "./returnReasonExplorerPresentation";
 import { ReturnReasonExplorerFilters } from "./ReturnReasonExplorerFilters";
 import { ReturnReasonExplorerRanking } from "./ReturnReasonExplorerRanking";
-import { ReturnReasonExplorerHierarchy } from "./ReturnReasonExplorerHierarchy";
 /** @typedef {import("../../shared/api/reviewBatchContracts").ReviewLabel} ReviewLabel */
 /** @typedef {import("./analysisDashboardContracts").DashboardInsights} DashboardInsights */
 /** @typedef {import("./analysisDashboardContracts").DashboardRoute} DashboardRoute */
-/** @typedef {import("./analysisDashboardContracts").InsightHierarchyNode} InsightHierarchyNode */
 /** @typedef {import("./analysisDashboardContracts").InsightReason} InsightReason */
-/** @typedef {{route: DashboardRoute, data: DashboardInsights, reasons: InsightReason[], hierarchy: InsightHierarchyNode[], taxonomyLabels: Map<string, ReviewLabel>, selected?: InsightReason, subjects: InsightReason[], groups: string[], pendingReason?: string, reasonStatus?: string, analysisContext: string, onUpdateRoute: (changes: Partial<DashboardRoute>) => void}} ReturnReasonInsightExplorerProps */
+/** @typedef {{route: DashboardRoute, data: DashboardInsights, reasons: InsightReason[], taxonomyLabels: Map<string, ReviewLabel>, selected?: InsightReason, subjects: InsightReason[], groups: string[], pendingReason?: string, reasonStatus?: string, analysisContext: string, onUpdateRoute: (changes: Partial<DashboardRoute>) => void}} ReturnReasonInsightExplorerProps */
 
 /** @param {ReturnReasonInsightExplorerProps} props */
 export function ReturnReasonInsightExplorer(props) {
@@ -23,7 +21,6 @@ export function ReturnReasonInsightExplorer(props) {
     analysisContext,
   } = props;
   const terms = analysisContextTerms(analysisContext);
-  const [hierarchyReset, setHierarchyReset] = useState(0);
   const selectedSubject = subjects.some((subject) => subject.value === route.subject)
     ? route.subject
     : "";
@@ -41,7 +38,6 @@ export function ReturnReasonInsightExplorer(props) {
         {...props}
         selectedSubject={selectedSubject}
         terms={terms}
-        onReset={() => setHierarchyReset((value) => value + 1)}
       />
       <ReturnReasonExplorerRanking
         {...props}
@@ -50,24 +46,6 @@ export function ReturnReasonInsightExplorer(props) {
         reasonStatus={reasonStatus}
         selectedSubject={selectedSubject}
         terms={terms}
-      />
-      <ReturnReasonExplorerHierarchy
-        key={JSON.stringify([
-          hierarchyReset,
-          route.versionId,
-          route.subject,
-          route.labelGroup,
-          route.listing,
-          route.productName,
-          route.productSku,
-          route.dateFrom,
-          route.dateTo,
-        ])}
-        hierarchy={props.hierarchy}
-        selectedCode={pendingReason || view.activeReason?.value || ""}
-        pendingReason={pendingReason}
-        reasonStatus={reasonStatus}
-        onUpdateRoute={props.onUpdateRoute}
       />
     </aside>
   );

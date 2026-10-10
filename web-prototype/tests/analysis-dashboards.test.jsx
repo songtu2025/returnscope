@@ -739,59 +739,52 @@ beforeEach(() => {
 
 afterEach(() => cleanup());
 
-test("折叠树选择原因后定位榜单分页，旧层级页码不影响刷新", async () => {
+test("移除层级入口后原因分页、选择、刷新和重置正常", async () => {
   const user = userEvent.setup();
-  const root = { value: "ROOT", label_name: "合成功能", record_count: 39 };
   const nodes = Array.from({ length: 39 }, (_, index) => ({
     value: `NODE_${index + 1}`,
     label_name: `合成标签${index + 1}`,
-    label_path: ["合成功能", `合成标签${index + 1}`],
-    parent_code: "ROOT",
     record_count: 39 - index,
   }));
   dashboardApiMock.analysisDashboardInsights.mockResolvedValue({
     reasons: nodes.map((node) => ({ ...node, label: node.label_name, percentage: 1 })),
-    hierarchy_problems: [root, ...nodes],
+    hierarchy_problems: nodes,
     taxonomy: {
       labels: nodes.map((node) => ({ code: node.value, name: node.label_name })),
     },
   });
   window.location.hash =
-    "#analysis-dashboards?dashboard=dashboard-default&version=dashboard-version-default&reason_page=2&hierarchy_page=3";
+    "#analysis-dashboards?dashboard=dashboard-default&version=dashboard-version-default&reason_page=2";
   const rendered = render(<DashboardHarness />);
-  const toggle = await screen.findByText("按分类层级查看");
-  expect(toggle.closest("details")).not.toHaveAttribute("open");
-  const reasonSection = screen.getByText("具体反馈原因").closest("section");
-  expect(
-    within(reasonSection).getByRole("navigation", { name: "分页，第 2 页，共 4 页" }),
-  ).toBeVisible();
-  const requests = dashboardApiMock.analysisDashboardInsights.mock.calls.length;
-  await user.click(toggle);
-  const tree = screen.getByRole("list", { name: "分类层级" });
-  expect(within(tree).getAllByRole("button")).toHaveLength(39);
-  expect(dashboardApiMock.analysisDashboardInsights).toHaveBeenCalledTimes(requests);
-  await user.click(within(tree).getByRole("button", { name: "合成标签31 9条" }));
+  const reasonSection = (await screen.findByText("具体反馈原因")).closest("section");
+  expect(screen.queryByText("按分类层级查看")).not.toBeInTheDocument();
+  const page = within(reasonSection).getByRole("navigation", {
+    name: "分页，第 2 页，共 4 页",
+  });
+  await user.click(within(page).getByRole("button", { name: "下一页" }));
+  await user.click(
+    within(
+      within(reasonSection).getByRole("navigation", { name: "分页，第 3 页，共 4 页" }),
+    ).getByRole("button", { name: "下一页" }),
+  );
+  await user.click(
+    within(reasonSection).getByRole("button", { name: /合成标签31.*9 · 1\.0%/ }),
+  );
   await waitFor(() => expect(window.location.hash).toContain("problem=NODE_31"));
   expect(
     within(reasonSection).getByRole("navigation", { name: "分页，第 4 页，共 4 页" }),
   ).toBeVisible();
-  expect(window.location.hash).not.toContain("hierarchy_page");
   rendered.unmount();
   render(<DashboardHarness />);
-  const restored = await screen.findByText("按分类层级查看");
-  expect(restored.closest("details")).not.toHaveAttribute("open");
-  await user.click(restored);
+  const restored = (await screen.findByText("具体反馈原因")).closest("section");
   expect(
-    screen
-      .getByRole("list", { name: "分类层级" })
-      .querySelector('[aria-current="true"]'),
-  ).toHaveTextContent("合成标签31");
+    within(restored).getByRole("button", { name: /合成标签31.*9 · 1\.0%/ }),
+  ).toHaveClass("active");
   await user.click(screen.getByRole("button", { name: "重置", exact: true }));
-  await waitFor(() =>
-    expect(screen.getByText("按分类层级查看").closest("details")).not.toHaveAttribute(
-      "open",
-    ),
-  );
+  await waitFor(() => expect(window.location.hash).not.toContain("problem="));
+  expect(
+    within(restored).getByRole("navigation", { name: "分页，第 1 页，共 4 页" }),
+  ).toBeVisible();
 });
 
 test.each([

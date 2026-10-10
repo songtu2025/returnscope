@@ -4,10 +4,9 @@ import { formatPercent } from "./returnReasonInsightPresentation";
 /** @typedef {import("./analysisDashboardContracts").InsightReason} InsightReason */
 /** @typedef {ReturnType<typeof import("./analysisContextPresentation").analysisContextTerms>} AnalysisContextTerms */
 
-/** @param {{onUpdateRoute: (changes: Partial<DashboardRoute>) => void, onReset: () => void}} props */
-function ExplorerHeader({ onUpdateRoute, onReset }) {
+/** @param {{onUpdateRoute: (changes: Partial<DashboardRoute>) => void}} props */
+function ExplorerHeader({ onUpdateRoute }) {
   const resetReasonFilters = () => {
-    onReset();
     onUpdateRoute({
       subject: "",
       reasonPage: 0,
@@ -101,7 +100,7 @@ function ReasonGroups({ route, groups, terms, onUpdateRoute }) {
   );
 }
 
-/** @param {{route: DashboardRoute, groups: string[], terms: AnalysisContextTerms, subjects: InsightReason[], selectedSubject: string, onUpdateRoute: (changes: Partial<DashboardRoute>) => void, onReset: () => void}} props */
+/** @param {{route: DashboardRoute, groups: string[], terms: AnalysisContextTerms, subjects: InsightReason[], selectedSubject: string, onUpdateRoute: (changes: Partial<DashboardRoute>) => void}} props */
 export function ReturnReasonExplorerFilters({
   route,
   groups,
@@ -109,11 +108,10 @@ export function ReturnReasonExplorerFilters({
   subjects,
   selectedSubject,
   onUpdateRoute,
-  onReset,
 }) {
   return (
     <>
-      <ExplorerHeader onUpdateRoute={onUpdateRoute} onReset={onReset} />
+      <ExplorerHeader onUpdateRoute={onUpdateRoute} />
       <SubjectSelector
         subjects={subjects}
         selectedSubject={selectedSubject}
