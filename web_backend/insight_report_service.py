@@ -5,10 +5,7 @@ from typing import Any, Callable
 
 from return_semantics.model_client import Sub2APIClient
 from web_backend import (
-    insight_report_content,
     insight_report_contracts,
-    insight_report_decision_blueprint,
-    insight_report_diagnostics,
     insight_report_legacy_blueprint,
     insight_report_quality,
     insight_report_quality_v6,
@@ -174,43 +171,7 @@ class InsightReportService(_InsightReportCreation, _InsightReportExecution):
         value.pop("technical_error", None)
         return value
 
-    _trend_summary = staticmethod(insight_report_diagnostics._trend_summary)
-
-    _rank_hotspots = staticmethod(insight_report_diagnostics._rank_hotspots)
-
-    _has_text_anomaly = staticmethod(insight_report_diagnostics._has_text_anomaly)
-
-    _filter_diagnostic_text = staticmethod(
-        insight_report_diagnostics._filter_diagnostic_text
-    )
-
-    _filter_issue_case_text = staticmethod(
-        insight_report_diagnostics._filter_issue_case_text
-    )
-
-    _filter_business_issue_text = staticmethod(
-        insight_report_diagnostics._filter_business_issue_text
-    )
-
-    _build_business_issues = staticmethod(
-        insight_report_diagnostics._build_business_issues
-    )
-
-    _product_mapping_check = staticmethod(
-        insight_report_diagnostics._product_mapping_check
-    )
-
-    _build_decision_blueprint = staticmethod(
-        insight_report_decision_blueprint._build_decision_blueprint
-    )
-
     _build_blueprint = staticmethod(insight_report_legacy_blueprint._build_blueprint)
-
-    _items_by_id = staticmethod(insight_report_content._items_by_id)
-
-    _text = staticmethod(insight_report_content._text)
-
-    _narrative_text = staticmethod(insight_report_content._narrative_text)
 
     _evaluate_live_quality_v6 = staticmethod(
         insight_report_quality_v6._evaluate_live_quality_v6
