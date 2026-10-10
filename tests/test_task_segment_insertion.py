@@ -160,10 +160,22 @@ def test_creation_preserves_blocking_policy(
 
 
 @pytest.mark.parametrize("preserved_scope", ["all", "most_records", "fewest_records"])
+@pytest.mark.parametrize(
+    "scope_mode, analysis_context",
+    [("manual", "user_feedback"), ("auto", "review"), ("legacy", "returns")],
+)
 def test_replan_preserves_completed_row_and_inserts_only_remaining_scope(
-    insertion: SimpleNamespace, preserved_scope: str
+    insertion: SimpleNamespace,
+    preserved_scope: str,
+    scope_mode: str,
+    analysis_context: str,
 ) -> None:
     task = _create(insertion)
+    task["snapshot"]["scope"]["mode"] = scope_mode
+    task["snapshot"]["analysis_context"] = analysis_context
+    task["snapshot"]["config"]["strategy_source"] = (
+        "task" if scope_mode == "auto" else "connection"
+    )
     prepared = insertion.prepared
     original = deepcopy(prepared.response)
     shoe = next(
@@ -193,7 +205,8 @@ def test_replan_preserves_completed_row_and_inserts_only_remaining_scope(
             ),
         )
         connection.execute(
-            "UPDATE tasks SET status = 'partial' WHERE id = ?", (task["id"],)
+            "UPDATE tasks SET status = 'partial', snapshot_json = ? WHERE id = ?",
+            (json.dumps(task["snapshot"]), task["id"]),
         )
     preserved = next(
         row
@@ -201,7 +214,15 @@ def test_replan_preserves_completed_row_and_inserts_only_remaining_scope(
         if row["id"] == shoe["id"]
     )
 
+    insertion.service.replan_preflight(task["id"], insertion.product_version_id)
+    inputs = insertion.service.plan_service.prepare.call_args.kwargs.copy()
+    assert inputs["store"] == (None if scope_mode == "auto" else task["store"])
+    assert inputs["listing"] == (None if scope_mode == "auto" else task["listing"])
+    assert inputs["analysis_context"] == analysis_context
+    assert inputs["product_version_id"] == insertion.product_version_id
+    assert (inputs["model_policy"] is not None) == (scope_mode == "auto")
     replanned = _replan(insertion, task)
+    assert insertion.service.plan_service.prepare.call_args.kwargs == inputs
 
     rows = _rows(insertion.database, "task_segments")
     assert next(row for row in rows if row["id"] == shoe["id"]) == preserved

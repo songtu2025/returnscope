@@ -35,19 +35,8 @@ class TaskReplanMixin(TaskReplanSegmentsMixin):
             raise ValueError("任务不存在")
         if task["status"] not in {"blocked", "partial"}:
             raise ValueError("仅阻断或部分完成的任务可以重新规划")
-        snapshot_scope = task.get("snapshot", {}).get("scope", {})
-        task_snapshot = task.get("snapshot", {})
-        model_policy = self._snapshot_model_policy(task)
         return self.plan_service.preflight(
-            dataset_version_id=str(task["dataset_version_id"]),
-            product_version_id=product_version_id,
-            store=(
-                None if snapshot_scope.get("mode") == "auto" else str(task["store"])
-            ),
-            listing=(None if snapshot_scope.get("mode") == "auto" else task["listing"]),
-            config_version_id=str(task["config_version_id"]),
-            model_policy=model_policy,
-            analysis_context=analysis_context_from_snapshot(task_snapshot),
+            **self._replan_plan_inputs(task, product_version_id)
         )
 
     def replan(
@@ -211,24 +200,33 @@ class TaskReplanMixin(TaskReplanSegmentsMixin):
         source = self.get(task_id)
         if source is None:
             raise ValueError("任务不存在")
-        source_scope = source.get("snapshot", {}).get("scope", {})
-        source_snapshot = source.get("snapshot", {})
-        model_policy = self._snapshot_model_policy(source)
-        prepared = self.plan_service.prepare(
-            dataset_version_id=str(source["dataset_version_id"]),
-            product_version_id=product_version_id,
-            store=(
-                None if source_scope.get("mode") == "auto" else str(source["store"])
-            ),
-            listing=(None if source_scope.get("mode") == "auto" else source["listing"]),
-            config_version_id=str(source["config_version_id"]),
-            model_policy=model_policy,
-            analysis_context=analysis_context_from_snapshot(source_snapshot),
-        )
+        plan_inputs = self._replan_plan_inputs(source, product_version_id)
+        model_policy = plan_inputs["model_policy"]
+        prepared = self.plan_service.prepare(**plan_inputs)
         current_hash = str(prepared.response["plan_hash"])
         if current_hash != plan_hash:
             raise TaskPlanConflict("执行计划已变化，请重新预检后再提交")
         return clean_reason, model_policy, prepared, current_hash
+
+    def _replan_plan_inputs(
+        self, task: dict[str, Any], product_version_id: str
+    ) -> dict[str, Any]:
+        snapshot_scope = task.get("snapshot", {}).get("scope", {})
+        task_snapshot = task.get("snapshot", {})
+        model_policy = self._snapshot_model_policy(task)
+        return {
+            "dataset_version_id": str(task["dataset_version_id"]),
+            "product_version_id": product_version_id,
+            "store": (
+                None if snapshot_scope.get("mode") == "auto" else str(task["store"])
+            ),
+            "listing": None
+            if snapshot_scope.get("mode") == "auto"
+            else task["listing"],
+            "config_version_id": str(task["config_version_id"]),
+            "model_policy": model_policy,
+            "analysis_context": analysis_context_from_snapshot(task_snapshot),
+        }
 
     def _replan_task_row(
         self,
