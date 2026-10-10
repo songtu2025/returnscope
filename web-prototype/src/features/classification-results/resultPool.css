@@ -52,8 +52,7 @@
 .classification-results-page .ant-select {
   min-width: 0;
 }
-.classification-results-page .ant-input-affix-wrapper > .ant-input,
-.classification-results-page .ant-select-input {
+.classification-results-page .ant-input-affix-wrapper > .ant-input {
   width: auto;
   height: auto;
   padding: 0;

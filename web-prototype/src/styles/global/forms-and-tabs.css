@@ -69,7 +69,8 @@ label {
   font-size: 13px;
   font-weight: 700;
 }
-input,
+/* 下拉框内部输入层由组件管理，避免原生表单样式触发内容区滚动。 */
+input:where(:not(.ant-select-input)),
 select,
 textarea {
   width: 100%;
@@ -80,7 +81,7 @@ textarea {
   font-size: 10px;
   transition: 0.14s ease;
 }
-input,
+input:where(:not(.ant-select-input)),
 select {
   height: 37px;
   padding: 0 10px;
@@ -89,12 +90,12 @@ textarea {
   padding: 10px;
   resize: vertical;
 }
-input:hover,
+input:where(:not(.ant-select-input)):hover,
 select:hover,
 textarea:hover {
   border-color: #b7c6bf;
 }
-input:disabled,
+input:where(:not(.ant-select-input)):disabled,
 select:disabled,
 textarea:disabled {
   color: #4d5a54;
