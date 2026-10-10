@@ -39,14 +39,12 @@ export function DashboardCreateConfirmation(context) {
         </label>
       )}
       <footer className="dashboard-confirm-actions">
-        <div className="dashboard-lineage-note">
-          <GitBranch size={19} />
-          <span>
-            {isVersionCreation
-              ? "新版本会保留旧版本，历史看板不会自动漂移。"
-              : "生成后固化数据来源，后续分类结果变化不会影响当前版本。"}
-          </span>
-        </div>
+        {isVersionCreation && (
+          <div className="dashboard-lineage-note">
+            <GitBranch size={19} />
+            <span>新版本会保留旧版本，历史看板不会自动漂移。</span>
+          </div>
+        )}
         {confirmationMessage && (
           <p className="dashboard-form-error" role="alert">
             {confirmationMessage}

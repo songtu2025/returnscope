@@ -54,7 +54,13 @@ export function DashboardCreateFlow(props) {
         <ArrowLeft size={17} /> 返回选择分类结果
       </button>
       <PageHeading
-        eyebrow={isVersionCreation ? "创建看板新版本" : "生成不可变看板数据集"}
+        eyebrow={
+          isVersionCreation
+            ? "创建看板新版本"
+            : isInsightCreation
+              ? "生成不可变看板数据集"
+              : undefined
+        }
         title={
           isVersionCreation
             ? "基于新分类结果创建版本"
@@ -63,7 +69,7 @@ export function DashboardCreateFlow(props) {
               : "创建分析看板"
         }
       />
-      <DashboardCreateSteps step={route.step} />
+      {isInsightCreation && <DashboardCreateSteps step={route.step} />}
 
       {state.loading && !state.plan && (
         <InlineLoading label="正在检查分类结果与 Listing 冲突…" />
