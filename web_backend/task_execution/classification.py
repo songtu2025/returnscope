@@ -6,7 +6,10 @@ from typing import Any
 import pandas as pd
 
 from return_semantics.analysis_context import analysis_context_from_snapshot
-from return_semantics.category_pipeline import CategorySegmentRuntime
+from return_semantics.category_pipeline import (
+    CategorySegmentRuntime,
+    secondary_is_fallback,
+)
 from return_semantics.claims import NO_CLAIMS_VERSION, ClaimsResolver
 from return_semantics.model_client import (
     JsonlCache,
@@ -103,11 +106,7 @@ class ClassificationExecutionMixin:
             cache=self._get_cache(f"{task['id']}-{task['config_version_id']}"),
             secondary_model=runtime.secondary_model,
             model_policy_version=str(runtime.model_policy["version"]),
-            secondary_is_fallback=bool(
-                runtime.model_policy["actual"].get("review")
-                and runtime.model_policy["actual"]["review"].get("fallback_from")
-                == "secondary"
-            ),
+            secondary_is_fallback=secondary_is_fallback(runtime.model_policy),
             progress=progress,
             should_cancel=lambda: self._segment_should_stop(
                 context.task_id,
@@ -153,7 +152,6 @@ class ClassificationExecutionMixin:
             str(task["store"]),
             task.get("listing"),
         )
-        review = runtime.model_policy["actual"].get("review")
         return classify_comments(
             unique_comments=unique_comments,
             taxonomy=taxonomy,
@@ -163,9 +161,7 @@ class ClassificationExecutionMixin:
             secondary_model=runtime.secondary_model,
             progress=progress,
             model_policy_version=str(runtime.model_policy["version"]),
-            secondary_is_fallback=bool(
-                review and review.get("fallback_from") == "secondary"
-            ),
+            secondary_is_fallback=secondary_is_fallback(runtime.model_policy),
             analysis_context=analysis_context_from_snapshot(snapshot),
         )
 
@@ -204,12 +200,6 @@ class ClassificationExecutionMixin:
             else settings.secondary_model,
             progress=progress,
             model_policy_version=str(source["model_policy_version"]),
-            secondary_is_fallback=bool(
-                model_policy
-                and model_policy["actual"].get("review")
-                and (
-                    model_policy["actual"]["review"].get("fallback_from") == "secondary"
-                )
-            ),
+            secondary_is_fallback=secondary_is_fallback(model_policy),
             analysis_context=source.get("analysis_context", "returns"),
         )

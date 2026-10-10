@@ -182,6 +182,10 @@ def _secondary_is_fallback(model_policy: dict[str, object] | None) -> bool:
     )
 
 
+# 任务执行与品类编排共用同一复核模型兜底判定，保留原入口。
+secondary_is_fallback = _secondary_is_fallback
+
+
 def classify_category_segments(
     dataset: ReturnDataset,
     registry: CapabilityRegistry,
