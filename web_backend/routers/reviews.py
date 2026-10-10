@@ -17,6 +17,12 @@ from web_backend.review_service import (
     RevisionConflict,
 )
 
+_REVIEW_ASSESSMENT_FIELDS = {
+    "label_correctness",
+    "evidence_completeness",
+    "review_routing",
+}
+
 
 def create_review_router(
     review_service: ReviewService,
@@ -177,11 +183,7 @@ def _register_review_batch_changes(
                 label_code=payload.label_code,
                 note=payload.reason,
                 action=payload.action,
-                review_assessment={
-                    "label_correctness": payload.label_correctness,
-                    "evidence_completeness": payload.evidence_completeness,
-                    "review_routing": payload.review_routing,
-                },
+                review_assessment=payload.model_dump(include=_REVIEW_ASSESSMENT_FIELDS),
                 semantic_item_reviews=(
                     [
                         item.model_dump(exclude_none=True)
@@ -219,11 +221,7 @@ def _register_review_batch_changes(
                 action=payload.action,
                 label_code=payload.label_code,
                 note=payload.reason,
-                review_assessment={
-                    "label_correctness": payload.label_correctness,
-                    "evidence_completeness": payload.evidence_completeness,
-                    "review_routing": payload.review_routing,
-                },
+                review_assessment=payload.model_dump(include=_REVIEW_ASSESSMENT_FIELDS),
             )
         except (ReviewBatchConflict, RevisionConflict) as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
