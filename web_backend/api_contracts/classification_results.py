@@ -133,6 +133,7 @@ class ClassificationPayloadResponse(CompatibleResponse):
 
 class ClassificationResultRecordResponse(CompatibleResponse):
     id: str
+    system_rerun_required: bool
     processing_status: str
     semantic_disposition: str
     comment_summary_status: str

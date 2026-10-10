@@ -13,12 +13,14 @@ import { Modal } from "../../components/SharedUi";
 export function SegmentRetryDialog({ task, segment, error, onClose, onSave }) {
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
+  const isFailureRetry = segment.system_retry_available === true;
+  const retryReason = isFailureRetry ? "重试分析失败项" : reason;
   /** @param {import("react").FormEvent<HTMLFormElement>} event */
   const submit = async (event) => {
     event.preventDefault();
     setSaving(true);
     try {
-      await onSave({ expected_revision: task.revision, reason });
+      await onSave({ expected_revision: task.revision, reason: retryReason });
     } finally {
       setSaving(false);
     }
@@ -26,36 +28,40 @@ export function SegmentRetryDialog({ task, segment, error, onClose, onSave }) {
   return (
     <Modal
       eyebrow="片段异常处理"
-      title={`重试 ${segment.agent_family}`}
+      title={isFailureRetry ? "重试分析失败项？" : `重试 ${segment.agent_family}`}
       onClose={onClose}
     >
       <form className="modal-form" onSubmit={submit}>
         <p className="form-hint">
-          将按当前任务快照重新排队片段“{segment.segment_key}”；未知品类不能直接重试。
+          {isFailureRetry
+            ? "重试失败项，保留成功结果，生成新版本。"
+            : `将按当前任务快照重新排队片段“${segment.segment_key}”；未知品类不能直接重试。`}
         </p>
         {error && (
           <p className="form-error" role="alert">
             {error}
           </p>
         )}
-        <label>
-          重试原因
-          <textarea
-            value={reason}
-            onChange={(event) => setReason(event.target.value)}
-            maxLength={500}
-            rows={3}
-            placeholder="必填，说明异常原因与重试依据"
-            required
-            autoFocus
-          />
-        </label>
+        {!isFailureRetry && (
+          <label>
+            重试原因
+            <textarea
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              maxLength={500}
+              rows={3}
+              placeholder="必填，说明异常原因与重试依据"
+              required
+              autoFocus
+            />
+          </label>
+        )}
         <div className="modal-actions">
           <button type="button" className="secondary-button" onClick={onClose}>
             取消
           </button>
-          <button className="primary-button" disabled={saving || !reason.trim()}>
-            {saving ? "正在提交…" : "确认重试片段"}
+          <button className="primary-button" disabled={saving || !retryReason.trim()}>
+            {saving ? "正在提交…" : isFailureRetry ? "开始重试" : "确认重试片段"}
           </button>
         </div>
       </form>

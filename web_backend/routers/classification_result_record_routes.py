@@ -40,6 +40,7 @@ def register_result_record_routes(
         problem: str | None = Query(default=None),
         quality_status: str | None = Query(default=None),
         comment_status: str | None = Query(default=None),
+        system_rerun_required: str | None = Query(default=None),
     ) -> dict[str, Any]:
         try:
             return result_service.records(
@@ -56,6 +57,7 @@ def register_result_record_routes(
                 problem=problem,
                 quality_status=quality_status,
                 comment_status=comment_status,
+                system_rerun_required=system_rerun_required,
             )
         except ClassificationResultNotFound as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -82,6 +84,7 @@ def register_result_record_routes(
         problem: str | None = Query(default=None),
         quality_status: str | None = Query(default=None),
         comment_status: str | None = Query(default=None),
+        system_rerun_required: str | None = Query(default=None),
     ) -> dict[str, Any]:
         try:
             return result_service.record_groups(
@@ -98,6 +101,7 @@ def register_result_record_routes(
                 problem=problem,
                 quality_status=quality_status,
                 comment_status=comment_status,
+                system_rerun_required=system_rerun_required,
             )
         except ClassificationResultNotFound as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc

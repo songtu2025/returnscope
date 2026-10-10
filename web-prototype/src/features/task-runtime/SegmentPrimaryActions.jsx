@@ -61,13 +61,13 @@ function SegmentRetryControls({ task, segment, actions }) {
           className="secondary-button compact-button"
           title={
             segment.system_failure_count
-              ? `重新处理 ${segment.system_failure_count} 个系统异常`
-              : "重新处理系统异常"
+              ? `重新分析 ${segment.system_failure_count} 个失败项`
+              : "重新分析失败项"
           }
           onClick={() => onRetry(segment)}
         >
           <ArrowClockwise size={15} />
-          重试系统异常
+          重试分析失败项
         </Button>
       )}
       {!canRetrySystemAnomalies && canRetrySegment(task, segment) && (

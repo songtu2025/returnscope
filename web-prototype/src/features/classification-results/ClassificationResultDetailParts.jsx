@@ -134,6 +134,13 @@ export function ResultRecordRow({ group, analysisContext, onOpen }) {
             (isUserFeedback ? "未形成语义标签" : "未形成问题标签")}
         </b>
       </div>
+      <div>
+        <span
+          className={`result-quality-badge ${record.system_rerun_required ? "needs_review" : "ready"}`}
+        >
+          {record.system_rerun_required ? "需重跑" : "无需重跑"}
+        </span>
+      </div>
       <div className="result-row-actions">
         <button
           className="secondary-button compact-button"

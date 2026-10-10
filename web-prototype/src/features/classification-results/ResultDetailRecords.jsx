@@ -64,7 +64,7 @@ function ResultRecordEmpty({ isUserFeedback }) {
     <EmptyState
       icon={MagnifyingGlass}
       title={isUserFeedback ? "当前条件没有反馈记录" : "当前条件没有订单记录"}
-      description="调整筛选条件后重试，也可使用上方“清除结果筛选”恢复全部状态和类型。"
+      description="调整筛选条件后重试，也可清除上方的结果筛选。"
     />
   );
 }
@@ -81,6 +81,7 @@ function ResultRecordHeading(context) {
           {Number(records?.total || 0).toLocaleString()} 组反馈 · 关联
           {Number(records?.source_total || 0).toLocaleString()} 条源明细
         </span>
+        <small>重跑标记仅表示当前版本的需求，执行以来源任务当前状态为准。</small>
       </div>
       <div className="result-record-tools">
         <ResultRecordFilters {...context}>
@@ -120,6 +121,7 @@ function ResultRecordColumnHead(context) {
       <span>产品名称 / 产品SKU</span>
       <span>{isUserFeedback ? "反馈标题 / 正文" : "Amazon原因"}</span>
       <span>{isUserFeedback ? "语义结果" : "分类结果"}</span>
+      <span>重跑标记</span>
       <span>操作</span>
     </div>
   );

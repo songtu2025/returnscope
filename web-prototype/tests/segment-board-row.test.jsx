@@ -196,8 +196,8 @@ test("系统异常重试优先于通用重试，运行任务禁止系统异常�
     "completed",
   );
   const view = render(<SegmentBoardRow {...props} />);
-  const retry = screen.getByRole("button", { name: "重试系统异常" });
-  expect(retry).toHaveAttribute("title", "重新处理 2 个系统异常");
+  const retry = screen.getByRole("button", { name: "重试分析失败项" });
+  expect(retry).toHaveAttribute("title", "重新分析 2 个失败项");
   expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument();
   await userEvent.click(retry);
   expect(props.actions.onRetry).toHaveBeenCalledExactlyOnceWith(props.segment);
@@ -205,7 +205,7 @@ test("系统异常重试优先于通用重试，运行任务禁止系统异常�
     <SegmentBoardRow {...props} task={{ ...props.task, status: "running" }} />,
   );
   expect(
-    screen.queryByRole("button", { name: "重试系统异常" }),
+    screen.queryByRole("button", { name: "重试分析失败项" }),
   ).not.toBeInTheDocument();
 });
 

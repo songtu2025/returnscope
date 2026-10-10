@@ -120,8 +120,9 @@ def test_group_queries_are_constant_and_enrichment_runs_once_per_group(
 @pytest.mark.parametrize(
     "quality", ["ready", "review_required", "unusable", "excluded"]
 )
+@pytest.mark.parametrize("rerun", [True, False])
 def test_result_filters_match_display_status_and_preserve_group_counts(
-    context, semantic_status, quality
+    context, semantic_status, quality, rerun
 ) -> None:
     version_id = context.version["version_id"]
     with context.database.transaction() as connection:
@@ -134,22 +135,32 @@ def test_result_filters_match_display_status_and_preserve_group_counts(
             "fact_ids": ["synthetic-fact"],
         }
         connection.execute(
-            "UPDATE classification_units SET classification_json = ?, quality_status = ?",
-            (json_text(payload), quality),
+            "UPDATE classification_units SET classification_json = ?, quality_status = ?, system_rerun_required = ?",
+            (json_text(payload), quality, int(rerun)),
         )
         connection.execute(
             "UPDATE classification_result_records SET quality_status = ?", (quality,)
         )
-    filters = {"quality_status": quality, "comment_status": semantic_status}
+    filters = {
+        "quality_status": quality,
+        "comment_status": semantic_status,
+        "system_rerun_required": str(rerun).lower(),
+    }
     first = context.service.record_groups(version_id, page_size=1, **filters)
     assert (first["total"], first["source_total"]) == (2, 3)
     assert first["items"][0]["member_count"] == 2
     assert first["items"][0]["record"]["comment_summary_status"] == semantic_status
+    assert first["items"][0]["record"]["system_rerun_required"] is rerun
     second = context.service.record_groups(version_id, page=2, page_size=1, **filters)
     assert second["items"][0]["members"][0]["source_row"] == 4
     records = context.service.records(version_id, page_size=1, **filters)
     assert records["total"] == 3
     assert records["items"][0]["comment_summary_status"] == semantic_status
+    assert records["items"][0]["system_rerun_required"] is rerun
+    opposite = context.service.record_groups(
+        version_id, system_rerun_required=str(not rerun).lower()
+    )
+    assert opposite["total"] == opposite["source_total"] == 0
     mismatched = "unusable" if quality != "unusable" else "ready"
     empty = context.service.record_groups(
         version_id, **{**filters, "quality_status": mismatched}
@@ -194,3 +205,40 @@ def test_invalid_semantic_filter_is_rejected(context, method) -> None:
         getattr(context.service, method)(
             context.version["version_id"], comment_status="UNKNOWN"
         )
+
+
+def test_rerun_filter_selects_unit_members_before_group_pagination(context) -> None:
+    version_id = context.version["version_id"]
+    with context.database.transaction() as connection:
+        # 隔离测试中增加另一个分类单元，验证不会按结果质量猜测重跑范围。
+        unit = dict(connection.execute("SELECT * FROM classification_units").fetchone())
+        unit.update(
+            id="synthetic-retry-unit",
+            classification_key="synthetic-retry",
+            system_rerun_required=1,
+        )
+        columns = ", ".join(unit)
+        placeholders = ", ".join("?" for _ in unit)
+        connection.execute(
+            f"INSERT INTO classification_units ({columns}) VALUES ({placeholders})",
+            tuple(unit.values()),
+        )
+        connection.execute(
+            "UPDATE classification_result_records SET classification_key = 'synthetic-retry' WHERE order_id = 'ORDER-OTHER'"
+        )
+    retry = context.service.record_groups(
+        version_id, system_rerun_required="true", page_size=1
+    )
+    assert (retry["total"], retry["source_total"]) == (1, 1)
+    assert retry["items"][0]["record"]["order_id"] == "ORDER-OTHER"
+    assert retry["items"][0]["record"]["system_rerun_required"] is True
+    keep = context.service.record_groups(
+        version_id, system_rerun_required="false", page_size=1
+    )
+    assert (keep["total"], keep["source_total"]) == (1, 2)
+    assert keep["items"][0]["member_count"] == 2
+    assert keep["items"][0]["record"]["system_rerun_required"] is False
+    empty = context.service.record_groups(
+        version_id, system_rerun_required="true", page=2, page_size=1
+    )
+    assert empty["items"] == [] and empty["total"] == 1

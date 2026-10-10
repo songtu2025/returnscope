@@ -7,7 +7,9 @@ import { RESULT_STATE_LABELS } from "./resultStatePolicy";
 /** @param {Pick<import("./classificationResultDetailContracts").ResultDetailContext, "route" | "updateRoute"> & {children: import("react").ReactNode}} props */
 export function ResultRecordFilters({ route, updateRoute, children }) {
   const id = useId();
-  const filtered = Boolean(route.recordQualityStatus || route.commentStatus);
+  const filtered = Boolean(
+    route.recordQualityStatus || route.commentStatus || route.systemRerunRequired,
+  );
   return (
     <div className="result-record-filters" role="group" aria-label="结果筛选">
       <div className="result-record-field">
@@ -46,11 +48,33 @@ export function ResultRecordFilters({ route, updateRoute, children }) {
           ]}
         />
       </div>
+      <div className="result-record-field">
+        <label htmlFor={`${id}-rerun`}>重跑标记</label>
+        <Select
+          id={`${id}-rerun`}
+          aria-label="重跑标记"
+          virtual={false}
+          value={route.systemRerunRequired}
+          onChange={(systemRerunRequired) =>
+            updateRoute({ systemRerunRequired, recordPage: 1 })
+          }
+          options={[
+            { value: "", label: "全部" },
+            { value: "true", label: "需重跑" },
+            { value: "false", label: "无需重跑" },
+          ]}
+        />
+      </div>
       {children}
       <Button
         disabled={!filtered}
         onClick={() =>
-          updateRoute({ recordQualityStatus: "", commentStatus: "", recordPage: 1 })
+          updateRoute({
+            recordQualityStatus: "",
+            commentStatus: "",
+            systemRerunRequired: "",
+            recordPage: 1,
+          })
         }
       >
         清除结果筛选

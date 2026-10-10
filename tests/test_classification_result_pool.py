@@ -757,6 +757,14 @@ def test_system_failure_retry_publishes_new_version_without_overwrite(
     assert second["version"] == 2
     assert second["parent_version_id"] == first["version_id"]
     assert second["quality_status"] == "ready"
+    assert all(
+        item["system_rerun_required"] is True
+        for item in service.records(first["version_id"])["items"]
+    )
+    assert all(
+        item["system_rerun_required"] is False
+        for item in service.records(second["version_id"])["items"]
+    )
     repeated = service.publish_v1(
         dataset=context.dataset,
         results=context.results,

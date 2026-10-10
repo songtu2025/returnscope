@@ -38,7 +38,7 @@ class ClassificationResultRecordFiltersMixin:
     def _records_select() -> str:
         return """
             SELECT r.*, u.processing_status, u.problem_labels_json,
-                   u.classification_json
+                   u.classification_json, u.system_rerun_required
             FROM classification_result_records r
             JOIN classification_units u
               ON u.result_version_id = r.result_version_id
@@ -71,6 +71,21 @@ class ClassificationResultRecordFiltersMixin:
             self._validate_quality_status(quality_status)
             where.append("r.quality_status = ?")
             params.append(quality_status)
+        system_rerun_required = filters.get("system_rerun_required")
+        if system_rerun_required is not None:
+            if system_rerun_required not in {"true", "false"}:
+                raise ValueError("system_rerun_required 不合法")
+            where.append(
+                """
+                EXISTS (
+                    SELECT 1 FROM classification_units retry_unit
+                    WHERE retry_unit.result_version_id = r.result_version_id
+                      AND retry_unit.classification_key = r.classification_key
+                      AND retry_unit.system_rerun_required = ?
+                )
+                """
+            )
+            params.append(int(system_rerun_required == "true"))
         comment_status = filters.get("comment_status")
         if comment_status:
             if comment_status not in [status.value for status in CommentSummaryStatus]:

@@ -289,8 +289,8 @@ test("后端标记系统异常可重试时展示专用入口并复用 Listing �
     />,
   );
 
-  const retryButton = screen.getByRole("button", { name: "重试系统异常" });
-  expect(retryButton).toHaveAttribute("title", "重新处理 2 个系统异常");
+  const retryButton = screen.getByRole("button", { name: "重试分析失败项" });
+  expect(retryButton).toHaveAttribute("title", "重新分析 2 个失败项");
   expect(screen.queryByRole("button", { name: "重试" })).toBeNull();
   await userEvent.click(retryButton);
   expect(onRetry).toHaveBeenCalledWith(segment);

@@ -42,6 +42,7 @@ export function ClassificationResultDetailView(props) {
             orderId: "",
             recordQualityStatus: "",
             commentStatus: "",
+            systemRerunRequired: "",
           })
         }
       >

@@ -131,6 +131,11 @@
 .result-record-heading > span {
   display: block;
 }
+.result-record-heading > small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
 .result-drilldown-card > header span,
 .result-record-heading > span {
   margin-top: 3px;
@@ -244,8 +249,8 @@
 .result-record-row {
   display: grid;
   grid-template-columns:
-    124px 142px minmax(160px, 1.25fr) minmax(130px, 1fr) minmax(150px, 1fr)
-    106px;
+    minmax(110px, 0.9fr) minmax(120px, 0.9fr) minmax(140px, 1fr)
+    minmax(110px, 0.9fr) minmax(140px, 1.1fr) 76px 106px;
   gap: 11px;
   align-items: center;
   min-width: 0;

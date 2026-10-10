@@ -20,11 +20,15 @@ export function useClassificationResultRecords({ route, notify }) {
       order_id: route.orderId,
       quality_status: route.recordQualityStatus,
       comment_status: route.commentStatus,
+      ...(route.systemRerunRequired
+        ? { system_rerun_required: route.systemRerunRequired }
+        : {}),
     }),
     [
       route.orderId,
       route.recordQualityStatus,
       route.commentStatus,
+      route.systemRerunRequired,
       route.pageSize,
       route.problem,
       route.productName,

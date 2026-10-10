@@ -15,7 +15,7 @@ GROUP_MEMBERS_SQL = """
         LIMIT ? OFFSET ?
     )
     SELECT f.*, s.member_count, u.processing_status,
-           u.problem_labels_json, u.classification_json
+           u.problem_labels_json, u.classification_json, u.system_rerun_required
     FROM filtered f
     JOIN selected s ON s.display_key = f.display_key
     JOIN classification_units u

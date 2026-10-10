@@ -58,11 +58,15 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-test("已忽略记录的行内状态与筛选选项一致", () => {
+test.each([true, false])("行内状态与重跑标记一致：%s", (rerun) => {
   render(
     <ResultRecordRow
       group={{
-        record: { quality_status: "excluded", comment_summary_status: "NO_CONFIRMED" },
+        record: {
+          quality_status: "excluded",
+          comment_summary_status: "NO_CONFIRMED",
+          system_rerun_required: rerun,
+        },
         member_count: 1,
         members: [],
       }}
@@ -74,9 +78,10 @@ test("已忽略记录的行内状态与筛选选项一致", () => {
     screen.getByText("已忽略", { selector: ".result-quality-badge" }),
   ).toBeVisible();
   expect(screen.queryByText("状态未提供")).not.toBeInTheDocument();
+  expect(screen.getByText(rerun ? "需重跑" : "无需重跑")).toBeVisible();
 });
 
-test("两个筛选器提供与记录标签相同的完整状态选项", async () => {
+test("三个筛选器提供与记录标签相同的完整状态选项", async () => {
   const user = userEvent.setup();
   render(<RecordFiltersHarness />);
   await screen.findByText("当前条件没有反馈记录");
@@ -100,12 +105,22 @@ test("两个筛选器提供与记录标签相同的完整状态选项", async ()
       .map((el) => el.textContent),
   ).toEqual(["全部类型", "仅正向", "仅负向", "混合表现", "疑似冲突", "无确定评价"]);
   await user.keyboard("{Escape}");
+  await user.click(screen.getByRole("combobox", { name: "重跑标记" }));
+  const rerunOptions = document.getElementById(
+    screen.getByLabelText("重跑标记").getAttribute("aria-controls"),
+  );
+  expect(
+    within(rerunOptions)
+      .getAllByRole("option")
+      .map((el) => el.textContent),
+  ).toEqual(["全部", "需重跑", "无需重跑"]);
+  await user.keyboard("{Escape}");
   expect(screen.getByRole("button", { name: "清除结果筛选" })).toBeDisabled();
 });
 
 test("URL 恢复组合条件且版本质量筛选不会污染记录状态", async () => {
   window.location.hash =
-    "classification-results?result_version_id=synthetic-version&quality_status=ready&record_quality_status=unusable&comment_status=NEGATIVE&record_page=2&page_size=50&problem=FIT&product_name=demo&product_sku=SKU&order_id=ORDER";
+    "classification-results?result_version_id=synthetic-version&quality_status=ready&record_quality_status=unusable&comment_status=NEGATIVE&system_rerun_required=true&record_page=2&page_size=50&problem=FIT&product_name=demo&product_sku=SKU&order_id=ORDER";
   render(<RecordFiltersHarness />);
   await waitFor(() =>
     expect(apiMock.classificationResultRecordGroups).toHaveBeenCalledWith(
@@ -115,6 +130,7 @@ test("URL 恢复组合条件且版本质量筛选不会污染记录状态", asyn
         page_size: 50,
         quality_status: "unusable",
         comment_status: "NEGATIVE",
+        system_rerun_required: "true",
         problem: "FIT",
         product_name: "demo",
         product_sku: "SKU",
@@ -147,6 +163,8 @@ test("筛选立即查询、重置页码且清除时保留其他条件", async ()
   await user.click(screen.getByRole("option", { name: "需复核" }));
   await user.click(screen.getByRole("combobox", { name: "语义类型" }));
   await user.click(screen.getByRole("option", { name: "混合表现" }));
+  await user.click(screen.getByRole("combobox", { name: "重跑标记" }));
+  await user.click(screen.getByRole("option", { name: "无需重跑" }));
   await waitFor(() =>
     expect(apiMock.classificationResultRecordGroups).toHaveBeenLastCalledWith(
       "synthetic-version",
@@ -154,6 +172,7 @@ test("筛选立即查询、重置页码且清除时保留其他条件", async ()
         page: 1,
         quality_status: "review_required",
         comment_status: "MIXED",
+        system_rerun_required: "false",
         product_sku: "SKU",
         order_id: "ORDER",
       }),
@@ -176,6 +195,7 @@ test("筛选立即查询、重置页码且清除时保留其他条件", async ()
   );
   expect(window.location.hash).not.toContain("record_page");
   expect(window.location.hash).not.toContain("comment_status");
+  expect(window.location.hash).not.toContain("system_rerun_required");
   expect(screen.getByLabelText("语义类型").closest(".ant-select")).toHaveTextContent(
     "全部类型",
   );
@@ -186,7 +206,7 @@ test("hash 历史变化同步筛选器和查询参数", async () => {
   await screen.findByText("当前条件没有反馈记录");
   await act(async () => {
     window.location.hash =
-      "classification-results?result_version_id=synthetic-version&record_quality_status=excluded&comment_status=NO_CONFIRMED";
+      "classification-results?result_version_id=synthetic-version&record_quality_status=excluded&comment_status=NO_CONFIRMED&system_rerun_required=true";
     window.dispatchEvent(new HashChangeEvent("hashchange"));
   });
   expect(screen.getByLabelText("结果状态").closest(".ant-select")).toHaveTextContent(
@@ -201,6 +221,7 @@ test("hash 历史变化同步筛选器和查询参数", async () => {
       expect.objectContaining({
         quality_status: "excluded",
         comment_status: "NO_CONFIRMED",
+        system_rerun_required: "true",
       }),
       expect.any(Object),
     ),

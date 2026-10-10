@@ -114,6 +114,7 @@ class _ClassificationResultRecords(
 
     @staticmethod
     def _serialize_record(value: dict[str, Any]) -> dict[str, Any]:
+        value["system_rerun_required"] = bool(value["system_rerun_required"])
         value["problem_labels"] = json_value(
             value.pop("problem_labels_json", None),
             [],

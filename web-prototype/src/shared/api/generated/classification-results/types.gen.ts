@@ -580,6 +580,10 @@ export type ClassificationResultRecordResponse = {
    */
   store_site?: string | null;
   /**
+   * System Rerun Required
+   */
+  system_rerun_required: boolean;
+  /**
    * Unknown Semantics
    */
   unknown_semantics?: Array<ClassificationUnknownSemanticResponse>;
@@ -1802,6 +1806,10 @@ export type ListRecordGroupsApiClassificationResultsVersionIdRecordGroupsGetData
      * Comment Status
      */
     comment_status?: string | null;
+    /**
+     * System Rerun Required
+     */
+    system_rerun_required?: string | null;
   };
   url: "/api/classification-results/{version_id}/record-groups";
 };
@@ -1884,6 +1892,10 @@ export type ListRecordsApiClassificationResultsVersionIdRecordsGetData = {
      * Comment Status
      */
     comment_status?: string | null;
+    /**
+     * System Rerun Required
+     */
+    system_rerun_required?: string | null;
   };
   url: "/api/classification-results/{version_id}/records";
 };

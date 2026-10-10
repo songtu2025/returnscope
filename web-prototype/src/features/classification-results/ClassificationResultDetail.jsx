@@ -41,6 +41,7 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
       route.productSku,
       route.recordQualityStatus,
       route.commentStatus,
+      route.systemRerunRequired,
       route.version,
     ],
   );
