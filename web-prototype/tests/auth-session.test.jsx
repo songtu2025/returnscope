@@ -1,11 +1,16 @@
 import { apiMock } from "./product-flow-mocks";
-import { expect, test, vi } from "vitest";
+import { beforeAll, expect, test, vi } from "vitest";
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithServerState as render } from "./renderWithServerState";
 import { App } from "../src/App";
 import { AuthPages } from "../src/pages/AuthPages";
 import { SESSION_EXPIRED_EVENT } from "../src/shared/api/request";
+
+beforeAll(async () => {
+  // 会话断言从首页依赖就绪后开始，不将并行编译耗时混入页面等待窗口。
+  await import("../src/features/workbench/WorkbenchPage");
+});
 
 test("任意子页面会话失效后退出已登录应用壳", async () => {
   apiMock.me.mockResolvedValue({
