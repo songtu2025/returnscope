@@ -1,155 +1,108 @@
 from __future__ import annotations
 
-from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 
-
-class StrictModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-
-def _validated_variant_ref(value: str) -> str:
-    normalized = value.strip()
-    if not normalized:
-        raise ValueError("规格引用不能为空")
-    if normalized.upper().startswith("UNSPEC") and normalized != "UNSPECIFIED":
-        raise ValueError("未明确规格必须精确使用UNSPECIFIED")
-    return normalized
-
-
-class SubjectCode(StrEnum):
-    PRODUCT = "PRODUCT"
-    CUSTOMER = "CUSTOMER"
-    DELIVERY = "DELIVERY"
-    ORDER = "ORDER"
-    SERVICE = "SERVICE"
-    UNKNOWN = "UNKNOWN"
-
-
-class SentimentCode(StrEnum):
-    NEGATIVE = "NEGATIVE"
-    POSITIVE = "POSITIVE"
-    NEUTRAL = "NEUTRAL"
-
-
-class AssertionCode(StrEnum):
-    AFFIRMED = "AFFIRMED"
-    NEGATED = "NEGATED"
-    UNCERTAIN = "UNCERTAIN"
-
-
-class FactSpecificity(StrEnum):
-    SPECIFIC = "SPECIFIC"
-    GENERAL_EVALUATION = "GENERAL_EVALUATION"
-
-
-class ExperiencerResolution(StrEnum):
-    EXPLICIT = "EXPLICIT"
-    INHERITED = "INHERITED"
-    AMBIGUOUS = "AMBIGUOUS"
-
-
-class FactExtractionSource(StrEnum):
-    PRIMARY = "PRIMARY"
-    COVERAGE = "COVERAGE"
-
-
-class ClaimRelation(StrEnum):
-    CONTRADICTS = "CONTRADICTS"
-    SUPPORTS = "SUPPORTS"
-    RELATED_UNCERTAIN = "RELATED_UNCERTAIN"
-    NONE = "NONE"
-
-
-class EvidenceSource(StrEnum):
-    COMMENT = "COMMENT"
-    TITLE = "TITLE"
-    BODY = "BODY"
-    TITLE_AND_BODY = "TITLE_AND_BODY"
-
-
-class ReferenceBasis(StrEnum):
-    NONE = "NONE"
-    PERSONAL_PREFERENCE = "PERSONAL_PREFERENCE"
-    SIZE_CHART = "SIZE_CHART"
-    LISTING = "LISTING"
-    MARKET_NORM = "MARKET_NORM"
-    BARE_USE = "BARE_USE"
-    OTHER_PRODUCT = "OTHER_PRODUCT"
-    OTHER_PERSON = "OTHER_PERSON"
-
-
-class FactRole(StrEnum):
-    CONCLUSION = "CONCLUSION"
-    EVIDENCE = "EVIDENCE"
-    CONTEXT = "CONTEXT"
-
-
-class CausalAttributionCode(StrEnum):
-    UNKNOWN = "UNKNOWN"
-    PRODUCT_INTRINSIC = "PRODUCT_INTRINSIC"
-    NORMAL_USE = "NORMAL_USE"
-    CUSTOMER_ACTION = "CUSTOMER_ACTION"
-    DELIVERY = "DELIVERY"
-    ORDER = "ORDER"
-    SERVICE = "SERVICE"
-    EXTERNAL_CONDITION = "EXTERNAL_CONDITION"
-
-
-class FactRelationType(StrEnum):
-    NONE = "NONE"
-    COVERED_BY = "COVERED_BY"
-    SUPPORTS = "SUPPORTS"
-    QUALIFIES = "QUALIFIES"
-    CAUSED_BY = "CAUSED_BY"
-
-
-class SemanticDisposition(StrEnum):
-    EXPECTED_ABSTENTION = "EXPECTED_ABSTENTION"
-    EVIDENCE_ONLY = "EVIDENCE_ONLY"
-    TAXONOMY_GAP = "TAXONOMY_GAP"
-    MAPPING_UNCERTAIN = "MAPPING_UNCERTAIN"
-    OUT_OF_SCOPE = "OUT_OF_SCOPE"
-
-
-class CommentSummaryStatus(StrEnum):
-    POSITIVE = "POSITIVE"
-    NEGATIVE = "NEGATIVE"
-    MIXED = "MIXED"
-    CONFLICT = "CONFLICT"
-    NO_CONFIRMED = "NO_CONFIRMED"
-
-
-class SemanticRelationType(StrEnum):
-    CONFLICT = "CONFLICT"
-    MIXED = "MIXED"
-    MULTI_ACTOR = "MULTI_ACTOR"
-    MULTI_PRODUCT = "MULTI_PRODUCT"
-
-
-class ProcessingStatus(StrEnum):
-    AUTO_APPROVED = "AUTO_APPROVED"
-    MANUAL_RESOLVED = "MANUAL_RESOLVED"
-    SECONDARY_REVIEW = "SECONDARY_REVIEW"
-    MANUAL_REVIEW = "MANUAL_REVIEW"
-    NO_TEXT_EVIDENCE = "NO_TEXT_EVIDENCE"
-    UNKNOWN_SEMANTIC = "UNKNOWN_SEMANTIC"
-    MODEL_ERROR = "MODEL_ERROR"
-
-
-def _migrate_semantic_refs(value: object) -> object:
-    if not isinstance(value, dict):
-        return value
-    migrated = dict(value)
-    actor_ref = str(
-        migrated.get("actor_ref") or migrated.get("experiencer_ref") or "REVIEWER"
-    )
-    migrated.setdefault("actor_ref", actor_ref)
-    migrated.setdefault("source_ref", actor_ref)
-    migrated.setdefault("experiencer_ref", actor_ref)
-    return migrated
+from return_semantics.fact_schemas import (
+    EvidenceSpan as EvidenceSpan,
+)
+from return_semantics.fact_schemas import (
+    ExtractedFact as ExtractedFact,
+)
+from return_semantics.fact_schemas import (
+    FactExtraction as FactExtraction,
+)
+from return_semantics.fact_schemas import (
+    FactMapping as FactMapping,
+)
+from return_semantics.schema_vocabulary import (
+    AssertionCode as AssertionCode,
+)
+from return_semantics.schema_vocabulary import (
+    CausalAttributionCode as CausalAttributionCode,
+)
+from return_semantics.schema_vocabulary import (
+    ClaimRelation as ClaimRelation,
+)
+from return_semantics.schema_vocabulary import (
+    CommentSummaryStatus as CommentSummaryStatus,
+)
+from return_semantics.schema_vocabulary import (
+    DimensionScopeField as DimensionScopeField,
+)
+from return_semantics.schema_vocabulary import (
+    EvidenceSource as EvidenceSource,
+)
+from return_semantics.schema_vocabulary import (
+    ExperiencerResolution as ExperiencerResolution,
+)
+from return_semantics.schema_vocabulary import (
+    FactExtractionSource as FactExtractionSource,
+)
+from return_semantics.schema_vocabulary import (
+    FactRelationType as FactRelationType,
+)
+from return_semantics.schema_vocabulary import (
+    FactRole as FactRole,
+)
+from return_semantics.schema_vocabulary import (
+    FactSpecificity as FactSpecificity,
+)
+from return_semantics.schema_vocabulary import (
+    ProcessingStatus as ProcessingStatus,
+)
+from return_semantics.schema_vocabulary import (
+    ReferenceBasis as ReferenceBasis,
+)
+from return_semantics.schema_vocabulary import (
+    SemanticDisposition as SemanticDisposition,
+)
+from return_semantics.schema_vocabulary import (
+    SemanticRelationType as SemanticRelationType,
+)
+from return_semantics.schema_vocabulary import (
+    SentimentCode as SentimentCode,
+)
+from return_semantics.schema_vocabulary import (
+    StrictModel as StrictModel,
+)
+from return_semantics.schema_vocabulary import (
+    SubjectCode as SubjectCode,
+)
+from return_semantics.schema_vocabulary import (
+    _migrate_semantic_refs as _migrate_semantic_refs,
+)
+from return_semantics.schema_vocabulary import (
+    _validated_variant_ref as _validated_variant_ref,
+)
+from return_semantics.taxonomy_schemas import (
+    CategoryDefinition as CategoryDefinition,
+)
+from return_semantics.taxonomy_schemas import (
+    ClaimEvidenceRequirement as ClaimEvidenceRequirement,
+)
+from return_semantics.taxonomy_schemas import (
+    DimensionContract as DimensionContract,
+)
+from return_semantics.taxonomy_schemas import (
+    EvidenceRequirement as EvidenceRequirement,
+)
+from return_semantics.taxonomy_schemas import (
+    ImplicitEvidenceRule as ImplicitEvidenceRule,
+)
+from return_semantics.taxonomy_schemas import (
+    LabelDefinition as LabelDefinition,
+)
+from return_semantics.taxonomy_schemas import (
+    LabelExample as LabelExample,
+)
+from return_semantics.taxonomy_schemas import (
+    TaxonomyConfig as TaxonomyConfig,
+)
+from return_semantics.taxonomy_schemas import (
+    TaxonomyValidationRules as TaxonomyValidationRules,
+)
 
 
 class SemanticUnit(StrictModel):
@@ -224,121 +177,6 @@ class UnknownSemantic(StrictModel):
     _validate_variant = field_validator("variant_ref")(_validated_variant_ref)
 
 
-class EvidenceSpan(StrictModel):
-    text: str = Field(min_length=1)
-    source: EvidenceSource = EvidenceSource.COMMENT
-
-
-class ExtractedFact(StrictModel):
-    fact_id: str = Field(min_length=1)
-    extraction_source: FactExtractionSource = FactExtractionSource.PRIMARY
-    actor_ref: str = Field(min_length=1)
-    source_ref: str = Field(min_length=1)
-    experiencer_ref: str = Field(min_length=1)
-    product_ref: str = Field(min_length=1)
-    variant_ref: str = Field(default="UNSPECIFIED", min_length=1)
-    event_ref: str = Field(min_length=1)
-    reference_basis: ReferenceBasis = ReferenceBasis.NONE
-    fact_role: FactRole = FactRole.CONCLUSION
-    subject: SubjectCode = SubjectCode.PRODUCT
-    statement_type: Literal[
-        "EXPERIENCE",
-        "EVALUATION",
-        "RECOMMENDATION",
-        "INTENT",
-        "PREDICTION",
-        "HYPOTHESIS",
-        "PRODUCT_CLAIM",
-        "APPEARANCE_INFERENCE",
-        "REPORTED",
-        "NEGATED",
-        "NOT_TESTED",
-        "ADVICE",
-    ]
-    assertion: AssertionCode = AssertionCode.AFFIRMED
-    specificity: FactSpecificity = FactSpecificity.SPECIFIC
-    experiencer_resolution: ExperiencerResolution = ExperiencerResolution.EXPLICIT
-    opinion: str = Field(min_length=1)
-    sentiment: SentimentCode
-    part: str = Field(min_length=1)
-    operation: str = ""
-    condition: str = ""
-    causal_attribution: CausalAttributionCode = CausalAttributionCode.UNKNOWN
-    causal_attribution_reason: str = ""
-    is_primary_reason: bool = False
-    candidate_branch_codes: list[str] = Field(default_factory=list)
-    evidence_spans: list[EvidenceSpan] = Field(min_length=1)
-
-    _migrate_refs = model_validator(mode="before")(_migrate_semantic_refs)
-    _validate_variant = field_validator("variant_ref")(_validated_variant_ref)
-
-    @model_validator(mode="after")
-    def validate_causal_attribution(self) -> "ExtractedFact":
-        has_attribution = self.causal_attribution != CausalAttributionCode.UNKNOWN
-        if has_attribution != bool(self.causal_attribution_reason.strip()):
-            raise ValueError("因果归属与因果说明必须同时填写或同时留空")
-        return self
-
-
-class FactExtraction(StrictModel):
-    facts: list[ExtractedFact]
-
-
-class FactMapping(StrictModel):
-    fact_id: str = Field(min_length=1)
-    label_codes: list[str] = Field(default_factory=list, max_length=1)
-    candidate_label_codes: list[str] = Field(default_factory=list, max_length=1)
-    reason: str = ""
-    disposition: SemanticDisposition | None = None
-    relation_type: FactRelationType = FactRelationType.NONE
-    related_fact_ids: list[str] = Field(default_factory=list)
-    evidence_relation: Literal["DIRECT", "EQUIVALENT", "INFERRED"] = "DIRECT"
-    fallback_is_independent: bool = False
-    adjudication_action: Literal["ACCEPT", "REPLACE", "ABSTAIN", "REVIEW"] | None = None
-
-    @model_validator(mode="before")
-    @classmethod
-    def migrate_candidate_labels(cls, value: object) -> object:
-        if not isinstance(value, dict):
-            return value
-        migrated = dict(value)
-        if migrated.get("label_codes") and migrated.get("disposition") is not None:
-            migrated.setdefault("candidate_label_codes", migrated["label_codes"])
-            migrated["label_codes"] = []
-        return migrated
-
-    @model_validator(mode="after")
-    def validate_disposition(self) -> "FactMapping":
-        if self.label_codes and self.disposition is not None:
-            raise ValueError("已有标签映射的事实不能同时指定未映射处置")
-        if self.label_codes and self.candidate_label_codes:
-            raise ValueError("终态标签与候选审计标签不能同时存在")
-        if self.candidate_label_codes and self.disposition is None:
-            raise ValueError("候选审计标签只能用于未形成终态的事实")
-        if self.relation_type == FactRelationType.NONE and self.related_fact_ids:
-            raise ValueError("无事实关系时不能引用关联事实")
-        if self.relation_type != FactRelationType.NONE and not self.related_fact_ids:
-            raise ValueError("事实关系必须引用至少一个关联事实")
-        if self.fact_id in self.related_fact_ids:
-            raise ValueError("事实关系不能引用自身")
-        if len(self.related_fact_ids) != len(set(self.related_fact_ids)):
-            raise ValueError("事实关系不能重复引用同一事实")
-        return self
-
-
-DimensionScopeField = Literal[
-    "source_ref",
-    "experiencer_ref",
-    "product_ref",
-    "variant_ref",
-    "event_ref",
-    "reference_basis",
-    "part",
-    "operation",
-    "condition",
-]
-
-
 class DimensionScope(StrictModel):
     source_ref: str = "REVIEWER"
     experiencer_ref: str = "REVIEWER"
@@ -402,206 +240,6 @@ class ModelClassification(ClassificationTrace):
     needs_review: bool = False
     review_reasons: list[str] = Field(default_factory=list)
     review_diagnostics: list[ReviewDiagnostic] = Field(default_factory=list)
-
-
-class LabelExample(StrictModel):
-    text: str = Field(min_length=1, max_length=1000)
-    applies: bool
-    sentiment: SentimentCode | None = None
-    explanation: str = Field(min_length=1, max_length=500)
-
-
-class LabelDefinition(StrictModel):
-    code: str
-    name: str
-    group: str = ""
-    parent_code: str | None = None
-    description: str = ""
-    keywords: list[str] = Field(default_factory=list)
-    exclusions: list[str] = Field(default_factory=list, max_length=10)
-    examples: list[LabelExample] = Field(default_factory=list, max_length=10)
-    allowed_sentiments: list[SentimentCode]
-    allowed_claim_ids: list[str] = Field(default_factory=list)
-
-    @model_validator(mode="after")
-    def validate_examples(self) -> "LabelDefinition":
-        for example in self.examples:
-            if example.applies and example.sentiment not in self.allowed_sentiments:
-                raise ValueError("适用示例必须选择该标签允许的评价方向")
-            if not example.applies and example.sentiment is not None:
-                raise ValueError("不适用示例不指定评价方向")
-        return self
-
-
-class EvidenceRequirement(StrictModel):
-    semantic_requirement: str = ""
-    label_code: str = Field(min_length=1)
-    cues: list[str] = Field(min_length=1)
-    unknown_opinion: str = Field(min_length=1)
-    unknown_reason: str = Field(min_length=1)
-
-
-class ImplicitEvidenceRule(StrictModel):
-    semantic_requirement: str = ""
-    label_code: str = Field(min_length=1)
-    cues: list[str] = Field(min_length=1)
-
-
-class ClaimEvidenceRequirement(StrictModel):
-    semantic_requirement: str = ""
-    label_code: str = Field(min_length=1)
-    claim_id: str = Field(min_length=1)
-    cues: list[str] = Field(min_length=1)
-
-
-class DimensionContract(StrictModel):
-    parent_code: str = Field(min_length=1)
-    verdict_label_codes: list[str] = Field(min_length=1)
-    scope_fields: list[DimensionScopeField] = Field(min_length=1)
-
-
-class TaxonomyValidationRules(StrictModel):
-    allowed_groups: list[str] = Field(default_factory=list)
-    neutral_reason_labels: list[str] | None = None
-    required_review_labels: list[str] = Field(default_factory=list)
-    boundary_required_labels: list[str] = Field(default_factory=list)
-    fallback_label_codes: list[str] = Field(default_factory=list)
-    conflict_scope: Literal["comment", "evidence"] = "comment"
-    opposite_reason_labels: dict[str, list[str]] = Field(default_factory=dict)
-    conflicting_label_sets: list[list[str]] = Field(default_factory=list)
-    evidence_requirements: list[EvidenceRequirement] = Field(default_factory=list)
-    implicit_evidence_rules: list[ImplicitEvidenceRule] = Field(default_factory=list)
-    claim_evidence_requirements: list[ClaimEvidenceRequirement] = Field(
-        default_factory=list
-    )
-    dimension_contracts: list[DimensionContract] = Field(default_factory=list)
-
-
-class CategoryDefinition(StrictModel):
-    code: str = Field(min_length=1)
-    name: str = Field(min_length=1)
-    parent_code: str | None = None
-
-
-class TaxonomyConfig(StrictModel):
-    version: str
-    structure_version: Literal[1, 2] = 1
-    categories: list[CategoryDefinition] = Field(default_factory=list)
-    recognition_profile: Literal[
-        "legacy_v3", "keyword_free_v1", "semantic_v1", "fact_v2"
-    ] = "legacy_v3"
-    agent_family: str
-    product_context: str
-    allowed_parts: list[str] = Field(default_factory=lambda: ["UNSPECIFIED"])
-    instructions: list[str] = Field(default_factory=list)
-    validation_rules: TaxonomyValidationRules = Field(
-        default_factory=TaxonomyValidationRules
-    )
-    labels: list[LabelDefinition]
-
-    @model_validator(mode="after")
-    def validate_rule_labels(self) -> "TaxonomyConfig":
-        # 校验顺序决定多个错误并存时的第一条提示，拆分后仍保持原顺序。
-        self._validate_label_structure()
-        label_codes = {label.code for label in self.labels}
-        self._validate_rule_references(label_codes)
-        self._validate_dimension_contracts(label_codes)
-        if any(
-            len(set(codes)) < 2
-            for codes in self.validation_rules.conflicting_label_sets
-        ):
-            raise ValueError("冲突标签组至少需要两个不同标签")
-        return self
-
-    def _validate_label_structure(self) -> None:
-        if self.structure_version == 2:
-            from return_semantics.taxonomy_hierarchy import validate_hierarchy
-
-            validate_hierarchy(self)
-        elif self.categories or any(label.parent_code for label in self.labels):
-            raise ValueError("层级标签必须使用 structure_version=2")
-        groups = self.validation_rules.allowed_groups
-        if (
-            self.structure_version == 1
-            and groups
-            and any(label.group not in groups for label in self.labels)
-        ):
-            raise ValueError("标签分组必须来自标准规定的业务分组")
-
-    def _validate_rule_references(self, label_codes: set[str]) -> None:
-        rule_codes = {
-            code
-            for codes in self.validation_rules.opposite_reason_labels.values()
-            for code in codes
-        }
-        rule_codes.update(
-            code
-            for codes in self.validation_rules.conflicting_label_sets
-            for code in codes
-        )
-        rule_codes.update(
-            rule.label_code for rule in self.validation_rules.evidence_requirements
-        )
-        rule_codes.update(
-            rule.label_code for rule in self.validation_rules.implicit_evidence_rules
-        )
-        rule_codes.update(
-            rule.label_code
-            for rule in self.validation_rules.claim_evidence_requirements
-        )
-        rule_codes.update(self.validation_rules.neutral_reason_labels or [])
-        rule_codes.update(self.validation_rules.required_review_labels)
-        rule_codes.update(self.validation_rules.boundary_required_labels)
-        rule_codes.update(self.validation_rules.fallback_label_codes)
-        unknown_codes = sorted(rule_codes.difference(label_codes))
-        if unknown_codes:
-            raise ValueError(f"校验规则引用了未知标签: {unknown_codes}")
-
-    def _validate_dimension_contracts(self, label_codes: set[str]) -> None:
-        from return_semantics.taxonomy_hierarchy import label_path_codes
-
-        contracts = self.validation_rules.dimension_contracts
-        decision_parent_codes = [contract.parent_code for contract in contracts]
-        category_codes = {category.code for category in self.categories}
-        if decision_parent_codes and self.structure_version != 2:
-            raise ValueError("维度裁决契约仅适用于层级标签")
-        unknown_parent_codes = sorted(set(decision_parent_codes) - category_codes)
-        if unknown_parent_codes:
-            raise ValueError(f"维度裁决契约引用了未知分类: {unknown_parent_codes}")
-        if len(decision_parent_codes) != len(set(decision_parent_codes)):
-            raise ValueError("同一分类只能配置一条维度裁决契约")
-        for contract in contracts:
-            self._validate_dimension_contract(contract, label_codes)
-        for label in self.labels:
-            matching_contracts = [
-                contract.parent_code
-                for contract in contracts
-                if contract.parent_code in label_path_codes(self, label.code)[:-1]
-            ]
-            if len(matching_contracts) > 1:
-                raise ValueError(f"维度裁决契约不能重叠管理同一标签: {label.code}")
-
-    def _validate_dimension_contract(
-        self, contract: DimensionContract, label_codes: set[str]
-    ) -> None:
-        from return_semantics.taxonomy_hierarchy import label_path_codes
-
-        if len(contract.verdict_label_codes) != len(set(contract.verdict_label_codes)):
-            raise ValueError("维度裁决契约的结论标签不能重复")
-        if len(contract.scope_fields) != len(set(contract.scope_fields)):
-            raise ValueError("维度裁决契约的作用域字段不能重复")
-        invalid_verdicts = [
-            code for code in contract.verdict_label_codes if code not in label_codes
-        ]
-        if invalid_verdicts:
-            raise ValueError(f"维度裁决契约引用了未知标签: {invalid_verdicts}")
-        outside_parent = [
-            code
-            for code in contract.verdict_label_codes
-            if contract.parent_code not in label_path_codes(self, code)[:-1]
-        ]
-        if outside_parent:
-            raise ValueError(f"维度结论标签不属于配置父级: {outside_parent}")
 
 
 class ClaimDefinition(StrictModel):
