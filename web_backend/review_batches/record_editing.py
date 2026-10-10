@@ -48,15 +48,7 @@ class _ReviewRecordEditing(_ReviewClassification, _ReviewSemanticValidation):
                 semantic_item_reviews=change.semantic_item_reviews,
                 added_semantic_items=change.added_semantic_items,
             )
-        after = self._apply_human_review_details(
-            before,
-            actor_id=change.actor_id,
-            assessed_at=change.now,
-            review_assessment=change.review_assessment,
-            semantic_item_reviews=change.semantic_item_reviews,
-            added_semantic_items=change.added_semantic_items,
-            coverage_status=change.coverage_status,
-        )
+        after = self._apply_human_review_details(before, change)
         if change.action != "exclude":
             after = self._resolve_batch_classification(
                 after,

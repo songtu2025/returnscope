@@ -7,36 +7,10 @@ from typing import Any, cast
 from return_semantics.comment_summary import compile_comment_semantics
 from return_semantics.schemas import SemanticUnit, TaxonomyConfig, UnknownSemantic
 from return_semantics.semantic_review import build_semantic_review_view
-
-
-def project_review_labels(
-    units: list[dict[str, Any]],
-    previous_problem_codes: list[str],
-    previous_label: str,
-    selected: str,
-) -> tuple[list[str], list[str], list[str]]:
-    neutral_problem_codes = set(previous_problem_codes)
-    if previous_label in neutral_problem_codes:
-        neutral_problem_codes.remove(previous_label)
-        neutral_problem_codes.add(selected)
-    problem_codes: list[str] = []
-    positive_codes: list[str] = []
-    negative_codes: list[str] = []
-    for unit in units:
-        code = str(unit.get("label_code", ""))
-        sentiment = str(unit.get("sentiment", ""))
-        if sentiment == "POSITIVE":
-            positive_codes.append(code)
-        elif sentiment == "NEGATIVE":
-            problem_codes.append(code)
-            negative_codes.append(code)
-        elif code in neutral_problem_codes:
-            problem_codes.append(code)
-    return (
-        list(dict.fromkeys(problem_codes)),
-        list(dict.fromkeys(positive_codes)),
-        list(dict.fromkeys(negative_codes)),
-    )
+from web_backend.review_batches.result_indexes import (
+    project_review_facts,
+    project_review_labels,
+)
 
 
 class _ReviewProjection:
@@ -265,43 +239,11 @@ class _ReviewProjection:
             self.units.append(unit)
             added.update(applied=True, result_item_id=f"fact:{fact_id}")
 
-    def _project_facts(self) -> None:
-        removed = {
-            item_id.removeprefix("fact:")
-            for item_id, review in self.reviews.items()
-            if review["action"] == "remove" and item_id in self.handled
-        }
-        self.result["extracted_facts"] = [
-            fact
-            for fact in self.result.get("extracted_facts", [])
-            if fact["fact_id"] not in removed
-        ]
-        mappings = [
-            mapping
-            for mapping in self.result.get("fact_mappings", [])
-            if mapping["fact_id"] not in removed
-        ]
-        for mapping in mappings:
-            review = self.reviews.get(f"fact:{mapping['fact_id']}")
-            if review is None or not review.get("applied"):
-                continue
-            code = (
-                review.get("label_code") if review["action"] == "change_label" else None
-            )
-            mapping.update(
-                label_codes=[code] if code else [],
-                candidate_label_codes=[],
-                disposition=None if code else "EXPECTED_ABSTENTION",
-                adjudication_action="REPLACE" if code else "ABSTAIN",
-                reason=review.get("note") or "人工逐项复核",
-            )
-        self.result["fact_mappings"] = mappings
-
     def apply(self) -> dict[str, Any]:
         self._project_units()
         self._project_unknowns()
         self._project_added()
-        self._project_facts()
+        project_review_facts(self.result, self.reviews, self.handled)
         self.result.update(semantic_units=self.units, unknown_semantics=self.unknowns)
         problems, positives, _negatives = project_review_labels(
             self.units, self.problems, "", ""

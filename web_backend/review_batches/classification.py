@@ -7,10 +7,9 @@ from return_semantics.semantic_review import (
     build_semantic_review_view,
 )
 from web_backend.review_batches.editing_context import _ReviewEditingContext
-from web_backend.review_label_corrections import (
-    apply_semantic_review_changes,
-    project_review_labels,
-)
+from web_backend.review_batches.result_indexes import project_review_labels
+from web_backend.review_contracts import ReviewRecordChange
+from web_backend.review_label_corrections import apply_semantic_review_changes
 
 
 class _ReviewClassification(_ReviewEditingContext):
@@ -73,44 +72,38 @@ class _ReviewClassification(_ReviewEditingContext):
     @staticmethod
     def _apply_human_review_details(
         classification: dict[str, Any],
-        *,
-        actor_id: str,
-        assessed_at: str,
-        review_assessment: dict[str, str | None] | None,
-        semantic_item_reviews: list[dict[str, Any]] | None,
-        added_semantic_items: list[dict[str, Any]] | None,
-        coverage_status: str | None,
+        change: ReviewRecordChange,
     ) -> dict[str, Any]:
         assessment = {
             key: value
-            for key, value in (review_assessment or {}).items()
+            for key, value in (change.review_assessment or {}).items()
             if value is not None
         }
         if not any(
             (
                 assessment,
-                semantic_item_reviews is not None,
-                added_semantic_items is not None,
-                coverage_status is not None,
+                change.semantic_item_reviews is not None,
+                change.added_semantic_items is not None,
+                change.coverage_status is not None,
             )
         ):
             return classification
 
         result = deepcopy(classification)
         result.pop("semantic_review", None)
-        reviewer = {"assessed_by": actor_id, "assessed_at": assessed_at}
+        reviewer = {"assessed_by": change.actor_id, "assessed_at": change.now}
         if assessment:
             result["human_review_assessment"] = {**assessment, **reviewer}
-        if semantic_item_reviews is not None:
+        if change.semantic_item_reviews is not None:
             result["human_semantic_reviews"] = [
-                {**item, **reviewer} for item in semantic_item_reviews
+                {**item, **reviewer} for item in change.semantic_item_reviews
             ]
-        if added_semantic_items is not None:
+        if change.added_semantic_items is not None:
             result["human_added_semantic_items"] = [
-                {**item, **reviewer} for item in added_semantic_items
+                {**item, **reviewer} for item in change.added_semantic_items
             ]
-        if coverage_status is not None:
-            result["coverage_review"] = {"status": coverage_status, **reviewer}
+        if change.coverage_status is not None:
+            result["coverage_review"] = {"status": change.coverage_status, **reviewer}
         return result
 
     def _apply_resolution(
