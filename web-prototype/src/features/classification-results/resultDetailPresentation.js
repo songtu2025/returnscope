@@ -21,13 +21,6 @@ export function resultDetailPresentation({
   const excludedRecords = resultQualityCount(summary, ["excluded"]);
   const unusableRecords = resultQualityCount(summary, ["unusable"]);
   const modelErrorRecords = resultModelErrorCount(summary);
-  const accountedRecords = accountedRecordCount(
-    readyRecords,
-    reviewRecords,
-    excludedRecords,
-    unusableRecords,
-  );
-  const totalRecords = Number(result.record_count || 0);
   const policy = resultActionPolicy(result);
   const allNeedReviewWithoutProblems = needsReviewWithoutProblems(
     recordsLoading,
@@ -43,8 +36,6 @@ export function resultDetailPresentation({
     excludedRecords,
     unusableRecords,
     modelErrorRecords,
-    accountedRecords,
-    totalRecords,
     policy,
     allNeedReviewWithoutProblems,
   };
@@ -67,20 +58,5 @@ function needsReviewWithoutProblems(recordsLoading, drilldowns, reviewRecords, r
     !recordsLoading &&
     drilldowns.problem.length === 0 &&
     Number(reviewRecords || result.record_count || 0) > 0
-  );
-}
-
-/** @param {number | undefined} readyRecords @param {number | undefined} reviewRecords @param {number | undefined} excludedRecords @param {number | undefined} unusableRecords */
-function accountedRecordCount(
-  readyRecords,
-  reviewRecords,
-  excludedRecords,
-  unusableRecords,
-) {
-  return (
-    Number(readyRecords || 0) +
-    Number(reviewRecords || 0) +
-    Number(excludedRecords || 0) +
-    Number(unusableRecords || 0)
   );
 }

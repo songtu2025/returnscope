@@ -276,7 +276,7 @@ test("分类结果详情加载时在原页面保留返回入口与稳定占位",
   expect(screen.queryByText("正在读取分类结果详情…")).not.toBeInTheDocument();
 });
 
-test("分类结果摘要完整展示记录去向并可对账", async () => {
+test("分类结果摘要保留统计卡片且不显示记录对账说明", async () => {
   apiMock.classificationResult.mockResolvedValue({
     ...resultVersion,
     record_count: 50,
@@ -303,9 +303,16 @@ test("分类结果摘要完整展示记录去向并可对账", async () => {
   expect(await screen.findByText("已忽略记录")).toBeVisible();
   expect(screen.getByText("不可用记录")).toBeVisible();
   expect(screen.getByText("其中模型异常 2 条")).toBeVisible();
-  expect(
-    screen.getByText("记录对账：50 = 41 可用 + 6 需复核 + 1 已忽略 + 2 不可用"),
-  ).toBeVisible();
+  expect(screen.queryByText(/记录对账：/)).not.toBeInTheDocument();
+  const metrics = document.querySelector(".result-summary-grid");
+  expect(Array.from(metrics.querySelectorAll("b"), (el) => el.textContent)).toEqual([
+    "50",
+    "45",
+    "41",
+    "6",
+    "1",
+    "2",
+  ]);
 });
 
 test("用户反馈结果不再把标题展示为退货原因", async () => {
@@ -340,6 +347,10 @@ test("用户反馈结果不再把标题展示为退货原因", async () => {
   render(<ClassificationResultsPage notify={vi.fn()} />);
 
   const section = (await screen.findByText("用户反馈记录")).closest("section");
+  expect(within(section).queryByText(/组反馈 · 关联/)).not.toBeInTheDocument();
+  expect(
+    within(section).queryByText(/重跑标记仅表示当前版本的需求/),
+  ).not.toBeInTheDocument();
   expect(within(section).getByText("反馈标题 / 正文")).toBeVisible();
   expect(within(section).getByText("Great winter gloves")).toBeVisible();
   expect(within(section).getByText("Warm and comfortable")).toBeVisible();
@@ -381,7 +392,7 @@ test("同一反馈只显示一份结论并可展开两条源明细", async () =>
 
   render(<ClassificationResultsPage notify={vi.fn()} />);
   const section = (await screen.findByText("订单级分类记录")).closest("section");
-  expect(within(section).getByText(/1 组反馈 · 关联2 条源明细/)).toBeVisible();
+  expect(within(section).getByText("共 1 条")).toBeVisible();
   expect(within(section).getAllByText("ORDER-001")).toHaveLength(1);
   await user.click(within(section).getByRole("button", { name: "查看证据" }));
   const drawer = screen.getByRole("dialog", { name: "分类结果与证据" });
@@ -391,7 +402,7 @@ test("同一反馈只显示一份结论并可展开两条源明细", async () =>
   expect(within(drawer).getAllByText("业务标签")).toHaveLength(1);
 });
 
-test("业务下钻按反馈组显示数量，源明细单独显示", async () => {
+test("业务下钻按反馈组显示数量", async () => {
   apiMock.classificationResultRecordGroups.mockResolvedValue({
     items: [{ ...groupOf(record), member_count: 2 }],
     total: 1,
@@ -406,7 +417,7 @@ test("业务下钻按反馈组显示数量，源明细单独显示", async () =>
 
   expect(await screen.findByRole("button", { name: /偏小\s*1\s*组/ })).toBeVisible();
   expect(screen.getByRole("button", { name: /产品表权威名称\s*1\s*组/ })).toBeVisible();
-  expect(screen.getByText(/1 组反馈 · 关联2 条源明细/)).toBeVisible();
+  expect(screen.getByText("共 1 条")).toBeVisible();
 });
 
 afterEach(() => cleanup());

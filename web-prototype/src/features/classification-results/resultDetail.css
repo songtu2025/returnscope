@@ -102,14 +102,6 @@
   border-color: #e7bdb8;
   background: #fff7f6;
 }
-.result-accounting-note {
-  margin: -5px 0 14px;
-  color: var(--muted);
-  font-size: 12px;
-}
-.result-accounting-note.is-warning {
-  color: var(--red);
-}
 .result-drilldown-card,
 .result-record-card {
   margin-bottom: 14px;
@@ -127,17 +119,10 @@
 }
 .result-drilldown-card > header b,
 .result-drilldown-card > header span,
-.result-record-heading > b,
-.result-record-heading > span {
+.result-record-heading > b {
   display: block;
 }
-.result-record-heading > small {
-  display: block;
-  color: var(--muted);
-  font-size: 12px;
-}
-.result-drilldown-card > header span,
-.result-record-heading > span {
+.result-drilldown-card > header span {
   margin-top: 3px;
   color: var(--muted);
   font-size: 11px;

@@ -71,17 +71,12 @@ function ResultRecordEmpty({ isUserFeedback }) {
 
 /** @param {import("./classificationResultDetailContracts").ResultDetailContext} context */
 function ResultRecordHeading(context) {
-  const { updateRoute, records, orderInput, setOrderInput, isUserFeedback } = context;
+  const { updateRoute, orderInput, setOrderInput, isUserFeedback } = context;
   const orderInputId = useId();
   return (
     <header>
       <div className="result-record-heading">
         <b>{isUserFeedback ? "用户反馈记录" : "订单级分类记录"}</b>
-        <span>
-          {Number(records?.total || 0).toLocaleString()} 组反馈 · 关联
-          {Number(records?.source_total || 0).toLocaleString()} 条源明细
-        </span>
-        <small>重跑标记仅表示当前版本的需求，执行以来源任务当前状态为准。</small>
       </div>
       <div className="result-record-tools">
         <ResultRecordFilters {...context}>

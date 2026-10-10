@@ -267,6 +267,13 @@ test("筛选期间旧请求被取消，迟到响应不能覆盖新结果", async
   await userEvent.click(screen.getByRole("option", { name: "不可用" }));
   await screen.findByText("当前条件没有反馈记录");
   expect(oldSignal.aborted).toBe(true);
-  await act(async () => completeOld({ items: [], total: 99, source_total: 100 }));
-  expect(screen.getByText("0 组反馈 · 关联0 条源明细")).toBeVisible();
+  await act(async () =>
+    completeOld({
+      items: [{ record: { source_record_id: "late-record", reason: "迟到反馈" } }],
+      total: 99,
+      source_total: 100,
+    }),
+  );
+  expect(screen.getByText("当前条件没有反馈记录")).toBeVisible();
+  expect(screen.queryByText("迟到反馈")).not.toBeInTheDocument();
 });

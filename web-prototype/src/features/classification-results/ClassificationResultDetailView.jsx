@@ -100,7 +100,6 @@ export function ClassificationResultDetailView(props) {
       ) : (
         <>
           <ResultDetailMetrics {...context} />
-          <ResultDetailAccounting {...context} />
 
           <ResultDetailDrilldown {...context} />
 
@@ -117,31 +116,5 @@ export function ClassificationResultDetailView(props) {
         </>
       )}
     </div>
-  );
-}
-
-/** @param {import("./classificationResultDetailContracts").ResultDetailContext} context */
-function ResultDetailAccounting(context) {
-  const {
-    readyRecords,
-    reviewRecords,
-    excludedRecords,
-    unusableRecords,
-    accountedRecords,
-    totalRecords,
-  } = context;
-  return (
-    <p
-      className={`result-accounting-note ${accountedRecords === totalRecords ? "is-balanced" : "is-warning"}`}
-      role="status"
-    >
-      记录对账：{totalRecords.toLocaleString()} ={" "}
-      {Number(readyRecords || 0).toLocaleString()} 可用 +{" "}
-      {Number(reviewRecords || 0).toLocaleString()} 需复核 +{" "}
-      {Number(excludedRecords || 0).toLocaleString()} 已忽略 +{" "}
-      {Number(unusableRecords || 0).toLocaleString()} 不可用
-      {accountedRecords !== totalRecords &&
-        `；仍有 ${Math.abs(totalRecords - accountedRecords).toLocaleString()} 条未对齐`}
-    </p>
   );
 }
