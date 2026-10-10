@@ -139,18 +139,19 @@ def test_schema_only_openapi_export_is_complete_and_deterministic(
         "/api/classification-results/{version_id}/record-groups",
         "/api/classification-results/{version_id}/drilldown",
         "/api/classification-results/{version_id}/download",
+        "/api/classification-results/{version_id}/records/{record_id}/semantics",
     }
     assert set(schema["paths"]) == expected_paths
 
     operation_ids = []
     for path_item in schema["paths"].values():
-        operation = path_item["get"]
+        operation = next(iter(path_item.values()))
         operation_ids.append(operation["operationId"])
         assert operation["responses"]["200"]["content"]
     assert len(operation_ids) == len(set(operation_ids))
 
     for path_item in schema["paths"].values():
-        parameters = path_item["get"].get("parameters", [])
+        parameters = next(iter(path_item.values())).get("parameters", [])
         assert any(
             parameter["name"] == SESSION_COOKIE
             and parameter["in"] == "cookie"
@@ -160,9 +161,10 @@ def test_schema_only_openapi_export_is_complete_and_deterministic(
 
     json_paths = expected_paths - {"/api/classification-results/{version_id}/download"}
     for path in json_paths:
-        response_schema = schema["paths"][path]["get"]["responses"]["200"]["content"][
-            "application/json"
-        ]["schema"]
+        operation = next(iter(schema["paths"][path].values()))
+        response_schema = operation["responses"]["200"]["content"]["application/json"][
+            "schema"
+        ]
         assert response_schema
 
     download_content = schema["paths"][

@@ -873,7 +873,7 @@ test("刷新恢复产品名称下钻且切换产品不会混入其他订单", as
   await user.tab({ shift: true });
   expect(closeButton).toHaveFocus();
   await user.tab({ shift: true });
-  expect(semanticSummary).toHaveFocus();
+  expect(screen.getByRole("button", { name: "人工修正" })).toHaveFocus();
   await user.tab();
   expect(closeButton).toHaveFocus();
   expect(within(drawer).getByText("产品表第二名称")).toBeVisible();
@@ -928,26 +928,19 @@ test("需复核且没有问题标签时以复核为主操作并说明订单现�
     screen.queryByRole("button", { name: "基于此版本创建看板" }),
   ).not.toBeInTheDocument();
   expect(
-    screen.getByText(
-      "尚未形成问题标签；当前 318 条均需复核，完成复核并发布派生版本后可按问题下钻。",
-    ),
+    screen.getByText("尚未形成问题标签；当前 318 条均需复核，可在查看证据时人工修正。"),
   ).toBeVisible();
   const problemColumn = screen.getByText("问题").closest(".drilldown-column");
   expect(within(problemColumn).getByText("尚未形成问题标签")).toBeVisible();
   expect(
-    within(problemColumn).getByText(
-      "当前 318 条记录需复核，完成复核并发布派生版本后，可按问题继续下钻。",
-    ),
+    within(problemColumn).getByText("当前 318 条记录需复核，可在查看证据时人工修正。"),
   ).toBeVisible();
   expect(within(problemColumn).queryByText("暂无数据")).not.toBeInTheDocument();
 
-  await userEvent.click(screen.getByRole("button", { name: "版本历史与复核" }));
-  await userEvent.click(await screen.findByRole("button", { name: "创建复核批次" }));
+  await userEvent.click(screen.getByRole("button", { name: "修改历史" }));
   expect(
-    await screen.findByRole("heading", {
-      name: "基于分类结果 v1 创建批次",
-    }),
-  ).toBeVisible();
+    screen.queryByRole("button", { name: "创建复核批次" }),
+  ).not.toBeInTheDocument();
   expect(window.location.hash).toContain("task_id=task-1");
   expect(window.location.hash).toContain("segment_id=segment-1");
 });
@@ -1179,7 +1172,7 @@ test("版本历史显示真实派生链且历史版本主动作进入最新版�
   render(<ClassificationResultsPage notify={vi.fn()} />);
 
   expect(await screen.findByText("v1 · 原始分类")).toBeVisible();
-  expect(screen.getByText("v2 · 复核派生")).toBeVisible();
+  expect(screen.getByText("v2 · 结果更新")).toBeVisible();
   expect(screen.getByText("人工复核后发布")).toBeVisible();
   expect(screen.getByText("发布人信息未提供", { exact: false })).toBeVisible();
   expect(screen.getByText("复核员乙", { exact: false })).toBeVisible();
@@ -1190,7 +1183,7 @@ test("版本历史显示真实派生链且历史版本主动作进入最新版�
   expect(apiMock.classificationResultRecordGroups).not.toHaveBeenCalled();
   expect(apiMock.classificationResultDrilldown).not.toHaveBeenCalled();
 
-  await userEvent.click(screen.getByRole("button", { name: "查看最新版本 v2" }));
+  await userEvent.click(screen.getByRole("button", { name: "查看版本" }));
   expect(window.location.hash).toContain("result_version_id=classification-version-2");
   expect(window.location.hash).toContain("tab=history");
 });
@@ -1211,115 +1204,9 @@ test("派生统计字段缺失时只显示已有记录与分类单元摘要", as
 
   render(<ClassificationResultsPage notify={vi.fn()} />);
 
-  expect(await screen.findByText("v2 · 复核派生")).toBeVisible();
+  expect(await screen.findByText("v2 · 结果更新")).toBeVisible();
   expect(screen.queryByText(/修改 .* 个分类单元/)).not.toBeInTheDocument();
   expect(screen.getAllByText(/3 条记录 · 1 个分类单元/)).toHaveLength(2);
-});
-
-test("已有复核草稿只允许进入批次，不重复创建", async () => {
-  const needsReview = { ...resultVersion, quality_status: "review_required" };
-  apiMock.classificationResult.mockResolvedValue(needsReview);
-  apiMock.classificationResultVersions.mockResolvedValue([needsReview]);
-  apiMock.reviewBatches.mockResolvedValue({
-    items: [
-      {
-        id: "review-batch-1",
-        status: "draft",
-        base_result_version_id: resultVersion.version_id,
-      },
-    ],
-    total: 1,
-    page: 1,
-    page_size: 100,
-  });
-  window.location.hash =
-    "classification-results?result_version_id=classification-version-1&tab=history";
-
-  render(<ClassificationResultsPage notify={vi.fn()} />);
-  await userEvent.click(await screen.findByRole("button", { name: /进入复核批次/ }));
-
-  expect(apiMock.createReviewBatch).not.toHaveBeenCalled();
-  expect(window.location.hash).toContain("review_batch_id=review-batch-1");
-  expect(window.location.hash).toContain("result_version_id=classification-version-1");
-});
-
-test("创建复核批次要求原因并准确说明处理范围", async () => {
-  const notify = vi.fn();
-  const needsReview = { ...resultVersion, quality_status: "review_required" };
-  apiMock.classificationResult.mockResolvedValue(needsReview);
-  apiMock.classificationResultVersions.mockResolvedValue([needsReview]);
-  apiMock.createReviewBatch.mockResolvedValue({
-    id: "review-batch-created",
-    base_result_version_id: needsReview.version_id,
-    status: "draft",
-  });
-  window.location.hash =
-    "classification-results?result_version_id=classification-version-1&tab=history&page=2&q=SR001&problem=FIT_TOO_SMALL";
-
-  render(<ClassificationResultsPage notify={notify} />);
-  await userEvent.click(await screen.findByRole("button", { name: "创建复核批次" }));
-  expect(screen.getByText(/批次只加入当前版本中“需复核”的分类单元/)).toBeVisible();
-  const submit = screen.getByRole("button", { name: "创建并进入批次" });
-  expect(submit).toBeDisabled();
-  await userEvent.type(
-    screen.getByPlaceholderText("必填：说明为什么需要发起本次复核"),
-    "检查低置信度分类",
-  );
-  await userEvent.click(submit);
-
-  await waitFor(() =>
-    expect(apiMock.createReviewBatch).toHaveBeenCalledWith("classification-version-1", {
-      reason: "检查低置信度分类",
-    }),
-  );
-  expect(window.location.hash).toContain("review_batch_id=review-batch-created");
-  const reviewQuery = new URLSearchParams(window.location.hash.split("?")[1]);
-  expect(reviewQuery.get("return_to")).toContain("page=2");
-  expect(reviewQuery.get("return_to")).toContain("q=SR001");
-  expect(reviewQuery.get("return_to")).toContain("problem=FIT_TOO_SMALL");
-});
-
-test("并发创建返回 409 时读取并进入服务器已有草稿", async () => {
-  const needsReview = { ...resultVersion, quality_status: "review_required" };
-  const conflict = Object.assign(new Error("该版本已有复核批次"), {
-    status: 409,
-  });
-  apiMock.classificationResult.mockResolvedValue(needsReview);
-  apiMock.classificationResultVersions.mockResolvedValue([needsReview]);
-  apiMock.reviewBatches
-    .mockResolvedValueOnce({ items: [], total: 0, page: 1, page_size: 100 })
-    .mockResolvedValue({
-      items: [
-        {
-          id: "server-review-batch",
-          status: "draft",
-          base_result_version_id: needsReview.version_id,
-        },
-      ],
-      total: 1,
-      page: 1,
-      page_size: 100,
-    });
-  apiMock.createReviewBatch.mockRejectedValue(conflict);
-  window.location.hash =
-    "classification-results?result_version_id=classification-version-1&tab=history";
-
-  render(<ClassificationResultsPage notify={vi.fn()} />);
-  await userEvent.click(await screen.findByRole("button", { name: "创建复核批次" }));
-  await userEvent.type(
-    screen.getByPlaceholderText("必填：说明为什么需要发起本次复核"),
-    "并发复核",
-  );
-  await userEvent.click(screen.getByRole("button", { name: "创建并进入批次" }));
-
-  await waitFor(() =>
-    expect(window.location.hash).toContain("review_batch_id=server-review-batch"),
-  );
-  expect(apiMock.reviewBatches).toHaveBeenLastCalledWith({
-    page: 1,
-    page_size: 100,
-    base_result_version_id: "classification-version-1",
-  });
 });
 
 test("复核版本切换取消共享旧请求，晚返回不覆盖新历史且卸载取消新请求", async () => {
@@ -1338,49 +1225,19 @@ test("复核版本切换取消共享旧请求，晚返回不覆盖新历史且�
   const props = { onSelectVersion: vi.fn(), notify: vi.fn() };
   const view = render(<ResultVersionReviewPanel result={resultVersion} {...props} />);
   const oldSignal = apiMock.classificationResultVersions.mock.calls[0][1].signal;
-  expect(apiMock.reviewBatches.mock.calls[0][1].signal).toBe(oldSignal);
 
   view.rerender(<ResultVersionReviewPanel result={nextVersion} {...props} />);
-  expect(await screen.findByText("v2 · 复核派生")).toBeVisible();
+  expect(await screen.findByText("v2 · 结果更新")).toBeVisible();
   expect(oldSignal.aborted).toBe(true);
   const nextSignal = apiMock.classificationResultVersions.mock.calls[1][1].signal;
-  expect(apiMock.reviewBatches.mock.calls[1][1].signal).toBe(nextSignal);
+
   await act(async () => finishOld([resultVersion]));
   expect(screen.queryByText("v1 · 原始分类")).not.toBeInTheDocument();
-  expect(screen.getByText("v2 · 复核派生")).toBeVisible();
+  expect(screen.getByText("v2 · 结果更新")).toBeVisible();
   expect(apiMock.classificationResultVersions).toHaveBeenCalledTimes(2);
-  expect(apiMock.reviewBatches).toHaveBeenCalledTimes(2);
+  expect(apiMock.reviewBatches).not.toHaveBeenCalled();
   view.unmount();
   expect(nextSignal.aborted).toBe(true);
-});
-
-test("复核创建 409 后刷新失败保留原因、显示刷新错误并恢复提交", async () => {
-  const needsReview = { ...resultVersion, quality_status: "review_required" };
-  const notify = vi.fn();
-  apiMock.classificationResultVersions.mockResolvedValue([needsReview]);
-  apiMock.reviewBatches
-    .mockResolvedValueOnce({ items: [], total: 0, page: 1, page_size: 100 })
-    .mockRejectedValueOnce(new Error("合成草稿刷新失败"));
-  apiMock.createReviewBatch.mockRejectedValue(
-    Object.assign(new Error("合成已有复核批次"), { status: 409 }),
-  );
-  render(
-    <ResultVersionReviewPanel
-      result={needsReview}
-      onSelectVersion={vi.fn()}
-      notify={notify}
-    />,
-  );
-  await userEvent.click(await screen.findByRole("button", { name: "创建复核批次" }));
-  const reason = screen.getByPlaceholderText("必填：说明为什么需要发起本次复核");
-  await userEvent.type(reason, "合成复核原因");
-  await userEvent.click(screen.getByRole("button", { name: "创建并进入批次" }));
-  await waitFor(() => expect(notify).toHaveBeenCalledWith("合成草稿刷新失败", "error"));
-  expect(reason).toHaveValue("合成复核原因");
-  expect(screen.getByRole("button", { name: "创建并进入批次" })).toBeEnabled();
-  expect(apiMock.reviewBatches).toHaveBeenCalledTimes(2);
-  expect(apiMock.createReviewBatch).toHaveBeenCalledTimes(1);
-  expect(window.location.hash).not.toContain("review_batch_id=");
 });
 
 import { classificationResultRouteState } from "../src/features/classification-results/classificationResultRoute";

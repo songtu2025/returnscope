@@ -1,8 +1,10 @@
 import { X } from "@phosphor-icons/react";
+import { useState } from "react";
 
 import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { resultLabelText } from "../../lib/taxonomyPresentation";
 import { SemanticResultPanel } from "./SemanticResultPanel";
+import { ManualSemanticEditor } from "./ManualSemanticEditor";
 
 /**
  * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultGroupResponse} ClassificationResultGroup
@@ -13,17 +15,44 @@ import { SemanticResultPanel } from "./SemanticResultPanel";
  *   group: ClassificationResultGroup,
  *   analysisContext: string,
  *   onClose: () => void,
+ *   onSaved?: (versionId: string) => void,
  *   returnFocusRef: { current: HTMLElement | null }
  * }} props
  */
-export function EvidenceDrawer({ group, analysisContext, onClose, returnFocusRef }) {
+export function EvidenceDrawer({
+  group,
+  analysisContext,
+  onClose,
+  onSaved,
+  returnFocusRef,
+}) {
+  const [editing, setEditing] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const requestClose = () => {
+    if (saving) return;
+    if (dirty) {
+      setConfirmClose(true);
+      return;
+    }
+    onClose();
+  };
   const record = group.record;
   const isUserFeedback = analysisContext === "user_feedback";
   const classification = record.classification ?? {};
-  const { dialogRef } = useDialogFocus({ open: true, onClose, returnFocusRef });
+  const { dialogRef } = useDialogFocus({
+    open: true,
+    onClose: requestClose,
+    returnFocusRef,
+  });
 
   return (
-    <div className="evidence-drawer-layer" role="presentation" onMouseDown={onClose}>
+    <div
+      className="evidence-drawer-layer"
+      role="presentation"
+      onMouseDown={requestClose}
+    >
       <aside
         ref={dialogRef}
         className="evidence-drawer"
@@ -42,11 +71,22 @@ export function EvidenceDrawer({ group, analysisContext, onClose, returnFocusRef
             data-dialog-initial-focus
             className="icon-button"
             aria-label="关闭证据抽屉"
-            onClick={onClose}
+            onClick={requestClose}
           >
             <X size={19} />
           </button>
         </header>
+        {confirmClose && (
+          <section className="drawer-section" role="alert">
+            <p>有未保存的修改，是否放弃？</p>
+            <button className="secondary-button" onClick={() => setConfirmClose(false)}>
+              继续编辑
+            </button>
+            <button className="secondary-button" onClick={onClose}>
+              放弃修改
+            </button>
+          </section>
+        )}
 
         <section className="drawer-section">
           <b>业务信息</b>
@@ -120,6 +160,26 @@ export function EvidenceDrawer({ group, analysisContext, onClose, returnFocusRef
 
         <section className="drawer-section">
           <SemanticResultPanel record={record} />
+          {onSaved && !editing && (
+            <button className="secondary-button" onClick={() => setEditing(true)}>
+              人工修正
+            </button>
+          )}
+          {onSaved && editing && (
+            <ManualSemanticEditor
+              group={group}
+              onSaved={onSaved}
+              onDirtyChange={setDirty}
+              onSavingChange={setSaving}
+              onCancel={() => {
+                if (dirty) {
+                  setConfirmClose(true);
+                } else {
+                  setEditing(false);
+                }
+              }}
+            />
+          )}
         </section>
 
         <section className="drawer-section drawer-lineage">

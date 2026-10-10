@@ -30,25 +30,26 @@ class _InsightReportRecords:
                 f"""
                 {self._select_sql()}
                 WHERE report.dashboard_id = ?
-                  AND report.dashboard_version_id = ?
                 ORDER BY report.version_no DESC
                 """,
-                (dashboard_id, dashboard_version_id),
+                (dashboard_id,),
             ).fetchall()
             decisions = self._decision_map(
                 connection,
                 [str(row["id"]) for row in rows],
             )
-        text_quality = None
-        if any(row["status"] == "completed" for row in rows):
-            text_quality = self.dashboard_service.text_quality(
-                dashboard_id,
-                dashboard_version_id,
-            )
+        qualities = {
+            version_id: self.dashboard_service.text_quality(dashboard_id, version_id)
+            for version_id in {
+                str(row["dashboard_version_id"])
+                for row in rows
+                if row["status"] == "completed"
+            }
+        }
         return [
             self._serialize(
                 dict(row),
-                text_quality=text_quality,
+                text_quality=qualities.get(str(row["dashboard_version_id"])),
                 decisions=decisions.get(str(row["id"]), []),
             )
             for row in rows
@@ -132,10 +133,12 @@ class _InsightReportRecords:
             SELECT report.*, model.display_name AS model_name,
                    creator.display_name AS created_by_name,
                    dashboard_version.version_no AS dashboard_version_no,
+                   CASE WHEN dashboard.current_version_id != report.dashboard_version_id THEN 1 ELSE 0 END AS source_outdated,
                    published.id AS publication_id,
                    published.version_no AS published_version_no,
                    published.published_at
             FROM ai_insight_reports report
+            JOIN analysis_dashboards dashboard ON dashboard.id = report.dashboard_id
             JOIN api_models model ON model.id = report.model_id
             JOIN users creator ON creator.id = report.created_by
             JOIN dashboard_versions dashboard_version

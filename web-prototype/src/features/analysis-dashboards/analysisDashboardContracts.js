@@ -84,6 +84,7 @@
  * @property {string} [updated_by_name]
  *
  * @typedef {Object} InsightReport
+ * @property {boolean | number} [source_outdated]
  * @property {string} id
  * @property {string} status
  * @property {number | null} [version_no]

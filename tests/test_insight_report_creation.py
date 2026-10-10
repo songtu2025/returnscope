@@ -172,7 +172,10 @@ def test_other_dashboard_or_version_can_create_an_independent_report(
     assert second["dashboard_version_id"] != version_id
     assert second["attempt_no"] == (2 if changed_scope == "version" else 1)
     assert second["version_no"] is None
-    assert service.get(str(first["id"])) == first
+    assert service.get(str(first["id"])) == {
+        **first,
+        "source_outdated": int(changed_scope == "version"),
+    }
     reports, audits = _creation_state(context.database)
     assert len(reports) == len(audits) == 2
 

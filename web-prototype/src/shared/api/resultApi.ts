@@ -1,4 +1,6 @@
 import type {
+  ManualCorrectionRequest,
+  ClassificationResultVersionResponse,
   ClassificationResultDrilldownResponse,
   GetDrilldownApiClassificationResultsVersionIdDrilldownGetData,
   GetDrilldownApiClassificationResultsVersionIdDrilldownGetResponse,
@@ -32,6 +34,15 @@ type ClassificationResultDrilldownFilters = Omit<
 >;
 
 export const resultApi = {
+  correctClassificationResult: (
+    versionId: string,
+    recordId: string,
+    payload: ManualCorrectionRequest,
+  ): Promise<ClassificationResultVersionResponse> =>
+    request(`/api/classification-results/${versionId}/records/${recordId}/semantics`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
   classificationResults: (
     filters: ClassificationResultFilters = {},
     options: RequestInit = {},

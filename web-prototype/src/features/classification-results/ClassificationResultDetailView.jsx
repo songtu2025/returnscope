@@ -64,7 +64,7 @@ export function ClassificationResultDetailView(props) {
           <span>
             尚未形成问题标签；当前{" "}
             {Number(reviewRecords || result.record_count).toLocaleString()}{" "}
-            条均需复核，完成复核并发布派生版本后可按问题下钻。
+            条均需复核，可在查看证据时人工修正。
           </span>
         </div>
       )}
@@ -80,23 +80,12 @@ export function ClassificationResultDetailView(props) {
           className={route.tab === "history" ? "active" : ""}
           onClick={() => updateRoute({ tab: "history" })}
         >
-          版本历史与复核
+          修改历史
         </button>
       </nav>
 
       {route.tab === "history" ? (
-        <ResultVersionReviewPanel
-          result={result}
-          notify={notify}
-          requestedAction={route.action}
-          routeContext={{
-            ...route,
-            taskId: route.taskId || result.source_task_id,
-            segmentId: route.segmentId || result.source_segment_id,
-          }}
-          onActionHandled={() => updateRoute({ action: "" })}
-          onSelectVersion={selectVersion}
-        />
+        <ResultVersionReviewPanel result={result} onSelectVersion={selectVersion} />
       ) : (
         <>
           <ResultDetailMetrics {...context} />
@@ -110,6 +99,11 @@ export function ClassificationResultDetailView(props) {
               group={selectedGroup}
               analysisContext={result.analysis_context}
               onClose={closeEvidence}
+              onSaved={(version) => {
+                closeEvidence();
+                notify("人工修正已保存");
+                updateRoute({ version, recordPage: 1 });
+              }}
               returnFocusRef={evidenceTriggerRef}
             />
           )}

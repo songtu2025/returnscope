@@ -5,14 +5,22 @@ from typing import TYPE_CHECKING, Any
 from web_backend.classification_result_payload import _version_quality
 from web_backend.classification_result_publication import SegmentPublicationState
 from web_backend.classification_result_queries import system_rerun_count
+from web_backend.classification_results.effective_content import (
+    business_hash,
+    load_content,
+    retain_manual_results,
+)
 from web_backend.classification_results.publication_writes import (
     PublicationVersion,
     insert_result,
     insert_version,
     publish_version,
+    record_completion,
     record_conflict,
+    update_segment,
 )
 from web_backend.common import new_id
+from web_backend.dashboards.live_sources import refresh_related_dashboards
 
 if TYPE_CHECKING:
     from web_backend.classification_result_service import ClassificationResultService
@@ -55,13 +63,29 @@ def publish_with_connection(
     now: str,
 ) -> tuple[dict[str, Any] | None, str | None]:
     task, segment = publication_source(connection, segment_state)
+    latest, parent = _publication_versions(connection, segment)
+    if parent is not None:
+        previous = load_content(connection, parent["id"])
+        retain_manual_results(prepared, previous)
+        if business_hash(previous) == business_hash(prepared):
+            version = PublicationVersion(
+                result_id=parent["result_id"],
+                version_id=parent["id"],
+                version_no=parent["version_no"],
+                content_hash=parent["content_hash"],
+                quality_status=parent["quality_status"],
+                parent_version_id=parent["parent_version_id"],
+                now=now,
+            )
+            update_segment(connection, segment_state, version)
+            record_completion(connection, segment_state, version)
+            return service._get_version_with_connection(connection, parent["id"]), None
     content_hash = service._content_hash(
         str(task["dataset_version_id"]),
         str(task["product_version_id"]),
         prepared["units"],
         prepared["records"],
     )
-    latest, parent = _publication_versions(connection, segment)
     if latest is not None:
         if str(latest["content_hash"]) == content_hash:
             return service._get_version_with_connection(
@@ -84,6 +108,7 @@ def publish_with_connection(
         prepared["records"],
     )
     publish_version(connection, segment_state, version)
+    refresh_related_dashboards(service.database, connection, version.result_id, now)
     return None, None
 
 

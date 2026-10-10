@@ -104,6 +104,12 @@ def test_result_router_preserves_registration_and_response_settings(
     harness: SimpleNamespace,
 ) -> None:
     routes = [route for route in harness.router.routes if isinstance(route, APIRoute)]
+    correction = next(route for route in routes if route.methods == {"PATCH"})
+    assert correction.path == BASE_PATH + "/{version_id}/records/{record_id}/semantics"
+    assert correction.response_model is not None
+    assert correction.response_model_exclude_unset
+    assert correction.dependant.dependencies[0].call is harness.current_user
+    routes = [route for route in routes if route.methods == {"GET"}]
     actual = [
         (
             route.path.removeprefix(BASE_PATH),

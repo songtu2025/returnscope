@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vitest";
 import {
-  activeReviewBatch,
   isDashboardSelectable,
   resultActionPolicy,
   resultStateLabel,
@@ -47,22 +46,6 @@ describe("分类版本由用户决定是否使用", () => {
   ])("记录级 %s 状态仍作为判断依据", (quality_status, label) => {
     expect(resultStateLabel({ quality_status })).toBe(label);
   });
-});
-
-test.each(["draft", "in_review", "conflict"])("保留活动复核批次 %s", (status) => {
-  const batch = { id: "synthetic-batch", status };
-  expect(activeReviewBatch([{ id: "published", status: "published" }, batch])).toBe(
-    batch,
-  );
-});
-
-test("已发布和已取消批次不再作为活动批次", () => {
-  expect(
-    activeReviewBatch([
-      { id: "published", status: "published" },
-      { id: "cancelled", status: "cancelled" },
-    ]),
-  ).toBeNull();
 });
 
 test("结果版本编号仍使用明确版本字段优先", () => {

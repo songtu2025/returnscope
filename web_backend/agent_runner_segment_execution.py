@@ -19,6 +19,7 @@ from web_backend.common import json_value
 from web_backend.dataset_cache import load_cached_dataset
 from web_backend.settings import Settings
 from web_backend.task_execution.contracts import _SegmentRunContext
+from web_backend.task_execution.effective_results import current_inherited_results
 from web_backend.task_execution.segment_configuration import SegmentConfigurationMixin
 from web_backend.task_execution.segment_state import SegmentStateMixin
 
@@ -62,6 +63,10 @@ class SegmentExecutionMixin(SegmentStateMixin, SegmentConfigurationMixin):
             for key, value in self._load_checkpoint(checkpoint_path).items()
             if not requires_system_rerun(value, "")
         }
+        if segment.get("result_version_id"):
+            existing_results = current_inherited_results(
+                self.database, str(segment["result_version_id"])
+            )
         return _SegmentRunContext(
             task_id=task_id,
             segment_id=segment_id,

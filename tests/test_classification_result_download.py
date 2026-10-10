@@ -6,13 +6,20 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from fastapi import APIRouter, FastAPI
+from fastapi.testclient import TestClient
 from openpyxl import load_workbook
 from test_classification_result_openapi import _bind_result_standard
 from test_classification_result_pool import _publish, _seed_result_context
+from test_manual_correction import _items, _record
+from test_result_version_reviews import _publish_review_required
 
 from web_backend.classification_result_service import ClassificationResultService
+from web_backend.classification_results.manual_correction import correct_group
 from web_backend.classification_results.result_export import semantic_export_rows
 from web_backend.classification_standard_service import ClassificationStandardService
+from web_backend.routers.task_download_routes import register_task_download_routes
+from web_backend.task_service import TaskService
 
 RESULT_COLUMNS = [
     "source_record_id",
@@ -140,3 +147,36 @@ def test_download_keeps_three_reads_without_member_queries(
     assert content.startswith(b"PK")
     reads = [sql for sql in statements if sql.lstrip().upper().startswith("SELECT")]
     assert len(reads) == 3
+
+
+def test_task_downloads_use_current_manual_result_instead_of_checkpoint(tmp_path: Path):
+    context, version = _publish_review_required(tmp_path)
+    service = ClassificationResultService(context.database)
+    correct_group(
+        service, version["version_id"], _record(context, version), _items(), "user-2"
+    )
+    tasks = TaskService(context.database)
+    segment = tasks.get(context.task_id)["segments"][0]
+    router = APIRouter()
+    register_task_download_routes(router, tasks, lambda: {"id": "user-1"})
+    app = FastAPI()
+    app.include_router(router)
+    client = TestClient(app)
+    paths = [
+        f"/api/tasks/{context.task_id}/download",
+        f"/api/tasks/{context.task_id}/segments/{segment['segment_key']}/download",
+    ]
+    for path in paths:
+        response = client.get(path)
+        assert response.status_code == 200
+        book = load_workbook(BytesIO(response.content))
+        values = list(book["分类结果"].values)
+        records = [dict(zip(values[0], row, strict=True)) for row in values[1:]]
+        for record in records:
+            classification = json.loads(record["classification_json"])
+            if record["order_id"] == "ORDER-DUP":
+                assert classification["semantic_units"][0]["opinion"] == "整体尺寸偏小"
+                assert record["quality_status"] == "ready"
+            else:
+                assert record["quality_status"] == "review_required"
+        book.close()

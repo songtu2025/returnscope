@@ -56,6 +56,7 @@ import {
 } from "../src/features/analysis-dashboards/dashboardSelectionStorage";
 import { ClassificationResultsPage } from "../src/pages/ClassificationResultsPage";
 import { useDashboardReports } from "../src/features/analysis-dashboards/useDashboardReports";
+import { useDashboardVersion } from "../src/features/analysis-dashboards/useDashboardVersion";
 import { useDashboardReportActions } from "../src/features/analysis-dashboards/useDashboardReportActions";
 import { ReportStatus } from "../src/features/analysis-dashboards/AiInsightReportCommon";
 import { percent as reportPercent } from "../src/features/analysis-dashboards/AiInsightReportPresentation";
@@ -1628,11 +1629,82 @@ test("筛选失败保留旧结果并可重试，切换版本不混用旧结果",
 
   window.location.hash =
     "#analysis-dashboards?dashboard=dashboard-default&version=dashboard-version-2";
+  dashboardApiMock.analysisDashboard.mockResolvedValue({
+    id: "dashboard-default",
+    current_version_id: "dashboard-version-2",
+    version: { version_id: "dashboard-version-2", version: 2 },
+  });
+  dashboardApiMock.analysisDashboardVersions.mockResolvedValue([
+    { version_id: "dashboard-version-2", version: 2 },
+  ]);
   await waitFor(() => expect(resolveNewVersion).toBeTypeOf("function"));
   expect(view.container.querySelector(".dashboard-detail-loading-body")).toBeTruthy();
   expect(screen.queryByText("5 条")).not.toBeInTheDocument();
   await act(async () => resolveNewVersion(insights(2)));
   expect(await screen.findByText("2 条")).toBeVisible();
+});
+
+test("看板默认读取最新结果，窗口重新获得焦点后自动更新", async () => {
+  const updateRoute = vi.fn();
+  const latest = { version_id: "live-2", version: 2 };
+  dashboardApiMock.analysisDashboard.mockResolvedValue({
+    id: "live",
+    current_version_id: "live-2",
+    version: latest,
+  });
+  dashboardApiMock.analysisDashboardVersions.mockResolvedValue([
+    latest,
+    { version_id: "live-1", version: 1 },
+  ]);
+  const { result } = renderHook(() =>
+    useDashboardVersion({
+      route: { dashboardId: "live", versionId: "live-1", tab: "overview" },
+      updateRoute,
+    }),
+  );
+  await waitFor(() => expect(result.current.main.loading).toBe(false));
+  expect(dashboardApiMock.analysisDashboard).toHaveBeenCalledWith(
+    "live",
+    "",
+    expect.any(Object),
+  );
+  expect(result.current.selectedVersion).toEqual(latest);
+  expect(updateRoute).toHaveBeenCalledWith({ versionId: "live-2" }, { replace: true });
+  const newer = { version_id: "live-3", version: 3 };
+  dashboardApiMock.analysisDashboard.mockResolvedValue({
+    id: "live",
+    current_version_id: "live-3",
+    version: newer,
+  });
+  dashboardApiMock.analysisDashboardVersions.mockResolvedValue([newer, latest]);
+  fireEvent(window, new Event("focus"));
+  await waitFor(() => expect(result.current.selectedVersion).toEqual(newer));
+});
+
+test("看板修改历史保留指定版本，不随焦点刷新跳转", async () => {
+  const updateRoute = vi.fn();
+  const old = { version_id: "history-1", version: 1 };
+  dashboardApiMock.analysisDashboard.mockResolvedValue({
+    id: "history",
+    current_version_id: "history-2",
+    version: old,
+  });
+  dashboardApiMock.analysisDashboardVersions.mockResolvedValue([
+    { version_id: "history-2", version: 2 },
+    old,
+  ]);
+  const { result } = renderHook(() =>
+    useDashboardVersion({
+      route: { dashboardId: "history", versionId: "history-1", tab: "history" },
+      updateRoute,
+    }),
+  );
+  await waitFor(() => expect(result.current.main.loading).toBe(false));
+  const count = dashboardApiMock.analysisDashboard.mock.calls.length;
+  fireEvent(window, new Event("focus"));
+  expect(dashboardApiMock.analysisDashboard.mock.calls.length).toBe(count);
+  expect(result.current.selectedVersion).toEqual(old);
+  expect(updateRoute).not.toHaveBeenCalled();
 });
 
 test("搜索条件只在点击筛选后提交并重置到第一页", async () => {
@@ -1988,6 +2060,9 @@ test("冲突必须逐组单选后才能创建不可变看板", async () => {
     current_version_id: "dashboard-version-1",
     version: { version_id: "dashboard-version-1", version: 1 },
   });
+  dashboardApiMock.analysisDashboard.mockImplementation(
+    () => dashboardApiMock.createAnalysisDashboard.mock.results[0].value,
+  );
   window.location.hash = `#analysis-dashboards?selection_token=${token}&step=check`;
   render(<DashboardHarness />);
 
@@ -2111,6 +2186,9 @@ test("当前看板可基于选择结果生成新版本并携带revision", async 
     revision: 8,
     version: { version_id: "dashboard-version-3", version: 3 },
   });
+  dashboardApiMock.analysisDashboard.mockImplementation(
+    () => dashboardApiMock.createAnalysisDashboardVersion.mock.results[0].value,
+  );
   window.location.hash = `#analysis-dashboards?selection_token=${token}&step=check`;
   render(<DashboardHarness />);
 

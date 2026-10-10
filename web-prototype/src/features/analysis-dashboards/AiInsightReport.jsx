@@ -36,8 +36,8 @@ export function AiInsightReport(props) {
       />
     );
   }
-  if (report.prompt_version === "ai-return-insight-v6") {
-    return (
+  const content =
+    report.prompt_version === "ai-return-insight-v6" ? (
       <AiInsightDecisionReport
         report={report}
         reports={props.reports}
@@ -48,7 +48,20 @@ export function AiInsightReport(props) {
         onSelectIssue={props.onSelectIssue}
         analysisContext={props.analysisContext}
       />
+    ) : (
+      <AiInsightLegacyReport {...props} report={report} />
     );
-  }
-  return <AiInsightLegacyReport {...props} report={report} />;
+  return (
+    <>
+      {Boolean(report.source_outdated) && (
+        <div className="result-action-guidance is-needs-review" role="status">
+          <span>数据已更新，报告需更新</span>
+          <button className="secondary-button" onClick={onGenerate}>
+            更新报告
+          </button>
+        </div>
+      )}
+      {content}
+    </>
+  );
 }

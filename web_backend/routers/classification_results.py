@@ -10,6 +10,9 @@ from web_backend.classification_result_service import (
 from web_backend.classification_standard_service import (
     ClassificationStandardService,
 )
+from web_backend.routers.classification_result_correction_routes import (
+    register_result_correction_routes,
+)
 from web_backend.routers.classification_result_download_routes import (
     register_result_download_routes,
 )
@@ -36,6 +39,7 @@ def create_classification_result_router(
     register_result_version_routes(router, result_service, current_user)
     register_result_metadata_routes(router, result_service, current_user, standards)
     register_result_record_routes(router, result_service, current_user)
+    register_result_correction_routes(router, result_service, current_user)
     register_result_download_routes(
         router, result_service, current_user, XLSX_MEDIA_TYPE
     )

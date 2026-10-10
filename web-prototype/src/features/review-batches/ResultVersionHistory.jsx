@@ -57,7 +57,7 @@ function ResultVersionHistoryItem({
       <div>
         <header>
           <b>
-            v{version.version} · {version.version === 1 ? "原始分类" : "复核派生"}
+            v{version.version} · {version.version === 1 ? "原始分类" : "结果更新"}
           </b>
           {current && <em>当前查看</em>}
         </header>

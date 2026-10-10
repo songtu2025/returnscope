@@ -73,7 +73,7 @@ function ResultProblemDrilldown(context) {
         allNeedReviewWithoutProblems
           ? `当前 ${Number(
               reviewRecords || result.record_count,
-            ).toLocaleString()} 条记录需复核，完成复核并发布派生版本后，可按问题继续下钻。`
+            ).toLocaleString()} 条记录需复核，可在查看证据时人工修正。`
           : ""
       }
       onSelect={selectProblem}

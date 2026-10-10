@@ -22,6 +22,7 @@ from web_backend.classification_standard_validation_worker import (
 from web_backend.common import new_id
 from web_backend.config_service import ConfigService
 from web_backend.dashboard_service import DashboardService
+from web_backend.dashboards.live_sources import refresh_related_dashboards
 from web_backend.data_quality_service import DataQualityService
 from web_backend.database import Database
 from web_backend.dataset_service import DatasetService
@@ -140,6 +141,8 @@ def _create_database(settings: Settings) -> Database:
     database = Database(settings.database_path)
     database.initialize(production=settings.production)
     _bootstrap_user(database, settings)
+    with database.transaction(immediate=True) as connection:
+        refresh_related_dashboards(database, connection, None, utc_now())
     return database
 
 

@@ -167,7 +167,9 @@ def build_semantic_review_view(
         if _get(review, "applied") and _get(review, "action") == "remove"
     )
     unexplained = (
-        [] if facts else _unexplained_fragments(source_text, coverage_evidence)
+        []
+        if facts or _get(_get(result, "human_review_assessment"), "resolved")
+        else _unexplained_fragments(source_text, coverage_evidence)
     )
     return {
         "semantic_items": items,
@@ -184,6 +186,8 @@ def review_route(
     processing_status: str | ProcessingStatus | None = None,
 ) -> str:
     """按业务复核、系统重跑和直接可用三类责任集中路由。"""
+    if _get(_get(result, "human_review_assessment"), "resolved"):
+        return READY
     view = build_semantic_review_view(
         result,
         source_text,

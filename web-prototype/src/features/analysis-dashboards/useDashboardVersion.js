@@ -21,48 +21,55 @@ export function useDashboardVersion({ route, updateRoute }) {
   /** @type {import("react").RefObject<AbortController | null>} */
   const mainControllerRef = useRef(null);
 
-  const loadMain = useCallback(async () => {
-    const generation = mainGenerationRef.current + 1;
-    mainGenerationRef.current = generation;
-    mainControllerRef.current?.abort();
-    const controller = new AbortController();
-    mainControllerRef.current = controller;
-    setMain((current) => ({ ...current, loading: true, error: "" }));
-    try {
-      /** @type {[Dashboard, DashboardVersion[] | {items?: DashboardVersion[]}]} */
-      const [dashboard, versionsResponse] = await Promise.all([
-        dashboardApi.analysisDashboard(route.dashboardId, route.versionId, {
-          signal: controller.signal,
-        }),
-        dashboardApi.analysisDashboardVersions(route.dashboardId, {
-          signal: controller.signal,
-        }),
-      ]);
-      if (mainGenerationRef.current !== generation) return;
-      /** @type {DashboardVersion[]} */
-      const versions = asItems(versionsResponse);
-      setMain({ loading: false, error: "", dashboard, versions });
-      const selectedVersionId = initialDashboardVersion(
-        route.versionId,
-        dashboard,
-        versions,
-      );
-      if (selectedVersionId && selectedVersionId !== route.versionId) {
-        updateRoute({ versionId: selectedVersionId }, { replace: true });
+  const loadMain = useCallback(
+    async (background = false) => {
+      const generation = mainGenerationRef.current + 1;
+      mainGenerationRef.current = generation;
+      mainControllerRef.current?.abort();
+      const controller = new AbortController();
+      mainControllerRef.current = controller;
+      if (!background) setMain((current) => ({ ...current, loading: true, error: "" }));
+      try {
+        /** @type {[Dashboard, DashboardVersion[] | {items?: DashboardVersion[]}]} */
+        const [dashboard, versionsResponse] = await Promise.all([
+          dashboardApi.analysisDashboard(
+            route.dashboardId,
+            route.tab === "history" ? route.versionId : "",
+            {
+              signal: controller.signal,
+            },
+          ),
+          dashboardApi.analysisDashboardVersions(route.dashboardId, {
+            signal: controller.signal,
+          }),
+        ]);
+        if (mainGenerationRef.current !== generation) return;
+        /** @type {DashboardVersion[]} */
+        const versions = asItems(versionsResponse);
+        setMain({ loading: false, error: "", dashboard, versions });
+        const selectedVersionId = initialDashboardVersion(
+          route.tab === "history" ? route.versionId : "",
+          dashboard,
+          versions,
+        );
+        if (selectedVersionId && selectedVersionId !== route.versionId) {
+          updateRoute({ versionId: selectedVersionId }, { replace: true });
+        }
+      } catch (error) {
+        if (
+          mainGenerationRef.current === generation &&
+          errorName(error) !== "AbortError"
+        ) {
+          setMain((current) => ({
+            ...current,
+            loading: false,
+            error: errorMessage(error),
+          }));
+        }
       }
-    } catch (error) {
-      if (
-        mainGenerationRef.current === generation &&
-        errorName(error) !== "AbortError"
-      ) {
-        setMain((current) => ({
-          ...current,
-          loading: false,
-          error: errorMessage(error),
-        }));
-      }
-    }
-  }, [route.dashboardId, route.versionId, updateRoute]);
+    },
+    [route.dashboardId, route.versionId, route.tab, updateRoute],
+  );
 
   useEffect(() => {
     loadMain();
@@ -71,15 +78,28 @@ export function useDashboardVersion({ route, updateRoute }) {
       mainControllerRef.current?.abort();
     };
   }, [loadMain]);
+  useEffect(() => {
+    if (route.tab === "history") return undefined;
+    const refresh = () => {
+      if (document.visibilityState !== "hidden") loadMain(true);
+    };
+    const timer = window.setInterval(refresh, 10000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [loadMain, route.tab]);
 
   const selectedVersion = useMemo(
     () =>
-      main.versions.find(
-        (version) => dashboardVersionId(version) === route.versionId,
-      ) ||
+      (route.tab === "history" &&
+        main.versions.find(
+          (version) => dashboardVersionId(version) === route.versionId,
+        )) ||
       main.dashboard?.version ||
       null,
-    [main.dashboard, main.versions, route.versionId],
+    [main.dashboard, main.versions, route.versionId, route.tab],
   );
   return { main, selectedVersion, loadMain };
 }

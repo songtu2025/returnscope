@@ -83,18 +83,6 @@
   border-right: 0;
 }
 
-.classification-results-page .result-version-review-panel {
-  border-color: #d9e3dd;
-  border-radius: 13px;
-  box-shadow: 0 10px 26px rgb(25 52 40 / 5%);
-}
-
-.classification-results-page .result-version-review-panel > header {
-  min-height: 86px;
-  padding-inline: 20px;
-  background: linear-gradient(90deg, #fbfdfc, #f3f9f6);
-}
-
 .review-batch-page .review-batch-workspace-header {
   padding: 22px 24px;
   border-color: #d9e3dd;

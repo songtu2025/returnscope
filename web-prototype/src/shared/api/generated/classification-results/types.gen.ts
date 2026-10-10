@@ -5,6 +5,36 @@ export type ClientOptions = {
 };
 
 /**
+ * AddedSemanticItemRequest
+ */
+export type AddedSemanticItemRequest = {
+  /**
+   * Evidence Text
+   */
+  evidence_text: string;
+  /**
+   * Item Id
+   */
+  item_id?: string | null;
+  /**
+   * Label Code
+   */
+  label_code: string;
+  /**
+   * Note
+   */
+  note?: string | null;
+  /**
+   * Opinion
+   */
+  opinion: string;
+  /**
+   * Sentiment
+   */
+  sentiment?: "POSITIVE" | "NEGATIVE" | "NEUTRAL" | null;
+};
+
+/**
  * CategoryDefinition
  */
 export type CategoryDefinition = {
@@ -1310,6 +1340,16 @@ export type LabelExample = {
 };
 
 /**
+ * ManualCorrectionRequest
+ */
+export type ManualCorrectionRequest = {
+  /**
+   * Semantic Items
+   */
+  semantic_items: Array<AddedSemanticItemRequest>;
+};
+
+/**
  * SemanticReviewCoverageResponse
  */
 export type SemanticReviewCoverageResponse = {
@@ -1919,6 +1959,45 @@ export type ListRecordsApiClassificationResultsVersionIdRecordsGetResponses = {
 
 export type ListRecordsApiClassificationResultsVersionIdRecordsGetResponse =
   ListRecordsApiClassificationResultsVersionIdRecordsGetResponses[keyof ListRecordsApiClassificationResultsVersionIdRecordsGetResponses];
+
+export type CorrectRecordApiClassificationResultsVersionIdRecordsRecordIdSemanticsPatchData =
+  {
+    body: ManualCorrectionRequest;
+    path: {
+      /**
+       * Version Id
+       */
+      version_id: string;
+      /**
+       * Record Id
+       */
+      record_id: string;
+    };
+    query?: never;
+    url: "/api/classification-results/{version_id}/records/{record_id}/semantics";
+  };
+
+export type CorrectRecordApiClassificationResultsVersionIdRecordsRecordIdSemanticsPatchErrors =
+  {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+  };
+
+export type CorrectRecordApiClassificationResultsVersionIdRecordsRecordIdSemanticsPatchError =
+  CorrectRecordApiClassificationResultsVersionIdRecordsRecordIdSemanticsPatchErrors[keyof CorrectRecordApiClassificationResultsVersionIdRecordsRecordIdSemanticsPatchErrors];
+
+export type CorrectRecordApiClassificationResultsVersionIdRecordsRecordIdSemanticsPatchResponses =
+  {
+    /**
+     * Successful Response
+     */
+    200: ClassificationResultVersionResponse;
+  };
+
+export type CorrectRecordApiClassificationResultsVersionIdRecordsRecordIdSemanticsPatchResponse =
+  CorrectRecordApiClassificationResultsVersionIdRecordsRecordIdSemanticsPatchResponses[keyof CorrectRecordApiClassificationResultsVersionIdRecordsRecordIdSemanticsPatchResponses];
 
 export type GetSummaryApiClassificationResultsVersionIdSummaryGetData = {
   body?: never;

@@ -3,8 +3,16 @@ import { selectedSentiment, SENTIMENT_LABELS } from "./semanticReviewDrafts";
 
 /** @typedef {import("./semanticLedgerContracts").ReviewLabel} ReviewLabel */
 
-/** @param {{code: string, labels: ReviewLabel[], value: string, onChange: (value: string) => void, name: string, known?: string}} props */
-export function SentimentField({ code, labels, value, onChange, name, known }) {
+/** @param {{code: string, labels: ReviewLabel[], value: string, onChange: (value: string) => void, name: string, known?: string, disabled?: boolean}} props */
+export function SentimentField({
+  code,
+  labels,
+  value,
+  onChange,
+  name,
+  known,
+  disabled,
+}) {
   if (!code) return null;
   const allowed = labels.find((label) => label.code === code)?.allowed_sentiments ?? [];
   const selected = selectedSentiment(code, labels, known || value);
@@ -16,6 +24,8 @@ export function SentimentField({ code, labels, value, onChange, name, known }) {
       ) : (
         <Select
           aria-label={name}
+          disabled={disabled}
+          getPopupContainer={(trigger) => trigger.parentElement}
           value={selected || undefined}
           onChange={onChange}
           placeholder="请选择评价方向"

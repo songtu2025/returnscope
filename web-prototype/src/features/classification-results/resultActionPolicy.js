@@ -8,8 +8,6 @@ export {
 } from "./resultStatePolicy";
 
 /** @typedef {import("./resultStatePolicy").ResultPolicyInput} ResultPolicyInput */
-/** @typedef {{id: string, status: string}} ReviewBatch */
-const ACTIVE_REVIEW_STATUSES = new Set(["draft", "in_review", "conflict"]);
 
 /** @param {ResultPolicyInput} result */
 export function resultActionPolicy(result) {
@@ -27,9 +25,4 @@ export function resultActionPolicy(result) {
     secondary: null,
     blockingReason: published ? "" : "分类结果版本尚未发布",
   };
-}
-
-/** @template {ReviewBatch} T @param {T[]} [batches] @returns {T | null} */
-export function activeReviewBatch(batches = []) {
-  return batches.find((batch) => ACTIVE_REVIEW_STATUSES.has(batch.status)) || null;
 }
