@@ -205,3 +205,18 @@
   display: flex;
   gap: 9px;
 }
+
+.dashboard-scope-feedback {
+  margin: 0 0 16px;
+}
+.dashboard-scope-update {
+  min-height: 20px;
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 20px;
+}
+.dashboard-scope-feedback .dashboard-coverage-note {
+  min-height: 64px;
+  margin: 0;
+}

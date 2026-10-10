@@ -1,5 +1,5 @@
 import {
-  hasDashboardCreationReason,
+  isDashboardCreationFormValid,
   dashboardCreationPlan,
   dashboardPlanStep,
   conflictId,
@@ -38,15 +38,21 @@ export function useDashboardCreation({ route, updateRoute, notify, userId }) {
   const [choices, setChoices] = useState(
     /** @returns {Record<string, string>} */ () => ({}),
   );
-  const [form, setFormState] = useState(
-    () => selection?.dashboard_form ?? { name: "", description: "", reason: "" },
-  );
-  /** @param {{name: string, description: string, reason: string}} next */
+  const [form, setFormState] = useState(() => ({
+    name: selection?.dashboard_form?.name ?? "",
+    reason: selection?.target_dashboard_id
+      ? (selection.dashboard_form?.reason ?? "")
+      : "",
+  }));
+  /** @param {{name: string, reason: string}} next */
   const setForm = (next) => {
     setFormState(next);
     updateDashboardSelection(userId, route.selectionToken, (current) => ({
       ...current,
-      dashboard_form: next,
+      dashboard_form: {
+        name: next.name,
+        ...(current.target_dashboard_id ? { reason: next.reason } : {}),
+      },
     }));
   };
   const [submitting, setSubmitting] = useState(false);
@@ -187,7 +193,7 @@ export function useDashboardCreation({ route, updateRoute, notify, userId }) {
   const submit = async () => {
     if (!selection) return;
     if (state.loading || state.error || state.plan?.ready !== true) return;
-    if (!hasDashboardCreationReason(form, isVersionCreation)) return;
+    if (!isDashboardCreationFormValid(form, isVersionCreation)) return;
     const targetDashboardId = selection.target_dashboard_id;
     setSubmitting(true);
     setConfirmationMessage("");
@@ -195,7 +201,7 @@ export function useDashboardCreation({ route, updateRoute, notify, userId }) {
       result_version_ids: resultVersionIds,
       filters: selection?.filters ?? {},
       plan_hash: state.plan?.plan_hash,
-      reason: form.reason.trim(),
+      reason: isVersionCreation ? form.reason.trim() : "创建分析看板",
     };
     try {
       const created = await createDashboardFromPlan({

@@ -587,12 +587,10 @@ test("两个创建入口共用跨页选择，取消后保留看板草稿", async
   expect(screen.queryByRole("button", { name: "检查并生成" })).not.toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "新建分析看板" }));
   await user.type(await screen.findByLabelText("看板名称"), "每周反馈看板");
-  await user.type(screen.getByLabelText("生成原因"), "经营复盘");
   await user.click(screen.getByRole("button", { name: /返回选择分类结果/ }));
   expect(await screen.findByText("已选 2 个结果版本")).toBeVisible();
   await user.click(screen.getByRole("button", { name: "新建分析看板" }));
   expect(await screen.findByLabelText("看板名称")).toHaveValue("每周反馈看板");
-  expect(screen.getByLabelText("生成原因")).toHaveValue("经营复盘");
   await user.click(screen.getByRole("button", { name: /返回选择分类结果/ }));
   await user.click(await screen.findByRole("button", { name: "生成 AI 洞察" }));
   const dialog = await screen.findByRole("dialog", { name: "生成 AI 洞察报告" });

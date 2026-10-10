@@ -3,7 +3,7 @@ import { dashboardApi } from "../../shared/api/dashboardApi";
 /** @typedef {import("./dashboardCreateContracts").DashboardCreateResponse} DashboardCreateResponse */
 /** @typedef {import("./dashboardCreateContracts").DashboardSelection} DashboardSelection */
 
-/** @param {{selection:DashboardSelection,form:{name:string,description:string},common:{result_version_ids:string[],filters:DashboardSelection["filters"],plan_hash?:string,reason:string},isVersionCreation:boolean}} input */
+/** @param {{selection:DashboardSelection,form:{name:string},common:{result_version_ids:string[],filters:DashboardSelection["filters"],plan_hash?:string,reason:string},isVersionCreation:boolean}} input */
 export async function createDashboardFromPlan({
   selection,
   form,
@@ -24,7 +24,7 @@ export async function createDashboardFromPlan({
   } else {
     created = await dashboardApi.createAnalysisDashboard({
       name: form.name.trim(),
-      description: form.description.trim(),
+      description: "",
       ...common,
     });
   }

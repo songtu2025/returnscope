@@ -51,8 +51,8 @@
   align-self: end;
 }
 .dashboard-list-filters select,
-.dashboard-confirm-aside input,
-.dashboard-confirm-aside textarea,
+.dashboard-confirm-form input,
+.dashboard-confirm-form textarea,
 .dashboard-version-controls select {
   width: 100%;
   min-width: 0;
@@ -63,7 +63,7 @@
   font: inherit;
 }
 .dashboard-list-filters select,
-.dashboard-confirm-aside input,
+.dashboard-confirm-form input,
 .dashboard-version-controls select {
   height: var(--desktop-control-height);
   padding: 0 10px;
@@ -73,7 +73,6 @@
 .dashboard-error,
 .dashboard-conflict-page,
 .dashboard-confirm-main,
-.dashboard-confirm-aside,
 .dashboard-drilldown-card,
 .dashboard-record-card,
 .dashboard-lineage-card,

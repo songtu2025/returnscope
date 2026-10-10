@@ -1771,13 +1771,31 @@ test.each(["dashboard", "insight"])(
     expect(ready).toBeDisabled();
     if (intent === "dashboard") {
       await user.type(screen.getByLabelText("看板名称"), "选择范围看板");
-      await user.type(screen.getByLabelText("生成原因"), "自主纳入待处理记录");
+      expect(screen.queryByLabelText("看板说明")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("生成原因")).not.toBeInTheDocument();
+      expect(readDashboardSelection("user-1", token).dashboard_form).toEqual({
+        name: "选择范围看板",
+      });
+      const workspace = screen
+        .getByLabelText("看板名称")
+        .closest(".dashboard-confirm-main");
+      expect(
+        within(workspace).getByRole("group", { name: "统计记录范围" }),
+      ).toBeVisible();
+      expect(
+        within(workspace).getByRole("button", { name: "确认生成分析看板" }),
+      ).toBeEnabled();
     } else {
       await screen.findByLabelText("模型");
       await user.click(screen.getByRole("button", { name: "中", exact: true }));
     }
     const review = screen.getByRole("checkbox", { name: "需复核", exact: true });
+    const scopeFeedback = document.querySelector(".dashboard-scope-feedback");
     await user.click(review);
+    if (intent === "dashboard") {
+      expect(document.querySelector(".dashboard-scope-feedback")).toBe(scopeFeedback);
+      expect(within(scopeFeedback).getByText("正在更新统计范围…")).toBeVisible();
+    }
     const submitLabel = intent === "dashboard" ? "确认生成分析看板" : "开始生成";
     expect(screen.getByRole("button", { name: submitLabel })).toBeDisabled();
     expect(screen.getByRole("checkbox", { name: "需复核", exact: true })).toBe(review);
@@ -1787,6 +1805,10 @@ test.each(["dashboard", "insight"])(
     await waitFor(() =>
       expect(screen.getByRole("button", { name: submitLabel })).toBeEnabled(),
     );
+    if (intent === "dashboard") {
+      expect(document.querySelector(".dashboard-scope-feedback")).toBe(scopeFeedback);
+      expect(within(scopeFeedback).getByText("统计范围已更新")).toBeVisible();
+    }
     expect(readDashboardSelection("user-1", token).filters).toEqual({
       quality_status: ["ready", "review_required"],
     });
@@ -1848,7 +1870,6 @@ test("快速返回原范围仍重新核对，迟到响应不能替换当前计�
   render(<DashboardHarness />);
   await screen.findByText("执行计划已生成");
   await user.type(screen.getByLabelText("看板名称"), "快速切换");
-  await user.type(screen.getByLabelText("生成原因"), "核对当前计划");
   const review = screen.getByRole("checkbox", { name: "需复核", exact: true });
   await user.click(review);
   await waitFor(() => expect(pending).toHaveLength(1));
@@ -1930,7 +1951,6 @@ test("冲突必须逐组单选后才能创建不可变看板", async () => {
   expect(await screen.findByText("执行计划已生成")).toBeVisible();
 
   await user.type(screen.getByLabelText("看板名称"), "美国站退货看板");
-  await user.type(screen.getByLabelText("生成原因"), "用于每周经营复盘");
   await user.click(screen.getByRole("button", { name: "确认生成分析看板" }));
 
   await waitFor(() =>
@@ -1939,7 +1959,8 @@ test("冲突必须逐组单选后才能创建不可变看板", async () => {
         name: "美国站退货看板",
         result_version_ids: ["result-v2"],
         plan_hash: "plan-result-v2",
-        reason: "用于每周经营复盘",
+        reason: "创建分析看板",
+        description: "",
       }),
     ),
   );
@@ -1971,12 +1992,10 @@ test("创建409保留输入并刷新计划后要求再次确认", async () => {
 
   expect(await screen.findByText("执行计划已生成")).toBeVisible();
   await user.type(screen.getByLabelText("看板名称"), "不能丢失的名称");
-  await user.type(screen.getByLabelText("生成原因"), "不能丢失的原因");
   await user.click(screen.getByRole("button", { name: "确认生成分析看板" }));
 
   expect(await screen.findByText(/已保留你的输入/)).toBeVisible();
   expect(screen.getByLabelText("看板名称")).toHaveValue("不能丢失的名称");
-  expect(screen.getByLabelText("生成原因")).toHaveValue("不能丢失的原因");
   expect(dashboardApiMock.createAnalysisDashboard).toHaveBeenCalledTimes(1);
 });
 
@@ -2014,12 +2033,11 @@ test("需复核来源可创建看板并展示实际纳入范围", async () => {
   window.location.hash = `#analysis-dashboards?selection_token=${token}&step=check`;
   render(<DashboardHarness />);
 
-  expect(await screen.findByText("请核对统计范围")).toBeVisible();
+  expect(await screen.findByRole("group", { name: "统计记录范围" })).toBeVisible();
   expect(screen.getByText(/纳入 6 \/\s*10 条记录/)).toBeVisible();
   expect(screen.getByText(/待处理 3 条.*已忽略 1 条/)).toBeVisible();
   expect(screen.getByRole("button", { name: "确认生成分析看板" })).toBeDisabled();
   await userEvent.type(screen.getByLabelText("看板名称"), "部分数据看板");
-  await userEvent.type(screen.getByLabelText("生成原因"), "先观察已可用数据");
   expect(screen.getByRole("button", { name: "确认生成分析看板" })).toBeEnabled();
 });
 

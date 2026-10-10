@@ -148,8 +148,7 @@
 .result-detail-header,
 .review-batch-workspace-header,
 .dashboard-conflict-page,
-.dashboard-confirm-main,
-.dashboard-confirm-aside {
+.dashboard-confirm-main {
   padding: var(--desktop-detail-padding);
 }
 .review-batch-progress,

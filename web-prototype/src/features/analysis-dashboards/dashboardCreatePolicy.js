@@ -76,6 +76,6 @@ export function dashboardCreationStage(state, route, selection, ids) {
 }
 
 /** @param {{name:string,reason:string}} form @param {boolean} isVersionCreation */
-export function hasDashboardCreationReason(form, isVersionCreation) {
-  return Boolean((isVersionCreation || form.name.trim()) && form.reason.trim());
+export function isDashboardCreationFormValid(form, isVersionCreation) {
+  return Boolean(isVersionCreation ? form.reason.trim() : form.name.trim());
 }

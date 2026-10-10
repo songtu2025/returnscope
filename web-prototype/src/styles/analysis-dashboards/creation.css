@@ -157,34 +157,54 @@
   font-size: 12px;
 }
 .dashboard-confirm-page {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 310px;
-  gap: 14px;
-  align-items: start;
+  display: block;
 }
-.dashboard-confirm-main,
-.dashboard-confirm-aside {
+.dashboard-confirm-main {
   padding: 18px;
 }
-.dashboard-confirm-aside {
+.dashboard-confirm-form {
   display: grid;
-  gap: 13px;
-  position: sticky;
-  top: 76px;
+  gap: 14px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
 }
-.dashboard-confirm-aside label,
+.dashboard-confirm-form > label {
+  width: min(100%, 560px);
+}
+.dashboard-confirm-form label,
 .dashboard-version-controls label {
   display: grid;
   gap: 6px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
-.dashboard-confirm-aside textarea {
+.dashboard-confirm-form textarea {
   padding: 10px;
   resize: vertical;
 }
+.dashboard-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.dashboard-confirm-actions .dashboard-lineage-note {
+  flex: 1 1 320px;
+  padding: 0;
+  background: transparent;
+}
+.dashboard-confirm-actions .dashboard-form-error {
+  flex-basis: 100%;
+}
+.dashboard-confirm-actions .dashboard-submit-button {
+  width: auto;
+  min-width: 180px;
+}
 .dashboard-plan-stats {
+  margin-top: 16px;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 7px;
@@ -211,9 +231,6 @@
   background: var(--green-pale);
   font-size: 11px;
   line-height: 1.45;
-}
-.dashboard-submit-button {
-  width: 100%;
 }
 .dashboard-blockers {
   display: grid;
@@ -246,11 +263,12 @@
 }
 .dashboard-source-mapping {
   margin-top: 15px;
-  overflow: hidden;
+  overflow-x: auto;
   border: 1px solid var(--line);
   border-radius: 10px;
 }
 .dashboard-source-mapping > div {
+  min-width: 680px;
   display: grid;
   grid-template-columns: 105px minmax(105px, 1fr) 86px minmax(130px, 1.2fr) 76px 125px;
   gap: 10px;

@@ -7,9 +7,6 @@
     grid-template-columns: 64px minmax(140px, 1.4fr) 56px 86px 74px 98px 78px 60px;
     gap: 8px;
   }
-  .dashboard-confirm-page {
-    grid-template-columns: minmax(0, 1fr) 288px;
-  }
   .dashboard-drilldown-grid {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }

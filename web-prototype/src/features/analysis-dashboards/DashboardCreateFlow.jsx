@@ -65,14 +65,9 @@ export function DashboardCreateFlow(props) {
       />
       <DashboardCreateSteps step={route.step} />
 
-      {state.loading &&
-        (state.plan ? (
-          <p role="status" aria-live="polite">
-            正在更新统计范围…
-          </p>
-        ) : (
-          <InlineLoading label="正在检查分类结果与 Listing 冲突…" />
-        ))}
+      {state.loading && !state.plan && (
+        <InlineLoading label="正在检查分类结果与 Listing 冲突…" />
+      )}
       {state.error && (
         <section className="dashboard-error" role="alert">
           <b>执行计划检查失败</b>
@@ -90,8 +85,9 @@ export function DashboardCreateFlow(props) {
 
       {stage.showConfirmation && !isInsightCreation && (
         <section className="dashboard-confirm-page">
-          <DashboardPlanSources {...context} />
-          <DashboardCreateConfirmation {...context} />
+          <DashboardPlanSources {...context}>
+            <DashboardCreateConfirmation {...context} />
+          </DashboardPlanSources>
         </section>
       )}
       {stage.showConfirmation && isInsightCreation && (

@@ -74,7 +74,6 @@
 .analysis-dashboard-page .dashboard-lineage-card,
 .analysis-dashboard-page .dashboard-history-card,
 .analysis-dashboard-page .dashboard-confirm-main,
-.analysis-dashboard-page .dashboard-confirm-aside,
 .analysis-dashboard-page .dashboard-conflict-page {
   border-color: #d9e3dd;
   border-radius: 13px;
@@ -108,10 +107,6 @@
 .analysis-dashboard-page .dashboard-create-steps {
   max-width: 760px;
   margin-bottom: 18px;
-}
-
-.analysis-dashboard-page .dashboard-confirm-aside {
-  top: 88px;
 }
 
 .analysis-dashboard-page .dashboard-plan-stats span {
