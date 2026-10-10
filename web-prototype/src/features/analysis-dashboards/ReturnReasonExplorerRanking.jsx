@@ -5,7 +5,6 @@ import { REASON_PAGE_SIZE } from "./returnReasonExplorerPresentation";
 /** @typedef {import("../../shared/api/reviewBatchContracts").ReviewLabel} ReviewLabel */
 /** @typedef {import("./analysisDashboardContracts").DashboardInsights} DashboardInsights */
 /** @typedef {import("./analysisDashboardContracts").DashboardRoute} DashboardRoute */
-/** @typedef {import("./analysisDashboardContracts").InsightHierarchyNode} InsightHierarchyNode */
 /** @typedef {import("./analysisDashboardContracts").InsightReason} InsightReason */
 /** @typedef {ReturnType<typeof import("./analysisContextPresentation").analysisContextTerms>} AnalysisContextTerms */
 /** @typedef {ReturnType<typeof import("./returnReasonExplorerPresentation").reasonPagePresentation>} ReasonPageView */
@@ -146,80 +145,6 @@ export function ReturnReasonExplorerRanking(props) {
           total={visibleReasons.length}
           totalPages={reasonPageCount}
           onPage={(reasonPage) => onUpdateRoute({ reasonPage })}
-          showTotal={false}
-          simple
-        />
-      )}
-    </section>
-  );
-}
-
-/** @param {{node: InsightHierarchyNode, taxonomyLabels: Map<string, ReviewLabel>, activeReason?: InsightReason, onUpdateRoute: (changes: Partial<DashboardRoute>) => void}} props */
-function HierarchyChoice({ node, taxonomyLabels, activeReason, onUpdateRoute }) {
-  return (
-    <li>
-      <button
-        disabled={!taxonomyLabels.has(node.value)}
-        className={activeReason?.value === node.value ? "active" : ""}
-        onClick={() =>
-          onUpdateRoute({
-            problem: node.value,
-            recordPage: 1,
-            reasonPage: 0,
-          })
-        }
-      >
-        <div>
-          <b>{node.label_path?.join(" → ") || node.label_name}</b>
-        </div>
-        <strong>{Number(node.record_count).toLocaleString()} 条</strong>
-      </button>
-    </li>
-  );
-}
-
-/** @param {{page: number, hierarchy: InsightHierarchyNode[], taxonomyLabels: Map<string, ReviewLabel>, activeReason?: InsightReason, onUpdateRoute: (changes: Partial<DashboardRoute>) => void}} props */
-export function ReturnReasonExplorerHierarchy({
-  page,
-  hierarchy,
-  taxonomyLabels,
-  activeReason,
-  onUpdateRoute,
-}) {
-  if (!hierarchy.length) return null;
-  const pageCount = Math.ceil(hierarchy.length / REASON_PAGE_SIZE);
-  const currentPage = Math.min(page || 1, pageCount);
-  const pageStart = (currentPage - 1) * REASON_PAGE_SIZE;
-  return (
-    <section
-      className={`return-reason-ranking return-hierarchy-ranking${pageCount > 1 ? " is-paginated" : ""}`}
-      aria-label="标签层级统计"
-    >
-      <header>
-        <div>
-          <h3>标签层级</h3>
-          <p>父级按评论去重；选择末端标签查看诊断</p>
-        </div>
-        <span>{hierarchy.length} 项</span>
-      </header>
-      <ol>
-        {hierarchy.slice(pageStart, pageStart + REASON_PAGE_SIZE).map((node) => (
-          <HierarchyChoice
-            key={node.value}
-            node={node}
-            taxonomyLabels={taxonomyLabels}
-            activeReason={activeReason}
-            onUpdateRoute={onUpdateRoute}
-          />
-        ))}
-      </ol>
-      {pageCount > 1 && (
-        <Pagination
-          page={currentPage}
-          pageSize={REASON_PAGE_SIZE}
-          total={hierarchy.length}
-          totalPages={pageCount}
-          onPage={(hierarchyPage) => onUpdateRoute({ hierarchyPage })}
           showTotal={false}
           simple
         />

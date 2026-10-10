@@ -1,11 +1,9 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { analysisContextTerms } from "./analysisContextPresentation";
 import { reasonPagePresentation } from "./returnReasonExplorerPresentation";
 import { ReturnReasonExplorerFilters } from "./ReturnReasonExplorerFilters";
-import {
-  ReturnReasonExplorerRanking,
-  ReturnReasonExplorerHierarchy,
-} from "./ReturnReasonExplorerRanking";
+import { ReturnReasonExplorerRanking } from "./ReturnReasonExplorerRanking";
+import { ReturnReasonExplorerHierarchy } from "./ReturnReasonExplorerHierarchy";
 /** @typedef {import("../../shared/api/reviewBatchContracts").ReviewLabel} ReviewLabel */
 /** @typedef {import("./analysisDashboardContracts").DashboardInsights} DashboardInsights */
 /** @typedef {import("./analysisDashboardContracts").DashboardRoute} DashboardRoute */
@@ -25,6 +23,7 @@ export function ReturnReasonInsightExplorer(props) {
     analysisContext,
   } = props;
   const terms = analysisContextTerms(analysisContext);
+  const [hierarchyReset, setHierarchyReset] = useState(0);
   const selectedSubject = subjects.some((subject) => subject.value === route.subject)
     ? route.subject
     : "";
@@ -42,6 +41,7 @@ export function ReturnReasonInsightExplorer(props) {
         {...props}
         selectedSubject={selectedSubject}
         terms={terms}
+        onReset={() => setHierarchyReset((value) => value + 1)}
       />
       <ReturnReasonExplorerRanking
         {...props}
@@ -52,10 +52,21 @@ export function ReturnReasonInsightExplorer(props) {
         terms={terms}
       />
       <ReturnReasonExplorerHierarchy
-        page={route.hierarchyPage}
+        key={JSON.stringify([
+          hierarchyReset,
+          route.versionId,
+          route.subject,
+          route.labelGroup,
+          route.listing,
+          route.productName,
+          route.productSku,
+          route.dateFrom,
+          route.dateTo,
+        ])}
         hierarchy={props.hierarchy}
-        taxonomyLabels={props.taxonomyLabels}
-        activeReason={view.activeReason}
+        selectedCode={pendingReason || view.activeReason?.value || ""}
+        pendingReason={pendingReason}
+        reasonStatus={reasonStatus}
         onUpdateRoute={props.onUpdateRoute}
       />
     </aside>

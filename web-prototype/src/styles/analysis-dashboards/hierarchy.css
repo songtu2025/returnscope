@@ -1,0 +1,120 @@
+.return-hierarchy-explorer {
+  flex: none;
+  margin-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.return-hierarchy-explorer summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.return-hierarchy-explorer summary::-webkit-details-marker {
+  display: none;
+}
+
+.return-hierarchy-explorer > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.return-hierarchy-explorer small {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.return-hierarchy-explorer summary > svg {
+  flex: none;
+  color: var(--muted);
+}
+
+.return-hierarchy-explorer details[open] > summary > svg,
+.return-hierarchy-explorer[open] > summary > svg {
+  transform: rotate(90deg);
+}
+
+.return-hierarchy-explorer > p {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.return-hierarchy-scroll {
+  max-height: 320px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.return-hierarchy-explorer ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.return-hierarchy-branch > ul {
+  margin-left: 14px;
+  padding-left: 4px;
+  border-left: 1px solid var(--line);
+}
+
+.return-hierarchy-branch > summary,
+.return-hierarchy-explorer li button {
+  display: grid;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 36px;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--ink);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+
+.return-hierarchy-branch > summary {
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+}
+
+.return-hierarchy-explorer li button {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding-left: 26px;
+}
+
+.return-hierarchy-explorer li span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.return-hierarchy-explorer li strong {
+  color: var(--green-dark);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.return-hierarchy-explorer summary:hover,
+.return-hierarchy-explorer li button:hover,
+.return-hierarchy-explorer li button.active {
+  background: var(--green-pale);
+}
+
+.return-hierarchy-explorer li button.active {
+  box-shadow: inset 3px 0 var(--green);
+}
+
+.return-hierarchy-explorer summary:focus-visible,
+.return-hierarchy-explorer li button:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: -2px;
+}

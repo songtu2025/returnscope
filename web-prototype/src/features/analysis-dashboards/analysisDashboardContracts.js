@@ -14,7 +14,6 @@
  * @property {number} pageSize
  * @property {number} recordPage
  * @property {number} reasonPage
- * @property {number} hierarchyPage
  * @property {string} problem
  * @property {string} labelGroup
  * @property {string} subject
@@ -209,7 +208,7 @@
  * @typedef {{report_type?: "problem_decision", title?: string, issues?: DecisionReportIssue[], caveats?: string[]}} InsightDecisionReportContent
  *
  * @typedef {{value: string, label: string, record_count: number, percentage: number, primary_rate?: number, subjects?: string[], lift?: number, baseline_record_count?: number}} InsightReason
- * @typedef {InsightReason & {label_path?: string[], label_name?: string}} InsightHierarchyNode
+ * @typedef {InsightReason & {label_path?: string[], label_name?: string, parent_code?: string | null}} InsightHierarchyNode
  * @typedef {{value: string, record_count: number, total_record_count: number, product_reason_rate: number, lift: number}} InsightProduct
  * @typedef {{value: string, record_count: number}} InsightPart
  * @typedef {{opinion: string, part?: string, record_count: number}} InsightOpinion

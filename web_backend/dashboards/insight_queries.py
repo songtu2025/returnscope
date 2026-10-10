@@ -17,7 +17,7 @@ from web_backend.dashboard_insight_preparation import (
     InsightOptions,
     PreparedInsightScope,
 )
-from web_backend.dashboard_insight_scope import InsightQueryScope
+from web_backend.dashboard_insight_scope import InsightQueryScope, subject_label_filter
 from web_backend.dashboard_plan import comment_summary_metrics
 from web_backend.dashboard_support import percentage
 from web_backend.request_timing import timed_stage
@@ -83,8 +83,14 @@ def collect_overview_summary(
                     feedback_groups=context["counting_basis"] == "feedback_group",
                 )
             )
+        # 与原因榜单限制到相同标签，父级仍由原有集合算法去重。
+        hierarchy_where = scope.where_sql + subject_label_filter(scope, "r", "l")
+        hierarchy_params = scope.params.copy()
+        if scope.clean_group:
+            hierarchy_where += " AND aligned_group(l.label_group, l.label_code, r.result_version_id) = ?"
+            hierarchy_params.append(scope.clean_group)
         hierarchy_problems = (
-            hierarchy_counts(connection, taxonomy, scope.where_sql, scope.params)
+            hierarchy_counts(connection, taxonomy, hierarchy_where, hierarchy_params)
             if taxonomy and taxonomy.structure_version == 2
             else []
         )

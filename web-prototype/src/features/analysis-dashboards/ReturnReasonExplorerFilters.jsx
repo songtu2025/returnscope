@@ -4,13 +4,13 @@ import { formatPercent } from "./returnReasonInsightPresentation";
 /** @typedef {import("./analysisDashboardContracts").InsightReason} InsightReason */
 /** @typedef {ReturnType<typeof import("./analysisContextPresentation").analysisContextTerms>} AnalysisContextTerms */
 
-/** @param {{onUpdateRoute: (changes: Partial<DashboardRoute>) => void}} props */
-function ExplorerHeader({ onUpdateRoute }) {
+/** @param {{onUpdateRoute: (changes: Partial<DashboardRoute>) => void, onReset: () => void}} props */
+function ExplorerHeader({ onUpdateRoute, onReset }) {
   const resetReasonFilters = () => {
+    onReset();
     onUpdateRoute({
       subject: "",
       reasonPage: 0,
-      hierarchyPage: 1,
       labelGroup: "",
       problem: "",
       recordPage: 1,
@@ -40,7 +40,6 @@ function SubjectSelector({ subjects, selectedSubject, onUpdateRoute }) {
       subject,
       labelGroup: "",
       reasonPage: 0,
-      hierarchyPage: 1,
       problem: "",
       recordPage: 1,
     });
@@ -91,7 +90,6 @@ function ReasonGroups({ route, groups, terms, onUpdateRoute }) {
                 problem: "",
                 recordPage: 1,
                 reasonPage: 0,
-                hierarchyPage: 1,
               })
             }
           >
@@ -103,7 +101,7 @@ function ReasonGroups({ route, groups, terms, onUpdateRoute }) {
   );
 }
 
-/** @param {{route: DashboardRoute, groups: string[], terms: AnalysisContextTerms, subjects: InsightReason[], selectedSubject: string, onUpdateRoute: (changes: Partial<DashboardRoute>) => void}} props */
+/** @param {{route: DashboardRoute, groups: string[], terms: AnalysisContextTerms, subjects: InsightReason[], selectedSubject: string, onUpdateRoute: (changes: Partial<DashboardRoute>) => void, onReset: () => void}} props */
 export function ReturnReasonExplorerFilters({
   route,
   groups,
@@ -111,10 +109,11 @@ export function ReturnReasonExplorerFilters({
   subjects,
   selectedSubject,
   onUpdateRoute,
+  onReset,
 }) {
   return (
     <>
-      <ExplorerHeader onUpdateRoute={onUpdateRoute} />
+      <ExplorerHeader onUpdateRoute={onUpdateRoute} onReset={onReset} />
       <SubjectSelector
         subjects={subjects}
         selectedSubject={selectedSubject}

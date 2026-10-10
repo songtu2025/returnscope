@@ -756,10 +756,6 @@
   font-size: 10px;
 }
 
-.return-insight-explorer .return-hierarchy-ranking li button {
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
 .return-insight-diagnostic {
   display: flex;
   flex-direction: column;

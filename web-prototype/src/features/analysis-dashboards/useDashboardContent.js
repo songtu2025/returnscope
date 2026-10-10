@@ -89,7 +89,6 @@ export function useDashboardContent({ route, updateRoute }) {
             problem: "",
             recordPage: 1,
             reasonPage: 0,
-            hierarchyPage: 1,
           },
           { replace: true },
         );
