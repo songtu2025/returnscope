@@ -17,11 +17,6 @@
 .task-runtime-workspace .listing-queue-search svg {
   flex-shrink: 0;
 }
-.task-runtime-workspace .listing-queue-search input {
-  min-height: 36px;
-  padding: 0;
-  box-shadow: none;
-}
 .task-runtime-workspace .listing-table {
   overflow: visible;
   background: #fff;

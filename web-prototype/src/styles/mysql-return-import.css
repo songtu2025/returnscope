@@ -203,8 +203,8 @@
 .mysql-filter-toolbar input {
   width: 100%;
   min-width: 0;
-  min-height: 38px;
-  padding: 8px 10px;
+  height: var(--desktop-control-height);
+  padding: 0 10px;
   border: 1px solid var(--line);
   border-radius: 7px;
   color: var(--ink);
@@ -223,9 +223,11 @@
   list-style: none;
 }
 .mysql-date-filter > summary b {
-  display: block;
+  display: flex;
+  align-items: center;
+  height: var(--desktop-control-height);
   margin-top: 6px;
-  padding: 9px 12px;
+  padding: 0 12px;
   border: 1px solid var(--line);
   border-radius: 7px;
   color: var(--ink);
@@ -236,7 +238,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 0;
+  height: var(--desktop-control-height);
+  padding: 0;
   color: var(--green);
 }
 .mysql-more-filter > summary span {

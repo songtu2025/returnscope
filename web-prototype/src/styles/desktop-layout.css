@@ -26,13 +26,6 @@
   width: var(--desktop-control-height);
   height: var(--desktop-control-height);
 }
-.standard-page
-  input:where(:not(.ant-select-input)):not([type="checkbox"]):not([type="radio"]):not(
-    [type="range"]
-  ):not([type="file"]),
-.standard-page select {
-  min-height: var(--desktop-control-height);
-}
 .empty-state {
   min-height: var(--desktop-empty-height);
   padding: var(--desktop-detail-padding);
@@ -110,16 +103,6 @@
   min-height: var(--desktop-filter-height);
   margin: 0 0 var(--desktop-section-gap);
   padding: 10px 12px;
-}
-.result-pool-filters input:where(:not(.ant-select-input)),
-.result-pool-filters select,
-.record-order-search input:where(:not(.ant-select-input)),
-.dashboard-list-filters select,
-.review-batch-filters input:where(:not(.ant-select-input)),
-.review-batch-filters select,
-.review-record-filters input:where(:not(.ant-select-input)),
-.review-record-filters select {
-  height: var(--desktop-control-height);
 }
 .result-pool-head,
 .result-record-head,

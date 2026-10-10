@@ -57,40 +57,13 @@
   align-items: center;
   gap: 8px;
   width: 100%;
+  margin: 0;
 }
 
 .product-master-page .dimension-search > .ant-input-affix-wrapper {
   flex: 1;
   min-width: 0;
   height: 100%;
-}
-
-.product-master-page
-  .dimension-search
-  > .ant-input-affix-wrapper
-  > input.ant-input.ant-input,
-.returns-assets-page
-  .returns-registry-search.ant-input-affix-wrapper
-  > input.ant-input.ant-input {
-  width: 100%;
-  min-width: 0;
-  height: auto;
-  min-height: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.product-master-page
-  .dimension-search
-  > .ant-input-affix-wrapper
-  > input.ant-input:focus-visible,
-.returns-assets-page
-  .returns-registry-search.ant-input-affix-wrapper
-  > input.ant-input:focus-visible {
-  outline: none;
 }
 
 .product-master-page .dimension-search > .ant-btn {
@@ -119,7 +92,6 @@
 .product-master-page .dimension-table-toolbar > div:last-child {
   justify-content: flex-end;
   gap: 10px;
-  padding-bottom: 2px;
   white-space: nowrap;
 }
 

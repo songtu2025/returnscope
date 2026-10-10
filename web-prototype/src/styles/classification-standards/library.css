@@ -68,26 +68,6 @@
 .standard-library-toolbar > .standard-search-box {
   height: 40px;
 }
-.classification-standard-page
-  :is(.standard-library-toolbar, .label-directory)
-  .standard-search-box.ant-input-affix-wrapper
-  > input.ant-input.ant-input {
-  width: 100%;
-  min-width: 0;
-  height: auto;
-  min-height: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-.classification-standard-page
-  .standard-search-box.ant-input-affix-wrapper
-  > input.ant-input:focus-visible {
-  outline: none;
-}
-
 .standard-status-filter {
   display: inline-flex;
   gap: 2px;

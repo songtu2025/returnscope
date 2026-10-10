@@ -972,7 +972,7 @@ test("分类标准首页使用全宽列表并支持搜索", async () => {
   expect(await screen.findByText("没有符合条件的分类标准")).toBeVisible();
 });
 
-test("分类标准搜索框保留原尺寸并只复位 AntD 内部输入框", () => {
+test("分类标准搜索框保留原尺寸且不覆盖 AntD 内部输入框", () => {
   const styles = readStyles("src/styles/classification-standards.css");
   expect(styles).toMatch(
     /\.standard-library-toolbar > \.standard-search-box\s*{[^}]*height:\s*40px;/s,
@@ -980,12 +980,7 @@ test("分类标准搜索框保留原尺寸并只复位 AntD 内部输入框", ()
   expect(styles).toMatch(
     /\.label-directory \.standard-search-box\s*{[^}]*height:\s*36px;/s,
   );
-  expect(styles).toMatch(
-    /\.classification-standard-page[\s\S]*?\.standard-search-box\.ant-input-affix-wrapper[\s\S]*?> input\.ant-input\.ant-input\s*{[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*min-height:\s*0;/s,
-  );
-  expect(styles).toMatch(
-    /\.classification-standard-page[\s\S]*?\.standard-search-box\.ant-input-affix-wrapper[\s\S]*?> input\.ant-input:focus-visible\s*{[^}]*outline:\s*none;/s,
-  );
+  expect(styles).not.toMatch(/> input\.ant-input(?:\.ant-input|:focus-visible)/);
 });
 
 test("工作台收纳设置和版本记录，不显示重复未修改状态", async () => {

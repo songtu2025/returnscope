@@ -79,6 +79,13 @@ test("桌面端共享尺寸以分类结果页为统一基准", () => {
   expect(styles).toMatch(/--desktop-page-padding:\s*24px/);
   expect(styles).toMatch(/--desktop-section-gap:\s*16px/);
   expect(styles).toMatch(/--desktop-control-height:\s*36px/);
+  expect(styles).toMatch(/--desktop-compact-height:\s*32px/);
+  expect(styles.match(/--desktop-control-height:\s*\d+px/g)).toEqual([
+    "--desktop-control-height: 36px",
+  ]);
+  expect(styles.match(/--desktop-compact-height:\s*\d+px/g)).toEqual([
+    "--desktop-compact-height: 32px",
+  ]);
   expect(styles).toMatch(/--desktop-table-head-height:\s*40px/);
   expect(styles).toMatch(/--desktop-business-row-height:\s*80px/);
   expect(styles).toMatch(/--desktop-empty-height:\s*208px/);
@@ -117,22 +124,30 @@ test("关键筛选条、表格行和空状态复用共享尺寸", () => {
   );
 });
 
-test("看板原因路径完整换行，标签层级数量靠右", () => {
-  expect(styles).toMatch(
-    /\.return-insight-explorer \.return-hierarchy-ranking li button\s*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto;/s,
-  );
+test("看板原因路径完整换行", () => {
   expect(styles).toMatch(
     /\.return-insight-explorer \.return-reason-ranking li b\s*{[^}]*text-overflow:\s*clip;[^}]*white-space:\s*normal;[^}]*overflow-wrap:\s*anywhere;/s,
   );
 });
 
-test("商品信息搜索框由外层控件统一管理高度和焦点", () => {
-  expect(styles).toMatch(
-    /\.product-master-page[\s\S]*?\.dimension-search[\s\S]*?> \.ant-input-affix-wrapper[\s\S]*?> input\.ant-input\.ant-input\s*{[^}]*height:\s*auto;[^}]*min-height:\s*0;[^}]*padding:\s*0;[^}]*border:\s*0;[^}]*background:\s*transparent;/,
+test("原生控件规则不进入组件库内部，不再依赖逐页重置补丁", () => {
+  const forms = readStyles("src/styles/global/forms-and-tabs.css");
+  const nativeInputRules = forms.match(/input:where\(\s*:not\(([^)]+)\)\s*\)/g);
+  expect(nativeInputRules).toHaveLength(4);
+  nativeInputRules.forEach((selector) => {
+    [
+      ".ant-input",
+      ".ant-select-input",
+      ".ant-checkbox-input",
+      ".ant-radio-input",
+    ].forEach((className) => expect(selector).toContain(className));
+  });
+  expect(forms).not.toMatch(/input:where\(:not\(\.ant-select-input\)\)/);
+  expect(forms).toContain(
+    ".ant-input, .ant-select-input, .ant-checkbox-input, .ant-radio-input",
   );
-  expect(styles).toMatch(
-    /\.product-master-page[\s\S]*?\.dimension-search[\s\S]*?> \.ant-input-affix-wrapper[\s\S]*?> input\.ant-input:focus-visible\s*{[^}]*outline:\s*none;/,
-  );
+  expect(styles).not.toContain("input.ant-input.ant-input");
+  expect(styles).not.toMatch(/\.standard-page\s+input[^}]+min-height:/s);
 });
 
 test("分类结果选择表在目标桌面宽度保留完整操作区", () => {

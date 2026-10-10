@@ -30,9 +30,11 @@ button {
 }
 button:focus-visible,
 a:focus-visible,
-input:focus-visible,
+input:where(
+    :not(.ant-input, .ant-select-input, .ant-checkbox-input, .ant-radio-input)
+  ):focus-visible,
 select:focus-visible,
-textarea:focus-visible {
+textarea:where(:not(.ant-input)):focus-visible {
   outline: 3px solid rgba(18, 118, 91, 0.22);
   outline-offset: 2px;
 }

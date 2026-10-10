@@ -8,8 +8,6 @@
   --desktop-page-padding: clamp(24px, 2vw, 38px);
   --desktop-card-padding: 18px;
   --desktop-detail-padding: 22px;
-  --desktop-control-height: 38px;
-  --desktop-compact-height: 34px;
   --desktop-filter-height: 60px;
   --desktop-table-head-height: 42px;
   --desktop-record-height: 48px;

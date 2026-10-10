@@ -41,7 +41,7 @@
 .listing-queue-search {
   display: flex;
   width: min(360px, 44vw);
-  min-height: 38px;
+  height: var(--desktop-control-height);
   align-items: center;
   gap: 8px;
   padding: 0 11px;
@@ -59,6 +59,8 @@
 .listing-queue-search input {
   width: 100%;
   min-width: 0;
+  height: 100%;
+  padding: 0;
   border: 0;
   outline: 0;
   background: transparent;
@@ -68,7 +70,7 @@
 
 .listing-queue-filters select {
   min-width: 132px;
-  min-height: 38px;
+  height: var(--desktop-control-height);
   padding: 0 32px 0 11px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -78,7 +80,7 @@
 }
 
 .listing-queue-toolbar .parallelism-control {
-  min-height: 38px;
+  min-height: var(--desktop-control-height);
   padding-block: 4px;
   border-radius: 8px;
 }

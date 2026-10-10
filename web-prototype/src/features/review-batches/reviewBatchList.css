@@ -22,6 +22,7 @@
 .review-batch-filters,
 .review-record-filters {
   display: grid;
+  align-items: end;
   gap: 10px;
   margin: 18px 0 12px;
   padding: 12px;
@@ -36,6 +37,7 @@
 
 .review-filter-field {
   display: grid;
+  grid-template-rows: auto var(--desktop-control-height);
   gap: 4px;
   min-width: 0;
   color: var(--muted);
@@ -43,7 +45,7 @@
   font-weight: 700;
 }
 
-.review-filter-field > span {
+.review-filter-field > span:first-child {
   line-height: 1;
 }
 

@@ -14,21 +14,6 @@
   min-width: 0;
 }
 
-.review-batch-page .ant-input-affix-wrapper > .ant-input,
-.review-batch-page .ant-checkbox-input {
-  width: auto;
-  height: auto;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.review-batch-page .ant-input-affix-wrapper > .ant-input {
-  width: 100%;
-}
-
 .review-batch-page .ant-select {
   width: 100%;
 }
@@ -36,11 +21,6 @@
 .review-batch-filters > .ant-btn,
 .review-record-filters > .ant-btn {
   align-self: end;
-}
-
-.review-record-checkbox .ant-checkbox-input {
-  width: 100%;
-  height: 100%;
 }
 
 .review-record-drawer > header .ant-btn {

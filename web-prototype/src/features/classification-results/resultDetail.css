@@ -211,7 +211,6 @@
   gap: 12px;
 }
 .result-record-tools {
-  --desktop-control-height: 36px;
   min-width: 0;
 }
 .result-record-filters {
@@ -242,8 +241,6 @@
 }
 .record-order-search .ant-input {
   min-width: 0;
-  height: 36px;
-  min-height: 36px;
 }
 .result-record-head,
 .result-record-row {
