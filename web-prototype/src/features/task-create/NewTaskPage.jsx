@@ -8,6 +8,7 @@ import {
   normalizeReturnVersion,
   resolveTaskModelPolicy,
   taskConnectionPolicy,
+  taskConnectionSelection,
   taskDataScopeLabel,
   taskLaunchCopy,
   taskPlanViewState,
@@ -80,15 +81,8 @@ export function NewTaskPage({
     .filter((item) => item.kind === "returns" && item.usage_scope === "task_input")
     .map(normalizeReturnVersion);
   const products = versions.filter((item) => item.kind === "products");
-  const publishedConfigs = configs.flatMap((item) =>
-    item.active_version ? [{ ...item.active_version, connection_name: item.name }] : [],
-  );
-  const selectedConfig =
-    publishedConfigs.find((item) => item.id === form.config_version_id) ??
-    publishedConfigs[0];
-  const selectedConnection = configs.find(
-    (item) => item.id === selectedConfig?.connection_id,
-  );
+  const { publishedConfigs, selectedConfig, selectedConnection } =
+    taskConnectionSelection(configs, form.config_version_id);
   const availableModels = (selectedConnection?.models ?? []).filter(
     (model) => model.active && model.validation_status === "validated",
   );

@@ -11,16 +11,24 @@ export { taskLaunchCopy } from "./taskLaunchPolicy";
 /** @typedef {import("../task-planning/taskPlanContracts").TaskExecutionPlan} TaskExecutionPlan */
 /** @typedef {import("../task-planning/taskPlanContracts").TaskPlanCounts} TaskPlanCounts */
 
-/** @param {ApiConnection[]} configs @param {TaskForm} form @returns {TaskModelPolicy} */
-export function resolveTaskModelPolicy(configs, form) {
+/** @param {ApiConnection[]} configs @param {string} configVersionId */
+export function taskConnectionSelection(configs, configVersionId) {
   const publishedConfigs = configs.flatMap((item) =>
     item.active_version ? [{ ...item.active_version, connection_name: item.name }] : [],
   );
   const selectedConfig =
-    publishedConfigs.find((item) => item.id === form.config_version_id) ??
-    publishedConfigs[0];
+    publishedConfigs.find((item) => item.id === configVersionId) ?? publishedConfigs[0];
   const selectedConnection = configs.find(
     (item) => item.id === selectedConfig?.connection_id,
+  );
+  return { publishedConfigs, selectedConfig, selectedConnection };
+}
+
+/** @param {ApiConnection[]} configs @param {TaskForm} form @returns {TaskModelPolicy} */
+export function resolveTaskModelPolicy(configs, form) {
+  const { selectedConfig, selectedConnection } = taskConnectionSelection(
+    configs,
+    form.config_version_id,
   );
   return {
     connection_id: selectedConnection?.id ?? "",
