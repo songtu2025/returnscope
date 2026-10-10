@@ -6,7 +6,7 @@ from web_backend import review_contracts as _contracts
 from web_backend import review_queries as _queries
 from web_backend.classification_result_service import ClassificationResultService
 from web_backend.classification_standard_service import ClassificationStandardService
-from web_backend.common import json_text, new_id
+from web_backend.common import insert_audit
 from web_backend.database import Database
 from web_backend.review_batch_editing import ReviewBatchEditingMixin
 from web_backend.review_publication import ReviewPublicationMixin
@@ -60,20 +60,13 @@ class ReviewService(
         after: dict[str, Any],
         created_at: str,
     ) -> None:
-        connection.execute(
-            """
-            INSERT INTO audit_logs(
-                id, entity_type, entity_id, action, before_json,
-                after_json, actor_id, created_at
-            ) VALUES (?, 'review_batch', ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                new_id("audit"),
-                batch_id,
-                action,
-                json_text(before),
-                json_text(after),
-                actor_id,
-                created_at,
-            ),
+        insert_audit(
+            connection,
+            "review_batch",
+            batch_id,
+            action,
+            actor_id,
+            before,
+            after,
+            created_at,
         )

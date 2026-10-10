@@ -6,15 +6,23 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from web_backend.api_contracts.accounts import (
     LoginRequest,
     PasswordChangeRequest,
-    UserCreateRequest,
-    UserStatusRequest,
 )
 from web_backend.classification_standard_validation_worker import (
     ClassificationStandardValidationWorker,
 )
-from web_backend.common import add_audit, list_audit, new_id
+from web_backend.common import add_audit
 from web_backend.database import Database
 from web_backend.insight_report_worker import InsightReportWorker
+from web_backend.routers.account_directory_routes import (
+    _email,
+    _register_team_routes,
+    _register_user_status_route,
+)
+from web_backend.routers.account_monitoring_routes import (
+    _MonitoringDependencies,
+    _register_health_route,
+    _register_system_status_route,
+)
 from web_backend.security import (
     SESSION_COOKIE,
     LoginAttemptLimiter,
@@ -28,51 +36,11 @@ from web_backend.task_service import TaskService
 from web_backend.worker import TaskWorker
 
 
-def _worker_health(worker: Any, enabled: bool) -> dict[str, Any]:
-    health = (
-        worker.health if enabled else {"last_error_type": None, "last_error_at": None}
-    )
-    if not enabled:
-        status = "ok"
-    elif not worker.is_alive:
-        status = "unavailable"
-    elif health["last_error_type"]:
-        status = "degraded"
-    else:
-        status = "ok"
-    return {
-        "status": status,
-        "last_error": health["last_error_type"],
-        "last_error_at": health["last_error_at"],
-    }
-
-
-def _email(value: str) -> str:
-    email = value.strip().lower()
-    if "@" not in email or email.startswith("@") or email.endswith("@"):
-        raise ValueError("请输入有效邮箱")
-    return email
-
-
 @dataclass(frozen=True)
 class _LoginSecurity:
     account_limiter: LoginAttemptLimiter
     address_limiter: LoginAttemptLimiter
     dummy_password_hash: str
-
-
-@dataclass(frozen=True)
-class _MonitoringDependencies:
-    task_service: TaskService
-    worker: TaskWorker
-    insight_report_worker: InsightReportWorker
-    standard_validation_worker: ClassificationStandardValidationWorker
-    start_worker: bool
-
-
-def _require_account_admin(user: dict[str, Any]) -> None:
-    if not user.get("is_admin"):
-        raise HTTPException(status_code=403, detail="仅系统管理员可管理团队账号")
 
 
 def create_account_router(
@@ -110,48 +78,6 @@ def create_account_router(
     _register_user_status_route(router, database, current_user)
     _register_system_status_route(router, database, settings, monitoring, current_user)
     return router
-
-
-def _register_health_route(
-    router: APIRouter,
-    database: Database,
-    monitoring: _MonitoringDependencies,
-) -> None:
-    worker = monitoring.worker
-    insight_report_worker = monitoring.insight_report_worker
-    standard_validation_worker = monitoring.standard_validation_worker
-    start_worker = monitoring.start_worker
-
-    @router.get("/api/health")
-    def health() -> dict[str, Any]:
-        with database.connect() as connection:
-            connection.execute("SELECT 1").fetchone()
-        workers = {
-            "listing": _worker_health(worker, start_worker),
-            "insight_report": _worker_health(insight_report_worker, start_worker),
-            "classification_standard_validation": _worker_health(
-                standard_validation_worker,
-                start_worker,
-            ),
-        }
-        worker_statuses = {item["status"] for item in workers.values()}
-        worker_status = (
-            "unavailable"
-            if "unavailable" in worker_statuses
-            else "degraded"
-            if "degraded" in worker_statuses
-            else "ok"
-        )
-        payload = {
-            "status": "ok" if worker_status == "ok" else "degraded",
-            "database": "ok",
-            "worker": worker_status,
-            "workers": workers,
-            "time": utc_now(),
-        }
-        if worker_status == "unavailable":
-            raise HTTPException(status_code=503, detail=payload)
-        return payload
 
 
 def _register_login_route(
@@ -299,198 +225,3 @@ def _register_password_route(
         response.delete_cookie(SESSION_COOKIE, path="/")
         response.status_code = 204
         return response
-
-
-def _register_team_routes(
-    router: APIRouter,
-    database: Database,
-    current_user: Callable[..., dict[str, Any]],
-) -> None:
-    User = Annotated[dict[str, Any], Depends(current_user)]
-
-    @router.get("/api/users")
-    def users(user: User) -> list[dict[str, Any]]:
-        _require_account_admin(user)
-        with database.connect() as connection:
-            rows = connection.execute(
-                """
-                SELECT id, email, display_name, active, created_at, last_seen_at
-                FROM users ORDER BY created_at ASC
-                """
-            ).fetchall()
-        output = []
-        for row in rows:
-            item = dict(row)
-            item["audit"] = list_audit(database, "user", str(row["id"]))
-            output.append(item)
-        return output
-
-    @router.post("/api/users", status_code=201)
-    def create_user(payload: UserCreateRequest, actor: User) -> dict[str, Any]:
-        _require_account_admin(actor)
-        try:
-            email = _email(payload.email)
-            password_hash = hash_password(payload.password)
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        user_id = new_id("user")
-        try:
-            with database.transaction(immediate=True) as connection:
-                connection.execute(
-                    """
-                    INSERT INTO users(
-                        id, email, display_name, password_hash, created_at
-                    ) VALUES (?, ?, ?, ?, ?)
-                    """,
-                    (
-                        user_id,
-                        email,
-                        payload.display_name.strip(),
-                        password_hash,
-                        utc_now(),
-                    ),
-                )
-        except Exception as exc:
-            if "UNIQUE" in str(exc):
-                raise HTTPException(status_code=409, detail="该邮箱已存在") from exc
-            raise
-        add_audit(
-            database,
-            "user",
-            user_id,
-            "create",
-            str(actor["id"]),
-            after={
-                "email": email,
-                "display_name": payload.display_name.strip(),
-            },
-        )
-        return {
-            "id": user_id,
-            "email": email,
-            "display_name": payload.display_name.strip(),
-            "created_by": actor["id"],
-        }
-
-
-def _register_user_status_route(
-    router: APIRouter,
-    database: Database,
-    current_user: Callable[..., dict[str, Any]],
-) -> None:
-    User = Annotated[dict[str, Any], Depends(current_user)]
-
-    @router.patch("/api/users/{user_id}")
-    def update_user_status(
-        user_id: str,
-        payload: UserStatusRequest,
-        actor: User,
-    ) -> dict[str, Any]:
-        _require_account_admin(actor)
-        if user_id == actor["id"] and not payload.active:
-            raise HTTPException(status_code=400, detail="不能停用自己的账号")
-        clean_note = payload.note.strip()
-        if not clean_note:
-            raise HTTPException(status_code=400, detail="请填写账号状态修改原因")
-        with database.transaction(immediate=True) as connection:
-            target = connection.execute(
-                """
-                SELECT id, email, display_name, active, created_at, last_seen_at
-                FROM users WHERE id = ?
-                """,
-                (user_id,),
-            ).fetchone()
-            if target is None:
-                raise HTTPException(status_code=404, detail="团队账号不存在")
-            before_active = bool(target["active"])
-            if before_active != payload.expected_active:
-                raise HTTPException(
-                    status_code=409,
-                    detail="账号状态已被他人修改，请刷新后重试",
-                )
-            if before_active == payload.active:
-                raise HTTPException(status_code=400, detail="账号状态没有变化")
-            connection.execute(
-                "UPDATE users SET active = ? WHERE id = ?",
-                (int(payload.active), user_id),
-            )
-            if not payload.active:
-                connection.execute(
-                    "DELETE FROM sessions WHERE user_id = ?",
-                    (user_id,),
-                )
-        if before_active != payload.active:
-            add_audit(
-                database,
-                "user",
-                user_id,
-                "activate" if payload.active else "deactivate",
-                str(actor["id"]),
-                before={"active": before_active},
-                after={"active": payload.active, "note": clean_note},
-            )
-        return {
-            **dict(target),
-            "active": int(payload.active),
-        }
-
-
-def _register_system_status_route(
-    router: APIRouter,
-    database: Database,
-    settings: Settings,
-    monitoring: _MonitoringDependencies,
-    current_user: Callable[..., dict[str, Any]],
-) -> None:
-    User = Annotated[dict[str, Any], Depends(current_user)]
-    task_service = monitoring.task_service
-    worker = monitoring.worker
-    start_worker = monitoring.start_worker
-
-    @router.get("/api/system/status")
-    def system_status(user: User) -> dict[str, Any]:
-        with database.connect() as connection:
-            task_counts = {
-                row["status"]: row["count"]
-                for row in connection.execute(
-                    "SELECT status, COUNT(*) AS count FROM tasks GROUP BY status"
-                ).fetchall()
-            }
-            pending_reviews = connection.execute(
-                """
-                SELECT COUNT(*) AS count FROM review_records
-                WHERE workflow_status = 'pending' AND batch_id IS NOT NULL
-                """
-            ).fetchone()["count"]
-            pending_review_batches = connection.execute(
-                """
-                SELECT COUNT(*) AS count
-                FROM review_batches AS batch
-                WHERE batch.status = 'draft'
-                  AND EXISTS (
-                      SELECT 1
-                      FROM review_records AS record
-                      WHERE record.batch_id = batch.id
-                        AND record.workflow_status = 'pending'
-                  )
-                """
-            ).fetchone()["count"]
-        warnings = []
-        if settings.bootstrap_password == "change-me-now":
-            warnings.append("仍在使用默认初始密码")
-        if not settings.encryption_key:
-            warnings.append("仍在使用开发环境加密密钥")
-        running_segments = task_service.running_count(str(user["id"]))
-        return {
-            "user": user,
-            "task_counts": task_counts,
-            "pending_reviews": pending_reviews,
-            "pending_review_batches": pending_review_batches,
-            "my_running_tasks": running_segments,
-            "my_running_segments": running_segments,
-            "worker_concurrency": settings.task_workers,
-            "worker_status": (
-                "ok" if not start_worker or worker.is_alive else "unavailable"
-            ),
-            "warnings": warnings,
-        }
