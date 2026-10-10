@@ -159,9 +159,9 @@ def test_creation_preserves_blocking_policy(
     assert prepared.response == original
 
 
-@pytest.mark.parametrize("preserve_all", [False, True])
+@pytest.mark.parametrize("preserved_scope", ["all", "most_records", "fewest_records"])
 def test_replan_preserves_completed_row_and_inserts_only_remaining_scope(
-    insertion: SimpleNamespace, preserve_all: bool
+    insertion: SimpleNamespace, preserved_scope: str
 ) -> None:
     task = _create(insertion)
     prepared = insertion.prepared
@@ -173,7 +173,11 @@ def test_replan_preserves_completed_row_and_inserts_only_remaining_scope(
     )
     keys = json.loads(shoe["classification_keys_json"])
     counts = prepared.dataset.records["classification_key"].value_counts()
-    preserved_keys = keys if preserve_all else [max(keys, key=lambda key: counts[key])]
+    preserve_all = preserved_scope == "all"
+    select_key = min if preserved_scope == "fewest_records" else max
+    preserved_keys = (
+        keys if preserve_all else [select_key(keys, key=counts.__getitem__)]
+    )
     with insertion.database.transaction(immediate=True) as connection:
         connection.execute(
             "UPDATE task_segments SET status = 'completed', classification_keys_json = ?, "
@@ -208,13 +212,18 @@ def test_replan_preserves_completed_row_and_inserts_only_remaining_scope(
     )
     for row in remaining:
         assert row["status"] == "queued"
-        assert (
-            row["record_count"] == row["unique_comments"] == row["progress_total"] == 1
-        )
+        remaining_keys = json.loads(row["classification_keys_json"])
+        expected_records = sum(int(counts[key]) for key in remaining_keys)
+        assert row["record_count"] == expected_records
+        assert row["unique_comments"] == row["progress_total"] == 1
+        if preserved_scope != "fewest_records":
+            assert expected_records == 1
+        elif row["agent_key"] == "footwear":
+            assert expected_records > 1
         assert row["created_at"] == replanned["heartbeat_at"]
         assert row["result_file_path"] is None
         assert row["model_calls"] == row["cache_hits"] == 0
-        assert json.loads(row["variants_json"])[0]["record_count"] == 1
+        assert json.loads(row["variants_json"])[0]["record_count"] == expected_records
         assert json.loads(row["variants_json"])[0]["unique_comments"] == 1
         assert not set(json.loads(row["classification_keys_json"])) & set(
             preserved_keys

@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from return_semantics.data import ReturnDataset
+from return_semantics.execution_plan_summary import _variant_counts
 from web_backend.common import add_audit, json_text, new_id
 from web_backend.database import Database
 from web_backend.security import utc_now
@@ -222,21 +223,9 @@ class TaskCreationMixin(TaskSnapshotsMixin):
         selected = dataset.unique_comments.loc[
             dataset.unique_comments["classification_key"].isin(classification_keys)
         ]
-        variants = []
-        for (category_a, category_b), rows in selected.groupby(
-            ["category_a", "category_b"],
-            sort=True,
-            dropna=False,
-        ):
-            variants.append(
-                {
-                    "category_a": str(category_a),
-                    "category_b": str(category_b),
-                    "record_count": int(rows["record_count"].sum()),
-                    "unique_comments": len(rows),
-                }
-            )
-        return variants
+        return _variant_counts(
+            selected, selected.set_index("classification_key")["record_count"]
+        )
 
     @staticmethod
     def _validated_segment_order(
