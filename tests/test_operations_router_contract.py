@@ -7,7 +7,7 @@ from unittest.mock import Mock
 import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
-from test_dashboard_router_contract import RouteCase
+from router_contract_helpers import RouteCase
 
 from web_backend.data_quality_service import DataQualityService
 from web_backend.operations_service import AuditLogService, WorkbenchService

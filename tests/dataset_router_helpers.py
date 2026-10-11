@@ -7,7 +7,7 @@ from unittest.mock import Mock
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from test_dashboard_router_contract import RouteCase
+from router_contract_helpers import RouteCase
 
 from web_backend.api_contracts.datasets import MySQLReturnImportRequest
 from web_backend.dataset_service import DatasetService

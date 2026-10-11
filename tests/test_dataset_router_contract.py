@@ -15,7 +15,7 @@ from dataset_router_helpers import (
 )
 from dataset_router_helpers import harness as harness
 from fastapi import HTTPException
-from test_dashboard_router_contract import RouteCase
+from router_contract_helpers import RouteCase
 
 from web_backend.api_contracts.datasets import MySQLReturnImportRequest
 from web_backend.dataset_service import DatasetRevisionConflict
