@@ -128,10 +128,17 @@ def _comments(
     )
 
 
+@pytest.fixture
+def pipeline_inputs(tmp_path, taxonomy, claims):
+    return {
+        "taxonomy": taxonomy,
+        "claims": claims,
+        "cache": JsonlCache(tmp_path / "cache.jsonl"),
+    }
+
+
 def test_low_risk_comment_uses_cheap_model(
-    tmp_path,
-    taxonomy,
-    claims,
+    pipeline_inputs,
 ) -> None:
     client = FakeClient(
         {"gpt-5.4-mini": _classification()},
@@ -140,10 +147,8 @@ def test_low_risk_comment_uses_cheap_model(
 
     run = classify_comments(
         unique_comments=_comments("Too small"),
-        taxonomy=taxonomy,
-        claims=claims,
         client=client,
-        cache=JsonlCache(tmp_path / "cache.jsonl"),
+        **pipeline_inputs,
     )
 
     assert client.calls == ["gpt-5.4-mini"]
@@ -176,9 +181,7 @@ def test_cheap_result_acceptance_does_not_depend_on_primary_label() -> None:
 
 
 def test_input_semantic_risk_uses_primary_model(
-    tmp_path,
-    taxonomy,
-    claims,
+    pipeline_inputs,
 ) -> None:
     client = FakeClient(
         {
@@ -188,10 +191,8 @@ def test_input_semantic_risk_uses_primary_model(
 
     run = classify_comments(
         unique_comments=_comments("Too small but uncomfortable"),
-        taxonomy=taxonomy,
-        claims=claims,
         client=client,
-        cache=JsonlCache(tmp_path / "cache.jsonl"),
+        **pipeline_inputs,
     )
 
     assert client.calls == ["gpt-5.5"]
@@ -200,9 +201,7 @@ def test_input_semantic_risk_uses_primary_model(
 
 
 def test_cheap_review_falls_back_to_primary(
-    tmp_path,
-    taxonomy,
-    claims,
+    pipeline_inputs,
 ) -> None:
     client = FakeClient(
         {
@@ -213,10 +212,8 @@ def test_cheap_review_falls_back_to_primary(
 
     run = classify_comments(
         unique_comments=_comments("Too small"),
-        taxonomy=taxonomy,
-        claims=claims,
         client=client,
-        cache=JsonlCache(tmp_path / "cache.jsonl"),
+        **pipeline_inputs,
     )
 
     result = next(iter(run.classifications.values()))
@@ -226,9 +223,7 @@ def test_cheap_review_falls_back_to_primary(
 
 
 def test_cheap_error_falls_back_to_primary(
-    tmp_path,
-    taxonomy,
-    claims,
+    pipeline_inputs,
 ) -> None:
     client = FakeClient(
         {
@@ -239,10 +234,8 @@ def test_cheap_error_falls_back_to_primary(
 
     run = classify_comments(
         unique_comments=_comments("Too small"),
-        taxonomy=taxonomy,
-        claims=claims,
         client=client,
-        cache=JsonlCache(tmp_path / "cache.jsonl"),
+        **pipeline_inputs,
     )
 
     assert client.calls == ["gpt-5.4-mini", "gpt-5.5"]
@@ -255,9 +248,7 @@ def test_cheap_error_falls_back_to_primary(
 
 
 def test_multiple_cheap_semantic_units_fall_back_to_primary(
-    tmp_path,
-    taxonomy,
-    claims,
+    pipeline_inputs,
 ) -> None:
     client = FakeClient(
         {
@@ -271,10 +262,8 @@ def test_multiple_cheap_semantic_units_fall_back_to_primary(
 
     run = classify_comments(
         unique_comments=_comments("Uncomfortable", reason="OTHER"),
-        taxonomy=taxonomy,
-        claims=claims,
         client=client,
-        cache=JsonlCache(tmp_path / "cache.jsonl"),
+        **pipeline_inputs,
     )
 
     result = next(iter(run.classifications.values()))
@@ -284,9 +273,7 @@ def test_multiple_cheap_semantic_units_fall_back_to_primary(
 
 
 def test_audit_disagreement_uses_secondary_model(
-    tmp_path,
-    taxonomy,
-    claims,
+    pipeline_inputs,
 ) -> None:
     client = FakeClient(
         {
@@ -299,10 +286,8 @@ def test_audit_disagreement_uses_secondary_model(
 
     run = classify_comments(
         unique_comments=_comments("Too small", reason="OTHER"),
-        taxonomy=taxonomy,
-        claims=claims,
         client=client,
-        cache=JsonlCache(tmp_path / "cache.jsonl"),
+        **pipeline_inputs,
         secondary_model="gpt-5.6-sol",
     )
 
@@ -326,9 +311,7 @@ def test_audit_disagreement_uses_secondary_model(
     ],
 )
 def test_secondary_error_becomes_manual_review(
-    tmp_path,
-    taxonomy,
-    claims,
+    pipeline_inputs,
     secondary_error,
     expected_code,
 ) -> None:
@@ -341,10 +324,8 @@ def test_secondary_error_becomes_manual_review(
 
     run = classify_comments(
         unique_comments=_comments("Too small but uncomfortable"),
-        taxonomy=taxonomy,
-        claims=claims,
         client=client,
-        cache=JsonlCache(tmp_path / "cache.jsonl"),
+        **pipeline_inputs,
         secondary_model="gpt-5.6-sol",
     )
 
@@ -358,18 +339,14 @@ def test_secondary_error_becomes_manual_review(
 
 
 def test_secondary_fallback_is_marked_as_system_diagnostic(
-    tmp_path,
-    taxonomy,
-    claims,
+    pipeline_inputs,
 ) -> None:
     client = FakeClient({"gpt-5.5": _classification(needs_review=True)})
 
     run = classify_comments(
         unique_comments=_comments("Too small but uncomfortable"),
-        taxonomy=taxonomy,
-        claims=claims,
         client=client,
-        cache=JsonlCache(tmp_path / "cache.jsonl"),
+        **pipeline_inputs,
         secondary_model="gpt-5.5",
         secondary_is_fallback=True,
     )
@@ -388,9 +365,7 @@ def test_secondary_fallback_is_marked_as_system_diagnostic(
     ],
 )
 def test_initial_model_error_is_system_diagnostic(
-    tmp_path,
-    taxonomy,
-    claims,
+    pipeline_inputs,
     model_error,
     expected_code,
 ) -> None:
@@ -398,10 +373,8 @@ def test_initial_model_error_is_system_diagnostic(
 
     run = classify_comments(
         unique_comments=_comments("Too small but uncomfortable"),
-        taxonomy=taxonomy,
-        claims=claims,
         client=client,
-        cache=JsonlCache(tmp_path / "cache.jsonl"),
+        **pipeline_inputs,
     )
 
     result = next(iter(run.classifications.values()))
@@ -411,9 +384,7 @@ def test_initial_model_error_is_system_diagnostic(
 
 
 def test_secondary_accepts_same_terminal_result_with_evidence_span_variation(
-    tmp_path,
-    taxonomy,
-    claims,
+    pipeline_inputs,
 ) -> None:
     client = FakeClient(
         {
@@ -429,10 +400,8 @@ def test_secondary_accepts_same_terminal_result_with_evidence_span_variation(
 
     run = classify_comments(
         unique_comments=_comments("They are Too small but still usable"),
-        taxonomy=taxonomy,
-        claims=claims,
         client=client,
-        cache=JsonlCache(tmp_path / "cache.jsonl"),
+        **pipeline_inputs,
         secondary_model="gpt-5.6-sol",
     )
 
@@ -442,26 +411,27 @@ def test_secondary_accepts_same_terminal_result_with_evidence_span_variation(
     assert result.review_reasons == ["二次模型结果一致"]
 
 
-def test_input_semantic_risk_router_ignores_text_length() -> None:
-    assert not has_input_semantic_risk("Too small")
-    assert has_input_semantic_risk("Not too small")
-    assert has_input_semantic_risk("Need smaller size")
-    assert has_input_semantic_risk("Too small but uncomfortable")
-    assert has_input_semantic_risk(
-        "Too small. Very uncomfortable.",
-    )
-    assert has_input_semantic_risk(
-        "Too small|Too small overall|No",
-    )
-    assert not has_input_semantic_risk(
-        "The shoes feel very tight across my feet every time I wear them"
-    )
+@pytest.mark.parametrize(
+    ("comment", "expected_risk"),
+    [
+        ("Too small", False),
+        ("Not too small", True),
+        ("Need smaller size", True),
+        ("Too small but uncomfortable", True),
+        ("Too small. Very uncomfortable.", True),
+        ("Too small|Too small overall|No", True),
+        ("The shoes feel very tight across my feet every time I wear them", False),
+    ],
+)
+def test_input_semantic_risk_router_ignores_text_length(
+    comment: str,
+    expected_risk: bool,
+) -> None:
+    assert has_input_semantic_risk(comment) is expected_risk
 
 
 def test_parallel_run_aggregates_metrics_and_callbacks_in_input_order(
-    tmp_path,
-    taxonomy,
-    claims,
+    pipeline_inputs,
 ) -> None:
     client = FakeClient(
         {"gpt-5.4-mini": _classification()},
@@ -476,10 +446,8 @@ def test_parallel_run_aggregates_metrics_and_callbacks_in_input_order(
 
     run = classify_comments(
         unique_comments=comments,
-        taxonomy=taxonomy,
-        claims=claims,
         client=client,
-        cache=JsonlCache(tmp_path / "cache.jsonl"),
+        **pipeline_inputs,
         progress=lambda current, total: progress_events.append((current, total)),
         checkpoint=lambda snapshot: checkpoint_sizes.append(
             len(snapshot.classifications)
@@ -502,9 +470,7 @@ def test_parallel_run_aggregates_metrics_and_callbacks_in_input_order(
 
 
 def test_cancellation_is_not_converted_to_secondary_review(
-    tmp_path,
-    taxonomy,
-    claims,
+    pipeline_inputs,
 ) -> None:
     client = FakeClient(
         {
@@ -522,10 +488,8 @@ def test_cancellation_is_not_converted_to_secondary_review(
     with pytest.raises(PipelineCancelled, match="^分析任务已取消$"):
         classify_comments(
             unique_comments=_comments("Too small but uncomfortable"),
-            taxonomy=taxonomy,
-            claims=claims,
             client=client,
-            cache=JsonlCache(tmp_path / "cache.jsonl"),
+            **pipeline_inputs,
             secondary_model="gpt-5.6-sol",
             should_cancel=should_cancel,
         )
@@ -534,9 +498,7 @@ def test_cancellation_is_not_converted_to_secondary_review(
 
 
 def test_parallel_rows_share_same_cached_model_call(
-    tmp_path,
-    taxonomy,
-    claims,
+    pipeline_inputs,
 ) -> None:
     client = FakeClient(
         {"gpt-5.4-mini": _classification()},
@@ -552,10 +514,8 @@ def test_parallel_rows_share_same_cached_model_call(
 
     run = classify_comments(
         unique_comments=comments,
-        taxonomy=taxonomy,
-        claims=claims,
         client=client,
-        cache=JsonlCache(tmp_path / "cache.jsonl"),
+        **pipeline_inputs,
     )
 
     assert client.calls == ["gpt-5.4-mini"]
@@ -565,9 +525,7 @@ def test_parallel_rows_share_same_cached_model_call(
 
 
 def test_consecutive_service_failures_alert_then_pause(
-    tmp_path,
-    taxonomy,
-    claims,
+    pipeline_inputs,
 ) -> None:
     client = UnavailableClient()
     comments = pd.concat(
@@ -579,10 +537,8 @@ def test_consecutive_service_failures_alert_then_pause(
     with pytest.raises(ModelServiceUnavailable) as error:
         classify_comments(
             unique_comments=comments,
-            taxonomy=taxonomy,
-            claims=claims,
             client=client,
-            cache=JsonlCache(tmp_path / "cache.jsonl"),
+            **pipeline_inputs,
             on_model_degraded=lambda run, count, _error: degraded.append(
                 (count, run.model_failures)
             ),

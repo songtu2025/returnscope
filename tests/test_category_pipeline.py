@@ -147,14 +147,24 @@ def test_four_agent_families_route_deterministically(
     assert capability.agent_family == agent_family
 
 
-def test_eyewear_variants_keep_confirmed_age_scope(registry) -> None:
-    infant = registry.variant("眼镜", "婴儿眼镜")
-    child = registry.variant("眼镜", "儿童眼镜")
-    cycling = registry.variant("眼镜", "骑行眼镜")
+@pytest.mark.parametrize(
+    ("category_b", "attributes"),
+    [
+        ("婴儿眼镜", {"age_range": "0-2岁"}),
+        ("儿童眼镜", {"age_range": "3-8岁"}),
+        ("骑行眼镜", {"audience": "主要成人"}),
+    ],
+)
+def test_eyewear_variants_keep_confirmed_age_scope(
+    registry,
+    category_b: str,
+    attributes: dict[str, str],
+) -> None:
+    variant = registry.variant("眼镜", category_b)
+    assert variant is not None and variant.attributes == attributes
 
-    assert infant is not None and infant.attributes == {"age_range": "0-2岁"}
-    assert child is not None and child.attributes == {"age_range": "3-8岁"}
-    assert cycling is not None and cycling.attributes == {"audience": "主要成人"}
+
+def test_unsupported_eyewear_variant_is_not_registered(registry) -> None:
     assert registry.resolve("眼镜", "时尚眼镜") is None
 
 
@@ -184,49 +194,53 @@ def _validated(key: str, taxonomy_version: str) -> ValidatedClassification:
     )
 
 
+@pytest.fixture
+def category_rows() -> list[dict[str, str]]:
+    return [
+        {
+            "classification_key": "hat",
+            "reason": "reason",
+            "comment_normalized": "hat comment",
+            "category_a": "遮阳帽",
+            "category_b": "儿童渔夫帽",
+        },
+        {
+            "classification_key": "eye",
+            "reason": "reason",
+            "comment_normalized": "eye comment",
+            "category_a": "眼镜",
+            "category_b": "儿童眼镜",
+        },
+        {
+            "classification_key": "shoe",
+            "reason": "reason",
+            "comment_normalized": "shoe comment",
+            "category_a": "水鞋",
+            "category_b": "薄底水鞋",
+        },
+        {
+            "classification_key": "glove",
+            "reason": "reason",
+            "comment_normalized": "glove comment",
+            "category_a": "手套",
+            "category_b": "滑雪手套",
+        },
+        {
+            "classification_key": "unknown",
+            "reason": "reason",
+            "comment_normalized": "unknown comment",
+            "category_a": "瑜伽球",
+            "category_b": "瑜伽球",
+        },
+    ]
+
+
 def test_mixed_task_loads_each_family_taxonomy_and_excludes_unknown(
     monkeypatch,
     registry,
+    category_rows,
 ) -> None:
-    dataset = _dataset(
-        [
-            {
-                "classification_key": "hat",
-                "reason": "reason",
-                "comment_normalized": "hat comment",
-                "category_a": "遮阳帽",
-                "category_b": "儿童渔夫帽",
-            },
-            {
-                "classification_key": "eye",
-                "reason": "reason",
-                "comment_normalized": "eye comment",
-                "category_a": "眼镜",
-                "category_b": "儿童眼镜",
-            },
-            {
-                "classification_key": "shoe",
-                "reason": "reason",
-                "comment_normalized": "shoe comment",
-                "category_a": "水鞋",
-                "category_b": "薄底水鞋",
-            },
-            {
-                "classification_key": "glove",
-                "reason": "reason",
-                "comment_normalized": "glove comment",
-                "category_a": "手套",
-                "category_b": "滑雪手套",
-            },
-            {
-                "classification_key": "unknown",
-                "reason": "reason",
-                "comment_normalized": "unknown comment",
-                "category_a": "瑜伽球",
-                "category_b": "瑜伽球",
-            },
-        ]
-    )
+    dataset = _dataset(category_rows)
     loaded_taxonomies: list[str] = []
 
     def fake_classify_comments(**kwargs) -> PipelineRun:
@@ -296,25 +310,9 @@ def test_mixed_task_loads_each_family_taxonomy_and_excludes_unknown(
 def test_failed_segment_does_not_discard_later_segment_or_success_counts(
     monkeypatch,
     registry,
+    category_rows,
 ) -> None:
-    dataset = _dataset(
-        [
-            {
-                "classification_key": "hat",
-                "reason": "reason",
-                "comment_normalized": "hat comment",
-                "category_a": "遮阳帽",
-                "category_b": "儿童渔夫帽",
-            },
-            {
-                "classification_key": "eye",
-                "reason": "reason",
-                "comment_normalized": "eye comment",
-                "category_a": "眼镜",
-                "category_b": "儿童眼镜",
-            },
-        ]
-    )
+    dataset = _dataset(category_rows[:2])
     progress_updates = []
 
     def fake_classify_comments(**kwargs) -> PipelineRun:
