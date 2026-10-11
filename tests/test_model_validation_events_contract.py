@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, call
 
 import pytest
 from fastapi import HTTPException
-from test_model_router_contract import harness as harness
-from test_model_router_contract import synthetic_user
+from model_router_helpers import harness as harness
+from model_router_helpers import synthetic_user
 
 EVENT_PATH = "/api/validation-runs/run-1/events"
 
