@@ -161,6 +161,10 @@ export function TaskRegistry({
         deferredQuery={deferredQuery}
         owner={owner}
         filter={filter}
+        attentionOnly={attentionOnly}
+        onClear={() =>
+          onViewStateChange({ query: "", owner: "all", attentionOnly: false })
+        }
         onReload={onReload}
         onCreate={onCreate}
       />

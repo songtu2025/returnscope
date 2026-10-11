@@ -594,12 +594,14 @@ describe("关键用户流程", () => {
   test.each([
     [new Error("合成搜索失败"), "合成搜索失败"],
     ["合成非Error拒绝", "请求失败"],
-  ])("全局搜索失败后恢复空态并保留错误文案：%s", async (error, message) => {
+  ])("全局搜索失败后展示错误并提供重试：%s", async (error, message) => {
     const notify = vi.fn();
     apiMock.tasks.mockRejectedValue(error);
     render(<GlobalSearch onClose={vi.fn()} onSelect={vi.fn()} notify={notify} />);
     await waitFor(() => expect(notify).toHaveBeenCalledWith(message, "error"));
-    expect(await screen.findByText("没有找到匹配内容")).toBeVisible();
+    expect(await screen.findByText("工作区读取失败")).toBeVisible();
+    expect(screen.queryByText("没有找到匹配内容")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "重新加载" })).toBeVisible();
     expect(screen.queryByText("正在读取工作区…")).not.toBeInTheDocument();
     for (const request of [apiMock.tasks, apiMock.datasets, apiMock.reviews])
       expect(request).toHaveBeenCalledOnce();
@@ -3989,5 +3991,43 @@ describe("关键用户流程", () => {
     await act(async () => resolveOld(oldTask));
     expect(within(detail).getByText("新任务详情")).toBeVisible();
     expect(within(detail).queryByText("旧任务详情")).not.toBeInTheDocument();
+  });
+});
+
+test("全局搜索失败可重试，箭头选择第二个结果后回车打开", async () => {
+  apiMock.tasks.mockRejectedValueOnce(new Error("合成读取失败")).mockResolvedValue([
+    {
+      id: "synthetic-a",
+      title: "合成任务甲",
+      owner_name: "合成用户",
+      status: "running",
+      store: "",
+    },
+    {
+      id: "synthetic-b",
+      title: "合成任务乙",
+      owner_name: "合成用户",
+      status: "running",
+      store: "",
+    },
+  ]);
+  apiMock.datasets.mockResolvedValue([]);
+  apiMock.reviews.mockResolvedValue([]);
+  const onSelect = vi.fn();
+  render(<GlobalSearch onClose={vi.fn()} onSelect={onSelect} notify={vi.fn()} />);
+  await screen.findByText("工作区读取失败");
+  await userEvent.click(screen.getByRole("button", { name: "重新加载" }));
+  const first = await screen.findByRole("button", { name: /合成任务甲/ });
+  const second = screen.getByRole("button", { name: /合成任务乙/ });
+  const input = screen.getByRole("textbox", { name: "全局搜索" });
+  input.focus();
+  await userEvent.keyboard("{ArrowDown}");
+  expect(first).toHaveFocus();
+  await userEvent.keyboard("{ArrowDown}");
+  expect(second).toHaveFocus();
+  await userEvent.keyboard("{Enter}");
+  expect(onSelect).toHaveBeenCalledWith("analysis-tasks", {
+    kind: "task",
+    id: "synthetic-b",
   });
 });

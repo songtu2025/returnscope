@@ -271,3 +271,23 @@ test("加载、首次错误、过期数据和空列表保持原反馈及重试�
   await userEvent.click(screen.getByRole("button", { name: "创建分析任务" }));
   expect(props.onCreate).toHaveBeenCalledOnce();
 });
+
+test("需处理筛选无结果时可清除条件并保留当前分组", async () => {
+  const { props } = setup({
+    tasks: [task("a")],
+    viewState: {
+      filter: "finished",
+      query: "",
+      owner: "all",
+      sort: "updated_desc",
+      attentionOnly: true,
+    },
+  });
+  expect(screen.getByText("没有匹配任务")).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "清除筛选" }));
+  expect(props.onViewStateChange).toHaveBeenCalledWith({
+    query: "",
+    owner: "all",
+    attentionOnly: false,
+  });
+});

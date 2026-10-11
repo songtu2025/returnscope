@@ -3108,3 +3108,20 @@ test("业务问题视图展示品类变体与评论证据", () => {
   expect(screen.queryByText("偏小与偏大问题占比趋势")).not.toBeInTheDocument();
   expect(screen.queryByText("商品热点与整体基线")).not.toBeInTheDocument();
 });
+
+test("看板列表筛选无结果提供清除筛选入口", async () => {
+  const { DashboardList } =
+    await import("../src/features/analysis-dashboards/DashboardList");
+  dashboardApiMock.analysisDashboards.mockResolvedValue({ items: [], total: 0 });
+  const updateRoute = vi.fn();
+  render(
+    <DashboardList
+      route={{ page: 1, pageSize: 20, q: "合成筛选", status: "" }}
+      updateRoute={updateRoute}
+      userId="synthetic-user"
+    />,
+  );
+  await screen.findByText("没有符合条件的看板");
+  await userEvent.click(screen.getByRole("button", { name: "清除筛选" }));
+  expect(updateRoute).toHaveBeenCalledWith({ q: "", status: "", page: 1 });
+});

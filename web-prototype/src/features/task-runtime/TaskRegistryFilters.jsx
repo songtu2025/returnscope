@@ -27,27 +27,33 @@ function RegistrySortMenu({ viewState, onViewStateChange, owners }) {
         <SlidersHorizontal size={17} /> 筛选与排序{owner !== "all" ? " · 1" : ""}
       </summary>
       <div className="task-registry-controls">
-        <select
-          value={owner}
-          onChange={(event) => onViewStateChange({ owner: event.target.value })}
-          aria-label="按负责人筛选"
-        >
-          <option value="all">全部负责人</option>
-          {owners.map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
-          ))}
-        </select>
-        <select
-          value={sort}
-          onChange={(event) => onViewStateChange({ sort: event.target.value })}
-          aria-label="任务排序"
-        >
-          <option value="updated_desc">最近更新</option>
-          <option value="created_desc">最近创建</option>
-          <option value="progress_desc">进度从高到低</option>
-        </select>
+        <label>
+          <span>负责人</span>
+          <select
+            value={owner}
+            onChange={(event) => onViewStateChange({ owner: event.target.value })}
+            aria-label="按负责人筛选"
+          >
+            <option value="all">全部负责人</option>
+            {owners.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>排序</span>
+          <select
+            value={sort}
+            onChange={(event) => onViewStateChange({ sort: event.target.value })}
+            aria-label="任务排序"
+          >
+            <option value="updated_desc">最近更新</option>
+            <option value="created_desc">最近创建</option>
+            <option value="progress_desc">进度从高到低</option>
+          </select>
+        </label>
       </div>
     </details>
   );

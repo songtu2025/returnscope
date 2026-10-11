@@ -13,6 +13,7 @@ import { Pagination } from "../../components/Pagination";
 import { EmptyState, InlineLoading, PageHeading } from "../../components/SharedUi";
 import { formatTime } from "../../lib/presentation";
 import { dashboardApi } from "../../shared/api/dashboardApi";
+import { errorStatus } from "../../shared/api/requestErrors";
 import { serverStateKeys } from "../../shared/serverState";
 import { createDashboardSelection } from "./dashboardSelectionStorage";
 
@@ -51,7 +52,9 @@ function useDashboardList({ route }) {
     error instanceof Error ? error.message : error ? "分析看板读取失败" : "";
   const load = () => mutate();
 
-  const dashboardData = /** @type {DashboardListPage | undefined} */ (data);
+  const dashboardData = /** @type {DashboardListPage | undefined} */ (
+    [401, 403].includes(Number(errorStatus(error))) ? undefined : data
+  );
   const totalPages = Math.max(
     Math.ceil((dashboardData?.total ?? 0) / route.pageSize),
     1,
@@ -71,12 +74,13 @@ function useDashboardList({ route }) {
 
 /** @param {DashboardListProps} props */
 export function DashboardList({ route, updateRoute, userId }) {
-  const context = { route, updateRoute, ...useDashboardList({ route }) };
+  const state = useDashboardList({ route });
   const chooseResults = () => {
     const token = createDashboardSelection(userId);
     navigateHash("classification-results", { selection_token: token });
   };
 
+  const context = { route, updateRoute, ...state };
   return (
     <div className="standard-page analysis-dashboard-page">
       <PageHeading
@@ -137,7 +141,7 @@ function DashboardListFilters({ filters, setFilters, updateRoute }) {
 
 /** @param {DashboardListContext} context */
 function DashboardListResults(context) {
-  const { isLoading, dashboardData, message, load, route } = context;
+  const { isLoading, dashboardData, message, load, route, updateRoute } = context;
   return (
     <section className="dashboard-list-card">
       {isLoading && !dashboardData && <InlineLoading label="正在读取分析看板…" />}
@@ -154,10 +158,20 @@ function DashboardListResults(context) {
           </button>
         </div>
       )}
-      {!isLoading && dashboardData?.items.length === 0 && (
+      {!isLoading && !message && dashboardData?.items.length === 0 && (
         <EmptyState
           icon={ChartBar}
           title={route.q || route.status ? "没有符合条件的看板" : "还没有分析看板"}
+          action={
+            route.q || route.status ? (
+              <button
+                className="secondary-button"
+                onClick={() => updateRoute({ q: "", status: "", page: 1 })}
+              >
+                清除筛选
+              </button>
+            ) : undefined
+          }
           description={
             route.q || route.status
               ? "调整筛选条件后重新查询。"
@@ -182,16 +196,21 @@ function DashboardListTable({
 }) {
   return (
     <>
-      <div className={`dashboard-list-table ${isValidating ? "is-loading" : ""}`}>
+      <div
+        className={`dashboard-list-table ${isValidating ? "is-loading" : ""}`}
+        role="table"
+        aria-label="分析看板列表"
+        aria-busy={isValidating}
+      >
         <div className="dashboard-list-head" role="row">
-          <span>状态</span>
-          <span>看板名称</span>
-          <span>当前版本</span>
-          <span>数据范围</span>
-          <span>评论数</span>
-          <span>最近更新</span>
-          <span>创建人</span>
-          <span>操作</span>
+          <span role="columnheader">状态</span>
+          <span role="columnheader">看板名称</span>
+          <span role="columnheader">当前版本</span>
+          <span role="columnheader">数据范围</span>
+          <span role="columnheader">评论数</span>
+          <span role="columnheader">最近更新</span>
+          <span role="columnheader">创建人</span>
+          <span role="columnheader">操作</span>
         </div>
         {dashboardData.items.map((dashboard) => (
           <DashboardRow
@@ -232,24 +251,30 @@ function DashboardRow({ dashboard, onOpen }) {
   const status = dashboard.status || "active";
   return (
     <article className="dashboard-list-row" role="row">
-      <span className={`dashboard-status ${status}`}>
+      <span role="cell" className={`dashboard-status ${status}`}>
         {statusLabels[status] || status}
       </span>
-      <div>
+      <div role="cell">
         <b>{dashboard.name || "未命名看板"}</b>
         <small>{dashboard.description || "未提供说明"}</small>
       </div>
-      <b>v{dashboard.current_version || dashboard.version || 1}</b>
-      <span>{Number(summary.listing_count || 0).toLocaleString()} 个 Listing</span>
-      <span>
+      <b role="cell">v{dashboard.current_version || dashboard.version || 1}</b>
+      <span role="cell">
+        {Number(summary.listing_count || 0).toLocaleString()} 个 Listing
+      </span>
+      <span role="cell">
         {Number(summary.comment_count ?? summary.record_count ?? 0).toLocaleString()}{" "}
         {summary.counting_basis === "feedback_group" ? "个反馈组" : "条"}
       </span>
-      <span>{formatTime(dashboard.updated_at || dashboard.created_at)}</span>
-      <span>{dashboard.created_by_name || "未提供"}</span>
-      <button className="secondary-button compact-button" onClick={onOpen}>
-        查看 <CaretRight size={15} />
-      </button>
+      <span role="cell">
+        {formatTime(dashboard.updated_at || dashboard.created_at)}
+      </span>
+      <span role="cell">{dashboard.created_by_name || "未提供"}</span>
+      <div role="cell">
+        <button className="secondary-button compact-button" onClick={onOpen}>
+          查看 <CaretRight size={15} />
+        </button>
+      </div>
     </article>
   );
 }

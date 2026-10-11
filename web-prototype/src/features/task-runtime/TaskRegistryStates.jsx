@@ -3,7 +3,7 @@ import { EmptyState, InlineLoading } from "../../components/SharedUi";
 
 /** @typedef {import("./TaskRegistry").TaskRegistryProps} TaskRegistryProps */
 /**
- * @typedef {Pick<TaskRegistryProps, "tasks" | "loading" | "error" | "hasData" | "onReload" | "onCreate"> & {deferredQuery: string, owner: string, filter: string, visibleCount: number}} TaskRegistryStatesProps
+ * @typedef {Pick<TaskRegistryProps, "tasks" | "loading" | "error" | "hasData" | "onReload" | "onCreate"> & {deferredQuery: string, owner: string, filter: string, visibleCount: number, attentionOnly: boolean, onClear: () => void}} TaskRegistryStatesProps
  */
 
 /** @param {Pick<TaskRegistryStatesProps, "error" | "hasData" | "onReload">} props */
@@ -24,21 +24,34 @@ function RegistryError({ error, hasData, onReload }) {
   );
 }
 
-/** @param {Pick<TaskRegistryStatesProps, "tasks" | "deferredQuery" | "owner" | "filter" | "onCreate">} props */
-function RegistryEmpty({ tasks, deferredQuery, owner, filter, onCreate }) {
+/** @param {Pick<TaskRegistryStatesProps, "tasks" | "deferredQuery" | "owner" | "filter" | "onCreate" | "attentionOnly" | "onClear">} props */
+function RegistryEmpty({
+  tasks,
+  deferredQuery,
+  owner,
+  filter,
+  onCreate,
+  attentionOnly,
+  onClear,
+}) {
+  const filtered = Boolean(deferredQuery || owner !== "all" || attentionOnly);
   return (
     <EmptyState
       icon={PlayCircle}
-      title={deferredQuery || owner !== "all" ? "没有匹配任务" : "暂无任务"}
+      title={filtered ? "没有匹配任务" : "暂无任务"}
       description={
-        deferredQuery || owner !== "all"
+        filtered
           ? "请调整搜索词或筛选条件。"
           : filter === "active"
             ? "新任务开始后，会在这里展示实时进度。"
             : "当前分组中没有任务记录。"
       }
       action={
-        tasks.length === 0 ? (
+        filtered ? (
+          <button className="secondary-button" onClick={onClear}>
+            清除筛选
+          </button>
+        ) : tasks.length === 0 ? (
           <button className="primary-button" onClick={onCreate}>
             创建分析任务
           </button>
@@ -57,12 +70,14 @@ export function TaskRegistryStates(props) {
       {!loading && error && (
         <RegistryError error={error} hasData={hasData} onReload={props.onReload} />
       )}
-      {!loading && (!error || hasData) && visibleCount === 0 && (
+      {!loading && !error && visibleCount === 0 && (
         <RegistryEmpty
           tasks={props.tasks}
           deferredQuery={props.deferredQuery}
           owner={props.owner}
           filter={props.filter}
+          attentionOnly={props.attentionOnly}
+          onClear={props.onClear}
           onCreate={props.onCreate}
         />
       )}
