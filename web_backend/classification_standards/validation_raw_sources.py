@@ -84,7 +84,7 @@ class ClassificationStandardValidationRawSourcesMixin:
             None,
         )
         if option is None:
-            raise ValueError("所选用户反馈数据或产品信息版本已不可用")
+            raise ValueError("所选用户反馈数据或商品资料已不可用")
         dataset = load_return_dataset_auto(
             Path(option["return"]["file_path"]), Path(option["product"]["file_path"])
         )

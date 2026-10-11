@@ -117,18 +117,6 @@ label small {
   gap: 18px;
   margin-bottom: 18px;
 }
-.snapshot-notice {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin-top: 21px;
-  padding: 11px 12px;
-  border: 1px solid #cce1d8;
-  border-radius: 8px;
-  color: var(--green-dark);
-  background: #f1faf6;
-  font-size: 13px;
-}
 .form-actions {
   display: flex;
   justify-content: space-between;

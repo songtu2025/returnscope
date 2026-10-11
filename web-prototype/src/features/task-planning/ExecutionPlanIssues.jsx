@@ -64,9 +64,7 @@ function TaskPlanCategoryIssue({
           {missingCategoryProducts.toLocaleString()} 个商品缺少品类A或品类B，影响{" "}
           {missingCategoryComments.toLocaleString()} 条评论
         </b>
-        <p>
-          品类是智能体路由的必填信息。补齐后会生成新的产品信息版本，并自动重新预检；在此之前不能创建任务。
-        </p>
+        <p>请先补齐商品品类。保存后更新当前商品资料，并自动重新预检。</p>
         {onResolveCategories && (
           <button
             type="button"

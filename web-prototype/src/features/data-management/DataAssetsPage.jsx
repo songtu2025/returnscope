@@ -9,7 +9,7 @@ import { ImportRulesPage } from "./ImportRulesPage";
 
 /** @typedef {import("./productMasterContracts").Navigate} Navigate */
 /** @typedef {import("./productMasterContracts").TaskRepairContext} TaskRepairContext */
-/** @typedef {{query: {view?: string, dataset?: string, return_to?: string, tab?: string, reference_page?: string | number}}} DataAssetsRoute */
+/** @typedef {{query: {view?: string, dataset?: string, return_to?: string, tab?: string, reference_version?: string, reference_page?: string | number}}} DataAssetsRoute */
 
 /**
  * @param {{route: DataAssetsRoute, notify: (message: string, tone?: string) => void, onNavigate: Navigate, userId: string}} props
@@ -24,8 +24,14 @@ export function DataAssetsPage({ route, notify, onNavigate, userId }) {
   useEffect(() => {
     if (["quality", "returns"].includes(requestedView)) {
       navigateHash("data-assets", { view: "products" });
+    } else if (route.query.reference_version) {
+      navigateHash(
+        "data-assets",
+        { ...route.query, reference_version: "" },
+        { replace: true },
+      );
     }
-  }, [requestedView]);
+  }, [requestedView, route.query]);
   const focus = useMemo(
     /** @returns {TaskRepairContext | null} */ () => {
       const repair = taskDraft?.repairContext;

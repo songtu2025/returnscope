@@ -314,7 +314,6 @@ describe("商品页面和旧任务草稿的恢复", () => {
       ...props,
       focus,
       routeDetailTab: tab,
-      routeReferenceVersion: "synthetic-products-v1",
       routeReferencePage: 2,
     };
     const { rerender } = render(<ProductMasterWorkspace {...pageProps} />);
@@ -332,6 +331,57 @@ describe("商品页面和旧任务草稿的恢复", () => {
         ),
       );
     }
+  });
+
+  test("旧商品版本链接读取当前资料并清除版本参数，保留引用分页", async () => {
+    apiMock.me.mockResolvedValue({ id: "synthetic-user", display_name: "合成用户" });
+    apiMock.dataVersionReferences.mockResolvedValue({
+      items: [
+        {
+          task_id: "synthetic-reference-task",
+          title: "合成引用任务",
+          reference_type: "products",
+          status: "completed",
+          version_snapshot: {},
+        },
+      ],
+      total: 21,
+    });
+    window.location.hash =
+      `#data-assets?view=products&dataset=${product.id}&tab=impact` +
+      "&reference_version=retired-products-v0&reference_page=2";
+
+    render(<App />);
+    expect(
+      await screen.findByRole("heading", { name: "商品信息汇总", level: 1 }),
+    ).toBeVisible();
+    await waitFor(() =>
+      expect(apiMock.dataVersionReferences).toHaveBeenCalledWith(
+        product.version_id,
+        { page: 2, page_size: 20 },
+        expect.anything(),
+      ),
+    );
+    await waitFor(() =>
+      expect(window.location.hash).toBe(
+        `#data-assets?view=products&dataset=${product.id}&tab=impact&reference_page=2`,
+      ),
+    );
+    expect(screen.queryByLabelText("选择产品信息版本")).not.toBeInTheDocument();
+    await userEvent.click(await screen.findByRole("button", { name: "上一页" }));
+    await waitFor(() =>
+      expect(apiMock.dataVersionReferences).toHaveBeenLastCalledWith(
+        product.version_id,
+        { page: 1, page_size: 20 },
+        expect.anything(),
+      ),
+    );
+    expect(
+      apiMock.dataVersionReferences.mock.calls.every(
+        ([id]) => id === product.version_id,
+      ),
+    ).toBe(true);
+    expect(window.location.hash).not.toContain("reference_version");
   });
 
   test("普通重渲染不覆盖用户主动选择的商品标签", async () => {
