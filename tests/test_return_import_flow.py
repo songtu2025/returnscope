@@ -11,41 +11,20 @@ from types import SimpleNamespace
 
 import pandas as pd
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
+from return_import_helpers import (
+    _create_task_input,
+    _database_counts,
+    _return_row,
+    _write_returns,
+)
 from test_classification_result_pool import _seed_result_context
 
-import web_backend.datasets.preview as dataset_preview_module
 from return_semantics.data import (
-    PRODUCT_COLUMNS,
-    RETURN_COLUMNS,
     RETURN_STORE_COLUMN,
     SOURCE_ORIGIN_COLUMN,
     _prepare_return_records,
 )
 from web_backend.dataset_service import DatasetService
-from web_backend.routers.datasets import create_dataset_router
-
-
-def _return_row(order_id: str, comment: str) -> dict[str, str]:
-    values = {column: "" for column in RETURN_COLUMNS}
-    values.update(
-        {
-            "return-date": "2026-08-20",
-            "order-id": order_id,
-            "sku": "SKU-1",
-            "product-name": "测试商品",
-            "quantity": "1",
-            "reason": "OTHER",
-            "customer-comments": comment,
-            RETURN_STORE_COLUMN: "SENWAYZON:US",
-        }
-    )
-    return values
-
-
-def _write_returns(path: Path, rows: list[dict[str, str]]) -> None:
-    pd.DataFrame(rows).to_csv(path, index=False, encoding="utf-8-sig")
 
 
 def _write_returns_xlsx(path: Path, rows: list[dict[str, str]]) -> None:
@@ -73,33 +52,6 @@ def test_return_loader_preserves_optional_source_origin_id(tmp_path: Path) -> No
     assert records.loc[0, SOURCE_ORIGIN_COLUMN] == "12345"
 
 
-def _create_task_input(
-    service: DatasetService,
-    source: Path,
-) -> dict[str, object]:
-    return service.create(
-        name="测试退货数据",
-        kind="returns",
-        description="",
-        source_path=source,
-        original_name=source.name,
-        content_type="text/csv",
-        change_note="首次导入",
-        actor_id="user-1",
-    )
-
-
-def _database_counts(database) -> dict[str, int]:
-    tables = ("datasets", "dataset_versions", "dataset_imports", "audit_logs")
-    with database.connect() as connection:
-        return {
-            table: int(
-                connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-            )
-            for table in tables
-        }
-
-
 def _fail_import_audit(database) -> None:
     with database.transaction(immediate=True) as connection:
         connection.execute(
@@ -124,106 +76,6 @@ def _assert_stored_files_exist(database) -> None:
         ).fetchall()
     assert all(Path(str(row[0])).is_file() for row in version_paths)
     assert all(Path(str(row[0])).is_file() for row in import_paths)
-
-
-def _synchronize_first_import_commits(service, monkeypatch) -> None:
-    original_commit = service._commit_return_import
-    first_attempt_barrier = threading.Barrier(2)
-    synchronized_threads: set[int] = set()
-    synchronized_threads_lock = threading.Lock()
-
-    def synchronized_commit(**kwargs):
-        thread_id = threading.get_ident()
-        with synchronized_threads_lock:
-            should_wait = thread_id not in synchronized_threads
-            synchronized_threads.add(thread_id)
-        if should_wait:
-            first_attempt_barrier.wait(timeout=5)
-        return original_commit(**kwargs)
-
-    monkeypatch.setattr(service, "_commit_return_import", synchronized_commit)
-
-
-def test_inspect_route_removes_temporary_file_after_unexpected_error(
-    tmp_path: Path,
-) -> None:
-    class FailingDatasetService:
-        def inspect_return_import(self, *_args, **_kwargs):
-            raise RuntimeError("解析器异常")
-
-    app = FastAPI()
-    app.include_router(
-        create_dataset_router(
-            dataset_service=FailingDatasetService(),
-            settings=SimpleNamespace(data_dir=tmp_path),
-            current_user=lambda: {"id": "user-1"},
-        )
-    )
-
-    with TestClient(app) as client, pytest.raises(RuntimeError, match="解析器异常"):
-        client.post(
-            "/api/return-imports/inspect",
-            files={"file": ("returns.csv", b"a,b\n1,2", "text/csv")},
-        )
-
-    temporary_dir = tmp_path / "tmp" / "dataset-imports"
-    assert not temporary_dir.exists() or not any(temporary_dir.iterdir())
-
-
-def _write_products(path: Path) -> None:
-    rows = [
-        {
-            PRODUCT_COLUMNS[0]: "MSKU-1",
-            PRODUCT_COLUMNS[1]: "SENWAYZON:US",
-            PRODUCT_COLUMNS[2]: "LISTING-1",
-            "品类A": "眼镜",
-            "品类B": "太阳镜",
-            "产品名称": "测试商品",
-            "SKU": "SKU-1",
-        },
-        {
-            PRODUCT_COLUMNS[0]: "MSKU-2",
-            PRODUCT_COLUMNS[1]: "SENWAYZON:US",
-            PRODUCT_COLUMNS[2]: "LISTING-2",
-            "品类A": "手套",
-            "品类B": "",
-            "产品名称": "测试手套",
-            "SKU": "SKU-2",
-        },
-    ]
-    pd.DataFrame(rows).to_excel(path, sheet_name="产品信息汇总表", index=False)
-
-
-def test_product_preview_uses_rebuildable_derived_csv(tmp_path: Path) -> None:
-    context = _seed_result_context(tmp_path)
-    service = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
-    source = tmp_path / "products.xlsx"
-    _write_products(source)
-
-    created = service.create(
-        name="商品信息",
-        kind="products",
-        description="",
-        source_path=source,
-        original_name=source.name,
-        content_type=(
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        ),
-        change_note="首次导入",
-        actor_id="user-1",
-    )
-    digest = created["versions"][0]["sha256"]
-    preview_path = tmp_path / "cache" / "dataset-previews" / f"{digest}.csv"
-
-    assert preview_path.exists()
-    assert service.preview_rows(str(created["id"]))["facets"]["categories"] == [
-        "手套",
-        "眼镜 > 太阳镜",
-    ]
-    preview_path.unlink()
-    rebuilt = service.preview_rows(str(created["id"]), query="MSKU-1")
-    assert rebuilt["total"] == 1
-    assert preview_path.exists()
 
 
 def test_staged_return_import_enforces_owner_retry_and_single_use(
@@ -315,92 +167,6 @@ def test_staged_cleanup_keeps_expired_import_while_processing(tmp_path: Path) ->
     assert source.exists()
 
 
-@pytest.mark.parametrize("failure", ["staging_row", "source_file"])
-def test_successful_staged_import_logs_cleanup_failure_without_payload(
-    tmp_path: Path, monkeypatch, caplog, failure: str
-) -> None:
-    context = _seed_result_context(tmp_path)
-    service = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
-    source = tmp_path / "SYNTHETIC-cleanup.csv"
-    _write_returns(source, [_return_row("SYNTHETIC-ORDER", "SYNTHETIC-COMMENT")])
-    inspection = service.inspect_return_import(source, source.name, actor_id="user-1")
-    if failure == "staging_row":
-        with context.database.transaction() as connection:
-            connection.execute(
-                """
-                CREATE TRIGGER fail_staging_cleanup
-                BEFORE DELETE ON dataset_import_staging
-                BEGIN
-                    SELECT RAISE(ABORT, 'SYNTHETIC-CONFIDENTIAL');
-                END
-                """
-            )
-    else:
-        original_unlink = Path.unlink
-
-        def fail_source_unlink(path, *args, **kwargs):
-            if path == source:
-                raise OSError("SYNTHETIC-CONFIDENTIAL")
-            return original_unlink(path, *args, **kwargs)
-
-        monkeypatch.setattr(Path, "unlink", fail_source_unlink)
-    result = service.import_staged_returns(
-        inspection_id=str(inspection["inspection_id"]),
-        actor_id="user-1",
-        mode="analyze_only",
-    )
-    assert result["summary"]["imported_row_count"] == 1
-    assert service.version_file(str(result["dataset"]["id"])) is not None
-    records = [
-        item
-        for item in caplog.records
-        if item.name == "web_backend.dataset_return_import"
-    ]
-    assert len(records) == 1
-    assert "error_type=" in records[0].getMessage()
-    assert records[0].exc_info is None
-    assert "SYNTHETIC-CONFIDENTIAL" not in caplog.text
-    assert str(source) not in caplog.text
-
-
-def test_import_source_directory_cleanup_logs_only_error_type(
-    tmp_path: Path, caplog
-) -> None:
-    directory = tmp_path / "SYNTHETIC-import"
-    directory.mkdir()
-    source = directory / "source.csv"
-    source.write_text("SYNTHETIC-DATA", encoding="utf-8")
-    extra = directory / "SYNTHETIC-CONFIDENTIAL"
-    extra.write_text("SYNTHETIC-EXTRA", encoding="utf-8")
-    DatasetService._cleanup_import_source(source)
-    assert not source.exists()
-    assert extra.exists()
-    records = [
-        item
-        for item in caplog.records
-        if item.name == "web_backend.dataset_return_versions"
-    ]
-    assert len(records) == 1
-    assert records[0].getMessage() == "导入归档目录清理失败: error_type=OSError"
-    assert records[0].exc_info is None
-    assert "SYNTHETIC-CONFIDENTIAL" not in caplog.text
-    assert str(directory) not in caplog.text
-
-
-def test_import_source_file_cleanup_keeps_unlink_failure(
-    monkeypatch, tmp_path: Path, caplog
-) -> None:
-    source = tmp_path / "SYNTHETIC-source.csv"
-
-    def fail_unlink(*_args, **_kwargs):
-        raise OSError("SYNTHETIC-UNLINK")
-
-    monkeypatch.setattr(Path, "unlink", fail_unlink)
-    with pytest.raises(OSError, match="SYNTHETIC-UNLINK"):
-        DatasetService._cleanup_import_source(source)
-    assert not caplog.records
-
-
 def test_return_import_recognizes_identity_and_separates_task_input(
     tmp_path: Path,
 ) -> None:
@@ -485,33 +251,6 @@ def test_return_import_does_not_fill_missing_store(tmp_path: Path) -> None:
             actor_id="user-1",
         )
     assert service.list("returns") == before
-
-
-def test_return_preview_reads_only_requested_prefix(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    context = _seed_result_context(tmp_path)
-    service = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
-    source = tmp_path / "bounded.csv"
-    _write_returns(
-        source,
-        [_return_row(f"O-{index}", "偏小") for index in range(20)],
-    )
-    created = _create_task_input(service, source)
-    original = dataset_preview_module.read_return_file
-    observed: list[int | None] = []
-
-    def tracking_read(path, usecols=None, nrows=None):
-        observed.append(nrows)
-        return original(path, usecols=usecols, nrows=nrows)
-
-    monkeypatch.setattr(dataset_preview_module, "read_return_file", tracking_read)
-    preview = service.preview_rows(str(created["id"]), offset=5, limit=2)
-
-    assert observed == [7]
-    assert preview["source_total"] == 20
-    assert [record["_row_index"] for record in preview["records"]] == [5, 6]
 
 
 @pytest.mark.parametrize("mode", ["analyze_only"])
@@ -708,38 +447,6 @@ def test_authoritative_duplicate_check_reuses_legacy_version(tmp_path: Path) -> 
     assert result["duplicate"] is True
     assert result["version_id"] == created["versions"][0]["id"]
     assert _database_counts(context.database) == before
-
-
-def test_return_import_copy_failure_cleans_unique_source_directory(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    context = _seed_result_context(tmp_path)
-    service = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
-    source = tmp_path / "copy-failure.csv"
-    _write_returns(source, [_return_row("O-1", "偏小")])
-    before = _database_counts(context.database)
-    original_copy = shutil.copy2
-
-    def failing_copy(source_path, destination, *args, **kwargs):
-        destination_path = Path(destination)
-        if "imports" in destination_path.parts:
-            destination_path.write_bytes(b"partial")
-            raise OSError("injected copy failure")
-        return original_copy(source_path, destination, *args, **kwargs)
-
-    monkeypatch.setattr(shutil, "copy2", failing_copy)
-    with pytest.raises(OSError, match="injected copy failure"):
-        service.import_returns(
-            source_path=source,
-            original_name=source.name,
-            content_type="text/csv",
-            mode="analyze_only",
-            actor_id="user-1",
-        )
-
-    assert _database_counts(context.database) == before
-    assert not any((tmp_path / "imports").rglob("*"))
 
 
 def test_blob_copy_failure_removes_temporary_file(

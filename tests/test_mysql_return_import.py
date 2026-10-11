@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from mysql_return_helpers import source as source
-from test_return_import_flow import _return_row
+from return_import_helpers import _return_row
 
 from return_semantics.data import RETURN_STORE_COLUMN, SOURCE_ORIGIN_COLUMN
 from web_backend import dataset_service as dataset_module
