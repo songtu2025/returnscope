@@ -32,7 +32,7 @@ export function Topbar({ user, system, onRefresh, onNavigate, onSearch, onLogout
             onNavigate("analysis-tasks");
           }}
           title="查看进行中的分析任务"
-          aria-label={`查看进行中的分析任务，运行 Listing ${system?.my_running_segments ?? system?.my_running_tasks ?? 0}/3`}
+          aria-label={`我的运行 Listing ${system?.my_running_segments ?? system?.my_running_tasks ?? 0}/3，查看进行中的分析任务`}
         >
           <span>我的运行 Listing</span>
           <strong>
