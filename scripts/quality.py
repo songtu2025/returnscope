@@ -9,6 +9,17 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_ROOT = PROJECT_ROOT / "web-prototype"
+SCRIPT_PYTHON_TARGETS = (
+    "scripts/generate_water_shoe_feature_template.py",
+    "scripts/water_shoe_workbook.py",
+    "scripts/water_shoe_workbook_layout.py",
+    "scripts/run_return_semantics.py",
+    "scripts/return_semantics_cli_options.py",
+    "scripts/return_semantics_cli_runtime.py",
+    "scripts/secret_scan.py",
+    "scripts/secret_scan_content.py",
+    "scripts/secret_scan_git.py",
+)
 PYTHON_TARGETS = (
     "web_backend",
     "return_semantics",
@@ -16,7 +27,7 @@ PYTHON_TARGETS = (
     "tests",
     "scripts/quality.py",
     "scripts/server_release.py",
-    "scripts/secret_scan.py",
+    *SCRIPT_PYTHON_TARGETS,
 )
 PRODUCTION_PYTHON_TARGETS = (
     "web_backend",
@@ -71,6 +82,17 @@ def check_commands() -> list[tuple[str, list[str], Path]]:
         (
             "Python type check",
             [sys.executable, "-m", "mypy"],
+            PROJECT_ROOT,
+        ),
+        (
+            "Python script type check",
+            [
+                sys.executable,
+                "-m",
+                "mypy",
+                "--explicit-package-bases",
+                *SCRIPT_PYTHON_TARGETS,
+            ],
             PROJECT_ROOT,
         ),
         ("Frontend quality checks", npm_command("run", "quality"), FRONTEND_ROOT),
