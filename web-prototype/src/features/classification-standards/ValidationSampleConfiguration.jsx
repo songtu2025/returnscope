@@ -20,7 +20,7 @@ function ValidationPurpose({ comparisonType, setComparisonType }) {
           )
         }
       >
-        <option value="standard_version">发布验证 · 当前标准与草稿</option>
+        <option value="standard_version">效果验证 · 生效标准与当前修改</option>
         <option value="keyword_ab">关键词对照 · 同标签，仅移除关键词</option>
         <option value="semantic_ab">语义方案对照 · 定义、边界与证据</option>
       </select>

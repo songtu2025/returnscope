@@ -55,7 +55,15 @@ export async function loadSelectedStandardDraft(
   }
 }
 
-/** @param {unknown} error */
-export function classificationDraftErrorMessage(error) {
-  return error instanceof Error ? error.message : "请求失败";
+/** @param {unknown} error @param {{saved?: boolean, enabled?: boolean}} [stage] */
+export function classificationDraftErrorMessage(
+  error,
+  { saved = false, enabled = false } = {},
+) {
+  const prefix = enabled
+    ? "标准已启用，页面刷新失败："
+    : saved
+      ? "修改已暂存，尚未启用："
+      : "";
+  return prefix + (error instanceof Error ? error.message : "请求失败");
 }

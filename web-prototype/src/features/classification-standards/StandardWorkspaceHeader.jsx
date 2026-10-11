@@ -29,9 +29,11 @@ export function StandardWorkspaceHeader({
         <h1>{isNew ? "建立品类与标签体系" : detail?.name}</h1>
         <span>
           {draft
-            ? `未发布草稿 r${draft.revision} · 当前启用版本 V${draft.base_version_no}`
+            ? "有暂存修改，尚未启用"
             : detail
-              ? `${detail.status === "active" ? "当前启用版本" : "已停用版本"} V${detail.version_no}`
+              ? detail.status === "active"
+                ? "使用中"
+                : "已停用"
               : "新建标准"}
         </span>
       </div>

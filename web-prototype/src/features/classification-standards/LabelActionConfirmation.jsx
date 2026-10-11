@@ -13,7 +13,7 @@ export function LabelActionConfirmation({
 }) {
   return (
     <Modal
-      eyebrow="标签草稿"
+      eyebrow="标签修改"
       title={
         pending.type === "replace"
           ? "创建替代标签"
@@ -26,8 +26,8 @@ export function LabelActionConfirmation({
       <div className="label-action-confirm">
         <p>
           {pending.type === "replace"
-            ? "将复制名称、判定说明和关键词，生成新编码，并将旧标签标记为拟停用。新标签不继承旧标签的承诺关联与专用校验规则；发布前请在标准设置中核对相关指令。"
-            : "仅修改当前草稿。相关标签校验引用会同步清理，已发布标准和历史结果保持原样。"}
+            ? "将复制名称、判定说明和关键词，生成新编码，并将旧标签标记为拟停用。新标签不继承旧标签的承诺关联与专用校验规则；保存并启用前请核对标准设置中的相关指令。"
+            : "先修改编辑内容并清理相关校验引用，保存并启用后生效；已有结果保持原样。"}
         </p>
         <div>
           <Button onClick={() => setPending(null)}>继续编辑</Button>

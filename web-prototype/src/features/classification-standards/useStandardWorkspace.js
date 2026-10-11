@@ -14,7 +14,6 @@ export function useStandardWorkspace({
   detail,
   draft,
   content,
-  changeReason,
   busy,
   dirty,
   selectedValidation,
@@ -23,7 +22,6 @@ export function useStandardWorkspace({
 }) {
   const [section, setSection] = useState(isNew ? "settings" : "labels");
   const [confirmBack, setConfirmBack] = useState(false);
-  const [confirmPublish, setConfirmPublish] = useState(false);
   const [fixRequest, setFixRequest] = useState(
     /** @type {ClassificationStandardValidationIssue | null} */ (null),
   );
@@ -46,12 +44,12 @@ export function useStandardWorkspace({
     draft,
     content,
   });
-  const validationEvidence = standardValidationEvidence(selectedValidation);
+  const validationEvidence = standardValidationEvidence(selectedValidation, dirty);
   const { publishDisabled, publishLabel } = standardPublicationState({
     busy,
     draft,
     dirty,
-    changeReason,
+    isNew,
   });
   useEffect(() => {
     if (!validationAttempt || handledValidationAttempt.current === validationAttempt) {
@@ -71,8 +69,6 @@ export function useStandardWorkspace({
     setSection,
     confirmBack,
     setConfirmBack,
-    confirmPublish,
-    setConfirmPublish,
     fixRequest,
     fixIssue,
     editable,

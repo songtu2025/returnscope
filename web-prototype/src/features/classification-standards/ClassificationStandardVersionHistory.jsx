@@ -20,34 +20,34 @@ export function ClassificationStandardVersionHistory({
   return (
     <details className="standard-version-history">
       <summary>
-        <ClockCounterClockwise size={17} /> 版本记录（{versions.length}）
+        <ClockCounterClockwise size={17} /> 修改记录（{versions.length}）
       </summary>
       <div>
         {versions.map((version) => (
           <div key={version.id}>
-            <b>V{version.version_no}</b>
+            <b>第 {version.version_no} 次更新</b>
             <span>{version.version_reason}</span>
             <small>{formatDate(version.published_at)}</small>
             <a
               href={classificationStandardApi.classificationStandardVersionExportUrl(
                 version.id,
               )}
-              aria-label={`导出 V${version.version_no} JSON`}
+              aria-label={`导出第 ${version.version_no} 次更新 JSON`}
             >
               <DownloadSimple size={14} /> 导出JSON
             </a>
             {version.id === standard.standard_version_id ? (
-              <span className="standard-version-current">当前版本</span>
+              <span className="standard-version-current">当前生效</span>
             ) : (
               <button
                 type="button"
                 className="standard-version-restore"
                 disabled={Boolean(standard.draft_id)}
-                title={standard.draft_id ? "请先处理现有草稿" : undefined}
-                aria-label={`恢复 V${version.version_no} 为草稿`}
+                title={standard.draft_id ? "请先处理暂存修改" : undefined}
+                aria-label={`采用第 ${version.version_no} 次更新内容`}
                 onClick={() => onRestore(version)}
               >
-                <ClockCounterClockwise size={14} /> 恢复为草稿
+                <ClockCounterClockwise size={14} /> 采用此记录
               </button>
             )}
           </div>

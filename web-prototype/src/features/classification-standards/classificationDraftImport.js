@@ -47,7 +47,7 @@ export async function importStandardDraftJson(
     state.setChangeReason(imported.change_reason || `导入 ${file.name}`);
     await loadStandards();
     await loadValidation(imported.id);
-    notify("JSON 已导入草稿，请检查后再发布");
+    notify("JSON 内容已暂存，请检查后保存并启用");
   } catch (error) {
     notify(
       error instanceof SyntaxError ? "JSON 文件格式错误" : errorMessage(error),

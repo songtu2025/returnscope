@@ -37,6 +37,7 @@ export function ClassificationStandardWorkspace(props) {
         {[
           ["labels", "标签管理"],
           ["settings", "标准设置"],
+          ["review", "检查与测试"],
         ].map(([value, title]) => (
           <button
             key={value}

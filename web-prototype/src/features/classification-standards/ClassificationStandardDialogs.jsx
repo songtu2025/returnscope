@@ -73,15 +73,15 @@ export function ClassificationStandardRestoreDialog({
   if (!target) return null;
   return (
     <Modal
-      eyebrow="恢复历史版本"
-      title={`恢复 V${target.version_no} 为新草稿`}
-      description="不会覆盖任何历史版本，也不会立即改变当前启用版本。请在草稿中检查后再发布。"
+      eyebrow="采用历史内容"
+      title={`采用第 ${target.version_no} 次更新的内容？`}
+      description="内容会暂存供你检查，保存并启用后才生效。修改记录保留。"
       onClose={onClose}
     >
       <div className="standard-delete-actions">
         <Button onClick={onClose}>取消</Button>
         <Button type="primary" disabled={busy === "restore"} onClick={onConfirm}>
-          {busy === "restore" ? "创建中" : "创建恢复草稿"}
+          {busy === "restore" ? "采用中" : "采用内容"}
         </Button>
       </div>
     </Modal>

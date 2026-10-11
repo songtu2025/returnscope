@@ -6,6 +6,7 @@ import {
 import {
   persistStandardDraft,
   prepareStandardExcelDraft,
+  enableStandardDraft,
 } from "./classificationDraftPersistence";
 import { importStandardDraftJson } from "./classificationDraftImport";
 
@@ -189,7 +190,7 @@ export function useClassificationStandardDraftController({
           { replace: true },
         );
       }
-      notify("修改已保存");
+      notify("修改已暂存，尚未启用");
     } catch (error) {
       notify(errorMessage(error), "error");
     } finally {
@@ -209,23 +210,23 @@ export function useClassificationStandardDraftController({
 
   const publish = async (/** @type {string | null} */ validationRunId = null) => {
     setBusy("publish");
+    let saved = /** @type {ClassificationStandardDraft | null} */ (null);
+    let enabled = false;
     try {
-      const saved = await persistDraft();
-      if (saved.validation.blocking.length > 0) {
-        throw new Error(saved.validation.blocking.join("；"));
-      }
-      const standard =
-        await classificationStandardApi.publishClassificationStandardDraft(saved.id, {
-          expected_revision: saved.revision,
-          reason: changeReason.trim() || "更新分类标准",
-          validation_run_id: validationRunId,
-        });
+      saved = await persistDraft();
+      const standard = await enableStandardDraft(
+        saved,
+        changeReason,
+        selectedValidation,
+        validationRunId,
+      );
+      enabled = true;
       await loadStandards();
       await loadSelected(standard.id);
       navigateHash("classification-standards", { standard: standard.id });
       notify(saved.is_new ? "分类标准已创建并启用" : "分类标准已更新并启用");
     } catch (error) {
-      notify(errorMessage(error), "error");
+      notify(errorMessage(error, { saved: Boolean(saved), enabled }), "error");
     } finally {
       setBusy("");
     }

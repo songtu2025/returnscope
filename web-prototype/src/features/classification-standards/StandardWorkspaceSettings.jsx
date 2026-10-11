@@ -33,7 +33,7 @@ export function StandardWorkspaceSettings(context) {
       <section className="standard-detail-section">
         <h2>识别策略</h2>
         <label>
-          当前草稿使用
+          当前编辑内容使用
           <select
             aria-label="识别策略"
             disabled={!editable}
@@ -71,13 +71,13 @@ export function StandardWorkspaceSettings(context) {
             <option value="secondary">独立模型复核</option>
           </select>
         </label>
-        <p>保存只修改草稿；通过发布验证并启用后，新任务才使用该策略。</p>
+        <p>保存并启用后，新任务使用该策略；暂存和测试不改变生效标准。</p>
       </section>
       {!isNew && editable && (
         <section className="standard-json-transfer">
           <div>
             <b>JSON 数据交换</b>
-            <span>导入只替换当前草稿的业务内容，不会直接发布。</span>
+            <span>导入内容供你检查，保存并启用后才生效。</span>
           </div>
           <label
             className={`secondary-button standard-json-import-button ${

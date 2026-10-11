@@ -9,9 +9,8 @@ export function StandardWorkspaceFooter(context) {
     busy,
     dirty,
     onSave,
-    section,
-    setSection,
-    setConfirmPublish,
+    onPublish,
+    validationEvidence,
     publishDisabled,
     publishLabel,
   } = context;
@@ -19,31 +18,23 @@ export function StandardWorkspaceFooter(context) {
     <footer className="standard-editor-footer">
       <div role="status">
         <strong>{standardChangeStatus(context)}</strong>
-        {draft && !dirty && <span>草稿 r{draft.revision}，尚未发布</span>}
+        <span>
+          {draft && !dirty ? "修改已暂存，尚未启用。" : ""}
+          启用后用于新任务，运行中的任务不变。
+        </span>
       </div>
       <div>
         <Button disabled={Boolean(busy)} onClick={onSave}>
-          {busy === "save" ? "保存中" : "保存草稿"}
+          {busy === "save" ? "暂存中" : "暂存修改"}
         </Button>
-        {section === "review" ? (
-          <button
-            type="button"
-            className="primary-button"
-            disabled={publishDisabled}
-            title={publishDisabled ? publishLabel : undefined}
-            onClick={() => setConfirmPublish(true)}
-          >
-            {busy === "publish" ? "启用中" : publishLabel}
-          </button>
-        ) : (
-          <Button
-            type="primary"
-            disabled={Boolean(busy) || (!dirty && !draft)}
-            onClick={() => setSection("review")}
-          >
-            发布
-          </Button>
-        )}
+        <Button
+          type="primary"
+          disabled={publishDisabled}
+          title={publishDisabled ? publishLabel : undefined}
+          onClick={() => void onPublish(validationEvidence?.id ?? null)}
+        >
+          {busy === "publish" ? "保存并启用中" : publishLabel}
+        </Button>
       </div>
     </footer>
   );

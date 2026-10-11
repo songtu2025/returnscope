@@ -148,7 +148,7 @@ export function ClassificationStandardsPage({ route, notify }) {
         standard: detail.id,
         view: "edit",
       });
-      notify(`已从 V${restoreTarget.version_no} 创建恢复草稿，请检查后再发布`);
+      notify("历史内容已暂存，请检查后保存并启用");
     } catch (error) {
       notify(errorMessage(error), "error");
     } finally {

@@ -16,7 +16,7 @@ import { formatDate } from "../../lib/presentation";
 /** @param {ClassificationStandardSummary} standard */
 function statusLabel(standard) {
   if (standard.status === "active") return "使用中";
-  return Number(standard.version_no) > 0 ? "已停用" : "未发布";
+  return Number(standard.version_no) > 0 ? "已停用" : "尚未启用";
 }
 
 /**
@@ -56,7 +56,7 @@ export function ClassificationStandardList({
       <PageHeading
         eyebrow="语义分类治理"
         title="分类标准"
-        description="维护商品品类与退货问题标签，分析任务会自动读取当前启用版本。"
+        description="维护商品品类与退货问题标签，新分析任务自动使用当前生效标准。"
         action={
           <Button type="primary" icon={<Plus size={16} />} onClick={onCreate}>
             新建分类标准
@@ -198,14 +198,7 @@ export function ClassificationStandardList({
                       <span className={`standard-status ${standard.status}`}>
                         {statusLabel(standard)}
                       </span>
-                      <small>
-                        {Number(standard.version_no) > 0
-                          ? `V${standard.version_no}`
-                          : "草稿"}
-                        {standard.draft_id && Number(standard.version_no) > 0
-                          ? " · 有草稿"
-                          : ""}
-                      </small>
+                      {standard.draft_id && <small>有暂存修改</small>}
                     </td>
                     <td>{formatDate(standard.updated_at)}</td>
                     <td>

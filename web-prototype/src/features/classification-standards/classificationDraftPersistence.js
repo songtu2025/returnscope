@@ -67,6 +67,29 @@ export async function persistStandardDraft({
   return workingDraft;
 }
 
+/** @param {ClassificationStandardDraft} saved @param {string} reason @param {import("../../shared/api/classificationStandardContracts").ClassificationStandardValidationRunDetail | null} selectedValidation @param {string | null} validationRunId */
+export async function enableStandardDraft(
+  saved,
+  reason,
+  selectedValidation,
+  validationRunId,
+) {
+  if (saved.validation.blocking.length > 0) {
+    throw new Error(saved.validation.blocking.join("；"));
+  }
+  return await classificationStandardApi.publishClassificationStandardDraft(saved.id, {
+    expected_revision: saved.revision,
+    reason: reason.trim() || "更新分类标准",
+    // 编辑后的修订不能沿用旧内容的测试记录。
+    validation_run_id:
+      selectedValidation?.id === validationRunId &&
+      selectedValidation.draft_revision === saved.revision &&
+      selectedValidation.is_current
+        ? validationRunId
+        : null,
+  });
+}
+
 /** @param {{dirty: boolean, draft: ClassificationStandardDraft | null, content: ClassificationStandardEditableContent, mode: string, requireDetail: () => ClassificationStandardDetail, state: {setDraft: (value: ClassificationStandardDraft) => void, setContent: (value: ClassificationStandardEditableContent) => void, setChangeReason: (value: string) => void}}} options @returns {Promise<ClassificationStandardDraft>} */
 export async function prepareStandardExcelDraft({
   dirty,

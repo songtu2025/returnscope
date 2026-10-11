@@ -293,9 +293,9 @@ function renderValidationController() {
   };
 }
 
-async function openPublishReview() {
+async function openChangeReview() {
   await userEvent.click(
-    await screen.findByRole("button", { name: "发布", exact: true }),
+    await screen.findByRole("button", { name: "检查与测试", exact: true }),
   );
 }
 
@@ -667,7 +667,7 @@ test("没有评价方向时新增示例仍保留用户选择的适用状态", as
   });
 });
 
-test("工作台切换标签保留批量关键词，保存草稿不触发发布", async () => {
+test("工作台切换标签保留批量关键词，暂存修改不触发发布", async () => {
   const another = {
     ...content.labels[0],
     code: "QUALITY_DURABLE",
@@ -708,7 +708,7 @@ test("工作台切换标签保留批量关键词，保存草稿不触发发布",
   if (!screen.getByText(/搜索别名（可选）/).closest("details").open)
     await userEvent.click(screen.getByText(/搜索别名（可选）/));
   expect(screen.getByRole("button", { name: "移除搜索别名 comfy" })).toBeVisible();
-  await userEvent.click(screen.getByRole("button", { name: "保存草稿" }));
+  await userEvent.click(screen.getByRole("button", { name: "暂存修改" }));
   await waitFor(() =>
     expect(standardApiMock.updateClassificationStandardDraft).toHaveBeenCalled(),
   );
@@ -751,7 +751,7 @@ test("复核模型作为草稿配置保存，不直接触发发布", async () =>
     screen.getByRole("combobox", { name: "复核模型" }),
     "secondary",
   );
-  await userEvent.click(screen.getByRole("button", { name: "保存草稿" }));
+  await userEvent.click(screen.getByRole("button", { name: "暂存修改" }));
 
   await waitFor(() =>
     expect(standardApiMock.updateClassificationStandardDraft).toHaveBeenCalled(),
@@ -809,16 +809,16 @@ test("替代标签生成新编码并清理旧引用，检查变更后才可保�
     screen.getByRole("textbox", { name: "判定说明（可选） 1" }),
     "明确描述鼻托压迫",
   );
-  await userEvent.click(screen.getByRole("button", { name: "发布", exact: true }));
+  await userEvent.click(
+    screen.getByRole("button", { name: "检查与测试", exact: true }),
+  );
   const changeReason = screen.getByRole("textbox", { name: "变更说明" });
   await userEvent.clear(changeReason);
   await userEvent.type(changeReason, "明确鼻托压迫规则");
-  const preview = screen
-    .getByRole("heading", { name: "发布前检查" })
-    .closest("section");
+  const preview = screen.getByRole("heading", { name: "变更检查" }).closest("section");
   expect(within(preview).getByText("新增")).toBeVisible();
   expect(within(preview).getByText("拟停用")).toBeVisible();
-  await userEvent.click(screen.getByRole("button", { name: "保存草稿" }));
+  await userEvent.click(screen.getByRole("button", { name: "暂存修改" }));
   await waitFor(() =>
     expect(standardApiMock.updateClassificationStandardDraft).toHaveBeenCalled(),
   );
@@ -990,7 +990,7 @@ test("工作台收纳设置和版本记录，不显示重复未修改状态", as
       notify={vi.fn()}
     />,
   );
-  expect(await screen.findByText("当前启用版本 V1")).toBeVisible();
+  expect(await screen.findByText("使用中")).toBeVisible();
   expect(screen.getByText("EYEWEAR_FIT_PRESSURE")).toBeVisible();
   await userEvent.click(screen.getByText(/搜索别名（可选）/));
   expect(screen.getByText("pressure")).toBeVisible();
@@ -999,8 +999,8 @@ test("工作台收纳设置和版本记录，不显示重复未修改状态", as
   expect(screen.queryByRole("button", { name: "检查变更", exact: true })).toBeNull();
   await userEvent.click(screen.getByRole("button", { name: "标准设置" }));
   expect(screen.getByRole("textbox", { name: "品类 B 1" })).toHaveValue("儿童眼镜");
-  await userEvent.click(screen.getByText("版本记录（1）"));
-  expect(screen.getByRole("link", { name: "导出 V1 JSON" })).toHaveAttribute(
+  await userEvent.click(screen.getByText("修改记录（1）"));
+  expect(screen.getByRole("link", { name: "导出第 1 次更新 JSON" })).toHaveAttribute(
     "href",
     `/api/classification-standard-versions/${standard.standard_version_id}/export`,
   );
@@ -1025,7 +1025,7 @@ test("工作台明确展示未发布草稿，可原位继续编辑", async () =>
       notify={vi.fn()}
     />,
   );
-  expect(await screen.findByText("未发布草稿 r1 · 当前启用版本 V1")).toBeVisible();
+  expect(await screen.findByText("有暂存修改，尚未启用")).toBeVisible();
   await userEvent.click(screen.getByText(/搜索别名（可选）/));
   expect(screen.getByText("draft keyword")).toBeVisible();
   await userEvent.click(screen.getByRole("button", { name: "编辑", exact: true }));
@@ -1065,18 +1065,18 @@ test("历史版本只能恢复为新草稿", async () => {
   );
 
   await userEvent.click(await screen.findByRole("button", { name: "标准设置" }));
-  await userEvent.click(screen.getByText("版本记录（2）"));
-  expect(screen.queryByRole("button", { name: "恢复 V2 为草稿" })).toBeNull();
-  await userEvent.click(screen.getByRole("button", { name: "恢复 V1 为草稿" }));
-  expect(screen.getByRole("dialog", { name: "恢复 V1 为新草稿" })).toBeVisible();
-  await userEvent.click(screen.getByRole("button", { name: "创建恢复草稿" }));
+  await userEvent.click(screen.getByText("修改记录（2）"));
+  expect(screen.queryByRole("button", { name: "采用第 2 次更新内容" })).toBeNull();
+  await userEvent.click(screen.getByRole("button", { name: "采用第 1 次更新内容" }));
+  expect(screen.getByRole("dialog", { name: "采用第 1 次更新的内容？" })).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "采用内容" }));
 
   await waitFor(() =>
     expect(standardApiMock.restoreClassificationStandardVersion).toHaveBeenCalledWith(
       standard.standard_version_id,
     ),
   );
-  expect(notify).toHaveBeenCalledWith("已从 V1 创建恢复草稿，请检查后再发布");
+  expect(notify).toHaveBeenCalledWith("历史内容已暂存，请检查后保存并启用");
   expect(standardApiMock.publishClassificationStandardDraft).not.toHaveBeenCalled();
 });
 
@@ -1120,7 +1120,7 @@ test("编辑页将JSON导入草稿但不直接发布", async () => {
   await userEvent.click(screen.getByRole("button", { name: "标准设置", exact: true }));
   expect(screen.getByDisplayValue("导入后的适用范围")).toBeVisible();
   expect(standardApiMock.publishClassificationStandardDraft).not.toHaveBeenCalled();
-  expect(notify).toHaveBeenCalledWith("JSON 已导入草稿，请检查后再发布");
+  expect(notify).toHaveBeenCalledWith("JSON 内容已暂存，请检查后保存并启用");
 });
 
 test("高级设置的部位由当前标准驱动并可新增", async () => {
@@ -1171,7 +1171,7 @@ test("草稿校验显示字段错误并聚焦首个未填写字段", async () =>
   const categoryAInput = screen.getByRole("textbox", { name: "品类 A 1" });
   const categoryBInput = screen.getByRole("textbox", { name: "品类 B 1" });
 
-  await userEvent.click(screen.getByRole("button", { name: "保存草稿" }));
+  await userEvent.click(screen.getByRole("button", { name: "暂存修改" }));
   expect(await screen.findByText("请填写标准名称")).toBeVisible();
   expect(screen.getByText("请填写适用商品说明")).toBeVisible();
   expect(screen.getByText("请填写品类 A")).toBeVisible();
@@ -1187,7 +1187,7 @@ test("草稿校验显示字段错误并聚焦首个未填写字段", async () =>
 
   await userEvent.type(productContextInput, "户外背包");
   expect(screen.queryByText("请填写适用商品说明")).not.toBeInTheDocument();
-  await userEvent.click(screen.getByRole("button", { name: "保存草稿" }));
+  await userEvent.click(screen.getByRole("button", { name: "暂存修改" }));
   expect(categoryAInput).toHaveFocus();
   expect(categoryAInput).toHaveAccessibleDescription("请填写品类 A");
 
@@ -1213,7 +1213,7 @@ test("草稿没有标签时就近提示并聚焦创建入口", async () => {
   );
   await userEvent.type(screen.getByRole("textbox", { name: "品类 A 1" }), "箱包");
   await userEvent.type(screen.getByRole("textbox", { name: "品类 B 1" }), "户外背包");
-  await userEvent.click(screen.getByRole("button", { name: "保存草稿" }));
+  await userEvent.click(screen.getByRole("button", { name: "暂存修改" }));
 
   expect(await screen.findByText("请至少增加一个分类标签")).toBeVisible();
   const createButton = screen.getByRole("button", { name: "创建第一个标签" });
@@ -1231,7 +1231,7 @@ test("同次校验清除标签错误时保持用户选择的标签分区", async
   );
 
   await screen.findByRole("textbox", { name: "标准名称" });
-  await userEvent.click(screen.getByRole("button", { name: "保存草稿" }));
+  await userEvent.click(screen.getByRole("button", { name: "暂存修改" }));
   expect(screen.getByRole("textbox", { name: "标准名称" })).toHaveFocus();
 
   const labelsTab = screen.getByRole("button", {
@@ -1279,7 +1279,7 @@ test("标签校验显示字段错误并只清除已修改字段", async () => {
   );
 
   const nameInput = await screen.findByRole("textbox", { name: "标签名称 1" });
-  await userEvent.click(screen.getByRole("button", { name: "保存草稿" }));
+  await userEvent.click(screen.getByRole("button", { name: "暂存修改" }));
   expect(await screen.findByText("请填写标签名称")).toBeVisible();
   expect(screen.getByText("请选择标签分组")).toBeVisible();
   expect(screen.getByText("请填写标签编码")).toBeVisible();
@@ -1351,16 +1351,16 @@ test("已发布标签支持停用、恢复和撤销停用", async () => {
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByRole("heading", { name: "停用此标签？" })).toBeVisible();
     await user.click(within(dialog).getByRole("button", { name: "确认移除" }));
-    expect(screen.getByText("此标签拟在下一版本停用")).toBeVisible();
+    expect(screen.getByText("此标签将在保存并启用后停用")).toBeVisible();
   };
 
   await retire();
-  await user.click(screen.getByRole("button", { name: "恢复到草稿" }));
-  expect(screen.queryByText("此标签拟在下一版本停用")).toBeNull();
+  await user.click(screen.getByRole("button", { name: "撤销停用" }));
+  expect(screen.queryByText("此标签将在保存并启用后停用")).toBeNull();
 
   await retire();
   await user.click(screen.getByRole("button", { name: "撤销当前修改" }));
-  expect(screen.queryByText("此标签拟在下一版本停用")).toBeNull();
+  expect(screen.queryByText("此标签将在保存并启用后停用")).toBeNull();
   expect(screen.getByText("镜框或镜腿造成压迫")).toBeVisible();
 });
 
@@ -1387,10 +1387,9 @@ test("编辑页可携带当前修订的测试记录发布", async () => {
   );
 
   await userEvent.click(
-    await screen.findByRole("button", { name: "发布", exact: true }),
+    await screen.findByRole("button", { name: "检查与测试", exact: true }),
   );
-  await userEvent.click(await screen.findByRole("button", { name: "发布并启用" }));
-  await userEvent.click(await screen.findByRole("button", { name: "验收并发布" }));
+  await userEvent.click(await screen.findByRole("button", { name: "保存并启用" }));
 
   await waitFor(() =>
     expect(standardApiMock.publishClassificationStandardDraft).toHaveBeenCalledWith(
@@ -1404,7 +1403,7 @@ test("编辑页可携带当前修订的测试记录发布", async () => {
   expect(notify).toHaveBeenCalledWith("分类标准已更新并启用");
 });
 
-test("草稿未运行测试时可以确认直接发布", async () => {
+test("有暂存修改但未运行测试时可以直接保存并启用", async () => {
   standardApiMock.classificationStandard.mockResolvedValue({
     ...detail,
     draft_id: validDraft.id,
@@ -1420,16 +1419,14 @@ test("草稿未运行测试时可以确认直接发布", async () => {
   );
 
   await userEvent.click(
-    await screen.findByRole("button", { name: "发布", exact: true }),
+    await screen.findByRole("button", { name: "检查与测试", exact: true }),
   );
   const validationRegion = await screen.findByRole("region", {
     name: "可选测试验收",
   });
   expect(validationRegion.closest("details")).toBeNull();
   expect(within(validationRegion).getByText("可选")).toBeVisible();
-  await userEvent.click(screen.getByRole("button", { name: "发布并启用" }));
-  expect(screen.getByText(/当前没有可关联的已完成测试/)).toBeVisible();
-  await userEvent.click(screen.getByRole("button", { name: "确认直接发布" }));
+  await userEvent.click(screen.getByRole("button", { name: "保存并启用" }));
   await waitFor(() =>
     expect(standardApiMock.publishClassificationStandardDraft).toHaveBeenCalledWith(
       validDraft.id,
@@ -1438,24 +1435,124 @@ test("草稿未运行测试时可以确认直接发布", async () => {
   );
 });
 
-test("草稿保存失败后保留未保存内容并恢复操作状态", async () => {
-  mockEditableDraft();
-  standardApiMock.updateClassificationStandardDraft.mockRejectedValue(
-    new Error("草稿保存冲突"),
+test("独立测试入口仅准备修改内容，准备测试不会启用标准", async () => {
+  standardApiMock.createClassificationStandardDraft.mockResolvedValue(draft);
+  standardApiMock.updateClassificationStandardDraft.mockImplementation(
+    async (_id, payload) => ({
+      ...validDraft,
+      content: payload.content,
+    }),
   );
+  renderEditPage();
+  await openChangeReview();
+  expect(screen.getByRole("button", { name: "准备测试" })).toBeDisabled();
+  await userEvent.click(screen.getByRole("button", { name: "标准设置", exact: true }));
+  await userEvent.type(screen.getByRole("textbox", { name: "标准名称" }), "待测试");
+  await openChangeReview();
+  await userEvent.click(screen.getByRole("button", { name: "准备测试" }));
+  await screen.findByRole("heading", { name: "检验当前修改的分类效果" });
+  expect(standardApiMock.updateClassificationStandardDraft).toHaveBeenCalled();
+  expect(standardApiMock.publishClassificationStandardDraft).not.toHaveBeenCalled();
+  expect(validationApiMock.start).not.toHaveBeenCalled();
+});
+
+test.each(["暂存修改", "保存并启用"])(
+  "%s失败后保留未保存内容并恢复操作状态",
+  async (action) => {
+    mockEditableDraft();
+    standardApiMock.updateClassificationStandardDraft.mockRejectedValue(
+      new Error("草稿保存冲突"),
+    );
+    const notify = renderEditPage();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "标准设置", exact: true }),
+    );
+    const nameInput = screen.getByRole("textbox", { name: "标准名称" });
+    await userEvent.clear(nameInput);
+    await userEvent.type(nameInput, "保存失败仍保留的标准名称");
+    await userEvent.click(screen.getByRole("button", { name: action }));
+
+    await waitFor(() => expect(notify).toHaveBeenCalledWith("草稿保存冲突", "error"));
+    expect(nameInput).toHaveValue("保存失败仍保留的标准名称");
+    expect(screen.getByRole("button", { name: action })).toBeEnabled();
+    expect(standardApiMock.validateClassificationStandardDraft).not.toHaveBeenCalled();
+    expect(standardApiMock.publishClassificationStandardDraft).not.toHaveBeenCalled();
+  },
+);
+
+test("编辑生效标准可以直接保存并启用，不必先暂存或测试", async () => {
+  standardApiMock.createClassificationStandardDraft.mockResolvedValue(draft);
+  const update = deferred();
+  standardApiMock.updateClassificationStandardDraft.mockReturnValue(update.promise);
+  standardApiMock.publishClassificationStandardDraft.mockResolvedValue(detail);
   const notify = renderEditPage();
   await userEvent.click(
     await screen.findByRole("button", { name: "标准设置", exact: true }),
   );
   const nameInput = screen.getByRole("textbox", { name: "标准名称" });
   await userEvent.clear(nameInput);
-  await userEvent.type(nameInput, "保存失败仍保留的标准名称");
-  await userEvent.click(screen.getByRole("button", { name: "保存草稿" }));
+  await userEvent.type(nameInput, "新生效名称");
+  await userEvent.click(screen.getByRole("button", { name: "保存并启用" }));
+  await waitFor(() =>
+    expect(standardApiMock.updateClassificationStandardDraft).toHaveBeenCalled(),
+  );
+  expect(screen.getByRole("button", { name: "保存并启用中" })).toBeDisabled();
+  expect(standardApiMock.publishClassificationStandardDraft).not.toHaveBeenCalled();
+  await act(async () =>
+    update.resolve({
+      ...validDraft,
+      content: { ...content, name: "新生效名称" },
+    }),
+  );
+  await waitFor(() => expect(notify).toHaveBeenCalledWith("分类标准已更新并启用"));
+  expect(standardApiMock.updateClassificationStandardDraft).toHaveBeenCalledWith(
+    draft.id,
+    expect.objectContaining({
+      content: expect.objectContaining({ name: "新生效名称" }),
+    }),
+  );
+  expect(standardApiMock.publishClassificationStandardDraft).toHaveBeenCalledWith(
+    draft.id,
+    expect.objectContaining({ expected_revision: 2, validation_run_id: null }),
+  );
+  expect(validationApiMock.start).not.toHaveBeenCalled();
+  expect(screen.queryByRole("dialog")).toBeNull();
+});
 
-  await waitFor(() => expect(notify).toHaveBeenCalledWith("草稿保存冲突", "error"));
-  expect(nameInput).toHaveValue("保存失败仍保留的标准名称");
-  expect(screen.getByRole("button", { name: "保存草稿" })).toBeEnabled();
-  expect(standardApiMock.validateClassificationStandardDraft).not.toHaveBeenCalled();
+test("测试后修改内容，保存并启用不沿用旧测试记录", async () => {
+  mockEditableDraft({ runs: [readyRun] });
+  standardApiMock.updateClassificationStandardDraft.mockImplementation(
+    async (_id, payload) => ({
+      ...validDraft,
+      revision: 3,
+      content: payload.content,
+    }),
+  );
+  standardApiMock.publishClassificationStandardDraft.mockResolvedValue(detail);
+  const notify = renderEditPage();
+  await waitFor(() => expect(validationApiMock.run).toHaveBeenCalledWith(readyRun.id));
+  await userEvent.click(screen.getByRole("button", { name: "标准设置", exact: true }));
+  await userEvent.type(screen.getByRole("textbox", { name: "标准名称" }), "修改");
+  await userEvent.click(screen.getByRole("button", { name: "保存并启用" }));
+  await waitFor(() => expect(notify).toHaveBeenCalledWith("分类标准已更新并启用"));
+  expect(standardApiMock.publishClassificationStandardDraft).toHaveBeenCalledWith(
+    validDraft.id,
+    expect.objectContaining({ expected_revision: 3, validation_run_id: null }),
+  );
+});
+
+test("启用成功后刷新失败，提示实际已启用", async () => {
+  mockEditableDraft();
+  standardApiMock.publishClassificationStandardDraft.mockResolvedValue(detail);
+  const { result, notify } = renderDraftController({
+    mode: "edit",
+    selectedId: standard.id,
+  });
+  await waitFor(() => expect(result.current.draft?.id).toBe(validDraft.id));
+  standardApiMock.classificationStandard.mockRejectedValue(new Error("刷新失败"));
+  await act(async () => result.current.publish());
+  expect(notify).toHaveBeenCalledWith("标准已启用，页面刷新失败：刷新失败", "error");
+  expect(standardApiMock.publishClassificationStandardDraft).toHaveBeenCalledTimes(1);
 });
 
 test("发布失败后保留变更说明并恢复发布操作状态", async () => {
@@ -1464,12 +1561,11 @@ test("发布失败后保留变更说明并恢复发布操作状态", async () =>
     new Error("发布版本冲突"),
   );
   const notify = renderEditPage();
-  await openPublishReview();
+  await openChangeReview();
   const reasonInput = screen.getByRole("textbox", { name: "变更说明" });
   await userEvent.clear(reasonInput);
   await userEvent.type(reasonInput, "发布失败后继续使用的说明");
-  await userEvent.click(screen.getByRole("button", { name: "发布并启用" }));
-  await userEvent.click(screen.getByRole("button", { name: "验收并发布" }));
+  await userEvent.click(screen.getByRole("button", { name: "保存并启用" }));
 
   await waitFor(() =>
     expect(standardApiMock.publishClassificationStandardDraft).toHaveBeenCalledWith(
@@ -1481,9 +1577,9 @@ test("发布失败后保留变更说明并恢复发布操作状态", async () =>
       },
     ),
   );
-  expect(notify).toHaveBeenCalledWith("发布版本冲突", "error");
+  expect(notify).toHaveBeenCalledWith("修改已暂存，尚未启用：发布版本冲突", "error");
   expect(reasonInput).toHaveValue("发布失败后继续使用的说明");
-  expect(screen.getByRole("button", { name: "发布并启用" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "保存并启用" })).toBeEnabled();
 });
 
 test("编辑页加载验证来源与运行记录并允许选择另一条记录", async () => {
@@ -1504,7 +1600,7 @@ test("编辑页加载验证来源与运行记录并允许选择另一条记录",
     expect(validationApiMock.runs).toHaveBeenCalledWith(validDraft.id);
     expect(validationApiMock.run).toHaveBeenCalledWith(readyRun.id);
   });
-  await openPublishReview();
+  await openChangeReview();
   expect(screen.getByRole("combobox", { name: "样本来源" })).toHaveValue(
     validationSource.result_version_id,
   );
@@ -1584,7 +1680,7 @@ test("开始样本验证提交当前草稿修订、来源、规模和验证目�
   validationApiMock.start.mockResolvedValue(queuedRun);
   validationApiMock.run.mockResolvedValue(queuedRun);
   const notify = renderEditPage();
-  await openPublishReview();
+  await openChangeReview();
   await userEvent.selectOptions(
     screen.getByRole("combobox", { name: "验证目的" }),
     "semantic_ab",
@@ -1634,15 +1730,14 @@ test("原始数据测试完成后无需额外审批即可验收发布", async ()
   );
 
   await userEvent.click(
-    await screen.findByRole("button", { name: "发布", exact: true }),
+    await screen.findByRole("button", { name: "检查与测试", exact: true }),
   );
   await userEvent.selectOptions(
     screen.getByRole("combobox", { name: "样本来源" }),
     validationSource.result_version_id,
   );
   expect(screen.getByRole("option", { name: /真实手套退货评论/ })).toBeInTheDocument();
-  await userEvent.click(screen.getByRole("button", { name: "发布并启用" }));
-  await userEvent.click(screen.getByRole("button", { name: "验收并发布" }));
+  await userEvent.click(screen.getByRole("button", { name: "保存并启用" }));
 
   await waitFor(() =>
     expect(standardApiMock.publishClassificationStandardDraft).toHaveBeenCalledWith(
@@ -1655,86 +1750,118 @@ test("原始数据测试完成后无需额外审批即可验收发布", async ()
   expect(notify).toHaveBeenCalledWith("分类标准已更新并启用");
 });
 
-test("新建页一次维护品类和标签并保存草稿", async () => {
-  const notify = vi.fn();
-  const createdDraft = {
-    ...draft,
-    id: "classification-standard-draft-backpack",
-    standard_id: "classification-standard-backpack",
-    is_new: true,
-    base_version_no: 0,
-    content: {
-      ...content,
-      name: "背包分类标准",
-      product_context: "户外背包",
-      variants: [{ category_a: "箱包", category_b: "户外背包", attributes: {} }],
-      labels: [],
-    },
-  };
-  standardApiMock.createClassificationStandard.mockResolvedValue(createdDraft);
-  standardApiMock.updateClassificationStandardDraft.mockImplementation(
-    async (_draftId, payload) => ({
-      ...createdDraft,
-      revision: 2,
-      content: payload.content,
-      validation: { blocking: [], warnings: [] },
-    }),
-  );
-  render(
-    <ClassificationStandardsPage route={{ query: { view: "new" } }} notify={notify} />,
-  );
-
-  await userEvent.type(
-    await screen.findByRole("textbox", { name: "标准名称" }),
-    "背包分类标准",
-  );
-  await userEvent.type(
-    screen.getByRole("textbox", { name: "适用商品说明" }),
-    "户外背包",
-  );
-  await userEvent.click(screen.getByRole("button", { name: "标准设置", exact: true }));
-  await userEvent.type(screen.getByRole("textbox", { name: "品类 A 1" }), "箱包");
-  await userEvent.type(screen.getByRole("textbox", { name: "品类 B 1" }), "户外背包");
-  await userEvent.click(screen.getByRole("button", { name: "标签管理", exact: true }));
-  await userEvent.click(screen.getByRole("button", { name: "增加标签", exact: true }));
-  await userEvent.selectOptions(screen.getByLabelText("标签分组 1"), "质量与耐用");
-  await userEvent.type(screen.getByRole("textbox", { name: "标签名称 1" }), "结构损坏");
-  await userEvent.clear(screen.getByRole("textbox", { name: "标签编码 1" }));
-  await userEvent.type(
-    screen.getByRole("textbox", { name: "标签编码 1" }),
-    "BACKPACK_DAMAGE",
-  );
-  await userEvent.type(
-    screen.getByRole("textbox", { name: "判定说明（可选） 1" }),
-    "背包主体或拉链损坏",
-  );
-  await userEvent.type(
-    screen.getByRole("textbox", { name: "搜索别名 1" }),
-    "damage, zipper",
-  );
-  await userEvent.click(screen.getByRole("button", { name: "保存草稿" }));
-
-  await waitFor(() =>
-    expect(standardApiMock.createClassificationStandard).toHaveBeenCalledWith({
-      name: "背包分类标准",
-      product_context: "户外背包",
-      category_a: "箱包",
-      category_b: "户外背包",
-    }),
-  );
-  expect(standardApiMock.publishClassificationStandardDraft).not.toHaveBeenCalled();
-  expect(standardApiMock.updateClassificationStandardDraft).toHaveBeenCalledWith(
-    createdDraft.id,
-    expect.objectContaining({
-      content: expect.objectContaining({
-        labels: expect.arrayContaining([
-          expect.objectContaining({ keywords: ["damage", "zipper"] }),
-        ]),
+test.each(["暂存修改", "保存并启用"])(
+  "新建页一次维护品类和标签并%s",
+  async (action) => {
+    const notify = vi.fn();
+    const createdDraft = {
+      ...draft,
+      id: "classification-standard-draft-backpack",
+      standard_id: "classification-standard-backpack",
+      is_new: true,
+      base_version_no: 0,
+      content: {
+        ...content,
+        name: "背包分类标准",
+        product_context: "户外背包",
+        variants: [{ category_a: "箱包", category_b: "户外背包", attributes: {} }],
+        labels: [],
+      },
+    };
+    standardApiMock.createClassificationStandard.mockResolvedValue(createdDraft);
+    standardApiMock.publishClassificationStandardDraft.mockResolvedValue({
+      ...detail,
+      id: createdDraft.standard_id,
+    });
+    standardApiMock.updateClassificationStandardDraft.mockImplementation(
+      async (_draftId, payload) => ({
+        ...createdDraft,
+        revision: 2,
+        content: payload.content,
+        validation: { blocking: [], warnings: [] },
       }),
-    }),
-  );
-  expect(notify).toHaveBeenCalledWith("修改已保存");
-});
+    );
+    render(
+      <ClassificationStandardsPage
+        route={{ query: { view: "new" } }}
+        notify={notify}
+      />,
+    );
+
+    await userEvent.type(
+      await screen.findByRole("textbox", { name: "标准名称" }),
+      "背包分类标准",
+    );
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "适用商品说明" }),
+      "户外背包",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "标准设置", exact: true }),
+    );
+    await userEvent.type(screen.getByRole("textbox", { name: "品类 A 1" }), "箱包");
+    await userEvent.type(screen.getByRole("textbox", { name: "品类 B 1" }), "户外背包");
+    await userEvent.click(
+      screen.getByRole("button", { name: "标签管理", exact: true }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "增加标签", exact: true }),
+    );
+    await userEvent.selectOptions(screen.getByLabelText("标签分组 1"), "质量与耐用");
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "标签名称 1" }),
+      "结构损坏",
+    );
+    await userEvent.clear(screen.getByRole("textbox", { name: "标签编码 1" }));
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "标签编码 1" }),
+      "BACKPACK_DAMAGE",
+    );
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "判定说明（可选） 1" }),
+      "背包主体或拉链损坏",
+    );
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "搜索别名 1" }),
+      "damage, zipper",
+    );
+    await userEvent.click(screen.getByRole("button", { name: action }));
+
+    await waitFor(() =>
+      expect(standardApiMock.createClassificationStandard).toHaveBeenCalledWith({
+        name: "背包分类标准",
+        product_context: "户外背包",
+        category_a: "箱包",
+        category_b: "户外背包",
+      }),
+    );
+    if (action === "暂存修改") {
+      expect(standardApiMock.publishClassificationStandardDraft).not.toHaveBeenCalled();
+    } else {
+      await waitFor(() =>
+        expect(standardApiMock.publishClassificationStandardDraft).toHaveBeenCalledWith(
+          createdDraft.id,
+          expect.objectContaining({ expected_revision: 2, validation_run_id: null }),
+        ),
+      );
+    }
+    expect(standardApiMock.updateClassificationStandardDraft).toHaveBeenCalledWith(
+      createdDraft.id,
+      expect.objectContaining({
+        content: expect.objectContaining({
+          labels: expect.arrayContaining([
+            expect.objectContaining({ keywords: ["damage", "zipper"] }),
+          ]),
+        }),
+      }),
+    );
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith(
+        action === "暂存修改" ? "修改已暂存，尚未启用" : "分类标准已创建并启用",
+      ),
+    );
+  },
+);
 
 test("删除已发布标准时明确执行停用", async () => {
   standardApiMock.classificationStandards.mockResolvedValue([
@@ -1809,7 +1936,7 @@ test("停用标准保持可浏览，设置禁止修改", async () => {
   await userEvent.click(screen.getByRole("button", { name: "标准设置" }));
   expect(screen.getByRole("textbox", { name: "标准名称" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "增加品类" })).toBeDisabled();
-  expect(screen.queryByRole("button", { name: "保存草稿" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "暂存修改" })).toBeNull();
 });
 
 test("Review 上传入口不依赖退货数据资产", async () => {
@@ -1973,7 +2100,7 @@ test("语义策略保存边界示例并将别名降为搜索用途", async () =>
   expect(
     screen.getByText("仅用于管理页面搜索，不参与当前语义策略分类。"),
   ).toBeVisible();
-  await userEvent.click(screen.getByRole("button", { name: "保存草稿" }));
+  await userEvent.click(screen.getByRole("button", { name: "暂存修改" }));
   await waitFor(() =>
     expect(standardApiMock.updateClassificationStandardDraft).toHaveBeenCalled(),
   );
@@ -2049,7 +2176,7 @@ test("结构检查定位缺名称和方向的标签，规则修正只写草稿",
     />,
   );
   await userEvent.click(
-    await screen.findByRole("button", { name: "发布", exact: true }),
+    await screen.findByRole("button", { name: "检查与测试", exact: true }),
   );
   const region = screen.getByRole("region", { name: "结构检查" });
   expect(within(region).getByText("必填信息不完整 · 1 项")).toBeVisible();
@@ -2060,14 +2187,18 @@ test("结构检查定位缺名称和方向的标签，规则修正只写草稿",
   await waitFor(() =>
     expect(screen.getByRole("textbox", { name: "标签名称 1" })).toHaveFocus(),
   );
-  await userEvent.click(screen.getByRole("button", { name: "发布", exact: true }));
+  await userEvent.click(
+    screen.getByRole("button", { name: "检查与测试", exact: true }),
+  );
   await userEvent.click(
     within(region).getAllByRole("button", { name: "去修正 尺码 → 不合身 → 偏小" })[1],
   );
   await waitFor(() =>
     expect(screen.getByRole("checkbox", { name: "负向", exact: true })).toHaveFocus(),
   );
-  await userEvent.click(screen.getByRole("button", { name: "发布", exact: true }));
+  await userEvent.click(
+    screen.getByRole("button", { name: "检查与测试", exact: true }),
+  );
   await userEvent.click(
     screen.getByRole("button", { name: "去修正 校验规则引用未知标签 OLD_LABEL" }),
   );
@@ -2076,7 +2207,7 @@ test("结构检查定位缺名称和方向的标签，规则修正只写草稿",
     screen.getByRole("button", { name: "删除中性退货原因规则 OLD_LABEL" }),
   );
   expect(standardApiMock.updateClassificationStandardDraft).not.toHaveBeenCalled();
-  await userEvent.click(screen.getByRole("button", { name: "保存草稿", exact: true }));
+  await userEvent.click(screen.getByRole("button", { name: "暂存修改", exact: true }));
   await waitFor(() =>
     expect(standardApiMock.updateClassificationStandardDraft).toHaveBeenCalled(),
   );
@@ -2116,7 +2247,7 @@ test("未改动的旧草稿保存时重新结构检查而不增加修订", async
     />,
   );
   await userEvent.click(
-    await screen.findByRole("button", { name: "保存草稿", exact: true }),
+    await screen.findByRole("button", { name: "暂存修改", exact: true }),
   );
   await waitFor(() =>
     expect(standardApiMock.validateClassificationStandardDraft).toHaveBeenCalledWith(
@@ -2125,7 +2256,9 @@ test("未改动的旧草稿保存时重新结构检查而不增加修订", async
     ),
   );
   expect(standardApiMock.updateClassificationStandardDraft).not.toHaveBeenCalled();
-  await userEvent.click(screen.getByRole("button", { name: "发布", exact: true }));
+  await userEvent.click(
+    screen.getByRole("button", { name: "检查与测试", exact: true }),
+  );
   expect(screen.getByText("必填信息不完整 · 1 项")).toBeVisible();
 });
 
@@ -2149,7 +2282,7 @@ test("不能定位的结构问题仅展示说明，失效规则保留修正入�
   expect(screen.getByRole("button", { name: "去修正 规则失效" })).toBeVisible();
 });
 
-test.each([1, 2])("v%s 标签可以清空判定说明并保存草稿", async (structureVersion) => {
+test.each([1, 2])("v%s 标签可以清空判定说明并暂存修改", async (structureVersion) => {
   const editableContent = {
     ...content,
     structure_version: structureVersion,
@@ -2188,7 +2321,7 @@ test.each([1, 2])("v%s 标签可以清空判定说明并保存草稿", async (st
     name: "判定说明（可选） 1",
   });
   await userEvent.clear(description);
-  await userEvent.click(screen.getByRole("button", { name: "保存草稿", exact: true }));
+  await userEvent.click(screen.getByRole("button", { name: "暂存修改", exact: true }));
   await waitFor(() =>
     expect(standardApiMock.updateClassificationStandardDraft).toHaveBeenCalled(),
   );

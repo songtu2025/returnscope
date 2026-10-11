@@ -130,9 +130,9 @@ export function ClassificationLabelWorkbench({
             <div className="label-workspace-scroll" key={`${selected}-${removed}`}>
               {removed ? (
                 <div className="label-workspace-notice">
-                  <h3>此标签拟在下一版本停用</h3>
-                  <p>当前线上标准与历史结果不受影响，发布草稿后才生效。</p>
-                  {editable && <Button onClick={restoreLabel}>恢复到草稿</Button>}
+                  <h3>此标签将在保存并启用后停用</h3>
+                  <p>当前生效标准与已有结果不变，保存并启用后生效。</p>
+                  {editable && <Button onClick={restoreLabel}>撤销停用</Button>}
                 </div>
               ) : (
                 <>

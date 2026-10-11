@@ -1,6 +1,7 @@
 import { StandardStrategyChanges } from "./StandardStrategyChanges";
 import { StandardLabelChange } from "./StandardLabelChange";
 import Input from "antd/es/input";
+import Button from "antd/es/button";
 import { ClassificationHierarchyChanges } from "./ClassificationHierarchyEditor";
 import { ClassificationStandardValidation } from "./ClassificationStandardValidation";
 import { ClassificationStructureIssues } from "./ClassificationStructureIssues";
@@ -29,15 +30,16 @@ export function StandardWorkspaceReview(context) {
     fixIssue,
     baseContent,
     changes,
+    onSave,
   } = context;
   return (
     <div className="standard-review-panel" hidden={section !== "review"}>
       <section className="standard-editor-section standard-change-preview">
         <header>
-          <h2>发布前检查</h2>
-          <span>对比当前启用版本</span>
+          <h2>变更检查</h2>
+          <span>对比当前生效标准</span>
         </header>
-        <p>保存草稿不会影响运行中的标准。可以直接发布，也可以先测试验收。</p>
+        <p>可以直接保存并启用，也可以先测试分类效果。</p>
         <ClassificationHierarchyChanges content={content} baseContent={baseContent} />
         <StandardStrategyChanges content={content} baseContent={baseContent} />
         {changes.length ? (
@@ -50,7 +52,7 @@ export function StandardWorkspaceReview(context) {
             />
           ))
         ) : (
-          <p>标签没有变化。基本信息与分类设置的修改会随草稿一起保存。</p>
+          <p>标签没有变化。基本信息与分类设置的修改会一起保存。</p>
         )}
         {JSON.stringify(content.validation_rules) !==
           JSON.stringify(baseContent?.validation_rules ?? {}) && (
@@ -75,7 +77,7 @@ export function StandardWorkspaceReview(context) {
             onChange={(event) => onReasonChange(event.target.value)}
           />
         </label>
-        <span>用于版本记录，不影响智能体判断。</span>
+        <span>用于修改记录，不影响智能体判断。</span>
       </section>
 
       <section
@@ -85,7 +87,7 @@ export function StandardWorkspaceReview(context) {
         <header className="standard-required-validation-heading">
           <div>
             <h2 id="standard-required-validation-title">可选测试验收</h2>
-            <p>运行测试可辅助判断分类效果，但不会代替你的发布决定。</p>
+            <p>测试不改变生效标准，也不会生成正式分类结果。</p>
           </div>
           <span>可选</span>
         </header>
@@ -105,7 +107,14 @@ export function StandardWorkspaceReview(context) {
             onSelectRun={onValidationSelect}
           />
         ) : (
-          <p>请先保存草稿，再按需运行测试验收。</p>
+          <div>
+            <p>
+              {dirty ? "准备测试会暂存当前修改，不会启用。" : "修改内容后可准备测试。"}
+            </p>
+            <Button disabled={Boolean(busy) || !dirty} onClick={onSave}>
+              {busy === "save" ? "准备中" : "准备测试"}
+            </Button>
+          </div>
         )}
       </section>
     </div>
