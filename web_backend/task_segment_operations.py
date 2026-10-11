@@ -14,6 +14,12 @@ from web_backend.task_state import summarize_task_status
 from web_backend.tasks.scheduling import TaskSchedulingMixin
 from web_backend.tasks.segment_retry import TaskSegmentRetryMixin
 
+_SEGMENT_ACTION_MESSAGES = {
+    "pause": "Listing 暂停请求已提交",
+    "resume": "Listing 已重新进入等待队列",
+    "cancel": "Listing 取消请求已提交",
+}
+
 
 class TaskSegmentOperationsMixin(TaskSchedulingMixin, TaskSegmentRetryMixin):
     _insert_audit: Callable[..., None]
@@ -115,11 +121,7 @@ class TaskSegmentOperationsMixin(TaskSchedulingMixin, TaskSegmentRetryMixin):
                     task_id,
                     f"segment_{action}",
                     stage,
-                    {
-                        "pause": "Listing 暂停请求已提交",
-                        "resume": "Listing 已重新进入等待队列",
-                        "cancel": "Listing 取消请求已提交",
-                    }[action],
+                    _SEGMENT_ACTION_MESSAGES[action],
                     actor_id,
                     json_text(event_data),
                     now,
@@ -142,7 +144,7 @@ class TaskSegmentOperationsMixin(TaskSchedulingMixin, TaskSegmentRetryMixin):
 
     @staticmethod
     def _validate_segment_action(action: str, note: str) -> str:
-        if action not in {"pause", "resume", "cancel"}:
+        if action not in _SEGMENT_ACTION_MESSAGES:
             raise ValueError("不支持的 Listing 操作")
         clean_note = note.strip()
         if action == "cancel" and not clean_note:
