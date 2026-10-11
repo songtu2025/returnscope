@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 
 import pytest
-from test_config_service import _create_version, _database, _secret_box
+from config_service_helpers import _create_version, _database, _secret_box
 from test_validation_run_service import (
     ACTOR_ID,
     CONFIG_VERSION_ID,

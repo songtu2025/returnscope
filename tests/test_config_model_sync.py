@@ -2,8 +2,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from config_service_helpers import _create_version, _database, _secret_box
 from task_execution_helpers import audit_rows, trace_queries
-from test_config_service import _create_version, _database, _secret_box
 
 from web_backend.config_service import ConfigService
 

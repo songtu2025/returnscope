@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from test_config_service import _database
+from config_service_helpers import _database
 
 from web_backend.common import add_audit, insert_audit, list_audit
 
