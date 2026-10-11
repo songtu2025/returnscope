@@ -74,18 +74,18 @@ function BatchFilters({ filters, onFilters, updateRoute }) {
 function BatchSummary({ batch, pending }) {
   return (
     <>
-      <div>
+      <div role="cell">
         <span className={`review-batch-status ${batch.status}`}>
           {BATCH_STATUS_LABELS[batch.status] ?? batch.status}
         </span>
         <small>修订 #{batch.revision ?? "—"}</small>
       </div>
-      <div>
+      <div role="cell">
         <b>{batch.listing || "未提供 Listing"}</b>
         <span>分类结果 v{batch.base_version_no ?? "—"}</span>
         <small>{batch.store_site || "未提供店铺/站点"}</small>
       </div>
-      <div>
+      <div role="cell">
         <b>
           {Number(batch.resolved_count || 0).toLocaleString()} /{" "}
           {Number(batch.record_count || 0).toLocaleString()}
@@ -102,11 +102,11 @@ function BatchRow({ batch, updateRoute }) {
   return (
     <article className="review-batch-row" role="row" key={batch.id}>
       <BatchSummary batch={batch} pending={pending} />
-      <div>
+      <div role="cell">
         <b>{batch.creator_name || "未提供创建人"}</b>
         <span>{formatTime(batch.updated_at || batch.created_at)}</span>
       </div>
-      <div>
+      <div role="cell">
         <Button
           size="small"
           icon={<CaretRight size={15} />}
@@ -135,13 +135,18 @@ function BatchRow({ batch, updateRoute }) {
 /** @param {{items: ReviewBatch[], loading: boolean, updateRoute: ReviewBatchListViewProps["updateRoute"]}} props */
 function BatchTable({ items, loading, updateRoute }) {
   return (
-    <div className={`review-batch-table ${loading ? "is-loading" : ""}`}>
+    <div
+      className={`review-batch-table ${loading ? "is-loading" : ""}`}
+      role="table"
+      aria-label="复核批次"
+      aria-busy={loading}
+    >
       <div className="review-batch-table-head" role="row">
-        <span>批次状态</span>
-        <span>来源结果</span>
-        <span>处理进度</span>
-        <span>创建与更新</span>
-        <span>操作</span>
+        <span role="columnheader">批次状态</span>
+        <span role="columnheader">来源结果</span>
+        <span role="columnheader">处理进度</span>
+        <span role="columnheader">创建与更新</span>
+        <span role="columnheader">操作</span>
       </div>
       {items.map((batch) => (
         <BatchRow key={batch.id} batch={batch} updateRoute={updateRoute} />
@@ -150,8 +155,8 @@ function BatchTable({ items, loading, updateRoute }) {
   );
 }
 
-/** @param {Pick<ReviewBatchListViewProps, "route" | "onEmptyAction">} props */
-function BatchEmptyState({ route, onEmptyAction }) {
+/** @param {Pick<ReviewBatchListViewProps, "route" | "onEmptyAction" | "updateRoute">} props */
+function BatchEmptyState({ route, onEmptyAction, updateRoute }) {
   return (
     <EmptyState
       icon={ListChecks}
@@ -162,7 +167,11 @@ function BatchEmptyState({ route, onEmptyAction }) {
           : "先从待复核的分类结果创建批次，再逐条确认或修改分类。"
       }
       action={
-        !route.q && !route.status ? (
+        route.q || route.status ? (
+          <Button onClick={() => updateRoute({ q: "", status: "", page: 1 })}>
+            清除筛选
+          </Button>
+        ) : (
           <Button
             type="primary"
             icon={<CaretRight size={16} />}
@@ -171,7 +180,7 @@ function BatchEmptyState({ route, onEmptyAction }) {
           >
             查看待复核结果
           </Button>
-        ) : null
+        )
       }
     />
   );
@@ -200,11 +209,21 @@ function BatchContents({ state, route, onRetry, updateRoute, onEmptyAction }) {
   return (
     <section className="review-batch-list-card">
       {state.loading && !state.data && <InlineLoading label="正在读取复核批次…" />}
-      {state.error && <ReviewBatchError error={state.error} onRetry={onRetry} />}
-      {!state.loading && !state.error && items.length === 0 && (
-        <BatchEmptyState route={route} onEmptyAction={onEmptyAction} />
+      {state.error && (
+        <ReviewBatchError
+          error={state.error}
+          onRetry={onRetry}
+          hasData={Boolean(state.data)}
+        />
       )}
-      {items.length > 0 && !state.error && (
+      {!state.loading && !state.error && items.length === 0 && (
+        <BatchEmptyState
+          route={route}
+          onEmptyAction={onEmptyAction}
+          updateRoute={updateRoute}
+        />
+      )}
+      {items.length > 0 && (
         <>
           <BatchTable items={items} loading={state.loading} updateRoute={updateRoute} />
           <BatchPagination data={state.data} route={route} updateRoute={updateRoute} />

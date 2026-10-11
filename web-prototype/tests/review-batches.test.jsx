@@ -1059,3 +1059,45 @@ test("快速切换批次时旧请求不会覆盖新批次", async () => {
   expect(screen.getByText("NEW001 复核批次")).toBeVisible();
   expect(screen.queryByText("SR001 复核批次")).not.toBeInTheDocument();
 });
+
+test("批次更新失败保留上次列表，重试恢复且权限失效清除数据", async () => {
+  reviewBatchApiMock.reviewBatches
+    .mockResolvedValueOnce({ items: [baseBatch], total: 1 })
+    .mockRejectedValueOnce(new Error("连接中断"))
+    .mockRejectedValueOnce(Object.assign(new Error("无权访问"), { status: 403 }))
+    .mockResolvedValueOnce({ items: [baseBatch], total: 1 });
+  const updateRoute = vi.fn();
+  const { rerender } = render(
+    <ReviewBatchList route={reviewBatchRouteState({})} updateRoute={updateRoute} />,
+  );
+  await screen.findByText("复核员甲");
+  rerender(
+    <ReviewBatchList
+      route={reviewBatchRouteState({ q: "更新" })}
+      updateRoute={updateRoute}
+    />,
+  );
+  await screen.findByText("复核批次更新失败，当前显示上一次数据");
+  expect(screen.getByText("复核员甲")).toBeVisible();
+  expect(screen.getByRole("table", { name: "复核批次" })).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "重新加载" }));
+  await screen.findByText("无权访问");
+  expect(screen.queryByText("复核员甲")).not.toBeInTheDocument();
+  expect(screen.queryByText("没有符合条件的复核批次")).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "重新加载" }));
+  await screen.findByText("复核员甲");
+});
+
+test("批次筛选为空提供清除筛选且保留来源版本", async () => {
+  reviewBatchApiMock.reviewBatches.mockResolvedValue({ items: [], total: 0 });
+  const updateRoute = vi.fn();
+  render(
+    <ReviewBatchList
+      route={reviewBatchRouteState({ q: "无结果", status: "draft" })}
+      updateRoute={updateRoute}
+    />,
+  );
+  await screen.findByText("没有符合条件的复核批次");
+  await userEvent.click(screen.getByRole("button", { name: "清除筛选" }));
+  expect(updateRoute).toHaveBeenCalledWith({ q: "", status: "", page: 1 });
+});

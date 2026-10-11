@@ -15,7 +15,6 @@ export function ResultPoolContent(context) {
     runPrimaryAction,
     data,
     loading,
-    error,
     totalPages,
     changePage,
     changePageSize,
@@ -23,19 +22,22 @@ export function ResultPoolContent(context) {
   return (
     <section className="result-pool-card">
       <ResultPoolStatus {...context} />{" "}
-      {data && data.items.length > 0 && !error && (
+      {data && data.items.length > 0 && (
         <>
           <div
             className={`result-pool-table is-selecting ${loading ? "is-loading" : ""}`}
+            role="table"
+            aria-label="分类结果版本"
+            aria-busy={loading}
           >
             <div className="result-pool-head" role="row">
-              <span>选择</span>
-              <span>结果状态</span>
-              <span>Listing / 店铺</span>
-              <span>产品名称</span>
-              <span>数据规模</span>
-              <span>发布时间</span>
-              <span>操作</span>
+              <span role="columnheader">选择</span>
+              <span role="columnheader">结果状态</span>
+              <span role="columnheader">Listing / 店铺</span>
+              <span role="columnheader">产品名称</span>
+              <span role="columnheader">数据规模</span>
+              <span role="columnheader">发布时间</span>
+              <span role="columnheader">操作</span>
             </div>
             {data.items.map((result) => (
               <ResultPoolRow

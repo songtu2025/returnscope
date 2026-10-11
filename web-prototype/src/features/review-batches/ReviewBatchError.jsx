@@ -3,14 +3,14 @@ import Button from "antd/es/button";
 
 /** @typedef {import("../../shared/api/reviewBatchContracts").ReviewRequestError} ReviewRequestError */
 
-/** @param {{error: ReviewRequestError, onRetry: () => void | Promise<unknown>}} props */
-export function ReviewBatchError({ error, onRetry }) {
+/** @param {{error: ReviewRequestError, onRetry: () => void | Promise<unknown>, hasData?: boolean}} props */
+export function ReviewBatchError({ error, onRetry, hasData = false }) {
   const serviceUnavailable = error?.status === 404;
   return (
     <div className="review-batch-error" role="alert">
       <WarningCircle size={24} />
       <div>
-        <b>复核批次读取失败</b>
+        <b>{hasData ? "复核批次更新失败，当前显示上一次数据" : "复核批次读取失败"}</b>
         <p>
           {serviceUnavailable
             ? "新版复核服务尚不可用，请稍后重新加载"

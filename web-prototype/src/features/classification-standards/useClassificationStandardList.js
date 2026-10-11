@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { classificationStandardApi } from "../../shared/api/classificationStandardApi";
+import { errorStatus } from "../../shared/api/requestErrors";
 import { classificationDraftErrorMessage as errorMessage } from "./classificationDraftSelection";
 /** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardSummary} ClassificationStandardSummary */
 /** @param {ClassificationStandardSummary[]} standards @param {string} query @param {"all" | "active" | "inactive"} statusFilter */
@@ -34,16 +35,30 @@ export function useClassificationStandardList(notify) {
     /** @type {"all" | "active" | "inactive"} */ ("all"),
   );
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [hasData, setHasData] = useState(false);
   const loadStandards = useCallback(async () => {
-    const values = await classificationStandardApi.classificationStandards();
-    setStandards(values);
-    return values;
+    setLoading(true);
+    setError("");
+    try {
+      const values = await classificationStandardApi.classificationStandards();
+      setStandards(values);
+      setHasData(true);
+      return values;
+    } catch (failure) {
+      setError(errorMessage(failure));
+      if ([401, 403].includes(Number(errorStatus(failure)))) {
+        setStandards([]);
+        setHasData(false);
+      }
+      throw failure;
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    loadStandards()
-      .catch((error) => notify(errorMessage(error), "error"))
-      .finally(() => setLoading(false));
+    loadStandards().catch((error) => notify(errorMessage(error), "error"));
   }, [loadStandards, notify]);
 
   const filteredStandards = useMemo(
@@ -57,6 +72,8 @@ export function useClassificationStandardList(notify) {
     statusFilter,
     setStatusFilter,
     loading,
+    error,
+    hasData,
     loadStandards,
     filteredStandards,
     totals,

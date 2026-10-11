@@ -2221,3 +2221,25 @@ test("没有判定说明的已发布标签展示名称路径语义提示", async
   expect(await screen.findByText("依据标签名称和完整路径理解")).toBeVisible();
   expect(screen.getByText("尺码与适配 → 佩戴压迫")).toBeVisible();
 });
+
+test("标准列表读取失败不会展示空状态和零统计，重试可恢复", async () => {
+  standardApiMock.classificationStandards
+    .mockRejectedValueOnce(new Error("连接中断"))
+    .mockResolvedValueOnce([]);
+  render(<ClassificationStandardsPage route={{ query: {} }} notify={vi.fn()} />);
+  await screen.findByText("分类标准读取失败");
+  expect(screen.queryByText("没有符合条件的分类标准")).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("分类标准汇总")).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "重新加载" }));
+  await screen.findByText("暂无分类标准");
+  expect(screen.getByLabelText("分类标准汇总")).toBeVisible();
+});
+
+test("标准列表筛选无结果可以清除而不跳转新建", async () => {
+  render(<ClassificationStandardsPage route={{ query: {} }} notify={vi.fn()} />);
+  const input = await screen.findByRole("textbox", { name: "搜索分类标准" });
+  await userEvent.type(input, "不匹配任何标准");
+  await screen.findByText("没有符合条件的分类标准");
+  await userEvent.click(screen.getByRole("button", { name: "清除筛选" }));
+  expect(input).toHaveValue("");
+});

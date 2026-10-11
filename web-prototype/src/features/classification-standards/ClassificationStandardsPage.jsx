@@ -62,6 +62,8 @@ export function ClassificationStandardsPage({ route, notify }) {
     statusFilter,
     setStatusFilter,
     loading,
+    error: listError,
+    hasData,
     loadStandards,
     filteredStandards,
     totals,
@@ -154,7 +156,7 @@ export function ClassificationStandardsPage({ route, notify }) {
     }
   };
 
-  if (loading) return <ClassificationStandardPageLoading mode={mode} />;
+  if (loading && !hasData) return <ClassificationStandardPageLoading mode={mode} />;
 
   const { detailError, detailPending, showDetailState } =
     classificationStandardDetailStatus({
@@ -171,6 +173,12 @@ export function ClassificationStandardsPage({ route, notify }) {
         {mode === "list" && (
           <ClassificationStandardList
             standards={filteredStandards}
+            error={listError}
+            hasData={hasData}
+            loading={loading}
+            onRetry={() =>
+              loadStandards().catch((error) => notify(errorMessage(error), "error"))
+            }
             totals={totals}
             query={query}
             statusFilter={statusFilter}

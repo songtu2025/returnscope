@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { navigateHash } from "../../app/hashRouter";
 import { reviewBatchApi } from "../../shared/api/reviewBatchApi";
+import { errorStatus } from "../../shared/api/requestErrors";
 import { ReviewBatchListView } from "./ReviewBatchListView";
 
 /** @typedef {import("../../shared/api/reviewBatchContracts").ReviewBatchRoute} ReviewBatchRoute */
@@ -58,7 +59,11 @@ export function ReviewBatchList({ route, updateRoute }) {
     } catch (error) {
       const failure = requestError(error);
       if (generationRef.current === generation && failure.name !== "AbortError") {
-        setState({ loading: false, error: failure, data: null });
+        setState((current) => ({
+          loading: false,
+          error: failure,
+          data: [401, 403].includes(Number(errorStatus(failure))) ? null : current.data,
+        }));
       }
     }
   }, [query]);

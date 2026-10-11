@@ -58,7 +58,7 @@ export function ResultPoolRow({
         onToggle={onToggle}
       />
       <ResultPoolMetadata result={result} onOpen={onOpen} />
-      <div className="result-row-actions">
+      <div className="result-row-actions" role="cell">
         <Button
           size="small"
           disabled={policy.primary.disabled}
@@ -87,18 +87,20 @@ function ResultPoolStatus({ result, policy, selectable, selected, onToggle }) {
   return (
     <>
       {selectable && (
-        <Checkbox
-          className="result-selection-cell"
-          title={disabledReason}
-          aria-label={`选择 ${result.listing || "未提供 Listing"} 结果 v${result.version}`}
-          checked={selected}
-          disabled={Boolean(disabledReason)}
-          onChange={onToggle}
-        >
-          {disabledReason && <small>{disabledReason}</small>}
-        </Checkbox>
+        <div role="cell">
+          <Checkbox
+            className="result-selection-cell"
+            title={disabledReason}
+            aria-label={`选择 ${result.listing || "未提供 Listing"} 结果 v${result.version}`}
+            checked={selected}
+            disabled={Boolean(disabledReason)}
+            onChange={onToggle}
+          >
+            {disabledReason && <small>{disabledReason}</small>}
+          </Checkbox>
+        </div>
       )}
-      <div className="result-state-cell">
+      <div className="result-state-cell" role="cell">
         <span className={`result-quality-badge ${policy.state}`}>{policy.label}</span>
         <small>
           {`版本发布：${PUBLISH_LABELS[result.publish_status] ?? result.publish_status ?? "未提供"}`}
@@ -113,23 +115,23 @@ function ResultPoolMetadata({ result, onOpen }) {
   const names = productNames(result);
   return (
     <>
-      <div className="result-listing-cell">
+      <div className="result-listing-cell" role="cell">
         <button className="text-button result-listing-link" onClick={onOpen}>
           {result.listing || "未提供 Listing"}
         </button>
         <span>{result.store_site || "未提供店铺/站点"}</span>
         <small>结果 v{result.version}</small>
       </div>
-      <div className="result-product-cell">
+      <div className="result-product-cell" role="cell">
         <b title={names.join("、")}>{names[0] || "未提供"}</b>
         {names.length > 1 && <span>另有 {names.length - 1} 个产品名称</span>}
         <small>产品信息 v{result.product_version}</small>
       </div>
-      <div className="result-scale-cell">
+      <div className="result-scale-cell" role="cell">
         <b>{Number(result.record_count || 0).toLocaleString()} 条记录</b>
         <span>{Number(result.unit_count || 0).toLocaleString()} 个分类单元</span>
       </div>
-      <div className="result-time-cell">
+      <div className="result-time-cell" role="cell">
         <b>{formatTime(result.published_at || result.created_at)}</b>
         <span>
           {result.standard_name || result.agent_family || "未提供分类标准"}

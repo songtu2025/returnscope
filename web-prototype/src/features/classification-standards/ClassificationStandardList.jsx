@@ -4,10 +4,11 @@ import {
   MagnifyingGlass,
   Plus,
   Tag,
+  WarningCircle,
 } from "@phosphor-icons/react";
 import Button from "antd/es/button";
 import Input from "antd/es/input";
-import { EmptyState, PageHeading } from "../../components/SharedUi";
+import { EmptyState, InlineLoading, PageHeading } from "../../components/SharedUi";
 import { formatDate } from "../../lib/presentation";
 
 /** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardSummary} ClassificationStandardSummary */
@@ -21,6 +22,10 @@ function statusLabel(standard) {
 /**
  * @param {{
  *   standards: ClassificationStandardSummary[],
+ *   error: string,
+ *   hasData: boolean,
+ *   loading: boolean,
+ *   onRetry: () => void,
  *   totals: {active: number, categories: number, labels: number},
  *   query: string,
  *   statusFilter: "all" | "active" | "inactive",
@@ -33,6 +38,10 @@ function statusLabel(standard) {
  */
 export function ClassificationStandardList({
   standards,
+  error,
+  hasData,
+  loading,
+  onRetry,
   totals,
   query,
   statusFilter,
@@ -54,23 +63,25 @@ export function ClassificationStandardList({
           </Button>
         }
       />
-      <section className="standard-library-summary" aria-label="分类标准汇总">
-        <div>
-          <BookOpenText size={20} />
-          <span>使用中标准</span>
-          <strong>{totals.active}</strong>
-        </div>
-        <div>
-          <CheckCircle size={20} />
-          <span>覆盖品类</span>
-          <strong>{totals.categories}</strong>
-        </div>
-        <div>
-          <Tag size={20} />
-          <span>分类标签</span>
-          <strong>{totals.labels}</strong>
-        </div>
-      </section>
+      {hasData && (
+        <section className="standard-library-summary" aria-label="分类标准汇总">
+          <div>
+            <BookOpenText size={20} />
+            <span>使用中标准</span>
+            <strong>{totals.active}</strong>
+          </div>
+          <div>
+            <CheckCircle size={20} />
+            <span>覆盖品类</span>
+            <strong>{totals.categories}</strong>
+          </div>
+          <div>
+            <Tag size={20} />
+            <span>分类标签</span>
+            <strong>{totals.labels}</strong>
+          </div>
+        </section>
+      )}
       <section className="standard-library-card">
         <div className="standard-library-toolbar">
           <Input
@@ -101,13 +112,56 @@ export function ClassificationStandardList({
             }
           </div>
         </div>
-        {standards.length === 0 ? (
+        {loading && <InlineLoading label="正在更新分类标准…" />}
+        {error && (
+          <div role="alert">
+            <EmptyState
+              icon={WarningCircle}
+              title={
+                hasData ? "分类标准更新失败，当前显示上一次数据" : "分类标准读取失败"
+              }
+              description={error}
+              action={
+                <button
+                  className="secondary-button"
+                  disabled={loading}
+                  onClick={onRetry}
+                >
+                  重新加载
+                </button>
+              }
+            />
+          </div>
+        )}
+        {!loading && !error && standards.length === 0 && (
           <EmptyState
             icon={BookOpenText}
-            title="没有符合条件的分类标准"
-            description="调整搜索条件，或新建一套分类标准。"
+            title={
+              query || statusFilter !== "all"
+                ? "没有符合条件的分类标准"
+                : "暂无分类标准"
+            }
+            description={
+              query || statusFilter !== "all"
+                ? "清除筛选后查看全部分类标准。"
+                : "新建一套分类标准后即可用于分析任务。"
+            }
+            action={
+              <button
+                className="secondary-button"
+                onClick={() => {
+                  if (query || statusFilter !== "all") {
+                    onQueryChange("");
+                    onStatusChange("all");
+                  } else onCreate();
+                }}
+              >
+                {query || statusFilter !== "all" ? "清除筛选" : "新建分类标准"}
+              </button>
+            }
           />
-        ) : (
+        )}
+        {standards.length > 0 && (
           <div className="standard-table-wrap">
             <table className="standard-library-table">
               <thead>

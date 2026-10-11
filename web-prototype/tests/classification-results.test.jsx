@@ -1325,3 +1325,56 @@ test("历史页不请求记录且下钻失败不影响概况重试", async () =>
   expect(apiMock.classificationResultRecordGroups).toHaveBeenCalledTimes(1);
   expect(apiMock.classificationResultDrilldown).toHaveBeenCalledTimes(3);
 });
+
+test("结果池更新失败保留已有版本和重试入口", async () => {
+  const { ResultPoolContent } =
+    await import("../src/features/classification-results/ResultPoolContent");
+  const load = vi.fn();
+  render(
+    <ResultPoolContent
+      data={{ items: [resultVersion], total: 1 }}
+      route={{ page: 1, pageSize: 20 }}
+      selectedIds={new Set()}
+      loading={false}
+      error="连接中断"
+      load={load}
+      updateRoute={vi.fn()}
+      toggleSelection={vi.fn()}
+      runPrimaryAction={vi.fn()}
+      totalPages={1}
+      changePage={vi.fn()}
+      changePageSize={vi.fn()}
+    />,
+  );
+  expect(screen.getByText("分类结果更新失败，当前显示上一次数据")).toBeVisible();
+  const table = screen.getByRole("table", { name: "分类结果版本" });
+  expect(within(table).getByText("SR001")).toBeVisible();
+  expect(within(table).getAllByRole("columnheader")).toHaveLength(7);
+  expect(within(table).getAllByRole("cell")).toHaveLength(7);
+  await userEvent.click(screen.getByRole("button", { name: "重试", exact: true }));
+  expect(load).toHaveBeenCalledOnce();
+});
+
+test("结果池筛选为空时清除条件并返回第一页", async () => {
+  const { ResultPoolStatus } =
+    await import("../src/features/classification-results/ResultPoolStatus");
+  const updateRoute = vi.fn();
+  render(
+    <ResultPoolStatus
+      loading={false}
+      data={{ items: [] }}
+      error=""
+      activeFilters
+      load={vi.fn()}
+      updateRoute={updateRoute}
+    />,
+  );
+  await userEvent.click(screen.getByRole("button", { name: "清除筛选" }));
+  expect(updateRoute).toHaveBeenCalledWith({
+    q: "",
+    storeSite: "",
+    listing: "",
+    qualityStatus: "",
+    page: 1,
+  });
+});

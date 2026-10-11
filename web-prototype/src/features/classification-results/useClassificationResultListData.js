@@ -2,7 +2,7 @@ import { useCallback, useRef } from "react";
 import useSWR from "swr";
 
 import { api } from "../../api";
-import { errorMessage } from "../../shared/api/requestErrors";
+import { errorMessage, errorStatus } from "../../shared/api/requestErrors";
 import { serverStateKeys } from "../../shared/serverState";
 import { runResultRequest } from "./resultRequestLifecycle";
 import { useNewResultNotice } from "./useNewResultNotice";
@@ -34,7 +34,7 @@ export function useClassificationResultListData(query) {
     await mutate();
   }, [mutate, resetNotice]);
   return {
-    data,
+    data: [401, 403].includes(Number(errorStatus(loadError))) ? null : data,
     loading: isLoading || isValidating,
     error: loadError ? errorMessage(loadError) : "",
     hasNewResults,
