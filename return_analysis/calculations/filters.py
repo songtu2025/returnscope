@@ -10,6 +10,7 @@ from return_analysis.calculations.common import label_codes, split_values
 
 def filter_details(
     frame: pd.DataFrame,
+    *,
     start_date: date | None = None,
     end_date: date | None = None,
     skus: Iterable[str] = (),

@@ -21,6 +21,7 @@ def build_cache_key(
     provider_name: str,
     taxonomy_version: str,
     claims_version: str,
+    *,
     thinking: bool = False,
     classification_scope: str = "",
     reasoning_effort: str = "",
