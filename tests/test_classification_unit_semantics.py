@@ -4,8 +4,8 @@ import sqlite3
 from pathlib import Path
 
 import pytest
+from database_migration_helpers import build_migration_settings as _settings
 from test_classification_result_pool import _publish, _seed_result_context
-from test_database_migrations import _settings
 from test_result_version_reviews import _publish_review_required
 
 from web_backend.backup import restore_backup
