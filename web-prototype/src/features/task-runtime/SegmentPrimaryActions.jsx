@@ -102,7 +102,7 @@ function SegmentResultControls({ segment, rowState, actions, publishStatus }) {
         <Button
           className="secondary-button compact-button"
           disabled={retryingPublishId === segment.id}
-          title="只重新发布现有分类结果，不会重新执行语义分类"
+          title="仅重新生成现有分类结果，不会重新执行语义分析"
           onClick={async () => {
             setRetryingPublishId(segment.id);
             await onRetryPublish(segment.id);

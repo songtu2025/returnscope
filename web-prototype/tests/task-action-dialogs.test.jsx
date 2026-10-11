@@ -152,7 +152,7 @@ test("失败项重试无需填写原因，自动保留审计载荷并阻止重�
     />,
   );
   expect(screen.getByRole("dialog", { name: "重试分析失败项？" })).toBeVisible();
-  expect(screen.getByText("重试失败项，保留成功结果，生成新版本。")).toBeVisible();
+  expect(screen.getByText("仅重试分析失败项，保留成功结果。")).toBeVisible();
   expect(screen.queryByLabelText("重试原因")).not.toBeInTheDocument();
   const submit = screen.getByRole("button", { name: "开始重试" });
   expect(submit).toBeEnabled();

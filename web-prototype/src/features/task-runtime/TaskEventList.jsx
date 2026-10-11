@@ -7,13 +7,14 @@ import { classNames, formatTime } from "../../lib/presentation";
 /** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
 /** @typedef {import("./taskRuntimeContracts").TaskEvent} TaskEvent */
 
-const TASK_STAGES = ["准备数据", "Listing 分类", "发布分类版本", "任务结束"];
+const TASK_STAGES = ["准备数据", "Listing 分类", "生成分类结果", "任务结束"];
 /** @type {Record<string, number>} */
 const TASK_STAGE_INDEX = {
   准备数据: 0,
   语义分析: 1,
   "Listing 分类": 1,
   生成结果: 2,
+  生成分类结果: 2,
   发布分类版本: 2,
   模型服务异常: 1,
   分析完成: 3,

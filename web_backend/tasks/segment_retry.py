@@ -25,7 +25,7 @@ def _retry_system_failure_count(
         return 0
     count = system_rerun_count(connection, str(segment["result_version_id"]))
     if not count:
-        raise ValueError("该片段只有业务复核项，请通过复核批次生成新版本")
+        raise ValueError("没有需要重试的失败项，请在分类结果中查看证据并人工修正")
     return count
 
 

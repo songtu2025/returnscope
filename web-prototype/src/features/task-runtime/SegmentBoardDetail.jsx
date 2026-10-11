@@ -23,9 +23,7 @@ function SegmentModelMetrics({ segment }) {
       <span>
         成功 {segment.model_calls || 0} · 失败 {modelFailures}
       </span>
-      <small>
-        缓存 {segment.cache_hits || 0} · {segment.taxonomy_version}
-      </small>
+      <small>缓存 {segment.cache_hits || 0}</small>
     </div>
   );
 }
@@ -39,13 +37,6 @@ function SegmentDetailFacts({ task, segment, stateLabel, stateDescription }) {
         <small>{task.owner_name || "—"}</small>
       </div>
       <div>
-        <span>标准版本</span>{" "}
-        <small>
-          {segment.standard_version ? `标准 V${segment.standard_version} · ` : ""}
-          {segment.logic_version || "未配置逻辑"}
-        </small>
-      </div>
-      <div>
         <span>记录与评论</span>
         <b>
           {(segment.record_count || 0).toLocaleString()} 条记录 ·{" "}
@@ -53,18 +44,37 @@ function SegmentDetailFacts({ task, segment, stateLabel, stateDescription }) {
         </b>
       </div>
       <div>
-        <span>执行逻辑</span>
-        <b>{segment.logic_version || "未配置"}</b>
-      </div>
-      <div>
-        <span>分类版本</span>
-        <b>{segment.taxonomy_version || "未生成"}</b>
-      </div>
-      <div>
         <span>状态说明</span>
         <b>{stateDescription || segment.error || stateLabel}</b>
       </div>
     </>
+  );
+}
+
+/** @param {{segment: TaskSegment}} props */
+function SegmentRunConfiguration({ segment }) {
+  return (
+    <details className="listing-run-configuration">
+      <summary>运行配置</summary>
+      <dl>
+        <div>
+          <dt>标准记录</dt>
+          <dd>
+            {segment.standard_version
+              ? `第 ${segment.standard_version} 次更新`
+              : "未记录"}
+          </dd>
+        </div>
+        <div>
+          <dt>执行逻辑</dt>
+          <dd>{segment.logic_version || "未配置"}</dd>
+        </div>
+        <div>
+          <dt>标签体系编号</dt>
+          <dd>{segment.taxonomy_version || "未记录"}</dd>
+        </div>
+      </dl>
+    </details>
   );
 }
 
@@ -189,6 +199,7 @@ export function SegmentBoardDetail({
         stateLabel={stateLabel}
         stateDescription={stateDescription}
       />
+      <SegmentRunConfiguration segment={segment} />
       <SegmentSecondaryActions
         task={task}
         segment={segment}

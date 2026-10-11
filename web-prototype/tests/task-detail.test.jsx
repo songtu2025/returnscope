@@ -91,12 +91,39 @@ test("任务配置使用固化快照，并从可执行片段选择分类标准",
     />,
   );
   await userEvent.click(screen.getByRole("tab", { name: "任务配置" }));
+  expect(screen.getByText("运行期间使用启动时的配置。")).toBeVisible();
   expect(screen.getByText("合成快照连接 · #0 · 任务自定义")).toBeVisible();
   expect(screen.getByText("合成快照模型 · 高")).toBeVisible();
   expect(screen.getByText("合成标准")).toBeVisible();
   expect(screen.queryByText("不可执行标准")).not.toBeInTheDocument();
   expect(screen.queryByText("合成旧模型 · 低")).not.toBeInTheDocument();
 });
+
+test.each(["发布分类版本", "生成结果", "生成分类结果"])(
+  "运行日志将历史阶段 %s 统一展示为生成分类结果",
+  async (stage) => {
+    const props = detailProps({
+      status: "completed",
+      segments: [
+        { id: "segment-1", agent_key: "footwear", scope: { listing: "SYNTHETIC" } },
+      ],
+    });
+    props.events = [
+      {
+        id: "event-1",
+        stage,
+        message: "合成结果已生成",
+        created_at: "2026-10-01T00:00:00Z",
+        data: { segment_id: "segment-1" },
+      },
+    ];
+    render(<TaskDetail {...props} />);
+    await userEvent.click(screen.getByRole("tab", { name: "运行日志" }));
+    expect(screen.getByText("SYNTHETIC · 生成分类结果")).toBeVisible();
+    expect(screen.getByText("合成结果已生成", { exact: false })).toBeVisible();
+    expect(props.events[0].stage).toBe(stage);
+  },
+);
 
 test("历史任务配置回退到基础字段，并保留默认并行数与空值", async () => {
   render(

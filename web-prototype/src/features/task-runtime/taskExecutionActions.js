@@ -32,7 +32,7 @@ export function taskExecutionActions({
         return true;
       } catch (error) {
         if (errorStatus(error) === 409) {
-          setActionError("任务版本已变化，请查看刷新后的片段状态再操作。");
+          setActionError("任务已更新，请查看刷新后的 Listing 状态再操作。");
           await loadSelected();
         } else {
           setActionError(errorMessage(error));
@@ -48,7 +48,7 @@ export function taskExecutionActions({
           segmentId,
           {
             expected_revision: selected.revision,
-            reason: "重新发布分类结果",
+            reason: "重新生成分类结果",
           },
         );
         setSelected(updated);

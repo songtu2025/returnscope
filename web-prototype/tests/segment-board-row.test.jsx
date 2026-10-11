@@ -65,7 +65,7 @@ function rowProps(fields = {}, status = "paused") {
   };
 }
 
-test("展开详情显示请求统计、版本及操作者，位置序号按原分页计算", () => {
+test("展开详情保留请求统计与操作者，运行配置默认收纳且可展开", async () => {
   render(
     <SegmentBoardRow
       {...rowProps({ standard_version: 2, logic_version: "synthetic-logic" })}
@@ -74,10 +74,18 @@ test("展开详情显示请求统计、版本及操作者，位置序号按原�
   expect(screen.getByText("22")).toBeVisible();
   expect(screen.getByText("5 次请求")).toBeVisible();
   expect(screen.getByText("成功 2 · 失败 3")).toBeVisible();
-  expect(screen.getByText("缓存 1 · synthetic-v1")).toBeVisible();
+  expect(screen.getByText("缓存 1")).toBeVisible();
   expect(screen.getByText("1,000 条记录 · 100 组评论")).toBeVisible();
-  expect(screen.getByText("标准 V2 · synthetic-logic")).toBeVisible();
   expect(screen.getByText("合成用户")).toBeVisible();
+  const configuration = screen.getByText("运行配置").closest("details");
+  expect(configuration).not.toHaveAttribute("open");
+  expect(screen.getByText("synthetic-v1")).not.toBeVisible();
+  await userEvent.click(screen.getByText("运行配置"));
+  expect(configuration).toHaveAttribute("open");
+  expect(screen.getByText("第 2 次更新")).toBeVisible();
+  expect(screen.getByText("synthetic-logic")).toBeVisible();
+  expect(screen.getByText("synthetic-v1")).toBeVisible();
+  expect(screen.queryByText("分类版本")).not.toBeInTheDocument();
 });
 
 test("已发布结果使用分类版本下载，旧结果使用原任务片段下载", () => {

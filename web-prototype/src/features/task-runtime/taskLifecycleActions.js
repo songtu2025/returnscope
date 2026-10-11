@@ -76,7 +76,7 @@ export function taskLifecycleActions({
         return true;
       } catch (error) {
         if (errorStatus(error) === 409) {
-          setActionError("任务版本已变化，请查看刷新后的状态再操作。");
+          setActionError("任务已更新，请查看刷新后的状态再操作。");
           await loadSelected();
         }
         notify(errorMessage(error), "error");
@@ -111,7 +111,7 @@ export function taskLifecycleActions({
         return true;
       } catch (error) {
         if (errorStatus(error) === 409) {
-          setActionError("执行计划或任务版本已变化，请重新预检后再提交。");
+          setActionError("执行计划或任务已更新，请重新检查后再提交。");
           await loadSelected();
         }
         notify(errorMessage(error), "error");

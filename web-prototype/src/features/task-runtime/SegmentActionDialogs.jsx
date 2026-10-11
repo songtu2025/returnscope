@@ -27,15 +27,19 @@ export function SegmentRetryDialog({ task, segment, error, onClose, onSave }) {
   };
   return (
     <Modal
-      eyebrow="片段异常处理"
-      title={isFailureRetry ? "重试分析失败项？" : `重试 ${segment.agent_family}`}
+      eyebrow="Listing 重试"
+      title={
+        isFailureRetry
+          ? "重试分析失败项？"
+          : `重试 ${segment.scope?.listing || segment.agent_family}`
+      }
       onClose={onClose}
     >
       <form className="modal-form" onSubmit={submit}>
         <p className="form-hint">
           {isFailureRetry
-            ? "重试失败项，保留成功结果，生成新版本。"
-            : `将按当前任务快照重新排队片段“${segment.segment_key}”；未知品类不能直接重试。`}
+            ? "仅重试分析失败项，保留成功结果。"
+            : "按启动时的配置重新分析该 Listing。"}
         </p>
         {error && (
           <p className="form-error" role="alert">

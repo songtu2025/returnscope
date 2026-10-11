@@ -45,7 +45,7 @@ export function TaskDetailConfig({ task, executableSegments }) {
       <header>
         <div>
           <h3>任务配置</h3>
-          <p>任务运行期间始终使用创建时固化的版本。</p>
+          <p>运行期间使用启动时的配置。</p>
         </div>
       </header>
       <div className="task-config-body">

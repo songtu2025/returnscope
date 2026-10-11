@@ -78,9 +78,7 @@ export function TaskRenameDialog({ task, onClose, onSave }) {
               required
             />
           </label>
-          <p className="form-hint">
-            数据、模型与分析范围属于不可变运行快照；名称修改会记录操作人和修改前后内容。
-          </p>
+          <p className="form-hint">仅修改任务名称，不改变分析数据、模型或范围。</p>
           <div className="modal-actions">
             <button type="button" className="secondary-button" onClick={close}>
               取消

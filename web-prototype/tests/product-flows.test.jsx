@@ -2503,7 +2503,7 @@ describe("关键用户流程", () => {
       "segment-publish-failed",
       {
         expected_revision: 3,
-        reason: "重新发布分类结果",
+        reason: "重新生成分类结果",
       },
     );
 
@@ -3008,7 +3008,7 @@ describe("关键用户流程", () => {
       }),
     );
     expect(
-      await screen.findByText("任务版本已变化，请查看刷新后的片段状态再操作。"),
+      await screen.findByText("任务已更新，请查看刷新后的 Listing 状态再操作。"),
     ).toBeVisible();
   });
 

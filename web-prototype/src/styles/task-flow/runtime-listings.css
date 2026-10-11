@@ -84,6 +84,28 @@
   align-items: center;
   gap: 10px;
 }
+.listing-row-detail > .listing-run-configuration {
+  grid-column: 1 / -1;
+  font-size: 12px;
+}
+.listing-run-configuration summary {
+  width: fit-content;
+  padding-block: 4px;
+  cursor: pointer;
+}
+.listing-run-configuration dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 12px 0 0;
+}
+.listing-run-configuration dt {
+  color: var(--muted);
+}
+.listing-run-configuration dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
 .task-runtime-workspace .listing-row-detail span,
 .task-runtime-workspace .listing-row-detail small {
   font-size: 12px;

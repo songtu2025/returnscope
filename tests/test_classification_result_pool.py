@@ -834,7 +834,8 @@ def test_published_business_review_segment_cannot_retry(tmp_path: Path) -> None:
     assert current_segment["system_retry_available"] is False
     assert current_segment["system_failure_count"] == 0
 
-    with pytest.raises(ValueError, match="只有业务复核项"):
+    events_before = task_service.events(context.task_id)
+    with pytest.raises(ValueError, match="没有需要重试的失败项.*人工修正"):
         task_service.retry_segment(
             task_id=context.task_id,
             segment_key="footwear",
@@ -842,6 +843,8 @@ def test_published_business_review_segment_cannot_retry(tmp_path: Path) -> None:
             expected_revision=int(current["revision"]),
             reason="尝试重跑业务复核",
         )
+    assert task_service.get(context.task_id) == current
+    assert task_service.events(context.task_id) == events_before
 
 
 def test_publication_failure_rolls_back_all_result_data(
