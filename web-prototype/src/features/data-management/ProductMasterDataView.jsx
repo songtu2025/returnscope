@@ -8,12 +8,7 @@ import { ProductMasterImpact } from "./ProductMasterImpact";
 /** @param {{state: ProductMasterState,selected: DatasetRecord,props: ProductMasterProps}} input */
 export function ProductMasterDataView({ state, selected, props }) {
   const { detailTab, setDetailTab, currentVersionId, onProductChanged } = state;
-  const {
-    onDetailTabChange,
-    onReferenceRouteChange,
-    routeReferenceVersion = "",
-    notify,
-  } = props;
+  const { onDetailTabChange, onReferenceRouteChange, notify } = props;
   return (
     <>
       {" "}
@@ -34,7 +29,7 @@ export function ProductMasterDataView({ state, selected, props }) {
             onDetailTabChange?.("impact");
             onReferenceRouteChange?.({
               tab: "impact",
-              reference_version: routeReferenceVersion || currentVersionId || "",
+              reference_version: "",
               reference_page: 1,
             });
           }}

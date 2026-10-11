@@ -5,10 +5,16 @@ from typing import Any
 
 from return_semantics.schemas import TaxonomyConfig
 from return_semantics.taxonomy_hierarchy import descendant_label_codes
+from web_backend.common import json_value
 from web_backend.dashboard_common import (
     ALLOWED_FILTERS,
     FILTER_COLUMNS,
     QUALITY_STATUSES,
+)
+from web_backend.dashboards.product_scope import (
+    PRODUCT_FILTERS,
+    PRODUCT_SCOPE,
+    product_scope_where,
 )
 from web_backend.database import Database
 from web_backend.result_hierarchy import feedback_group_key_sql, result_taxonomy
@@ -60,7 +66,16 @@ def normalize_filters(filters: dict[str, Any]) -> dict[str, list[str]]:
                 if value is not None and str(value).strip()
             }
         )
-        if clean_values:
+        if key == PRODUCT_SCOPE:
+            for value in clean_values:
+                token = json_value(value)
+                if (
+                    not isinstance(token, list)
+                    or len(token) != 3
+                    or not all(isinstance(item, str) for item in token)
+                ):
+                    raise ValueError("商品统计范围不合法")
+        if clean_values or key == PRODUCT_SCOPE:
             output[key] = clean_values
     invalid_quality = set(output.get("quality_status", [])) - QUALITY_STATUSES
     if invalid_quality:
@@ -79,6 +94,11 @@ def record_where(
     params: list[Any] = list(source_ids)
     for filters in filter_sets:
         for key, values in filters.items():
+            if key in PRODUCT_FILTERS and PRODUCT_SCOPE in filters:
+                continue
+            if key == PRODUCT_SCOPE:
+                where.append(product_scope_where(values, params))
+                continue
             placeholders = ",".join("?" for _ in values)
             if key == "problem":
                 where.append(_problem_where(database, source_ids, values, params))

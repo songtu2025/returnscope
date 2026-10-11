@@ -13,7 +13,6 @@
  *   onReturnToTask?: (productVersionId: string) => void,
  *   routeDetailTab?: string,
  *   onDetailTabChange?: (tab: string) => void,
- *   routeReferenceVersion?: string,
  *   routeReferencePage?: string | number,
  *   onReferenceRouteChange?: (changes: Record<string, string | number>) => void,
  *   onAssetViewChange?: (view: string) => void,

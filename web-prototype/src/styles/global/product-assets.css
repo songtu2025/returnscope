@@ -218,7 +218,6 @@
   cursor: not-allowed;
 }
 .data-page .schema-table,
-.data-page .version-list,
 .data-page .data-audit-list {
   margin-top: 12px;
   border: 1px solid var(--line-soft);
@@ -226,13 +225,9 @@
   overflow: hidden;
 }
 .data-page .schema-table > div,
-.data-page .version-list > div,
 .data-page .data-audit-list > div {
   padding-right: 12px;
   padding-left: 12px;
-}
-.data-page .version-list b {
-  max-width: none;
 }
 .data-page .data-audit-list > .muted-line {
   margin: 0;

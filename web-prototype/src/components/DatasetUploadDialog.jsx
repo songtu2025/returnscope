@@ -11,16 +11,30 @@ import { Modal } from "./SharedUi";
  *   dialog: UploadDialog,
  *   onClose: () => void,
  *   onDone: (result: unknown) => void | Promise<void>,
+ *   onConflict?: (dataset: import("../shared/api/dataManagementContracts").DatasetRecord) => void | Promise<void>,
  * }} props
  */
-export function DatasetUploadDialog({ dialog, onClose, onDone }) {
+export function DatasetUploadDialog({ dialog, onClose, onDone, onConflict }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [note, setNote] = useState("");
   const [file, setFile] = useState(/** @type {File | null} */ (null));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [revision, setRevision] = useState(
+    dialog.mode === "update" ? dialog.dataset.current_version : 0,
+  );
+  const [stale, setStale] = useState(false);
   const kind = dialog.mode === "create" ? dialog.kind : dialog.dataset.kind;
+
+  const refreshCurrent = async () => {
+    if (dialog.mode !== "update") return;
+    const latest = await api.dataset(dialog.dataset.id, { include: "" });
+    setRevision(latest.current_version);
+    await onConflict?.(latest);
+    setStale(false);
+    setError("资料已更新，请核对后重试");
+  };
 
   /** @param {import("react").FormEvent<HTMLFormElement>} event */
   const submit = async (event) => {
@@ -35,6 +49,10 @@ export function DatasetUploadDialog({ dialog, onClose, onDone }) {
     body.append("file", file);
     body.append("change_note", note);
     try {
+      if (stale) {
+        await refreshCurrent();
+        return;
+      }
       let result;
       if (dialog.mode === "create") {
         body.append("name", name);
@@ -42,12 +60,25 @@ export function DatasetUploadDialog({ dialog, onClose, onDone }) {
         body.append("description", description);
         result = await api.createDataset(body);
       } else {
-        body.append("expected_version", String(dialog.dataset.current_version));
+        body.append("expected_version", String(revision));
         result = await api.updateDatasetContent(dialog.dataset.id, body);
       }
       await onDone(result);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "上传失败");
+      if (
+        requestError instanceof Error &&
+        "status" in requestError &&
+        requestError.status === 409
+      ) {
+        setStale(true);
+        try {
+          await refreshCurrent();
+        } catch {
+          setError("资料刷新失败，请重试刷新");
+        }
+      } else {
+        setError(requestError instanceof Error ? requestError.message : "上传失败");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -103,7 +134,7 @@ export function DatasetUploadDialog({ dialog, onClose, onDone }) {
           />
         </label>
         {error && (
-          <div className="form-error">
+          <div className="form-error" role="alert">
             <WarningCircle size={17} />
             {error}
           </div>
@@ -115,9 +146,11 @@ export function DatasetUploadDialog({ dialog, onClose, onDone }) {
           <button className="primary-button" disabled={submitting}>
             {submitting
               ? "正在校验并上传…"
-              : dialog.mode === "create"
-                ? "导入"
-                : "保存更新"}
+              : stale
+                ? "刷新资料"
+                : dialog.mode === "create"
+                  ? "导入"
+                  : "保存更新"}
           </button>
         </div>
       </form>

@@ -18,6 +18,7 @@ from web_backend.dashboard_support import (
     mixed_hierarchy,
     normalize_filters,
 )
+from web_backend.dashboards.product_scope import bind_product_scope
 from web_backend.database import Database
 
 
@@ -39,6 +40,9 @@ def build_plan(
     )
     conflicts = _scope_conflicts(sources)
     eligible_ids = [str(source["result_version_id"]) for source in eligible_sources]
+    normalized_filters = bind_product_scope(
+        connection, eligible_ids, normalized_filters
+    )
     _apply_quality_scope(connection, eligible_ids, normalized_filters, warnings)
     summary = summarize_sources(
         database,

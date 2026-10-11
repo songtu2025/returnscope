@@ -114,10 +114,7 @@ export function TaskCategoryCompletion({ dataset, focus, notify, onReturnToTask 
         })),
         change_note: changeNote.trim(),
       });
-      const versionId =
-        result.version_id ??
-        result.versions?.find((version) => version.version === result.current_version)
-          ?.id;
+      const versionId = result.version_id;
       await refreshProductState(mutate);
       notify(`已补充 ${completedItems.length} 个商品`);
       if (versionId) onReturnToTask?.(versionId);

@@ -17,6 +17,7 @@ def refresh_related_dashboards(
     now: str,
     *,
     product_dataset_id: str | None = None,
+    product_scopes: dict[str, dict[str, list[str]]] | None = None,
 ) -> None:
     rows = connection.execute(
         """
@@ -56,9 +57,11 @@ def refresh_related_dashboards(
             database,
             connection,
             [source["latest_id"] for source in sources],
-            json_value(row["filters_json"], {}),
+            (product_scopes or {}).get(row["id"], json_value(row["filters_json"], {})),
         )
-        if plan["plan_hash"] == row["plan_hash"]:
+        if plan["plan_hash"] == row["plan_hash"] and plan["filters"] == json_value(
+            row["filters_json"], {}
+        ):
             continue
         version = storage._insert_version(
             connection,

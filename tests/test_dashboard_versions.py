@@ -5,6 +5,7 @@ import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
 
+import pandas as pd
 import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
@@ -83,11 +84,212 @@ def test_product_edit_updates_existing_dashboard_without_changing_semantics(
         for row in before["items"]
     ]
     assert current["version"]["filters"] == dashboard["version"]["filters"]
+    products.update_product_row(
+        "dataset-products", 0, 2, {"产品名称": "再次修改商品"}, "连续修改验证", "user-1"
+    )
+    current = service.get(str(dashboard["id"]))
+    records = service.records(str(dashboard["id"]), current["version"]["version_id"])
+    assert {item["product_name"] for item in records["items"]} == {"再次修改商品"}
     with context.database.transaction() as connection:
         refresh_product_dependents(
             context.database, connection, "dataset-products", "2026-10-11T00:00:00Z"
         )
     assert service.get(str(dashboard["id"]))["revision"] == current["revision"]
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+@pytest.mark.parametrize(
+    "field,column", [("product_name", "产品名称"), ("product_sku", "SKU")]
+)
+def test_product_rename_preserves_dashboard_product_scope(
+    tmp_path, legacy, field, column
+):
+    context, version, service = _ready_result(tmp_path)
+    with context.database.connect() as connection:
+        value = connection.execute(
+            f"SELECT {field} FROM classification_result_records LIMIT 1"
+        ).fetchone()[0]
+    filters = {field: [value]}
+    _, dashboard = _create_dashboard(service, version["version_id"], filters)
+    if legacy:
+        with context.database.transaction() as connection:
+            connection.execute(
+                "UPDATE dashboard_dataset_versions SET filters_json = ? WHERE id = ?",
+                (json_text(filters), dashboard["version"]["dataset_version_id"]),
+            )
+    products = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
+    for revision in (1, 2):
+        products.update_product_row(
+            "dataset-products",
+            0,
+            revision,
+            {column: f"修改后-{revision}", "MSKU": f"CHANGED-{revision}"},
+            "验证范围",
+            "user-1",
+        )
+        current = service.get(dashboard["id"])
+        records = service.records(dashboard["id"], current["version"]["version_id"])
+        assert records["total"] == 3
+        assert {item[field] for item in records["items"]} == {f"修改后-{revision}"}
+        assert current["version"]["filters"]["_product_scope"]
+
+
+def test_empty_product_filter_cannot_expand_to_all_records(tmp_path):
+    _, version, service = _ready_result(tmp_path)
+    plan = service.preflight(
+        [version["version_id"]], {"product_name": ["不存在的商品"]}
+    )
+    assert not plan["ready"]
+    assert plan["summary"]["record_count"] == 0
+
+
+def test_product_scope_keeps_dynamic_product_filter(tmp_path):
+    context, version, service = _ready_result(tmp_path)
+    value = str(context.dataset.records.iloc[0]["product_name"])
+    _, dashboard = _create_dashboard(
+        service, version["version_id"], {"product_name": [value]}
+    )
+    records = service.records(
+        dashboard["id"],
+        dashboard["version"]["version_id"],
+        product_name="不存在的商品",
+    )
+    assert records["total"] == 0
+
+
+def test_upgrade_recovers_recorded_product_links_and_legacy_scope(tmp_path):
+    context, version, service = _ready_result(tmp_path)
+    value = str(context.dataset.records.iloc[0]["product_name"])
+    _, dashboard = _create_dashboard(
+        service, version["version_id"], {"product_name": [value]}
+    )
+    products = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
+    products.update_product_row(
+        "dataset-products",
+        0,
+        1,
+        {"MSKU": "UPDATED-MSKU", "产品名称": "第一次改名"},
+        "修改标识",
+        "user-1",
+    )
+    products.update_product_row(
+        "dataset-products", 0, 2, {"产品名称": "第二次改名"}, "再次改名", "user-1"
+    )
+    with context.database.transaction() as connection:
+        connection.execute(
+            "UPDATE dashboard_dataset_versions SET filters_json = ? WHERE dashboard_id = ?",
+            (json_text({"product_name": [value]}), dashboard["id"]),
+        )
+        connection.execute(
+            "UPDATE classification_result_records SET product_name = '第一次改名'"
+        )
+        connection.execute("DROP TABLE product_identity_aliases")
+        connection.execute(
+            "DELETE FROM app_migrations WHERE migration_id = '20261011_product_identity_aliases'"
+        )
+    context.database.upgrade_schema()
+    current = service.get(dashboard["id"])
+    after = service.records(dashboard["id"], current["version"]["version_id"])
+    assert after["total"] == 3
+    assert {item["product_name"] for item in after["items"]} == {"第二次改名"}
+    assert current["version"]["filters"]["_product_scope"]
+    context.database.upgrade_schema()
+    assert service.get(dashboard["id"])["revision"] == current["revision"]
+
+
+def test_product_scope_does_not_expand_when_name_matches_another_product(tmp_path):
+    context, version, service = _ready_result(tmp_path)
+    products = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
+    source = Path(products.version_file("dataset-products")["file_path"])
+    frame = pd.read_excel(source, dtype=str).fillna("")
+    other = frame.iloc[0].copy()
+    other["MSKU"], other["产品名称"] = "OTHER-MSKU", "另一个商品"
+    pd.concat([frame, other.to_frame().T], ignore_index=True).to_excel(
+        source, sheet_name="产品信息汇总表", index=False
+    )
+    with context.database.transaction() as connection:
+        connection.execute(
+            "UPDATE classification_result_records SET matched_msku = 'OTHER-MSKU', "
+            "product_name = '另一个商品' WHERE id = (SELECT id FROM classification_result_records LIMIT 1)"
+        )
+    _, dashboard = _create_dashboard(
+        service, version["version_id"], {"product_name": [frame.iloc[0]["产品名称"]]}
+    )
+    products.update_product_row(
+        "dataset-products", 0, 1, {"产品名称": "另一个商品"}, "同名验证", "user-1"
+    )
+    current = service.get(dashboard["id"])
+    records = service.records(dashboard["id"], current["version"]["version_id"])
+    assert records["total"] == 2
+    assert {item["matched_msku"] for item in records["items"]} == {"SOURCE-MSKU-1"}
+
+
+def test_full_product_upload_does_not_infer_identity_from_row_position(tmp_path):
+    context, version, service = _ready_result(tmp_path)
+    _, dashboard = _create_dashboard(service, version["version_id"])
+    products = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
+    source = Path(products.version_file("dataset-products")["file_path"])
+    frame = pd.read_excel(source, dtype=str).fillna("")
+    other = frame.iloc[0].copy()
+    other["MSKU"], other["产品名称"] = "OTHER-MSKU", "另一个商品"
+    frame.loc[0, "产品名称"] = "上传更新商品"
+    upload = tmp_path / "synthetic-reordered.xlsx"
+    pd.concat([other.to_frame().T, frame], ignore_index=True).to_excel(
+        upload, sheet_name="产品信息汇总表", index=False
+    )
+    products.add_version(
+        "dataset-products",
+        upload,
+        upload.name,
+        "application/octet-stream",
+        "合成重排上传",
+        "user-1",
+        expected_current_version=1,
+    )
+    current = service.get(dashboard["id"])
+    records = service.records(dashboard["id"], current["version"]["version_id"])
+    assert {item["product_name"] for item in records["items"]} == {"上传更新商品"}
+    with context.database.connect() as connection:
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM product_identity_aliases"
+            ).fetchone()[0]
+            == 0
+        )
+
+
+def test_upgrade_does_not_guess_product_links_from_incomplete_audit(tmp_path, caplog):
+    context, version, service = _ready_result(tmp_path)
+    products = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
+    products.update_product_row(
+        "dataset-products", 0, 1, {"MSKU": "UPDATED-MSKU"}, "修改标识", "user-1"
+    )
+    with context.database.transaction() as connection:
+        connection.execute(
+            "UPDATE audit_logs SET after_json = ? WHERE entity_type = 'dataset' AND action = 'dimension_row_update'",
+            (json_text({"values": {"MSKU": "资料不一致"}}),),
+        )
+        connection.execute("DROP TABLE product_identity_aliases")
+        connection.execute(
+            "DELETE FROM app_migrations WHERE migration_id = '20261011_product_identity_aliases'"
+        )
+    with caplog.at_level("INFO"):
+        context.database.upgrade_schema()
+    assert "'unresolved': 1" in caplog.text
+    with context.database.connect() as connection:
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM product_identity_aliases"
+            ).fetchone()[0]
+            == 0
+        )
+        assert {
+            row[0]
+            for row in connection.execute(
+                "SELECT matched_msku FROM classification_result_records WHERE result_version_id = ?",
+                (version["version_id"],),
+            )
+        } == {"SOURCE-MSKU-1"}
 
 
 def test_preflight_hash_is_stable_and_blocks_invalid_sources(tmp_path: Path) -> None:

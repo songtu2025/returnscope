@@ -89,6 +89,9 @@ export function ProductMasterWorkspace(props) {
         <DatasetUploadDialog
           dialog={dialog}
           onClose={() => setDialog(null)}
+          onConflict={async (dataset) => {
+            await onProductChanged(dataset);
+          }}
           onDone={async () => {
             setDialog(null);
             await onProductChanged();

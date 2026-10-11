@@ -172,6 +172,7 @@ class DatasetService(
         expected_current_version: int | None = None,
         _inspection: dict[str, Any] | None = None,
         _product_previous_identities: list[tuple[str, str]] | None = None,
+        _product_audit: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         with self.database.connect() as connection:
             dataset = connection.execute(
@@ -209,7 +210,7 @@ class DatasetService(
             },
         )
         version_id = str(prepared["id"])
-        prepared["manual_edit"] = _product_previous_identities is not None
+        prepared["product_audit"] = _product_audit
 
         with self.database.transaction(immediate=True) as connection:
             now = utc_now()

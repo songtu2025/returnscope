@@ -13,6 +13,7 @@ import { ModelPreferencePage } from "../src/features/system-settings/ModelPrefer
 import { SystemSettingsPage } from "../src/features/system-settings/SystemSettingsPage";
 import { ProductMasterWorkspace } from "../src/features/data-management/ProductMasterWorkspace";
 import { ProductDimensionRows } from "../src/features/data-management/ProductDimensionRows";
+import { DatasetUploadDialog } from "../src/components/DatasetUploadDialog";
 import { TaskCreatePage } from "../src/features/task-create/TaskCreatePage";
 import {
   readTaskDraft,
@@ -32,11 +33,11 @@ describe("商品页面和旧任务草稿的恢复", () => {
     kind: "products",
     name: "合成商品信息",
     current_version: 1,
+    version_id: "synthetic-products-v1",
     row_count: 1,
     column_count: 3,
     schema: ["MSKU", "Listing", "产品名称"],
     audit: [],
-    versions: [{ id: "synthetic-products-v1", version: 1 }],
   };
   const rows = {
     records: [
@@ -107,6 +108,56 @@ describe("商品页面和旧任务草稿的恢复", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "更新产品信息" })).toBeEnabled();
   });
+
+  test.each([false, true])(
+    "上传冲突保留文件，刷新后由用户重试（刷新失败=%s）",
+    async (refreshFails) => {
+      const user = userEvent.setup();
+      const conflict = Object.assign(new Error("合成并发冲突"), { status: 409 });
+      apiMock.updateDatasetContent
+        .mockRejectedValueOnce(conflict)
+        .mockResolvedValue({ current_version: 3 });
+      apiMock.dataset.mockResolvedValue({ ...product, current_version: 2 });
+      if (refreshFails)
+        apiMock.dataset.mockRejectedValueOnce(new Error("合成刷新失败"));
+      const onDone = vi.fn();
+      const onConflict = vi.fn();
+      const { container } = render(
+        <DatasetUploadDialog
+          dialog={{ mode: "update", dataset: product }}
+          onClose={vi.fn()}
+          onDone={onDone}
+          onConflict={onConflict}
+        />,
+      );
+      await user.upload(
+        container.querySelector('input[type="file"]'),
+        new File(["synthetic"], "synthetic.xlsx"),
+      );
+      await user.type(screen.getByLabelText("修改说明"), "合成修改说明");
+      await user.click(screen.getByRole("button", { name: "保存更新" }));
+      if (refreshFails) {
+        expect(await screen.findByRole("alert")).toHaveTextContent("资料刷新失败");
+        await user.click(screen.getByRole("button", { name: "刷新资料" }));
+      }
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "资料已更新，请核对后重试",
+      );
+      expect(apiMock.updateDatasetContent).toHaveBeenCalledTimes(1);
+      expect(screen.getByText("synthetic.xlsx")).toBeVisible();
+      expect(screen.getByLabelText("修改说明")).toHaveValue("合成修改说明");
+      await user.click(screen.getByRole("button", { name: "保存更新" }));
+      await waitFor(() => expect(onDone).toHaveBeenCalledOnce());
+      expect(
+        apiMock.updateDatasetContent.mock.calls.map(([, body]) =>
+          body.get("expected_version"),
+        ),
+      ).toEqual(["1", "2"]);
+      expect(onConflict).toHaveBeenCalledWith(
+        expect.objectContaining({ current_version: 2 }),
+      );
+    },
+  );
 
   test.each(["mysql", "upload"])(
     "真实创建页恢复有效 %s 草稿时不提示迁移",
@@ -1550,7 +1601,7 @@ describe("关键用户流程", () => {
     });
     apiMock.completeProductCategories.mockResolvedValue({
       current_version: 2,
-      versions: [{ id: "products-v2", version: 2 }],
+      version_id: "products-v2",
     });
 
     render(
@@ -1622,7 +1673,7 @@ describe("关键用户流程", () => {
       quality: { complete_rate: 100 },
       schema: [],
       audit: [],
-      versions: [{ id: "products-v2", version: 2 }],
+      version_id: "products-v2",
     };
     apiMock.datasets.mockResolvedValue([productDataset]);
     apiMock.dataset.mockResolvedValue(productDataset);
@@ -1666,7 +1717,7 @@ describe("关键用户流程", () => {
       quality: { complete_rate: 100 },
       schema: [],
       audit: [],
-      versions: [{ id: "products-v2", version: 2 }],
+      version_id: "products-v2",
     };
     apiMock.datasets.mockResolvedValue([productDataset]);
     apiMock.dataset.mockResolvedValue(productDataset);
@@ -1727,17 +1778,14 @@ describe("关键用户流程", () => {
       quality: { complete_rate: 100 },
       schema: [],
       audit: [],
-      versions: [{ id: "products-v2", version: 2 }],
+      version_id: "products-v2",
     };
     apiMock.datasets.mockResolvedValue([productDataset]);
     apiMock.dataset.mockResolvedValue(productDataset);
     apiMock.completeProductCategories.mockResolvedValue({
       ...productDataset,
       current_version: 3,
-      versions: [
-        { id: "products-v3", version: 3 },
-        { id: "products-v2", version: 2 },
-      ],
+      version_id: "products-v3",
     });
 
     render(

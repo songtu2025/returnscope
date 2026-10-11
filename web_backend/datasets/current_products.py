@@ -8,7 +8,9 @@ from typing import Any
 import pandas as pd
 
 from web_backend.common import insert_audit, json_text, json_value
+from web_backend.dashboards.product_scope import capture_dashboard_product_scopes
 from web_backend.dataset_files import PRODUCT_WORKSHEET, DatasetRevisionConflict
+from web_backend.datasets.product_aliases import product_aliases, save_product_aliases
 
 
 def product_identities(frame: pd.DataFrame) -> list[tuple[str, str]]:
@@ -81,7 +83,17 @@ def update_current_products(connection: Any, write: Any, now: str) -> tuple[int,
         "UPDATE datasets SET current_version = ?, updated_at = ? WHERE id = ?",
         (revision, now, write.dataset_id),
     )
-    if write.prepared.get("manual_edit"):
+    if audit := write.prepared.get("product_audit"):
+        insert_audit(
+            connection,
+            "dataset",
+            write.dataset_id,
+            audit["action"],
+            write.actor_id,
+            before=audit["before"],
+            after=audit["after"],
+            created_at=now,
+        )
         return revision, str(source["id"])
     insert_audit(
         connection,
@@ -118,13 +130,16 @@ def sync_product_display(
     ).fillna("")
     grouped: dict[tuple[str, str], list[dict[Any, Any]]] = {}
     identities = product_identities(frame)
+    if previous_identities is not None:
+        save_product_aliases(connection, dataset_id, previous_identities, identities)
     for index, product in enumerate(frame.to_dict(orient="records")):
         identity = identities[index]
         grouped.setdefault(identity, []).append(product)
-        if previous_identities and index < len(previous_identities):
-            previous = previous_identities[index]
-            if previous != identity:
-                grouped.setdefault(previous, []).append(product)
+    for previous, current in product_aliases(connection, dataset_id).items():
+        if previous in grouped:
+            raise ValueError("历史商品标识被重复使用，请核对店铺和 MSKU")
+        if current in grouped:
+            grouped[previous] = grouped[current]
     for identity, products in grouped.items():
         product = products[0]
         fields = {
@@ -155,10 +170,21 @@ def refresh_product_dependents(
     now: str,
     *,
     previous_identities: list[tuple[str, str]] | None = None,
+    product_scopes: dict[str, dict[str, list[str]]] | None = None,
 ) -> None:
     from web_backend.dashboards.live_sources import refresh_related_dashboards
 
+    scopes = (
+        product_scopes
+        if product_scopes is not None
+        else capture_dashboard_product_scopes(connection, dataset_id)
+    )
     sync_product_display(connection, dataset_id, previous_identities)
     refresh_related_dashboards(
-        database, connection, None, now, product_dataset_id=dataset_id
+        database,
+        connection,
+        None,
+        now,
+        product_dataset_id=dataset_id,
+        product_scopes=scopes,
     )

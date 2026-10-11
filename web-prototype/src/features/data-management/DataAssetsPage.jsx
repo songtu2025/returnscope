@@ -9,7 +9,7 @@ import { ImportRulesPage } from "./ImportRulesPage";
 
 /** @typedef {import("./productMasterContracts").Navigate} Navigate */
 /** @typedef {import("./productMasterContracts").TaskRepairContext} TaskRepairContext */
-/** @typedef {{query: {view?: string, dataset?: string, return_to?: string, tab?: string, reference_version?: string, reference_page?: string | number}}} DataAssetsRoute */
+/** @typedef {{query: {view?: string, dataset?: string, return_to?: string, tab?: string, reference_page?: string | number}}} DataAssetsRoute */
 
 /**
  * @param {{route: DataAssetsRoute, notify: (message: string, tone?: string) => void, onNavigate: Navigate, userId: string}} props
@@ -44,7 +44,11 @@ export function DataAssetsPage({ route, notify, onNavigate, userId }) {
 
   /** @param {Record<string, string | number>} changes */
   const updateRoute = (changes) =>
-    navigateHash("data-assets", { ...route.query, ...changes });
+    navigateHash("data-assets", {
+      ...route.query,
+      ...changes,
+      reference_version: "",
+    });
 
   if (view === "rules") return <ImportRulesPage />;
 
@@ -56,17 +60,12 @@ export function DataAssetsPage({ route, notify, onNavigate, userId }) {
         focus={focus}
         taskDraft={taskDraft}
         routeDetailTab={route.query.tab || ""}
-        routeReferenceVersion={route.query.reference_version || ""}
         routeReferencePage={route.query.reference_page || 1}
         onAssetViewChange={(nextView) =>
           updateRoute({ view: nextView, dataset: "", tab: "" })
         }
-        onDetailTabChange={(tab) =>
-          navigateHash("data-assets", { ...route.query, tab })
-        }
-        onReferenceRouteChange={(changes) =>
-          navigateHash("data-assets", { ...route.query, ...changes })
-        }
+        onDetailTabChange={(tab) => updateRoute({ tab })}
+        onReferenceRouteChange={updateRoute}
         onReturnToTask={(productVersionId) => {
           updateTaskDraft(userId, {
             ...taskDraft,

@@ -8,7 +8,7 @@ from typing import Any
 import pandas as pd
 
 from return_semantics.data import PRODUCT_CATEGORY_COLUMNS, PRODUCT_COLUMNS
-from web_backend.common import add_audit, new_id
+from web_backend.common import new_id
 from web_backend.database import Database
 from web_backend.dataset_files import PRODUCT_WORKSHEET, DatasetRevisionConflict
 from web_backend.datasets.current_products import product_identities
@@ -88,6 +88,7 @@ class DatasetProductWorkbookMixin:
         edit: _ProductWorkbookEdit,
         change_note: str,
         actor_id: str,
+        audit: dict[str, Any],
     ) -> dict[str, Any]:
         edit.workbook[PRODUCT_WORKSHEET] = edit.frame
         temp_path = self.settings.data_dir / "tmp" / f"{new_id('dimension')}.xlsx"
@@ -105,6 +106,7 @@ class DatasetProductWorkbookMixin:
                 actor_id=actor_id,
                 expected_current_version=edit.expected_version,
                 _product_previous_identities=edit.previous_identities,
+                _product_audit=audit,
             )
         finally:
             temp_path.unlink(missing_ok=True)
@@ -238,25 +240,18 @@ class DatasetProductWorkbookMixin:
             changes,
         )
         self._apply_product_row_change(edit.frame, row_index, changed)
-        result = self._persist_product_workbook(
-            edit,
-            change_note or f"修改商品维度第 {row_index + 2} 行",
-            actor_id,
-        )
-        add_audit(
-            self.database,
-            "dataset",
-            dataset_id,
-            "dimension_row_update",
-            actor_id,
-            before={"row_index": row_index, "values": before},
-            after={
+        audit = {
+            "action": "dimension_row_update",
+            "before": {"row_index": row_index, "values": before},
+            "after": {
                 "row_index": row_index,
                 "values": changed,
                 "note": change_note.strip(),
             },
+        }
+        return self._persist_product_workbook(
+            edit, change_note or f"修改商品维度第 {row_index + 2} 行", actor_id, audit
         )
-        return self.get(dataset_id) or result
 
     def complete_product_categories(
         self,
@@ -281,18 +276,13 @@ class DatasetProductWorkbookMixin:
             edit.frame,
             normalized_items,
         )
-        result = self._persist_product_workbook(edit, change_note, actor_id)
-        add_audit(
-            self.database,
-            "dataset",
-            dataset_id,
-            "dimension_category_completion",
-            actor_id,
-            before={"items": before_items},
-            after={
+        audit = {
+            "action": "dimension_category_completion",
+            "before": {"items": before_items},
+            "after": {
                 "store": fallback_store,
                 "items": normalized_items,
                 "note": change_note.strip(),
             },
-        )
-        return self.get(dataset_id) or result
+        }
+        return self._persist_product_workbook(edit, change_note, actor_id, audit)

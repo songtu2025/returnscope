@@ -111,10 +111,6 @@
   background: #fbfdfb;
 }
 
-.product-master-page .version-list {
-  min-height: 0;
-}
-
 .product-master-page .data-audit-list > .muted-line {
   display: grid;
   min-height: 116px;
@@ -165,10 +161,6 @@
 
 .product-info-name-field {
   grid-column: 1 / -1;
-}
-
-.product-info-edit-form .snapshot-notice {
-  margin: 0;
 }
 
 .product-info-edit-form .modal-actions {

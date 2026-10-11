@@ -138,9 +138,6 @@ function productMasterSelection(selected) {
         "dimension_category_completion",
       ].includes(entry.action),
     ) ?? [];
-  const currentVersionId =
-    selected?.version_id ??
-    selected?.versions?.find((version) => version.version === selected.current_version)
-      ?.id;
+  const currentVersionId = selected?.version_id;
   return { dimensionAudit, currentVersionId };
 }

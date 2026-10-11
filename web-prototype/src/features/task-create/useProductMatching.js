@@ -76,21 +76,17 @@ export function useProductMatching({
     if (!selectedProducts?.dataset_id) return;
     setSubmitting(true);
     try {
-      const updated =
-        /** @type {{version_id?: string, versions?: {id: string, version: number}[], current_version: number}} */ (
-          await api.completeProductCategories(selectedProducts.dataset_id, {
-            expected_version: selectedProducts.version,
-            store: primaryPlanStore(preflight.data),
-            items,
-            change_note: `确认任务“${
-              form.title || selectedReturns?.dataset_name || "用户反馈数据"
-            }”的商品关联`,
-          })
-        );
-      const latestId =
-        updated.version_id ??
-        updated.versions?.find((version) => version.version === updated.current_version)
-          ?.id;
+      const updated = /** @type {{version_id: string, current_version: number}} */ (
+        await api.completeProductCategories(selectedProducts.dataset_id, {
+          expected_version: selectedProducts.version,
+          store: primaryPlanStore(preflight.data),
+          items,
+          change_note: `确认任务“${
+            form.title || selectedReturns?.dataset_name || "用户反馈数据"
+          }”的商品关联`,
+        })
+      );
+      const latestId = updated.version_id;
       if (!latestId) {
         throw new Error("产品信息已更新，请刷新后重试");
       }

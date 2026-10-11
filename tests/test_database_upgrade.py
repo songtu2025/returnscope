@@ -82,6 +82,26 @@ def test_empty_production_database_requires_explicit_initialization(
         initialize_empty_database(settings, app_stopped=True)
 
 
+def test_product_alias_upgrade_requires_stop_and_supports_backup_restore(tmp_path):
+    settings = _settings(tmp_path)
+    database = Database(settings.database_path)
+    database.initialize()
+    with database.transaction() as connection:
+        connection.execute("DROP TABLE product_identity_aliases")
+        connection.execute(
+            "DELETE FROM app_migrations WHERE migration_id = '20261011_product_identity_aliases'"
+        )
+    with pytest.raises(RuntimeError, match="缺少表"):
+        database.initialize(production=True)
+    with pytest.raises(ValueError, match="必须停止应用"):
+        upgrade_database(settings, app_stopped=False)
+    backup = upgrade_database(settings, app_stopped=True)
+    database.initialize(production=True)
+    restore_backup(settings, backup)
+    with pytest.raises(RuntimeError, match="缺少表"):
+        database.initialize(production=True)
+
+
 def test_offline_upgrade_restores_missing_schema_and_can_rollback(
     tmp_path: Path,
 ) -> None:

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 
+from web_backend.dashboards.product_scope import PRODUCT_SCOPE
+
 PAGE_SIZE_DEFAULT = 50
 PAGE_SIZE_MAX = 200
 PLAN_VERSION = "dashboard-dataset-plan-v2"
@@ -21,7 +23,7 @@ FILTER_COLUMNS = {
     "order_id": "order_id",
     "quality_status": "quality_status",
 }
-ALLOWED_FILTERS = {"problem", *FILTER_COLUMNS}
+ALLOWED_FILTERS = {"problem", PRODUCT_SCOPE, *FILTER_COLUMNS}
 GROUP_COLUMNS = {
     "listing": "r.listing",
     "product_name": "r.product_name",

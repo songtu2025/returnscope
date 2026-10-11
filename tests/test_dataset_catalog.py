@@ -249,3 +249,45 @@ def test_product_category_completion_rejects_stale_version_before_write(
     assert result["current_version"] == 1
     assert len(result["versions"]) == 1
     assert result["audit"] == []
+
+
+def test_product_alias_can_return_to_its_own_identifier(catalog_context):
+    service, _ = catalog_context
+    service.update_product_row(
+        "dataset-products", 0, 1, {"MSKU": "UPDATED-MSKU"}, "修改标识", "user-1"
+    )
+    result = service.update_product_row(
+        "dataset-products", 0, 2, {"MSKU": "SOURCE-MSKU-1"}, "恢复标识", "user-1"
+    )
+    assert result["current_version"] == 3
+
+
+def test_product_alias_rejects_ambiguous_duplicate_rows(product_completion_context):
+    service, _, _, _, _ = product_completion_context
+    with pytest.raises(ValueError, match="存在重复"):
+        service.update_product_row(
+            "dataset-products", 0, 1, {"MSKU": "UPDATED-MSKU"}, "重复商品", "user-1"
+        )
+    assert service.get("dataset-products")["current_version"] == 1
+
+
+def test_product_audit_failure_rolls_back_saved_data(catalog_context, monkeypatch):
+    service, _ = catalog_context
+    before = service.get("dataset-products")
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("合成留痕失败")
+
+    monkeypatch.setattr("web_backend.datasets.current_products.insert_audit", fail)
+    with pytest.raises(RuntimeError, match="合成留痕失败"):
+        service.update_product_row(
+            "dataset-products", 0, 1, {"MSKU": "UPDATED-MSKU"}, "验证事务", "user-1"
+        )
+    assert service.get("dataset-products") == before
+    with service.database.connect() as connection:
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM product_identity_aliases"
+            ).fetchone()[0]
+            == 0
+        )
