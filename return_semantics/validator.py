@@ -254,3 +254,4 @@ for _entry in (
     _validate_unknown_evidence,
 ):
     _entry.__module__ = __name__
+del _entry
