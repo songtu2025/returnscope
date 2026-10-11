@@ -4,9 +4,9 @@ from typing import Any
 from unittest.mock import call
 
 import pytest
+from dataset_router_helpers import harness as harness
+from dataset_router_helpers import synthetic_user
 from fastapi import HTTPException, UploadFile
-from test_dataset_router_contract import harness as harness
-from test_dataset_router_contract import synthetic_user
 
 from web_backend.routers.datasets import XLSX_CONTENT_TYPE
 
