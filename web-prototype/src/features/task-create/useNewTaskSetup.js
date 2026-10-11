@@ -3,6 +3,7 @@ import useSWR from "swr";
 
 import { api } from "../../api";
 import { serverStateKeys } from "../../shared/serverState";
+import { resolveTaskModelPolicy, taskConnectionSelection } from "./newTaskPolicy";
 
 /** @typedef {import("./taskCreateContracts").ApiConnection} ApiConnection */
 /** @typedef {import("./taskCreateContracts").DataVersion} DataVersion */
@@ -99,15 +100,34 @@ export function useNewTaskSetup(draft) {
     );
   };
 
+  const configs = setup?.connections ?? [];
+  const { publishedConfigs, selectedConfig, selectedConnection } =
+    taskConnectionSelection(configs, form.config_version_id);
+  const availableModels = (selectedConnection?.models ?? []).filter(
+    (model) => model.active && model.validation_status === "validated",
+  );
+  const modelPolicy = resolveTaskModelPolicy(configs, form);
+  const versions = setup?.data ?? [];
+  const products = versions.filter((item) => item.kind === "products");
+  const selectedProducts = products.find(
+    (item) => item.version_id === form.product_version_id,
+  );
+
   return {
-    configs: setup?.connections ?? [],
+    availableModels,
+    configs,
     form,
     loadingSetup: isLoading && !setup,
+    modelPolicy,
+    products,
+    publishedConfigs,
+    selectedConfig,
+    selectedProducts,
     setForm,
     setSetupAttempt: () => void mutate(),
     setVersions,
     setupError: error ? setupErrorMessage(error) : "",
     system: setup?.status ?? null,
-    versions: setup?.data ?? [],
+    versions,
   };
 }

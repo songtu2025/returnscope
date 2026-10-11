@@ -1,6 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../../api";
-import { importNotification, importSelectionLabel } from "./newTaskPolicy";
+import {
+  importNotification,
+  importSelectionLabel,
+  normalizeReturnVersion,
+} from "./newTaskPolicy";
 
 /** @typedef {import("./taskCreateContracts").DataVersion} DataVersion */
 /** @typedef {import("./taskCreateContracts").ReturnImportResult} ReturnImportResult */
@@ -9,18 +13,25 @@ import { importNotification, importSelectionLabel } from "./newTaskPolicy";
 /** @typedef {import("./mysqlReturnContracts").MysqlReturnFormState} MysqlReturnFormState */
 
 /**
- * @param {{draft?: TaskDraft | null, focusAfterPreparationRef: import("react").MutableRefObject<boolean>, invalidatePreflight: () => void, notify: (message: string, type?: "success" | "error") => void, onChanged: () => void | Promise<unknown>, setForm: import("react").Dispatch<import("react").SetStateAction<TaskForm>>, setPrepared: import("react").Dispatch<import("react").SetStateAction<boolean>>, setVersions: import("react").Dispatch<import("react").SetStateAction<DataVersion[]>>}} options
+ * @param {{draft?: TaskDraft | null, focusAfterPreparationRef: import("react").MutableRefObject<boolean>, form: TaskForm, invalidatePreflight: () => void, invalidateUnavailableSource: () => void, loadingSetup: boolean, notify: (message: string, type?: "success" | "error") => void, onChanged: () => void | Promise<unknown>, onDraftChange?: (draft: TaskDraft) => void, prepared: boolean, setForm: import("react").Dispatch<import("react").SetStateAction<TaskForm>>, setPrepared: import("react").Dispatch<import("react").SetStateAction<boolean>>, setVersions: import("react").Dispatch<import("react").SetStateAction<DataVersion[]>>, setupError: string, versions: DataVersion[]}} options
  */
 
 export function useTaskImport({
   draft,
   focusAfterPreparationRef,
+  form,
   invalidatePreflight,
+  invalidateUnavailableSource,
+  loadingSetup,
   notify,
   onChanged,
+  onDraftChange,
+  prepared,
   setForm,
   setPrepared,
   setVersions,
+  setupError,
+  versions,
 }) {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [mysqlDraft, setMysqlDraft] = useState(
@@ -30,6 +41,67 @@ export function useTaskImport({
   const [selectedDataLabel, setSelectedDataLabel] = useState(
     draft?.selectedDataLabel ?? "",
   );
+  const allReturns = versions
+    .filter((item) => item.kind === "returns" && item.usage_scope === "task_input")
+    .map(normalizeReturnVersion);
+  const selectedReturns = allReturns.find(
+    (item) => item.version_id === form.dataset_version_id,
+  );
+
+  useEffect(() => {
+    onDraftChange?.({
+      form,
+      step: prepared ? 2 : 1,
+      resumePreflight: prepared,
+      dataEntryMode,
+      selectedDataLabel,
+      mysqlDraft,
+    });
+  }, [dataEntryMode, form, mysqlDraft, onDraftChange, selectedDataLabel, prepared]);
+
+  useEffect(() => {
+    if (loadingSetup || setupError || !form.dataset_version_id || selectedReturns)
+      return;
+    setPrepared(false);
+    invalidateUnavailableSource();
+    setForm((current) => ({ ...current, dataset_version_id: "" }));
+    notify(
+      "草稿中的分析数据已失效，请重新读取数据库或上传文件；其他设置已保留。",
+      "error",
+    );
+  }, [
+    loadingSetup,
+    setupError,
+    form.dataset_version_id,
+    selectedReturns,
+    invalidateUnavailableSource,
+    setForm,
+    setPrepared,
+    notify,
+  ]);
+
+  /** @param {TaskForm} next */
+  const updateForm = (next) => {
+    if (next.dataset_version_id !== form.dataset_version_id) {
+      invalidatePreflight();
+      setPrepared(false);
+    }
+    setForm(next);
+  };
+
+  /** @param {"mysql" | "upload"} nextMode */
+  const changeDataEntryMode = (nextMode) => {
+    if (nextMode === dataEntryMode) return;
+    setDataEntryMode(nextMode);
+    setSelectedDataLabel("");
+    updateForm({ ...form, dataset_version_id: "" });
+  };
+
+  const invalidateMysql = () => {
+    invalidatePreflight();
+    setPrepared(false);
+    setForm((current) => ({ ...current, dataset_version_id: "" }));
+  };
 
   /**
    * @param {ReturnImportResult} result
@@ -61,14 +133,16 @@ export function useTaskImport({
   };
 
   return {
+    changeDataEntryMode,
     dataEntryMode,
     finishImport,
+    invalidateMysql,
     mysqlDraft,
     selectedDataLabel,
-    setDataEntryMode,
+    selectedReturns,
     setMysqlDraft,
-    setSelectedDataLabel,
     setUploadOpen,
+    updateForm,
     uploadOpen,
   };
 }

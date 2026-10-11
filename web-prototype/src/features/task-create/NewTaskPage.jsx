@@ -5,10 +5,7 @@ import { taskPlanCounts } from "../task-planning/taskPlanPolicy";
 import { TaskLaunchActions } from "./NewTaskActions";
 import { NewTaskView } from "./NewTaskView";
 import {
-  normalizeReturnVersion,
-  resolveTaskModelPolicy,
   taskConnectionPolicy,
-  taskConnectionSelection,
   taskDataScopeLabel,
   taskLaunchCopy,
   taskPlanViewState,
@@ -21,7 +18,6 @@ import { useTaskPreflight } from "./useTaskPreflight";
 import { submitNewTask } from "./newTaskSubmission";
 
 /** @typedef {import("./taskCreateContracts").TaskDraft} TaskDraft */
-/** @typedef {import("./taskCreateContracts").TaskForm} TaskForm */
 /**
  * @param {{onNavigate: import("../../app/navigation").Navigate, notify: (message: string, type?: "success" | "error") => void, onChanged: () => void | Promise<unknown>, draft?: TaskDraft | null, onDraftChange?: (draft: TaskDraft) => void, onDraftComplete?: () => void}} props
  */
@@ -45,9 +41,15 @@ export function NewTaskPage({
     headingRef.current?.focus();
   }, []);
   const {
+    availableModels,
     configs,
     form,
     loadingSetup,
+    modelPolicy,
+    products,
+    publishedConfigs,
+    selectedConfig,
+    selectedProducts,
     setForm,
     setSetupAttempt,
     setVersions,
@@ -77,62 +79,40 @@ export function NewTaskPage({
     setSubmitError,
   });
 
-  const allReturns = versions
-    .filter((item) => item.kind === "returns" && item.usage_scope === "task_input")
-    .map(normalizeReturnVersion);
-  const products = versions.filter((item) => item.kind === "products");
-  const { publishedConfigs, selectedConfig, selectedConnection } =
-    taskConnectionSelection(configs, form.config_version_id);
-  const availableModels = (selectedConnection?.models ?? []).filter(
-    (model) => model.active && model.validation_status === "validated",
-  );
-  const modelPolicy = resolveTaskModelPolicy(configs, form);
-
   const invalidateTaskPreflight = () => {
     focusAfterPreparation.current = false;
     setSubmitError("");
     invalidatePreflight();
   };
   const {
+    changeDataEntryMode,
     dataEntryMode,
     finishImport,
+    invalidateMysql,
     mysqlDraft,
     selectedDataLabel,
-    setDataEntryMode,
+    selectedReturns,
     setMysqlDraft,
-    setSelectedDataLabel,
     setUploadOpen,
+    updateForm,
     uploadOpen,
   } = useTaskImport({
     draft,
     focusAfterPreparationRef: focusAfterPreparation,
+    form,
     invalidatePreflight: invalidateTaskPreflight,
+    invalidateUnavailableSource: invalidatePreflight,
+    loadingSetup,
     notify,
     onChanged,
+    onDraftChange,
+    prepared,
     setForm,
     setPrepared,
     setVersions,
+    setupError,
+    versions,
   });
-
-  useEffect(() => {
-    onDraftChange?.({
-      form,
-      step: prepared ? 2 : 1,
-      resumePreflight: prepared,
-      dataEntryMode,
-      selectedDataLabel,
-      mysqlDraft,
-    });
-  }, [dataEntryMode, form, mysqlDraft, onDraftChange, selectedDataLabel, prepared]);
-
-  /** @param {TaskForm} next */
-  const updateForm = (next) => {
-    if (next.dataset_version_id !== form.dataset_version_id) {
-      invalidateTaskPreflight();
-      setPrepared(false);
-    }
-    setForm(next);
-  };
 
   /** @param {Record<string, string | number>} changes */
   const updateModelPolicy = (changes) => {
@@ -150,31 +130,6 @@ export function NewTaskPage({
       model_policy: modelPolicy,
     }));
   };
-  const selectedReturns = allReturns.find(
-    (item) => item.version_id === form.dataset_version_id,
-  );
-  useEffect(() => {
-    if (loadingSetup || setupError || !form.dataset_version_id || selectedReturns)
-      return;
-    setPrepared(false);
-    invalidatePreflight();
-    setForm((current) => ({ ...current, dataset_version_id: "" }));
-    notify(
-      "草稿中的分析数据已失效，请重新读取数据库或上传文件；其他设置已保留。",
-      "error",
-    );
-  }, [
-    loadingSetup,
-    setupError,
-    form.dataset_version_id,
-    selectedReturns,
-    invalidatePreflight,
-    setForm,
-    notify,
-  ]);
-  const selectedProducts = products.find(
-    (item) => item.version_id === form.product_version_id,
-  );
   const { matchingOpen, resolveCategories, saveProductMatches, setMatchingOpen } =
     useProductMatching({
       dataEntryMode,
@@ -294,23 +249,14 @@ export function NewTaskPage({
           selectedReturns,
           dataEntryMode,
           selectedDataLabel,
-          onDataEntryModeChange: (/** @type {"mysql" | "upload"} */ nextMode) => {
-            if (nextMode === dataEntryMode) return;
-            setDataEntryMode(nextMode);
-            setSelectedDataLabel("");
-            updateForm({ ...form, dataset_version_id: "" });
-          },
+          onDataEntryModeChange: changeDataEntryMode,
           mysqlDraft,
           setMysqlDraft,
           setMysqlState,
           mysqlState,
           prepared,
           scopeLabel,
-          onInvalidateMysql: () => {
-            invalidateTaskPreflight();
-            setPrepared(false);
-            setForm((current) => ({ ...current, dataset_version_id: "" }));
-          },
+          onInvalidateMysql: invalidateMysql,
         }}
         plan={{
           preflight,
