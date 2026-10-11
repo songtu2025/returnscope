@@ -10,6 +10,8 @@ from web_backend.classification_standard_validation_service import (
     ClassificationStandardValidationService,
 )
 
+_MAX_REVIEW_UPLOAD_BYTES = 20 * 1024 * 1024
+
 
 class _ValidationOperations:
     def __init__(
@@ -111,8 +113,8 @@ def register_validation_routes(
         comparison_type: Annotated[str, Form()] = "standard_version",
     ) -> dict[str, Any]:
         try:
-            content = await file.read(20 * 1024 * 1024 + 1)
-            if len(content) > 20 * 1024 * 1024:
+            content = await file.read(_MAX_REVIEW_UPLOAD_BYTES + 1)
+            if len(content) > _MAX_REVIEW_UPLOAD_BYTES:
                 raise ValueError("Review 文件不能超过20MB")
             return validation_service.create_run(
                 draft_id,

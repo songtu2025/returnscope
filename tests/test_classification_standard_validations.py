@@ -5,8 +5,10 @@ import json
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
+from unittest.mock import Mock
 
 import pandas as pd
+import pytest
 
 from return_semantics.pipeline import PipelineRun
 from return_semantics.schemas import ProcessingStatus, ValidatedClassification
@@ -799,6 +801,50 @@ def test_review_upload_keeps_source_context_and_isolated_validation(tmp_path):
     assert completed["publication_ready"] is False
 
 
+@pytest.mark.parametrize("size_delta", [-1, 0, 1])
+def test_review_upload_enforces_size_limit_before_service_call(size_delta: int) -> None:
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from web_backend.routers.classification_standards import (
+        create_classification_standard_router,
+    )
+
+    validations = Mock(spec=ClassificationStandardValidationService)
+    validations.create_run.return_value = {"id": "synthetic-validation"}
+    app = FastAPI()
+    app.include_router(
+        create_classification_standard_router(
+            Mock(spec=ClassificationStandardService),
+            validations,
+            lambda: {"id": "user-1", "role": "user"},
+        )
+    )
+    content = b"a" * (20 * 1024 * 1024 + size_delta)
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/classification-standard-drafts/draft-1/review-validation-runs",
+            data={"expected_revision": 1},
+            files={"file": ("synthetic.xlsx", content, "application/octet-stream")},
+        )
+    if size_delta > 0:
+        assert response.status_code == 400
+        assert response.json() == {"detail": "Review 文件不能超过20MB"}
+        validations.create_run.assert_not_called()
+    else:
+        assert response.status_code == 201
+        assert response.json() == {"id": "synthetic-validation"}
+        validations.create_run.assert_called_once_with(
+            "draft-1",
+            1,
+            "",
+            20,
+            "user-1",
+            review_file=("synthetic.xlsx", content),
+            comparison_type="standard_version",
+        )
+
+
 def test_review_coverage_and_changes_include_positive_semantics():
     from return_semantics.schemas import SemanticUnit
 
@@ -903,8 +949,6 @@ def test_validation_changes_separate_primary_policy_from_semantic_units():
 
 
 def test_keyword_comparison_uses_same_taxonomy_and_cannot_approve(tmp_path):
-    import pytest
-
     standards, validations = _services(tmp_path)
     standard = next(
         item for item in standards.list() if item["standard_key"] == "eyewear"
@@ -952,8 +996,6 @@ def test_keyword_comparison_uses_same_taxonomy_and_cannot_approve(tmp_path):
 def test_quality_policy_warns_but_does_not_block_direct_publishing(
     tmp_path,
 ):
-    import pytest
-
     from web_backend.classification_validation_quality import FACT_QUALITY_POLICY
 
     standards, validations = _services(tmp_path)
