@@ -49,6 +49,27 @@ def test_filter_details_combines_date_and_label_filters() -> None:
     assert result["分类键"].tolist() == ["key-2"]
 
 
+@pytest.mark.parametrize(
+    ("problem_codes", "expected_rows"),
+    [([], 3), (["FIT_TOO_SMALL"], 2), (["MISSING"], 0)],
+)
+def test_filter_details_isolates_returned_data_and_attributes(
+    problem_codes: list[str], expected_rows: int
+) -> None:
+    frame = _details()
+    frame.attrs = {"synthetic": {"values": [1, 2]}}
+    original = frame.copy()
+
+    result = filter_details(frame, problem_codes=problem_codes)
+
+    assert len(result) == expected_rows
+    assert result.attrs == frame.attrs
+    result.loc[0, "sku"] = "synthetic-changed"
+    result.attrs["synthetic"]["values"].append(3)
+    pd.testing.assert_frame_equal(frame, original)
+    assert frame.attrs == original.attrs
+
+
 def test_label_summary_counts_each_record_once_per_label() -> None:
     result = label_summary(_details(), "问题标签", _catalog())
 

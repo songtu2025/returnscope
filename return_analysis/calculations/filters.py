@@ -24,7 +24,7 @@ def filter_details(
     problem_codes: Iterable[str] = (),
     claim_relations: Iterable[str] = (),
 ) -> pd.DataFrame:
-    result = frame.copy()
+    result = frame
     if start_date is not None:
         result = result.loc[result["return_date"].dt.date >= start_date]
     if end_date is not None:
