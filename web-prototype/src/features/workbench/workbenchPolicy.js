@@ -28,7 +28,12 @@ export function openTarget(target) {
   const destination = routeForTarget(target);
   if (!destination) return;
   if (target?.action === "review" && destination.page === "classification-results") {
-    navigateHash(destination.page, { ...destination.query, tab: "history" });
+    navigateHash(destination.page, {
+      ...destination.query,
+      action: "",
+      tab: "",
+      record_quality_status: "review_required",
+    });
     return;
   }
   navigateHash(destination.page, destination.query);
@@ -36,7 +41,7 @@ export function openTarget(target) {
 
 /** @param {WorkbenchAction} action */
 export function nextActionLabel(action) {
-  if (action.type === "review_required") return "创建复核批次";
+  if (action.type === "review_required") return "处理待复核记录";
   if (action.type === "report_running") return "查看进度";
   if (action.type === "report_failed") return "查看并重试";
   return (

@@ -63,7 +63,7 @@ test("工作台只调用一次真实汇总并按具体目标跳转", async () =>
   );
 });
 
-test("需复核待办直接进入创建批次界面", async () => {
+test("需复核待办直接进入待复核反馈，不进入批次或修改历史", async () => {
   summary.mockResolvedValue({
     actions: [
       {
@@ -78,7 +78,10 @@ test("需复核待办直接进入创建批次界面", async () => {
         target: {
           route: "classification-results",
           result_version_id: "result-review-1",
+          task_id: "task-review-1",
+          segment_id: "segment-review-1",
           action: "review",
+          tab: "history",
         },
       },
     ],
@@ -88,11 +91,16 @@ test("需复核待办直接进入创建批次界面", async () => {
 
   render(<WorkbenchPage onNavigate={vi.fn()} />);
 
-  await userEvent.click(await screen.findByText("SR002 分类结果"));
+  const action = await screen.findByRole("button", {
+    name: /SR002 分类结果.*处理待复核记录/,
+  });
+  expect(screen.queryByText("创建复核批次")).not.toBeInTheDocument();
+  action.focus();
+  await userEvent.keyboard("{Enter}");
 
-  expect(window.location.hash).toContain("result_version_id=result-review-1");
-  expect(window.location.hash).toContain("action=review");
-  expect(window.location.hash).toContain("tab=history");
+  expect(window.location.hash).toBe(
+    "#classification-results?task_id=task-review-1&segment_id=segment-review-1&result_version_id=result-review-1&record_quality_status=review_required",
+  );
 });
 
 test("原子汇总失败只显示一个共享错误和一次重试", async () => {

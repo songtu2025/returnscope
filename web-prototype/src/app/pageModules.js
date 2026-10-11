@@ -63,7 +63,10 @@ const PAGE_PRELOADERS = {
 /** @param {string} page */
 export function preloadPage(page) {
   const loader = PAGE_PRELOADERS[page];
-  if (loader) void loader();
+  // 预加载只是导航加速；失败时保持当前编辑，实际打开页面再由错误边界处理。
+  return loader?.().catch((error) => {
+    console.warn("页面预加载失败，将在打开页面时重试。", error);
+  });
 }
 
 export {

@@ -22,6 +22,7 @@ vi.mock("../src/app/pageModules", async () => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("页面加载错误恢复", () => {
@@ -64,5 +65,40 @@ describe("页面加载错误恢复", () => {
       expect(screen.getByRole("heading", { name: "数据资产" })).toBeInTheDocument(),
     );
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  test.each([
+    "Failed to fetch dynamically imported module: /assets/old-page.js",
+    "error loading dynamically imported module: /assets/old-page.js",
+    "Importing a module script failed.",
+    "Unable to preload CSS for /assets/old-page.css",
+  ])("资源失败提供明确恢复入口，保留路由且不自动刷新：%s", async (message) => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const reload = vi.fn();
+    const hash = "#classification-results?record_quality_status=review_required";
+    const location = { hash, reload };
+    vi.stubGlobal(
+      "window",
+      new Proxy(window, {
+        get: (target, key) =>
+          key === "location" ? location : Reflect.get(target, key, target),
+      }),
+    );
+    function BrokenPage() {
+      throw new TypeError(message);
+    }
+    render(
+      <PageErrorBoundary>
+        <BrokenPage />
+      </PageErrorBoundary>,
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent("页面资源加载失败");
+    expect(screen.getByText("请检查网络，或刷新获取最新页面。")).toBeVisible();
+    expect(screen.queryByText(message)).not.toBeInTheDocument();
+    expect(reload).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "刷新页面" }));
+    expect(reload).toHaveBeenCalledOnce();
+    expect(location.hash).toBe(hash);
   });
 });
