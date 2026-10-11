@@ -30,12 +30,6 @@ import { ReviewBatchPage } from "../src/features/review-batches/ReviewBatchPage"
 import { ReviewBatchList } from "../src/features/review-batches/ReviewBatchList";
 import { reviewBatchRouteState } from "../src/features/review-batches/reviewBatchRoute";
 
-function expectSelectedOption(label, option) {
-  expect(
-    screen.getByRole("combobox", { name: label }).closest(".ant-select"),
-  ).toHaveTextContent(option);
-}
-
 async function selectOption(label, option) {
   const combobox = screen.getByRole("combobox", { name: label });
   fireEvent.mouseDown(
@@ -161,17 +155,17 @@ test("复核批次详情等待时保留返回入口与页面占位", async () =>
     />,
   );
 
-  expect(await screen.findByText("正在读取复核批次…")).toBeVisible();
-  expect(screen.getByRole("button", { name: "返回复核批次列表" })).toBeVisible();
+  expect(await screen.findByText("正在读取历史复核记录…")).toBeVisible();
+  expect(screen.getByRole("button", { name: "返回历史复核记录" })).toBeVisible();
   expect(
-    screen.getByText("正在读取复核批次…").closest(".standard-page"),
+    screen.getByText("正在读取历史复核记录…").closest(".standard-page"),
   ).toBeInTheDocument();
 
   await act(async () => resolveBatch(baseBatch));
-  expect(screen.queryByText("正在读取复核批次…")).not.toBeInTheDocument();
+  expect(screen.queryByText("正在读取历史复核记录…")).not.toBeInTheDocument();
 });
 
-test("批次列表从 URL 恢复服务端筛选并进入批次", async () => {
+test("批次列表从 URL 恢复服务端筛选并查看历史", async () => {
   reviewBatchApiMock.reviewBatches.mockResolvedValue({
     items: [baseBatch],
     total: 21,
@@ -190,10 +184,8 @@ test("批次列表从 URL 恢复服务端筛选并进入批次", async () => {
   for (const label of ["关键词", "批次状态"]) {
     expect(within(filters).getByText(label, { selector: "span" })).toBeVisible();
   }
-  expect(screen.getByRole("button", { name: "复核记录" })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
+  expect(screen.getByRole("button", { name: "返回分类结果池" })).toBeVisible();
+  expect(screen.queryByRole("button", { name: "复核记录" })).toBeNull();
   expect(reviewBatchApiMock.reviewBatches).toHaveBeenCalledWith(
     {
       page: 2,
@@ -204,7 +196,7 @@ test("批次列表从 URL 恢复服务端筛选并进入批次", async () => {
     },
     expect.objectContaining({ signal: expect.any(AbortSignal) }),
   );
-  await userEvent.click(screen.getByRole("button", { name: /进入批次/ }));
+  await userEvent.click(screen.getByRole("button", { name: /查看历史/ }));
   expect(window.location.hash).toContain("review_batch_id=review-batch-1");
   expect(window.location.hash).toContain("result_version_id=classification-version-1");
 });
@@ -237,7 +229,7 @@ test("编辑批次筛选草稿不提前请求，确认筛选才更新路由", as
   });
 });
 
-test("进入批次只重置原有记录筛选，保留分页大小与返回上下文", async () => {
+test("查看历史只重置原有记录筛选，保留分页大小与返回上下文", async () => {
   reviewBatchApiMock.reviewBatches.mockResolvedValue({ items: [baseBatch], total: 1 });
   const updateRoute = vi.fn();
   render(
@@ -254,7 +246,7 @@ test("进入批次只重置原有记录筛选，保留分页大小与返回上�
       updateRoute={updateRoute}
     />,
   );
-  await userEvent.click(await screen.findByRole("button", { name: /进入批次/ }));
+  await userEvent.click(await screen.findByRole("button", { name: /查看历史/ }));
   expect(updateRoute).toHaveBeenCalledExactlyOnceWith({
     batchId: baseBatch.id,
     resultVersionId: baseBatch.base_result_version_id,
@@ -315,7 +307,7 @@ test("空复核记录引导用户查看待复核分类结果", async () => {
   const user = userEvent.setup();
   render(<ReviewBatchPage route={{ query: {} }} notify={vi.fn()} />);
 
-  await user.click(await screen.findByRole("button", { name: /查看待复核结果/ }));
+  await user.click(await screen.findByRole("button", { name: /查看分类结果/ }));
 
   expect(window.location.hash).toBe(
     "#classification-results?quality_status=review_required",
@@ -356,9 +348,15 @@ test("待处理批次展示真实业务字段并阻止提前发布", async () =>
     within(filters).getByRole("button", { name: "筛选", exact: true }),
   ).toBeVisible();
   expect(screen.queryByText("鞋履")).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "还剩 2 条需处理" })).toBeDisabled();
+  expect(
+    screen.queryByRole("button", { name: "还剩 2 条需处理" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "发布派生版本" }),
+  ).not.toBeInTheDocument();
+  expect(reviewBatchApiMock.updateReviewBatchRecord).not.toHaveBeenCalled();
 
-  await userEvent.click(screen.getByRole("button", { name: "处理" }));
+  await userEvent.click(screen.getByRole("button", { name: "查看" }));
   const drawer = screen.getByRole("dialog", { name: "ORDER-001、ORDER-002" });
   expect(within(drawer).getByText("产品表名称")).toBeVisible();
   expect(within(drawer).getByText("PRODUCT-SKU-1")).toBeVisible();
@@ -387,148 +385,16 @@ test("复核记录摘要展示完整问题和正向标签而非主因标签", as
   expect(screen.queryByText("尺寸 → 偏小")).not.toBeInTheDocument();
 });
 
-test("修改分类时不使用主因作为预选标签", async () => {
-  const semanticRecord = {
-    ...baseRecord,
-    classification: {
-      ...baseRecord.classification,
-      primary_label_codes: ["FIT_TOO_SMALL"],
-      problem_label_codes: ["FIT_TOO_LARGE"],
-      positive_label_codes: [],
-    },
-  };
-
-  render(page(baseBatch, [semanticRecord]));
-
-  await userEvent.click(await screen.findByRole("button", { name: "处理" }));
-  await userEvent.click(screen.getByRole("button", { name: /修改分类/ }));
-  expectSelectedOption("修改分类标签", "偏大 · FIT_TOO_LARGE");
-  await userEvent.type(screen.getByRole("textbox", { name: "搜索分类标签" }), "偏");
-  await userEvent.click(
-    screen.getByRole("button", { name: "确认原结果", exact: true }),
-  );
-  await userEvent.click(screen.getByRole("button", { name: "修改分类", exact: true }));
-  expect(screen.getByRole("textbox", { name: "搜索分类标签" })).toHaveValue("偏");
-});
-
-test("待处理记录回填已存在的复核质量判断", async () => {
-  const assessedRecord = {
-    ...baseRecord,
-    classification: {
-      ...baseRecord.classification,
-      human_review_assessment: {
-        label_correctness: "incorrect",
-        evidence_completeness: "partial",
-        review_routing: "should_auto_approve",
-      },
-    },
-  };
-  render(page(baseBatch, [assessedRecord]));
-
-  await userEvent.click(await screen.findByRole("button", { name: "处理" }));
-  expectSelectedOption("标签正确性", "错误");
-  expectSelectedOption("证据完整性", "部分完整");
-  expectSelectedOption("路由合理性", "本应自动通过");
-});
-
-test("再次保存已有逐项修订时不会回传服务端审计元数据", async () => {
-  const reviewedRecord = {
-    ...baseRecord,
-    classification: {
-      ...baseRecord.classification,
-      semantic_review: {
-        semantic_items: [
-          {
-            item_id: "semantic-item-0",
-            evidence_text: "Too small",
-            opinion: "偏小",
-            label_code: "FIT_TOO_SMALL",
-            disposition: "MAPPED",
-          },
-        ],
-        coverage_summary: { mapped: 1 },
-        unexplained_fragments: [],
-      },
-      human_semantic_reviews: [
-        {
-          semantic_item_id: "semantic-item-0",
-          action: "no_tag_needed",
-          label_code: null,
-          note: "仅描述个人偏好",
-          assessed_by: "user-1",
-          assessed_at: "2026-08-12T10:00:00Z",
-        },
-      ],
-      human_added_semantic_items: [
-        {
-          item_id: "manual-1",
-          evidence_text: "for me",
-          opinion: "个人尺寸体验",
-          label_code: "FIT_TOO_LARGE",
-          note: "人工补充的遗漏观点",
-          assessed_by: "user-1",
-          assessed_at: "2026-08-12T10:00:00Z",
-        },
-      ],
-      coverage_review: {
-        status: "has_omission",
-        assessed_by: "user-1",
-        assessed_at: "2026-08-12T10:00:00Z",
-      },
-    },
-  };
-  reviewBatchApiMock.updateReviewBatchRecord.mockResolvedValue({
-    ...reviewedRecord,
-    workflow_status: "resolved",
-    revision: 2,
-  });
-  render(page(baseBatch, [reviewedRecord]));
-
-  await userEvent.click(await screen.findByRole("button", { name: "处理" }));
-  await userEvent.type(
-    screen.getByPlaceholderText("必填：说明确认、修改或排除的判断依据"),
-    "复查后保持已有逐项修订",
-  );
-  await userEvent.click(screen.getByRole("button", { name: "仅保存" }));
-
-  await waitFor(() =>
-    expect(reviewBatchApiMock.updateReviewBatchRecord).toHaveBeenCalledWith(
-      "review-batch-1",
-      "review-record-1",
-      expect.objectContaining({
-        semantic_item_reviews: [
-          {
-            semantic_item_id: "semantic-item-0",
-            action: "no_tag_needed",
-            label_code: null,
-            note: "仅描述个人偏好",
-          },
-        ],
-        added_semantic_items: [
-          {
-            item_id: "manual-1",
-            evidence_text: "for me",
-            opinion: "个人尺寸体验",
-            label_code: "FIT_TOO_LARGE",
-            note: "人工补充的遗漏观点",
-          },
-        ],
-        coverage_status: "has_omission",
-      }),
-    ),
-  );
-});
-
 test("复核抽屉限制键盘焦点并在关闭后恢复触发按钮", async () => {
   render(page());
-  const trigger = await screen.findByRole("button", { name: "处理" });
+  const trigger = await screen.findByRole("button", { name: "查看" });
   await userEvent.click(trigger);
   const drawer = screen.getByRole("dialog", { name: "ORDER-001、ORDER-002" });
   const close = within(drawer).getByRole("button", { name: "关闭复核抽屉" });
   expect(close).toHaveFocus();
   await userEvent.tab({ shift: true });
   expect(
-    within(drawer).getByPlaceholderText("必填：说明确认、修改或排除的判断依据"),
+    within(drawer).getByText("查看完整语义详情", { selector: "summary" }),
   ).toHaveFocus();
   await userEvent.keyboard("{Escape}");
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -551,62 +417,6 @@ test("产品快照字段缺失时明确显示未提供且不用品类兜底", as
   expect(await screen.findAllByText("未提供")).not.toHaveLength(0);
   expect(screen.queryByText("鞋履")).not.toBeInTheDocument();
   expect(screen.queryByText("儿童水鞋")).not.toBeInTheDocument();
-});
-
-test("确认原结果同时提交标签、证据和路由质量判断", async () => {
-  reviewBatchApiMock.updateReviewBatchRecord.mockResolvedValue({
-    id: baseRecord.id,
-    workflow_status: "resolved",
-    revision: 2,
-  });
-  const resolvedRecord = {
-    ...baseRecord,
-    workflow_status: "resolved",
-    revision: 2,
-  };
-  const view = page();
-  reviewBatchApiMock.reviewBatchRecords
-    .mockResolvedValueOnce({ items: [baseRecord], total: 1, page: 1, page_size: 20 })
-    .mockResolvedValue({ items: [resolvedRecord], total: 1, page: 1, page_size: 20 });
-  render(view);
-
-  await userEvent.click(await screen.findByRole("button", { name: "处理" }));
-  expectSelectedOption("标签正确性", "正确");
-  expectSelectedOption("证据完整性", "完整");
-  expectSelectedOption("路由合理性", "路由正确");
-  await selectOption("标签正确性", "部分正确");
-  await selectOption("证据完整性", "缺失");
-  await selectOption("路由合理性", "本应自动通过");
-  await userEvent.type(
-    screen.getByPlaceholderText("必填：说明确认、修改或排除的判断依据"),
-    "证据与原标签一致",
-  );
-  await userEvent.click(screen.getByRole("button", { name: "仅保存" }));
-
-  await waitFor(() =>
-    expect(reviewBatchApiMock.updateReviewBatchRecord).toHaveBeenCalledWith(
-      "review-batch-1",
-      "review-record-1",
-      {
-        expected_revision: 1,
-        action: "confirm",
-        label_code: null,
-        reason: "证据与原标签一致",
-        label_correctness: "partial",
-        evidence_completeness: "missing",
-        review_routing: "should_auto_approve",
-        semantic_item_reviews: [],
-        added_semantic_items: [],
-        coverage_status: "complete",
-      },
-    ),
-  );
-  const drawer = await screen.findByRole("dialog", {
-    name: "ORDER-001、ORDER-002",
-  });
-  expect(within(drawer).getByText("产品表名称")).toBeVisible();
-  expect(within(drawer).getByText("PRODUCT-SKU-1")).toBeVisible();
-  expect(within(drawer).getByText("2")).toBeVisible();
 });
 
 test("语义核验清单逐项展示并将系统异常置顶且锁定编辑", async () => {
@@ -666,7 +476,7 @@ test("语义核验清单逐项展示并将系统异常置顶且锁定编辑", as
   };
   render(page(baseBatch, [semanticRecord]));
 
-  await userEvent.click(await screen.findByRole("button", { name: "处理" }));
+  await userEvent.click(await screen.findByRole("button", { name: "查看" }));
   const ledger = screen.getByRole("region", { name: "语义核验清单" });
   expect(within(ledger).getByText("无需归类 1")).toBeVisible();
   expect(within(ledger).getByText("待判断 2")).toBeVisible();
@@ -676,7 +486,7 @@ test("语义核验清单逐项展示并将系统异常置顶且锁定编辑", as
     name: "待人工判断",
   });
   expect(within(systemGroup).getByText("系统异常 · 1 项")).toBeVisible();
-  expect(within(systemGroup).getByText("已锁定编辑")).toBeVisible();
+  expect(within(systemGroup).getByText("历史记录")).toBeVisible();
   expect(within(businessGroup).getByText("待人工判断 · 2 项")).toBeVisible();
   const items = within(ledger).getAllByRole("article");
   expect(within(items[0]).getByText("系统处理失败")).toBeVisible();
@@ -698,228 +508,6 @@ test("语义核验清单逐项展示并将系统异常置顶且锁定编辑", as
   expect(within(items[3]).getByText("保暖效果好")).toBeVisible();
   expect(screen.getByText("展开完整原文上下文")).toBeVisible();
   expect(screen.getByText("查看完整语义详情")).toBeVisible();
-});
-
-test("逐项调整和补充遗漏观点随整条确认提交", async () => {
-  const record = {
-    ...baseRecord,
-    classification: {
-      ...baseRecord.classification,
-      semantic_review: {
-        semantic_items: [
-          {
-            item_id: "semantic-item-0",
-            evidence_text: "Too small",
-            opinion: "偏小",
-            label_code: "FIT_TOO_SMALL",
-            disposition: "MAPPED",
-          },
-        ],
-        coverage_summary: { mapped: 1 },
-        unexplained_fragments: [],
-      },
-    },
-  };
-  reviewBatchApiMock.updateReviewBatchRecord.mockResolvedValue({
-    ...record,
-    workflow_status: "resolved",
-    revision: 2,
-  });
-  render(page(baseBatch, [record]));
-
-  await userEvent.click(await screen.findByRole("button", { name: "处理" }));
-  await userEvent.click(screen.getByRole("button", { name: "调整" }));
-  await selectOption("调整方式：偏小", "标记为无需归类");
-  await userEvent.click(screen.getByRole("button", { name: "保存本项调整" }));
-  await selectOption("观点覆盖判断", "存在遗漏观点");
-  await userEvent.click(screen.getByRole("button", { name: "补充遗漏观点" }));
-  await userEvent.type(
-    screen.getByPlaceholderText("粘贴能够支持该观点的原文片段"),
-    "for me",
-  );
-  await userEvent.type(
-    screen.getByPlaceholderText("用一句话概括用户表达的观点"),
-    "个人尺寸体验",
-  );
-  await selectOption("补充观点的归类标签", "偏大 · FIT_TOO_LARGE");
-  await userEvent.click(screen.getByRole("button", { name: "添加观点" }));
-  await userEvent.type(
-    screen.getByPlaceholderText("必填：说明确认、修改或排除的判断依据"),
-    "按原文补充和调整",
-  );
-  await userEvent.click(screen.getByRole("button", { name: "仅保存" }));
-
-  await waitFor(() =>
-    expect(reviewBatchApiMock.updateReviewBatchRecord).toHaveBeenCalledWith(
-      "review-batch-1",
-      "review-record-1",
-      expect.objectContaining({
-        semantic_item_reviews: [
-          {
-            semantic_item_id: "semantic-item-0",
-            action: "no_tag_needed",
-            label_code: null,
-            note: null,
-          },
-        ],
-        added_semantic_items: [
-          {
-            item_id: "manual-1",
-            evidence_text: "for me",
-            opinion: "个人尺寸体验",
-            label_code: "FIT_TOO_LARGE",
-            note: "人工补充的遗漏观点",
-            sentiment: "NEGATIVE",
-          },
-        ],
-        coverage_status: "has_omission",
-      }),
-    ),
-  );
-});
-
-test("可选择本页待处理记录并批量排除", async () => {
-  const secondRecord = {
-    ...baseRecord,
-    id: "review-record-2",
-    classification_key: "classification-key-2",
-    order_ids: ["ORDER-003"],
-  };
-  reviewBatchApiMock.updateReviewBatchRecords.mockResolvedValue({
-    updated_count: 2,
-    batch: { ...baseBatch, revision: 3, excluded_count: 2, remaining_count: 0 },
-  });
-  render(page(baseBatch, [baseRecord, secondRecord]));
-
-  await userEvent.click(
-    await screen.findByRole("checkbox", { name: "选择本页待处理记录" }),
-  );
-  await userEvent.click(screen.getByRole("button", { name: /批量排除/ }));
-  expect(screen.getByText(/仍保留原始记录和操作记录/)).toBeVisible();
-  await userEvent.type(
-    screen.getByPlaceholderText("必填：说明本次批量处理的判断依据"),
-    "不属于有效产品反馈",
-  );
-  await userEvent.click(screen.getByRole("button", { name: "确认处理 2 条" }));
-
-  await waitFor(() =>
-    expect(reviewBatchApiMock.updateReviewBatchRecords).toHaveBeenCalledWith(
-      "review-batch-1",
-      {
-        records: [
-          { id: "review-record-1", expected_revision: 1 },
-          { id: "review-record-2", expected_revision: 1 },
-        ],
-        action: "exclude",
-        label_code: null,
-        reason: "不属于有效产品反馈",
-      },
-    ),
-  );
-});
-
-test("复核抽屉关闭恢复入口焦点，未保存修改需确认", async () => {
-  render(page(baseBatch, [baseRecord]));
-  const trigger = await screen.findByRole("button", { name: "处理" });
-  await userEvent.click(trigger);
-  await userEvent.keyboard("{Escape}");
-  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  expect(trigger).toHaveFocus();
-  await userEvent.click(trigger);
-  const reason = screen.getByPlaceholderText("必填：说明确认、修改或排除的判断依据");
-  await userEvent.type(reason, "保留我的判断");
-  await userEvent.keyboard("{Escape}");
-  expect(screen.getByRole("button", { name: "继续编辑" })).toHaveFocus();
-  await userEvent.click(screen.getByRole("button", { name: "继续编辑" }));
-  expect(reason).toHaveValue("保留我的判断");
-  await userEvent.keyboard("{Escape}");
-  await userEvent.click(screen.getByRole("button", { name: "放弃修改并关闭" }));
-  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  expect(trigger).toHaveFocus();
-});
-
-test("单条处理后可直接进入下一条待处理记录", async () => {
-  const secondRecord = {
-    ...baseRecord,
-    id: "review-record-2",
-    classification_key: "classification-key-2",
-    order_ids: ["ORDER-003"],
-  };
-  reviewBatchApiMock.updateReviewBatchRecord.mockResolvedValue({
-    ...baseRecord,
-    workflow_status: "resolved",
-    revision: 2,
-  });
-  render(page(baseBatch, [baseRecord, secondRecord]));
-
-  await userEvent.click((await screen.findAllByRole("button", { name: "处理" }))[0]);
-  await userEvent.type(
-    screen.getByPlaceholderText("必填：说明确认、修改或排除的判断依据"),
-    "证据一致",
-  );
-  await userEvent.click(screen.getByRole("button", { name: "保存并下一条" }));
-
-  expect(await screen.findByRole("dialog", { name: "ORDER-003" })).toBeVisible();
-  await waitFor(() =>
-    expect(screen.getByRole("button", { name: "关闭复核抽屉" })).toHaveFocus(),
-  );
-});
-
-test("单条 409 保留我的输入并可基于服务器新 revision 重试", async () => {
-  const conflict = Object.assign(new Error("记录已被其他用户修改，请刷新后重试"), {
-    status: 409,
-  });
-  const latestBatch = { ...baseBatch, revision: 3 };
-  const latestRecord = { ...baseRecord, revision: 2 };
-  reviewBatchApiMock.reviewBatch
-    .mockResolvedValueOnce(baseBatch)
-    .mockResolvedValue(latestBatch);
-  reviewBatchApiMock.reviewBatchRecords
-    .mockResolvedValueOnce({ items: [baseRecord], total: 1, page: 1, page_size: 20 })
-    .mockResolvedValue({ items: [latestRecord], total: 1, page: 1, page_size: 20 });
-  reviewBatchApiMock.updateReviewBatchRecord
-    .mockRejectedValueOnce(conflict)
-    .mockResolvedValue({
-      ...latestRecord,
-      workflow_status: "resolved",
-      revision: 3,
-    });
-
-  render(
-    <ReviewBatchPage
-      route={{ query: { review_batch_id: "review-batch-1" } }}
-      notify={vi.fn()}
-    />,
-  );
-  await userEvent.click(await screen.findByRole("button", { name: "处理" }));
-  await userEvent.click(screen.getByRole("button", { name: /修改分类/ }));
-  expectSelectedOption("标签正确性", "部分正确");
-  expectSelectedOption("证据完整性", "部分完整");
-  expectSelectedOption("路由合理性", "本应人工复核");
-  await selectOption("修改分类标签", "偏大 · FIT_TOO_LARGE");
-  const reason = screen.getByPlaceholderText("必填：说明确认、修改或排除的判断依据");
-  await userEvent.type(reason, "实物证据指向偏大");
-  await userEvent.click(screen.getByRole("button", { name: "仅保存" }));
-
-  expect(await screen.findByText("服务器最新")).toBeVisible();
-  expect(screen.getByText("修订 #2")).toBeVisible();
-  expect(screen.getByText("我的未保存")).toBeVisible();
-  await waitFor(() =>
-    expect(screen.getByRole("button", { name: "关闭复核抽屉" })).toHaveFocus(),
-  );
-  expect(screen.getAllByText("实物证据指向偏大")).toHaveLength(2);
-  expect(reason).toHaveValue("实物证据指向偏大");
-
-  await userEvent.click(screen.getByRole("button", { name: "基于新修订继续编辑" }));
-  expect(reason).toHaveValue("实物证据指向偏大");
-  await userEvent.click(screen.getByRole("button", { name: "仅保存" }));
-  await waitFor(() =>
-    expect(reviewBatchApiMock.updateReviewBatchRecord).toHaveBeenLastCalledWith(
-      "review-batch-1",
-      "review-record-1",
-      expect.objectContaining({ expected_revision: 2, reason: "实物证据指向偏大" }),
-    ),
-  );
 });
 
 test("已处理记录展示分别保存的复核质量判断", async () => {
@@ -946,57 +534,6 @@ test("已处理记录展示分别保存的复核质量判断", async () => {
   expect(within(summary).getByText("本应人工复核")).toBeVisible();
 });
 
-test("发布 409 留在弹窗刷新 revision，确认后进入派生版本历史", async () => {
-  const completed = {
-    ...baseBatch,
-    revision: 4,
-    resolved_count: 2,
-    remaining_count: 0,
-  };
-  const refreshed = { ...completed, revision: 5 };
-  const conflict = Object.assign(new Error("批次已被其他用户修改"), {
-    status: 409,
-  });
-  reviewBatchApiMock.reviewBatch
-    .mockResolvedValueOnce(completed)
-    .mockResolvedValue(refreshed);
-  reviewBatchApiMock.reviewBatchRecords.mockResolvedValue({
-    items: [{ ...baseRecord, workflow_status: "resolved" }],
-    total: 1,
-    page: 1,
-    page_size: 20,
-  });
-  reviewBatchApiMock.publishReviewBatch
-    .mockRejectedValueOnce(conflict)
-    .mockResolvedValue({ version_id: "classification-version-2", version: 2 });
-
-  render(
-    <ReviewBatchPage
-      route={{ query: { review_batch_id: "review-batch-1" } }}
-      notify={vi.fn()}
-    />,
-  );
-  await userEvent.click(await screen.findByRole("button", { name: "发布派生版本" }));
-  await userEvent.type(
-    screen.getByPlaceholderText("必填：说明本次复核版本的发布原因"),
-    "本批复核已完成",
-  );
-  await userEvent.click(screen.getByRole("button", { name: "确认生成新版本" }));
-
-  expect(await screen.findByText(/已刷新批次，请重新确认后发布/)).toBeVisible();
-  expect(window.location.hash).not.toContain("classification-version-2");
-
-  await userEvent.click(screen.getByRole("button", { name: "确认生成新版本" }));
-  await waitFor(() =>
-    expect(reviewBatchApiMock.publishReviewBatch).toHaveBeenLastCalledWith(
-      "review-batch-1",
-      { expected_revision: 5, reason: "本批复核已完成" },
-    ),
-  );
-  expect(window.location.hash).toContain("result_version_id=classification-version-2");
-  expect(window.location.hash).toContain("tab=history");
-});
-
 test("已发布批次只读且显示实际派生版本", async () => {
   const published = {
     ...baseBatch,
@@ -1008,9 +545,11 @@ test("已发布批次只读且显示实际派生版本", async () => {
   };
   render(page(published, [{ ...baseRecord, workflow_status: "resolved" }]));
 
-  expect(await screen.findByText(/已发布为分类结果 v2/)).toBeVisible();
+  expect(await screen.findByText(/历史批次仅供查看/)).toBeVisible();
   expect(screen.getByRole("button", { name: /查看衍生版本/ })).toBeEnabled();
-  expect(screen.getByRole("button", { name: /创建分析看板/ })).toBeEnabled();
+  expect(
+    screen.queryByRole("button", { name: /创建分析看板/ }),
+  ).not.toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "查看" }));
   expect(screen.queryByText("复核结论")).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "仅保存" })).not.toBeInTheDocument();

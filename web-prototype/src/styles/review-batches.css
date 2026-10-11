@@ -2,7 +2,6 @@
 @import "../features/review-batches/reviewBatchWorkspace.css";
 @import "../features/review-batches/reviewRecordDrawer.css";
 @import "../features/review-batches/reviewRecordEditor.css";
-@import "../features/review-batches/reviewPublication.css";
 @import "../features/review-batches/semanticReviewLedger.css";
 @import "../features/review-batches/semanticReviewEvidence.css";
 @import "../features/review-batches/semanticReviewEditing.css";
@@ -27,38 +26,4 @@
   width: 36px;
   min-width: 36px;
   height: 36px;
-}
-
-.review-resolution-options .ant-btn {
-  width: 100%;
-  height: auto;
-  min-height: 38px;
-}
-
-.review-resolution-options .ant-btn.active {
-  border-color: var(--green);
-  color: var(--green);
-  background: #eff8f4;
-}
-
-.review-resolution-options .ant-btn.active.is-exclude {
-  border-color: #a17025;
-  color: #805517;
-  background: #fff8e8;
-}
-
-.review-assessment-fields .ant-select {
-  font-size: 11px;
-}
-
-.review-record-editor .ant-input-textarea textarea,
-.review-publish-modal .ant-input-textarea textarea,
-.review-create-modal .ant-input-textarea textarea {
-  resize: vertical;
-}
-
-.review-drawer-scroll > .review-conflict-panel,
-.review-conflict-message {
-  border-color: #e7bf76;
-  background: #fff8e8;
 }

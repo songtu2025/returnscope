@@ -10,7 +10,7 @@ import {
 import { Pagination } from "../../components/Pagination";
 import { EmptyState, InlineLoading, PageHeading } from "../../components/SharedUi";
 import { formatTime } from "../../lib/presentation";
-import { ResultWorkspaceNav } from "../classification-results/ResultWorkspaceNav";
+import { navigateHash } from "../../app/hashRouter";
 import { ReviewBatchError } from "./ReviewBatchError";
 import { BATCH_STATUS_LABELS, pendingCount } from "./reviewBatchPresentation";
 
@@ -125,7 +125,7 @@ function BatchRow({ batch, updateRoute }) {
             })
           }
         >
-          进入批次
+          查看历史
         </Button>
       </div>
     </article>
@@ -164,7 +164,7 @@ function BatchEmptyState({ route, onEmptyAction, updateRoute }) {
       description={
         route.q || route.status
           ? "调整筛选条件后重新查询。"
-          : "先从待复核的分类结果创建批次，再逐条确认或修改分类。"
+          : "人工修正请进入分类结果，在反馈记录中查看证据并修改。"
       }
       action={
         route.q || route.status ? (
@@ -178,7 +178,7 @@ function BatchEmptyState({ route, onEmptyAction, updateRoute }) {
             iconPlacement="end"
             onClick={onEmptyAction}
           >
-            查看待复核结果
+            查看分类结果
           </Button>
         )
       }
@@ -245,11 +245,12 @@ export function ReviewBatchListView({
 }) {
   return (
     <div className="standard-page review-batch-page">
-      <ResultWorkspaceNav active="reviews" />
+      <Button type="text" onClick={() => navigateHash("classification-results")}>
+        返回分类结果池
+      </Button>
       <PageHeading
-        eyebrow="分类结果质量治理"
-        title="复核记录"
-        description="按批次处理需复核分类单元，完成后发布为新的不可变分类结果版本。"
+        title="历史复核记录"
+        description="旧批次仅供查看；人工修正请在分类结果的反馈记录中完成。"
       />
       <BatchFilters filters={filters} onFilters={onFilters} updateRoute={updateRoute} />
       <BatchContents

@@ -75,6 +75,43 @@ export type ClaimEvidenceRequirement = {
 };
 
 /**
+ * ClassificationManualChangeResponse
+ */
+export type ClassificationManualChangeResponse = {
+  after: ClassificationManualSemanticResponse;
+  before: ClassificationManualSemanticResponse;
+  /**
+   * Reason
+   */
+  reason: string;
+  [key: string]: unknown;
+};
+
+/**
+ * ClassificationManualSemanticResponse
+ */
+export type ClassificationManualSemanticResponse = {
+  /**
+   * Atomic Facts
+   */
+  atomic_facts: Array<ClassificationSemanticFactResponse>;
+  classification: ClassificationPayloadResponse;
+  /**
+   * Comment Conclusions
+   */
+  comment_conclusions: Array<ClassificationTopicSummaryResponse>;
+  /**
+   * Comment Summary Status
+   */
+  comment_summary_status: string;
+  /**
+   * Semantic Disposition
+   */
+  semantic_disposition: string;
+  [key: string]: unknown;
+};
+
+/**
  * ClassificationPayloadResponse
  */
 export type ClassificationPayloadResponse = {
@@ -106,6 +143,7 @@ export type ClassificationPayloadResponse = {
   fact_mappings?: Array<{
     [key: string]: unknown;
   }>;
+  human_review_assessment?: ManualResultAssessmentResponse | null;
   /**
    * Model Name
    */
@@ -920,6 +958,7 @@ export type ClassificationResultVersionResponse = {
    * Logic Version
    */
   logic_version: string | null;
+  manual_change?: ClassificationManualChangeResponse | null;
   /**
    * Model Policy Version
    */
@@ -1347,6 +1386,29 @@ export type ManualCorrectionRequest = {
    * Semantic Items
    */
   semantic_items: Array<AddedSemanticItemRequest>;
+};
+
+/**
+ * ManualResultAssessmentResponse
+ */
+export type ManualResultAssessmentResponse = {
+  /**
+   * Assessed At
+   */
+  assessed_at?: string | null;
+  /**
+   * Assessed By
+   */
+  assessed_by?: string | null;
+  /**
+   * Assessed By Name
+   */
+  assessed_by_name?: string | null;
+  /**
+   * Resolved
+   */
+  resolved?: boolean;
+  [key: string]: unknown;
 };
 
 /**

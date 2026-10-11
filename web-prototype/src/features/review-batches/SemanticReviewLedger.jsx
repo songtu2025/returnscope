@@ -1,11 +1,6 @@
-import { dispositionTone } from "./semanticReviewPresentation";
-import Button from "antd/es/button";
-import { CheckCircle, Trash, WarningCircle } from "@phosphor-icons/react";
-import { upsert } from "./semanticReviewDrafts";
+import { CheckCircle, WarningCircle } from "@phosphor-icons/react";
 import { ReviewLedgerItem } from "./SemanticReviewItem";
-import { SemanticReviewAddForm } from "./SemanticReviewAddForm";
 import { SemanticReviewGroups } from "./SemanticReviewGroups";
-import { SemanticReviewControls } from "./SemanticReviewControls";
 import { useSemanticLedger } from "./useSemanticLedger";
 
 /** @typedef {import("./semanticLedgerContracts").SemanticReviewLedgerItem} SemanticReviewLedgerItem */
@@ -13,19 +8,7 @@ import { useSemanticLedger } from "./useSemanticLedger";
 /** @param {import("./semanticLedgerContracts").SemanticLedgerProps} props */
 export function SemanticReviewLedger(props) {
   const context = { ...props, ...useSemanticLedger(props) };
-  const {
-    record,
-    labels,
-    editable,
-    addedItems,
-    onItemReviews,
-    onAddedItems,
-    adding,
-    reviews,
-    items,
-    reviewFor,
-    displayedSummary,
-  } = context;
+  const { record, labels, items, reviewFor, displayedSummary } = context;
 
   /** @param {SemanticReviewLedgerItem} item */
   const renderItem = (item) => {
@@ -36,18 +19,7 @@ export function SemanticReviewLedger(props) {
         item={item}
         sourceText={record.comment || ""}
         labels={labels}
-        editable={
-          editable &&
-          dispositionTone(item.disposition) !== "failure" &&
-          item.businessReviewRequired !== false
-        }
         review={review}
-        onReview={(next) => onItemReviews(upsert(reviews, next))}
-        onReset={() =>
-          onItemReviews(
-            reviews.filter((candidate) => candidate.semantic_item_id !== item.id),
-          )
-        }
       />
     );
   };
@@ -56,7 +28,7 @@ export function SemanticReviewLedger(props) {
       <header>
         <div>
           <b>语义核验清单</b>
-          <span>按“原文证据—用户观点—标签或处置”核验，无需逐标签确认。</span>
+          <span>查看历史原文证据、用户观点及人工调整。</span>
         </div>
         <div className="semantic-review-summary" aria-label="语义覆盖概览">
           <span>
@@ -77,25 +49,7 @@ export function SemanticReviewLedger(props) {
       ) : (
         <div className="semantic-review-empty" role="status">
           <WarningCircle size={18} />
-          当前结果没有可核验的观点，请展开完整原文判断是否需要补充。
-        </div>
-      )}
-
-      {editable && <SemanticReviewControls {...context} />}
-
-      {editable && adding && <SemanticReviewAddForm {...context} />}
-
-      {editable && addedItems.length > 0 && (
-        <div className="semantic-review-added-actions">
-          <span>已人工补充 {addedItems.length} 项</span>
-          <Button
-            type="text"
-            size="small"
-            icon={<Trash size={15} />}
-            onClick={() => onAddedItems(addedItems.slice(0, -1))}
-          >
-            移除最后一项
-          </Button>
+          这条历史记录没有已提取的观点，可展开完整原文查看。
         </div>
       )}
     </section>

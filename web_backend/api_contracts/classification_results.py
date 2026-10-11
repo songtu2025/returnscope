@@ -57,6 +57,20 @@ class ClassificationResultBlockingReasonResponse(CompatibleResponse):
     message: str
 
 
+class ClassificationManualSemanticResponse(CompatibleResponse):
+    classification: ClassificationPayloadResponse
+    semantic_disposition: str
+    comment_summary_status: str
+    atomic_facts: list[ClassificationSemanticFactResponse]
+    comment_conclusions: list[ClassificationTopicSummaryResponse]
+
+
+class ClassificationManualChangeResponse(CompatibleResponse):
+    before: ClassificationManualSemanticResponse
+    after: ClassificationManualSemanticResponse
+    reason: str
+
+
 class ClassificationResultVersionResponse(CompatibleResponse):
     version_id: str
     result_id: str
@@ -76,6 +90,7 @@ class ClassificationResultVersionResponse(CompatibleResponse):
     parent_version_no: int | None
     changed_unit_count: int
     inherited_unit_count: int
+    manual_change: ClassificationManualChangeResponse | None = None
     source_task_id: str
     source_segment_id: str
     analysis_context: Literal["returns", "review", "user_feedback"]

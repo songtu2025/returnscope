@@ -3,6 +3,8 @@ import { useState } from "react";
 
 import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { resultLabelText } from "../../lib/taxonomyPresentation";
+import { formatTime } from "../../lib/presentation";
+import { resultStateLabel } from "./resultActionPolicy";
 import { SemanticResultPanel } from "./SemanticResultPanel";
 import { ManualSemanticEditor } from "./ManualSemanticEditor";
 
@@ -76,6 +78,31 @@ export function EvidenceDrawer({
             <X size={19} />
           </button>
         </header>
+        <section className="drawer-section drawer-correction-heading">
+          <div>
+            <b>
+              {classification.human_review_assessment?.resolved
+                ? "人工已修正"
+                : "分类语义"}
+            </b>
+            {classification.human_review_assessment?.resolved && (
+              <small>
+                {classification.human_review_assessment.assessed_by_name ||
+                  "操作者信息未提供"}
+                {" · "}
+                {formatTime(classification.human_review_assessment.assessed_at)}
+              </small>
+            )}
+          </div>
+          {onSaved && !editing && (
+            <button
+              className="primary-button compact-button"
+              onClick={() => setEditing(true)}
+            >
+              人工修正
+            </button>
+          )}
+        </section>
         {confirmClose && (
           <section className="drawer-section" role="alert">
             <p>有未保存的修改，是否放弃？</p>
@@ -89,7 +116,35 @@ export function EvidenceDrawer({
         )}
 
         <section className="drawer-section">
-          <b>业务信息</b>
+          <b>{isUserFeedback ? "用户反馈原文" : "退货原文"}</b>
+          <DrawerField
+            label={isUserFeedback ? "反馈标题" : "Amazon原因"}
+            value={record.reason}
+          />
+          <blockquote>
+            {record.comment || (isUserFeedback ? "未提供反馈正文" : "未提供退货评论")}
+          </blockquote>
+        </section>
+
+        <section className="drawer-section">
+          {onSaved && editing ? (
+            <ManualSemanticEditor
+              group={group}
+              onSaved={onSaved}
+              onDirtyChange={setDirty}
+              onSavingChange={setSaving}
+              onCancel={() => {
+                if (dirty) setConfirmClose(true);
+                else setEditing(false);
+              }}
+            />
+          ) : (
+            <SemanticResultPanel record={record} />
+          )}
+        </section>
+
+        <details className="drawer-section drawer-context">
+          <summary>业务信息</summary>
           <DrawerField label="店铺/站点" value={record.store_site} />
           <DrawerField label="Listing" value={record.listing} />
           <DrawerField label="产品名称" value={record.product_name} />
@@ -103,18 +158,7 @@ export function EvidenceDrawer({
             label="产品匹配"
             value={record.product_match_status === "matched" ? "已匹配" : "未匹配"}
           />
-        </section>
-
-        <section className="drawer-section">
-          <b>{isUserFeedback ? "用户反馈原文" : "退货原文"}</b>
-          <DrawerField
-            label={isUserFeedback ? "反馈标题" : "Amazon原因"}
-            value={record.reason}
-          />
-          <blockquote>
-            {record.comment || (isUserFeedback ? "未提供反馈正文" : "未提供退货评论")}
-          </blockquote>
-        </section>
+        </details>
 
         {group.member_count > 1 && (
           <section className="drawer-section drawer-source-members">
@@ -135,8 +179,8 @@ export function EvidenceDrawer({
           </section>
         )}
 
-        <section className="drawer-section">
-          <b>业务标签</b>
+        <details className="drawer-section drawer-context">
+          <summary>业务标签与记录状态</summary>
           <DrawerField
             label={isUserFeedback ? "主要问题（如有）" : "主要问题"}
             value={resultLabelText(record, classification.primary_label_codes)}
@@ -151,39 +195,21 @@ export function EvidenceDrawer({
               value={resultLabelText(record, classification.positive_label_codes)}
             />
           )}
-          <DrawerField label="处理状态" value={record.processing_status} />
-          <DrawerField
-            label="复核原因"
-            value={classification.review_reasons?.join("；")}
-          />
-        </section>
-
-        <section className="drawer-section">
-          <SemanticResultPanel record={record} />
-          {onSaved && !editing && (
-            <button className="secondary-button" onClick={() => setEditing(true)}>
-              人工修正
-            </button>
-          )}
-          {onSaved && editing && (
-            <ManualSemanticEditor
-              group={group}
-              onSaved={onSaved}
-              onDirtyChange={setDirty}
-              onSavingChange={setSaving}
-              onCancel={() => {
-                if (dirty) {
-                  setConfirmClose(true);
-                } else {
-                  setEditing(false);
-                }
-              }}
+          <DrawerField label="记录状态" value={resultStateLabel(record)} />
+          {Boolean(classification.review_reasons?.length) && (
+            <DrawerField
+              label="需处理原因"
+              value={classification.review_reasons?.join("；")}
             />
           )}
-        </section>
+        </details>
 
-        <section className="drawer-section drawer-lineage">
-          <b>运行来源</b>
+        <details className="drawer-section drawer-context drawer-lineage">
+          <summary>
+            {classification.human_review_assessment?.resolved
+              ? "原始分析来源"
+              : "运行来源"}
+          </summary>
           <DrawerField label="模型" value={classification.model_name} />
           <DrawerField label="提示词版本" value={classification.prompt_version} />
           <DrawerField label="分类体系" value={classification.taxonomy_version} />
@@ -192,7 +218,7 @@ export function EvidenceDrawer({
           {record.source_origin_id && (
             <DrawerField label="源表明细ID" value={record.source_origin_id} />
           )}
-        </section>
+        </details>
       </aside>
     </div>
   );

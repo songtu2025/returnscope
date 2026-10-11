@@ -3,7 +3,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from return_semantics.schemas import TaxonomyConfig
-from web_backend.classification_result_payload import PAGE_SIZE_DEFAULT
+from web_backend.classification_result_payload import (
+    PAGE_SIZE_DEFAULT,
+    prepare_semantic_record,
+)
 from web_backend.classification_result_publication import (
     ClassificationResultNotFound,
 )
@@ -80,7 +83,34 @@ class _ClassificationResultQueries:
                 """,
                 (current["result_id"],),
             ).fetchall()
-        return [self._serialize_version(dict(row)) for row in rows]
+            history = [self._serialize_version(dict(row)) for row in rows]
+            changes = connection.execute(
+                """
+                SELECT before_json, after_json FROM audit_logs
+                WHERE entity_type = 'classification_result' AND entity_id = ?
+                  AND action = 'manual_correction'
+                ORDER BY created_at, id
+                """,
+                (current["result_id"],),
+            ).fetchall()
+            taxonomy = result_taxonomy(connection, version_id)
+        by_version = {item["version_id"]: item for item in history}
+        for change in changes:
+            after = json_value(change["after_json"], {})
+            item = by_version.get(after.get("version_id"))
+            if item is None:
+                continue
+            before = json_value(change["before_json"], {})
+            item["manual_change"] = {
+                "before": prepare_semantic_record(
+                    {"classification": before.get("classification", {})}, taxonomy
+                ),
+                "after": prepare_semantic_record(
+                    {"classification": after.get("classification", {})}, taxonomy
+                ),
+                "reason": after.get("reason", "人工修正语义"),
+            }
+        return history
 
     @staticmethod
     def _version_select() -> str:

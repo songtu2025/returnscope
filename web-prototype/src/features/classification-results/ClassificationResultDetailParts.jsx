@@ -4,6 +4,7 @@ import { resultState, resultStateLabel } from "./resultActionPolicy";
 import { SemanticStatusBadge } from "./SemanticResultPanel";
 import { semanticRecordStatus } from "./semanticResultPresentation";
 import { resultLabelText } from "../../lib/taxonomyPresentation";
+import { formatTime } from "../../lib/presentation";
 
 /**
  * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultDrilldownItemResponse} ClassificationResultDrilldownItem
@@ -129,6 +130,16 @@ export function ResultRecordRow({ group, analysisContext, onOpen }) {
           {record.quality_status === "excluded" ? "已忽略" : resultStateLabel(record)}
         </span>
         <SemanticStatusBadge status={semanticRecordStatus(record)} />
+        {record.classification?.human_review_assessment?.resolved && (
+          <span
+            className="result-quality-badge ready"
+            title={formatTime(
+              record.classification.human_review_assessment.assessed_at,
+            )}
+          >
+            人工已修正
+          </span>
+        )}
         <b>
           {resultLabelText(record, labels) ||
             (isUserFeedback ? "未形成语义标签" : "未形成问题标签")}

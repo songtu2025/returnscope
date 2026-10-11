@@ -5,14 +5,22 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from test_classification_result_pool import (
     _clone_publishable_segment,
     _publish,
     _seed_result_context,
 )
+from test_manual_correction import _items, _record
+from test_result_version_reviews import _publish_review_required
 
 from web_backend.classification_result_service import ClassificationResultService
+from web_backend.classification_results.manual_correction import correct_group
 from web_backend.classification_results.version_queries import version_list_filters
+from web_backend.routers.classification_results import (
+    create_classification_result_router,
+)
 
 
 @pytest.fixture
@@ -152,3 +160,80 @@ def test_list_uses_two_queries_in_one_connection(context, monkeypatch) -> None:
     assert len(reads) == 2
     assert "COUNT(*)" in reads[0]
     assert "LIMIT 1 OFFSET 0" in reads[1]
+
+
+def test_manual_history_counts_only_current_correction_and_scopes_audit(tmp_path: Path):
+    context, version = _publish_review_required(tmp_path)
+    service = ClassificationResultService(context.database)
+    first = correct_group(
+        service, version["version_id"], _record(context, version), _items(), "user-2"
+    )
+    second = correct_group(
+        service,
+        first["version_id"],
+        _record(context, first),
+        [{**_items()[0], "opinion": "尺码偏小"}],
+        "user-1",
+    )
+    assert second["changed_unit_count"] == 1
+    assert len(service.history(second["version_id"])) == 3
+    from web_backend.common import insert_audit
+
+    with context.database.transaction() as connection:
+        insert_audit(
+            connection,
+            actor_id="user-1",
+            action="manual_correction",
+            entity_type="classification_result",
+            entity_id="other-result",
+            before={},
+            after={"version_id": second["version_id"], "reason": "其他结果"},
+        )
+    assert (
+        service.history(second["version_id"])[0]["manual_change"]["reason"]
+        == "人工修正语义"
+    )
+
+
+def test_manual_history_and_actor_metadata(tmp_path: Path):
+    context, version = _publish_review_required(tmp_path)
+    service = ClassificationResultService(context.database)
+    corrected = correct_group(
+        service, version["version_id"], _record(context, version), _items(), "user-2"
+    )
+    history = service.history(corrected["version_id"])
+    assert history[0]["changed_unit_count"] == 1
+    assert history[0]["manual_change"]["reason"] == "人工修正语义"
+    assert (
+        history[0]["manual_change"]["before"]["classification"]["semantic_units"]
+        != history[0]["manual_change"]["after"]["classification"]["semantic_units"]
+    )
+    assert "manual_change" not in history[1]
+    groups = service.record_groups(corrected["version_id"])["items"]
+    assessment = groups[0]["record"]["classification"]["human_review_assessment"]
+    assert assessment["resolved"]
+    assert assessment["assessed_by_name"] == "用户二"
+
+
+def test_manual_history_and_actor_api_contract(tmp_path: Path):
+    context, version = _publish_review_required(tmp_path)
+    service = ClassificationResultService(context.database)
+    corrected = correct_group(
+        service, version["version_id"], _record(context, version), _items(), "user-2"
+    )
+    app = FastAPI()
+    app.include_router(
+        create_classification_result_router(service, lambda: {"id": "user-2"})
+    )
+    client = TestClient(app)
+    url = f"/api/classification-results/{corrected['version_id']}"
+    history = client.get(f"{url}/versions")
+    assert history.status_code == 200
+    assert history.json()[0]["manual_change"]["reason"] == "人工修正语义"
+    assert history.json()[0]["manual_change"]["after"]["atomic_facts"]
+    groups = client.get(f"{url}/record-groups")
+    assert groups.status_code == 200
+    assessment = groups.json()["items"][0]["record"]["classification"][
+        "human_review_assessment"
+    ]
+    assert assessment["resolved"] and assessment["assessed_by_name"] == "用户二"

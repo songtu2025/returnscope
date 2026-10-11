@@ -33,7 +33,7 @@ function ResultPoolEmpty({ activeFilters, updateRoute }) {
       description={
         activeFilters
           ? "调整筛选条件后重新查询。"
-          : "Listing 片段完成并发布后，会在这里形成不可变结果版本。"
+          : "Listing 分析完成后，可在这里查看分类结果和反馈证据。"
       }
       action={
         <button

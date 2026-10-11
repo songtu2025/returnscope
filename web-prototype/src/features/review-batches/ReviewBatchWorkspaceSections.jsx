@@ -1,11 +1,8 @@
 import {
   ArrowLeft,
   CaretRight,
-  ChartBar,
   CheckCircle,
-  EyeSlash,
   MagnifyingGlass,
-  PencilSimple,
 } from "@phosphor-icons/react";
 import Button from "antd/es/button";
 import Input from "antd/es/input";
@@ -28,11 +25,11 @@ const REVIEW_FILTER_FIELDS = [
   ["order-id", "筛选 order-id", "order-id", "orderId"],
 ];
 
-/** @typedef {{batch: ReviewBatch, pending: number, readOnly: boolean, onBack: () => void, onOpenSource: () => void, onOpenDerived: () => void, onCreateDashboard: () => void, onOpenPublish: () => void}} ReviewSummaryProps */
+/** @typedef {{batch: ReviewBatch, pending: number, onBack: () => void, onOpenSource: () => void, onOpenDerived: () => void}} ReviewSummaryProps */
 
 /** @param {ReviewSummaryProps} props */
 export function ReviewBatchSummary(props) {
-  const { batch, pending, readOnly, onBack } = props;
+  const { batch, pending, onBack } = props;
   return (
     <>
       <Button
@@ -41,7 +38,7 @@ export function ReviewBatchSummary(props) {
         icon={<ArrowLeft size={17} />}
         onClick={onBack}
       >
-        返回复核批次列表
+        返回历史复核记录
       </Button>
 
       <header className="review-batch-workspace-header">
@@ -58,66 +55,27 @@ export function ReviewBatchSummary(props) {
         <ReviewBatchActions {...props} />
       </header>
       <ReviewBatchProgress batch={batch} pending={pending} />
-      {readOnly && (
-        <div className="review-batch-readonly" role="status">
-          <CheckCircle size={18} />
-          此批次已发布为分类结果 v{batch.derived_version_no ?? "—"}，当前内容只读。
-        </div>
-      )}
+      <div className="review-batch-readonly" role="status">
+        <CheckCircle size={18} />
+        历史批次仅供查看；人工修正请进入最新分类结果。
+      </div>
     </>
   );
 }
 
-/** @param {ReviewBatch} batch @param {number} pending */
-function reviewPublishState(batch, pending) {
-  if (Number(batch.record_count || 0) === 0) {
-    return { label: "无可处理记录", title: "该历史批次没有可处理记录，不能发布" };
-  }
-  if (pending > 0) {
-    return {
-      label: `还剩 ${pending} 条需处理`,
-      title: `还剩 ${pending} 条需处理，全部处理后才能发布`,
-    };
-  }
-  return { label: "发布派生版本", title: "" };
-}
-
 /** @param {ReviewSummaryProps} props */
-function ReviewBatchActions({
-  batch,
-  pending,
-  readOnly,
-  onOpenSource,
-  onOpenDerived,
-  onCreateDashboard,
-  onOpenPublish,
-}) {
-  const publishState = reviewPublishState(batch, pending);
+function ReviewBatchActions({ batch, onOpenSource, onOpenDerived }) {
   return (
     <div className="review-batch-header-actions">
       <Button onClick={onOpenSource}>查看来源版本</Button>
-      {readOnly ? (
-        <>
-          <Button
-            type="primary"
-            icon={<CaretRight size={16} />}
-            iconPlacement="end"
-            onClick={onOpenDerived}
-          >
-            查看衍生版本
-          </Button>
-          <Button icon={<ChartBar size={17} />} onClick={onCreateDashboard}>
-            创建分析看板
-          </Button>
-        </>
-      ) : (
+      {batch.derived_result_version_id && (
         <Button
           type="primary"
-          disabled={pending > 0 || Number(batch.record_count || 0) === 0}
-          title={publishState.title}
-          onClick={onOpenPublish}
+          icon={<CaretRight size={16} />}
+          iconPlacement="end"
+          onClick={onOpenDerived}
         >
-          {publishState.label}
+          查看衍生版本
         </Button>
       )}
     </div>
@@ -194,31 +152,6 @@ export function ReviewRecordFilters({ filters, onFilters, onApply }) {
       <Button type="primary" onClick={onApply}>
         筛选
       </Button>
-    </section>
-  );
-}
-
-/** @param {{checkedCount: number, onBulk: (action: ReviewAction) => void, onClear: () => void}} props */
-export function ReviewBulkToolbar({ checkedCount, onBulk, onClear }) {
-  if (!checkedCount) return null;
-
-  return (
-    <section className="review-bulk-toolbar" aria-label="批量复核操作">
-      <b>已选择 {checkedCount} 条待处理记录</b>
-      <div>
-        <Button icon={<CheckCircle size={17} />} onClick={() => onBulk("confirm")}>
-          批量确认
-        </Button>
-        <Button icon={<PencilSimple size={17} />} onClick={() => onBulk("modify")}>
-          批量修改分类
-        </Button>
-        <Button icon={<EyeSlash size={17} />} onClick={() => onBulk("exclude")}>
-          批量排除
-        </Button>
-        <Button type="text" onClick={onClear}>
-          取消选择
-        </Button>
-      </div>
     </section>
   );
 }

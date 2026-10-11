@@ -8,6 +8,6 @@
  * @typedef {import("../../shared/api/reviewBatchContracts").SemanticReviewLedgerItem} SemanticReviewLedgerItem
  */
 
-/** @typedef {{record: ReviewRecord, labels: ReviewLabel[], editable: boolean, itemReviews: SemanticItemReview[], addedItems: AddedSemanticItem[], coverageStatus: CoverageStatus, onItemReviews: (value: SemanticItemReview[]) => void, onAddedItems: (value: AddedSemanticItem[]) => void, onCoverageStatus: (value: CoverageStatus) => void}} SemanticLedgerProps */
+/** @typedef {{record: ReviewRecord, labels: ReviewLabel[], itemReviews: SemanticItemReview[], addedItems: AddedSemanticItem[], coverageStatus: CoverageStatus}} SemanticLedgerProps */
 /** @typedef {SemanticLedgerProps & ReturnType<typeof import("./useSemanticLedger").useSemanticLedger>} SemanticLedgerContext */
 export {};

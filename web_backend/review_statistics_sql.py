@@ -1,5 +1,17 @@
 REVIEW_CHANGED_UNIT_COUNT_SQL = """
-COALESCE((
+CASE WHEN v.version_reason = '反馈组人工修正' THEN (
+    SELECT COUNT(*) FROM classification_units current_unit
+    LEFT JOIN classification_units parent_unit
+      ON parent_unit.result_version_id = v.parent_version_id
+     AND parent_unit.classification_key = current_unit.classification_key
+    WHERE current_unit.result_version_id = v.id
+      AND json_extract(current_unit.classification_json, '$.human_review_assessment.resolved') = 1
+      AND (
+          parent_unit.id IS NULL
+          OR json_extract(current_unit.classification_json, '$.human_review_assessment.assessed_at')
+            IS NOT json_extract(parent_unit.classification_json, '$.human_review_assessment.assessed_at')
+      )
+) ELSE COALESCE((
     SELECT COUNT(DISTINCT revision.review_record_id)
     FROM review_batches batch
     JOIN review_records review ON review.batch_id = batch.id
@@ -29,5 +41,5 @@ COALESCE((
                 )
           )
       )
-), 0)
+), 0) END
 """

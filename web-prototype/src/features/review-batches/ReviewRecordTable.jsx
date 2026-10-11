@@ -1,4 +1,3 @@
-import Checkbox from "antd/es/checkbox";
 import { ListChecks } from "@phosphor-icons/react";
 import { Pagination } from "../../components/Pagination";
 import { EmptyState, InlineLoading } from "../../components/SharedUi";
@@ -34,29 +33,9 @@ export function ReviewRecordTable(context) {
   );
 }
 
-/** @param {Pick<Parameters<typeof ReviewRecordTable>[0], "recordItems" | "readOnly" | "checkedIds" | "setCheckedIds">} props */
-function ReviewRecordTableHead({ recordItems, readOnly, checkedIds, setCheckedIds }) {
+function ReviewRecordTableHead() {
   return (
     <div className="review-record-table-head" role="row">
-      {!readOnly && (
-        <span className="review-record-checkbox">
-          <Checkbox
-            aria-label="选择本页待处理记录"
-            checked={
-              recordItems.some((record) => record.workflow_status === "pending") &&
-              recordItems
-                .filter((record) => record.workflow_status === "pending")
-                .every((record) => checkedIds.includes(itemId(record)))
-            }
-            onChange={(event) => {
-              const pageIds = recordItems
-                .filter((record) => record.workflow_status === "pending")
-                .map(itemId);
-              setCheckedIds(event.target.checked ? pageIds : []);
-            }}
-          />
-        </span>
-      )}
       <span>order-id / 产品名称</span>
       <span>Listing / 产品SKU</span>
       <span>退货SKU（MSKU）</span>
@@ -68,32 +47,14 @@ function ReviewRecordTableHead({ recordItems, readOnly, checkedIds, setCheckedId
 
 /** @param {ReviewWorkspaceContext} context */
 function ReviewRecordRows(context) {
-  const { recordItems, readOnly, recordsState, checkedIds, setCheckedIds, openRecord } =
-    context;
+  const { recordItems, recordsState, openRecord } = context;
   return (
-    <div
-      className={`review-record-table ${!readOnly ? "is-selectable" : ""} ${recordsState.loading ? "is-loading" : ""}`}
-    >
-      <ReviewRecordTableHead
-        recordItems={recordItems}
-        readOnly={readOnly}
-        checkedIds={checkedIds}
-        setCheckedIds={setCheckedIds}
-      />
+    <div className={`review-record-table ${recordsState.loading ? "is-loading" : ""}`}>
+      <ReviewRecordTableHead />
       {recordItems.map((record) => (
         <ReviewRecordRow
           key={itemId(record)}
           record={record}
-          selectionEnabled={!readOnly}
-          selectable={!readOnly && record.workflow_status === "pending"}
-          checked={checkedIds.includes(itemId(record))}
-          onCheck={(/** @type {boolean} */ checked) =>
-            setCheckedIds((current) =>
-              checked
-                ? [...current, itemId(record)]
-                : current.filter((id) => id !== itemId(record)),
-            )
-          }
           onOpen={() => openRecord(record)}
         />
       ))}

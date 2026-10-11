@@ -46,6 +46,9 @@ def test_manual_correction_splits_only_current_feedback_group(tmp_path: Path):
     corrected = correct_group(
         service, version["version_id"], _record(context, version), _items(), "user-2"
     )
+    assert corrected["changed_unit_count"] == 1
+    assert corrected["inherited_unit_count"] == 1
+    assert service.list()["items"][0]["changed_unit_count"] == 1
     with context.database.connect() as connection:
         content = load_content(connection, corrected["version_id"])
         rows = content["records"]

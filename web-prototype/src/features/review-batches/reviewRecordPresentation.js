@@ -6,7 +6,7 @@
 /** @typedef {import("../../shared/api/reviewBatchContracts").ReviewRecord} ReviewRecord */
 /** @typedef {import("../../shared/api/reviewBatchContracts").SemanticItemReview} SemanticItemReview */
 /** @typedef {import("./reviewAssessment").ReviewAssessment} ReviewAssessment */
-/** @typedef {{record: ReviewRecord, readOnly: boolean, labels: ReviewLabel[], mode: ReviewAction, labelCode: string, reason: string, conflict: ReviewConflict | null, saving: boolean, assessment: ReviewAssessment, semanticItemReviews: SemanticItemReview[], addedSemanticItems: AddedSemanticItem[], coverageStatus: CoverageStatus, onMode: (mode: ReviewAction) => void, onAssessment: (assessment: ReviewAssessment) => void, onSemanticItemReviews: (value: SemanticItemReview[]) => void, onAddedSemanticItems: (value: AddedSemanticItem[]) => void, onCoverageStatus: (value: CoverageStatus) => void, onLabelCode: (code: string) => void, onReason: (reason: string) => void, onSave: () => void | Promise<void>, onSaveAndNext: () => void | Promise<void>, onClose: () => void, onUseServer: () => void, onContinueWithServer: () => void}} ReviewRecordDrawerProps */
+/** @typedef {{record: ReviewRecord, labels: ReviewLabel[], onClose: () => void}} ReviewRecordDrawerProps */
 
 /** @param {ReviewRecord} item @param {string} key @returns {string[]} */
 export function values(item, key) {

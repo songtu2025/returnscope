@@ -81,19 +81,3 @@
   background: #f3f8f5;
   line-height: 1.6;
 }
-
-.review-current-result > b,
-.review-record-editor > b {
-  display: block;
-  margin-bottom: 10px;
-}
-
-.review-current-result > div {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
-}
-
-.review-current-result p {
-  margin: 3px 0;
-}

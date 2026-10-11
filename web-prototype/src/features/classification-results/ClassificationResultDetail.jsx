@@ -61,6 +61,19 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
   } = useClassificationResultDetailData({ route, notify });
 
   useEffect(() => {
+    if (!records || recordsLoading || recordsError) return;
+    const lastPage = Math.max(Math.ceil(records.total / route.pageSize), 1);
+    if (route.recordPage > lastPage) updateRoute({ recordPage: lastPage });
+  }, [
+    records,
+    recordsLoading,
+    recordsError,
+    route.pageSize,
+    route.recordPage,
+    updateRoute,
+  ]);
+
+  useEffect(() => {
     if (!result || error || route.tab === "history" || selectedGroup) return undefined;
     const controller = new AbortController();
     const refresh = () => {

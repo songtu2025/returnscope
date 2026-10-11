@@ -63,7 +63,9 @@ test.each(drawers)(
     const view = render(drawer(props));
     const dialog = screen.getByRole("dialog", { name: "分类结果与证据" });
     const closeButton = screen.getByRole("button", { name: "关闭证据抽屉" });
-    const summary = dialog.querySelector("summary");
+    const summaries = dialog.querySelectorAll("summary");
+    const summary = summaries[0];
+    const lastSummary = summaries[summaries.length - 1];
     expect(summary).not.toBeNull();
     expect(closeButton).toHaveFocus();
 
@@ -72,7 +74,7 @@ test.each(drawers)(
     hiddenButton.textContent = "隐藏操作";
     dialog.append(hiddenButton);
     await user.tab({ shift: true });
-    expect(summary).toHaveFocus();
+    expect(lastSummary).toHaveFocus();
     await user.tab();
     expect(closeButton).toHaveFocus();
 

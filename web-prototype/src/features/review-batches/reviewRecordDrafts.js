@@ -1,7 +1,6 @@
 /** @typedef {import("./semanticLedgerContracts").AddedSemanticItem} AddedSemanticItem */
 /** @typedef {import("../../shared/api/reviewBatchContracts").ClassificationData} ClassificationData */
 /** @typedef {import("./semanticLedgerContracts").ReviewRecord} ReviewRecord */
-/** @typedef {import("../../shared/api/reviewBatchContracts").ReviewRequestError} ReviewRequestError */
 /** @typedef {import("./semanticLedgerContracts").SemanticItemReview} SemanticItemReview */
 
 /** @param {ReviewRecord} item */
@@ -34,11 +33,4 @@ export function addedSemanticItemDrafts(classification) {
       note: item.note ?? null,
       ...(item.sentiment ? { sentiment: item.sentiment } : {}),
     }));
-}
-
-/** @param {unknown} error @returns {ReviewRequestError} */
-export function requestError(error) {
-  return error instanceof Error
-    ? /** @type {ReviewRequestError} */ (error)
-    : /** @type {ReviewRequestError} */ (new Error("复核操作失败"));
 }

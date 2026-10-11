@@ -2,6 +2,7 @@ import { ClockCounterClockwise, WarningCircle } from "@phosphor-icons/react";
 import { EmptyState, InlineLoading } from "../../components/SharedUi";
 import Button from "antd/es/button";
 import { formatTime } from "../../lib/presentation";
+import { SemanticResultPanel } from "../classification-results/SemanticResultPanel";
 /** @typedef {import("../../shared/api/reviewBatchContracts").ResultVersion} ResultVersion */
 /**
  * @param {{version: ResultVersion, parentVersionNo?: number | null, hasChangeSummary: boolean}} props
@@ -11,10 +12,10 @@ function ResultVersionPublication({ version, parentVersionNo, hasChangeSummary }
     <>
       <p>
         {parentVersionNo ? `来源 v${parentVersionNo}` : "首次发布"} ·{" "}
-        {version.created_by_name || "发布人信息未提供"}·{" "}
+        {version.created_by_name || "操作者信息未提供"} ·{" "}
         {formatTime(version.published_at || version.created_at)}
       </p>
-      <p>{version.version_reason || "未提供发布原因"}</p>
+      {version.version_reason && <p>{version.version_reason}</p>}
       {hasChangeSummary && (
         <p>
           基于 v{version.parent_version_no} 修改{" "}
@@ -28,10 +29,24 @@ function ResultVersionPublication({ version, parentVersionNo, hasChangeSummary }
         {Number(version.record_count || 0).toLocaleString()} 条记录 ·{" "}
         {Number(version.unit_count || 0).toLocaleString()} 个分类单元
       </small>
+      {version.manual_change && (
+        <details className="result-manual-change">
+          <summary>查看人工修正前后</summary>
+          <p>修改原因：{version.manual_change.reason}</p>
+          <section aria-label="修正前语义">
+            <b>修正前</b>
+            <SemanticResultPanel record={version.manual_change.before} />
+          </section>
+          <section aria-label="修正后语义">
+            <b>修正后</b>
+            <SemanticResultPanel record={version.manual_change.after} />
+          </section>
+        </details>
+      )}
       <details>
         <summary>查看技术信息</summary>
         <code>{version.version_id}</code>
-        {version.created_by && <code>发布账号：{version.created_by}</code>}
+        {version.created_by && <code>操作账号：{version.created_by}</code>}
         {version.source_review_batch_id && (
           <code>复核批次：{version.source_review_batch_id}</code>
         )}
@@ -57,7 +72,14 @@ function ResultVersionHistoryItem({
       <div>
         <header>
           <b>
-            v{version.version} · {version.version === 1 ? "原始分类" : "结果更新"}
+            v{version.version} ·{" "}
+            {version.version === 1
+              ? "原始分类"
+              : version.version_reason === "反馈组人工修正"
+                ? "人工修正"
+                : version.source_review_batch_id
+                  ? "历史批次复核"
+                  : "分析结果更新"}
           </b>
           {current && <em>当前查看</em>}
         </header>
@@ -124,12 +146,12 @@ export function ResultVersionHistory({
   const ready = !loading && !error;
   return (
     <div className="result-version-panel-body">
-      {loading && <InlineLoading label="正在读取版本历史…" />}
+      {loading && <InlineLoading label="正在读取修改历史…" />}
       {error && (
         <div className="review-batch-error" role="alert">
           <WarningCircle size={22} />
           <div>
-            <b>版本历史读取失败</b>
+            <b>修改历史读取失败</b>
             <p>{error}</p>
           </div>
           <Button onClick={onReload}>重新加载</Button>
@@ -138,8 +160,8 @@ export function ResultVersionHistory({
       {ready && history.length === 0 && (
         <EmptyState
           icon={ClockCounterClockwise}
-          title="暂无版本历史"
-          description="当前接口没有返回可展示的版本记录。"
+          title="暂无修改历史"
+          description="当前没有可展示的修改记录。"
         />
       )}
       {!error && history.length > 0 && (

@@ -1,5 +1,4 @@
 import Button from "antd/es/button";
-import Checkbox from "antd/es/checkbox";
 import { CaretRight } from "@phosphor-icons/react";
 import { resultLabelText } from "../../lib/taxonomyPresentation";
 import { SemanticStatusBadge } from "../classification-results/SemanticResultPanel";
@@ -15,16 +14,9 @@ const WORKFLOW_STATUS_LABELS = {
 };
 
 /**
- * @param {{record: ReviewRecord, selectionEnabled: boolean, selectable: boolean, checked: boolean, onCheck: (checked: boolean) => void, onOpen: () => void}} props
+ * @param {{record: ReviewRecord, onOpen: () => void}} props
  */
-export function ReviewRecordRow({
-  record,
-  selectionEnabled,
-  selectable,
-  checked,
-  onCheck,
-  onOpen,
-}) {
+export function ReviewRecordRow({ record, onOpen }) {
   const classification = record.classification ?? {};
   const semanticCodes = [
     ...(classification.problem_label_codes ?? []),
@@ -37,18 +29,6 @@ export function ReviewRecordRow({
   ];
   return (
     <article className="review-record-row" role="row">
-      {selectionEnabled &&
-        (selectable ? (
-          <span className="review-record-checkbox">
-            <Checkbox
-              aria-label={`选择 ${valueText(values(record, "order_ids"))}`}
-              checked={checked}
-              onChange={(event) => onCheck(event.target.checked)}
-            />
-          </span>
-        ) : (
-          <span className="review-record-checkbox" aria-hidden="true" />
-        ))}
       <div>
         <b>{valueText(values(record, "order_ids"))}</b>
         <span>{valueText(values(record, "product_names"))}</span>
@@ -79,7 +59,7 @@ export function ReviewRecordRow({
           iconPlacement="end"
           onClick={onOpen}
         >
-          {record.workflow_status === "pending" ? "处理" : "查看"}
+          查看
         </Button>
       </div>
     </article>

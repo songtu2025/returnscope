@@ -38,11 +38,14 @@ class ClassificationResultRecordFiltersMixin:
     def _records_select() -> str:
         return """
             SELECT r.*, u.processing_status, u.problem_labels_json,
-                   u.classification_json, u.system_rerun_required
+                   u.classification_json, u.system_rerun_required,
+                   modifier.display_name AS manual_actor_name
             FROM classification_result_records r
             JOIN classification_units u
               ON u.result_version_id = r.result_version_id
              AND u.classification_key = r.classification_key
+            LEFT JOIN users modifier
+              ON modifier.id = json_extract(u.classification_json, '$.human_review_assessment.assessed_by')
         """
 
     def _record_filters(

@@ -123,6 +123,10 @@ class _ClassificationResultRecords(
             value.pop("classification_json", None),
             {},
         )
+        actor_name = value.pop("manual_actor_name", None)
+        assessment = value["classification"].get("human_review_assessment")
+        if assessment and assessment.get("resolved"):
+            assessment["assessed_by_name"] = actor_name
         return value
 
     @staticmethod

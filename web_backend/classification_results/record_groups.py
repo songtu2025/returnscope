@@ -15,12 +15,15 @@ GROUP_MEMBERS_SQL = """
         LIMIT ? OFFSET ?
     )
     SELECT f.*, s.member_count, u.processing_status,
-           u.problem_labels_json, u.classification_json, u.system_rerun_required
+           u.problem_labels_json, u.classification_json, u.system_rerun_required,
+           modifier.display_name AS manual_actor_name
     FROM filtered f
     JOIN selected s ON s.display_key = f.display_key
     JOIN classification_units u
       ON u.result_version_id = f.result_version_id
      AND u.classification_key = f.classification_key
+    LEFT JOIN users modifier
+      ON modifier.id = json_extract(u.classification_json, '$.human_review_assessment.assessed_by')
     ORDER BY s.first_row, f.source_row, f.id
     """
 

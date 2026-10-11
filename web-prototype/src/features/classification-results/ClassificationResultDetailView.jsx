@@ -35,6 +35,7 @@ export function ClassificationResultDetailView(props) {
         onClick={() =>
           updateRoute({
             version: "",
+            tab: "records",
             recordPage: 1,
             problem: "",
             productName: "",
@@ -101,8 +102,17 @@ export function ClassificationResultDetailView(props) {
               onClose={closeEvidence}
               onSaved={(version) => {
                 closeEvidence();
-                notify("人工修正已保存");
-                updateRoute({ version, recordPage: 1 });
+                const filtered =
+                  route.recordQualityStatus === "review_required" ||
+                  route.recordQualityStatus === "unusable" ||
+                  route.recordQualityStatus === "excluded" ||
+                  route.systemRerunRequired === "true";
+                notify(
+                  filtered
+                    ? "人工修正已保存，无需重跑；记录可能已移出当前筛选。"
+                    : "人工修正已保存，无需重跑",
+                );
+                updateRoute({ version });
               }}
               returnFocusRef={evidenceTriggerRef}
             />

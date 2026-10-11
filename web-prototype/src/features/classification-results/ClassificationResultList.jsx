@@ -1,7 +1,6 @@
 import { ChartBar, Sparkle } from "@phosphor-icons/react";
 import { PageHeading } from "../../components/SharedUi";
 import { DashboardSelectionBar } from "./ClassificationResultListParts";
-import { ResultWorkspaceNav } from "./ResultWorkspaceNav";
 import { useResultPoolWorkspace } from "./useResultPoolWorkspace";
 import { ResultPoolFilters } from "./ResultPoolFilters";
 import { ResultPoolContent } from "./ResultPoolContent";
@@ -22,19 +21,15 @@ export function ClassificationResultList(props) {
   } = context;
   return (
     <div className="standard-page classification-results-page">
-      <ResultWorkspaceNav
-        active={route.qualityStatus === "review_required" ? "pending" : "results"}
-      />
       <PageHeading
-        eyebrow="不可变分类数据资产"
         title="分类结果池"
-        description="每个已完成 Listing 独立发布结果版本，可在网页查看订单级分类与证据。"
+        description="查看最新分类结果，在反馈记录中查看证据或人工修正语义。"
         action={
           <div className="result-creation-actions">
             <button
               className="primary-button"
               disabled={!selectedResults.length}
-              title={selectedResults.length ? "" : "请先勾选结果版本"}
+              title={selectedResults.length ? "" : "请先勾选分类结果"}
               onClick={continueToDashboard}
             >
               <ChartBar size={18} />{" "}
@@ -44,7 +39,7 @@ export function ClassificationResultList(props) {
               <button
                 className="secondary-button"
                 disabled={!selectedResults.length}
-                title={selectedResults.length ? "" : "请先勾选结果版本"}
+                title={selectedResults.length ? "" : "请先勾选分类结果"}
                 onClick={continueToInsight}
               >
                 <Sparkle size={18} /> 生成 AI 洞察
@@ -62,9 +57,7 @@ export function ClassificationResultList(props) {
                 ? "正在为现有看板选择新版本数据"
                 : "当前勾选结果可用于分析看板或 AI 洞察"}
             </b>
-            <span>
-              已发布版本均可选择；默认仅纳入可用记录，统计范围可在确认时调整。
-            </span>
+            <span>默认仅纳入可用记录，统计范围可在确认时调整。</span>
           </div>
           <button className="text-button" onClick={() => clearSelection(true)}>
             取消选择

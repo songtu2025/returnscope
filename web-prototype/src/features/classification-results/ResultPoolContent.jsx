@@ -27,7 +27,7 @@ export function ResultPoolContent(context) {
           <div
             className={`result-pool-table is-selecting ${loading ? "is-loading" : ""}`}
             role="table"
-            aria-label="分类结果版本"
+            aria-label="分类结果"
             aria-busy={loading}
           >
             <div className="result-pool-head" role="row">
@@ -50,7 +50,11 @@ export function ResultPoolContent(context) {
                 onOpen={() =>
                   updateRoute({
                     version: result.version_id,
+                    tab: "records",
                     recordPage: 1,
+                    recordQualityStatus: route.qualityStatus,
+                    commentStatus: "",
+                    systemRerunRequired: "",
                     problem: "",
                     productName: "",
                     productSku: "",

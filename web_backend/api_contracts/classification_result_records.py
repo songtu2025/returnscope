@@ -99,6 +99,13 @@ class ClassificationTopicSummaryResponse(CompatibleResponse):
     event_count: int = 0
 
 
+class ManualResultAssessmentResponse(CompatibleResponse):
+    resolved: bool = False
+    assessed_by: str | None = None
+    assessed_by_name: str | None = None
+    assessed_at: str | None = None
+
+
 class ClassificationPayloadResponse(CompatibleResponse):
     classification_key: str | None = None
     semantic_units: list[ClassificationSemanticFactResponse] = Field(
@@ -122,6 +129,7 @@ class ClassificationPayloadResponse(CompatibleResponse):
     semantic_relations: list[dict[str, object]] = Field(default_factory=list)
     comment_summary: dict[str, object] | None = None
     semantic_review: SemanticReviewResponse | None = None
+    human_review_assessment: ManualResultAssessmentResponse | None = None
 
 
 class ClassificationResultRecordResponse(CompatibleResponse):

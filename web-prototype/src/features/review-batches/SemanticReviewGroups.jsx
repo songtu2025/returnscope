@@ -10,9 +10,9 @@ export function SemanticReviewGroups(context) {
           <header>
             <div>
               <b>系统异常 · {systemItems.length} 项</b>
-              <span>不属于业务标签判断，需由系统重跑或管理员处理。</span>
+              <span>展示当时分析中记录的技术诊断。</span>
             </div>
-            <span>已锁定编辑</span>
+            <span>历史记录</span>
           </header>
           <div className="semantic-review-items">{systemItems.map(renderItem)}</div>
         </section>
@@ -21,7 +21,7 @@ export function SemanticReviewGroups(context) {
         <header>
           <div>
             <b>待人工判断 · {displayedSummary.needsReview} 项</b>
-            <span>核对业务观点、证据与标签；已归类项也可按证据修正。</span>
+            <span>展示当时记录的业务观点、证据与人工调整。</span>
           </div>
         </header>
         {businessItems.length > 0 ? (

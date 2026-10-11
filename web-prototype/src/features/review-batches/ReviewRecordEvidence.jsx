@@ -83,17 +83,13 @@ function ReviewSourceContext({ record }) {
   );
 }
 
-/** @param {Pick<import("./reviewRecordPresentation").ReviewRecordDrawerProps, "record" | "labels" | "semanticItemReviews" | "addedSemanticItems" | "coverageStatus" | "onSemanticItemReviews" | "onAddedSemanticItems" | "onCoverageStatus"> & {editable: boolean}} props */
+/** @param {Pick<import("./reviewRecordPresentation").ReviewRecordDrawerProps, "record" | "labels"> & {semanticItemReviews: import("./semanticLedgerContracts").SemanticItemReview[], addedSemanticItems: import("./semanticLedgerContracts").AddedSemanticItem[], coverageStatus: import("./semanticLedgerContracts").CoverageStatus}} props */
 export function ReviewRecordEvidence({
   record,
   labels,
-  editable,
   semanticItemReviews,
   addedSemanticItems,
   coverageStatus,
-  onSemanticItemReviews,
-  onAddedSemanticItems,
-  onCoverageStatus,
 }) {
   const classification = record.classification ?? {};
   return (
@@ -104,20 +100,14 @@ export function ReviewRecordEvidence({
         key={record.id}
         record={record}
         labels={labels}
-        editable={editable}
         itemReviews={semanticItemReviews}
         addedItems={addedSemanticItems}
         coverageStatus={coverageStatus}
-        onItemReviews={onSemanticItemReviews}
-        onAddedItems={onAddedSemanticItems}
-        onCoverageStatus={onCoverageStatus}
       />
 
       <ReviewSourceContext record={record} />
 
-      {!editable && (
-        <ReviewAssessmentSummary value={classification.human_review_assessment} />
-      )}
+      <ReviewAssessmentSummary value={classification.human_review_assessment} />
     </>
   );
 }

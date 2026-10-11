@@ -21,6 +21,8 @@ const { apiMock, dashboardApiMock } = vi.hoisted(() => ({
     reviewBatches: vi.fn(),
     createReviewBatch: vi.fn(),
     configs: vi.fn(),
+    resultTaxonomy: vi.fn(),
+    correctClassificationResult: vi.fn(),
   },
   dashboardApiMock: {
     dashboardPreflight: vi.fn(),
@@ -68,6 +70,8 @@ function ResultCreationHarness({ notify = vi.fn() }) {
 }
 
 const record = {
+  id: "record-1",
+  result_version_id: "classification-version-1",
   source_record_id: "returns-v3:2",
   source_row: 2,
   return_date: "2026-08-01",
@@ -224,26 +228,20 @@ beforeEach(() => {
   });
 });
 
-test("分类结果工作区整合结果版本、待复核和复核记录", async () => {
-  const user = userEvent.setup();
+test("分类结果使用统一列表，进入详情携带记录情况筛选", async () => {
   render(
     <ClassificationResultsPage
-      route={{ query: {} }}
+      route={{ query: { quality_status: "review_required" } }}
       notify={vi.fn()}
       userId="user-1"
     />,
   );
-
-  expect(screen.getByRole("button", { name: "结果版本" })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
-  await user.click(screen.getByRole("button", { name: "待复核" }));
-  expect(window.location.hash).toBe(
-    "#classification-results?quality_status=review_required",
-  );
-  await user.click(screen.getByRole("button", { name: "复核记录" }));
-  expect(window.location.hash).toBe("#classification-results?view=reviews");
+  expect(screen.queryByRole("button", { name: "结果版本" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "待复核" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "复核记录" })).not.toBeInTheDocument();
+  await userEvent.click(await screen.findByRole("button", { name: "SR001" }));
+  expect(window.location.hash).toContain("record_quality_status=review_required");
+  expect(window.location.hash).not.toContain("view=reviews");
 });
 
 test("分类结果详情加载时在原页面保留返回入口与稳定占位", async () => {
@@ -359,6 +357,9 @@ test("用户反馈结果不再把标题展示为退货原因", async () => {
   const drawer = screen.getByRole("dialog", { name: "分类结果与证据" });
   expect(within(drawer).getByText("用户反馈原文")).toBeVisible();
   expect(within(drawer).getByText("反馈标题")).toBeVisible();
+  await userEvent.click(
+    within(drawer).getByText("业务标签与记录状态", { selector: "summary" }),
+  );
   expect(within(drawer).getByText("正向标签")).toBeVisible();
   expect(within(drawer).queryByText("Amazon原因")).not.toBeInTheDocument();
 });
@@ -399,7 +400,7 @@ test("同一反馈只显示一份结论并可展开两条源明细", async () =>
   expect(within(drawer).getByText("关联源明细（2）")).toBeVisible();
   expect(within(drawer).getByText("源记录 2 · 2026-08-01")).toBeVisible();
   expect(within(drawer).getByText("源记录 3 · 2026-08-02")).toBeVisible();
-  expect(within(drawer).getAllByText("业务标签")).toHaveLength(1);
+  expect(within(drawer).getAllByText("业务标签与记录状态")).toHaveLength(1);
 });
 
 test("业务下钻按反馈组显示数量", async () => {
@@ -869,13 +870,15 @@ test("刷新恢复产品名称下钻且切换产品不会混入其他订单", as
   expect(semanticSummary).not.toBeNull();
   expect(closeButton).toHaveFocus();
   await user.tab();
-  expect(semanticSummary).toHaveFocus();
-  await user.tab({ shift: true });
-  expect(closeButton).toHaveFocus();
-  await user.tab({ shift: true });
   expect(screen.getByRole("button", { name: "人工修正" })).toHaveFocus();
   await user.tab();
+  expect(semanticSummary).toHaveFocus();
+  closeButton.focus();
+  await user.tab({ shift: true });
+  expect(within(drawer).getByText("运行来源", { selector: "summary" })).toHaveFocus();
+  await user.tab();
   expect(closeButton).toHaveFocus();
+  await user.click(within(drawer).getByText("业务信息", { selector: "summary" }));
   expect(within(drawer).getByText("产品表第二名称")).toBeVisible();
   expect(within(drawer).getAllByText("SOURCE-MSKU-1")).toHaveLength(2);
   expect(within(drawer).getByText("PRODUCT-SKU-2")).toBeVisible();
@@ -1172,9 +1175,9 @@ test("版本历史显示真实派生链且历史版本主动作进入最新版�
   render(<ClassificationResultsPage notify={vi.fn()} />);
 
   expect(await screen.findByText("v1 · 原始分类")).toBeVisible();
-  expect(screen.getByText("v2 · 结果更新")).toBeVisible();
+  expect(screen.getByText("v2 · 历史批次复核")).toBeVisible();
   expect(screen.getByText("人工复核后发布")).toBeVisible();
-  expect(screen.getByText("发布人信息未提供", { exact: false })).toBeVisible();
+  expect(screen.getByText("操作者信息未提供", { exact: false })).toBeVisible();
   expect(screen.getByText("复核员乙", { exact: false })).toBeVisible();
   expect(
     screen.getByText("基于 v1 修改 2 个分类单元，其余 1 个沿用来源版本"),
@@ -1204,7 +1207,7 @@ test("派生统计字段缺失时只显示已有记录与分类单元摘要", as
 
   render(<ClassificationResultsPage notify={vi.fn()} />);
 
-  expect(await screen.findByText("v2 · 结果更新")).toBeVisible();
+  expect(await screen.findByText("v2 · 分析结果更新")).toBeVisible();
   expect(screen.queryByText(/修改 .* 个分类单元/)).not.toBeInTheDocument();
   expect(screen.getAllByText(/3 条记录 · 1 个分类单元/)).toHaveLength(2);
 });
@@ -1227,13 +1230,13 @@ test("复核版本切换取消共享旧请求，晚返回不覆盖新历史且�
   const oldSignal = apiMock.classificationResultVersions.mock.calls[0][1].signal;
 
   view.rerender(<ResultVersionReviewPanel result={nextVersion} {...props} />);
-  expect(await screen.findByText("v2 · 结果更新")).toBeVisible();
+  expect(await screen.findByText("v2 · 分析结果更新")).toBeVisible();
   expect(oldSignal.aborted).toBe(true);
   const nextSignal = apiMock.classificationResultVersions.mock.calls[1][1].signal;
 
   await act(async () => finishOld([resultVersion]));
   expect(screen.queryByText("v1 · 原始分类")).not.toBeInTheDocument();
-  expect(screen.getByText("v2 · 结果更新")).toBeVisible();
+  expect(screen.getByText("v2 · 分析结果更新")).toBeVisible();
   expect(apiMock.classificationResultVersions).toHaveBeenCalledTimes(2);
   expect(apiMock.reviewBatches).not.toHaveBeenCalled();
   view.unmount();
@@ -1347,7 +1350,7 @@ test("结果池更新失败保留已有版本和重试入口", async () => {
     />,
   );
   expect(screen.getByText("分类结果更新失败，当前显示上一次数据")).toBeVisible();
-  const table = screen.getByRole("table", { name: "分类结果版本" });
+  const table = screen.getByRole("table", { name: "分类结果" });
   expect(within(table).getByText("SR001")).toBeVisible();
   expect(within(table).getAllByRole("columnheader")).toHaveLength(7);
   expect(within(table).getAllByRole("cell")).toHaveLength(7);
@@ -1377,4 +1380,130 @@ test("结果池筛选为空时清除条件并返回第一页", async () => {
     qualityStatus: "",
     page: 1,
   });
+});
+
+test.each(["", "review_required"])(
+  "人工修正保存保留筛选 %s 和当前分页，并显示新状态",
+  async (quality) => {
+    const notify = vi.fn();
+    apiMock.resultTaxonomy.mockResolvedValue({
+      labels: [
+        { code: "FIT_TOO_SMALL", name: "尺寸", allowed_sentiments: ["NEGATIVE"] },
+      ],
+    });
+    apiMock.correctClassificationResult.mockResolvedValue({
+      version_id: "classification-version-2",
+    });
+    apiMock.classificationResultVersions.mockImplementation((id) =>
+      Promise.resolve([
+        { ...resultVersion, version_id: id, version: id.endsWith("2") ? 2 : 1 },
+      ]),
+    );
+    apiMock.classificationResult.mockImplementation((id) =>
+      Promise.resolve({
+        ...resultVersion,
+        version_id: id,
+        version: id.endsWith("2") ? 2 : 1,
+      }),
+    );
+    const correctedRecord = {
+      ...record,
+      classification: {
+        ...record.classification,
+        human_review_assessment: {
+          resolved: true,
+          assessed_by_name: "测试人员",
+          assessed_at: "2026-10-11T10:00:00Z",
+        },
+      },
+    };
+    apiMock.classificationResultRecordGroups.mockImplementation((id) =>
+      Promise.resolve({
+        items:
+          id.endsWith("2") && quality
+            ? []
+            : [groupOf(id.endsWith("2") ? correctedRecord : record)],
+        total: id.endsWith("2") && quality ? 20 : 40,
+        source_total: 40,
+      }),
+    );
+    window.location.hash = `classification-results?result_version_id=classification-version-1&record_page=2&record_quality_status=${quality}`;
+    render(<ResultCreationHarness notify={notify} />);
+    await userEvent.click(await screen.findByRole("button", { name: "查看证据" }));
+    await userEvent.click(screen.getByRole("button", { name: "人工修正" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "保存修正" })).toBeEnabled(),
+    );
+    fireEvent.change(screen.getByLabelText("观点 1 用户观点"), {
+      target: { value: "整体尺寸偏小" },
+    });
+    await userEvent.click(screen.getByRole("button", { name: "保存修正" }));
+    await waitFor(() =>
+      expect(window.location.hash).toContain("classification-version-2"),
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
+    if (quality) {
+      await waitFor(() => expect(window.location.hash).not.toContain("record_page=2"));
+      expect(window.location.hash).toContain("record_quality_status=review_required");
+      expect(notify).toHaveBeenCalledWith(expect.stringContaining("移出当前筛选"));
+      expect(apiMock.classificationResultRecordGroups).toHaveBeenLastCalledWith(
+        "classification-version-2",
+        expect.objectContaining({ page: 1, quality_status: quality }),
+        expect.any(Object),
+      );
+    } else {
+      expect(window.location.hash).toContain("record_page=2");
+      expect(await screen.findByText("人工已修正")).toBeVisible();
+      expect(notify).toHaveBeenCalledWith("人工修正已保存，无需重跑");
+      await userEvent.click(screen.getByRole("button", { name: "查看证据" }));
+      expect(screen.getByText("测试人员", { exact: false })).toBeVisible();
+    }
+  },
+);
+
+test("人工修改历史显示来源、变更数量和修正前后语义", async () => {
+  const manual = {
+    ...resultVersion,
+    version_id: "manual-v2",
+    version: 2,
+    version_reason: "反馈组人工修正",
+    parent_version_no: 1,
+    parent_version_id: resultVersion.version_id,
+    changed_unit_count: 1,
+    inherited_unit_count: 2,
+    created_by_name: "测试修正人",
+    manual_change: {
+      before: record,
+      after: {
+        ...record,
+        classification: {
+          ...record.classification,
+          semantic_units: [
+            {
+              ...record.classification.semantic_units[0],
+              opinion: "人工修正的尺寸问题",
+            },
+          ],
+        },
+      },
+      reason: "人工修正语义",
+    },
+  };
+  apiMock.classificationResultVersions.mockResolvedValue([manual, resultVersion]);
+  render(<ResultVersionReviewPanel result={manual} onSelectVersion={vi.fn()} />);
+  expect(await screen.findByText("v2 · 人工修正")).toBeVisible();
+  expect(screen.getByText("测试修正人", { exact: false })).toBeVisible();
+  expect(
+    screen.getByText("基于 v1 修改 1 个分类单元，其余 2 个沿用来源版本"),
+  ).toBeVisible();
+  await userEvent.click(screen.getByText("查看人工修正前后", { selector: "summary" }));
+  expect(
+    within(screen.getByRole("region", { name: "修正前语义" })).getAllByText("尺码偏小")
+      .length,
+  ).toBeGreaterThan(0);
+  expect(
+    within(screen.getByRole("region", { name: "修正后语义" })).getAllByText(
+      "人工修正的尺寸问题",
+    ).length,
+  ).toBeGreaterThan(0);
 });

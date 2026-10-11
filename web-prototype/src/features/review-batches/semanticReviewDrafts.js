@@ -43,19 +43,3 @@ export function manualItem(item, index) {
     sentiment: item.sentiment || "",
   };
 }
-
-/** @param {SemanticItemReview[]} items @param {SemanticItemReview} next */
-export function upsert(items, next) {
-  const existing = items.findIndex(
-    (item) => item.semantic_item_id === next.semantic_item_id,
-  );
-  if (existing < 0) return [...items, next];
-  return items.map((item, index) => (index === existing ? next : item));
-}
-
-/** @param {AddedSemanticItem[]} items */
-export function nextManualId(items) {
-  let index = items.length + 1;
-  while (items.some((item) => item.item_id === `manual-${index}`)) index += 1;
-  return `manual-${index}`;
-}
