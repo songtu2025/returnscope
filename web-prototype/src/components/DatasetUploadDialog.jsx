@@ -3,8 +3,8 @@ import { UploadSimple, WarningCircle } from "@phosphor-icons/react";
 import { api } from "../api";
 import { Modal } from "./SharedUi";
 
-/** @typedef {{id: string, name: string, kind: string}} UploadDataset */
-/** @typedef {{mode: "create", kind: string} | {mode: "version", dataset: UploadDataset}} UploadDialog */
+/** @typedef {{id: string, name: string, kind: string, current_version: number}} UploadDataset */
+/** @typedef {{mode: "create", kind: string} | {mode: "update", dataset: UploadDataset}} UploadDialog */
 
 /**
  * @param {{
@@ -42,7 +42,8 @@ export function DatasetUploadDialog({ dialog, onClose, onDone }) {
         body.append("description", description);
         result = await api.createDataset(body);
       } else {
-        result = await api.addDatasetVersion(dialog.dataset.id, body);
+        body.append("expected_version", String(dialog.dataset.current_version));
+        result = await api.updateDatasetContent(dialog.dataset.id, body);
       }
       await onDone(result);
     } catch (requestError) {
@@ -54,11 +55,8 @@ export function DatasetUploadDialog({ dialog, onClose, onDone }) {
 
   return (
     <Modal
-      title={
-        dialog.mode === "create"
-          ? "导入产品信息"
-          : `为 ${dialog.dataset.name} 创建新版本`
-      }
+      eyebrow="商品信息"
+      title={dialog.mode === "create" ? "导入产品信息" : `更新 ${dialog.dataset.name}`}
       onClose={onClose}
     >
       <form className="modal-form" onSubmit={submit}>
@@ -95,12 +93,12 @@ export function DatasetUploadDialog({ dialog, onClose, onDone }) {
         </label>
 
         <label>
-          版本说明
+          修改说明
           <input
             value={note}
             onChange={(event) => setNote(event.target.value)}
             maxLength={500}
-            placeholder="必填：例如补充 8 月 1—7 日数据"
+            placeholder="必填：例如补充商品名称和品类"
             required
           />
         </label>
@@ -115,7 +113,11 @@ export function DatasetUploadDialog({ dialog, onClose, onDone }) {
             取消
           </button>
           <button className="primary-button" disabled={submitting}>
-            {submitting ? "正在校验并上传…" : "创建不可变版本"}
+            {submitting
+              ? "正在校验并上传…"
+              : dialog.mode === "create"
+                ? "导入"
+                : "保存更新"}
           </button>
         </div>
       </form>

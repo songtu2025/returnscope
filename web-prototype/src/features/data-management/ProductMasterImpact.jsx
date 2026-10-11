@@ -7,12 +7,10 @@ import { formatTime } from "../../lib/presentation";
 /** @typedef {import("./productMasterContracts").ProductMasterProps} ProductMasterProps */
 /** @typedef {ReturnType<typeof import("./useProductMasterState").useProductMasterState>} ProductMasterState */
 
-/** @param {Pick<ProductMasterState,"dimensionAudit"|"currentVersionId"> & {selected: DatasetRecord} & Pick<ProductMasterProps,"routeReferenceVersion"|"routeReferencePage"|"onReferenceRouteChange"|"onNavigate">} props */
+/** @param {Pick<ProductMasterState,"dimensionAudit"|"currentVersionId"> & Pick<ProductMasterProps,"routeReferencePage"|"onReferenceRouteChange"|"onNavigate">} props */
 export function ProductMasterImpact({
   dimensionAudit,
   currentVersionId,
-  selected,
-  routeReferenceVersion = "",
   routeReferencePage = 1,
   onReferenceRouteChange,
   onNavigate,
@@ -31,9 +29,7 @@ export function ProductMasterImpact({
         </div>
       </section>
       <DatasetReferences
-        versions={selected.versions ?? []}
         currentVersionId={currentVersionId}
-        routeVersionId={routeReferenceVersion}
         page={Number(routeReferencePage) || 1}
         onRouteChange={onReferenceRouteChange}
         onNavigate={onNavigate}
@@ -44,6 +40,18 @@ export function ProductMasterImpact({
 
 /** @param {{entry: NonNullable<DatasetRecord["audit"]>[number]}} props */
 function ProductAuditEntry({ entry }) {
+  if (entry.action === "product_update")
+    return (
+      <div>
+        <b>{entry.actor_name} · 商品资料更新</b>
+        <p>
+          {entry.before?.row_count} 条 → {entry.after?.row_count} 条
+        </p>
+        <small>
+          {entry.after?.note} · {formatTime(entry.created_at)}
+        </small>
+      </div>
+    );
   if (entry.action === "dimension_category_completion")
     return <ProductCategoryAudit entry={entry} />;
   const changes = Object.keys(entry.after?.values ?? {}).filter(

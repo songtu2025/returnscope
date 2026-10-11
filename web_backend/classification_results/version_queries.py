@@ -57,8 +57,9 @@ VERSION_SELECT_SQL = f"""
             JOIN classification_results r ON r.id = v.result_id
             JOIN dataset_versions dv ON dv.id = r.dataset_version_id
             JOIN datasets rd ON rd.id = dv.dataset_id
-            JOIN dataset_versions pv ON pv.id = r.product_version_id
-            JOIN datasets pd ON pd.id = pv.dataset_id
+            JOIN dataset_versions product_source ON product_source.id = r.product_version_id
+            JOIN datasets pd ON pd.id = product_source.dataset_id
+            JOIN dataset_versions pv ON pv.dataset_id = pd.id AND pv.version = pd.current_version
             LEFT JOIN tasks task ON task.id = r.source_task_id
             LEFT JOIN classification_standard_versions standard_version
               ON standard_version.id = r.standard_version_id

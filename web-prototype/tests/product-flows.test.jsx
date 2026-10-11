@@ -165,7 +165,7 @@ describe("商品页面和旧任务草稿的恢复", () => {
     expect(screen.getByRole("button", { name: "导入产品信息" })).toBeDisabled();
     await act(async () => resolveList([]));
     expect(await screen.findByText("尚未建立产品信息")).toBeVisible();
-    expect(screen.getByRole("button", { name: "导入首个产品信息版本" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "导入商品信息" })).toBeEnabled();
   });
 
   test("商品详情失败不能误报无商品且可以重试", async () => {
@@ -186,7 +186,7 @@ describe("商品页面和旧任务草稿的恢复", () => {
         const key =
           source === "list"
             ? serverStateKeys.productDatasets
-            : serverStateKeys.productDataset(product.id, "versions");
+            : serverStateKeys.productDataset(product.id, "");
         return (
           <button
             onClick={() =>
@@ -253,10 +253,10 @@ describe("商品页面和旧任务草稿的恢复", () => {
   });
 
   test.each([
-    ["impact", "变更追踪与影响"],
-    ["versions", "版本历史"],
-    ["audit", "变更追踪与影响"],
-    ["references", "变更追踪与影响"],
+    ["impact", "修改记录与任务引用"],
+    ["versions", "产品列表"],
+    ["audit", "修改记录与任务引用"],
+    ["references", "修改记录与任务引用"],
   ])("商品定位保留显式标签 %s 和引用上下文", async (tab, label) => {
     const focus = { kind: "dataset", datasetKind: "products", id: product.id };
     const pageProps = {
@@ -286,9 +286,13 @@ describe("商品页面和旧任务草稿的恢复", () => {
   test("普通重渲染不覆盖用户主动选择的商品标签", async () => {
     const focus = { kind: "dataset", datasetKind: "products", id: product.id };
     const { rerender } = render(<ProductMasterWorkspace {...props} focus={focus} />);
-    await userEvent.click(await screen.findByRole("button", { name: "版本历史" }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "修改记录与任务引用" }),
+    );
     rerender(<ProductMasterWorkspace {...props} focus={{ ...focus }} />);
-    expect(screen.getByRole("button", { name: "版本历史" })).toHaveClass("active");
+    expect(screen.getByRole("button", { name: "修改记录与任务引用" })).toHaveClass(
+      "active",
+    );
   });
 
   test("筛选切换后不能把旧商品行显示成新结果", async () => {
@@ -1278,7 +1282,7 @@ describe("关键用户流程", () => {
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith("用户反馈数据已导入并自动选中"),
     );
-    expect(apiMock.addDatasetVersion).not.toHaveBeenCalled();
+    expect(apiMock.updateDatasetContent).not.toHaveBeenCalled();
     expect(apiMock.createDataset).not.toHaveBeenCalled();
     expect(apiMock.inspectReturnImport).toHaveBeenCalledOnce();
     expect(apiMock.inspectReturnImport.mock.calls[0][0].get("file").name).toBe(
@@ -3017,10 +3021,10 @@ describe("关键用户流程", () => {
 
     await user.click(await screen.findByRole("button", { name: "导入产品信息" }));
     await user.type(screen.getByLabelText("产品信息名称"), "SEEKWAY 产品信息");
-    await user.type(screen.getByLabelText("版本说明"), "首次导入产品信息");
+    await user.type(screen.getByLabelText("修改说明"), "首次导入产品信息");
     const fileInput = container.querySelector('input[type="file"]');
     await user.upload(fileInput, new File(["products"], "products.xlsx"));
-    await user.click(screen.getByRole("button", { name: "创建不可变版本" }));
+    await user.click(screen.getByRole("button", { name: "导入" }));
 
     await waitFor(() => expect(apiMock.createDataset).toHaveBeenCalledOnce());
     const body = apiMock.createDataset.mock.calls[0][0];

@@ -29,6 +29,10 @@ from web_backend.dataset_return_versions import (
     DatasetVersionWrite,
 )
 from web_backend.datasets.catalog import _DatasetCatalog
+from web_backend.datasets.current_products import (
+    refresh_product_dependents,
+    update_current_products,
+)
 from web_backend.datasets.preview import _DatasetPreview
 from web_backend.datasets.references import _DatasetReferences
 from web_backend.datasets.return_inspection import (
@@ -138,7 +142,8 @@ class DatasetService(
                 source_path=source_path,
                 original_name=original_name,
                 content_type=content_type,
-                change_note=change_note or "创建首个版本",
+                change_note=change_note
+                or ("导入商品信息" if kind == "products" else "创建任务输入"),
                 actor_id=actor_id,
                 _inspection=_inspection,
             )
@@ -166,6 +171,7 @@ class DatasetService(
         actor_id: str,
         expected_current_version: int | None = None,
         _inspection: dict[str, Any] | None = None,
+        _product_previous_identities: list[tuple[str, str]] | None = None,
     ) -> dict[str, Any]:
         with self.database.connect() as connection:
             dataset = connection.execute(
@@ -175,6 +181,19 @@ class DatasetService(
         if dataset is None:
             raise ValueError("数据集不存在")
         kind = str(dataset["kind"])
+        if kind == "products" and dataset["current_version"]:
+            expected_current_version = (
+                int(dataset["current_version"])
+                if expected_current_version is None
+                else expected_current_version
+            )
+            with self.database.connect() as connection:
+                previous = connection.execute(
+                    "SELECT file_path, sha256 FROM dataset_versions WHERE dataset_id = ? AND version = ?",
+                    (dataset_id, dataset["current_version"]),
+                ).fetchone()
+            # 输入文件按摘要留存，正在执行的任务继续读取启动时的资料。
+            self._ensure_blob(Path(previous["file_path"]), previous["sha256"])
         if kind == "returns" and (
             dataset["usage_scope"] != "task_input" or dataset["current_version"] != 0
         ):
@@ -190,28 +209,36 @@ class DatasetService(
             },
         )
         version_id = str(prepared["id"])
+        prepared["manual_edit"] = _product_previous_identities is not None
 
         with self.database.transaction(immediate=True) as connection:
             now = utc_now()
-            version = self._insert_prepared_version(
-                connection,
-                write=DatasetVersionWrite(
-                    dataset_id=dataset_id,
-                    prepared=prepared,
-                    actor_id=actor_id,
-                    expected_current_version=expected_current_version,
-                ),
-                now=now,
+            write = DatasetVersionWrite(
+                dataset_id=dataset_id,
+                prepared=prepared,
+                actor_id=actor_id,
+                expected_current_version=expected_current_version,
             )
-        add_audit(
-            self.database,
-            "dataset",
-            dataset_id,
-            "add_version",
-            actor_id,
-            after={
-                "version": version,
-                "version_id": version_id,
-            },
-        )
+            if kind == "products" and dataset["current_version"]:
+                version, version_id = update_current_products(connection, write, now)
+                refresh_product_dependents(
+                    self.database,
+                    connection,
+                    dataset_id,
+                    now,
+                    previous_identities=_product_previous_identities,
+                )
+            else:
+                version = self._insert_prepared_version(
+                    connection, write=write, now=now
+                )
+        if not dataset["current_version"]:
+            add_audit(
+                self.database,
+                "dataset",
+                dataset_id,
+                "import",
+                actor_id,
+                after={"version": version, "version_id": version_id},
+            )
         return self.get(dataset_id) or {}

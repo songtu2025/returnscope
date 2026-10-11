@@ -11,19 +11,27 @@ from web_backend.database import Database
 
 
 def refresh_related_dashboards(
-    database: Database, connection: Any, result_id: str | None, now: str
+    database: Database,
+    connection: Any,
+    result_id: str | None,
+    now: str,
+    *,
+    product_dataset_id: str | None = None,
 ) -> None:
     rows = connection.execute(
         """
-        SELECT DISTINCT d.id, d.created_by, v.version_no, data.id AS dataset_id, data.filters_json
+        SELECT DISTINCT d.id, d.created_by, v.version_no, data.id AS dataset_id, data.filters_json, data.plan_hash
         FROM analysis_dashboards d
         JOIN dashboard_versions v ON v.id = d.current_version_id
         JOIN dashboard_dataset_versions data ON data.id = v.dataset_version_id
         JOIN dashboard_dataset_sources s ON s.dataset_version_id = data.id
         JOIN classification_result_versions r ON r.id = s.result_version_id
+        JOIN classification_results result ON result.id = r.result_id
+        JOIN dataset_versions product ON product.id = result.product_version_id
         WHERE (? IS NULL OR r.result_id = ?) AND d.status = 'active'
+          AND (? IS NULL OR product.dataset_id = ?)
         """,
-        (result_id, result_id),
+        (result_id, result_id, product_dataset_id, product_dataset_id),
     ).fetchall()
     storage = _DashboardVersionStorage()
     storage.database = database
@@ -40,7 +48,9 @@ def refresh_related_dashboards(
             """,
             (row["dataset_id"],),
         ).fetchall()
-        if all(source["previous_id"] == source["latest_id"] for source in sources):
+        if product_dataset_id is None and all(
+            source["previous_id"] == source["latest_id"] for source in sources
+        ):
             continue
         plan = build_plan(
             database,
@@ -48,6 +58,8 @@ def refresh_related_dashboards(
             [source["latest_id"] for source in sources],
             json_value(row["filters_json"], {}),
         )
+        if plan["plan_hash"] == row["plan_hash"]:
+            continue
         version = storage._insert_version(
             connection,
             dashboard_id=row["id"],
@@ -56,7 +68,9 @@ def refresh_related_dashboards(
                 (row["id"],),
             ).fetchone()[0],
             plan=plan,
-            reason="分类结果更新，自动同步",
+            reason="商品信息更新，自动同步"
+            if product_dataset_id
+            else "分类结果更新，自动同步",
             actor_id=row["created_by"],
             now=now,
         )

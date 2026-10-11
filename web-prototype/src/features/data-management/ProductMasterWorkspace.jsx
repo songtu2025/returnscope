@@ -14,14 +14,7 @@ import { ProductTaskRepair } from "./ProductTaskRepair";
 /** @param {ProductMasterProps} props */
 export function ProductMasterWorkspace(props) {
   const state = useProductMasterState(props);
-  const {
-    selected,
-    dialog,
-    setDialog,
-    mutateDatasets,
-    mutateSelected,
-    currentVersionId,
-  } = state;
+  const { selected, dialog, setDialog, onProductChanged, currentVersionId } = state;
   const {
     notify,
     focus,
@@ -42,7 +35,7 @@ export function ProductMasterWorkspace(props) {
             onClick={() =>
               setDialog(
                 selected
-                  ? { mode: "version", dataset: selected }
+                  ? { mode: "update", dataset: selected }
                   : { mode: "create", kind: "products" },
               )
             }
@@ -72,14 +65,14 @@ export function ProductMasterWorkspace(props) {
           <EmptyState
             icon={Database}
             title="尚未建立产品信息"
-            description="导入首个产品信息版本后，可维护商品映射、版本和修改留痕。"
+            description="导入商品资料后，可维护商品映射、品类和修改记录。"
             action={
               <Button
                 type="primary"
                 icon={<UploadSimple size={17} />}
                 onClick={() => setDialog({ mode: "create", kind: "products" })}
               >
-                导入首个产品信息版本
+                导入商品信息
               </Button>
             }
           />
@@ -98,8 +91,8 @@ export function ProductMasterWorkspace(props) {
           onClose={() => setDialog(null)}
           onDone={async () => {
             setDialog(null);
-            await Promise.all([mutateDatasets(), mutateSelected()]);
-            notify(dialog.mode === "create" ? "产品信息已创建" : "新版本已创建");
+            await onProductChanged();
+            notify(dialog.mode === "create" ? "产品信息已创建" : "产品信息已更新");
           }}
         />
       )}

@@ -33,7 +33,9 @@ FROM tasks t
 JOIN users u ON u.id = t.owner_id
 JOIN dataset_versions rv ON rv.id = t.dataset_version_id
 JOIN datasets rd ON rd.id = rv.dataset_id
-JOIN dataset_versions pv ON pv.id = t.product_version_id
+JOIN dataset_versions product_source ON product_source.id = t.product_version_id
+JOIN datasets products ON products.id = product_source.dataset_id
+JOIN dataset_versions pv ON pv.dataset_id = products.id AND pv.version = products.current_version
 JOIN api_config_versions cv ON cv.id = t.config_version_id
 WHERE t.id = ?
 """

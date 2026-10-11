@@ -7,33 +7,23 @@ import { STATUS_LABELS } from "../../constants";
 import { formatTime } from "../../lib/presentation";
 
 /** @typedef {import("../../app/navigation").Navigate} Navigate */
-/** @typedef {import("../../shared/api/dataManagementContracts").DatasetVersion} DatasetVersion */
 /** @typedef {import("../../shared/api/dataManagementContracts").DatasetReferencePage} DatasetReferencePage */
 
 /**
  * @param {{
- *   versions: DatasetVersion[],
  *   currentVersionId?: string,
- *   routeVersionId?: string,
  *   page: number,
  *   onRouteChange?: (changes: Record<string, string | number>) => void,
  *   onNavigate?: Navigate,
  * }} props
  */
 export function DatasetReferences({
-  versions,
   currentVersionId,
-  routeVersionId,
   page,
   onRouteChange,
   onNavigate,
 }) {
-  const availableVersionIds = versions.map((item) =>
-    String(item.id ?? item.version_id),
-  );
-  const selectedVersionId = availableVersionIds.includes(String(routeVersionId))
-    ? String(routeVersionId)
-    : String(currentVersionId ?? availableVersionIds[0] ?? "");
+  const selectedVersionId = currentVersionId ?? "";
   const [state, setState] = useState(
     /** @type {{loading: boolean, error: string, data: DatasetReferencePage | null}} */ ({
       loading: true,
@@ -79,37 +69,7 @@ export function DatasetReferences({
 
   return (
     <section className="dataset-view-panel dataset-reference-panel">
-      <CardHeading title="任务引用" note="历史任务始终保留启动时固化的数据版本" />
-      <div className="dataset-reference-toolbar">
-        <label>
-          数据版本
-          <select
-            value={selectedVersionId}
-            onChange={(event) =>
-              onRouteChange?.({
-                tab: "references",
-                reference_version: event.target.value,
-                reference_page: 1,
-              })
-            }
-          >
-            {versions.map((version) => {
-              const id = String(version.id ?? version.version_id);
-              return (
-                <option key={id} value={id}>
-                  v{version.version} · {version.original_name || "未提供文件名"}
-                </option>
-              );
-            })}
-          </select>
-        </label>
-        {state.data?.version && (
-          <span>
-            当前查看：{state.data.version.name || "数据版本"} · v
-            {state.data.version.version ?? "-"}
-          </span>
-        )}
-      </div>
+      <CardHeading title="任务引用" note="任务执行时保留启动时的输入资料" />
       {state.loading ? (
         <InlineLoading label="正在读取任务引用…" />
       ) : state.error ? (
@@ -125,8 +85,8 @@ export function DatasetReferences({
       ) : !state.data?.items?.length ? (
         <EmptyState
           icon={Database}
-          title="此版本尚未被任务引用"
-          description="任务创建并固化该版本后会显示在这里。"
+          title="尚未被任务引用"
+          description="使用这份商品资料的任务会显示在这里。"
         />
       ) : (
         <>
@@ -150,7 +110,7 @@ export function DatasetReferences({
                     {formatTime(item.created_at)}
                   </p>
                   <details>
-                    <summary>固化版本快照</summary>
+                    <summary>任务输入资料</summary>
                     <SnapshotFields value={item.version_snapshot} />
                   </details>
                 </div>
@@ -193,7 +153,9 @@ export function DatasetReferences({
 
 /** @param {{value?: Record<string, unknown>}} props */
 function SnapshotFields({ value }) {
-  const entries = Object.entries(value ?? {});
+  const entries = Object.entries(value ?? {}).filter(
+    ([key]) => !["version", "version_id"].includes(key),
+  );
   if (!entries.length) return <p>未提供快照明细</p>;
   return (
     <dl className="snapshot-field-list">

@@ -26,7 +26,7 @@ import { API_BASE, queryString, request } from "./request";
  *   updateDatasetRow: (id: string, payload: DataPayload) => Promise<DatasetRecord>,
  *   completeProductCategories: (id: string, payload: DataPayload) => Promise<DatasetRecord>,
  *   createDataset: (formData: FormData) => DataRequest,
- *   addDatasetVersion: (id: string, formData: FormData) => DataRequest,
+ *   updateDatasetContent: (id: string, formData: FormData) => DataRequest,
  *   inspectReturnImport: (formData: FormData) => DataRequest,
  *   importReturns: (payload: DataPayload) => DataRequest
  * }}
@@ -95,8 +95,8 @@ export const dataApi = {
     }),
   createDataset: (formData) =>
     request("/api/datasets", { method: "POST", body: formData }),
-  addDatasetVersion: (id, formData) =>
-    request(`/api/datasets/${id}/versions`, { method: "POST", body: formData }),
+  updateDatasetContent: (id, formData) =>
+    request(`/api/datasets/${id}/content`, { method: "PUT", body: formData }),
   inspectReturnImport: (formData) =>
     request("/api/return-imports/inspect", { method: "POST", body: formData }),
   importReturns: (payload) =>

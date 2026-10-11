@@ -81,6 +81,7 @@ def test_publication_writes_use_one_immediate_transaction(
         ["UPDATE", "classification_result_versions", "SET"],
         ["UPDATE", "task_segments", "SET"],
         ["INSERT", "INTO", "task_events("],
+        ["UPDATE", "classification_result_records", "SET"],
     ]
     assert statements.count("COMMIT") == 1
 

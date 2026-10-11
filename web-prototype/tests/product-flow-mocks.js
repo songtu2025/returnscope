@@ -38,7 +38,7 @@ const { apiMock } = vi.hoisted(() => ({
     qualityPreflight: vi.fn(),
     productScopes: vi.fn(),
     createDataset: vi.fn(),
-    addDatasetVersion: vi.fn(),
+    updateDatasetContent: vi.fn(),
     inspectReturnImport: vi.fn(),
     importReturns: vi.fn(),
     configs: vi.fn(),

@@ -12,9 +12,6 @@ export function dashboardVersionNumber(version) {
 }
 
 /** @param {DashboardSource | null | undefined} source */
-export function productCatalogVersionLabel(source) {
-  if (!source?.product_dataset_name || source?.product_version == null) {
-    return "未提供产品信息版本";
-  }
-  return `${source.product_dataset_name} · v${source.product_version}`;
+export function productCatalogLabel(source) {
+  return source?.product_dataset_name || "未提供产品信息";
 }

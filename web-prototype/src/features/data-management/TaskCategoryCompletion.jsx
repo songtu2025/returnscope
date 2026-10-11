@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { useSWRConfig } from "swr";
 import { api } from "../../api";
+import { refreshProductState } from "../../shared/serverState";
 import { TaskCategoryTable } from "./TaskCategoryTable";
 
 /** @typedef {import("../../shared/api/dataManagementContracts").DatasetRecord} DatasetRecord */
@@ -25,6 +27,7 @@ function requestError(error) {
  * }} props
  */
 export function TaskCategoryCompletion({ dataset, focus, notify, onReturnToTask }) {
+  const { mutate } = useSWRConfig();
   const categoryOptions = /** @type {CategoryOption[]} */ (focus.categoryOptions ?? []);
   const [items, setItems] = useState(
     /** @returns {CompletionItem[]} */ () =>
@@ -111,12 +114,12 @@ export function TaskCategoryCompletion({ dataset, focus, notify, onReturnToTask 
         })),
         change_note: changeNote.trim(),
       });
-      const versionId = result.versions?.find(
-        (version) => version.version === result.current_version,
-      )?.id;
-      notify(
-        `已补充 ${completedItems.length} 个商品，并创建产品信息 v${result.current_version}`,
-      );
+      const versionId =
+        result.version_id ??
+        result.versions?.find((version) => version.version === result.current_version)
+          ?.id;
+      await refreshProductState(mutate);
+      notify(`已补充 ${completedItems.length} 个商品`);
       if (versionId) onReturnToTask?.(versionId);
     } catch (error) {
       const nextError = requestError(error);
@@ -217,9 +220,7 @@ export function TaskCategoryCompletion({ dataset, focus, notify, onReturnToTask 
           disabled={!completedItems.length || !changeNote.trim() || saving}
           onClick={save}
         >
-          {saving
-            ? "正在创建新版本…"
-            : `保存 ${completedItems.length} 个商品并重新预检`}
+          {saving ? "正在保存…" : `保存 ${completedItems.length} 个商品并重新预检`}
         </button>
       </footer>
     </section>

@@ -1,9 +1,6 @@
 import { CheckCircle } from "@phosphor-icons/react";
 import { formatTime } from "../../lib/presentation";
-import {
-  productCatalogVersionLabel,
-  resultSourceVersionNumber,
-} from "./dashboardFields";
+import { productCatalogLabel, resultSourceVersionNumber } from "./dashboardFields";
 import { itemVersionId } from "./dashboardCreatePolicy";
 import { DashboardQualityScope } from "./DashboardQualityScope";
 
@@ -33,7 +30,7 @@ export function DashboardPlanSources(context) {
         <span>店铺/站点</span>
         <span>Listing</span>
         <span>结果版本</span>
-        <span>产品信息版本</span>
+        <span>产品信息</span>
         <span>记录数</span>
         <span>发布时间</span>
       </div>
@@ -42,9 +39,7 @@ export function DashboardPlanSources(context) {
           <span>{source.store_site || "未提供"}</span>
           <b>{source.listing || "未提供"}</b>
           <span>v{resultSourceVersionNumber(source) ?? "-"}</span>
-          <span title={productCatalogVersionLabel(source)}>
-            {productCatalogVersionLabel(source)}
-          </span>
+          <span title={productCatalogLabel(source)}>{productCatalogLabel(source)}</span>
           <span>{Number(source.record_count || 0).toLocaleString()}</span>
           <span>{formatTime(source.published_at)}</span>
         </div>

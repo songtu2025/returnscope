@@ -79,19 +79,16 @@ test("筛选批量补品类仅修改可编辑已选商品，并保留隐藏选�
   expect(screen.getByText("6/10")).toBeVisible();
 });
 
-test("提交保持版本、店铺、修改原因和完成商品范围，返回新版本", async () => {
+test("提交校验修订号并保留店铺和商品范围，返回当前资料", async () => {
   const user = userEvent.setup();
   const { notify, onReturnToTask } = mountCompletion();
   completeProductCategories.mockResolvedValue({
     current_version: 5,
-    versions: [
-      { version: 4, id: "synthetic-old" },
-      { version: 5, id: "synthetic-new" },
-    ],
+    version_id: "synthetic-current",
   });
   await fillOne(user);
   await user.click(screen.getByRole("button", { name: "保存 1 个商品并重新预检" }));
-  await waitFor(() => expect(onReturnToTask).toHaveBeenCalledWith("synthetic-new"));
+  await waitFor(() => expect(onReturnToTask).toHaveBeenCalledWith("synthetic-current"));
   expect(completeProductCategories).toHaveBeenCalledExactlyOnceWith(
     "synthetic-products",
     {
@@ -109,7 +106,7 @@ test("提交保持版本、店铺、修改原因和完成商品范围，返回�
       change_note: "合成修改原因",
     },
   );
-  expect(notify).toHaveBeenCalledWith("已补充 1 个商品，并创建产品信息 v5");
+  expect(notify).toHaveBeenCalledWith("已补充 1 个商品");
 });
 
 test.each([

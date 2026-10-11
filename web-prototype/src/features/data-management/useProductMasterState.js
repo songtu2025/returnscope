@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
 import { api } from "../../api";
-import { serverStateKeys } from "../../shared/serverState";
+import { refreshProductState, serverStateKeys } from "../../shared/serverState";
 
 /** @typedef {import("./productMasterContracts").DatasetRecord} DatasetRecord */
 /** @typedef {import("./productMasterContracts").UploadDialog} UploadDialog */
@@ -9,6 +9,7 @@ import { serverStateKeys } from "../../shared/serverState";
 
 /** @param {Pick<ProductMasterProps,"notify"|"focus"|"routeDetailTab">} props */
 export function useProductMasterState({ notify, focus, routeDetailTab = "" }) {
+  const { mutate: mutateCache } = useSWRConfig();
   const [selectedId, setSelectedId] = useState(/** @type {string | null} */ (null));
   const [dialog, setDialog] = useState(/** @type {UploadDialog | null} */ (null));
   const [detailTab, setDetailTab] = useState("rows");
@@ -19,7 +20,7 @@ export function useProductMasterState({ notify, focus, routeDetailTab = "" }) {
     isLoading: datasetsLoading,
     mutate: mutateDatasets,
   } = useSWR(serverStateKeys.productDatasets, () => api.datasets("products"));
-  const detailInclude = detailTab === "impact" ? "versions,audit" : "versions";
+  const detailInclude = detailTab === "impact" ? "audit" : "";
   const {
     data: selected = null,
     error: detailError,
@@ -43,7 +44,7 @@ export function useProductMasterState({ notify, focus, routeDetailTab = "" }) {
     );
   }, [datasets, focusedId]);
   useEffect(() => {
-    if (["rows", "versions", "impact"].includes(routeDetailTab)) {
+    if (["rows", "impact"].includes(routeDetailTab)) {
       setDetailTab(routeDetailTab);
     } else if (["audit", "references"].includes(routeDetailTab)) {
       setDetailTab("impact");
@@ -96,6 +97,13 @@ export function useProductMasterState({ notify, focus, routeDetailTab = "" }) {
     mutateDatasets,
     selected,
     mutateSelected,
+    /** @param {DatasetRecord} [dataset] */
+    onProductChanged: async (dataset) => {
+      await Promise.all([
+        dataset ? mutateSelected(dataset, false) : mutateSelected(),
+        refreshProductState(mutateCache),
+      ]);
+    },
     dimensionAudit,
     currentVersionId,
   };
@@ -124,10 +132,15 @@ function productMasterLoadState({
 function productMasterSelection(selected) {
   const dimensionAudit =
     selected?.audit?.filter((entry) =>
-      ["dimension_row_update", "dimension_category_completion"].includes(entry.action),
+      [
+        "product_update",
+        "dimension_row_update",
+        "dimension_category_completion",
+      ].includes(entry.action),
     ) ?? [];
-  const currentVersionId = selected?.versions?.find(
-    (version) => version.version === selected.current_version,
-  )?.id;
+  const currentVersionId =
+    selected?.version_id ??
+    selected?.versions?.find((version) => version.version === selected.current_version)
+      ?.id;
   return { dimensionAudit, currentVersionId };
 }

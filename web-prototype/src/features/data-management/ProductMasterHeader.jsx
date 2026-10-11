@@ -9,10 +9,9 @@ export function ProductMasterHeader({ selected }) {
   return (
     <header className="dataset-header">
       <div className="dataset-heading-copy">
-        <small className="asset-name-label">当前版本</small>
         <div className="dataset-title-line">
           <h2>商品信息汇总</h2>
-          <span>v{selected.current_version} · 当前生效</span>
+          <span>当前生效</span>
         </div>
       </div>
       <div className="dataset-summary">
@@ -37,7 +36,7 @@ export function ProductMasterHeader({ selected }) {
         <div className="dataset-utility-actions">
           <a className="text-button" href={api.datasetDownloadUrl(selected.id)}>
             <DownloadSimple size={16} />
-            下载版本
+            下载商品信息
           </a>
         </div>
       </div>

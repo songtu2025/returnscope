@@ -56,10 +56,7 @@ export function TaskDetailConfig({ task, executableSegments }) {
           label="退货明细"
           value={`${task.dataset_name || "—"} · v${task.dataset_version || "—"}`}
         />
-        <InfoRow
-          label="产品信息"
-          value={`${task.product_name || "—"} · v${task.product_version || "—"}`}
-        />
+        <InfoRow label="产品信息" value={task.product_name || "—"} />
         <ModelConfiguration task={task} />
       </div>
     </section>

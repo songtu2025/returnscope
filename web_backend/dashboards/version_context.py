@@ -38,10 +38,12 @@ JOIN dataset_versions source_version
   ON source_version.id = r.dataset_version_id
 JOIN datasets source_dataset
   ON source_dataset.id = source_version.dataset_id
-JOIN dataset_versions product_version
-  ON product_version.id = r.product_version_id
+JOIN dataset_versions product_source
+  ON product_source.id = r.product_version_id
 JOIN datasets product_dataset
-  ON product_dataset.id = product_version.dataset_id
+  ON product_dataset.id = product_source.dataset_id
+JOIN dataset_versions product_version
+  ON product_version.dataset_id = product_dataset.id AND product_version.version = product_dataset.current_version
 LEFT JOIN tasks task ON task.id = r.source_task_id
 LEFT JOIN users creator ON creator.id = v.created_by
 """

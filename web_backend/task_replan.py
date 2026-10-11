@@ -60,12 +60,22 @@ class TaskReplanMixin(TaskReplanSegmentsMixin):
             str(segment["segment_key"]): segment
             for segment in prepared.response["segments"]
         }
+        product_version_id = str(prepared.products["id"])
         planned_keys = prepared.execution_plan.classification_keys_by_segment(
             prepared.dataset
         )
         record_counts = prepared.dataset.records["classification_key"].value_counts()
         now = utc_now()
         with self.database.transaction(immediate=True) as connection:
+            current_product = connection.execute(
+                "SELECT sha256 FROM dataset_versions WHERE id = ?",
+                (product_version_id,),
+            ).fetchone()
+            if (
+                current_product is None
+                or current_product["sha256"] != prepared.products["sha256"]
+            ):
+                raise TaskPlanConflict("商品信息已更新，请重新预检")
             row = self._replan_task_row(connection, task_id, expected_revision)
             old_segments = connection.execute(
                 "SELECT * FROM task_segments WHERE task_id = ?",

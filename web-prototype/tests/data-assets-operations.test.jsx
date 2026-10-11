@@ -207,9 +207,7 @@ test("数据版本引用显示历史任务固化快照并精确跳转", async ()
 
   render(
     <DatasetReferences
-      versions={[{ id: "returns-v2", version: 2, original_name: "returns.xlsx" }]}
       currentVersionId="returns-v2"
-      routeVersionId="returns-v2"
       page={1}
       onRouteChange={vi.fn()}
       onNavigate={onNavigate}
@@ -219,8 +217,8 @@ test("数据版本引用显示历史任务固化快照并精确跳转", async ()
   expect(await screen.findByText("八月退货分析")).toBeVisible();
   expect(screen.getByText(/已暂停 · 系统管理员/)).toBeVisible();
   expect(screen.queryByText(/paused ·/)).not.toBeInTheDocument();
-  expect(screen.getByText("固化版本快照")).toBeVisible();
-  await userEvent.click(screen.getByText("固化版本快照"));
+  expect(screen.getByText("任务输入资料")).toBeVisible();
+  await userEvent.click(screen.getByText("任务输入资料"));
   expect(
     within(screen.getByText("dataset_version_id").closest("div")).getByText(
       "returns-v2",

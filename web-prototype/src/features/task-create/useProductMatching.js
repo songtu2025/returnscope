@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { useSWRConfig } from "swr";
 import { api } from "../../api";
+import { refreshProductState } from "../../shared/serverState";
 import { primaryPlanStore } from "./newTaskPolicy";
 
 /** @typedef {import("./taskCreateContracts").DataVersion} DataVersion */
@@ -30,6 +32,7 @@ export function useProductMatching({
   setSubmitting,
   setVersions,
 }) {
+  const { mutate } = useSWRConfig();
   const [matchingOpen, setMatchingOpen] = useState(false);
 
   const resolveCategories = () => {
@@ -74,7 +77,7 @@ export function useProductMatching({
     setSubmitting(true);
     try {
       const updated =
-        /** @type {{versions?: {id: string, version: number}[], current_version: number}} */ (
+        /** @type {{version_id?: string, versions?: {id: string, version: number}[], current_version: number}} */ (
           await api.completeProductCategories(selectedProducts.dataset_id, {
             expected_version: selectedProducts.version,
             store: primaryPlanStore(preflight.data),
@@ -84,16 +87,18 @@ export function useProductMatching({
             }”的商品关联`,
           })
         );
-      const latestVersion = updated.versions?.find(
-        (version) => version.version === updated.current_version,
-      );
-      if (!latestVersion?.id) {
-        throw new Error("产品信息已更新，但未返回最新版本，请刷新后重试");
+      const latestId =
+        updated.version_id ??
+        updated.versions?.find((version) => version.version === updated.current_version)
+          ?.id;
+      if (!latestId) {
+        throw new Error("产品信息已更新，请刷新后重试");
       }
       setVersions(await api.dataVersions());
+      await refreshProductState(mutate);
       setMatchingOpen(false);
       invalidatePreflight();
-      setForm((current) => ({ ...current, product_version_id: latestVersion.id }));
+      setForm((current) => ({ ...current, product_version_id: latestId }));
       notify(`已保存 ${items.length.toLocaleString()} 个商品关联，正在重新生成计划`);
     } catch (error) {
       notify(error instanceof Error ? error.message : "保存商品关联失败", "error");

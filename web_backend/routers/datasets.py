@@ -192,12 +192,13 @@ def _register_dataset_upload_routes(
         finally:
             temp_path.unlink(missing_ok=True)
 
-    @router.post("/api/datasets/{dataset_id}/versions", status_code=201)
-    async def add_dataset_version(
+    @router.put("/api/datasets/{dataset_id}/content")
+    async def update_dataset_content(
         dataset_id: str,
         user: User,
         file: Annotated[UploadFile, File()],
         change_note: Annotated[str, Form(min_length=1, max_length=500)],
+        expected_version: Annotated[int, Form(ge=1)],
     ) -> dict[str, Any]:
         dataset = dataset_service.get(dataset_id)
         if dataset and dataset["kind"] != "products":
@@ -215,7 +216,10 @@ def _register_dataset_upload_routes(
                 content_type=_upload_content_type(file, suffix),
                 change_note=change_note,
                 actor_id=str(user["id"]),
+                expected_current_version=expected_version,
             )
+        except DatasetRevisionConflict as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         finally:

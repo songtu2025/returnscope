@@ -55,7 +55,7 @@ test.each([false, true])("行编辑保持可选字段与修改原因原值：%s"
     within(dialog).getByRole("textbox", { name: "修改原因" }),
     " 合成原因 ",
   );
-  await user.click(within(dialog).getByRole("button", { name: "保存并创建新版本" }));
+  await user.click(within(dialog).getByRole("button", { name: "保存" }));
   await waitFor(() => expect(onChanged).toHaveBeenCalled());
   expect(api.updateDatasetRow).toHaveBeenCalledWith(dataset.id, {
     row_index: 3,
@@ -69,7 +69,7 @@ test.each([false, true])("行编辑保持可选字段与修改原因原值：%s"
     change_note: " 合成原因 ",
   });
   expect(calls).toEqual(["保存", "版本更新", "通知"]);
-  expect(notify).toHaveBeenCalledWith("产品信息已更新，并创建了新版本");
+  expect(notify).toHaveBeenCalledWith("产品信息已更新");
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });
 
@@ -91,15 +91,15 @@ test.each([true, false])("仅Error对象的409刷新版本：%s", async (errorOb
     within(dialog).getByRole("textbox", { name: "修改原因" }),
     "合成原因",
   );
-  await user.click(within(dialog).getByRole("button", { name: "保存并创建新版本" }));
+  await user.click(within(dialog).getByRole("button", { name: "保存" }));
   await waitFor(() => expect(notify).toHaveBeenCalled());
   if (errorObject) {
-    expect(api.dataset).toHaveBeenCalledWith(dataset.id, { include: "versions" });
+    expect(api.dataset).toHaveBeenCalledWith(dataset.id, { include: "" });
     expect(onChanged).toHaveBeenCalledWith({ ...dataset, current_version: 4 });
     expect(calls).toEqual(["读取版本", "版本更新", "通知"]);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(notify).toHaveBeenCalledWith(
-      "数据已被其他用户更新，已刷新到最新版本，请重新修改",
+      "数据已被其他用户更新，已刷新，请重新修改",
       "error",
     );
   } else {
@@ -109,9 +109,7 @@ test.each([true, false])("仅Error对象的409刷新版本：%s", async (errorOb
     expect(within(dialog).getByRole("textbox", { name: "修改原因" })).toHaveValue(
       "合成原因",
     );
-    expect(
-      within(dialog).getByRole("button", { name: "保存并创建新版本" }),
-    ).toBeEnabled();
+    expect(within(dialog).getByRole("button", { name: "保存" })).toBeEnabled();
   }
 });
 
@@ -127,8 +125,8 @@ test("保存中阻止重复提交并保留原取消行为", async () => {
     within(dialog).getByRole("textbox", { name: "修改原因" }),
     "合成原因",
   );
-  await user.click(within(dialog).getByRole("button", { name: "保存并创建新版本" }));
-  const saving = within(dialog).getByRole("button", { name: "正在创建新版本…" });
+  await user.click(within(dialog).getByRole("button", { name: "保存" }));
+  const saving = within(dialog).getByRole("button", { name: "正在保存…" });
   expect(saving).toBeDisabled();
   await user.click(saving);
   expect(api.updateDatasetRow).toHaveBeenCalledTimes(1);

@@ -16,6 +16,17 @@ from web_backend.routers.datasets import create_dataset_router
 
 MYSQL_BODY = {"mapping": {"comment": "feedback"}}
 
+UPLOAD_CASES = (
+    ("inspect_return_import", "/api/return-imports/inspect", {}, 200),
+    ("create", "/api/datasets", {"name": "合成数据", "kind": "products"}, 201),
+    (
+        "add_version",
+        "/api/datasets/dataset-1/content",
+        {"change_note": "验证更新", "expected_version": "1"},
+        200,
+    ),
+)
+
 
 IMPORT_BODY = {"inspection_id": "inspection-1", "mode": "new"}
 
@@ -153,6 +164,11 @@ ERROR_STATUSES = {
 
 def synthetic_user() -> dict[str, Any]:
     return {"id": 42, "is_admin": True}
+
+
+def upload_request(harness: SimpleNamespace, path: str, **options: Any) -> Any:
+    method = "PUT" if path.endswith("/content") else "POST"
+    return harness.client.request(method, path, **options)
 
 
 @pytest.fixture

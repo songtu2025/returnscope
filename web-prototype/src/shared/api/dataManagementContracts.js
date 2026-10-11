@@ -40,7 +40,7 @@
  *   audit?: DatasetAuditEntry[],
  * }} DatasetRecord
  *
- * @typedef {{values?: Record<string, string | number | null>, items?: unknown[], store?: string, note?: string, row_index?: number}} DatasetAuditSide
+ * @typedef {{values?: Record<string, string | number | null>, items?: unknown[], store?: string, note?: string, row_index?: number, row_count?: number}} DatasetAuditSide
  * @typedef {{id: string, action: string, actor_name?: string, created_at?: string, before?: DatasetAuditSide, after?: DatasetAuditSide}} DatasetAuditEntry
  *
  * @typedef {{

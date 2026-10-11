@@ -1,11 +1,24 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from web_backend.common import json_value
 
 if TYPE_CHECKING:
     from web_backend.task_plan_service import PreparedTaskPlan
+
+
+def frozen_product_input(task: dict[str, Any]) -> dict[str, Any]:
+    """商品资料更新后，任务仍使用启动时摘要对应的不可变输入文件。"""
+    products = json_value(task.get("snapshot_json"), {}).get("products", {})
+    digest = products.get("sha256")
+    if digest and digest != task.get("product_sha256"):
+        frozen_path = Path(str(task["product_file_path"])).with_name(f"{digest}.xlsx")
+        if not frozen_path.is_file():
+            raise ValueError("任务商品输入文件不存在")
+        task.update(product_file_path=str(frozen_path), product_sha256=digest)
+    return task
 
 
 class TaskSnapshotsMixin:

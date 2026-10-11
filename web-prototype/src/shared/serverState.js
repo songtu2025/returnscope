@@ -4,6 +4,20 @@ export const serverStateConfig = {
   shouldRetryOnError: false,
 };
 
+/** @param {import("swr").ScopedMutator} mutate */
+export function refreshProductState(mutate) {
+  return mutate(
+    (key) =>
+      Array.isArray(key) &&
+      ((key[0] === "data-assets" && key[1] === "products") ||
+        ["classification-results", "analysis-dashboards", "task-create"].includes(
+          key[0],
+        )),
+    undefined,
+    { revalidate: true },
+  );
+}
+
 export const serverStateKeys = {
   /** @param {number} limit */
   workbenchSummary: (limit) => ["workbench", "summary", limit],

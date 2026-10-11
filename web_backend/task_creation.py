@@ -61,6 +61,7 @@ class TaskCreationMixin(TaskSnapshotsMixin):
         current_hash = validate_creation_plan(prepared.response, plan_hash)
         returns = prepared.returns
         products = prepared.products
+        product_version_id = str(products["id"])
         config = prepared.config
         clean_store = str(prepared.response["inputs"]["scope"]["store"])
         clean_listing = prepared.response["inputs"]["scope"]["listing"]
@@ -82,6 +83,15 @@ class TaskCreationMixin(TaskSnapshotsMixin):
             for position, segment_key in enumerate(ordered_segment_keys, start=1)
         }
         with self.database.transaction(immediate=True) as connection:
+            current_products = connection.execute(
+                "SELECT sha256 FROM dataset_versions WHERE id = ?",
+                (product_version_id,),
+            ).fetchone()
+            if (
+                current_products is None
+                or current_products["sha256"] != products["sha256"]
+            ):
+                raise TaskPlanConflict("商品信息已更新，请重新预检")
             task_id = new_id("task")
             now = utc_now()
             snapshot = {

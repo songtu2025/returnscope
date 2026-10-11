@@ -16,7 +16,7 @@ SELECT d.kind, d.current_version, v.version AS selected_version,
 FROM datasets d
 JOIN dataset_versions v
   ON v.dataset_id = d.id
- AND v.version = COALESCE(?, d.current_version)
+ AND v.version = CASE WHEN d.kind = 'products' THEN d.current_version ELSE COALESCE(?, d.current_version) END
 WHERE d.id = ? AND d.archived_at IS NULL
 """
 

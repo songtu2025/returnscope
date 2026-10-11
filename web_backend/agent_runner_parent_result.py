@@ -116,7 +116,11 @@ class ParentResultMixin:
                 """,
                 (task_id,),
             ).fetchone()
-        return dict(row) if row else None
+        if row is None:
+            return None
+        from web_backend.tasks.snapshots import frozen_product_input
+
+        return frozen_product_input(dict(row))
 
     _top_problem_labels = staticmethod(top_problem_labels)
 

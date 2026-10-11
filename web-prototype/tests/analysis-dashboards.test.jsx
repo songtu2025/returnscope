@@ -2067,8 +2067,8 @@ test("冲突必须逐组单选后才能创建不可变看板", async () => {
   render(<DashboardHarness />);
 
   expect(await screen.findByText("同一 Listing 选择了多个结果版本")).toBeVisible();
-  expect(screen.getByText("产品信息：SEEKWAY:US 商品目录 · v3")).toBeVisible();
-  expect(screen.getByText("产品信息版本未记录")).toBeVisible();
+  expect(screen.getByText("产品信息：SEEKWAY:US 商品目录")).toBeVisible();
+  expect(screen.getByText("产品信息未记录")).toBeVisible();
   await user.click(screen.getByRole("radio", { name: /结果 v2/ }));
   await user.click(screen.getByRole("button", { name: /确认冲突选择/ }));
   expect(await screen.findByText("所选分类结果")).toBeVisible();
@@ -2744,8 +2744,8 @@ test("数据来源与版本历史使用真实看板版本字段", async () => {
   ).toBeVisible();
   expect(screen.getByText("dataset-version-2")).toBeVisible();
   expect(screen.getByText("v8")).toBeVisible();
-  expect(screen.getByText("SEEKWAY:US 商品目录 · v3")).toBeVisible();
-  expect(screen.getByText("未提供产品信息版本")).toBeVisible();
+  expect(screen.getByText("SEEKWAY:US 商品目录")).toBeVisible();
+  expect(screen.getByText("未提供产品信息")).toBeVisible();
 
   await user.click(screen.getByRole("button", { name: "版本历史" }));
   expect(await screen.findByText("看板版本历史")).toBeVisible();

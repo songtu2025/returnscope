@@ -8,6 +8,7 @@ from test_classification_result_pool import _seed_result_context
 from web_backend.common import add_audit
 from web_backend.dataset_files import DatasetRevisionConflict
 from web_backend.dataset_service import DatasetService
+from web_backend.tasks.snapshots import frozen_product_input
 
 
 @pytest.fixture
@@ -81,6 +82,72 @@ def test_missing_dataset_does_not_query_history(catalog_context) -> None:
 
     assert service.get("absent") is None
     assert len(queries) == 1
+
+
+def test_product_save_updates_current_input_and_preserves_task_input(
+    catalog_context,
+) -> None:
+    service, _queries = catalog_context
+    before = service.get("dataset-products")
+    original = Path(service.version_file("dataset-products")["file_path"]).read_bytes()
+    saved = service.update_product_row(
+        "dataset-products", 0, 1, {"产品名称": "最新合成商品"}, "修正名称", "user-1"
+    )
+    assert saved["version_id"] == before["version_id"]
+    assert len(saved["versions"]) == len(service.list_versions("products")) == 1
+    assert (
+        service.preview_rows("dataset-products")["records"][0]["产品名称"]
+        == "最新合成商品"
+    )
+    assert service.version_file("dataset-products", 1) == service.version_file(
+        "dataset-products"
+    )
+    with service.database.connect() as connection:
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM dataset_versions WHERE dataset_id = 'dataset-products'"
+            ).fetchone()[0]
+            == 1
+        )
+        task = dict(
+            connection.execute(
+                "SELECT snapshot_json FROM tasks WHERE id = 'task-1'"
+            ).fetchone()
+        )
+    current = service.version_file("dataset-products")
+    task.update(
+        product_file_path=current["file_path"],
+        product_sha256=saved["versions"][0]["sha256"],
+    )
+    frozen = frozen_product_input(task)
+    assert Path(frozen["product_file_path"]).read_bytes() == original
+    assert (
+        pd.read_excel(frozen["product_file_path"], dtype=str).iloc[0]["产品名称"]
+        == "产品表权威名称"
+    )
+    with pytest.raises(DatasetRevisionConflict):
+        service.update_product_row(
+            "dataset-products", 0, 1, {"产品名称": "过期修改"}, "验证冲突", "user-1"
+        )
+    assert service.get("dataset-products")["current_version"] == 2
+    assert service.references(saved["version_id"])["total"] == 1
+
+
+def test_product_update_rolls_back_when_dependent_refresh_fails(
+    catalog_context, monkeypatch
+) -> None:
+    service, _queries = catalog_context
+    before = service.get("dataset-products")
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("合成关联更新失败")
+
+    monkeypatch.setattr("web_backend.dataset_service.refresh_product_dependents", fail)
+    with pytest.raises(RuntimeError, match="合成关联更新失败"):
+        service.update_product_row(
+            "dataset-products", 0, 1, {"产品名称": "失败修改"}, "验证回滚", "user-1"
+        )
+    assert service.get("dataset-products") == before
 
 
 @pytest.fixture

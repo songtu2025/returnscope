@@ -4,7 +4,7 @@ import { InlineLoading } from "../../components/SharedUi";
 import { formatTime } from "../../lib/presentation";
 import {
   dashboardVersionNumber,
-  productCatalogVersionLabel,
+  productCatalogLabel,
   resultSourceVersionNumber,
 } from "./dashboardFields";
 import { AiInsightReport } from "./AiInsightReport";
@@ -183,7 +183,7 @@ function DashboardDetailSources({ data, version }) {
           <span>店铺/站点</span>
           <span>Listing</span>
           <span>分类结果版本</span>
-          <span>产品信息版本</span>
+          <span>产品信息</span>
           <span>记录数</span>
           <span>发布状态</span>
         </div>
@@ -192,8 +192,8 @@ function DashboardDetailSources({ data, version }) {
             <span>{source.store_site || "未提供"}</span>
             <b>{source.listing || "未提供"}</b>
             <span>v{resultSourceVersionNumber(source) || "-"}</span>
-            <span title={productCatalogVersionLabel(source)}>
-              {productCatalogVersionLabel(source)}
+            <span title={productCatalogLabel(source)}>
+              {productCatalogLabel(source)}
             </span>
             <span>{Number(source.record_count || 0).toLocaleString()}</span>
             <span>{source.publish_status === "published" ? "已发布" : "未发布"}</span>

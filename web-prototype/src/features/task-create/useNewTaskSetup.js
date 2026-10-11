@@ -65,7 +65,12 @@ export function useNewTaskSetup(draft) {
     )?.active_version;
     setForm((current) => ({
       ...current,
-      product_version_id: current.product_version_id || products?.version_id || "",
+      product_version_id: setup.data.some(
+        (item) =>
+          item.kind === "products" && item.version_id === current.product_version_id,
+      )
+        ? current.product_version_id
+        : products?.version_id || "",
       config_version_id:
         current.config_version_id ||
         setup.preference?.config_version_id ||

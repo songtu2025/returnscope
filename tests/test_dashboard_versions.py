@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi import FastAPI, HTTPException
@@ -22,6 +23,8 @@ from web_backend.dashboard_insights import InsightOptions
 from web_backend.dashboard_plan import summarize_sources
 from web_backend.dashboard_service import DashboardConflict, DashboardService
 from web_backend.dashboard_support import version_context
+from web_backend.dataset_service import DatasetService
+from web_backend.datasets.current_products import refresh_product_dependents
 from web_backend.routers.dashboards import create_dashboard_router
 
 
@@ -47,6 +50,44 @@ def _create_dashboard(
         actor_id="user-1",
     )
     return plan, dashboard
+
+
+@pytest.mark.parametrize("change_identity", [False, True])
+def test_product_edit_updates_existing_dashboard_without_changing_semantics(
+    tmp_path: Path, change_identity: bool
+) -> None:
+    context, version, service = _ready_result(tmp_path)
+    result_id = str(version["version_id"])
+    plan, dashboard = _create_dashboard(service, result_id)
+    before = service.records(
+        str(dashboard["id"]), str(dashboard["version"]["version_id"])
+    )
+    products = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
+    changes = {"产品名称": "最新合成商品"}
+    if change_identity:
+        changes["MSKU"] = "UPDATED-MSKU"
+    updated = products.update_product_row(
+        "dataset-products", 0, 1, changes, "修正商品资料", "user-1"
+    )
+    assert updated["version_id"] == "version-products"
+    current = service.get(str(dashboard["id"]))
+    assert current["version"]["plan_hash"] != plan["plan_hash"]
+    assert current["version"]["source_snapshot"][0]["result_version_id"] == result_id
+    after = service.records(str(dashboard["id"]), str(current["version"]["version_id"]))
+    assert {row["product_name"] for row in after["items"]} == {"最新合成商品"}
+    assert [
+        {key: value for key, value in row.items() if key != "product_name"}
+        for row in after["items"]
+    ] == [
+        {key: value for key, value in row.items() if key != "product_name"}
+        for row in before["items"]
+    ]
+    assert current["version"]["filters"] == dashboard["version"]["filters"]
+    with context.database.transaction() as connection:
+        refresh_product_dependents(
+            context.database, connection, "dataset-products", "2026-10-11T00:00:00Z"
+        )
+    assert service.get(str(dashboard["id"]))["revision"] == current["revision"]
 
 
 def test_preflight_hash_is_stable_and_blocks_invalid_sources(tmp_path: Path) -> None:
@@ -1572,6 +1613,9 @@ def test_product_dataset_lineage_changes_hash_and_stays_traceable(
             WHERE id = ?
             """,
             ("version-products-2", original_source["result_id"]),
+        )
+        connection.execute(
+            "UPDATE datasets SET current_version = 2 WHERE id = 'dataset-products'"
         )
 
     changed = service.preflight([result_version_id], {})

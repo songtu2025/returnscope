@@ -37,18 +37,23 @@ class _DatasetReferences:
             ).fetchone()
             if version is None:
                 raise ValueError("数据版本不存在")
+            reference_params: tuple[Any, ...]
+            if version["kind"] == "products":
+                reference_clause = "t.product_version_id IN (SELECT id FROM dataset_versions WHERE dataset_id = ?)"
+                reference_params = (version["dataset_id"],)
+            else:
+                reference_clause = (
+                    "t.dataset_version_id = ? OR t.product_version_id = ?"
+                )
+                reference_params = (version_id, version_id)
             total = int(
                 connection.execute(
-                    """
-                    SELECT COUNT(*)
-                    FROM tasks t
-                    WHERE t.dataset_version_id = ? OR t.product_version_id = ?
-                    """,
-                    (version_id, version_id),
+                    f"SELECT COUNT(*) FROM tasks t WHERE {reference_clause}",
+                    reference_params,
                 ).fetchone()[0]
             )
             rows = connection.execute(
-                """
+                f"""
                 SELECT t.id AS task_id, t.title, t.status,
                        t.owner_id, owner.display_name AS owner_name,
                        t.created_at, t.snapshot_json,
@@ -56,14 +61,13 @@ class _DatasetReferences:
                             THEN 'returns' ELSE 'products' END AS reference_type
                 FROM tasks t
                 LEFT JOIN users owner ON owner.id = t.owner_id
-                WHERE t.dataset_version_id = ? OR t.product_version_id = ?
+                WHERE {reference_clause}
                 ORDER BY t.created_at DESC, t.id ASC, reference_type ASC
                 LIMIT ? OFFSET ?
                 """,
                 (
                     version_id,
-                    version_id,
-                    version_id,
+                    *reference_params,
                     page_size,
                     (page - 1) * page_size,
                 ),
@@ -100,7 +104,8 @@ class _DatasetReferences:
                 SELECT v.file_path, d.kind
                 FROM dataset_versions v
                 JOIN datasets d ON d.id = v.dataset_id
-                WHERE v.id = ? AND d.archived_at IS NULL
+                WHERE v.dataset_id = (SELECT dataset_id FROM dataset_versions WHERE id = ?)
+                  AND v.version = d.current_version AND d.archived_at IS NULL
                 """,
                 (version_id,),
             ).fetchone()

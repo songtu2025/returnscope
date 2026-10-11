@@ -64,7 +64,8 @@ class TaskPlanInputsMixin:
                 SELECT v.*, d.name AS dataset_name, d.kind, d.usage_scope
                 FROM dataset_versions v
                 JOIN datasets d ON d.id = v.dataset_id
-                WHERE v.id = ? AND d.archived_at IS NULL
+                WHERE v.dataset_id = (SELECT dataset_id FROM dataset_versions WHERE id = ?)
+                  AND v.version = d.current_version AND d.archived_at IS NULL
                 """,
                 (product_version_id,),
             ).fetchone()
@@ -94,7 +95,7 @@ class TaskPlanInputsMixin:
         if returns_row["usage_scope"] != "task_input":
             raise ValueError("长期反馈数据源已下线，请重新读取数据库或上传文件")
         if products_row is None or products_row["kind"] != "products":
-            raise ValueError("请选择有效的商品维度版本")
+            raise ValueError("请选择有效的商品信息")
         if config_row is None or config_row["published_at"] is None:
             raise ValueError("请先验证并发布一个 API 配置")
         return dict(returns_row), dict(products_row), dict(config_row)

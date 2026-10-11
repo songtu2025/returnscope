@@ -113,7 +113,10 @@ test("历史任务配置回退到基础字段，并保留默认并行数与空�
   expect(screen.getByText("合成基础连接 · #2")).toBeVisible();
   expect(screen.getByText("合成基础模型 · 中")).toBeVisible();
   expect(screen.getByText("3")).toBeVisible();
-  expect(screen.getAllByText("— · v—")).toHaveLength(2);
+  expect(screen.getByText("— · v—")).toBeVisible();
+  expect(
+    within(screen.getByText("产品信息").parentElement).getByText("—"),
+  ).toBeVisible();
 });
 
 test("总览展示评论进度和发布情况，并通过需处理入口切换 Listing", async () => {

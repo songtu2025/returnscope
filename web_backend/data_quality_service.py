@@ -131,13 +131,15 @@ class DataQualityService:
                        d.name AS dataset_name, d.kind
                 FROM dataset_versions v
                 JOIN datasets d ON d.id = v.dataset_id
-                WHERE v.id IN (?, ?)
+                WHERE (v.id = ? AND d.kind = 'returns') OR
+                    (v.dataset_id = (SELECT dataset_id FROM dataset_versions WHERE id = ?)
+                     AND d.kind = 'products' AND v.version = d.current_version)
                 """,
                 (returns_version_id, products_version_id),
             ).fetchall()
-        by_id = {str(row["id"]): dict(row) for row in rows}
-        returns = by_id.get(returns_version_id)
-        products = by_id.get(products_version_id)
+        by_kind = {str(row["kind"]): dict(row) for row in rows}
+        returns = by_kind.get("returns")
+        products = by_kind.get("products")
         if returns is None or returns["kind"] != "returns":
             raise ValueError("用户反馈数据版本不存在或类型不正确")
         if products is None or products["kind"] != "products":

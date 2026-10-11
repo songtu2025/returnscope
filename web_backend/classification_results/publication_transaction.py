@@ -21,6 +21,7 @@ from web_backend.classification_results.publication_writes import (
 )
 from web_backend.common import new_id
 from web_backend.dashboards.live_sources import refresh_related_dashboards
+from web_backend.datasets.current_products import sync_product_display
 
 if TYPE_CHECKING:
     from web_backend.classification_result_service import ClassificationResultService
@@ -108,6 +109,11 @@ def publish_with_connection(
         prepared["records"],
     )
     publish_version(connection, segment_state, version)
+    product_dataset = connection.execute(
+        "SELECT dataset_id FROM dataset_versions WHERE id = ?",
+        (task["product_version_id"],),
+    ).fetchone()
+    sync_product_display(connection, product_dataset["dataset_id"])
     refresh_related_dashboards(service.database, connection, version.result_id, now)
     return None, None
 

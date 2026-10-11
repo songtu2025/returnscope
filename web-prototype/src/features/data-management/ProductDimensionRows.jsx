@@ -88,13 +88,13 @@ export function ProductDimensionRows({ dataset, notify, onChanged }) {
       });
       setEditing(null);
       onChanged(updated);
-      notify("产品信息已更新，并创建了新版本");
+      notify("产品信息已更新");
     } catch (error) {
       const nextError = requestError(error);
       if (nextError.status === 409) {
         setEditing(null);
-        onChanged(await api.dataset(dataset.id, { include: "versions" }));
-        notify("数据已被其他用户更新，已刷新到最新版本，请重新修改", "error");
+        onChanged(await api.dataset(dataset.id, { include: "" }));
+        notify("数据已被其他用户更新，已刷新，请重新修改", "error");
       } else notify(nextError.message, "error");
     } finally {
       setSaving(false);
@@ -149,7 +149,6 @@ export function ProductDimensionRows({ dataset, notify, onChanged }) {
       )}
       {editing && (
         <ProductDimensionEditDialog
-          dataset={dataset}
           editing={editing}
           setEditing={setEditing}
           changeNote={changeNote}

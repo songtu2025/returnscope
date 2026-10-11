@@ -2,7 +2,7 @@
 /** @typedef {import("../../shared/api/dataManagementContracts").DatasetRecord} DatasetRecord */
 /** @typedef {import("../task-create/taskCreateContracts").TaskDraft} TaskDraft */
 /** @typedef {import("../task-create/taskCreateContracts").TaskRepairContext} TaskRepairContext */
-/** @typedef {{mode: "create", kind: string} | {mode: "version", dataset: DatasetRecord}} UploadDialog */
+/** @typedef {{mode: "create", kind: string} | {mode: "update", dataset: DatasetRecord}} UploadDialog */
 
 /**
  * @typedef {{

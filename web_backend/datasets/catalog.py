@@ -33,6 +33,8 @@ _DATASET_VERSIONS_SQL = """
                     FROM dataset_versions v
                     JOIN users u ON u.id = v.created_by
                     WHERE v.dataset_id = ?
+                      AND (NOT EXISTS (SELECT 1 FROM datasets d WHERE d.id = v.dataset_id AND d.kind = 'products')
+                           OR v.version = (SELECT current_version FROM datasets WHERE id = v.dataset_id))
                     ORDER BY v.version DESC
                     """
 
@@ -115,6 +117,7 @@ class _DatasetCatalog:
             JOIN datasets d ON d.id = v.dataset_id
             JOIN users u ON u.id = v.created_by
             WHERE d.archived_at IS NULL
+              AND (d.kind != 'products' OR v.version = d.current_version)
         """
         params: tuple[object, ...] = ()
         if kind:
@@ -142,7 +145,7 @@ class _DatasetCatalog:
                 FROM dataset_versions v
                 JOIN datasets d ON d.id = v.dataset_id
                 WHERE v.dataset_id = ? AND d.archived_at IS NULL
-                  AND v.version = COALESCE(?, d.current_version)
+                  AND v.version = CASE WHEN d.kind = 'products' THEN d.current_version ELSE COALESCE(?, d.current_version) END
                 """,
                 (dataset_id, version),
             ).fetchone()

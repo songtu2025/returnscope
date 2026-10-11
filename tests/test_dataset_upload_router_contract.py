@@ -4,22 +4,13 @@ from typing import Any
 from unittest.mock import call
 
 import pytest
+from dataset_router_helpers import UPLOAD_CASES, synthetic_user, upload_request
 from dataset_router_helpers import harness as harness
-from dataset_router_helpers import synthetic_user
 from fastapi import HTTPException, UploadFile
 
+from web_backend.dataset_files import DatasetRevisionConflict
 from web_backend.routers.datasets import XLSX_CONTENT_TYPE
 
-UPLOAD_CASES = (
-    ("inspect_return_import", "/api/return-imports/inspect", {}, 200),
-    ("create", "/api/datasets", {"name": "合成数据", "kind": "products"}, 201),
-    (
-        "add_version",
-        "/api/datasets/dataset-1/versions",
-        {"change_note": "验证追加"},
-        201,
-    ),
-)
 CONTENT = b"column\nsynthetic-value\n"
 
 
@@ -41,8 +32,11 @@ def test_upload_routes_preserve_file_metadata_and_cleanup(
         return {"id": "synthetic-dataset"}
 
     getattr(harness.service, service_method).side_effect = capture
-    response = harness.client.post(
-        path, data=form, files={"file": ("synthetic.CSV", CONTENT, "text/csv")}
+    response = upload_request(
+        harness,
+        path,
+        data=form,
+        files={"file": ("synthetic.CSV", CONTENT, "text/csv")},
     )
     assert response.status_code == status
     assert response.json() == {"id": "synthetic-dataset"}
@@ -65,7 +59,7 @@ def test_upload_routes_preserve_file_metadata_and_cleanup(
         if service_method == "create":
             expected_kwargs.update(name="合成数据", kind="products", description="")
         else:
-            expected_kwargs["dataset_id"] = "dataset-1"
+            expected_kwargs.update(dataset_id="dataset-1", expected_current_version=1)
         assert source.parent == harness.settings.data_dir / "tmp"
         assert not source.exists()
     assert captured["args"] == expected_args
@@ -79,7 +73,9 @@ def test_upload_routes_preserve_file_metadata_and_cleanup(
 @pytest.mark.parametrize(
     ("service_method", "path", "form"), [case[:3] for case in UPLOAD_CASES]
 )
-@pytest.mark.parametrize("error_type", (ValueError, RuntimeError))
+@pytest.mark.parametrize(
+    "error_type", (ValueError, RuntimeError, DatasetRevisionConflict)
+)
 def test_upload_errors_preserve_mapping_and_remove_temporary_files(
     harness: SimpleNamespace,
     service_method: str,
@@ -99,13 +95,17 @@ def test_upload_errors_preserve_mapping_and_remove_temporary_files(
 
     getattr(harness.service, service_method).side_effect = fail
     options = {"data": form, "files": {"file": ("synthetic.csv", CONTENT, "text/csv")}}
-    if error_type is ValueError:
-        response = harness.client.post(path, **options)
-        assert response.status_code == 400
+    if issubclass(error_type, ValueError):
+        response = upload_request(harness, path, **options)
+        assert response.status_code == (
+            409
+            if error_type is DatasetRevisionConflict and service_method == "add_version"
+            else 400
+        )
         assert response.json() == {"detail": "合成上传异常"}
     else:
         with pytest.raises(RuntimeError) as raised:
-            harness.client.post(path, **options)
+            upload_request(harness, path, **options)
         assert raised.value is error
     assert len(captured) == 1
     assert not captured[0].exists()
@@ -124,13 +124,16 @@ def test_upload_size_limit_is_enforced_before_service_call(
     monkeypatch.setattr(
         "web_backend.routers.datasets.MAX_UPLOAD_BYTES", len(CONTENT) - 1
     )
-    response = harness.client.post(
-        path, data=form, files={"file": ("synthetic.csv", CONTENT, "text/csv")}
+    response = upload_request(
+        harness,
+        path,
+        data=form,
+        files={"file": ("synthetic.csv", CONTENT, "text/csv")},
     )
     assert response.status_code == 400
     assert response.json() == {"detail": "单个文件不能超过 200 MB"}
     assert harness.service.mock_calls == (
-        [call.get("dataset-1")] if "/versions" in path else []
+        [call.get("dataset-1")] if "/content" in path else []
     )
     assert harness.mysql.mock_calls == []
     assert list(harness.settings.data_dir.rglob("*.csv")) == []
@@ -146,8 +149,11 @@ def test_upload_routes_require_login_without_saving_files(
         raise HTTPException(status_code=401, detail="请先登录")
 
     harness.client.app.dependency_overrides[synthetic_user] = reject_user
-    response = harness.client.post(
-        path, data=form, files={"file": ("synthetic.csv", CONTENT, "text/csv")}
+    response = upload_request(
+        harness,
+        path,
+        data=form,
+        files={"file": ("synthetic.csv", CONTENT, "text/csv")},
     )
     assert response.status_code == 401
     assert harness.service.mock_calls == harness.mysql.mock_calls == []
@@ -160,7 +166,7 @@ def test_upload_routes_require_login_without_saving_files(
 def test_missing_upload_file_does_not_call_service(
     harness: SimpleNamespace, path: str, form: dict[str, str]
 ) -> None:
-    response = harness.client.post(path, data=form)
+    response = upload_request(harness, path, data=form)
     assert response.status_code == 422
     assert harness.service.mock_calls == harness.mysql.mock_calls == []
 
@@ -210,10 +216,13 @@ def test_upload_routes_forward_optional_form_values(
     if service_method == "create":
         form["description"] = "合成说明"
     getattr(harness.service, service_method).return_value = {}
-    response = harness.client.post(
-        case[1], data=form, files={"file": ("synthetic.csv", CONTENT, "text/csv")}
+    response = upload_request(
+        harness,
+        case[1],
+        data=form,
+        files={"file": ("synthetic.csv", CONTENT, "text/csv")},
     )
-    assert response.status_code == 201
+    assert response.status_code == case[3]
     forwarded = getattr(harness.service, service_method).call_args.kwargs
     assert "default_store" not in forwarded
     assert forwarded["change_note"] == "指定变更原因"

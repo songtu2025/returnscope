@@ -278,9 +278,9 @@ def test_version_upload_rejects_feedback_without_saving_file(
     harness: SimpleNamespace,
 ) -> None:
     harness.service.get.return_value = {"kind": "returns"}
-    response = harness.client.post(
-        "/api/datasets/source/versions",
-        data={"change_note": "合成变更"},
+    response = harness.client.put(
+        "/api/datasets/source/content",
+        data={"change_note": "合成变更", "expected_version": "1"},
         files={"file": ("synthetic.csv", b"synthetic", "text/csv")},
     )
     assert response.status_code == 400

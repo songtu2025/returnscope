@@ -369,10 +369,11 @@ def test_task_input_cannot_be_updated_through_dataset_versions(tmp_path: Path) -
         assert login.status_code == 200
         returns = _upload_dataset(client, returns_path, "退货数据", "returns")
         with version_path.open("rb") as file_handle:
-            response = client.post(
-                f"/api/datasets/{returns['id']}/versions",
+            response = client.put(
+                f"/api/datasets/{returns['id']}/content",
                 data={
                     "change_note": "删除无效记录并补充站点",
+                    "expected_version": "1",
                     "default_store": "SEEKWAY:US",
                 },
                 files={"file": (version_path.name, file_handle)},

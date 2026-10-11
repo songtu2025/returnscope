@@ -11,6 +11,7 @@ from return_semantics.data import PRODUCT_CATEGORY_COLUMNS, PRODUCT_COLUMNS
 from web_backend.common import add_audit, new_id
 from web_backend.database import Database
 from web_backend.dataset_files import PRODUCT_WORKSHEET, DatasetRevisionConflict
+from web_backend.datasets.current_products import product_identities
 from web_backend.datasets.product_category_rows import (
     append_category_row,
     update_category_rows,
@@ -26,6 +27,7 @@ class _ProductWorkbookEdit:
     content_type: str
     workbook: dict[str, pd.DataFrame]
     frame: pd.DataFrame
+    previous_identities: list[tuple[str, str]]
 
 
 class DatasetProductWorkbookMixin:
@@ -78,6 +80,7 @@ class DatasetProductWorkbookMixin:
             content_type=str(source["content_type"]),
             workbook=workbook,
             frame=frame,
+            previous_identities=product_identities(frame),
         )
 
     def _persist_product_workbook(
@@ -101,6 +104,7 @@ class DatasetProductWorkbookMixin:
                 change_note=change_note,
                 actor_id=actor_id,
                 expected_current_version=edit.expected_version,
+                _product_previous_identities=edit.previous_identities,
             )
         finally:
             temp_path.unlink(missing_ok=True)
@@ -129,7 +133,7 @@ class DatasetProductWorkbookMixin:
             if before[column] != normalized[column]
         }
         if not changed:
-            raise ValueError("内容没有变化，无需创建新版本")
+            raise ValueError("内容没有变化，无需保存")
         return before, changed
 
     @staticmethod
@@ -185,12 +189,9 @@ class DatasetProductWorkbookMixin:
         frame: pd.DataFrame,
     ) -> dict[tuple[str, str], list[Any]]:
         rows_by_product: dict[tuple[str, str], list[Any]] = {}
-        identities = frame[["店铺/站点", "MSKU"]].fillna("").astype(str)
-        for index, values in identities.iterrows():
-            product_key = (
-                str(values["店铺/站点"]).strip(),
-                str(values["MSKU"]).strip(),
-            )
+        for index, product_key in zip(
+            frame.index, product_identities(frame), strict=True
+        ):
             rows_by_product.setdefault(product_key, []).append(index)
         return rows_by_product
 

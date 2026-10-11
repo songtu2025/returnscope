@@ -168,6 +168,9 @@ def _insert_quality_versions(context, tmp_path: Path) -> tuple[str, str, str]:
             """,
             (str(products_path), products_path.stat().st_size, products_sha, now),
         )
+        connection.execute(
+            "UPDATE datasets SET current_version = 2 WHERE id = 'dataset-products'"
+        )
     return "quality-returns", "quality-products", "quality-products-v3"
 
 
@@ -176,6 +179,8 @@ def test_data_quality_preflight_hash_issues_and_zero_model_calls(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     context = _seed_result_context(tmp_path)
+    service = DataQualityService(context.database)
+    baseline = service.preflight("version-returns", "version-products")
     returns_id, products_id, products_v3 = _insert_quality_versions(
         context,
         tmp_path,
@@ -185,10 +190,16 @@ def test_data_quality_preflight_hash_issues_and_zero_model_calls(
         raise AssertionError("数据质量预检不得调用模型")
 
     monkeypatch.setattr("return_semantics.model_client.Sub2APIClient", forbid_model)
-    service = DataQualityService(context.database)
-    baseline = service.preflight("version-returns", "version-products")
     first = service.preflight(returns_id, products_id)
     second = service.preflight(returns_id, products_id)
+    assert (
+        service.preflight(returns_id, products_v3)["quality_hash"]
+        == first["quality_hash"]
+    )
+    with context.database.transaction() as connection:
+        connection.execute(
+            "UPDATE datasets SET current_version = 3 WHERE id = 'dataset-products'"
+        )
     changed = service.preflight(returns_id, products_v3)
 
     assert baseline["counts"]["total_records"] == 3
@@ -304,11 +315,17 @@ def test_data_quality_cache_is_bounded_invalidates_and_isolation_safe(
     assert calls == 1
 
     service.preflight(returns_id, products_v3)
+    assert calls == 1
+    with context.database.transaction() as connection:
+        connection.execute(
+            "UPDATE datasets SET current_version = 3 WHERE id = 'dataset-products'"
+        )
+    service.preflight(returns_id, products_id)
     assert calls == 2
     with context.database.transaction() as connection:
         connection.execute(
             "UPDATE dataset_versions SET sha256 = 'corrected-sha' WHERE id = ?",
-            (products_id,),
+            (products_v3,),
         )
     service.preflight(returns_id, products_id)
     assert calls == 3
@@ -316,8 +333,7 @@ def test_data_quality_cache_is_bounded_invalidates_and_isolation_safe(
 
     with context.database.transaction() as connection:
         connection.execute(
-            "UPDATE dataset_versions SET sha256 = ? WHERE id = ?",
-            (first["products_version"]["sha256"], products_id),
+            "UPDATE datasets SET current_version = 2 WHERE id = 'dataset-products'"
         )
     service.preflight(returns_id, products_id)
     assert calls == 4

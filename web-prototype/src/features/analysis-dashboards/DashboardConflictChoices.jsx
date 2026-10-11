@@ -37,8 +37,7 @@ export function DashboardConflictChoices(context) {
               {conflictCandidates(conflict, selection, state.plan?.sources).map(
                 (candidate) => {
                   const versionId = itemVersionId(candidate);
-                  const hasProductVersion =
-                    candidate.product_dataset_name && candidate.product_version != null;
+                  const hasProductInfo = candidate.product_dataset_name;
                   return (
                     <label key={versionId}>
                       <input
@@ -51,9 +50,9 @@ export function DashboardConflictChoices(context) {
                       <span>
                         <b>结果 v{resultSourceVersionNumber(candidate) ?? "-"}</b>
                         <small>
-                          {hasProductVersion
-                            ? `产品信息：${candidate.product_dataset_name} · v${candidate.product_version}`
-                            : "产品信息版本未记录"}
+                          {hasProductInfo
+                            ? `产品信息：${candidate.product_dataset_name}`
+                            : "产品信息未记录"}
                         </small>
                         <small>
                           {Number(candidate.record_count || 0).toLocaleString()} 条记录

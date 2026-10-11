@@ -125,7 +125,6 @@ function ResultPoolMetadata({ result, onOpen }) {
       <div className="result-product-cell" role="cell">
         <b title={names.join("、")}>{names[0] || "未提供"}</b>
         {names.length > 1 && <span>另有 {names.length - 1} 个产品名称</span>}
-        <small>产品信息 v{result.product_version}</small>
       </div>
       <div className="result-scale-cell" role="cell">
         <b>{Number(result.record_count || 0).toLocaleString()} 条记录</b>

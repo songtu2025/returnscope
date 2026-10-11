@@ -2,6 +2,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Annotated, Any, AsyncIterator
 
 from fastapi import Cookie, FastAPI, HTTPException
@@ -75,11 +76,23 @@ def _bootstrap_user(database: Database, settings: Settings) -> None:
 
 
 def _create_database(settings: Settings) -> Database:
+    from web_backend.datasets.current_products import refresh_product_dependents
+
     settings.ensure_directories()
     database = Database(settings.database_path)
     database.initialize(production=settings.production)
     _bootstrap_user(database, settings)
     with database.transaction(immediate=True) as connection:
+        products = connection.execute(
+            "SELECT d.id, v.file_path FROM datasets d JOIN dataset_versions v "
+            "ON v.dataset_id = d.id AND v.version = d.current_version "
+            "WHERE d.kind = 'products' AND d.archived_at IS NULL"
+        ).fetchall()
+        for product in products:
+            if Path(product["file_path"]).is_file():
+                refresh_product_dependents(
+                    database, connection, product["id"], utc_now()
+                )
         refresh_related_dashboards(database, connection, None, utc_now())
     return database
 
