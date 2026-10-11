@@ -4031,3 +4031,58 @@ test("全局搜索失败可重试，箭头选择第二个结果后回车打开",
     id: "synthetic-b",
   });
 });
+
+test.each(["configs", "modelPreference"])(
+  "模型偏好读取 %s 失败显示错误，重试后才显示空服务",
+  async (method) => {
+    apiMock[method].mockRejectedValueOnce(new Error("合成偏好读取失败"));
+    render(<ModelPreferencePage notify={vi.fn()} />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("合成偏好读取失败");
+    expect(screen.queryByText(/暂无已发布的模型服务/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "保存为我的默认策略" }),
+    ).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "重试" }));
+    expect(await screen.findByText(/暂无已发布的模型服务/)).toBeVisible();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  },
+);
+
+test("模型偏好保存失败保留已选推理强度，重试保存同一草稿", async () => {
+  const notify = vi.fn();
+  apiMock.configs.mockResolvedValue([
+    {
+      id: "synthetic-connection",
+      name: "合成模型服务",
+      active_version_id: "v1",
+      models: [
+        {
+          id: "synthetic-model",
+          model_key: "main",
+          display_name: "合成主模型",
+          active: true,
+          validation_status: "validated",
+          supported_efforts: ["medium", "high"],
+        },
+      ],
+    },
+  ]);
+  apiMock.saveModelPreference
+    .mockRejectedValueOnce(new Error("合成保存失败"))
+    .mockImplementation(async (policy) => policy);
+  render(<ModelPreferencePage notify={notify} />);
+  const effort = await screen.findByLabelText("主分析推理强度");
+  await userEvent.selectOptions(effort, "high");
+  const save = screen.getByRole("button", { name: "保存为我的默认策略" });
+  await userEvent.click(save);
+  await waitFor(() => expect(notify).toHaveBeenCalledWith("合成保存失败", "error"));
+  expect(effort).toHaveValue("high");
+  expect(save).toBeEnabled();
+  await userEvent.click(save);
+  await waitFor(() =>
+    expect(notify).toHaveBeenCalledWith("默认模型策略已保存", "success"),
+  );
+  expect(apiMock.saveModelPreference).toHaveBeenLastCalledWith(
+    expect.objectContaining({ primary_effort: "high" }),
+  );
+});

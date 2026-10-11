@@ -1,4 +1,5 @@
-import { PageHeading, PageLoadingState } from "../../components/SharedUi";
+import { WarningCircle } from "@phosphor-icons/react";
+import { EmptyState, PageHeading, PageLoadingState } from "../../components/SharedUi";
 import { ModelPreferenceForm } from "./ModelPreferenceForm";
 import { useModelPreference } from "./useModelPreference";
 
@@ -14,6 +15,19 @@ export function ModelPreferencePage({ notify }) {
       />
       {preference.loading ? (
         <PageLoadingState label="正在读取个人模型偏好…" heading={false} />
+      ) : preference.error ? (
+        <div role="alert">
+          <EmptyState
+            icon={WarningCircle}
+            title="模型偏好读取失败"
+            description={preference.error}
+            action={
+              <button className="secondary-button" onClick={preference.load}>
+                重试
+              </button>
+            }
+          />
+        </div>
       ) : (
         <ModelPreferenceForm {...preference} />
       )}

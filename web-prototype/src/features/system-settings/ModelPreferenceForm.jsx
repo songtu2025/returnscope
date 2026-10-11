@@ -146,7 +146,7 @@ function PolicyRow({
       </div>
       <select
         aria-label={`${label}模型`}
-        value={policy[modelField]}
+        value={policy[modelField] ?? ""}
         onChange={(event) => onModelChange(modelField, event.target.value)}
       >
         {optional && <option value="">不使用</option>}

@@ -280,7 +280,7 @@ test.each([
   ["上月", "2024-02-01", "2024-02-29"],
 ])("日期%s自动更新预览并正确处理跨月", async (label, start, end) => {
   vi.useFakeTimers({ toFake: ["Date"] });
-  vi.setSystemTime(new Date(2024, 2, 1, 0, 30));
+  vi.setSystemTime(new Date("2024-02-29T16:30:00Z"));
   const user = userEvent.setup();
   render(<ImportView onDone={vi.fn()} />);
   await user.click(await screen.findByText("反馈日期", { exact: true }));

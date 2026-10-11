@@ -14,28 +14,6 @@ import {
 
 /** @typedef {(message: string, tone?: string) => void} Notify */
 /** @typedef {import("react").Dispatch<import("react").SetStateAction<ModelPreference>>} SetPolicy */
-/** @param {Notify} notify @param {(value: boolean) => void} setLoading @param {(value: ModelConnection[]) => void} setConnections @param {SetPolicy} setPolicy */
-async function loadPreference(notify, setLoading, setConnections, setPolicy) {
-  setLoading(true);
-  try {
-    const [serviceConnections, preference] = await Promise.all([
-      api.configs(),
-      api.modelPreference(),
-    ]);
-    const published = serviceConnections.filter((item) => item.active_version_id);
-    const selected =
-      published.find((item) => item.id === preference?.connection_id) ??
-      published[0] ??
-      null;
-    setConnections(published);
-    setPolicy(policyForConnection(selected, preference ?? EMPTY_POLICY));
-  } catch (error) {
-    notify(error instanceof Error ? error.message : "模型偏好读取失败", "error");
-  } finally {
-    setLoading(false);
-  }
-}
-
 /** @param {ModelPreference} policy @param {Notify} notify @param {SetPolicy} setPolicy @param {(value: boolean) => void} setSaving */
 async function savePreference(policy, notify, setPolicy, setSaving) {
   if (!policy.primary_model) {
@@ -64,11 +42,29 @@ export function useModelPreference(notify) {
   const [policy, setPolicy] = useState(/** @type {ModelPreference} */ (EMPTY_POLICY));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
-  const load = useCallback(
-    () => loadPreference(notify, setLoading, setConnections, setPolicy),
-    [notify],
-  );
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const [serviceConnections, preference] = await Promise.all([
+        api.configs(),
+        api.modelPreference(),
+      ]);
+      const published = serviceConnections.filter((item) => item.active_version_id);
+      const selected =
+        published.find((item) => item.id === preference?.connection_id) ??
+        published[0] ??
+        null;
+      setConnections(published);
+      setPolicy(policyForConnection(selected, preference ?? EMPTY_POLICY));
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "模型偏好读取失败");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
   useEffect(() => {
     load();
   }, [load]);
@@ -89,5 +85,16 @@ export function useModelPreference(notify) {
     setPolicy((current) => policyForModel(current, field, value, model));
   };
   const save = () => savePreference(policy, notify, setPolicy, setSaving);
-  return { connections, policy, loading, saving, models, setPolicy, updateModel, save };
+  return {
+    connections,
+    policy,
+    loading,
+    saving,
+    error,
+    load,
+    models,
+    setPolicy,
+    updateModel,
+    save,
+  };
 }
