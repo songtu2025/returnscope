@@ -264,3 +264,25 @@
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 1199px) {
+  .nav-item::after {
+    content: attr(data-nav-label);
+    position: absolute;
+    left: calc(100% + 12px);
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 6px 10px;
+    border-radius: 7px;
+    color: #fff;
+    background: var(--sidebar);
+    font-size: var(--font-assist);
+    white-space: nowrap;
+    pointer-events: none;
+    visibility: hidden;
+  }
+  .nav-item:hover::after,
+  .nav-item:focus-visible::after {
+    visibility: visible;
+  }
+}

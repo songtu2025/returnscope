@@ -19,6 +19,12 @@ export function Topbar({ user, system, onRefresh, onNavigate, onSearch, onLogout
         <kbd>Ctrl K</kbd>
       </button>
       <div className="topbar-actions">
+        <span
+          className="system-timezone"
+          title="系统时间统一按 Asia/Shanghai 显示，业务源日期保持原值"
+        >
+          北京时间
+        </span>
         <button
           className="capacity-chip"
           onClick={async () => {
@@ -26,6 +32,7 @@ export function Topbar({ user, system, onRefresh, onNavigate, onSearch, onLogout
             onNavigate("analysis-tasks");
           }}
           title="查看进行中的分析任务"
+          aria-label={`查看进行中的分析任务，运行 Listing ${system?.my_running_segments ?? system?.my_running_tasks ?? 0}/3`}
         >
           <span>我的运行 Listing</span>
           <strong>

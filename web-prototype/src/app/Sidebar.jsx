@@ -67,6 +67,9 @@ function SidebarNavItem({
       onMouseEnter={() => preloadPage(id)}
       onFocus={() => preloadPage(id)}
       aria-current={active ? "page" : undefined}
+      aria-label={label}
+      data-nav-label={label}
+      title={label}
     >
       <Icon
         className="sidebar-nav-icon"

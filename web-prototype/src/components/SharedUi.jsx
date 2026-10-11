@@ -50,7 +50,7 @@ export function InfoRow({ label, value }) {
   return (
     <div className="info-row">
       <span>{label}</span>
-      <b>{value ?? "—"}</b>
+      <b>{value == null || value === "" ? "--" : value}</b>
     </div>
   );
 }

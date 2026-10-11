@@ -5,10 +5,13 @@
   font-synthesis: none;
   --ink: #15211d;
   --muted: #66736d;
-  --line: #dce2dd;
-  --line-soft: #e9ede9;
+  --line: #d8e2dc;
+  --line-soft: #e8eeea;
   --panel: #ffffff;
-  --canvas: #f4f6f3;
+  --surface-soft: #f6f9f7;
+  --font-control: 14px;
+  --font-assist: 12px;
+  --canvas: #f5f7f5;
   --green: #12765b;
   --green-dark: #0d5d47;
   --green-pale: #e8f4ef;
@@ -20,7 +23,7 @@
   --blue-pale: #eaf1fb;
   --sidebar: #12251f;
   --sidebar-soft: #1d342c;
-  --shadow-sm: 0 1px 2px rgba(19, 34, 29, 0.06), 0 5px 16px rgba(19, 34, 29, 0.04);
+  --shadow-sm: 0 1px 2px rgb(19 34 29 / 5%), 0 8px 20px rgb(19 34 29 / 4%);
   --shadow-lg: 0 20px 70px rgba(19, 34, 29, 0.18);
   --layout-wide-max: 1680px;
   --layout-workflow-max: 1560px;

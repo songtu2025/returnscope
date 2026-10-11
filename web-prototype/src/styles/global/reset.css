@@ -35,7 +35,7 @@ input:where(
   ):focus-visible,
 select:focus-visible,
 textarea:where(:not(.ant-input)):focus-visible {
-  outline: 3px solid rgba(18, 118, 91, 0.22);
+  outline: 3px solid var(--green);
   outline-offset: 2px;
 }
 a {

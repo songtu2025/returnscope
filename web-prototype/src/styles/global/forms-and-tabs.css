@@ -40,7 +40,7 @@
   z-index: 1;
   padding-right: 10px;
   background: #fff;
-  font-size: 10px;
+  font-size: var(--font-assist);
 }
 .stepper .active {
   color: var(--green-dark);
@@ -78,7 +78,7 @@ textarea:where(:not(.ant-input)) {
   border-radius: 7px;
   color: var(--ink);
   background: #fff;
-  font-size: 10px;
+  font-size: var(--font-control);
   transition: 0.14s ease;
 }
 input:where(:not(.ant-input, .ant-select-input, .ant-checkbox-input, .ant-radio-input)),
