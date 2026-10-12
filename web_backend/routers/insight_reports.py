@@ -63,7 +63,7 @@ def _register_report_creation(
             return service.create_for_dashboard(
                 dashboard_id,
                 version_id,
-                **payload.model_dump(),
+                **payload.model_dump(exclude_none=True),
                 actor_id=str(user["id"]),
             )
         except DashboardNotFound as exc:

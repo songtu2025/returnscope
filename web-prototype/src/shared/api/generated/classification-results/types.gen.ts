@@ -1729,6 +1729,42 @@ export type ListResultsApiClassificationResultsGetResponses = {
 export type ListResultsApiClassificationResultsGetResponse =
   ListResultsApiClassificationResultsGetResponses[keyof ListResultsApiClassificationResultsGetResponses];
 
+export type SearchFeedbackApiClassificationResultsSearchGetData = {
+  body?: never;
+  path?: never;
+  query: {
+    /**
+     * Q
+     */
+    q: string;
+    /**
+     * Limit
+     */
+    limit?: number;
+  };
+  url: "/api/classification-results/search";
+};
+
+export type SearchFeedbackApiClassificationResultsSearchGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type SearchFeedbackApiClassificationResultsSearchGetError =
+  SearchFeedbackApiClassificationResultsSearchGetErrors[keyof SearchFeedbackApiClassificationResultsSearchGetErrors];
+
+export type SearchFeedbackApiClassificationResultsSearchGetResponses = {
+  /**
+   * Successful Response
+   */
+  200: ClassificationResultGroupsResponse;
+};
+
+export type SearchFeedbackApiClassificationResultsSearchGetResponse =
+  SearchFeedbackApiClassificationResultsSearchGetResponses[keyof SearchFeedbackApiClassificationResultsSearchGetResponses];
+
 export type GetResultApiClassificationResultsVersionIdGetData = {
   body?: never;
   path: {
@@ -1869,6 +1905,10 @@ export type ListRecordGroupsApiClassificationResultsVersionIdRecordGroupsGetData
      */
     page_size?: number;
     /**
+     * Feedback Source Record Id
+     */
+    feedback_source_record_id?: string | null;
+    /**
      * Order Id
      */
     order_id?: string | null;
@@ -1954,6 +1994,10 @@ export type ListRecordsApiClassificationResultsVersionIdRecordsGetData = {
      * Page Size
      */
     page_size?: number;
+    /**
+     * Feedback Source Record Id
+     */
+    feedback_source_record_id?: string | null;
     /**
      * Order Id
      */

@@ -62,8 +62,8 @@ export function DashboardPlanSources(context) {
           <>
             <CheckCircle size={24} />
             <div>
-              <b>执行计划已生成</b>
-              <span>请核对每个 Listing 使用的结果版本，再生成不可变数据集。</span>
+              <b>所选分类结果</b>
+              <span>核对所选 Listing 与统计范围后生成 AI 洞察。</span>
             </div>
           </>
         )}

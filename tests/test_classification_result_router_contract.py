@@ -31,7 +31,17 @@ def test_result_router_preserves_registration_and_response_settings(
     assert correction.response_model is not None
     assert correction.response_model_exclude_unset
     assert correction.dependant.dependencies[0].call is harness.current_user
-    routes = [route for route in routes if route.methods == {"GET"}]
+    search = next(route for route in routes if route.path == BASE_PATH + "/search")
+    assert search.dependant.dependencies[0].call is harness.current_user
+    assert search.response_model is not None and search.response_model_exclude_unset
+    assert routes.index(search) < next(
+        index
+        for index, route in enumerate(routes)
+        if route.path == BASE_PATH + "/{version_id}"
+    )
+    routes = [
+        route for route in routes if route.methods == {"GET"} and route is not search
+    ]
     actual = [
         (
             route.path.removeprefix(BASE_PATH),

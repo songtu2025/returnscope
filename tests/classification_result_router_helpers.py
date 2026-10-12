@@ -32,13 +32,13 @@ ROUTES = [
         "/{version_id}/records",
         "list_records",
         "records",
-        "version_id,page,page_size,order_id,listing,product_name,source_sku,matched_msku,product_sku,asin,problem,quality_status,comment_status,system_rerun_required",
+        "version_id,page,page_size,feedback_source_record_id,order_id,listing,product_name,source_sku,matched_msku,product_sku,asin,problem,quality_status,comment_status,system_rerun_required",
     ),
     (
         "/{version_id}/record-groups",
         "list_record_groups",
         "record_groups",
-        "version_id,page,page_size,order_id,listing,product_name,source_sku,matched_msku,product_sku,asin,problem,quality_status,comment_status,system_rerun_required",
+        "version_id,page,page_size,feedback_source_record_id,order_id,listing,product_name,source_sku,matched_msku,product_sku,asin,problem,quality_status,comment_status,system_rerun_required",
     ),
     (
         "/{version_id}/drilldown",

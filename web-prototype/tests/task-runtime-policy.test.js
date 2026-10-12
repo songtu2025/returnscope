@@ -171,3 +171,27 @@ test("排序复制原数组，同值保持顺序，更新时间缺失时回退�
   expect(values).toEqual([first, second]);
   expect(sortTasks(values, "progress_desc")).not.toBe(values);
 });
+
+test("当前结果已处理不会被历史运行失败标成待处理，有待复核时给出当前记录数量", () => {
+  const task = {
+    status: "partial",
+    segments: [
+      {
+        status: "completed_with_errors",
+        result_publish_status: "published",
+        system_failure_count: 0,
+        pending_review_count: 0,
+      },
+    ],
+  };
+  expect(taskSummary(task)).toMatchObject({
+    needsAttention: false,
+    statusLabel: "分析完成",
+  });
+  task.segments[0].pending_review_count = 36;
+  expect(taskSummary(task)).toMatchObject({
+    needsAttention: true,
+    issues: 1,
+    attentionDescription: "36 条记录待复核，请在下方 Listing 中处理。",
+  });
+});

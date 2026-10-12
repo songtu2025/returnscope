@@ -1,6 +1,12 @@
+from pathlib import Path
+
 import pytest
+from test_manual_correction import _items
+from test_result_version_reviews import _publish_review_required
 from test_task_planning import _create_task, _database_with_inputs
 
+from web_backend.classification_result_service import ClassificationResultService
+from web_backend.classification_results.manual_correction import correct_group
 from web_backend.task_service import TaskService
 
 
@@ -96,3 +102,24 @@ def test_detail_uses_one_connection_and_preserves_query_budget(
         len([sql for sql in queries if sql.lstrip().startswith("SELECT")]) == expected
     )
     assert (result is None) == missing
+
+
+def test_latest_group_recovery_preserves_scope_and_task_attention(tmp_path: Path):
+    context, version = _publish_review_required(tmp_path)
+    service = ClassificationResultService(context.database)
+    group = service.record_groups(version["version_id"], order_id="ORDER-DUP")["items"][
+        0
+    ]
+    source_id = group["record"]["source_record_id"]
+    corrected = correct_group(
+        service, version["version_id"], group["record"]["id"], _items(), "user-2"
+    )
+    recovered = service.record_groups(
+        corrected["version_id"], feedback_source_record_id=source_id
+    )
+    assert recovered["total"] == 1
+    assert recovered["items"][0]["member_count"] == 2
+    assert recovered["items"][0]["record"]["quality_status"] == "ready"
+    task = TaskService(context.database).get(version["source_task_id"])
+    assert task["segments"][0]["pending_review_count"] == 1
+    assert task["segments"][0]["system_failure_count"] == 0

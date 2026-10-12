@@ -26,6 +26,8 @@ class DashboardVersionCreateRequest(DashboardPlanRequest):
 class InsightReportGenerateRequest(BaseModel):
     model_id: str = Field(min_length=1, max_length=120)
     reasoning_effort: str = Field(min_length=1, max_length=20)
+    filters: dict[str, DashboardFilterValue] | None = None
+    plan_hash: str | None = Field(default=None, min_length=64, max_length=64)
 
 
 class InsightReportIssueDecisionRequest(BaseModel):

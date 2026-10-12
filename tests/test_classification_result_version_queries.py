@@ -237,3 +237,61 @@ def test_manual_history_and_actor_api_contract(tmp_path: Path):
         "human_review_assessment"
     ]
     assert assessment["resolved"] and assessment["assessed_by_name"] == "用户二"
+
+
+def test_feedback_search_uses_current_results_and_requires_login(
+    tmp_path: Path,
+) -> None:
+    context, version = _publish_review_required(tmp_path)
+    service = ClassificationResultService(context.database)
+    current = correct_group(
+        service, version["version_id"], _record(context, version), _items(), "user-2"
+    )
+    results = service.search_record_groups("small")
+    assert results["items"]
+    assert all(
+        group["record"]["result_version_id"] == current["version_id"]
+        for group in results["items"]
+    )
+    assert service.search_record_groups("%_")["total"] == 0
+    app = FastAPI()
+    app.include_router(
+        create_classification_result_router(service, lambda: {"id": "user-1"})
+    )
+    response = TestClient(app).get(
+        "/api/classification-results/search", params={"q": "small"}
+    )
+    assert response.status_code == 200
+    assert (
+        response.json()["items"][0]["record"]["result_version_id"]
+        == current["version_id"]
+    )
+
+    from fastapi import HTTPException
+
+    def require_login():
+        raise HTTPException(status_code=401, detail="请登录")
+
+    protected_app = FastAPI()
+    protected_app.include_router(
+        create_classification_result_router(service, require_login)
+    )
+    anonymous = TestClient(protected_app)
+    assert (
+        anonymous.get(
+            "/api/classification-results/search", params={"q": "small"}
+        ).status_code
+        == 401
+    )
+    assert (
+        anonymous.get(
+            "/api/classification-results/search", params={"q": "small", "limit": 51}
+        ).status_code
+        != 200
+    )
+    assert (
+        TestClient(app)
+        .get("/api/classification-results/search", params={"q": "small", "limit": 51})
+        .status_code
+        == 422
+    )

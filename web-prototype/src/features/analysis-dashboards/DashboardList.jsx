@@ -86,7 +86,7 @@ export function DashboardList({ route, updateRoute, userId }) {
       <PageHeading
         eyebrow="可追溯分析交付"
         title="分析看板"
-        description="从已发布的分类结果版本选择统计范围，生成不可变看板数据集。"
+        description="选择分类结果和统计范围创建看板，后续自动显示最新数据。"
         action={
           <button className="primary-button" onClick={chooseResults}>
             <ChartBar size={18} /> 选择分类结果
@@ -256,7 +256,7 @@ function DashboardRow({ dashboard, onOpen }) {
       </span>
       <div role="cell">
         <b>{dashboard.name || "未命名看板"}</b>
-        <small>{dashboard.description || "未提供说明"}</small>
+        {dashboard.description && <small>{dashboard.description}</small>}
       </div>
       <b role="cell">v{dashboard.current_version || dashboard.version || 1}</b>
       <span role="cell">

@@ -46,6 +46,7 @@ vi.mock("../src/api", () => ({ api: resultApiMock }));
 import { useHashRoute } from "../src/app/hashRouter";
 import { AiInsightReport } from "../src/features/analysis-dashboards/AiInsightReport";
 import { AnalysisDashboardPage } from "../src/features/analysis-dashboards/AnalysisDashboardPage";
+import { DashboardReportGeneration } from "../src/features/analysis-dashboards/DashboardReportGeneration";
 import { DashboardDetailLoading } from "../src/features/analysis-dashboards/DashboardDetailStateViews";
 import { ReturnReasonInsightExplorer } from "../src/features/analysis-dashboards/ReturnReasonInsightExplorer";
 import { ReturnReasonInsights } from "../src/features/analysis-dashboards/ReturnReasonInsights";
@@ -2351,20 +2352,16 @@ test("看板详情聚焦退货原因洞察并保留证据与版本入口", async
   expect(evidenceButton).toHaveFocus();
 
   await user.click(screen.getByRole("button", { name: "数据说明" }));
-  await user.click(screen.getByRole("button", { name: "创建新版本" }));
-  await waitFor(() => expect(window.location.hash).toContain("classification-results"));
-  const token = new URLSearchParams(window.location.hash.split("?")[1]).get(
-    "selection_token",
-  );
-  expect(readDashboardSelection("user-1", token)).toEqual(
-    expect.objectContaining({
-      target_dashboard_id: "dashboard-1",
-      expected_revision: 2,
-    }),
-  );
+  expect(screen.queryByRole("button", { name: "创建新版本" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("combobox", { name: "历史数据" })).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "修改历史" }));
+  expect(await screen.findByRole("combobox", { name: "历史数据" })).toBeVisible();
 });
 
 test("AI洞察报告按结论证据和行动路径展开", async () => {
+  dashboardApiMock.dashboardPreflight.mockImplementation(({ filters }) =>
+    Promise.resolve(planFor(["result-v1"], { filters })),
+  );
   const user = userEvent.setup();
   const version = {
     version_id: "dashboard-version-report",
@@ -2678,7 +2675,12 @@ test("AI洞察报告按结论证据和行动路径展开", async () => {
     expect(dashboardApiMock.createAnalysisDashboardInsightReport).toHaveBeenCalledWith(
       "dashboard-report",
       "dashboard-version-report",
-      { model_id: "model-1", reasoning_effort: "high" },
+      expect.objectContaining({
+        model_id: "model-1",
+        reasoning_effort: "high",
+        filters: expect.objectContaining({ quality_status: ["ready"] }),
+        plan_hash: expect.any(String),
+      }),
     ),
   );
   expect(await screen.findByText("AI 正在生成洞察报告")).toBeVisible();
@@ -2747,7 +2749,7 @@ test("数据来源与版本历史使用真实看板版本字段", async () => {
   expect(screen.getByText("SEEKWAY:US 商品目录")).toBeVisible();
   expect(screen.getByText("未提供产品信息")).toBeVisible();
 
-  await user.click(screen.getByRole("button", { name: "版本历史" }));
+  await user.click(screen.getByRole("button", { name: "修改历史" }));
   expect(await screen.findByText("看板版本历史")).toBeVisible();
   expect(screen.getByText("看板数据集 v2")).toBeVisible();
   expect(screen.getByText("替换 L001 分类结果")).toBeVisible();
@@ -3124,4 +3126,59 @@ test("看板列表筛选无结果提供清除筛选入口", async () => {
   await screen.findByText("没有符合条件的看板");
   await userEvent.click(screen.getByRole("button", { name: "清除筛选" }));
   expect(updateRoute).toHaveBeenCalledWith({ q: "", status: "", page: 1 });
+});
+
+test("已有看板的报告范围默认可用，变更后使用重新核对的计数和哈希", async () => {
+  const user = userEvent.setup();
+  const submit = vi.fn();
+  dashboardApiMock.dashboardPreflight.mockImplementation(
+    ({ result_version_ids, filters }) =>
+      Promise.resolve(
+        planFor(result_version_ids, {
+          filters,
+          plan_hash: filters.quality_status.includes("review_required")
+            ? "expanded-scope"
+            : "ready-scope",
+          summary: {
+            record_count: filters.quality_status.includes("review_required") ? 8 : 5,
+          },
+        }),
+      ),
+  );
+  render(
+    <DashboardReportGeneration
+      dashboard={{ id: "board", name: "范围验收" }}
+      selectedVersion={{
+        version_id: "board-current",
+        filters: { listing: "L1" },
+        source_snapshot: [{ result_version_id: "result-current" }],
+      }}
+      generationForm={{ modelId: "model-1", effort: "high" }}
+      setGenerationForm={vi.fn()}
+      setGenerationOpen={vi.fn()}
+      submitReportGeneration={submit}
+      generationState={{
+        loading: false,
+        submitting: false,
+        error: "",
+        models: [
+          { id: "model-1", display_name: "测试模型", supported_efforts: ["high"] },
+        ],
+      }}
+      analysisContext="feedback"
+    />,
+  );
+  expect(screen.getByRole("checkbox", { name: "可用", exact: true })).toBeChecked();
+  expect(
+    screen.getByRole("checkbox", { name: "需复核", exact: true }),
+  ).not.toBeChecked();
+  expect(await screen.findByText(/已纳入 5 条/)).toBeVisible();
+  await user.click(screen.getByRole("checkbox", { name: "需复核", exact: true }));
+  expect(await screen.findByText(/已纳入 8 条/)).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "开始生成" }));
+  expect(submit).toHaveBeenCalledWith(expect.anything(), {
+    filters: { listing: "L1", quality_status: ["ready", "review_required"] },
+    plan_hash: "expanded-scope",
+  });
+  expect(dashboardApiMock.createAnalysisDashboardVersion).not.toHaveBeenCalled();
 });

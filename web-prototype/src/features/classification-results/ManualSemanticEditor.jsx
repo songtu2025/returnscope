@@ -5,7 +5,11 @@ import Select from "antd/es/select";
 import { api } from "../../api";
 import { AntdProvider } from "../../components/AntdProvider";
 import { labelText } from "../../lib/taxonomyPresentation";
-import { errorMessage } from "../analysis-dashboards/dashboardRequestErrors";
+import {
+  errorMessage,
+  errorStatus,
+} from "../analysis-dashboards/dashboardRequestErrors";
+import { SemanticResultPanel } from "./SemanticResultPanel";
 import { selectedSentiment } from "../review-batches/semanticReviewDrafts";
 import { SentimentField } from "../review-batches/SemanticSentimentField";
 
@@ -21,7 +25,11 @@ export function ManualSemanticEditor({
   onDirtyChange,
   onSavingChange,
 }) {
-  const record = group.record;
+  const [currentGroup, setCurrentGroup] = useState(group);
+  const record = currentGroup.record;
+  const [conflict, setConflict] = useState(false);
+  const [recovering, setRecovering] = useState(false);
+  const [recovered, setRecovered] = useState(false);
   const [items, setItems] = useState(() =>
     (record.classification.semantic_units ?? []).map((unit, index) => ({
       item_id: `unit:${index}`,
@@ -99,9 +107,36 @@ export function ManualSemanticEditor({
       onSaved(result.version_id);
     } catch (reason) {
       setError(errorMessage(reason));
+      setConflict(errorStatus(reason) === 409);
     } finally {
       setSaving(false);
       onSavingChange(false);
+    }
+  };
+
+  const loadLatest = async () => {
+    setRecovering(true);
+    try {
+      const versions = await api.classificationResultVersions(record.result_version_id);
+      const latest = versions[0];
+      if (!latest || latest.version_id === record.result_version_id) {
+        setError("当前结果未变化；若 Listing 正在运行，请结束后再保存。输入已保留。");
+        setConflict(false);
+        return;
+      }
+      const groups = await api.classificationResultRecordGroups(latest.version_id, {
+        feedback_source_record_id: record.source_record_id,
+      });
+      const latestGroup = groups.items[0];
+      if (!latestGroup) throw new Error("最新结果中未找到这条反馈，输入已保留。");
+      setCurrentGroup(latestGroup);
+      setRecovered(true);
+      setConflict(false);
+      setError("");
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setRecovering(false);
     }
   };
 
@@ -110,7 +145,7 @@ export function ManualSemanticEditor({
       <div ref={editorRef} className="manual-semantic-editor">
         <header>
           <b>人工修正</b>
-          <span>保存影响当前反馈组及其 {group.member_count} 条源明细</span>
+          <span>保存影响当前反馈组及其 {currentGroup.member_count} 条源明细</span>
         </header>
         {loading && <p role="status">正在读取分类标准…</p>}
         {error && (
@@ -121,7 +156,18 @@ export function ManualSemanticEditor({
             )}
           </p>
         )}
-        <fieldset disabled={saving || loading}>
+        {conflict && (
+          <Button loading={recovering} onClick={loadLatest}>
+            加载最新结果并保留输入
+          </Button>
+        )}
+        {recovered && (
+          <section aria-label="最新结果核对">
+            <p role="status">已保留你的输入，请核对最新结果后再保存。</p>
+            <SemanticResultPanel record={record} title="最新结果" />
+          </section>
+        )}
+        <fieldset disabled={saving || loading || recovering}>
           {items.map((item, index) => (
             <div className="manual-semantic-item" key={item.item_id}>
               <div className="manual-semantic-item-heading">
@@ -209,7 +255,7 @@ export function ManualSemanticEditor({
             aria-label="保存修正"
             type="primary"
             loading={saving}
-            disabled={loading || !labels.length || !valid}
+            disabled={loading || recovering || conflict || !labels.length || !valid}
             onClick={save}
           >
             保存修正

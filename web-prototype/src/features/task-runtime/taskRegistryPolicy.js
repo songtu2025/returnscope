@@ -31,6 +31,12 @@ export function taskFilterGroup(task) {
 
 /** @param {TaskSegment} segment */
 export function segmentNeedsAttention(segment) {
+  if (isPublishedResult(segment)) {
+    return (
+      Number(segment.system_failure_count || 0) > 0 ||
+      Number(segment.pending_review_count || 0) > 0
+    );
+  }
   return (
     ["failed", "blocked", "completed_with_errors"].includes(segment.status) ||
     resultPublishStatus(segment) === "failed" ||
@@ -74,7 +80,13 @@ export function taskSummary(task) {
   const issues = executable.filter(segmentNeedsAttention).length;
   const excluded = segments.some((segment) => segment.agent_key === "unknown");
   const needsAttention =
-    issues > 0 || excluded || ["failed", "blocked", "partial"].includes(task.status);
+    issues > 0 ||
+    excluded ||
+    (!segments.length && ["failed", "blocked", "partial"].includes(task.status));
+  const pendingReview = executable.reduce(
+    (count, segment) => count + Number(segment.pending_review_count || 0),
+    0,
+  );
   const issueDescription =
     issues > 0
       ? `${issues} 个 Listing 需处理`
@@ -90,9 +102,17 @@ export function taskSummary(task) {
     remaining: Math.max(total - generated, 0),
     resultDescription,
     issueDescription,
+    attentionDescription:
+      pendingReview > 0
+        ? `${pendingReview} 条记录待复核，请在下方 Listing 中处理。`
+        : issues > 0
+          ? "查看下方 Listing 的失败原因和可执行操作。"
+          : "",
     statusLabel: partialQueue
       ? "部分排队"
-      : (STATUS_LABELS[task.status] ?? task.status),
+      : task.status === "partial" && generated === total && !needsAttention
+        ? "分析完成"
+        : (STATUS_LABELS[task.status] ?? task.status),
   };
 }
 

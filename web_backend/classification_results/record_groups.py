@@ -35,7 +35,7 @@ def fetch_record_group_page(
     page_size: int,
 ) -> tuple[Any, list[Any]]:
     where_sql, params = filters
-    group_key = feedback_group_key_sql("r")
+    group_key = "r.result_version_id || ':' || " + feedback_group_key_sql("r")
     grouped_sql = f"""
         WITH filtered AS (
             SELECT r.*, {group_key} AS display_key

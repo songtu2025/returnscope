@@ -134,8 +134,7 @@
 .dashboard-confirm-main {
   padding: var(--desktop-detail-padding);
 }
-.review-batch-progress,
-.dashboard-create-steps {
+.review-batch-progress {
   gap: 10px;
   margin-bottom: var(--desktop-section-gap);
 }

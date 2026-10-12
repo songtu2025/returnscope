@@ -2,6 +2,8 @@ import type {
   ManualCorrectionRequest,
   ClassificationResultVersionResponse,
   ClassificationResultDrilldownResponse,
+  SearchFeedbackApiClassificationResultsSearchGetData,
+  SearchFeedbackApiClassificationResultsSearchGetResponse,
   GetDrilldownApiClassificationResultsVersionIdDrilldownGetData,
   GetDrilldownApiClassificationResultsVersionIdDrilldownGetResponse,
   GetResultApiClassificationResultsVersionIdGetData,
@@ -34,6 +36,11 @@ type ClassificationResultDrilldownFilters = Omit<
 >;
 
 export const resultApi = {
+  searchClassificationFeedback: (
+    q: SearchFeedbackApiClassificationResultsSearchGetData["query"]["q"],
+    options: RequestInit = {},
+  ): Promise<SearchFeedbackApiClassificationResultsSearchGetResponse> =>
+    request(`/api/classification-results/search${queryString({ q })}`, options),
   correctClassificationResult: (
     versionId: string,
     recordId: string,

@@ -36,8 +36,8 @@ export function DashboardInsightConfirmation(context) {
       ready={!state.loading && !state.error && state.plan?.ready === true}
       scopeLabel={
         currentSources.length === 1
-          ? `${currentSources[0].listing || "未提供 Listing"} · ${currentSources[0].product_names?.[0] || "未提供产品名称"}`
-          : `${currentSources.length} 个分类结果版本`
+          ? `${currentSources[0].listing || "未提供 Listing"}`
+          : `${currentSources.length} 个分类结果`
       }
       includedRecords={Number(summary.record_count || 0)}
       unitCount={Number(summary.unit_count || 0)}

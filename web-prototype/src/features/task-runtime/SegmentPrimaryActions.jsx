@@ -89,6 +89,14 @@ function SegmentResultControls({ segment, rowState, actions, publishStatus }) {
   const { onViewClassification, onRetryPublish } = actions;
   return (
     <>
+      {isPublishedResult(segment) && Number(segment.pending_review_count || 0) > 0 && (
+        <Button
+          className="secondary-button compact-button listing-view-button"
+          onClick={() => onViewClassification(segment, "review_required")}
+        >
+          处理待复核记录
+        </Button>
+      )}
       {["completed", "completed_with_errors"].includes(segment.status) &&
         isPublishedResult(segment) && (
           <Button

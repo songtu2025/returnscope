@@ -3,7 +3,10 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from web_backend.classification_result_queries import system_rerun_counts
+from web_backend.classification_result_queries import (
+    pending_review_counts,
+    system_rerun_counts,
+)
 from web_backend.common import json_text
 from web_backend.database import Database
 
@@ -102,9 +105,11 @@ class TaskListQueriesMixin:
                     if segment["result_version_id"] is not None
                 ],
             )
+            review_counts = pending_review_counts(connection, list(rerun_counts))
             for segment in segments:
                 value = dict(segment)
                 version_id = str(value.get("result_version_id") or "")
+                value["pending_review_count"] = review_counts.get(version_id, 0)
                 self._attach_system_retry_state(
                     value,
                     rerun_counts.get(version_id, 0),

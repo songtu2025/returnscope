@@ -122,7 +122,7 @@ export function InsightGenerationModal({
               <small>
                 {models.length
                   ? "只展示已启用并验证通过的模型"
-                  : "请先在系统设置中配置并验证模型"}
+                  : "请联系管理员配置并验证模型"}
               </small>
             </div>
 

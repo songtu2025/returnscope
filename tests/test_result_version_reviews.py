@@ -1427,7 +1427,7 @@ def test_published_completed_with_errors_cannot_use_normal_retry(
             (context.segment_id,),
         )
     task = TaskService(context.database).get(context.task_id)
-    with pytest.raises(ValueError, match="通过复核批次"):
+    with pytest.raises(ValueError, match="查看证据并人工修正"):
         TaskService(context.database).retry_segment(
             context.task_id,
             "footwear",

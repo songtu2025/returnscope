@@ -14,6 +14,7 @@ from web_backend.classification_result_payload import (
     classification_comment_status,
 )
 from web_backend.common import json_value
+from web_backend.result_hierarchy import feedback_group_key_sql
 
 
 def register_comment_status_filter(
@@ -55,6 +56,15 @@ class ClassificationResultRecordFiltersMixin:
     ) -> tuple[str, list[Any]]:
         where = ["r.result_version_id = ?"]
         params: list[Any] = [version_id]
+        source_record_id = filters.get("feedback_source_record_id")
+        if source_record_id:
+            where.append(
+                f"{feedback_group_key_sql('r')} = ("
+                f"SELECT {feedback_group_key_sql('source')} "
+                "FROM classification_result_records source "
+                "WHERE source.result_version_id = ? AND source.source_record_id = ?)"
+            )
+            params.extend([version_id, source_record_id])
         columns = {
             "order_id": "order_id",
             "listing": "listing",

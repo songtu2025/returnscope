@@ -36,7 +36,6 @@ import { analysisContextTerms } from "./analysisContextPresentation";
  * @property {(versionId: string) => void} onSelectVersion
  * @property {() => void} onShowSources
  * @property {() => void} onShowHistory
- * @property {() => void} onCreateVersion
  * @property {() => void} onShowOverview
  * @property {() => void} onShowReport
  */
@@ -62,7 +61,6 @@ export function DashboardDetailHeader({
   onSelectVersion,
   onShowSources,
   onShowHistory,
-  onCreateVersion,
   onShowOverview,
   onShowReport,
 }) {
@@ -119,42 +117,34 @@ export function DashboardDetailHeader({
         <section className="return-insight-data-info">
           <div>
             <b>{dashboard.description || "当前看板基于已发布分类结果生成"}</b>
-            <span>
-              看板版本 v{dashboardVersionNumber(selectedVersion)} · 历史版本只读且可追溯
-            </span>
+            <span>看板自动显示当前分类结果；历史数据可在修改历史中查看。</span>
           </div>
-          <label>
-            看板版本
-            <select
-              aria-label="看板版本"
-              value={versionId}
-              onChange={(event) => onSelectVersion(event.target.value)}
-            >
-              {versions.map((version) => (
-                <option
-                  key={dashboardVersionId(version)}
-                  value={dashboardVersionId(version)}
-                >
-                  v{dashboardVersionNumber(version)}
-                  {dashboardVersionId(version) === currentVersionId ? "（当前）" : ""}
-                </option>
-              ))}
-            </select>
-          </label>
+          {activeTab === "history" && (
+            <label>
+              历史数据
+              <select
+                aria-label="历史数据"
+                value={versionId}
+                onChange={(event) => onSelectVersion(event.target.value)}
+              >
+                {versions.map((version) => (
+                  <option
+                    key={dashboardVersionId(version)}
+                    value={dashboardVersionId(version)}
+                  >
+                    v{dashboardVersionNumber(version)}
+                    {dashboardVersionId(version) === currentVersionId ? "（当前）" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <Button type="link" onClick={onShowSources}>
             数据来源
           </Button>
           <Button type="link" onClick={onShowHistory}>
-            版本历史
+            修改历史
           </Button>
-          <button
-            className="primary-button"
-            disabled={!isCurrentVersion}
-            title={isCurrentVersion ? "" : "历史版本只读，请切换到当前版本"}
-            onClick={onCreateVersion}
-          >
-            创建新版本
-          </button>
         </section>
       )}
 
@@ -186,7 +176,7 @@ export function DashboardDetailHeader({
             className={activeTab === "history" ? "active" : ""}
             onClick={onShowHistory}
           >
-            版本历史
+            修改历史
           </button>
         </nav>
       )}

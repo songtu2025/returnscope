@@ -60,13 +60,12 @@ export function TaskDetailAlerts({
         </div>
       )}
 
-      {["failed", "blocked", "partial"].includes(task.status) && task.message && (
+      {summary.needsAttention && !["queued", "running"].includes(task.status) && (
         <section className="task-action-banner" role="status">
           <WarningCircle size={19} />
           <div>
             <b>{summary.issueDescription}</b>
-            <p>{task.message}</p>
-            <small>查看下方 Listing 的原因和可执行操作；已生成的结果仍可查看。</small>
+            <p>{summary.attentionDescription || task.message}</p>
           </div>
         </section>
       )}

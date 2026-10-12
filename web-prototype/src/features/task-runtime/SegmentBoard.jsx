@@ -20,7 +20,7 @@ import { segmentNeedsAttention } from "./taskRegistryPolicy";
  * @property {(segmentKey: string, action: SegmentAction, note?: string) => Promise<unknown>} onAction
  * @property {(maxParallelSegments: number) => Promise<unknown>} onParallelism
  * @property {(segmentKeys: string[]) => Promise<unknown>} onReorder
- * @property {(segment: TaskSegment & {result_version_id: string}) => void} onViewClassification
+ * @property {(segment: TaskSegment & {result_version_id: string}, qualityStatus?: string) => void} onViewClassification
  * @property {() => void} onResumeUnfinished
  */
 const ORDERABLE_SEGMENT_STATUSES = ["queued", "retry_pending", "paused"];

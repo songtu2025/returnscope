@@ -4,8 +4,6 @@ import "../../styles/insight-generation.css";
 import "../../styles/classification-results.css";
 import "../../styles/return-insights.css";
 import "../../styles/ai-insight-reports.css";
-import { navigateHash } from "../../app/hashRouter";
-import { createDashboardSelection } from "./dashboardSelectionStorage";
 import { DashboardDetailContent } from "./DashboardDetailContent";
 import { DashboardDetailEvidenceDrawer } from "./DashboardDetailEvidenceDrawer";
 import { DashboardDetailHeader } from "./DashboardDetailHeader";
@@ -27,7 +25,7 @@ import { useDashboardReportActions } from "./useDashboardReportActions";
 
 /** @param {DashboardDetailProps} props */
 export function DashboardDetail(props) {
-  const { route, updateRoute, userId } = props;
+  const { route, updateRoute } = props;
   const { main, selectedVersion, loadMain } = useDashboardVersion(props);
   const { content, selectedRecord, setSelectedRecord, loadContent } =
     useDashboardContent(props);
@@ -74,13 +72,6 @@ export function DashboardDetail(props) {
   const currentVersionId = currentDashboardVersion(dashboard, main.versions);
   const isCurrentVersion = !currentVersionId || currentVersionId === route.versionId;
   const showReport = route.tab === "report";
-  const createVersion = () => {
-    const token = createDashboardSelection(userId, {
-      target_dashboard_id: route.dashboardId,
-      expected_revision: dashboard.revision,
-    });
-    navigateHash("classification-results", { selection_token: token });
-  };
   const analysisContext = dashboardAnalysisContext(content.data, selectedReport);
 
   return (
@@ -115,7 +106,7 @@ export function DashboardDetail(props) {
               versionId,
               reportId: "",
               issueId: "",
-              tab: "overview",
+              tab: "history",
               recordPage: 1,
               reasonPage: 0,
               problem: "",
@@ -131,7 +122,6 @@ export function DashboardDetail(props) {
         }
         onShowSources={() => updateRoute({ tab: "source" })}
         onShowHistory={() => updateRoute({ tab: "history" })}
-        onCreateVersion={createVersion}
         onShowOverview={() => updateRoute({ tab: "overview" })}
         onShowReport={() => updateRoute({ tab: "report", problem: "", labelGroup: "" })}
       />
@@ -190,7 +180,6 @@ export function DashboardDetail(props) {
         <DashboardReportGeneration
           dashboard={dashboard}
           selectedVersion={selectedVersion}
-          selectedReport={selectedReport}
           generationForm={generationForm}
           setGenerationForm={setGenerationForm}
           setGenerationOpen={setGenerationOpen}

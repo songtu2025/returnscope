@@ -11,7 +11,7 @@ export const SEGMENT_STATUS_LABELS = {
   cancel_pending: "正在取消",
   paused: "已暂停",
   completed: "已完成",
-  completed_with_errors: "完成但有异常",
+  completed_with_errors: "分析完成",
   failed: "失败",
   blocked: "未纳入分析",
   cancelled: "已取消",
@@ -57,7 +57,11 @@ export function segmentResultPresentation(segment) {
       : publishStatus === "failed"
         ? shortPublishError(segment.result_publish_error)
         : publishStatus === "published"
-          ? "结果已生成"
+          ? Number(segment.pending_review_count || 0) > 0
+            ? `${segment.pending_review_count} 条记录待复核`
+            : Number(segment.system_failure_count || 0) > 0
+              ? `${segment.system_failure_count} 个分析失败项可重试`
+              : "当前结果无待处理项；历史执行情况见运行日志"
           : segment.wait_reason;
   return { displayStatus, publishStatus, qualityState, stateLabel, stateDescription };
 }

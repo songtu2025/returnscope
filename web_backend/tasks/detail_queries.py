@@ -5,7 +5,10 @@ from dataclasses import dataclass
 from sqlite3 import Connection
 from typing import TYPE_CHECKING, Any
 
-from web_backend.classification_result_queries import system_rerun_counts
+from web_backend.classification_result_queries import (
+    pending_review_counts,
+    system_rerun_counts,
+)
 from web_backend.database import Database
 from web_backend.task_contracts import SEGMENT_USER_LIMIT, WAITING_SEGMENT_STATUSES
 
@@ -144,6 +147,7 @@ class TaskDetailQueriesMixin:
             )
             if row is None:
                 return None
+            review_counts = pending_review_counts(connection, list(rerun_counts))
             capacity = _running_capacity(connection, task_id, row["owner_id"])
         item = self._serialize(dict(row))
         item["segments"] = [
@@ -155,6 +159,9 @@ class TaskDetailQueriesMixin:
         ]
         max_parallel = int(item.get("max_parallel_segments", _DEFAULT_TASK_PARALLELISM))
         for segment in item["segments"]:
+            segment["pending_review_count"] = review_counts.get(
+                str(segment.get("result_version_id") or ""), 0
+            )
             reason = _segment_wait_reason(
                 segment,
                 item,

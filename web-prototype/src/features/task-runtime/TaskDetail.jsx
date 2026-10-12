@@ -27,7 +27,7 @@ import { taskSummary } from "./taskRegistryPolicy";
  * @property {AnalysisTask} task
  * @property {string | null} [focusSegmentId]
  * @property {TaskEvent[]} events
- * @property {(segment: TaskSegment & {result_version_id: string}) => void} onViewClassification
+ * @property {(segment: TaskSegment & {result_version_id: string}, qualityStatus?: string) => void} onViewClassification
  * @property {string} actionError
  * @property {() => void} onClearActionError
  * @property {(payload: TaskPayload) => Promise<boolean>} onRename

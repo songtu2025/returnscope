@@ -131,6 +131,7 @@ def test_schema_only_openapi_export_is_complete_and_deterministic(
     schema = json.loads(first.stdout)
     expected_paths = {
         "/api/classification-results",
+        "/api/classification-results/search",
         "/api/classification-results/{version_id}",
         "/api/classification-results/{version_id}/versions",
         "/api/classification-results/{version_id}/taxonomy",

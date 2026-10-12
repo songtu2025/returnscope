@@ -35,7 +35,9 @@ def register_result_record_routes(
         query: Annotated[ResultRecordQuery, Query()],
     ) -> dict[str, Any]:
         try:
-            return result_service.records(version_id, **query.model_dump())
+            return result_service.records(
+                version_id, **query.model_dump(exclude_none=True)
+            )
         except ClassificationResultNotFound as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except ValueError as exc:
@@ -52,7 +54,9 @@ def register_result_record_routes(
         query: Annotated[ResultRecordQuery, Query()],
     ) -> dict[str, Any]:
         try:
-            return result_service.record_groups(version_id, **query.model_dump())
+            return result_service.record_groups(
+                version_id, **query.model_dump(exclude_none=True)
+            )
         except ClassificationResultNotFound as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except ValueError as exc:

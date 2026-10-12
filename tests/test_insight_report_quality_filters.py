@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from pathlib import Path
 
 import pytest
+from test_insight_reports import _service_context
 
 from web_backend.insight_report_evidence import _mask_product_diagnostics
+from web_backend.insight_report_service import InsightReportConflict
 from web_backend.insight_reports.quality_context import (
     _LiveQualityEvaluation,
     _prepare_live_quality,
@@ -167,3 +170,53 @@ def test_analysis_masks_product_identity_before_text_filtering() -> None:
     assert context.analysis["samples"] == [
         {"comment": "clean", "product_sku": None, "product_name": None}
     ]
+
+
+def test_report_quality_scope_does_not_change_dashboard_current_data(
+    tmp_path: Path,
+) -> None:
+    context, dashboard, service, _captured = _service_context(tmp_path)
+    dashboard_id = str(dashboard["id"])
+    current_id = str(dashboard["version"]["version_id"])
+    result_ids = [
+        source["result_version_id"]
+        for source in service.dashboard_service.sources(dashboard_id, current_id)
+    ]
+    filters = {"quality_status": ["ready", "review_required", "unusable"]}
+    plan = service.dashboard_service.preflight(result_ids, filters)
+    report = service.create_for_dashboard(
+        dashboard_id,
+        current_id,
+        model_id="model-1",
+        reasoning_effort="high",
+        actor_id="user-1",
+        filters=filters,
+        plan_hash=plan["plan_hash"],
+    )
+    assert report["dashboard_id"] == dashboard_id
+    assert (
+        service.dashboard_service.get(dashboard_id)["current_version_id"] == current_id
+    )
+    scope = service.dashboard_service.get(dashboard_id, report["dashboard_version_id"])[
+        "version"
+    ]
+    assert scope["filters"]["quality_status"] == filters["quality_status"]
+    assert report["source_outdated"] == 0
+    service.claim_next()
+    service.run(report["id"])
+    completed = service.get(report["id"])
+    assert completed["status"] == "completed"
+    assert (
+        completed["evidence"]["source"]["included_record_count"]
+        == plan["summary"]["record_count"]
+    )
+    with pytest.raises(InsightReportConflict, match="计划已变化"):
+        service.create_for_dashboard(
+            dashboard_id,
+            current_id,
+            model_id="model-1",
+            reasoning_effort="high",
+            actor_id="user-1",
+            filters=filters,
+            plan_hash="0" * 64,
+        )

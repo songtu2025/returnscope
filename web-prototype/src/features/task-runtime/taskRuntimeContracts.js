@@ -50,6 +50,7 @@
  * @property {string} [source_review_batch_id]
  * @property {boolean} [system_retry_available]
  * @property {number} [system_failure_count]
+ * @property {number} [pending_review_count]
  *
  * @typedef {Object} AnalysisTask
  * @property {string} id

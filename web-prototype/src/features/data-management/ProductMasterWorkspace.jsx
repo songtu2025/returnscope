@@ -26,7 +26,7 @@ export function ProductMasterWorkspace(props) {
     <div className="standard-page data-page product-master-page">
       <PageHeading
         title="商品信息汇总"
-        description="维护跨分析任务复用的产品名称、店铺映射和品类信息；退货明细在分析任务中导入。"
+        description="维护跨分析任务复用的产品名称、店铺映射和品类信息；用户反馈在分析任务中导入。"
         action={
           <Button
             type="primary"

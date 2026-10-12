@@ -17,27 +17,30 @@ export function GlobalSearch({ onClose, onSelect, notify }) {
     /** @type {SearchResources} */ ({
       tasks: [],
       datasets: [],
-      reviews: [],
+      feedback: [],
     }),
   );
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [searchError, setSearchError] = useState("");
+  const error = loadError || searchError;
+  const [searching, setSearching] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const resultsRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const { dialogRef, constrainFocus } = useDialogFocus({ open: true, onClose });
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError("");
+    setLoadError("");
     try {
-      const [tasks, datasets, reviews] = await Promise.all([
+      const [tasks, datasets] = await Promise.all([
         api.tasks(),
-        api.datasets(),
-        api.reviews(),
+        api.datasets("products"),
       ]);
-      setResources({ tasks, datasets, reviews });
+      setResources((current) => ({ ...current, tasks, datasets }));
     } catch (failure) {
       const message = errorMessage(failure);
-      setError(message);
+      setLoadError(message);
       notify(message, "error");
     } finally {
       setLoading(false);
@@ -46,6 +49,34 @@ export function GlobalSearch({ onClose, onSelect, notify }) {
   useEffect(() => {
     load();
   }, [load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    if (!query.trim()) {
+      setResources((current) => ({ ...current, feedback: [] }));
+      setSearching(false);
+      setSearchError("");
+      return undefined;
+    }
+    setSearching(true);
+    setSearchError("");
+    const timer = window.setTimeout(async () => {
+      try {
+        const result = await api.searchClassificationFeedback(query.trim(), {
+          signal: controller.signal,
+        });
+        if (!controller.signal.aborted)
+          setResources((current) => ({ ...current, feedback: result.items }));
+      } catch (failure) {
+        if (!controller.signal.aborted) setSearchError(errorMessage(failure));
+      } finally {
+        if (!controller.signal.aborted) setSearching(false);
+      }
+    }, 250);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [query, attempt]);
 
   const matches = matchingSearchItems(resources, query);
 
@@ -70,7 +101,13 @@ export function GlobalSearch({ onClose, onSelect, notify }) {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
-              if (!loading && !error && event.key === "Enter" && matches[0])
+              if (
+                !loading &&
+                !searching &&
+                !error &&
+                event.key === "Enter" &&
+                matches[0]
+              )
                 onSelect(matches[0].page, matches[0].focus);
               if (event.key === "ArrowDown" || event.key === "ArrowUp") {
                 event.preventDefault();
@@ -100,28 +137,35 @@ export function GlobalSearch({ onClose, onSelect, notify }) {
             else dialogRef.current?.querySelector("input")?.focus();
           }}
         >
-          {loading && (
+          {(loading || searching) && (
             <div className="command-empty">
               <Pulse size={22} />
               正在读取工作区…
             </div>
           )}
-          {!loading && error && (
+          {!loading && !searching && error && (
             <div className="command-empty" role="alert">
               <b>工作区读取失败</b>
               <span>{error}</span>
-              <button className="secondary-button" onClick={load}>
+              <button
+                className="secondary-button"
+                onClick={() => {
+                  load();
+                  setAttempt((value) => value + 1);
+                }}
+              >
                 重新加载
               </button>
             </div>
           )}
-          {!loading && !error && matches.length === 0 && (
+          {!loading && !searching && !error && matches.length === 0 && (
             <div className="command-empty">
               <MagnifyingGlass size={22} />
               没有找到匹配内容
             </div>
           )}
           {!loading &&
+            !searching &&
             !error &&
             matches.map((item) => {
               const Icon = item.icon;

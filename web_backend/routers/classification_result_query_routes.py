@@ -8,6 +8,7 @@ from web_backend.api_contracts.classification_result_queries import (
     ResultVersionQuery,
 )
 from web_backend.api_contracts.classification_results import (
+    ClassificationResultGroupsResponse,
     ClassificationResultListResponse,
     ClassificationResultSummaryResponse,
     ClassificationResultTaxonomyResponse,
@@ -41,6 +42,18 @@ def register_result_version_routes(
             return result_service.list(**query.model_dump())
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.get(
+        "/api/classification-results/search",
+        dependencies=[Depends(current_user)],
+        response_model=ClassificationResultGroupsResponse,
+        response_model_exclude_unset=True,
+    )
+    def search_feedback(
+        q: str = Query(min_length=1, max_length=200),
+        limit: int = Query(default=12, ge=1, le=50),
+    ) -> dict[str, Any]:
+        return result_service.search_record_groups(q, limit)
 
     @router.get(
         "/api/classification-results/{version_id}",

@@ -9,7 +9,6 @@ import { useDashboardCreation } from "./useDashboardCreation";
 import { useDashboardInsightCreation } from "./useDashboardInsightCreation";
 import { DashboardInsightConfirmation } from "./DashboardInsightConfirmation";
 
-/** @typedef {import("./dashboardCreateContracts").DashboardCreateRoute} DashboardCreateRoute */
 /** @typedef {import("./dashboardCreateContracts").DashboardCreateProps} DashboardCreateProps */
 
 /** @param {DashboardCreateProps} props */
@@ -58,7 +57,7 @@ export function DashboardCreateFlow(props) {
           isVersionCreation
             ? "创建看板新版本"
             : isInsightCreation
-              ? "生成不可变看板数据集"
+              ? undefined
               : undefined
         }
         title={
@@ -69,7 +68,6 @@ export function DashboardCreateFlow(props) {
               : "创建分析看板"
         }
       />
-      {isInsightCreation && <DashboardCreateSteps step={route.step} />}
 
       {state.loading && !state.plan && (
         <InlineLoading label="正在检查分类结果与 Listing 冲突…" />
@@ -103,20 +101,5 @@ export function DashboardCreateFlow(props) {
         </>
       )}
     </div>
-  );
-}
-
-/** @param {{step: DashboardCreateRoute["step"]}} props */
-function DashboardCreateSteps({ step }) {
-  const active = step === "conflicts" ? 2 : step === "confirm" ? 3 : 1;
-  return (
-    <ol className="dashboard-create-steps" aria-label="看板生成步骤">
-      {["选择分类结果", "解决版本冲突", "确认并生成"].map((label, index) => (
-        <li key={label} className={active >= index + 1 ? "active" : ""}>
-          <span>{index + 1}</span>
-          {label}
-        </li>
-      ))}
-    </ol>
   );
 }

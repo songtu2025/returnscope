@@ -179,3 +179,57 @@ class DashboardService(_DashboardCatalog, _DashboardVersionStorage, _DashboardAn
                 now=now,
             )
         return self.get(dashboard_id, version_ids["version_id"])
+
+    def report_data_version(
+        self,
+        dashboard_id: str,
+        version_id: str,
+        *,
+        filters: dict[str, Any],
+        plan_hash: str,
+        actor_id: str,
+    ) -> str:
+        """复用数据快照保存报告范围，不推进看板的当前数据。"""
+        with self.database.transaction(immediate=True) as connection:
+            current = connection.execute(
+                "SELECT current_version_id FROM analysis_dashboards WHERE id = ?",
+                (dashboard_id,),
+            ).fetchone()
+            if current is None:
+                raise DashboardNotFound("分析看板不存在")
+            if current["current_version_id"] != version_id:
+                raise DashboardConflict("看板数据已更新，请重新打开报告生成窗口")
+            sources = connection.execute(
+                """SELECT source.result_version_id FROM dashboard_dataset_sources source
+                JOIN dashboard_versions version ON version.dataset_version_id = source.dataset_version_id
+                WHERE version.id = ?""",
+                (version_id,),
+            ).fetchall()
+            plan = build_plan(
+                self.database,
+                connection,
+                [str(source[0]) for source in sources],
+                filters,
+            )
+            self._require_ready_plan(plan, plan_hash)
+            existing = connection.execute(
+                """SELECT v.id FROM dashboard_versions v JOIN dashboard_dataset_versions data
+                ON data.id = v.dataset_version_id WHERE v.dashboard_id = ? AND data.plan_hash = ?
+                ORDER BY v.version_no DESC LIMIT 1""",
+                (dashboard_id, plan_hash),
+            ).fetchone()
+            if existing:
+                return str(existing["id"])
+            number = connection.execute(
+                "SELECT COALESCE(MAX(version_no), 0) + 1 FROM dashboard_versions WHERE dashboard_id = ?",
+                (dashboard_id,),
+            ).fetchone()[0]
+            return self._insert_version(
+                connection,
+                dashboard_id=dashboard_id,
+                version_no=number,
+                plan=plan,
+                reason="AI 洞察统计范围",
+                actor_id=actor_id,
+                now=utc_now(),
+            )["version_id"]

@@ -104,11 +104,6 @@
   box-shadow: 0 5px 14px rgb(25 52 40 / 6%);
 }
 
-.analysis-dashboard-page .dashboard-create-steps {
-  max-width: 760px;
-  margin-bottom: 18px;
-}
-
 .analysis-dashboard-page .dashboard-history-card li {
   border-color: #dfe7e2;
   background: #fff;

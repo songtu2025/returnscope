@@ -133,7 +133,7 @@ class _InsightReportRecords:
             SELECT report.*, model.display_name AS model_name,
                    creator.display_name AS created_by_name,
                    dashboard_version.version_no AS dashboard_version_no,
-                   CASE WHEN dashboard.current_version_id != report.dashboard_version_id THEN 1 ELSE 0 END AS source_outdated,
+                   CASE WHEN current_data.source_snapshot_json != report_data.source_snapshot_json THEN 1 ELSE 0 END AS source_outdated,
                    published.id AS publication_id,
                    published.version_no AS published_version_no,
                    published.published_at
@@ -143,6 +143,9 @@ class _InsightReportRecords:
             JOIN users creator ON creator.id = report.created_by
             JOIN dashboard_versions dashboard_version
               ON dashboard_version.id = report.dashboard_version_id
+            JOIN dashboard_dataset_versions report_data ON report_data.id = dashboard_version.dataset_version_id
+            JOIN dashboard_versions current_version ON current_version.id = dashboard.current_version_id
+            JOIN dashboard_dataset_versions current_data ON current_data.id = current_version.dataset_version_id
             LEFT JOIN ai_insight_report_versions published
               ON published.job_id = report.id
         """

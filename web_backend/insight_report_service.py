@@ -12,7 +12,7 @@ from web_backend import (
 )
 from web_backend.common import json_value
 from web_backend.config_service import ConfigService
-from web_backend.dashboard_service import DashboardService
+from web_backend.dashboard_service import DashboardConflict, DashboardService
 from web_backend.database import Database
 from web_backend.insight_reports.creation import _InsightReportCreation
 from web_backend.insight_reports.execution import _InsightReportExecution
@@ -129,9 +129,24 @@ class InsightReportService(_InsightReportCreation, _InsightReportExecution):
         model_id: str,
         reasoning_effort: str,
         actor_id: str,
+        filters: dict[str, Any] | None = None,
+        plan_hash: str | None = None,
     ) -> dict[str, Any]:
         self.dashboard_service.get(dashboard_id, dashboard_version_id)
         model = self._resolve_model(model_id, reasoning_effort)
+        if filters is not None:
+            if not plan_hash:
+                raise ValueError("请先核对本次报告统计范围")
+            try:
+                dashboard_version_id = self.dashboard_service.report_data_version(
+                    dashboard_id,
+                    dashboard_version_id,
+                    filters=filters,
+                    plan_hash=plan_hash,
+                    actor_id=actor_id,
+                )
+            except DashboardConflict as exc:
+                raise InsightReportConflict(str(exc)) from exc
         return self._create_report(
             target=_ReportCreationTarget(
                 dashboard_id=dashboard_id,

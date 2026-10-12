@@ -39,6 +39,9 @@ class _ClassificationResultRecords(
 
         def taxonomy(self, version_id: str) -> TaxonomyConfig | None: ...
 
+        @staticmethod
+        def _contains_pattern(value: str) -> str: ...
+
     def records(
         self,
         version_id: str,
@@ -110,6 +113,52 @@ class _ClassificationResultRecords(
             "source_total": int(totals["sources"]),
             "page": page,
             "page_size": page_size,
+        }
+
+    def search_record_groups(self, q: str, limit: int = 12) -> dict[str, Any]:
+        """在每个 Listing 的当前结果中搜索反馈，复用反馈组分页和展示口径。"""
+        query = q.strip()
+        if not query:
+            return {
+                "items": [],
+                "total": 0,
+                "source_total": 0,
+                "page": 1,
+                "page_size": limit,
+            }
+        pattern = self._contains_pattern(query)
+        where = """
+            r.result_version_id IN (
+                SELECT v.id FROM classification_result_versions v
+                WHERE v.publish_status = 'published' AND v.version_no = (
+                    SELECT MAX(latest.version_no) FROM classification_result_versions latest
+                    WHERE latest.result_id = v.result_id AND latest.publish_status = 'published'
+                )
+            ) AND (r.comment LIKE ? ESCAPE '\\' OR r.reason LIKE ? ESCAPE '\\'
+                   OR r.order_id LIKE ? ESCAPE '\\' OR r.product_name LIKE ? ESCAPE '\\'
+                   OR r.listing LIKE ? ESCAPE '\\')
+        """
+        with self.database.connect() as connection:
+            totals, rows = fetch_record_group_page(
+                connection, (where, [pattern] * 5), 1, limit
+            )
+            taxonomies = {
+                version_id: self.taxonomy(version_id)
+                for version_id in {str(row["result_version_id"]) for row in rows}
+            }
+        groups = assemble_record_groups(
+            rows,
+            lambda value: self._enrich_record(
+                self._serialize_record(value),
+                taxonomies[str(value["result_version_id"])],
+            ),
+        )
+        return {
+            "items": groups,
+            "total": int(totals["groups"]),
+            "source_total": int(totals["sources"]),
+            "page": 1,
+            "page_size": limit,
         }
 
     @staticmethod

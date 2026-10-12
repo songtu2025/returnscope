@@ -608,7 +608,7 @@ describe("关键用户流程", () => {
     const dialog = screen.getByRole("dialog", { name: "全局搜索" });
     expect(apiMock.tasks).toHaveBeenCalledOnce();
     expect(apiMock.datasets).toHaveBeenCalledOnce();
-    expect(apiMock.reviews).toHaveBeenCalledOnce();
+    expect(apiMock.reviews).not.toHaveBeenCalled();
     expect(
       await within(dialog).findByRole("button", { name: /搜索目标任务/ }),
     ).toBeVisible();
@@ -616,6 +616,7 @@ describe("关键用户流程", () => {
 
     const input = within(dialog).getByRole("textbox", { name: "全局搜索" });
     await user.type(input, "搜索目标");
+    await within(dialog).findByRole("button", { name: /搜索目标/ });
     expect(
       within(dialog).queryByRole("button", { name: /产品信息样本/ }),
     ).not.toBeInTheDocument();
@@ -654,15 +655,22 @@ describe("关键用户流程", () => {
         row_count: 1,
       },
     ]);
-    apiMock.reviews.mockResolvedValue([
-      {
-        id: "review-match",
-        workflow_status: "pending",
-        comment: "合成待复核",
-        task_title: "合成任务",
-        owner_name: "合成账号",
-      },
-    ]);
+    apiMock.searchClassificationFeedback.mockResolvedValue({
+      items: [
+        {
+          member_count: 1,
+          members: [],
+          record: {
+            id: "record-current",
+            result_version_id: "result-current",
+            order_id: "ORDER-CURRENT",
+            listing: "CURRENT",
+            quality_status: "review_required",
+            comment: "合成待复核",
+          },
+        },
+      ],
+    });
     render(<GlobalSearch onClose={vi.fn()} onSelect={onSelect} notify={vi.fn()} />);
     const dialog = screen.getByRole("dialog", { name: "全局搜索" });
     await within(dialog).findByRole("button", { name: /上限任务0/ });
@@ -670,12 +678,12 @@ describe("关键用户流程", () => {
     expect(within(dialog).queryByRole("button", { name: /上限任务12/ })).toBeNull();
     const input = within(dialog).getByRole("textbox", { name: "全局搜索" });
     await user.keyboard("{Enter}");
-    expect(onSelect).toHaveBeenLastCalledWith("legacy-results", {
-      kind: "result",
+    expect(onSelect).toHaveBeenLastCalledWith("analysis-tasks", {
+      kind: "task",
       id: "task-limit-0",
     });
     await user.type(input, " match ");
-    await user.click(within(dialog).getByRole("button", { name: /MATCH产品/ }));
+    await user.click(await within(dialog).findByRole("button", { name: /MATCH产品/ }));
     expect(onSelect).toHaveBeenLastCalledWith("data-assets", {
       kind: "dataset",
       id: "product-match",
@@ -683,16 +691,18 @@ describe("关键用户流程", () => {
     });
     await user.clear(input);
     await user.type(input, "隐藏退货源");
-    expect(within(dialog).getByText("没有找到匹配内容")).toBeVisible();
+    expect(await within(dialog).findByText("没有找到匹配内容")).toBeVisible();
     await user.clear(input);
     await user.type(input, "合成待复核");
+    await within(dialog).findByRole("button", { name: /合成待复核/ });
     await user.keyboard("{Enter}");
-    expect(onSelect).toHaveBeenLastCalledWith("review", {
-      kind: "review",
-      id: "review-match",
-      status: "pending",
+    expect(onSelect).toHaveBeenLastCalledWith("classification-results", {
+      kind: "classification-result",
+      id: "result-current",
+      listing: "CURRENT",
+      orderId: "ORDER-CURRENT",
     });
-    for (const request of [apiMock.tasks, apiMock.datasets, apiMock.reviews])
+    for (const request of [apiMock.tasks, apiMock.datasets])
       expect(request).toHaveBeenCalledOnce();
   });
 
@@ -708,7 +718,7 @@ describe("关键用户流程", () => {
     expect(screen.queryByText("没有找到匹配内容")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "重新加载" })).toBeVisible();
     expect(screen.queryByText("正在读取工作区…")).not.toBeInTheDocument();
-    for (const request of [apiMock.tasks, apiMock.datasets, apiMock.reviews])
+    for (const request of [apiMock.tasks, apiMock.datasets])
       expect(request).toHaveBeenCalledOnce();
   });
 
@@ -2518,7 +2528,7 @@ describe("关键用户流程", () => {
 
     const reviewRow = screen.getByRole("row", { name: /REVIEW/ });
     expect(within(reviewRow).getByText("已发布")).toBeVisible();
-    expect(within(reviewRow).getByText("完成但有异常")).toBeVisible();
+    expect(within(reviewRow).getByText("分析完成")).toBeVisible();
     expect(
       within(reviewRow).getByRole("button", { name: "查看分类结果" }),
     ).toBeEnabled();

@@ -174,7 +174,7 @@ def test_other_dashboard_or_version_can_create_an_independent_report(
     assert second["version_no"] is None
     assert service.get(str(first["id"])) == {
         **first,
-        "source_outdated": int(changed_scope == "version"),
+        "source_outdated": 0,  # 相同来源的新快照不意味着数据过期。
     }
     reports, audits = _creation_state(context.database)
     assert len(reports) == len(audits) == 2

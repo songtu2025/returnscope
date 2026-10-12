@@ -53,6 +53,26 @@ def system_rerun_count(connection: Any, result_version_id: str) -> int:
     )
 
 
+def pending_review_counts(
+    connection: Any, result_version_ids: list[str]
+) -> dict[str, int]:
+    """批量读取当前结果中待人工处理的源记录数，不使用历史运行状态。"""
+    version_ids = list(dict.fromkeys(result_version_ids))
+    if not version_ids:
+        return {}
+    rows = connection.execute(
+        """
+        SELECT result_version_id, COUNT(*) AS record_count
+        FROM classification_result_records
+        WHERE result_version_id IN (SELECT value FROM json_each(?))
+          AND quality_status = 'review_required'
+        GROUP BY result_version_id
+        """,
+        (json_text(version_ids),),
+    ).fetchall()
+    return {str(row["result_version_id"]): int(row["record_count"]) for row in rows}
+
+
 class _ClassificationResultQueries:
     database: Database
 

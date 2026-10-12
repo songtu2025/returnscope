@@ -59,8 +59,8 @@ export function useDashboardReportGeneration({
       models,
     });
   };
-  /** @param {import("react").FormEvent<HTMLFormElement>} event */
-  const submitReportGeneration = async (event) => {
+  /** @param {import("react").FormEvent<HTMLFormElement>} event @param {{filters: Record<string, unknown>, plan_hash: string}} scope */
+  const submitReportGeneration = async (event, scope) => {
     event.preventDefault();
     setGenerationState((current) => ({ ...current, submitting: true, error: "" }));
     try {
@@ -71,6 +71,7 @@ export function useDashboardReportGeneration({
         {
           model_id: generationForm.modelId,
           reasoning_effort: generationForm.effort,
+          ...scope,
         },
       );
       setReports((current) => ({

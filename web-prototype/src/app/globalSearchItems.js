@@ -4,8 +4,8 @@ import { STATUS_LABELS } from "../constants";
 /** @typedef {import("./navigation").NavigationFocus} NavigationFocus */
 /** @typedef {{id: string, title: string, owner_name: string, status: keyof typeof STATUS_LABELS, store: string, listing?: string}} SearchTask */
 /** @typedef {{id: string, kind: string, name: string, current_version: number, row_count: number, description?: string}} SearchDataset */
-/** @typedef {{id: string, workflow_status: string, comment: string, task_title: string, owner_name: string}} SearchReview */
-/** @typedef {{tasks: SearchTask[], datasets: SearchDataset[], reviews: SearchReview[]}} SearchResources */
+/** @typedef {import("../shared/api/generated/classification-results/types.gen").ClassificationResultGroupResponse} SearchFeedback */
+/** @typedef {{tasks: SearchTask[], datasets: SearchDataset[], feedback: SearchFeedback[]}} SearchResources */
 /** @typedef {{id: string, type: string, icon: import("react").ElementType, title: string, meta: string, keywords: string, page: string, focus: NavigationFocus}} GlobalSearchItem */
 
 /** @param {SearchTask} task @returns {GlobalSearchItem} */
@@ -16,9 +16,9 @@ const taskSearchItem = (task) => ({
   title: task.title,
   meta: `${task.owner_name} · ${STATUS_LABELS[task.status] ?? task.status}`,
   keywords: `${task.title} ${task.store} ${task.listing ?? ""} ${task.owner_name}`,
-  page: task.status === "completed" ? "legacy-results" : "analysis-tasks",
+  page: "analysis-tasks",
   focus: {
-    kind: task.status === "completed" ? "result" : "task",
+    kind: "task",
     id: task.id,
   },
 });
@@ -26,25 +26,30 @@ const taskSearchItem = (task) => ({
 /** @param {SearchDataset} dataset @returns {GlobalSearchItem} */
 const datasetSearchItem = (dataset) => ({
   id: dataset.id,
-  type: "产品信息",
+  type: "商品信息",
   icon: Database,
   title: dataset.name,
-  meta: `v${dataset.current_version} · ${dataset.row_count.toLocaleString()} 行`,
+  meta: `当前数据 · ${dataset.row_count.toLocaleString()} 行`,
   keywords: `${dataset.name} ${dataset.description ?? ""} ${dataset.kind}`,
   page: "data-assets",
   focus: { kind: "dataset", id: dataset.id, datasetKind: dataset.kind },
 });
 
-/** @param {SearchReview} review @returns {GlobalSearchItem} */
-const reviewSearchItem = (review) => ({
-  id: review.id,
-  type: review.workflow_status === "pending" ? "待复核" : "已复核",
+/** @param {SearchFeedback} group @returns {GlobalSearchItem} */
+const feedbackSearchItem = ({ record }) => ({
+  id: record.id,
+  type: record.quality_status === "review_required" ? "待复核反馈" : "用户反馈",
   icon: ListChecks,
-  title: review.comment,
-  meta: `${review.task_title} · ${review.owner_name}`,
-  keywords: `${review.comment} ${review.task_title} ${review.owner_name}`,
-  page: "review",
-  focus: { kind: "review", id: review.id, status: review.workflow_status },
+  title: record.comment || record.reason || record.order_id || "用户反馈",
+  meta: `${record.listing} · ${record.order_id || "无订单号"}`,
+  keywords: `${record.comment || ""} ${record.reason || ""} ${record.order_id || ""} ${record.listing || ""} ${record.product_name || ""}`,
+  page: "classification-results",
+  focus: {
+    kind: "classification-result",
+    id: record.result_version_id,
+    listing: record.listing || undefined,
+    orderId: record.order_id || undefined,
+  },
 });
 
 /** @param {SearchResources} resources @param {string} query */
@@ -54,7 +59,7 @@ export function matchingSearchItems(resources, query) {
     ...resources.datasets
       .filter((dataset) => dataset.kind === "products")
       .map(datasetSearchItem),
-    ...resources.reviews.map(reviewSearchItem),
+    ...resources.feedback.map(feedbackSearchItem),
   ];
   const normalized = query.trim().toLowerCase();
   const matches = items

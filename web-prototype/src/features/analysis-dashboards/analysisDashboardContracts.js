@@ -40,6 +40,7 @@
  * @property {boolean} [is_current]
  * @property {string} [source_change_summary]
  * @property {DashboardSummary} [summary]
+ * @property {DashboardSource[]} [source_snapshot]
  * @property {Record<string, string | string[] | null>} [filters]
  *
  * @typedef {Object} DashboardListItem

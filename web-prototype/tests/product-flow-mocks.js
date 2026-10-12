@@ -28,6 +28,7 @@ const { apiMock } = vi.hoisted(() => ({
     segmentDownloadUrl: vi.fn(),
     classificationResultDownloadUrl: vi.fn(),
     classificationResults: vi.fn(),
+    searchClassificationFeedback: vi.fn(),
     datasets: vi.fn(),
     dataset: vi.fn(),
     datasetRows: vi.fn(),
@@ -186,6 +187,7 @@ beforeEach(() => {
   apiMock.segmentDownloadUrl.mockReturnValue("/segment-download");
   apiMock.classificationResultDownloadUrl.mockReturnValue("/classification-download");
   apiMock.preflightTask.mockResolvedValue(executionPlan);
+  apiMock.searchClassificationFeedback.mockResolvedValue({ items: [] });
 });
 
 afterEach(() => cleanup());

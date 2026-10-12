@@ -18,6 +18,7 @@ class ResultVersionQuery(ResultPaginationQuery):
 
 
 class ResultRecordQuery(ResultPaginationQuery):
+    feedback_source_record_id: str | None = None
     order_id: str | None = None
     listing: str | None = None
     product_name: str | None = None
