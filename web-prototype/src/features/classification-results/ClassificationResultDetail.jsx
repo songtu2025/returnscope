@@ -81,6 +81,7 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
       api
         .classificationResultVersions(route.version, { signal: controller.signal })
         .then((versions) => {
+          if (controller.signal.aborted) return;
           const latest = versions.find(
             (version) => version.publish_status === "published",
           );
@@ -97,9 +98,13 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
     };
     refresh();
     const timer = window.setInterval(refresh, 10000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
     return () => {
       controller.abort();
       window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
     };
   }, [result, error, route.version, route.tab, selectedGroup, updateRoute]);
 

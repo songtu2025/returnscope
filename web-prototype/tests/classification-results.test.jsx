@@ -244,6 +244,36 @@ test("分类结果使用统一列表，进入详情携带记录情况筛选", as
   expect(window.location.hash).not.toContain("view=reviews");
 });
 
+test("打开证据后晚到的版本查询不会切换页面或打断人工编辑", async () => {
+  let resolveVersions;
+  apiMock.resultTaxonomy.mockResolvedValue({ labels: [], parts: [] });
+  apiMock.classificationResultVersions.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        resolveVersions = resolve;
+      }),
+  );
+  window.location.hash = "classification-results?version=classification-version-1";
+  render(<ClassificationResultsPage notify={vi.fn()} />);
+  await userEvent.click(await screen.findByRole("button", { name: "查看证据" }));
+  const drawer = screen.getByRole("dialog", { name: "分类结果与证据" });
+  await userEvent.click(within(drawer).getByRole("button", { name: "人工修正" }));
+  const opinion = await within(drawer).findByRole("textbox", {
+    name: "观点 1 用户观点",
+  });
+  await userEvent.clear(opinion);
+  await userEvent.type(opinion, "保留当前草稿");
+  await act(async () =>
+    resolveVersions([
+      { ...resultVersion, version: 2, version_id: "classification-version-2" },
+    ]),
+  );
+  expect(screen.getByRole("dialog", { name: "分类结果与证据" })).toBeVisible();
+  expect(window.location.hash).toContain("classification-version-1");
+  expect(window.location.hash).not.toContain("classification-version-2");
+  expect(opinion).toHaveValue("保留当前草稿");
+});
+
 test("分类结果详情加载时在原页面保留返回入口与稳定占位", async () => {
   let resolveSummary;
   apiMock.classificationResultSummary.mockReturnValue(

@@ -3927,6 +3927,64 @@ describe("关键用户流程", () => {
     }
   });
 
+  test("已完成任务详情在无运行事件时刷新，隐藏暂停并清理请求", async () => {
+    let poll;
+    const realInterval = window.setInterval.bind(window);
+    const interval = vi
+      .spyOn(window, "setInterval")
+      .mockImplementation((callback, delay) => {
+        if (delay !== 10000) return realInterval(callback, delay);
+        poll = callback;
+        return 102;
+      });
+    const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(false);
+    const task = {
+      id: "task-refresh",
+      title: "人工修正前",
+      status: "completed",
+      segments: [],
+      metrics: {},
+      snapshot: {},
+    };
+    apiMock.tasks.mockResolvedValue([task]);
+    apiMock.task.mockResolvedValue(task);
+    const view = render(
+      <TaskMonitor
+        notify={vi.fn()}
+        onNavigate={vi.fn()}
+        onChanged={vi.fn()}
+        focusId={task.id}
+      />,
+    );
+    try {
+      const detail = view.container.querySelector(".task-detail-panel");
+      expect(await within(detail).findByText("人工修正前")).toBeVisible();
+      fireEvent.click(within(detail).getByRole("tab", { name: "任务配置" }));
+      expect(poll).toBeTypeOf("function");
+      hidden.mockReturnValue(true);
+      await act(async () => poll());
+      expect(apiMock.task).toHaveBeenCalledTimes(1);
+      hidden.mockReturnValue(false);
+      apiMock.task.mockResolvedValue({ ...task, title: "人工修正后" });
+      await act(async () => poll());
+      expect(screen.getByText("人工修正后")).toBeVisible();
+      apiMock.task.mockResolvedValue({ ...task, title: "返回页面已更新" });
+      await act(async () => fireEvent(window, new Event("focus")));
+      expect(screen.getByText("返回页面已更新")).toBeVisible();
+      expect(within(detail).getByRole("tab", { name: "任务配置" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      const signal = apiMock.task.mock.lastCall[1].signal;
+      view.unmount();
+      expect(signal.aborted).toBe(true);
+    } finally {
+      view.unmount();
+      interval.mockRestore();
+      hidden.mockRestore();
+    }
+  });
+
   test("任务列表恢复可见时立即刷新", async () => {
     apiMock.tasks.mockResolvedValue([]);
     Object.defineProperty(document, "hidden", { configurable: true, value: true });

@@ -92,7 +92,8 @@ export function useTaskMonitorState({
       if (!selectedId) return null;
       const generation = ++selectedRequestGeneration.current;
       const value = await taskMonitorApi.task(selectedId, options);
-      if (selectedRequestGeneration.current === generation) setSelected(value);
+      if (selectedRequestGeneration.current === generation && !options.signal?.aborted)
+        setSelected(value);
       return value;
     },
     [selectedId],
@@ -163,33 +164,34 @@ export function useTaskMonitorState({
   }, [selectedId, eventStreamVersion, loadSelected, loadTasks, notify, onChanged]);
 
   useEffect(() => {
-    if (selectedId) return undefined;
+    const controller = new AbortController();
+    const refresh = () => {
+      if (document.hidden) return;
+      if (!selectedId) return void loadTasks(true);
+      loadSelected({ signal: controller.signal }).catch((error) => {
+        if (!controller.signal.aborted) setDetailError(errorMessage(error));
+      });
+    };
     const hasActiveTasks = tasks.some((task) =>
       ["queued", "running"].includes(task.status),
     );
     const timer = window.setInterval(
-      () => {
-        if (!document.hidden) loadTasks(true);
-      },
-      hasActiveTasks ? ACTIVE_LIST_REFRESH_MS : IDLE_LIST_REFRESH_MS,
+      refresh,
+      selectedId || hasActiveTasks ? ACTIVE_LIST_REFRESH_MS : IDLE_LIST_REFRESH_MS,
     );
-    const frame = window.requestAnimationFrame(() =>
-      window.scrollTo(0, listScroll.current),
+    const frame = window.requestAnimationFrame(
+      () => !selectedId && window.scrollTo(0, listScroll.current),
     );
+    document.addEventListener("visibilitychange", refresh);
+    if (selectedId) window.addEventListener("focus", refresh);
     return () => {
+      controller.abort();
       window.clearInterval(timer);
       window.cancelAnimationFrame(frame);
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("focus", refresh);
     };
-  }, [selectedId, loadTasks, tasks]);
-
-  useEffect(() => {
-    if (selectedId) return undefined;
-    const refreshWhenVisible = () => {
-      if (!document.hidden) loadTasks(true);
-    };
-    document.addEventListener("visibilitychange", refreshWhenVisible);
-    return () => document.removeEventListener("visibilitychange", refreshWhenVisible);
-  }, [selectedId, loadTasks]);
+  }, [selectedId, loadSelected, loadTasks, tasks]);
 
   const showTaskDetail = Boolean(selectedId);
   const visibleSelected = selected?.id === selectedId ? selected : null;

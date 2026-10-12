@@ -23,48 +23,68 @@ function useReportList({ route }) {
   /** @type {import("react").RefObject<AbortController | null>} */
   const reportControllerRef = useRef(null);
 
-  const loadReports = useCallback(async () => {
-    if (route.tab !== "report" || !route.versionId) {
-      setReports({ loading: false, error: "", items: [] });
-      return;
-    }
-    const generation = reportGenerationRef.current + 1;
-    reportGenerationRef.current = generation;
-    reportControllerRef.current?.abort();
-    const controller = new AbortController();
-    reportControllerRef.current = controller;
-    setReports((current) => ({ ...current, loading: true, error: "" }));
-    try {
-      const items = await dashboardApi.analysisDashboardInsightReports(
-        route.dashboardId,
-        route.versionId,
-        { signal: controller.signal },
-      );
-      if (reportGenerationRef.current !== generation) return;
-      /** @type {InsightReport[]} */
-      const reportItems = asItems(items);
-      setReports({ loading: false, error: "", items: reportItems });
-    } catch (error) {
-      if (
-        reportGenerationRef.current === generation &&
-        errorName(error) !== "AbortError"
-      ) {
-        setReports((current) => ({
-          ...current,
-          loading: false,
-          error: errorMessage(error),
-        }));
+  const loadReports = useCallback(
+    /** @param {boolean} [silent] */ async (silent = false) => {
+      if (route.tab !== "report" || !route.versionId) {
+        setReports({ loading: false, error: "", items: [] });
+        return;
       }
-    }
-  }, [route.dashboardId, route.tab, route.versionId]);
+      const generation = reportGenerationRef.current + 1;
+      reportGenerationRef.current = generation;
+      reportControllerRef.current?.abort();
+      const controller = new AbortController();
+      reportControllerRef.current = controller;
+      setReports((current) => ({
+        ...current,
+        loading: silent === true ? current.loading : true,
+        error: "",
+      }));
+      try {
+        const items = await dashboardApi.analysisDashboardInsightReports(
+          route.dashboardId,
+          route.versionId,
+          { signal: controller.signal },
+        );
+        if (reportGenerationRef.current !== generation) return;
+        /** @type {InsightReport[]} */
+        const reportItems = asItems(items);
+        setReports({ loading: false, error: "", items: reportItems });
+      } catch (error) {
+        if (
+          reportGenerationRef.current === generation &&
+          errorName(error) !== "AbortError"
+        ) {
+          setReports((current) => ({
+            ...current,
+            loading: false,
+            error: errorMessage(error),
+          }));
+        }
+      }
+    },
+    [route.dashboardId, route.tab, route.versionId],
+  );
 
   useEffect(() => {
     loadReports();
+    const refresh = () => {
+      if (!document.hidden && route.tab === "report" && route.versionId)
+        loadReports(true);
+    };
+    const timer =
+      route.tab === "report" && route.versionId
+        ? window.setInterval(refresh, 10000)
+        : null;
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
     return () => {
       reportGenerationRef.current += 1;
       reportControllerRef.current?.abort();
+      if (timer !== null) window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
     };
-  }, [loadReports]);
+  }, [loadReports, route.tab, route.versionId]);
 
   return { reports, setReports, loadReports };
 }

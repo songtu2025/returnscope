@@ -884,6 +884,69 @@ test.each([
   expect(reportPercent(value)).toBe(expected);
 });
 
+test("报告列表后台刷新纳入其他页面的新报告且保留选中报告", async () => {
+  let poll;
+  const realInterval = window.setInterval.bind(window);
+  const interval = vi
+    .spyOn(window, "setInterval")
+    .mockImplementation((callback, delay) => {
+      if (delay !== 10000) return realInterval(callback, delay);
+      poll = callback;
+      return 103;
+    });
+  const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(false);
+  const oldReport = { id: "old-report", status: "completed", version_no: 1 };
+  const newReport = { id: "new-report", status: "completed", version_no: 2 };
+  dashboardApiMock.analysisDashboardInsightReports.mockResolvedValue([oldReport]);
+  const view = renderHook(() =>
+    useDashboardReports({
+      route: {
+        dashboardId: "dashboard-1",
+        versionId: "version-1",
+        tab: "report",
+        reportId: oldReport.id,
+      },
+      updateRoute: vi.fn(),
+      notify: vi.fn(),
+    }),
+  );
+  try {
+    await waitFor(() =>
+      expect(view.result.current.selectedReport?.id).toBe(oldReport.id),
+    );
+    expect(poll).toBeTypeOf("function");
+    hidden.mockReturnValue(true);
+    await act(async () => poll());
+    expect(dashboardApiMock.analysisDashboardInsightReports).toHaveBeenCalledTimes(1);
+    hidden.mockReturnValue(false);
+    let resolveRefresh;
+    dashboardApiMock.analysisDashboardInsightReports.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRefresh = resolve;
+        }),
+    );
+    act(() => fireEvent(window, new Event("focus")));
+    expect(view.result.current.reports.loading).toBe(false);
+    await act(async () =>
+      resolveRefresh([newReport, { ...oldReport, source_outdated: true }]),
+    );
+    expect(view.result.current.reports.items).toHaveLength(2);
+    expect(view.result.current.selectedReport).toMatchObject({
+      id: oldReport.id,
+      source_outdated: true,
+    });
+    const signal =
+      dashboardApiMock.analysisDashboardInsightReports.mock.lastCall[2].signal;
+    view.unmount();
+    expect(signal.aborted).toBe(true);
+  } finally {
+    view.unmount();
+    interval.mockRestore();
+    hidden.mockRestore();
+  }
+});
+
 test("报告版本切换取消旧请求，过期响应不能覆盖新报告", async () => {
   let resolveOld;
   dashboardApiMock.analysisDashboardInsightReports
