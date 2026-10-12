@@ -43,6 +43,9 @@ export function ProductMasterDataView({ state, selected, props }) {
             dataset={selected}
             notify={notify}
             onChanged={onProductChanged}
+            onEditingChange={state.setProtectedOperation}
+            onRefresh={state.retry}
+            parentError={Boolean(state.error)}
           />
         )}
         {detailTab === "impact" && (

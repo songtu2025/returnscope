@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useProtectedData } from "../../hooks/useProtectedData";
+import { useDataRefresh } from "../../hooks/useDataRefresh";
+import { MANAGED_REFRESH_OPTIONS } from "../../shared/refreshPolicy";
+import { useLayoutEffect, useRef, useState } from "react";
 import useSWR from "swr";
-import { ArrowClockwise, MagnifyingGlass } from "@phosphor-icons/react";
-import Button from "antd/es/button";
-import Input from "antd/es/input";
+import { ProductDimensionToolbar } from "./ProductDimensionToolbar";
 import { api } from "../../api";
 import { ProductLoadFeedback } from "./ProductLoadFeedback";
 
@@ -21,9 +22,23 @@ function requestError(error) {
     : new Error("请求失败");
 }
 
-/** @param {{dataset: DatasetRecord, notify: (message: string, tone?: string) => void, onChanged: (dataset: DatasetRecord) => void}} props */
-export function ProductDimensionRows({ dataset, notify, onChanged }) {
+/** @param {{dataset: DatasetRecord, notify: (message: string, tone?: string) => void, onChanged: (dataset: DatasetRecord) => void, onEditingChange?: (editing: boolean) => void, onRefresh?: () => Promise<unknown>, parentError?: boolean}} props */
+export function ProductDimensionRows({
+  dataset,
+  notify,
+  onChanged,
+  onEditingChange,
+  onRefresh,
+  parentError = false,
+}) {
   const [editing, setEditing] = useState(/** @type {DatasetRow | null} */ (null));
+  const editingVersion = useRef(dataset.current_version);
+  const [conflict, setConflict] = useState(false);
+  const isEditing = Boolean(editing);
+  useLayoutEffect(() => {
+    onEditingChange?.(isEditing);
+    return () => onEditingChange?.(false);
+  }, [isEditing, onEditingChange]);
   const [query, setQuery] = useState("");
   const [draftQuery, setDraftQuery] = useState("");
   const [store, setStore] = useState("");
@@ -33,7 +48,7 @@ export function ProductDimensionRows({ dataset, notify, onChanged }) {
   const [changeNote, setChangeNote] = useState("");
   const pageSize = 15;
   const {
-    data = null,
+    data: fetchedData = null,
     error,
     isLoading,
     isValidating,
@@ -52,13 +67,22 @@ export function ProductDimensionRows({ dataset, notify, onChanged }) {
         store,
         category,
       }),
-    { revalidateOnFocus: false },
+    MANAGED_REFRESH_OPTIONS,
   );
+  const identity = JSON.stringify([
+    dataset.id,
+    dataset.current_version,
+    query,
+    page,
+    store,
+    category,
+  ]);
+  const data = useProtectedData(fetchedData, Boolean(editing), identity);
+  useDataRefresh(() => mutate(), { loading: isLoading || isValidating, identity });
   const load = () =>
-    mutate((current) => current, { revalidate: true, throwOnError: false });
-  useEffect(() => {
-    if (error) notify(requestError(error).message, "error");
-  }, [error, notify]);
+    onRefresh
+      ? onRefresh()
+      : mutate((current) => current, { revalidate: true, throwOnError: false });
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize));
   const pageStart = Math.min(Math.max(1, page - 2), Math.max(1, totalPages - 4));
   const visiblePages = Array.from(
@@ -68,12 +92,12 @@ export function ProductDimensionRows({ dataset, notify, onChanged }) {
   /** @param {import("react").FormEvent<HTMLFormElement>} event */
   const save = async (event) => {
     event.preventDefault();
-    if (!editing) return;
+    if (!editing || conflict) return;
     setSaving(true);
     try {
       const updated = await api.updateDatasetRow(dataset.id, {
         row_index: editing._row_index,
-        expected_version: dataset.current_version,
+        expected_version: editingVersion.current,
         changes: {
           MSKU: editing.MSKU,
           "店铺/站点": editing["店铺/站点"],
@@ -92,9 +116,12 @@ export function ProductDimensionRows({ dataset, notify, onChanged }) {
     } catch (error) {
       const nextError = requestError(error);
       if (nextError.status === 409) {
-        setEditing(null);
-        onChanged(await api.dataset(dataset.id, { include: "" }));
-        notify("数据已被其他用户更新，已刷新，请重新修改", "error");
+        setConflict(true);
+        await api
+          .dataset(dataset.id, { include: "" })
+          .then(onChanged)
+          .catch(() => notify("资料同步失败，输入已保留，可关闭后刷新", "error"));
+        notify("数据已更新，输入已保留，请核对最新资料后重新修改", "error");
       } else notify(nextError.message, "error");
     } finally {
       setSaving(false);
@@ -125,7 +152,7 @@ export function ProductDimensionRows({ dataset, notify, onChanged }) {
         loading={isValidating}
       />
       <ProductLoadFeedback
-        error={error}
+        error={parentError ? null : error}
         loading={isLoading || isValidating}
         hasData={Boolean(data)}
         onRetry={load}
@@ -142,6 +169,8 @@ export function ProductDimensionRows({ dataset, notify, onChanged }) {
           hasFilters={hasFilters}
           clearFilters={clearFilters}
           onEdit={(row) => {
+            editingVersion.current = dataset.current_version;
+            setConflict(false);
             setEditing(row);
             setChangeNote("");
           }}
@@ -154,130 +183,11 @@ export function ProductDimensionRows({ dataset, notify, onChanged }) {
           changeNote={changeNote}
           setChangeNote={setChangeNote}
           saving={saving}
+          conflict={conflict}
           onSave={save}
           onClose={() => setEditing(null)}
         />
       )}
     </section>
-  );
-}
-
-/** @param {{draftQuery: string, setDraftQuery: (value: string) => void, setPage: (value: number) => void, setQuery: (value: string) => void}} props */
-function ProductDimensionSearch({ draftQuery, setDraftQuery, setPage, setQuery }) {
-  return (
-    <form
-      className="dimension-search"
-      onSubmit={(event) => {
-        event.preventDefault();
-        setPage(1);
-        setQuery(draftQuery);
-      }}
-    >
-      <Input
-        aria-label="搜索产品信息"
-        prefix={<MagnifyingGlass size={15} />}
-        value={draftQuery}
-        onChange={(event) => setDraftQuery(event.target.value)}
-        placeholder="搜索 MSKU、产品名称或 Listing"
-      />
-      <Button htmlType="submit" autoInsertSpace={false}>
-        搜索
-      </Button>
-    </form>
-  );
-}
-
-/** @param {{data: DatasetRowsPage | null, store: string, category: string, setStore: (value: string) => void, setCategory: (value: string) => void, setPage: (value: number) => void}} props */
-function ProductDimensionFilters({
-  data,
-  store,
-  category,
-  setStore,
-  setCategory,
-  setPage,
-}) {
-  return (
-    <div className="product-master-filters">
-      <label>
-        店铺/站点
-        <select
-          value={store}
-          onChange={(event) => {
-            setPage(1);
-            setStore(event.target.value);
-          }}
-        >
-          <option value="">全部</option>
-          {(data?.facets?.stores ?? []).map((value) => (
-            <option value={value} key={value}>
-              {value}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        品类
-        <select
-          value={category}
-          onChange={(event) => {
-            setPage(1);
-            setCategory(event.target.value);
-          }}
-        >
-          <option value="">全部</option>
-          {(data?.facets?.categories ?? []).map((value) => (
-            <option value={value} key={value}>
-              {value}
-            </option>
-          ))}
-        </select>
-      </label>
-    </div>
-  );
-}
-
-/** @param {{data: DatasetRowsPage | null, dataset: DatasetRecord, draftQuery: string, setDraftQuery: (value: string) => void, setPage: (value: number) => void, setQuery: (value: string) => void, store: string, setStore: (value: string) => void, category: string, setCategory: (value: string) => void, load: () => Promise<unknown>, loading: boolean}} props */
-function ProductDimensionToolbar({
-  data,
-  dataset,
-  draftQuery,
-  setDraftQuery,
-  setPage,
-  setQuery,
-  store,
-  setStore,
-  category,
-  setCategory,
-  load,
-  loading,
-}) {
-  return (
-    <div className="dimension-table-toolbar">
-      <ProductDimensionSearch
-        draftQuery={draftQuery}
-        setDraftQuery={setDraftQuery}
-        setPage={setPage}
-        setQuery={setQuery}
-      />
-      <ProductDimensionFilters
-        data={data}
-        store={store}
-        category={category}
-        setStore={setStore}
-        setCategory={setCategory}
-        setPage={setPage}
-      />
-      <div>
-        <span>共 {(data?.total ?? dataset.row_count).toLocaleString()} 条产品</span>
-        <Button
-          autoInsertSpace={false}
-          icon={<ArrowClockwise size={15} />}
-          disabled={loading}
-          onClick={() => load()}
-        >
-          刷新
-        </Button>
-      </div>
-    </div>
   );
 }

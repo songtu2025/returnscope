@@ -41,7 +41,13 @@ describe("商品页面和旧任务草稿的恢复", () => {
   };
   const rows = {
     records: [
-      { _row_index: 0, MSKU: "SYNTHETIC-1", Listing: "DEMO", 产品名称: "合成商品" },
+      {
+        _row_index: 0,
+        MSKU: "SYNTHETIC-1",
+        "店铺/站点": "DEMO:US",
+        Listing: "DEMO",
+        产品名称: "合成商品",
+      },
     ],
     total: 1,
     facets: { stores: [], categories: [] },
@@ -435,6 +441,66 @@ describe("商品页面和旧任务草稿的恢复", () => {
     await act(async () => resolveOld(rows));
     expect(screen.getByText("NEW-SYNTHETIC")).toBeVisible();
     expect(screen.queryByText("SYNTHETIC-1")).not.toBeInTheDocument();
+  });
+
+  test("后台读取保留产品编辑输入和原修订，冲突后关闭编辑再应用最新资料", async () => {
+    const user = userEvent.setup();
+    render(<ProductMasterWorkspace {...props} />);
+    await user.click(
+      await screen.findByRole("button", { name: "编辑 SYNTHETIC-1 产品信息" }),
+    );
+    const dialog = screen.getByRole("dialog");
+    const name = within(dialog).getByLabelText("产品名称");
+    await user.clear(name);
+    await user.type(name, "我的产品输入");
+    fireEvent.change(within(dialog).getByLabelText("店铺 / 站点"), {
+      target: { value: "DEMO:US" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("修改原因"), {
+      target: { value: "核对产品名称" },
+    });
+    name.focus();
+    const updated = {
+      ...product,
+      current_version: 2,
+      version_id: "synthetic-products-v2",
+    };
+    apiMock.dataset.mockResolvedValue(updated);
+    apiMock.datasetRows.mockResolvedValue({
+      ...rows,
+      records: [{ ...rows.records[0], 产品名称: "最新产品名称" }],
+    });
+    vi.useFakeTimers();
+    try {
+      act(() => fireEvent(window, new Event("focus")));
+      await act(async () => vi.advanceTimersByTimeAsync(100));
+      expect(apiMock.dataset.mock.calls.length).toBeGreaterThan(1);
+      expect(apiMock.datasetRows.mock.calls.length).toBeGreaterThan(1);
+      expect(name).toHaveValue("我的产品输入");
+      expect(name).toHaveFocus();
+      expect(within(dialog).getByLabelText("修改原因")).toHaveValue("核对产品名称");
+      expect(screen.queryByText("最新产品名称")).toBeNull();
+      apiMock.updateDatasetRow.mockRejectedValue(
+        Object.assign(new Error("合成并发冲突"), { status: 409 }),
+      );
+      await act(async () => fireEvent.submit(dialog.querySelector("form")));
+      expect(apiMock.updateDatasetRow).toHaveBeenCalledWith(
+        product.id,
+        expect.objectContaining({ expected_version: 1 }),
+      );
+      expect(within(dialog).getByRole("alert")).toHaveTextContent("输入已保留");
+      expect(name).toHaveValue("我的产品输入");
+      expect(
+        within(dialog).getByRole("button", { name: "保存", exact: true }),
+      ).toBeDisabled();
+      await act(async () =>
+        fireEvent.click(within(dialog).getByRole("button", { name: "取消" })),
+      );
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(screen.getByText("最新产品名称")).toBeVisible();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -1336,7 +1402,6 @@ describe("关键用户流程", () => {
         }),
       ),
     );
-    expect(apiMock.tasks).toHaveBeenCalledWith({ include_archived: true });
     expect(onChanged).toHaveBeenCalled();
     expect(onNavigate).toHaveBeenCalledWith("tasks");
   });
@@ -3247,7 +3312,7 @@ describe("关键用户流程", () => {
         note: "证据明确，确认模型标签",
       }),
     );
-    expect(await screen.findByText("分类结果缓存已清除")).toBeVisible();
+    expect(await screen.findByText("分类结果缓存存在")).toBeVisible();
     expect(onChanged).toHaveBeenCalled();
   });
 
@@ -4111,13 +4176,13 @@ describe("关键用户流程", () => {
       await act(async () => Promise.resolve());
       expect(apiMock.tasks).toHaveBeenCalledTimes(1);
 
-      await act(async () => vi.advanceTimersByTimeAsync(10000));
+      await act(async () => vi.advanceTimersByTimeAsync(10100));
       expect(apiMock.tasks).toHaveBeenCalledTimes(2);
 
-      await act(async () => vi.advanceTimersByTimeAsync(10000));
+      await act(async () => vi.advanceTimersByTimeAsync(10100));
       expect(apiMock.tasks).toHaveBeenCalledTimes(2);
 
-      await act(async () => vi.advanceTimersByTimeAsync(50000));
+      await act(async () => vi.advanceTimersByTimeAsync(50100));
       expect(apiMock.tasks).toHaveBeenCalledTimes(3);
     } finally {
       vi.useRealTimers();
@@ -4130,7 +4195,7 @@ describe("关键用户流程", () => {
     const interval = vi
       .spyOn(window, "setInterval")
       .mockImplementation((callback, delay) => {
-        if (delay !== 10000) return realInterval(callback, delay);
+        if (delay !== 60000) return realInterval(callback, delay);
         poll = callback;
         return 102;
       });
@@ -4158,15 +4223,23 @@ describe("关键用户流程", () => {
       expect(await within(detail).findByText("人工修正前")).toBeVisible();
       fireEvent.click(within(detail).getByRole("tab", { name: "任务配置" }));
       expect(poll).toBeTypeOf("function");
+      vi.useFakeTimers();
       hidden.mockReturnValue(true);
       await act(async () => poll());
       expect(apiMock.task).toHaveBeenCalledTimes(1);
       hidden.mockReturnValue(false);
       apiMock.task.mockResolvedValue({ ...task, title: "人工修正后" });
-      await act(async () => poll());
+      await act(async () => {
+        poll();
+        await vi.advanceTimersByTimeAsync(100);
+      });
       expect(screen.getByText("人工修正后")).toBeVisible();
       apiMock.task.mockResolvedValue({ ...task, title: "返回页面已更新" });
-      await act(async () => fireEvent(window, new Event("focus")));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1100);
+        fireEvent(window, new Event("focus"));
+        await vi.advanceTimersByTimeAsync(100);
+      });
       expect(screen.getByText("返回页面已更新")).toBeVisible();
       expect(within(detail).getByRole("tab", { name: "任务配置" })).toHaveAttribute(
         "aria-selected",
@@ -4177,6 +4250,7 @@ describe("关键用户流程", () => {
       expect(signal.aborted).toBe(true);
     } finally {
       view.unmount();
+      vi.useRealTimers();
       interval.mockRestore();
       hidden.mockRestore();
     }

@@ -1,3 +1,5 @@
+import { useDataRefresh } from "../../hooks/useDataRefresh";
+import { MANAGED_REFRESH_OPTIONS } from "../../shared/refreshPolicy";
 import useSWR from "swr";
 import "../../styles/workbench.css";
 
@@ -16,7 +18,9 @@ export function WorkbenchPage({ onNavigate }) {
   const { data, error, isLoading, isValidating, mutate } = useSWR(
     serverStateKeys.workbenchSummary(5),
     () => workbenchApi.summary(5),
+    MANAGED_REFRESH_OPTIONS,
   );
+  useDataRefresh(() => mutate(), { loading: isLoading || isValidating });
   const actions = /** @type {WorkbenchAction[]} */ (data?.actions ?? []);
   const recentOutputs = /** @type {WorkbenchOutput[]} */ (data?.recent_outputs ?? []);
   const hasData = data !== undefined;

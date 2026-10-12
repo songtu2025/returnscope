@@ -115,6 +115,9 @@ export function ModelServiceView({
             ) : null
           }
         />
+        {loadState === "ready" && loadError && (
+          <p role="alert">模型服务更新失败，当前显示上次数据：{loadError}</p>
+        )}
         {loadState === "loading" ? (
           <InlineLoading scope="page" label="正在读取模型服务…" />
         ) : loadState === "error" ? (

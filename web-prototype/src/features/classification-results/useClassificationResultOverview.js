@@ -1,7 +1,9 @@
-import { useCallback, useRef } from "react";
+import { useDataRefresh } from "../../hooks/useDataRefresh";
+import { MANAGED_REFRESH_OPTIONS } from "../../shared/refreshPolicy";
+import { useCallback, useEffect, useRef } from "react";
 import useSWR from "swr";
 
-import { api } from "../../api";
+import { readResultOverview } from "./classificationResultReads";
 import { errorMessage } from "../../shared/api/requestErrors";
 import { serverStateKeys } from "../../shared/serverState";
 import { runResultRequest } from "../../shared/api/requestLifecycle";
@@ -13,12 +15,8 @@ export function useClassificationResultOverview(version) {
     () =>
       runResultRequest(
         controllerRef,
-        (signal) =>
-          Promise.all([
-            api.classificationResult(version, { signal }),
-            api.classificationResultSummary(version, { signal }),
-          ]),
-        ([result, summary]) => ({ result, summary }),
+        (signal) => readResultOverview(version, { signal }),
+        (value) => value,
       ),
     [version],
   );
@@ -27,7 +25,13 @@ export function useClassificationResultOverview(version) {
     error,
     isLoading,
     mutate,
-  } = useSWR(serverStateKeys.classificationResultOverview(version), loadOverview);
+  } = useSWR(
+    serverStateKeys.classificationResultOverview(version),
+    loadOverview,
+    MANAGED_REFRESH_OPTIONS,
+  );
+  useDataRefresh(() => mutate(), { loading: isLoading, identity: version });
+  useEffect(() => () => controllerRef.current?.abort(), [version]);
   const retry = useCallback(() => void mutate(), [mutate]);
   return {
     result: overview?.result ?? null,

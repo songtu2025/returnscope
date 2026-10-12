@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import useSWR from "swr";
+import { useDataRefresh } from "../../hooks/useDataRefresh";
+import { MANAGED_REFRESH_OPTIONS } from "../../shared/refreshPolicy";
 import { ArrowClockwise, ListBullets } from "@phosphor-icons/react";
 
 import { navigateHash } from "../../app/hashRouter";
@@ -14,36 +16,18 @@ const KIND_LABELS = {
 
 export function ImportRulesPage() {
   /** @typedef {import("../../shared/api/dataManagementContracts").ImportRule} ImportRule */
-  const [state, setState] = useState(
-    /** @type {{loading: boolean, error: string, items: ImportRule[]}} */ ({
-      loading: true,
-      error: "",
-      items: [],
-    }),
+  const { data, error, isLoading, isValidating, mutate } = useSWR(
+    ["data-assets", "import-rules"],
+    () => dataApi.importRules(),
+    MANAGED_REFRESH_OPTIONS,
   );
-
-  const load = useCallback(
-    /** @param {AbortSignal} [signal] */ async (signal) => {
-      setState((current) => ({ ...current, loading: true, error: "" }));
-      try {
-        const value = await dataApi.importRules({ signal });
-        setState({ loading: false, error: "", items: value.items ?? [] });
-      } catch (error) {
-        const requestError =
-          error instanceof Error ? error : new Error("导入规则读取失败");
-        if (requestError.name !== "AbortError") {
-          setState({ loading: false, error: requestError.message, items: [] });
-        }
-      }
-    },
-    [],
-  );
-
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, [load]);
+  const state = {
+    loading: isLoading,
+    error: error instanceof Error ? error.message : error ? "导入规则读取失败" : "",
+    items: /** @type {ImportRule[]} */ (data?.items ?? []),
+  };
+  const load = () => mutate();
+  useDataRefresh(load, { loading: isLoading || isValidating });
 
   return (
     <div className="standard-page data-page import-rules-page">
@@ -64,9 +48,12 @@ export function ImportRulesPage() {
             <span>上传文件会按对应规则校验扩展名、工作表和字段结构。</span>
           </div>
         </header>
+        {state.error && data && (
+          <p role="alert">导入规则更新失败，当前显示上次数据：{state.error}</p>
+        )}
         {state.loading ? (
           <InlineLoading scope="page" label="正在读取导入规则…" />
-        ) : state.error ? (
+        ) : state.error && !data ? (
           <div className="plan-state error import-rules-error" role="alert">
             <div>
               <b>导入规则读取失败</b>

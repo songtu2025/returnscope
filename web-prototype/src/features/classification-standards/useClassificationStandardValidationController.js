@@ -1,3 +1,5 @@
+import { useDataRefresh } from "../../hooks/useDataRefresh";
+import { REFRESH_INTERVALS } from "../../shared/refreshPolicy";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { classificationStandardApi } from "../../shared/api/classificationStandardApi";
@@ -134,17 +136,14 @@ export function useClassificationStandardValidationController({
     [],
   );
 
-  useEffect(() => {
-    const active = validationRuns.some((run) =>
-      ["queued", "running"].includes(run.status),
-    );
-    if (!draft || !active) return undefined;
-    const timer = window.setInterval(() => {
-      if (document.hidden) return;
-      loadValidation(draft.id, null, true).catch(() => undefined);
-    }, 2000);
-    return () => window.clearInterval(timer);
-  }, [draft, loadValidation, validationRuns]);
+  const active = validationRuns.some((run) =>
+    ["queued", "running"].includes(run.status),
+  );
+  useDataRefresh(() => draft && loadValidation(draft.id, null, true), {
+    enabled: Boolean(draft) && active,
+    interval: REFRESH_INTERVALS.activeJob,
+    identity: draft?.id || "",
+  });
 
   const startSampleValidation = async (
     /** @type {File | null} */

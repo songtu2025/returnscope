@@ -1115,7 +1115,7 @@ test("不存在的分类结果详情支持页面内局部重试", async () => {
   expect(notify).not.toHaveBeenCalled();
 });
 
-test("结果池在页面隐藏时暂停新结果轮询", async () => {
+test("结果池在页面隐藏时暂停自动刷新", async () => {
   vi.useFakeTimers();
   Object.defineProperty(document, "hidden", { configurable: true, value: true });
   try {
@@ -1126,7 +1126,7 @@ test("结果池在页面隐藏时暂停新结果轮询", async () => {
     });
     expect(apiMock.classificationResults).toHaveBeenCalledTimes(1);
 
-    await act(async () => vi.advanceTimersByTimeAsync(15000));
+    await act(async () => vi.advanceTimersByTimeAsync(60100));
     expect(apiMock.classificationResults).toHaveBeenCalledTimes(1);
   } finally {
     Object.defineProperty(document, "hidden", { configurable: true, value: false });
@@ -1134,7 +1134,7 @@ test("结果池在页面隐藏时暂停新结果轮询", async () => {
   }
 });
 
-test("旧筛选轮询晚返回不会覆盖当前列表或触发新结果提示", async () => {
+test("旧筛选刷新晚返回不会覆盖当前列表", async () => {
   vi.useFakeTimers();
   let emptyQueryCalls = 0;
   let oldPollSignal;
@@ -1178,7 +1178,7 @@ test("旧筛选轮询晚返回不会覆盖当前列表或触发新结果提示",
     expect(screen.getByText("产品表权威名称")).toBeVisible();
 
     await act(async () => {
-      vi.advanceTimersByTime(15000);
+      vi.advanceTimersByTime(60100);
       await Promise.resolve();
     });
     expect(oldPollSignal).toBeDefined();
@@ -1554,6 +1554,56 @@ test.each(["", "review_required"])(
     }
   },
 );
+
+test("证据查看期间保留旧结果，关闭后备齐新数据整体切换并保留筛选页码", async () => {
+  const nextVersion = {
+    ...resultVersion,
+    version_id: "classification-version-2",
+    version: 2,
+  };
+  apiMock.classificationResultRecordGroups.mockResolvedValue({
+    items: [groupOf(record)],
+    total: 40,
+    source_total: 40,
+  });
+  window.location.hash =
+    "classification-results?result_version_id=classification-version-1&record_page=2&record_quality_status=ready";
+  const view = render(<ResultCreationHarness />);
+  await userEvent.click(await screen.findByRole("button", { name: "查看证据" }));
+  await waitFor(() => expect(apiMock.classificationResultVersions).toHaveBeenCalled());
+  apiMock.classificationResultVersions.mockResolvedValue([nextVersion, resultVersion]);
+  let resolveOverview;
+  apiMock.classificationResult.mockImplementation((id) =>
+    id === nextVersion.version_id
+      ? new Promise((resolve) => {
+          resolveOverview = resolve;
+        })
+      : Promise.resolve(resultVersion),
+  );
+  vi.useFakeTimers();
+  try {
+    act(() => fireEvent(window, new Event("focus")));
+    await act(async () => vi.advanceTimersByTimeAsync(100));
+    expect(window.location.hash).toContain("classification-version-1");
+    expect(screen.getByRole("dialog")).toBeVisible();
+    expect(resolveOverview).toBeUndefined();
+    await act(async () =>
+      fireEvent.click(screen.getByRole("button", { name: "关闭证据抽屉" })),
+    );
+    expect(resolveOverview).toBeTypeOf("function");
+    expect(window.location.hash).toContain("classification-version-1");
+    expect(view.container.querySelector(".page-loading-state")).toBeNull();
+    await act(async () => resolveOverview(nextVersion));
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    expect(window.location.hash).toContain("classification-version-2");
+    expect(window.location.hash).toContain("record_page=2");
+    expect(window.location.hash).toContain("record_quality_status=ready");
+    expect(view.container.querySelector(".page-loading-state")).toBeNull();
+  } finally {
+    view.unmount();
+    vi.useRealTimers();
+  }
+});
 
 test("人工修改历史显示来源、变更数量和修正前后语义", async () => {
   const manual = {

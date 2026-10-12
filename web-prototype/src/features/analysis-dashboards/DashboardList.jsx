@@ -1,3 +1,5 @@
+import { useDataRefresh } from "../../hooks/useDataRefresh";
+import { MANAGED_REFRESH_OPTIONS } from "../../shared/refreshPolicy";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLoadingHeight } from "../../hooks/useLoadingHeight";
 import {
@@ -47,8 +49,12 @@ function useDashboardList({ route }) {
   const { data, error, isLoading, isValidating, mutate } = useSWR(
     serverStateKeys.dashboardList(query),
     () => dashboardApi.analysisDashboards(query, {}),
-    { keepPreviousData: true },
+    { ...MANAGED_REFRESH_OPTIONS, keepPreviousData: true },
   );
+  useDataRefresh(() => mutate(), {
+    loading: isLoading || isValidating,
+    identity: JSON.stringify(query),
+  });
   const message =
     error instanceof Error ? error.message : error ? "分析看板读取失败" : "";
   const load = () => mutate();

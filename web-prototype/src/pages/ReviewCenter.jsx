@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSWRConfig } from "swr";
+import { refreshServerState } from "../shared/serverState";
 import "../styles/review-center.css";
 
 import { api } from "../api";
@@ -139,11 +140,12 @@ export function ReviewCenter({ notify, onChanged, focus }) {
       });
       notify("复核修改已写入新的结果版本");
       await load();
-      await mutateServerState(
-        (key) => Array.isArray(key) && key[0] === "classification-results",
-        undefined,
-        { revalidate: false },
-      );
+      await refreshServerState(mutateServerState, [
+        "classification-results",
+        "analysis-dashboards",
+        "analysis-tasks",
+        "workbench",
+      ]);
       onChanged();
     } catch (error) {
       const requestError = reviewError(error);

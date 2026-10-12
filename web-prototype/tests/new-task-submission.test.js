@@ -102,17 +102,15 @@ test("创建参数、任务列表缓存与成功回调保持顺序，保留表�
     unresolved_policy: "block_all",
     segment_order: props.segmentOrder,
   });
-  expect(apiMock.tasks).toHaveBeenCalledExactlyOnceWith({ include_archived: true });
-  expect(props.mutateServerState).toHaveBeenCalledWith(
-    ["analysis-tasks", "list", { include_archived: true }],
-    expect.any(Promise),
-    { revalidate: false },
-  );
+  expect(props.mutateServerState).toHaveBeenCalledExactlyOnceWith(expect.any(Function));
+  const predicate = props.mutateServerState.mock.calls[0][0];
+  expect(predicate(["analysis-tasks", "list"])).toBe(true);
+  expect(predicate(["workbench", "summary"])).toBe(true);
+  expect(predicate(["data-assets", "products"])).toBe(false);
   expect(order).toEqual([
     "busy:true",
     "error:",
     "create",
-    "tasks",
     "cache",
     "notify",
     "draft",
@@ -123,28 +121,27 @@ test("创建参数、任务列表缓存与成功回调保持顺序，保留表�
   expect(JSON.stringify(props.form)).toBe(before);
 });
 
-test("任务列表读取失败后清空同一缓存并继续成功路径", async () => {
-  apiMock.tasks.mockRejectedValue(new Error("合成列表错误"));
+test("关联刷新失败保留缓存并继续已创建任务的成功路径", async () => {
   const props = submission({ onDraftComplete: undefined });
+  props.mutateServerState.mockRejectedValue(new Error("合成列表错误"));
   await submitNewTask(props);
-  expect(props.mutateServerState).toHaveBeenCalledTimes(2);
-  expect(props.mutateServerState).toHaveBeenLastCalledWith(
-    ["analysis-tasks", "list", { include_archived: true }],
-    undefined,
-    { revalidate: false },
+  expect(props.mutateServerState).toHaveBeenCalledExactlyOnceWith(expect.any(Function));
+  expect(props.notify).toHaveBeenCalledWith(
+    "任务已创建，关联数据更新失败，可返回任务页重试",
+    "error",
   );
   expect(props.onNavigate).toHaveBeenCalledExactlyOnceWith("tasks");
   expect(props.setSubmitError).toHaveBeenCalledExactlyOnceWith("");
 });
 
-test("缓存清理本身失败沿用提交错误路径，保留已创建结果与草稿", async () => {
+test("刷新缓存失败不会误报创建失败或保留可重复提交的草稿", async () => {
   const props = submission();
   props.mutateServerState.mockRejectedValue(new Error("合成缓存错误"));
   await submitNewTask(props);
   expect(apiMock.createTask).toHaveBeenCalledOnce();
-  expect(props.setSubmitError).toHaveBeenLastCalledWith("合成缓存错误");
-  expect(props.onDraftComplete).not.toHaveBeenCalled();
-  expect(props.onNavigate).not.toHaveBeenCalled();
+  expect(props.setSubmitError).toHaveBeenCalledExactlyOnceWith("");
+  expect(props.onDraftComplete).toHaveBeenCalledOnce();
+  expect(props.onNavigate).toHaveBeenCalledExactlyOnceWith("tasks");
   expect(props.setSubmitting).toHaveBeenLastCalledWith(false);
 });
 

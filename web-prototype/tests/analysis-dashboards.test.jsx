@@ -890,7 +890,7 @@ test("报告列表后台刷新纳入其他页面的新报告且保留选中报�
   const interval = vi
     .spyOn(window, "setInterval")
     .mockImplementation((callback, delay) => {
-      if (delay !== 10000) return realInterval(callback, delay);
+      if (delay !== 60000) return realInterval(callback, delay);
       poll = callback;
       return 103;
     });
@@ -915,6 +915,7 @@ test("报告列表后台刷新纳入其他页面的新报告且保留选中报�
       expect(view.result.current.selectedReport?.id).toBe(oldReport.id),
     );
     expect(poll).toBeTypeOf("function");
+    vi.useFakeTimers();
     hidden.mockReturnValue(true);
     await act(async () => poll());
     expect(dashboardApiMock.analysisDashboardInsightReports).toHaveBeenCalledTimes(1);
@@ -927,6 +928,7 @@ test("报告列表后台刷新纳入其他页面的新报告且保留选中报�
         }),
     );
     act(() => fireEvent(window, new Event("focus")));
+    await act(async () => vi.advanceTimersByTimeAsync(100));
     expect(view.result.current.reports.loading).toBe(false);
     await act(async () =>
       resolveRefresh([newReport, { ...oldReport, source_outdated: true }]),
@@ -942,6 +944,7 @@ test("报告列表后台刷新纳入其他页面的新报告且保留选中报�
     expect(signal.aborted).toBe(true);
   } finally {
     view.unmount();
+    vi.useRealTimers();
     interval.mockRestore();
     hidden.mockRestore();
   }
@@ -1018,30 +1021,47 @@ test.each([
     await waitFor(() =>
       expect(interval).toHaveBeenCalledWith(expect.any(Function), 2000),
     );
+    vi.useFakeTimers();
     hidden.mockReturnValue(true);
     await act(async () => poll());
     expect(dashboardApiMock.insightReport).not.toHaveBeenCalled();
     hidden.mockReturnValue(false);
-    await act(async () => poll());
+    await act(async () => {
+      poll();
+      await vi.advanceTimersByTimeAsync(100);
+    });
     expect(view.result.current.reports.items[0].status).toBe("running");
     expect(notify).not.toHaveBeenCalled();
-    await act(async () => poll());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1100);
+      poll();
+      await vi.advanceTimersByTimeAsync(100);
+    });
     expect(dashboardApiMock.insightReport).toHaveBeenCalledTimes(2);
-    expect(dashboardApiMock.insightReport).toHaveBeenNthCalledWith(1, "report-job");
-    expect(dashboardApiMock.insightReport).toHaveBeenNthCalledWith(2, "report-job");
+    expect(dashboardApiMock.insightReport).toHaveBeenNthCalledWith(
+      1,
+      "report-job",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(dashboardApiMock.insightReport).toHaveBeenNthCalledWith(
+      2,
+      "report-job",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
     expect(interval.mock.calls.filter(([, delay]) => delay === 2000)).toHaveLength(1);
     expect(view.result.current.reports.items).toEqual([updated]);
     expect(notify).toHaveBeenCalledExactlyOnceWith(message);
     expect(clear).toHaveBeenCalledWith(101);
   } finally {
     view.unmount();
+    vi.useRealTimers();
     hidden.mockRestore();
     interval.mockRestore();
     clear.mockRestore();
   }
 });
 
-test("报告轮询请求失败时清理定时器并保留原状态", async () => {
+test("报告轮询临时失败保留原状态，下一周期恢复后停止", async () => {
   let poll;
   const realInterval = window.setInterval.bind(window);
   const interval = vi
@@ -1056,7 +1076,9 @@ test("报告轮询请求失败时清理定时器并保留原状态", async () =>
   const notify = vi.fn();
   const original = { id: "report-job", status: "running", kind: "generation_job" };
   dashboardApiMock.analysisDashboardInsightReports.mockResolvedValue([original]);
-  dashboardApiMock.insightReport.mockRejectedValue(new Error("合成网络错误"));
+  dashboardApiMock.insightReport
+    .mockRejectedValueOnce(new Error("合成网络错误"))
+    .mockResolvedValue({ ...original, status: "completed" });
   const view = renderHook(() =>
     useDashboardReports({
       route: { dashboardId: "dashboard-1", versionId: "version-1", tab: "report" },
@@ -1068,12 +1090,27 @@ test("报告轮询请求失败时清理定时器并保留原状态", async () =>
     await waitFor(() =>
       expect(interval).toHaveBeenCalledWith(expect.any(Function), 2000),
     );
-    await act(async () => poll());
-    expect(clear).toHaveBeenCalledWith(102);
+    vi.useFakeTimers();
+    await act(async () => {
+      poll();
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(clear).not.toHaveBeenCalledWith(102);
+    expect(view.result.current.reports.error).toBe("合成网络错误");
     expect(view.result.current.reports.items).toEqual([original]);
     expect(notify).not.toHaveBeenCalled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1100);
+      poll();
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(view.result.current.reports.items[0].status).toBe("completed");
+    expect(view.result.current.reports.error).toBe("");
+    expect(clear).toHaveBeenCalledWith(102);
+    expect(notify).toHaveBeenCalledExactlyOnceWith("AI 洞察报告已生成");
   } finally {
     view.unmount();
+    vi.useRealTimers();
     hidden.mockRestore();
     interval.mockRestore();
     clear.mockRestore();
@@ -1901,6 +1938,89 @@ test("看板修改历史保留指定版本，不随焦点刷新跳转", async ()
   expect(dashboardApiMock.analysisDashboard.mock.calls.length).toBe(count);
   expect(result.current.selectedVersion).toEqual(old);
   expect(updateRoute).not.toHaveBeenCalled();
+});
+
+test("证据操作中继续读看板新数据，关闭后应用且不重复读取元数据", async () => {
+  const updateRoute = vi.fn();
+  const old = { version_id: "protected-1", version: 1 };
+  const newer = { version_id: "protected-2", version: 2 };
+  const route = {
+    dashboardId: "protected",
+    versionId: old.version_id,
+    tab: "overview",
+  };
+  dashboardApiMock.analysisDashboard.mockResolvedValue({
+    id: "protected",
+    current_version_id: old.version_id,
+    version: old,
+  });
+  dashboardApiMock.analysisDashboardVersions.mockResolvedValue([old]);
+  const view = renderHook(
+    ({ protectedOperation }) =>
+      useDashboardVersion({ route, updateRoute, protectedOperation }),
+    { initialProps: { protectedOperation: false } },
+  );
+  await waitFor(() => expect(view.result.current.selectedVersion).toEqual(old));
+  view.rerender({ protectedOperation: true });
+  dashboardApiMock.analysisDashboard.mockResolvedValue({
+    id: "protected",
+    current_version_id: newer.version_id,
+    version: newer,
+  });
+  dashboardApiMock.analysisDashboardVersions.mockResolvedValue([newer, old]);
+  vi.useFakeTimers();
+  try {
+    act(() => fireEvent(window, new Event("focus")));
+    await act(async () => vi.advanceTimersByTimeAsync(100));
+    expect(dashboardApiMock.analysisDashboard).toHaveBeenCalledTimes(2);
+    expect(view.result.current.selectedVersion).toEqual(old);
+    expect(updateRoute).not.toHaveBeenCalled();
+    view.rerender({ protectedOperation: false });
+    expect(view.result.current.selectedVersion).toEqual(newer);
+    expect(updateRoute).toHaveBeenCalledExactlyOnceWith(
+      { versionId: newer.version_id },
+      { replace: true },
+    );
+    expect(dashboardApiMock.analysisDashboard).toHaveBeenCalledTimes(2);
+  } finally {
+    view.unmount();
+    vi.useRealTimers();
+  }
+});
+
+test("迟到的报告列表不能把已完成报告退回运行中", async () => {
+  const original = { id: "report-race", status: "running", kind: "generation_job" };
+  const completed = { ...original, status: "completed" };
+  dashboardApiMock.analysisDashboardInsightReports.mockResolvedValueOnce([original]);
+  dashboardApiMock.insightReport.mockResolvedValue(completed);
+  const view = renderHook(() =>
+    useDashboardReports({
+      route: { dashboardId: "dashboard-1", versionId: "version-1", tab: "report" },
+      updateRoute: vi.fn(),
+      notify: vi.fn(),
+    }),
+  );
+  await waitFor(() => expect(view.result.current.reports.items).toEqual([original]));
+  let resolveList;
+  dashboardApiMock.analysisDashboardInsightReports.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolveList = resolve;
+      }),
+  );
+  vi.useFakeTimers();
+  try {
+    act(() => fireEvent(window, new Event("focus")));
+    await act(async () => vi.advanceTimersByTimeAsync(100));
+    expect(view.result.current.reports.items).toEqual([completed]);
+    await act(async () => resolveList([original]));
+    expect(view.result.current.reports.items).toEqual([completed]);
+    await act(async () => vi.advanceTimersByTimeAsync(5000));
+    expect(dashboardApiMock.insightReport).toHaveBeenCalledOnce();
+  } finally {
+    view.unmount();
+    vi.useRealTimers();
+  }
 });
 
 test("搜索条件只在点击筛选后提交并重置到第一页", async () => {

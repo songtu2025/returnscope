@@ -1,17 +1,25 @@
+import { useProtectedData } from "../../hooks/useProtectedData";
+import { useDataRefresh } from "../../hooks/useDataRefresh";
+import { MANAGED_REFRESH_OPTIONS } from "../../shared/refreshPolicy";
 import { useEffect, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { api } from "../../api";
-import { refreshProductState, serverStateKeys } from "../../shared/serverState";
+import {
+  refreshProductState,
+  refreshServerState,
+  serverStateKeys,
+} from "../../shared/serverState";
 
 /** @typedef {import("./productMasterContracts").DatasetRecord} DatasetRecord */
 /** @typedef {import("./productMasterContracts").UploadDialog} UploadDialog */
 /** @typedef {import("./productMasterContracts").ProductMasterProps} ProductMasterProps */
 
-/** @param {Pick<ProductMasterProps,"notify"|"focus"|"routeDetailTab">} props */
-export function useProductMasterState({ notify, focus, routeDetailTab = "" }) {
+/** @param {Pick<ProductMasterProps,"focus"|"routeDetailTab">} props */
+export function useProductMasterState({ focus, routeDetailTab = "" }) {
   const { mutate: mutateCache } = useSWRConfig();
   const [selectedId, setSelectedId] = useState(/** @type {string | null} */ (null));
   const [dialog, setDialog] = useState(/** @type {UploadDialog | null} */ (null));
+  const [protectedOperation, setProtectedOperation] = useState(false);
   const [detailTab, setDetailTab] = useState("rows");
 
   const {
@@ -19,10 +27,14 @@ export function useProductMasterState({ notify, focus, routeDetailTab = "" }) {
     error: datasetsError,
     isLoading: datasetsLoading,
     mutate: mutateDatasets,
-  } = useSWR(serverStateKeys.productDatasets, () => api.datasets("products"));
+  } = useSWR(
+    serverStateKeys.productDatasets,
+    () => api.datasets("products"),
+    MANAGED_REFRESH_OPTIONS,
+  );
   const detailInclude = detailTab === "impact" ? "audit" : "";
   const {
-    data: selected = null,
+    data: fetchedSelected = null,
     error: detailError,
     isLoading: detailLoading,
     mutate: mutateSelected,
@@ -32,17 +44,31 @@ export function useProductMasterState({ notify, focus, routeDetailTab = "" }) {
       if (!selectedId) return null;
       return api.dataset(selectedId, { include: detailInclude });
     },
+    MANAGED_REFRESH_OPTIONS,
+  );
+  useDataRefresh(() => mutateDatasets(), { loading: datasetsLoading });
+  useDataRefresh(() => mutateSelected(), {
+    enabled: Boolean(selectedId),
+    loading: detailLoading,
+    identity: `${selectedId}:${detailInclude}`,
+  });
+  const selected = useProtectedData(
+    fetchedSelected,
+    protectedOperation || Boolean(dialog),
+    selectedId || "",
   );
   const focusedId = focus?.datasetKind === "products" ? focus.id : undefined;
   useEffect(() => {
     setSelectedId(
       (current) =>
         focusedId ??
-        (datasets.some((item) => item.id === current)
+        ((protectedOperation || dialog) && current
           ? current
-          : (datasets[0]?.id ?? null)),
+          : datasets.some((item) => item.id === current)
+            ? current
+            : (datasets[0]?.id ?? null)),
     );
-  }, [datasets, focusedId]);
+  }, [datasets, focusedId, protectedOperation, dialog]);
   useEffect(() => {
     if (["rows", "impact"].includes(routeDetailTab)) {
       setDetailTab(routeDetailTab);
@@ -52,20 +78,6 @@ export function useProductMasterState({ notify, focus, routeDetailTab = "" }) {
       setDetailTab("rows");
     }
   }, [routeDetailTab, focusedId]);
-  useEffect(() => {
-    if (!datasetsError) return;
-    notify(
-      datasetsError instanceof Error ? datasetsError.message : "产品信息读取失败",
-      "error",
-    );
-  }, [datasetsError, notify]);
-  useEffect(() => {
-    if (!detailError) return;
-    notify(
-      detailError instanceof Error ? detailError.message : "产品详情读取失败",
-      "error",
-    );
-  }, [detailError, notify]);
   const { dimensionAudit, currentVersionId } = productMasterSelection(selected);
   const loadState = productMasterLoadState({
     datasetsLoading,
@@ -77,17 +89,11 @@ export function useProductMasterState({ notify, focus, routeDetailTab = "" }) {
   });
   return {
     ...loadState,
+    // 各读取状态保留错误与旧数据；统一重试不再重复显示父级和列表的同一告警。
     retry: () =>
-      datasetsError
-        ? mutateDatasets((current) => current, {
-            revalidate: true,
-            throwOnError: false,
-          })
-        : mutateSelected((current) => current, {
-            revalidate: true,
-            throwOnError: false,
-          }),
+      refreshServerState(mutateCache, ["data-assets"]).catch(() => undefined),
     selectedId,
+    setProtectedOperation,
     setSelectedId,
     dialog,
     setDialog,

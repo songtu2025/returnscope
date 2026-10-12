@@ -1,3 +1,4 @@
+import { useDataRefresh } from "../../hooks/useDataRefresh";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { dashboardApi } from "../../shared/api/dashboardApi";
 import { asItems } from "./DashboardDetailHelpers";
@@ -48,7 +49,19 @@ function useReportList({ route }) {
         if (reportGenerationRef.current !== generation) return;
         /** @type {InsightReport[]} */
         const reportItems = asItems(items);
-        setReports({ loading: false, error: "", items: reportItems });
+        // 轮询可能已读到完成状态，迟到的列表响应不能把同一报告退回运行中。
+        setReports((current) => ({
+          loading: false,
+          error: "",
+          items: reportItems.map((item) => {
+            const previous = current.items.find((value) => value.id === item.id);
+            return previous &&
+              ["completed", "failed"].includes(previous.status) &&
+              ["queued", "running"].includes(item.status)
+              ? previous
+              : item;
+          }),
+        }));
       } catch (error) {
         if (
           reportGenerationRef.current === generation &&
@@ -67,25 +80,19 @@ function useReportList({ route }) {
 
   useEffect(() => {
     loadReports();
-    const refresh = () => {
-      if (!document.hidden && route.tab === "report" && route.versionId)
-        loadReports(true);
-    };
-    const timer =
-      route.tab === "report" && route.versionId
-        ? window.setInterval(refresh, 10000)
-        : null;
-    window.addEventListener("focus", refresh);
-    document.addEventListener("visibilitychange", refresh);
+
     return () => {
       reportGenerationRef.current += 1;
       reportControllerRef.current?.abort();
-      if (timer !== null) window.clearInterval(timer);
-      window.removeEventListener("focus", refresh);
-      document.removeEventListener("visibilitychange", refresh);
     };
   }, [loadReports, route.tab, route.versionId]);
 
+  useDataRefresh(() => loadReports(true), {
+    enabled: route.tab === "report" && Boolean(route.versionId),
+    domains: ["analysis-dashboards"],
+    identity: `${route.dashboardId}:${route.versionId}`,
+    loading: reports.loading,
+  });
   return { reports, setReports, loadReports };
 }
 

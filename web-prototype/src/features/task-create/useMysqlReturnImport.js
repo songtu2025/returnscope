@@ -1,3 +1,5 @@
+import { useDataRefresh } from "../../hooks/useDataRefresh";
+import { MANAGED_REFRESH_OPTIONS } from "../../shared/refreshPolicy";
 import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { api } from "../../api";
@@ -57,9 +59,12 @@ export function useMysqlReturnImport({
     error: schemaError,
     isLoading: loadingSchema,
     mutate: mutateSchema,
-  } = useSWR(serverStateKeys.mysqlReturnSchema, () =>
-    mysqlReturnApi.mysqlReturnSchema(),
+  } = useSWR(
+    serverStateKeys.mysqlReturnSchema,
+    () => mysqlReturnApi.mysqlReturnSchema(),
+    MANAGED_REFRESH_OPTIONS,
   );
+  useDataRefresh(() => mutateSchema(), { loading: loadingSchema });
   const loading = (loadingSchema && !schema) || refreshingSchema;
   const displayError = error || (schemaError ? errorMessage(schemaError) : "");
 

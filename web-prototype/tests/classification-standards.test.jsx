@@ -513,33 +513,36 @@ test("验证创建和详情选择失败均恢复操作状态并提示", async ()
   expect(setBusy.mock.calls).toEqual([["validation"], [""]]);
 });
 
-test("轮询失败静默并在卸载时清理两秒定时器", async () => {
+test("轮询失败静默并在下一周期恢复，卸载后停止", async () => {
+  vi.useFakeTimers();
+  const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(true);
   const runningRun = { ...readyRun, id: "validation-running", status: "running" };
-  const intervalCallbacks = [];
-  vi.spyOn(window, "setInterval").mockImplementation((callback, delay) => {
-    if (delay === 2000) intervalCallbacks.push(callback);
-    return 91;
-  });
-  const clearIntervalSpy = vi.spyOn(window, "clearInterval");
   validationApiMock.sources.mockResolvedValue([validationSource]);
   validationApiMock.runs.mockResolvedValue([runningRun]);
   validationApiMock.run.mockResolvedValue(runningRun);
   const { result, unmount, notify } = renderValidationController();
-
-  await act(async () => result.current.loadValidation(validDraft.id));
-  await waitFor(() => expect(intervalCallbacks).toHaveLength(1));
-
-  Object.defineProperty(document, "hidden", { configurable: true, value: true });
-  intervalCallbacks.at(-1)();
-  expect(validationApiMock.sources).toHaveBeenCalledTimes(1);
-  Object.defineProperty(document, "hidden", { configurable: true, value: false });
-  validationApiMock.sources.mockRejectedValueOnce(new Error("轮询失败"));
-  intervalCallbacks.at(-1)();
-  await waitFor(() => expect(validationApiMock.sources).toHaveBeenCalledTimes(2));
-  expect(notify).not.toHaveBeenCalled();
-
-  unmount();
-  expect(clearIntervalSpy).toHaveBeenCalledWith(91);
+  try {
+    await act(async () => result.current.loadValidation(validDraft.id));
+    expect(vi.getTimerCount()).toBe(1);
+    await act(async () => vi.advanceTimersByTimeAsync(2100));
+    expect(validationApiMock.sources).toHaveBeenCalledOnce();
+    hidden.mockReturnValue(false);
+    validationApiMock.sources.mockRejectedValueOnce(new Error("轮询失败"));
+    await act(async () => vi.advanceTimersByTimeAsync(2000));
+    expect(validationApiMock.sources).toHaveBeenCalledTimes(2);
+    expect(result.current.validationRuns).toEqual([runningRun]);
+    expect(notify).not.toHaveBeenCalled();
+    await act(async () => vi.advanceTimersByTimeAsync(2000));
+    expect(validationApiMock.sources).toHaveBeenCalledTimes(3);
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+    await act(async () => vi.advanceTimersByTimeAsync(4000));
+    expect(validationApiMock.sources).toHaveBeenCalledTimes(3);
+  } finally {
+    unmount();
+    hidden.mockRestore();
+    vi.useRealTimers();
+  }
 });
 
 test("质量检查分开展示发布风险项与人工复核警告", async () => {

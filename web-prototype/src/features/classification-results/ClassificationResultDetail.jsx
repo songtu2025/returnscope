@@ -5,8 +5,7 @@ import { PageLoadingState } from "../../components/SharedUi";
 import { createResultDashboard } from "./resultSelectionActions";
 import { ResultError } from "./ClassificationResultCommon";
 import { useClassificationResultDetailData } from "./useClassificationResultDetailData";
-import { api } from "../../api";
-import { errorMessage } from "../../shared/api/requestErrors";
+import { useLatestResult } from "./useLatestResult";
 
 /** @typedef {import("./classificationResultDetailContracts").ClassificationResultGroup} ClassificationResultGroup */
 /** @typedef {import("./classificationResultDetailContracts").ClassificationResultDetailProps} ClassificationResultDetailProps */
@@ -17,7 +16,6 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
     /** @type {ClassificationResultGroup | null} */ (null),
   );
   const [orderInput, setOrderInput] = useState(route.orderId);
-  const [versionRefreshError, setVersionRefreshError] = useState("");
   const [refreshAttempt, setRefreshAttempt] = useState(0);
   const evidenceTriggerRef = useRef(/** @type {HTMLButtonElement | null} */ (null));
   const closeEvidence = useCallback(() => setSelectedGroup(null), []);
@@ -36,7 +34,6 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
   };
 
   useEffect(() => setOrderInput(route.orderId), [route.orderId]);
-  useEffect(() => setVersionRefreshError(""), [route.version, route.tab]);
   useEffect(
     () => setSelectedGroup(null),
     [
@@ -62,7 +59,11 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
     retryRecords,
     error,
     retry,
-  } = useClassificationResultDetailData({ route, notify });
+  } = useClassificationResultDetailData({
+    route,
+    notify,
+    protectedOperation: Boolean(selectedGroup),
+  });
 
   useEffect(() => {
     if (!records || recordsLoading || recordsError) return;
@@ -77,49 +78,13 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
     updateRoute,
   ]);
 
-  useEffect(() => {
-    if (!result || error || route.tab === "history" || selectedGroup) return undefined;
-    const controller = new AbortController();
-    const refresh = () => {
-      if (document.visibilityState === "hidden") return;
-      api
-        .classificationResultVersions(route.version, { signal: controller.signal })
-        .then((versions) => {
-          if (controller.signal.aborted) return;
-          setVersionRefreshError("");
-          const latest = versions.find(
-            (version) => version.publish_status === "published",
-          );
-          if (
-            latest &&
-            latest.version > result.version &&
-            latest.version_id !== route.version
-          )
-            updateRoute({ version: latest.version_id, recordPage: 1 });
-        })
-        .catch((reason) => {
-          if (!controller.signal.aborted) setVersionRefreshError(errorMessage(reason));
-        });
-    };
-    refresh();
-    const timer = window.setInterval(refresh, 10000);
-    window.addEventListener("focus", refresh);
-    document.addEventListener("visibilitychange", refresh);
-    return () => {
-      controller.abort();
-      window.clearInterval(timer);
-      window.removeEventListener("focus", refresh);
-      document.removeEventListener("visibilitychange", refresh);
-    };
-  }, [
+  const versionRefreshError = useLatestResult({
+    route,
     result,
-    error,
-    route.version,
-    route.tab,
-    selectedGroup,
+    protectedOperation: Boolean(selectedGroup),
     updateRoute,
     refreshAttempt,
-  ]);
+  });
 
   if (loading && !result) {
     return (

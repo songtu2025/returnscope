@@ -85,6 +85,12 @@ export function ModelServicePage({
     showValidationRun,
   });
   const { catalogModels } = catalog;
+  const { setProtectedOperation } = connectionState;
+  useEffect(() => {
+    setProtectedOperation(
+      configuration.editing || Boolean(catalog.modelEditor) || Boolean(busy),
+    );
+  }, [configuration.editing, catalog.modelEditor, busy, setProtectedOperation]);
   useEffect(() => {
     if (!focusModelId || !focusedModelRef.current) return;
     focusedModelRef.current.scrollIntoView({ block: "center" });

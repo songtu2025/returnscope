@@ -1,4 +1,7 @@
-import { useEffect } from "react";
+import { useDataRefresh } from "../../hooks/useDataRefresh";
+import { REFRESH_INTERVALS } from "../../shared/refreshPolicy";
+import { errorMessage } from "./dashboardRequestErrors";
+import { useEffect, useRef } from "react";
 import { dashboardApi } from "../../shared/api/dashboardApi";
 import { isPublishedReport } from "./DashboardDetailHelpers";
 import { selectedDashboardIssue } from "./dashboardReportPolicy";
@@ -50,26 +53,37 @@ export function useDashboardReportPolling({ generationAttempts, setReports, noti
   const activeReportId = generationAttempts.find((report) =>
     ["queued", "running"].includes(report.status),
   )?.id;
+  const controllerRef = useRef(/** @type {AbortController | null} */ (null));
+  useEffect(() => () => controllerRef.current?.abort(), [activeReportId]);
 
-  useEffect(() => {
-    if (!activeReportId) return undefined;
-    const timer = window.setInterval(async () => {
-      if (document.hidden) return;
+  useDataRefresh(
+    async () => {
+      if (!activeReportId) return;
+      controllerRef.current?.abort();
+      const controller = new AbortController();
+      controllerRef.current = controller;
       try {
-        const updated = await dashboardApi.insightReport(activeReportId);
+        const updated = await dashboardApi.insightReport(activeReportId, {
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
         setReports((current) => ({
           ...current,
+          error: "",
           items: current.items.map((item) => (item.id === updated.id ? updated : item)),
         }));
-        if (updated.status === "completed") {
-          notify?.("AI 洞察报告已生成");
-        } else if (updated.status === "failed") {
+        if (updated.status === "completed") notify?.("AI 洞察报告已生成");
+        else if (updated.status === "failed")
           notify?.("AI 洞察报告生成未完成，可在报告页重试");
-        }
-      } catch {
-        window.clearInterval(timer);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setReports((current) => ({ ...current, error: errorMessage(error) }));
       }
-    }, 2000);
-    return () => window.clearInterval(timer);
-  }, [activeReportId, notify, setReports]);
+    },
+    {
+      enabled: Boolean(activeReportId),
+      interval: REFRESH_INTERVALS.activeJob,
+      identity: activeReportId,
+    },
+  );
 }

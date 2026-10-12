@@ -1,3 +1,5 @@
+import { useSWRConfig } from "swr";
+import { refreshServerState } from "../../shared/serverState";
 import { ArrowLeft, ListChecks, WarningCircle } from "@phosphor-icons/react";
 import { ResultVersionReviewPanel } from "../review-batches/ResultVersionReviewPanel";
 import { EvidenceDrawer } from "./EvidenceDrawer";
@@ -13,6 +15,7 @@ import { ResultError } from "./ClassificationResultCommon";
 
 /** @param {ResultDetailViewProps} props */
 export function ClassificationResultDetailView(props) {
+  const { mutate } = useSWRConfig();
   const presentation = resultDetailPresentation(props);
   const actions = resultDetailActions(props);
   const context = { ...props, ...presentation, ...actions };
@@ -118,6 +121,14 @@ export function ClassificationResultDetailView(props) {
                     : "人工修正已保存，无需重跑",
                 );
                 updateRoute({ version });
+                void refreshServerState(mutate, [
+                  "classification-results",
+                  "analysis-dashboards",
+                  "analysis-tasks",
+                  "workbench",
+                ]).catch(() =>
+                  notify("人工修正已保存，部分关联数据更新失败，可重试", "error"),
+                );
               }}
               returnFocusRef={evidenceTriggerRef}
             />

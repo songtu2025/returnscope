@@ -1,14 +1,18 @@
+import { useDataRefresh } from "../../hooks/useDataRefresh";
+import {
+  MANAGED_REFRESH_OPTIONS,
+  REFRESH_INTERVALS,
+  notifyDataChanged,
+} from "../../shared/refreshPolicy";
 import { useCallback, useEffect, useRef, useState } from "react";
-import useSWR from "swr";
-import { serverStateKeys } from "../../shared/serverState";
+import useSWR, { useSWRConfig } from "swr";
+import { refreshServerState, serverStateKeys } from "../../shared/serverState";
 import { taskMonitorApi, errorMessage } from "./taskMonitorRequests";
 
 /** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
 /** @typedef {import("./taskRuntimeContracts").TaskEvent} TaskEvent */
 /** @typedef {import("./taskMonitorContracts").TaskListState} TaskListState */
 
-const ACTIVE_LIST_REFRESH_MS = 10000;
-const IDLE_LIST_REFRESH_MS = 60000;
 const DEFAULT_LIST_STATE = {
   filter: "all",
   query: "",
@@ -28,6 +32,7 @@ export function useTaskMonitorState({
   onListStateChange,
   onTaskFocus,
 }) {
+  const { mutate: mutateCache } = useSWRConfig();
   const [localListState, setLocalListState] = useState(DEFAULT_LIST_STATE);
   const listState = controlledListState ?? localListState;
   const [selectedId, setSelectedId] = useState(/** @type {string | null} */ (null));
@@ -36,6 +41,7 @@ export function useTaskMonitorState({
   const [eventStreamVersion, setEventStreamVersion] = useState(0);
   const [actionError, setActionError] = useState("");
   const selectedRequestGeneration = useRef(0);
+  const selectedControllerRef = useRef(/** @type {AbortController | null} */ (null));
   const previousFocusId = useRef(/** @type {string | null | undefined} */ (focusId));
   const listScroll = useRef(0);
   const notifiedListError = useRef("");
@@ -46,8 +52,10 @@ export function useTaskMonitorState({
     error: taskListError,
     isValidating,
     mutate: refreshTasks,
-  } = useSWR(serverStateKeys.taskList, () =>
-    taskMonitorApi.tasks({ include_archived: true }),
+  } = useSWR(
+    serverStateKeys.taskList,
+    () => taskMonitorApi.tasks({ include_archived: true }),
+    MANAGED_REFRESH_OPTIONS,
   );
   const tasks = /** @type {AnalysisTask[]} */ (taskData ?? EMPTY_TASKS);
   const listError = taskListError ? errorMessage(taskListError) : "";
@@ -91,21 +99,19 @@ export function useTaskMonitorState({
     async (options = {}) => {
       if (!selectedId) return null;
       const generation = ++selectedRequestGeneration.current;
+      selectedControllerRef.current?.abort();
+      const controller = new AbortController();
+      selectedControllerRef.current = controller;
+      const signal = options.signal ?? controller.signal;
       try {
-        const value = await taskMonitorApi.task(selectedId, options);
-        if (
-          selectedRequestGeneration.current === generation &&
-          !options.signal?.aborted
-        ) {
+        const value = await taskMonitorApi.task(selectedId, { ...options, signal });
+        if (selectedRequestGeneration.current === generation && !signal.aborted) {
           setSelected(value);
           setDetailError("");
         }
         return value;
       } catch (error) {
-        if (
-          selectedRequestGeneration.current === generation &&
-          !options.signal?.aborted
-        )
+        if (selectedRequestGeneration.current === generation && !signal.aborted)
           setDetailError(errorMessage(error));
         throw error;
       }
@@ -138,6 +144,7 @@ export function useTaskMonitorState({
     loadSelected({ signal: controller.signal }).catch(() => {});
     return () => {
       controller.abort();
+      selectedControllerRef.current?.abort();
       selectedRequestGeneration.current += 1;
     };
   }, [loadSelected, notify, selectedId]);
@@ -160,9 +167,12 @@ export function useTaskMonitorState({
         const nextEvents = pendingEvents;
         pendingEvents = [];
         setEvents((current) => [...current, ...nextEvents]);
-        Promise.all([loadSelected(), loadTasks(true), onChanged()]).catch((error) =>
-          notify(errorMessage(error), "error"),
-        );
+        notifyDataChanged(["analysis-tasks"]);
+        void refreshServerState(mutateCache, [
+          "classification-results",
+          "analysis-dashboards",
+          "workbench",
+        ]).catch(() => notify("关联数据更新失败，可重试", "error"));
       }, 500);
     });
     source.addEventListener("close", () => source.close());
@@ -170,35 +180,42 @@ export function useTaskMonitorState({
       source.close();
       if (refreshTimer !== null) window.clearTimeout(refreshTimer);
     };
-  }, [selectedId, eventStreamVersion, loadSelected, loadTasks, notify, onChanged]);
+  }, [
+    selectedId,
+    eventStreamVersion,
+    loadSelected,
+    loadTasks,
+    notify,
+    onChanged,
+    mutateCache,
+  ]);
 
+  const hasActiveTasks = tasks.some((task) =>
+    ["queued", "running"].includes(task.status),
+  );
+  const activeSelection = selectedId
+    ? ["queued", "running"].includes(selected?.status ?? "")
+    : hasActiveTasks;
+  useDataRefresh(
+    async () => {
+      if (!selectedId) return loadTasks(true);
+      await Promise.all([loadSelected(), loadTasks(true), onChanged()]);
+    },
+    {
+      interval: activeSelection
+        ? REFRESH_INTERVALS.activeTask
+        : REFRESH_INTERVALS.ordinary,
+      domains: ["analysis-tasks"],
+      identity: selectedId || "list",
+      loading: loading && !taskData,
+    },
+  );
   useEffect(() => {
-    const controller = new AbortController();
-    const refresh = () => {
-      if (document.hidden) return;
-      if (!selectedId) return void loadTasks(true);
-      loadSelected({ signal: controller.signal }).catch(() => {});
-    };
-    const hasActiveTasks = tasks.some((task) =>
-      ["queued", "running"].includes(task.status),
-    );
-    const timer = window.setInterval(
-      refresh,
-      selectedId || hasActiveTasks ? ACTIVE_LIST_REFRESH_MS : IDLE_LIST_REFRESH_MS,
-    );
     const frame = window.requestAnimationFrame(
       () => !selectedId && window.scrollTo(0, listScroll.current),
     );
-    document.addEventListener("visibilitychange", refresh);
-    if (selectedId) window.addEventListener("focus", refresh);
-    return () => {
-      controller.abort();
-      window.clearInterval(timer);
-      window.cancelAnimationFrame(frame);
-      document.removeEventListener("visibilitychange", refresh);
-      window.removeEventListener("focus", refresh);
-    };
-  }, [selectedId, loadSelected, loadTasks, tasks]);
+    return () => window.cancelAnimationFrame(frame);
+  }, [selectedId]);
 
   const showTaskDetail = Boolean(selectedId);
   const visibleSelected = selected?.id === selectedId ? selected : null;

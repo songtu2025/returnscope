@@ -15,7 +15,7 @@ export function ModelPreferencePage({ notify }) {
       />
       {preference.loading ? (
         <PageLoadingState label="正在读取个人模型偏好…" />
-      ) : preference.error ? (
+      ) : preference.error && !preference.hasData ? (
         <div role="alert">
           <EmptyState
             icon={WarningCircle}
@@ -29,7 +29,12 @@ export function ModelPreferencePage({ notify }) {
           />
         </div>
       ) : (
-        <ModelPreferenceForm {...preference} />
+        <>
+          {preference.error && (
+            <p role="alert">模型偏好更新失败，当前显示上次数据：{preference.error}</p>
+          )}
+          <ModelPreferenceForm {...preference} />
+        </>
       )}
     </div>
   );

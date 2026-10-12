@@ -1,4 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import useSWR, { useSWRConfig } from "swr";
+import { useDataRefresh } from "../../hooks/useDataRefresh";
+import { useProtectedData } from "../../hooks/useProtectedData";
+import { MANAGED_REFRESH_OPTIONS } from "../../shared/refreshPolicy";
+import { refreshServerState } from "../../shared/serverState";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api";
 import {
   EMPTY_POLICY,
@@ -11,6 +16,7 @@ import {
 /** @typedef {import("../../shared/api/systemSettingsContracts").ModelPreference} ModelPreference */
 /** @typedef {import("../../shared/api/systemSettingsContracts").PipelineModelKey} PipelineModelKey */
 /** @typedef {import("../../shared/api/systemSettingsContracts").PipelineEffortKey} PipelineEffortKey */
+const EMPTY_CONNECTIONS = /** @type {ModelConnection[]} */ ([]);
 
 /** @typedef {(message: string, tone?: string) => void} Notify */
 /** @typedef {import("react").Dispatch<import("react").SetStateAction<ModelPreference>>} SetPolicy */
@@ -29,6 +35,7 @@ async function savePreference(policy, notify, setPolicy, setSaving) {
     });
     setPolicy(value);
     notify("默认模型策略已保存", "success");
+    return value;
   } catch (error) {
     notify(error instanceof Error ? error.message : "模型偏好保存失败", "error");
   } finally {
@@ -38,36 +45,56 @@ async function savePreference(policy, notify, setPolicy, setSaving) {
 
 /** @param {Notify} notify */
 export function useModelPreference(notify) {
-  const [connections, setConnections] = useState(/** @type {ModelConnection[]} */ ([]));
-  const [policy, setPolicy] = useState(/** @type {ModelPreference} */ (EMPTY_POLICY));
-  const [loading, setLoading] = useState(true);
+  const { mutate: mutateCache } = useSWRConfig();
+  const [policy, setPolicyState] = useState(
+    /** @type {ModelPreference} */ (EMPTY_POLICY),
+  );
+  const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const [serviceConnections, preference] = await Promise.all([
+  const {
+    data,
+    error: loadError,
+    isLoading,
+    isValidating,
+    mutate,
+  } = useSWR(
+    ["settings", "model-preference"],
+    async () => {
+      const [allConnections, preference] = await Promise.all([
         api.configs(),
         api.modelPreference(),
       ]);
-      const published = serviceConnections.filter((item) => item.active_version_id);
+      const connections = allConnections.filter((item) => item.active_version_id);
       const selected =
-        published.find((item) => item.id === preference?.connection_id) ??
-        published[0] ??
+        connections.find((item) => item.id === preference?.connection_id) ??
+        connections[0] ??
         null;
-      setConnections(published);
-      setPolicy(policyForConnection(selected, preference ?? EMPTY_POLICY));
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "模型偏好读取失败");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      return {
+        connections,
+        policy: policyForConnection(selected, preference ?? EMPTY_POLICY),
+      };
+    },
+    MANAGED_REFRESH_OPTIONS,
+  );
+  const displayed = useProtectedData(data, dirty || saving, "model-preference");
+  const connections = displayed?.connections ?? EMPTY_CONNECTIONS;
   useEffect(() => {
-    load();
-  }, [load]);
+    if (displayed && !dirty && !saving) setPolicyState(displayed.policy);
+  }, [displayed, dirty, saving]);
+  useDataRefresh(() => mutate(), { loading: isLoading || isValidating });
+  const loading = isLoading && !data;
+  const error =
+    loadError instanceof Error
+      ? loadError.message
+      : loadError
+        ? "模型偏好读取失败"
+        : "";
+  const load = () => mutate();
+  /** @type {SetPolicy} */
+  const setPolicy = (value) => {
+    setDirty(true);
+    setPolicyState(value);
+  };
 
   const connection = useMemo(
     () => connections.find((item) => item.id === policy.connection_id) ?? null,
@@ -84,9 +111,21 @@ export function useModelPreference(notify) {
     const model = modelByKey.get(value);
     setPolicy((current) => policyForModel(current, field, value, model));
   };
-  const save = () => savePreference(policy, notify, setPolicy, setSaving);
+  const save = async () => {
+    const value = await savePreference(policy, notify, setPolicyState, setSaving);
+    if (!value) return;
+    await mutate(
+      { connections: data?.connections ?? [], policy: value },
+      { revalidate: false },
+    );
+    setDirty(false);
+    void refreshServerState(mutateCache, ["task-create"]).catch(() =>
+      notify("偏好已保存，关联配置更新失败，可重试", "error"),
+    );
+  };
   return {
     connections,
+    hasData: Boolean(data),
     policy,
     loading,
     saving,

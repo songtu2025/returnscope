@@ -41,8 +41,10 @@ export function useResultPoolWorkspace({ route, updateRoute, userId }) {
     ],
   );
 
-  const { data, loading, error, hasNewResults, load } =
-    useClassificationResultListData(query);
+  const { data, loading, error, load } = useClassificationResultListData(
+    query,
+    selection.selectedResults.length > 0,
+  );
 
   const activeFilters = Boolean(
     route.q || route.storeSite || route.listing || route.qualityStatus,
@@ -61,7 +63,6 @@ export function useResultPoolWorkspace({ route, updateRoute, userId }) {
     data,
     loading,
     error,
-    hasNewResults,
     load,
     activeFilters,
     totalPages,

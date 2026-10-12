@@ -32,6 +32,7 @@ const { apiMock } = vi.hoisted(() => ({
     datasets: vi.fn(),
     dataset: vi.fn(),
     datasetRows: vi.fn(),
+    updateDatasetRow: vi.fn(),
     dataVersionReferences: vi.fn(),
     datasetDownloadUrl: vi.fn(),
     completeProductCategories: vi.fn(),

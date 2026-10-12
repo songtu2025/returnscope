@@ -106,8 +106,8 @@ function ProductChangeNote({ changeNote, setChangeNote }) {
   );
 }
 
-/** @param {{saving: boolean, onClose: () => void}} props */
-function ProductEditActions({ saving, onClose }) {
+/** @param {{saving: boolean, conflict?: boolean, onClose: () => void}} props */
+function ProductEditActions({ saving, conflict, onClose }) {
   return (
     <div className="modal-actions">
       <Button autoInsertSpace={false} onClick={onClose}>
@@ -116,7 +116,7 @@ function ProductEditActions({ saving, onClose }) {
       <Button
         type="primary"
         htmlType="submit"
-        disabled={saving}
+        disabled={saving || conflict}
         autoInsertSpace={false}
       >
         {saving ? "正在保存…" : "保存"}
@@ -125,13 +125,14 @@ function ProductEditActions({ saving, onClose }) {
   );
 }
 
-/** @param {{editing: DatasetRow, setEditing: SetEditing, changeNote: string, setChangeNote: (value: string) => void, saving: boolean, onSave: (event: import("react").FormEvent<HTMLFormElement>) => void | Promise<void>, onClose: () => void}} props */
+/** @param {{editing: DatasetRow, setEditing: SetEditing, changeNote: string, setChangeNote: (value: string) => void, saving: boolean, conflict?: boolean, onSave: (event: import("react").FormEvent<HTMLFormElement>) => void | Promise<void>, onClose: () => void}} props */
 export function ProductDimensionEditDialog({
   editing,
   setEditing,
   changeNote,
   setChangeNote,
   saving,
+  conflict = false,
   onSave,
   onClose,
 }) {
@@ -142,10 +143,15 @@ export function ProductDimensionEditDialog({
       onClose={onClose}
     >
       <form className="modal-form product-info-edit-form" onSubmit={onSave}>
+        {conflict && (
+          <p className="form-error" role="alert">
+            数据已更新，输入已保留。请关闭编辑，核对最新资料后重新修改。
+          </p>
+        )}
         <ProductIdentityFields editing={editing} setEditing={setEditing} />
         <ProductAttributeFields editing={editing} setEditing={setEditing} />
         <ProductChangeNote changeNote={changeNote} setChangeNote={setChangeNote} />
-        <ProductEditActions saving={saving} onClose={onClose} />
+        <ProductEditActions saving={saving} conflict={conflict} onClose={onClose} />
       </form>
     </Modal>
   );

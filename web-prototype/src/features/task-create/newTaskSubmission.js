@@ -1,6 +1,6 @@
 import { api } from "../../api";
 import { errorStatus } from "../../shared/api/requestErrors";
-import { serverStateKeys } from "../../shared/serverState";
+import { refreshServerState } from "../../shared/serverState";
 
 /** @typedef {import("./taskCreateContracts").TaskForm} TaskForm */
 /** @typedef {import("./taskCreateContracts").TaskPreflightState} TaskPreflightState */
@@ -60,6 +60,7 @@ async function createPreparedTask({
   unresolvedPolicy,
   segmentOrder,
   mutateServerState,
+  notify,
 }) {
   await api.createTask({
     ...form,
@@ -71,15 +72,9 @@ async function createPreparedTask({
     segment_order: segmentOrder,
   });
   try {
-    await mutateServerState(
-      serverStateKeys.taskList,
-      api.tasks({ include_archived: true }),
-      { revalidate: false },
-    );
+    await refreshServerState(mutateServerState, ["analysis-tasks", "workbench"]);
   } catch {
-    await mutateServerState(serverStateKeys.taskList, undefined, {
-      revalidate: false,
-    });
+    notify("任务已创建，关联数据更新失败，可返回任务页重试", "error");
   }
 }
 

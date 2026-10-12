@@ -1,3 +1,4 @@
+import { MANAGED_REFRESH_OPTIONS } from "../../shared/refreshPolicy";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import "../../styles/task-flow.css";
 import useSWR from "swr";
@@ -29,6 +30,7 @@ export function TaskCreatePage({ route, notify, onNavigate, onChanged, userId })
   } = useSWR(
     templateTaskId ? serverStateKeys.taskTemplate(templateTaskId) : null,
     () => (templateTaskId ? api.task(templateTaskId) : null),
+    MANAGED_REFRESH_OPTIONS,
   );
 
   useEffect(() => {

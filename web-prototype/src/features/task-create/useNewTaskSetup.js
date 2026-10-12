@@ -1,3 +1,6 @@
+import { useDataRefresh } from "../../hooks/useDataRefresh";
+import { useProtectedData } from "../../hooks/useProtectedData";
+import { MANAGED_REFRESH_OPTIONS } from "../../shared/refreshPolicy";
 import { useEffect, useState } from "react";
 import useSWR from "swr";
 
@@ -39,6 +42,9 @@ function setupErrorMessage(error) {
 
 /** @param {TaskDraft | null | undefined} draft */
 export function useNewTaskSetup(draft) {
+  const [importedVersions, setImportedVersions] = useState(
+    /** @type {DataVersion[] | null} */ (null),
+  );
   const [form, setForm] = useState(
     /** @type {TaskForm} */ ({
       title: "",
@@ -51,11 +57,17 @@ export function useNewTaskSetup(draft) {
     }),
   );
   const {
-    data: setup,
+    data: fetchedSetup,
     error,
     isLoading,
     mutate,
-  } = useSWR(serverStateKeys.taskCreateSetup, loadTaskSetup);
+  } = useSWR(serverStateKeys.taskCreateSetup, loadTaskSetup, MANAGED_REFRESH_OPTIONS);
+  const setup = useProtectedData(
+    fetchedSetup,
+    Boolean(form.title || form.dataset_version_id || form.store || form.listing),
+    "task-setup",
+  );
+  useDataRefresh(() => mutate(), { loading: isLoading });
 
   useEffect(() => {
     if (!setup) return;
@@ -95,11 +107,14 @@ export function useNewTaskSetup(draft) {
 
   /** @type {import("react").Dispatch<import("react").SetStateAction<DataVersion[]>>} */
   const setVersions = (next) => {
+    const nextVersions =
+      typeof next === "function" ? next(importedVersions ?? setup?.data ?? []) : next;
+    // 用户主动导入的新数据立即可见，后台读取不能覆盖正在填写的任务草稿。
+    setImportedVersions(nextVersions);
     void mutate(
       (current) => {
         if (!current) return current;
-        const data = typeof next === "function" ? next(current.data) : next;
-        return { ...current, data };
+        return { ...current, data: nextVersions };
       },
       { revalidate: false },
     );
@@ -112,7 +127,7 @@ export function useNewTaskSetup(draft) {
     (model) => model.active && model.validation_status === "validated",
   );
   const modelPolicy = resolveTaskModelPolicy(configs, form);
-  const versions = setup?.data ?? [];
+  const versions = importedVersions ?? setup?.data ?? [];
   const products = versions.filter((item) => item.kind === "products");
   const selectedProducts = products.find(
     (item) => item.version_id === form.product_version_id,
@@ -122,7 +137,7 @@ export function useNewTaskSetup(draft) {
     availableModels,
     configs,
     form,
-    loadingSetup: isLoading && !setup,
+    loadingSetup: !setup && (isLoading || !error),
     modelPolicy,
     products,
     publishedConfigs,

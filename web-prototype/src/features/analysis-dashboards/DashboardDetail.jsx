@@ -26,7 +26,6 @@ import { useDashboardReportActions } from "./useDashboardReportActions";
 /** @param {DashboardDetailProps} props */
 export function DashboardDetail(props) {
   const { route, updateRoute } = props;
-  const { main, selectedVersion, loadMain } = useDashboardVersion(props);
   const { content, selectedRecord, setSelectedRecord, loadContent } =
     useDashboardContent(props);
   const reportState = useDashboardReports(props);
@@ -50,6 +49,12 @@ export function DashboardDetail(props) {
     retryReport,
     setIssueDecision,
   } = useDashboardReportActions({ ...props, ...reportState });
+
+  const { main, selectedVersion, loadMain } = useDashboardVersion({
+    ...props,
+    protectedOperation:
+      Boolean(selectedRecord) || generationOpen || decisionState.loading,
+  });
 
   const [showDataInfo, setShowDataInfo] = useState(false);
   /** @type {import("react").RefObject<HTMLElement | null>} */

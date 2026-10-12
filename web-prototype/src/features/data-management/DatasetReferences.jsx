@@ -1,3 +1,5 @@
+import { useDataRefresh } from "../../hooks/useDataRefresh";
+import { MANAGED_REFRESH_OPTIONS } from "../../shared/refreshPolicy";
 import { useCallback, useRef } from "react";
 import useSWR from "swr";
 import { useLoadingHeight } from "../../hooks/useLoadingHeight";
@@ -48,7 +50,13 @@ export function DatasetReferences({
           ),
         (value) => value,
       ),
+    MANAGED_REFRESH_OPTIONS,
   );
+  useDataRefresh(() => mutate(), {
+    enabled: Boolean(selectedVersionId),
+    loading: isLoading || isValidating,
+    identity: `${currentVersionId}:${page}`,
+  });
   const state = {
     data,
     loading: isLoading || isValidating,

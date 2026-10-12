@@ -68,7 +68,10 @@ export function ClassificationStandardsPage({ route, notify }) {
     loadStandards,
     filteredStandards,
     totals,
-  } = useClassificationStandardList(notify);
+  } = useClassificationStandardList(
+    notify,
+    classificationStandardPageMode(route).mode === "list",
+  );
   const [busy, setBusy] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(
     /** @type {ClassificationStandardSummary | null} */ (null),

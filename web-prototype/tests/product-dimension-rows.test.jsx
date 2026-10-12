@@ -97,9 +97,13 @@ test.each([true, false])("仅Error对象的409刷新版本：%s", async (errorOb
     expect(api.dataset).toHaveBeenCalledWith(dataset.id, { include: "" });
     expect(onChanged).toHaveBeenCalledWith({ ...dataset, current_version: 4 });
     expect(calls).toEqual(["读取版本", "版本更新", "通知"]);
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeVisible();
+    expect(within(dialog).getByRole("textbox", { name: "修改原因" })).toHaveValue(
+      "合成原因",
+    );
+    expect(within(dialog).getByRole("button", { name: "保存" })).toBeDisabled();
     expect(notify).toHaveBeenCalledWith(
-      "数据已被其他用户更新，已刷新，请重新修改",
+      "数据已更新，输入已保留，请核对最新资料后重新修改",
       "error",
     );
   } else {

@@ -16,8 +16,6 @@ export function ClassificationResultList(props) {
     clearSelection,
     continueToDashboard,
     continueToInsight,
-    hasNewResults,
-    load,
   } = context;
   return (
     <div className="standard-page classification-results-page">
@@ -61,15 +59,6 @@ export function ClassificationResultList(props) {
           </div>
           <button className="text-button" onClick={() => clearSelection(true)}>
             取消选择
-          </button>
-        </div>
-      )}
-
-      {hasNewResults && (
-        <div className="result-refresh-banner" role="status">
-          <span>有新的 Listing 分类结果可用，当前列表未自动改变。</span>
-          <button className="secondary-button" onClick={load}>
-            刷新列表
           </button>
         </div>
       )}

@@ -59,6 +59,7 @@ export function useModelServiceConfiguration({
   );
   const [discardConfirmation, setDiscardConfirmation] = useState(false);
   const preserveConfigFormRef = useRef(false);
+  const formConnectionRef = useRef(selectedConnectionId);
   useEffect(() => {
     if (focusModelId) setActivePanel("models");
     else if (focusConfigVersionId) setActivePanel("versions");
@@ -73,12 +74,17 @@ export function useModelServiceConfiguration({
     Boolean(selectedConnection),
   );
   const saveDisabled = Boolean(busy) || configFormErrors.length > 0;
+  const configSaving = busy === "save";
   useEffect(() => {
+    // 保存响应先给出新修订，连接列表随后同步；不能被尚未更新的旧列表改回。
+    if (configSaving || (editing && formConnectionRef.current === selectedConnectionId))
+      return;
     if (preserveConfigFormRef.current) {
       preserveConfigFormRef.current = false;
       return;
     }
     if (!selectedConnection) return;
+    formConnectionRef.current = selectedConnectionId;
     const value = preferredVersion(
       selectedConnection,
       selectedVersion?.id,
@@ -88,6 +94,8 @@ export function useModelServiceConfiguration({
     if (value) setForm(formForVersion(selectedConnection, value));
     setEditing(false);
   }, [
+    configSaving,
+    editing,
     connections,
     focusConfigVersionId,
     selectedConnection,
