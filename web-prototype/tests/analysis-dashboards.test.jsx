@@ -1298,14 +1298,10 @@ test("空态只保留一个选择分类结果入口", async () => {
   expect(screen.getAllByRole("button", { name: "选择分类结果" })).toHaveLength(1);
 });
 
-test("详情组件与数据加载共用固定的页头和正文占位", async () => {
+test("详情加载展示真实标题，正文继续使用公共加载提示", async () => {
   const loadingView = render(<DashboardDetailLoading />);
-  expect(
-    loadingView.container.querySelector(".return-insight-page-header"),
-  ).toBeTruthy();
-  expect(
-    loadingView.container.querySelector(".dashboard-detail-loading-body"),
-  ).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "分析看板" })).toBeTruthy();
+  expect(loadingView.container.querySelector(".page-loading-state")).toBeTruthy();
   loadingView.unmount();
 
   /** @type {(value: unknown) => void} */
@@ -1322,8 +1318,8 @@ test("详情组件与数据加载共用固定的页头和正文占位", async ()
     "#analysis-dashboards?dashboard=dashboard-default&version=dashboard-version-default";
   const view = render(<DashboardHarness />);
 
-  expect(await screen.findByText("正在打开分析看板…")).toBeVisible();
-  expect(view.container.querySelector(".dashboard-detail-loading-title")).toBeTruthy();
+  expect(await screen.findByText("正在读取分析看板…")).toBeVisible();
+  expect(screen.getByRole("heading", { name: "分析看板" })).toBeVisible();
   await waitFor(() => {
     expect(dashboardApiMock.analysisDashboard).toHaveBeenCalledTimes(1);
     expect(dashboardApiMock.analysisDashboardInsights).toHaveBeenCalledTimes(1);
@@ -1340,10 +1336,8 @@ test("详情组件与数据加载共用固定的页头和正文占位", async ()
   expect(
     await screen.findByRole("heading", { name: "用户反馈语义洞察" }),
   ).toBeVisible();
-  expect(screen.getByText("正在打开分析看板…")).toBeVisible();
-  expect(
-    view.container.querySelectorAll(".dashboard-detail-loading-body"),
-  ).toHaveLength(1);
+  expect(await screen.findByText("正在读取分析看板…")).toBeVisible();
+  expect(view.container.querySelectorAll(".page-loading-state")).toHaveLength(1);
 
   await act(async () => {
     resolveInsights({
@@ -1357,7 +1351,7 @@ test("详情组件与数据加载共用固定的页头和正文占位", async ()
       evidence: { items: [], total: 0 },
     });
   });
-  expect(screen.queryByText("正在打开分析看板…")).not.toBeInTheDocument();
+  expect(screen.queryByText("正在读取分析看板…")).not.toBeInTheDocument();
   expect(screen.getByText("纳入反馈")).toBeVisible();
 });
 
@@ -1377,7 +1371,7 @@ test("详情正文读取失败时保留页头和重试入口", async () => {
     "网络连接中断，请检查网络后重新加载",
   );
   expect(screen.getByRole("button", { name: "重新加载" })).toBeVisible();
-  expect(screen.queryByText("正在打开分析看板…")).not.toBeInTheDocument();
+  expect(screen.queryByText("正在读取分析看板…")).not.toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "重新加载" }));
   expect(await screen.findByText("纳入反馈")).toBeVisible();
@@ -1646,7 +1640,7 @@ test("连续调整筛选时保留旧结果，并只应用最后一次请求", as
   expect(screen.getByRole("status")).toHaveTextContent("当前显示上一次结果");
   expect(screen.getByText("10 条")).toBeVisible();
   expect(screen.getByRole("combobox", { name: "Listing" })).toBeEnabled();
-  expect(view.container.querySelector(".dashboard-detail-loading-body")).toBeNull();
+  expect(view.container.querySelector(".page-loading-state")).toBeNull();
 
   await user.selectOptions(screen.getByRole("combobox", { name: "Listing" }), "L003");
   await waitFor(() => expect(resolveThird).toBeTypeOf("function"));
@@ -1702,7 +1696,7 @@ test("筛选失败保留旧结果并可重试，切换版本不混用旧结果",
     { version_id: "dashboard-version-2", version: 2 },
   ]);
   await waitFor(() => expect(resolveNewVersion).toBeTypeOf("function"));
-  expect(view.container.querySelector(".dashboard-detail-loading-body")).toBeTruthy();
+  expect(view.container.querySelector(".page-loading-state")).toBeTruthy();
   expect(screen.queryByText("5 条")).not.toBeInTheDocument();
   await act(async () => resolveNewVersion(insights(2)));
   expect(await screen.findByText("2 条")).toBeVisible();

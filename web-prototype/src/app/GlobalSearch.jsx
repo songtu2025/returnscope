@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CaretRight, MagnifyingGlass, Pulse } from "@phosphor-icons/react";
+import { CaretRight, MagnifyingGlass } from "@phosphor-icons/react";
 import { api } from "../api";
 import { errorMessage } from "../shared/api/requestErrors";
 import { matchingSearchItems } from "./globalSearchItems";
 import { useDialogFocus } from "../hooks/useDialogFocus";
+import { useLoadingHeight } from "../hooks/useLoadingHeight";
+import { InlineLoading } from "../components/SharedUi";
 
 /** @typedef {import("./navigation").NavigationFocus} NavigationFocus */
 /** @typedef {(message: string, tone?: string) => void} Notify */
@@ -21,12 +23,15 @@ export function GlobalSearch({ onClose, onSelect, notify }) {
     }),
   );
   const [loading, setLoading] = useState(true);
+  const [hasData, setHasData] = useState(false);
+  const [feedbackQuery, setFeedbackQuery] = useState("");
   const [loadError, setLoadError] = useState("");
   const [searchError, setSearchError] = useState("");
   const error = loadError || searchError;
   const [searching, setSearching] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const resultsRef = useRef(/** @type {HTMLDivElement | null} */ (null));
+  useLoadingHeight(loading || searching, resultsRef);
   const { dialogRef, constrainFocus } = useDialogFocus({ open: true, onClose });
 
   const load = useCallback(async () => {
@@ -38,6 +43,7 @@ export function GlobalSearch({ onClose, onSelect, notify }) {
         api.datasets("products"),
       ]);
       setResources((current) => ({ ...current, tasks, datasets }));
+      setHasData(true);
     } catch (failure) {
       const message = errorMessage(failure);
       setLoadError(message);
@@ -64,8 +70,10 @@ export function GlobalSearch({ onClose, onSelect, notify }) {
         const result = await api.searchClassificationFeedback(query.trim(), {
           signal: controller.signal,
         });
-        if (!controller.signal.aborted)
+        if (!controller.signal.aborted) {
           setResources((current) => ({ ...current, feedback: result.items }));
+          setFeedbackQuery(query.trim());
+        }
       } catch (failure) {
         if (!controller.signal.aborted) setSearchError(errorMessage(failure));
       } finally {
@@ -78,7 +86,13 @@ export function GlobalSearch({ onClose, onSelect, notify }) {
     };
   }, [query, attempt]);
 
-  const matches = matchingSearchItems(resources, query);
+  const matches = matchingSearchItems(
+    {
+      ...resources,
+      feedback: feedbackQuery === query.trim() ? resources.feedback : [],
+    },
+    query,
+  );
 
   return (
     <div
@@ -101,13 +115,7 @@ export function GlobalSearch({ onClose, onSelect, notify }) {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
-              if (
-                !loading &&
-                !searching &&
-                !error &&
-                event.key === "Enter" &&
-                matches[0]
-              )
+              if (!loading && !loadError && event.key === "Enter" && matches[0])
                 onSelect(matches[0].page, matches[0].focus);
               if (event.key === "ArrowDown" || event.key === "ArrowUp") {
                 event.preventDefault();
@@ -119,6 +127,11 @@ export function GlobalSearch({ onClose, onSelect, notify }) {
             }}
             placeholder="输入任务名、产品信息或评论…"
             data-dialog-initial-focus
+          />
+          <InlineLoading
+            label="更新中…"
+            compact
+            active={hasData && (loading || searching)}
           />
           <kbd>Esc</kbd>
         </header>
@@ -137,15 +150,10 @@ export function GlobalSearch({ onClose, onSelect, notify }) {
             else dialogRef.current?.querySelector("input")?.focus();
           }}
         >
-          {(loading || searching) && (
-            <div className="command-empty">
-              <Pulse size={22} />
-              正在读取工作区…
-            </div>
-          )}
+          {loading && !hasData && <InlineLoading label="正在读取工作区…" />}
           {!loading && !searching && error && (
             <div className="command-empty" role="alert">
-              <b>工作区读取失败</b>
+              <b>{loadError ? "工作区读取失败" : "反馈搜索失败"}</b>
               <span>{error}</span>
               <button
                 className="secondary-button"
@@ -164,9 +172,7 @@ export function GlobalSearch({ onClose, onSelect, notify }) {
               没有找到匹配内容
             </div>
           )}
-          {!loading &&
-            !searching &&
-            !error &&
+          {hasData &&
             matches.map((item) => {
               const Icon = item.icon;
               return (

@@ -18,9 +18,6 @@
   }
 }
 
-.dashboard-create-page > .inline-loading {
-  min-height: 260px;
-}
 .dashboard-status.archived {
   color: var(--muted);
   background: #eef1ef;

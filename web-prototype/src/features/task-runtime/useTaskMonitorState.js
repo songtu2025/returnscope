@@ -44,14 +44,14 @@ export function useTaskMonitorState({
   const {
     data: taskData,
     error: taskListError,
-    isLoading,
+    isValidating,
     mutate: refreshTasks,
   } = useSWR(serverStateKeys.taskList, () =>
     taskMonitorApi.tasks({ include_archived: true }),
   );
   const tasks = /** @type {AnalysisTask[]} */ (taskData ?? EMPTY_TASKS);
   const listError = taskListError ? errorMessage(taskListError) : "";
-  const loading = isLoading && taskData === undefined;
+  const loading = isValidating;
 
   useEffect(() => {
     if (!taskListError) {

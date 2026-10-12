@@ -206,11 +206,6 @@
 .status-pill.archived i {
   background: #7f8b85;
 }
-.task-template-loading {
-  display: grid;
-  min-height: 240px;
-  place-items: center;
-}
 @media (max-width: 900px) {
   .task-registry-toolbar {
     grid-template-columns: 1fr;

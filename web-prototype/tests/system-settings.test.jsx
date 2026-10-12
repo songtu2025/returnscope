@@ -1,4 +1,5 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
+import { renderWithServerState as render } from "./renderWithServerState";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -8,6 +9,24 @@ vi.mock("../src/shared/api/auditApi", () => ({ auditApi: { logs } }));
 
 import { AuditLogPage } from "../src/features/system-settings/AuditLogPage";
 import { AuditLogEntries } from "../src/features/system-settings/AuditLogEntries";
+import { AuditLogResults } from "../src/features/system-settings/AuditLogResults";
+import { useAuditLogs } from "../src/features/system-settings/useAuditLogs";
+
+function AuditRefreshProbe({ route }) {
+  const { state, load } = useAuditLogs(route, Number(route.query.page || 1));
+  return (
+    <>
+      <button onClick={load}>刷新</button>
+      <AuditLogResults
+        state={state}
+        load={load}
+        dateRangeError=""
+        page={Number(route.query.page || 1)}
+        route={route}
+      />
+    </>
+  );
+}
 
 beforeEach(() => {
   logs.mockReset();
@@ -15,6 +34,61 @@ beforeEach(() => {
 });
 
 afterEach(() => cleanup());
+
+test("审计同条件刷新保留数据，失败可重试；翻页不混用旧结果", async () => {
+  const previous = {
+    total: 21,
+    page: 1,
+    page_size: 20,
+    items: [
+      {
+        id: "previous",
+        actor_name: "合成旧记录",
+        action: "task_create",
+        entity_type: "task",
+      },
+    ],
+  };
+  let finishRefresh;
+  let finishPage;
+  logs
+    .mockResolvedValueOnce(previous)
+    .mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          finishRefresh = reject;
+        }),
+    )
+    .mockResolvedValueOnce(previous)
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishPage = resolve;
+        }),
+    );
+  const route = { query: {} };
+  const view = render(<AuditRefreshProbe route={route} />);
+  await screen.findByText("合成旧记录");
+  await userEvent.click(screen.getByRole("button", { name: "刷新" }));
+  await waitFor(() => expect(logs).toHaveBeenCalledTimes(2));
+  expect(screen.getByText("合成旧记录")).toBeVisible();
+  await act(async () => finishRefresh(new Error("合成刷新失败")));
+  await screen.findByRole("button", { name: "重新加载" });
+  expect(screen.getByText("合成旧记录")).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "重新加载" }));
+  await waitFor(() => expect(logs).toHaveBeenCalledTimes(3));
+  view.rerender(<AuditRefreshProbe route={{ query: { page: "2" } }} />);
+  await waitFor(() => expect(logs).toHaveBeenCalledTimes(4));
+  expect(screen.queryByText("合成旧记录")).toBeNull();
+  await act(async () =>
+    finishPage({
+      ...previous,
+      page: 2,
+      items: [{ ...previous.items[0], id: "new", actor_name: "合成新记录" }],
+    }),
+  );
+  expect(await screen.findByText("合成新记录")).toBeVisible();
+});
 
 test.each([
   [{ target: { view: "products" }, after: { kind: "returns" } }, "产品信息"],

@@ -1,25 +1,17 @@
 import { ArrowLeft } from "@phosphor-icons/react";
 
-import { InlineLoading } from "../../components/SharedUi";
+import { PageLoadingState } from "../../components/SharedUi";
 
 export function DashboardDetailLoading() {
   return (
     <div className="standard-page analysis-dashboard-page dashboard-detail-page return-insight-page">
-      <header className="return-insight-page-header" aria-hidden="true">
-        <span className="dashboard-detail-loading-title" />
-        <span className="dashboard-detail-loading-actions" />
-      </header>
-      <DashboardDetailLoadingBody />
+      <PageLoadingState title="分析看板" label="正在读取分析看板…" />
     </div>
   );
 }
 
 export function DashboardDetailLoadingBody() {
-  return (
-    <div className="dashboard-detail-loading-body">
-      <InlineLoading label="正在打开分析看板…" />
-    </div>
-  );
+  return <PageLoadingState label="正在读取分析看板…" />;
 }
 
 /** @param {{error: string, onBack?: () => void, onReload: () => void | Promise<void>, hasData?: boolean}} props */

@@ -1,14 +1,12 @@
 import { ArrowRight, ChartBar, Plus } from "@phosphor-icons/react";
-import { EmptyState, InlineLoading } from "../../components/SharedUi";
+import { EmptyState } from "../../components/SharedUi";
 import { formatTime } from "../../lib/presentation";
 import { OUTPUT_LABELS, openTarget } from "./workbenchPolicy";
 
 /** @typedef {import("../../shared/api/workbenchContracts").WorkbenchOutput} WorkbenchOutput */
-/** @typedef {import("./workbenchPolicy").WorkbenchViewState} WorkbenchViewState */
 
-/** @param {{recentOutputs: WorkbenchOutput[], state: WorkbenchViewState, onNavigate: (destination: string) => void}} props */
-export function WorkbenchOutputs({ recentOutputs, state, onNavigate }) {
-  const { isLoading, hasData, message } = state;
+/** @param {{recentOutputs: WorkbenchOutput[], hasData: boolean, onNavigate: (destination: string) => void}} props */
+export function WorkbenchOutputs({ recentOutputs, hasData, onNavigate }) {
   return (
     <section className="content-card workbench-card workbench-output-card">
       <header>
@@ -23,9 +21,7 @@ export function WorkbenchOutputs({ recentOutputs, state, onNavigate }) {
           查看分类结果 <ArrowRight size={15} />
         </button>
       </header>
-      {isLoading && !hasData ? (
-        <InlineLoading label="正在读取最近产出…" />
-      ) : message && !hasData ? null : recentOutputs.length === 0 ? (
+      {!hasData ? null : recentOutputs.length === 0 ? (
         <EmptyState
           icon={ChartBar}
           title="还没有可查看的产出"

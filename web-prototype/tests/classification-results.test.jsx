@@ -41,6 +41,7 @@ import { AnalysisDashboardPage } from "../src/features/analysis-dashboards/Analy
 import { useHashRoute } from "../src/app/hashRouter";
 import { readDashboardSelection } from "../src/features/analysis-dashboards/dashboardSelectionStorage";
 import { ResultVersionReviewPanel } from "../src/features/review-batches/ResultVersionReviewPanel";
+import { ResultVersionHistory } from "../src/features/review-batches/ResultVersionHistory";
 import { renderWithServerState as render } from "./renderWithServerState";
 
 const resultVersion = {
@@ -1284,6 +1285,25 @@ test("派生统计字段缺失时只显示已有记录与分类单元摘要", as
   expect(await screen.findByText("v2 · 分析结果更新")).toBeVisible();
   expect(screen.queryByText(/修改 .* 个分类单元/)).not.toBeInTheDocument();
   expect(screen.getAllByText(/3 条记录 · 1 个分类单元/)).toHaveLength(2);
+});
+
+test("修改历史更新中和更新失败均保留已有条目", async () => {
+  const props = {
+    history: [resultVersion],
+    resultVersionId: resultVersion.version_id,
+    loading: false,
+    error: "",
+    onReload: vi.fn(),
+    onSelectVersion: vi.fn(),
+  };
+  const view = render(<ResultVersionHistory {...props} />);
+  view.rerender(<ResultVersionHistory {...props} loading />);
+  expect(screen.getByText("v1 · 原始分类")).toBeVisible();
+  view.rerender(<ResultVersionHistory {...props} error="合成历史失败" />);
+  expect(screen.getByText("合成历史失败")).toBeVisible();
+  expect(screen.getByText("v1 · 原始分类")).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "重新加载" }));
+  expect(props.onReload).toHaveBeenCalledOnce();
 });
 
 test("复核版本切换取消共享旧请求，晚返回不覆盖新历史且卸载取消新请求", async () => {

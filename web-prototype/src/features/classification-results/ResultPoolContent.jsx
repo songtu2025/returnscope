@@ -2,6 +2,8 @@ import { ResultPoolStatus } from "./ResultPoolStatus";
 import { Pagination } from "./ClassificationResultCommon";
 import { ResultPoolRow } from "./ClassificationResultListParts";
 import { resultVersionId } from "./resultActionPolicy";
+import { useRef } from "react";
+import { useLoadingHeight } from "../../hooks/useLoadingHeight";
 
 /** @typedef {import("./classificationResultListContracts").ResultPoolContext} ResultPoolContext */
 
@@ -19,13 +21,19 @@ export function ResultPoolContent(context) {
     changePage,
     changePageSize,
   } = context;
+  const regionRef = useRef(/** @type {HTMLElement | null} */ (null));
+  useLoadingHeight(loading, regionRef);
   return (
-    <section className="result-pool-card">
+    <section
+      ref={regionRef}
+      className="result-pool-card loading-region"
+      aria-busy={loading}
+    >
       <ResultPoolStatus {...context} />{" "}
       {data && data.items.length > 0 && (
         <>
           <div
-            className={`result-pool-table is-selecting ${loading ? "is-loading" : ""}`}
+            className="result-pool-table is-selecting"
             role="table"
             aria-label="分类结果"
             aria-busy={loading}

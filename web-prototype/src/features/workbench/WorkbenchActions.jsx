@@ -1,14 +1,12 @@
 import { ArrowRight, ListChecks } from "@phosphor-icons/react";
-import { EmptyState, InlineLoading } from "../../components/SharedUi";
+import { EmptyState } from "../../components/SharedUi";
 import { formatTime } from "../../lib/presentation";
 import { ACTION_LABELS, nextActionLabel, openTarget } from "./workbenchPolicy";
 
 /** @typedef {import("../../shared/api/workbenchContracts").WorkbenchAction} WorkbenchAction */
-/** @typedef {import("./workbenchPolicy").WorkbenchViewState} WorkbenchViewState */
 
-/** @param {{actions: WorkbenchAction[], state: WorkbenchViewState, onNavigate: (destination: string) => void}} props */
-export function WorkbenchActions({ actions, state, onNavigate }) {
-  const { isLoading, hasData, message } = state;
+/** @param {{actions: WorkbenchAction[], hasData: boolean, onNavigate: (destination: string) => void}} props */
+export function WorkbenchActions({ actions, hasData, onNavigate }) {
   return (
     <section className="content-card workbench-card workbench-action-card">
       <header>
@@ -20,9 +18,7 @@ export function WorkbenchActions({ actions, state, onNavigate }) {
           查看分析任务 <ArrowRight size={15} />
         </button>
       </header>
-      {isLoading && !hasData ? (
-        <InlineLoading label="正在读取待行动事项…" />
-      ) : message && !hasData ? null : actions.length === 0 ? (
+      {!hasData ? null : actions.length === 0 ? (
         <EmptyState
           icon={ListChecks}
           title="当前没有待处理事项或后台任务"

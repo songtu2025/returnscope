@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { PageHeading } from "../../components/SharedUi";
+import { InlineLoading, PageHeading } from "../../components/SharedUi";
 import { filtersFromRoute, getDateRangeError, numberParam } from "./auditLogPolicy";
 import { AuditLogFilter } from "./AuditLogFilter";
 import { AuditLogResults } from "./AuditLogResults";
@@ -24,6 +24,13 @@ export function AuditLogPage({ route }) {
         eyebrow="系统治理"
         title="审计记录"
         description="按操作人、对象和日期追溯系统变更；敏感字段始终掩码。"
+        action={
+          <InlineLoading
+            label="更新中…"
+            compact
+            active={state.loading && Boolean(state.data)}
+          />
+        }
       />
       <section className="content-card audit-card">
         <AuditLogFilter

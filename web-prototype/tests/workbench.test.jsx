@@ -16,6 +16,35 @@ beforeEach(() => {
 
 afterEach(() => cleanup());
 
+test("首页慢请求只显示一个加载提示，两个卡片不重复加载或提前显示空态", async () => {
+  let finish;
+  summary.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  render(<WorkbenchPage onNavigate={vi.fn()} />);
+  await waitFor(() =>
+    expect(document.querySelectorAll(".inline-loading.ant-spin-spinning")).toHaveLength(
+      1,
+    ),
+  );
+  expect(document.querySelectorAll(".workbench-card .inline-loading")).toHaveLength(0);
+  expect(document.querySelector(".workbench-grid")).toHaveAttribute(
+    "aria-busy",
+    "true",
+  );
+  expect(screen.queryByText("当前没有待处理事项或后台任务")).toBeNull();
+  expect(screen.queryByText("还没有可查看的产出")).toBeNull();
+  expect(summary).toHaveBeenCalledTimes(1);
+  await act(async () => finish({ actions: [], recent_outputs: [], counts: {} }));
+  expect(await screen.findByText("还没有可查看的产出")).toBeVisible();
+  expect(document.querySelectorAll(".inline-loading.ant-spin-spinning")).toHaveLength(
+    0,
+  );
+});
+
 test("工作台只调用一次真实汇总并按具体目标跳转", async () => {
   summary.mockResolvedValue({
     actions: [
@@ -50,6 +79,9 @@ test("工作台只调用一次真实汇总并按具体目标跳转", async () =>
   expect(screen.getByText("SR001 分类结果")).toBeVisible();
   expect(summary).toHaveBeenCalledTimes(1);
   expect(summary).toHaveBeenCalledWith(5);
+  expect(document.querySelectorAll(".inline-loading.ant-spin-spinning")).toHaveLength(
+    0,
+  );
   expect(screen.queryByText("我的运行额度")).not.toBeInTheDocument();
 
   await userEvent.click(screen.getByText("商品信息待补充"));
@@ -114,7 +146,8 @@ test("原子汇总失败只显示一个共享错误和一次重试", async () =>
   expect(within(alert).getByText("首页数据读取失败")).toBeVisible();
   expect(screen.getAllByRole("button", { name: "重新加载" })).toHaveLength(1);
 
-  await userEvent.click(screen.getByRole("button", { name: "重新加载" }));
+  screen.getByRole("button", { name: "重新加载" }).focus();
+  await userEvent.keyboard("{Enter}");
   expect(await screen.findByText("当前没有待处理事项或后台任务")).toBeVisible();
   expect(screen.getByText("还没有可查看的产出")).toBeVisible();
   expect(summary).toHaveBeenCalledTimes(2);
@@ -165,6 +198,12 @@ test("再次进入首页立即显示缓存并在后台更新", async () => {
   expect(screen.getByText("缓存中的待办")).toBeVisible();
   expect(screen.queryByText("正在读取待行动事项…")).not.toBeInTheDocument();
   await waitFor(() => expect(summary).toHaveBeenCalledTimes(2));
+  await waitFor(() =>
+    expect(document.querySelectorAll(".inline-loading.ant-spin-spinning")).toHaveLength(
+      1,
+    ),
+  );
+  expect(screen.getByText("缓存中的待办")).toBeVisible();
 
   await act(async () => {
     resolveRefresh({

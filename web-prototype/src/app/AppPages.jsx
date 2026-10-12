@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { PageLoadingState } from "../components/SharedUi";
 import { PageErrorBoundary } from "./PageErrorBoundary";
+import { PRIMARY_NAV_ITEMS, SETTINGS_NAV_ITEM } from "./navigation";
 import { LegacyResultsPage, LegacyReviewPage } from "./LegacyPages";
 import {
   WorkbenchPage,
@@ -21,12 +22,17 @@ import {
 /** @param {{route: AppRoute, user: CurrentUser, notify: Notify, navigate: Navigate, refreshSystem: () => Promise<void>}} props */
 export function AppPages({ route, user, notify, navigate, refreshSystem }) {
   const page = route.page;
+  const title =
+    page === "task-create"
+      ? "创建分析任务"
+      : [...PRIMARY_NAV_ITEMS, SETTINGS_NAV_ITEM].find((item) => item.id === page)
+          ?.label;
   return (
     <PageErrorBoundary key={page}>
       <Suspense
         fallback={
           <div className="standard-page">
-            <PageLoadingState label="正在加载页面…" />
+            <PageLoadingState title={title} label="正在读取页面…" />
           </div>
         }
       >
@@ -74,7 +80,7 @@ export function AppPages({ route, user, notify, navigate, refreshSystem }) {
           <Suspense
             fallback={
               <div className="standard-page classification-results-page">
-                <PageLoadingState label="正在加载分类结果池…" />
+                <PageLoadingState title="分类结果" label="正在读取分类结果…" />
               </div>
             }
           >

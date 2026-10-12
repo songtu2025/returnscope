@@ -3,7 +3,6 @@ import { routeForTarget } from "../../app/navigation";
 
 /** @typedef {import("../../shared/api/workbenchContracts").WorkbenchTarget} WorkbenchTarget */
 /** @typedef {import("../../shared/api/workbenchContracts").WorkbenchAction} WorkbenchAction */
-/** @typedef {{isLoading: boolean, hasData: boolean, message: string}} WorkbenchViewState */
 
 /** @type {Record<string, string>} */
 export const ACTION_LABELS = {

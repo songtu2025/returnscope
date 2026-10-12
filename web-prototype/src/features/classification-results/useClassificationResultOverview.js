@@ -4,7 +4,7 @@ import useSWR from "swr";
 import { api } from "../../api";
 import { errorMessage } from "../../shared/api/requestErrors";
 import { serverStateKeys } from "../../shared/serverState";
-import { runResultRequest } from "./resultRequestLifecycle";
+import { runResultRequest } from "../../shared/api/requestLifecycle";
 
 /** @param {string} version */
 export function useClassificationResultOverview(version) {

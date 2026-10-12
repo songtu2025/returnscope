@@ -82,7 +82,7 @@ export function ClassificationStandardList({
           </div>
         </section>
       )}
-      <section className="standard-library-card">
+      <section className="standard-library-card" aria-busy={loading}>
         <div className="standard-library-toolbar">
           <Input
             className="standard-search-box"
@@ -92,6 +92,7 @@ export function ClassificationStandardList({
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
           />
+          <InlineLoading label="更新中…" compact active={loading && hasData} />
           <div className="standard-status-filter" role="group" aria-label="标准状态">
             {
               /** @type {const} */ ([
@@ -112,7 +113,7 @@ export function ClassificationStandardList({
             }
           </div>
         </div>
-        {loading && <InlineLoading label="正在更新分类标准…" />}
+        {loading && !hasData && <InlineLoading label="正在读取分类标准…" />}
         {error && (
           <div role="alert">
             <EmptyState

@@ -1,6 +1,7 @@
 import Button from "antd/es/button";
 import Input from "antd/es/input";
-import { useId } from "react";
+import { useId, useRef } from "react";
+import { useLoadingHeight } from "../../hooks/useLoadingHeight";
 import { MagnifyingGlass } from "@phosphor-icons/react";
 import { EmptyState, InlineLoading } from "../../components/SharedUi";
 import { Pagination, ResultError } from "./ClassificationResultCommon";
@@ -22,38 +23,41 @@ export function ResultDetailRecords(context) {
     changeRecordPage,
     changePageSize,
   } = context;
+  const regionRef = useRef(/** @type {HTMLDivElement | null} */ (null));
+  useLoadingHeight(recordsLoading, regionRef);
   return (
     <section className="result-record-card" id="classification-order-records">
       <ResultRecordHeading {...context} />
-
-      {recordsError && <ResultError message={recordsError} onRetry={retryRecords} />}
-      {recordsLoading && !records && <InlineLoading label="正在读取订单记录…" />}
-      {!recordsError && !recordsLoading && records?.items?.length === 0 && (
-        <ResultRecordEmpty isUserFeedback={isUserFeedback} />
-      )}
-      {records && records.items.length > 0 && (
-        <>
-          <div className={`result-record-table ${recordsLoading ? "is-loading" : ""}`}>
-            <ResultRecordColumnHead {...context} />
-            {records.items.map((group) => (
-              <ResultRecordRow
-                key={group.record.source_record_id}
-                group={group}
-                analysisContext={result.analysis_context}
-                onOpen={openEvidence(group)}
-              />
-            ))}
-          </div>
-          <Pagination
-            page={route.recordPage}
-            pageSize={route.pageSize}
-            total={records.total}
-            totalPages={totalPages}
-            onPage={changeRecordPage}
-            onPageSize={changePageSize}
-          />
-        </>
-      )}
+      <div ref={regionRef} className="loading-region" aria-busy={recordsLoading}>
+        {recordsError && <ResultError message={recordsError} onRetry={retryRecords} />}
+        {recordsLoading && !records && <InlineLoading label="正在读取订单记录…" />}
+        {!recordsError && !recordsLoading && records?.items?.length === 0 && (
+          <ResultRecordEmpty isUserFeedback={isUserFeedback} />
+        )}
+        {records && records.items.length > 0 && (
+          <>
+            <div className="result-record-table">
+              <ResultRecordColumnHead {...context} />
+              {records.items.map((group) => (
+                <ResultRecordRow
+                  key={group.record.source_record_id}
+                  group={group}
+                  analysisContext={result.analysis_context}
+                  onOpen={openEvidence(group)}
+                />
+              ))}
+            </div>
+            <Pagination
+              page={route.recordPage}
+              pageSize={route.pageSize}
+              total={records.total}
+              totalPages={totalPages}
+              onPage={changeRecordPage}
+              onPageSize={changePageSize}
+            />
+          </>
+        )}
+      </div>
     </section>
   );
 }
@@ -77,6 +81,11 @@ function ResultRecordHeading(context) {
     <header>
       <div className="result-record-heading">
         <b>{isUserFeedback ? "用户反馈记录" : "订单级分类记录"}</b>
+        <InlineLoading
+          label="更新中…"
+          compact
+          active={context.recordsLoading && Boolean(context.records)}
+        />
       </div>
       <div className="result-record-tools">
         <ResultRecordFilters {...context}>

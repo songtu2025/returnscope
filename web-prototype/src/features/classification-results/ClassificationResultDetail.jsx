@@ -130,7 +130,7 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
         >
           <ArrowLeft size={17} /> 返回分类结果池
         </button>
-        <PageLoadingState label="正在读取分类结果详情…" />
+        <PageLoadingState title="分类结果" label="正在读取分类结果详情…" />
       </div>
     );
   }

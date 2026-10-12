@@ -211,7 +211,7 @@ describe("商品页面和旧任务草稿的恢复", () => {
       }),
     );
     render(<ProductMasterWorkspace {...props} />);
-    expect(screen.getByText("正在读取产品信息…")).toBeVisible();
+    expect(await screen.findByText("正在读取产品信息…")).toBeVisible();
     expect(screen.queryByText("尚未建立产品信息")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "导入产品信息" })).toBeDisabled();
     await act(async () => resolveList([]));
@@ -511,7 +511,7 @@ describe("关键用户流程", () => {
 
     render(<NewTaskPage notify={vi.fn()} onChanged={vi.fn()} onNavigate={vi.fn()} />);
 
-    expect(screen.getByText("正在读取数据与模型配置…")).toBeVisible();
+    expect(await screen.findByText("正在读取数据与模型配置…")).toBeVisible();
     expect(screen.queryByText("还需要完成运行准备")).not.toBeInTheDocument();
 
     resolveVersions([]);
@@ -722,6 +722,55 @@ describe("关键用户流程", () => {
     expect(screen.queryByText("正在读取工作区…")).not.toBeInTheDocument();
     for (const request of [apiMock.tasks, apiMock.datasets])
       expect(request).toHaveBeenCalledOnce();
+  });
+
+  test("远端反馈搜索等待或失败时，本地匹配仍可选择", async () => {
+    let failSearch;
+    apiMock.tasks.mockResolvedValue([
+      { id: "local-task", title: "本地分析任务", status: "done" },
+    ]);
+    apiMock.datasets.mockResolvedValue([]);
+    apiMock.searchClassificationFeedback.mockImplementation(
+      () =>
+        new Promise((_, reject) => {
+          failSearch = reject;
+        }),
+    );
+    const onSelect = vi.fn();
+    render(<GlobalSearch onClose={vi.fn()} onSelect={onSelect} notify={vi.fn()} />);
+    await screen.findByRole("button", { name: /本地分析任务/ });
+    fireEvent.change(screen.getByRole("textbox", { name: "全局搜索" }), {
+      target: { value: "本地" },
+    });
+    await waitFor(() =>
+      expect(apiMock.searchClassificationFeedback).toHaveBeenCalled(),
+    );
+    await userEvent.click(screen.getByRole("button", { name: /本地分析任务/ }));
+    expect(onSelect).toHaveBeenCalledWith("analysis-tasks", {
+      kind: "task",
+      id: "local-task",
+    });
+    await act(async () => failSearch(new Error("合成反馈搜索失败")));
+    await screen.findByText("反馈搜索失败");
+    expect(screen.getByRole("button", { name: /本地分析任务/ })).toBeVisible();
+    expect(screen.getByRole("textbox", { name: "全局搜索" })).toHaveValue("本地");
+  });
+
+  test("慢速读取类似任务配置时保留创建页标题", async () => {
+    apiMock.task.mockImplementation(() => new Promise(() => {}));
+    render(
+      <TaskCreatePage
+        route={{ query: { template_task: "slow-template" } }}
+        notify={vi.fn()}
+        onNavigate={vi.fn()}
+        onChanged={vi.fn()}
+        userId="synthetic-user"
+      />,
+    );
+    expect(
+      screen.getByRole("heading", { name: "创建分析任务", level: 1 }),
+    ).toBeVisible();
+    expect(await screen.findByText("正在读取原任务配置…")).toBeVisible();
   });
 
   test("浏览器前进后退可以恢复对应页面", async () => {
@@ -944,9 +993,9 @@ describe("关键用户流程", () => {
         expect.objectContaining({ signal: expect.any(AbortSignal) }),
       ),
     );
-    expect(await screen.findByText("正在更新分析结果…")).toBeVisible();
+    expect(await screen.findByText("正在读取分析结果…")).toBeVisible();
     expect(
-      screen.getByText("正在更新分析结果…").closest(".inline-loading"),
+      screen.getByText("正在读取分析结果…").closest(".inline-loading"),
     ).toHaveClass("ant-spin");
     await act(async () => resolveDiagnosis());
     expect(await screen.findByRole("heading", { name: "问题优先级" })).toBeVisible();
@@ -3214,6 +3263,152 @@ describe("关键用户流程", () => {
     classification: { status: "MANUAL_REVIEW", primary_label_codes: ["size_large"] },
   };
 
+  test("切换复核记录不展示旧详情，迟到响应不能覆盖当前记录及输入", async () => {
+    const first = {
+      ...conflictingReview,
+      id: "review-a",
+      task_title: "复核A",
+      comment: "评论A",
+    };
+    const second = {
+      ...conflictingReview,
+      id: "review-b",
+      task_title: "复核B",
+      comment: "评论B",
+    };
+    let finishFirst;
+    let finishSecond;
+    apiMock.reviews.mockResolvedValue([first, second]);
+    apiMock.review.mockImplementation(
+      (id) =>
+        new Promise((resolve) => {
+          if (id === first.id) finishFirst = resolve;
+          else finishSecond = resolve;
+        }),
+    );
+    apiMock.reviewTaxonomy.mockResolvedValue({ labels: [] });
+    apiMock.resolveReview.mockResolvedValue({});
+    render(<ReviewCenter notify={vi.fn()} onChanged={vi.fn()} focus={null} />);
+    await waitFor(() => expect(apiMock.review).toHaveBeenCalledWith(first.id));
+    await userEvent.click(screen.getByRole("button", { name: /评论B/ }));
+    expect(screen.queryByRole("button", { name: /确认并完成复核/ })).toBeNull();
+    expect(document.querySelector(".review-workspace")).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    await act(async () => finishSecond(second));
+    fireEvent.change(await screen.findByLabelText("修改说明"), {
+      target: { value: "仅修正B" },
+    });
+    await act(async () => finishFirst(first));
+    expect(screen.getByRole("heading", { name: "复核B" })).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "复核A" })).toBeNull();
+    expect(screen.getByLabelText("修改说明")).toHaveValue("仅修正B");
+    await userEvent.click(screen.getByRole("button", { name: /确认并完成复核/ }));
+    expect(apiMock.resolveReview).toHaveBeenCalledExactlyOnceWith(second.id, {
+      expected_revision: 3,
+      label_code: "size_large",
+      note: "仅修正B",
+    });
+  });
+
+  test("复核冲突后读取失败保留输入并阻止旧版本提交，重试可恢复", async () => {
+    apiMock.reviews.mockResolvedValue([conflictingReview]);
+    apiMock.review
+      .mockResolvedValueOnce(conflictingReview)
+      .mockRejectedValueOnce(new Error("合成读取失败"))
+      .mockResolvedValueOnce({ ...conflictingReview, revision: 4 });
+    apiMock.reviewTaxonomy.mockResolvedValue({
+      labels: [{ code: "size_small", name: "偏小" }],
+    });
+    apiMock.resolveReview.mockRejectedValue(
+      Object.assign(new Error("合成冲突"), { status: 409 }),
+    );
+    render(<ReviewCenter notify={vi.fn()} onChanged={vi.fn()} focus={null} />);
+    fireEvent.change(await screen.findByLabelText("修改说明"), {
+      target: { value: "保留修正说明" },
+    });
+    await userEvent.click(screen.getByRole("button", { name: /确认并完成复核/ }));
+    expect(await screen.findByText("复核记录更新失败，输入已保留")).toBeVisible();
+    expect(screen.getByLabelText("修改说明")).toHaveValue("保留修正说明");
+    expect(screen.getByRole("button", { name: /确认并完成复核/ })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "重新加载" }));
+    await screen.findByText(/记录版本 #4/);
+    expect(screen.getByLabelText("修改说明")).toHaveValue("保留修正说明");
+    expect(screen.getByRole("button", { name: /确认并完成复核/ })).toBeEnabled();
+    expect(apiMock.resolveReview).toHaveBeenCalledOnce();
+  });
+
+  test("复核列表与指定详情并行读取时仅详情展示动画，列表失败仍可重试", async () => {
+    let finishList;
+    let finishDetail;
+    apiMock.reviews
+      .mockImplementationOnce(
+        () =>
+          new Promise((_, reject) => {
+            finishList = reject;
+          }),
+      )
+      .mockResolvedValueOnce([conflictingReview]);
+    apiMock.review.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishDetail = resolve;
+        }),
+    );
+    apiMock.reviewTaxonomy.mockResolvedValue({ labels: [] });
+    render(
+      <ReviewCenter
+        notify={vi.fn()}
+        onChanged={vi.fn()}
+        focus={{ id: conflictingReview.id, status: "pending" }}
+      />,
+    );
+    await waitFor(() =>
+      expect(apiMock.review).toHaveBeenCalledWith(conflictingReview.id),
+    );
+    await waitFor(() =>
+      expect(
+        document.querySelectorAll(".inline-loading.ant-spin-spinning"),
+      ).toHaveLength(1),
+    );
+    expect(screen.getByText("正在读取复核列表…")).toBeVisible();
+    expect(document.querySelector(".review-list")).toHaveAttribute("aria-busy", "true");
+    expect(
+      document.querySelector(".review-workspace .ant-spin-spinning"),
+    ).toBeInTheDocument();
+    await act(async () => finishDetail(conflictingReview));
+    fireEvent.change(await screen.findByLabelText("修改说明"), {
+      target: { value: "独立输入" },
+    });
+    await waitFor(() =>
+      expect(
+        document.querySelector(".review-list .ant-spin-spinning"),
+      ).toBeInTheDocument(),
+    );
+    expect(document.querySelectorAll(".inline-loading.ant-spin-spinning")).toHaveLength(
+      1,
+    );
+    await act(async () => finishList(new Error("合成列表读取失败")));
+    await screen.findByText("复核列表读取失败");
+    expect(screen.getByLabelText("修改说明")).toHaveValue("独立输入");
+    await userEvent.click(screen.getByRole("button", { name: "重新加载" }));
+    await waitFor(() => expect(apiMock.reviews).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText("复核列表读取失败")).toBeNull();
+    expect(screen.getByLabelText("修改说明")).toHaveValue("独立输入");
+  });
+
+  test("复核列表读取失败显示重试而不是空记录", async () => {
+    apiMock.reviews
+      .mockRejectedValueOnce(new Error("合成列表失败"))
+      .mockResolvedValueOnce([]);
+    render(<ReviewCenter notify={vi.fn()} onChanged={vi.fn()} focus={null} />);
+    await screen.findByText("复核列表读取失败");
+    expect(screen.queryByText("没有记录")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "重新加载" }));
+    expect(await screen.findByText("没有记录")).toBeVisible();
+  });
+
   test("复核版本冲突只刷新详情，保留标签和说明草稿", async () => {
     const row = conflictingReview;
     const notify = vi.fn();
@@ -3341,7 +3536,7 @@ describe("关键用户流程", () => {
     );
   });
 
-  test("我的模型偏好读取时保留页面标题和固定占位", () => {
+  test("我的模型偏好读取时保留页面标题和固定占位", async () => {
     apiMock.configs.mockReturnValue(new Promise(() => {}));
     apiMock.modelPreference.mockReturnValue(new Promise(() => {}));
 
@@ -3349,7 +3544,7 @@ describe("关键用户流程", () => {
 
     expect(screen.getByRole("heading", { name: "我的模型偏好" })).toBeVisible();
     expect(
-      screen.getByText("正在读取个人模型偏好…").closest(".page-loading-state"),
+      (await screen.findByText("正在读取个人模型偏好…")).closest(".page-loading-state"),
     ).toBeInTheDocument();
   });
 
@@ -3378,21 +3573,21 @@ describe("关键用户流程", () => {
     expect(screen.getByRole("heading", { name: "模型服务" })).toBeVisible();
   });
 
-  test("系统设置快速切换时只显示当前标签的加载状态", () => {
+  test("系统设置快速切换时只显示当前标签的加载状态", async () => {
     apiMock.configs.mockReturnValue(new Promise(() => {}));
     apiMock.users.mockReturnValue(new Promise(() => {}));
     window.location.hash = "#settings?tab=service";
     render(<SystemSettingsRouteHarness />);
 
-    expect(screen.getByText("正在读取模型服务…")).toBeVisible();
+    expect(await screen.findByText("正在读取模型服务…")).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "用户与安全" }));
-    expect(screen.getByText("正在读取用户与安全设置…")).toBeVisible();
+    expect(await screen.findByText("正在读取用户与安全设置…")).toBeVisible();
     expect(screen.queryByText("正在读取模型服务…")).not.toBeInTheDocument();
     expect(screen.queryByText("暂无用户账号")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "模型服务" }));
-    expect(screen.getByText("正在读取模型服务…")).toBeVisible();
+    expect(await screen.findByText("正在读取模型服务…")).toBeVisible();
     expect(screen.queryByText("正在读取用户与安全设置…")).not.toBeInTheDocument();
     expect(screen.queryByText("尚未创建模型服务")).not.toBeInTheDocument();
   });
@@ -3709,7 +3904,7 @@ describe("关键用户流程", () => {
     );
     expect(screen.getByRole("button", { name: "全部任务" })).toBeVisible();
     expect(
-      screen.getByText("正在读取任务…").closest(".page-loading-state"),
+      (await screen.findByText("正在读取任务…")).closest(".page-loading-state"),
     ).toBeInTheDocument();
 
     await act(async () =>
@@ -4040,6 +4235,42 @@ describe("关键用户流程", () => {
     } finally {
       Object.defineProperty(document, "hidden", { configurable: true, value: false });
     }
+  });
+
+  test("任务列表后台刷新保持表格、搜索和焦点，失败后可恢复", async () => {
+    const task = {
+      id: "task-loading-qa",
+      title: "合成保留任务",
+      status: "completed",
+      owner_name: "验收用户",
+      segments: [],
+      metrics: {},
+      snapshot: {},
+    };
+    apiMock.tasks.mockResolvedValue([task]);
+    render(<TaskMonitor notify={vi.fn()} onNavigate={vi.fn()} onChanged={vi.fn()} />);
+    const table = await screen.findByRole("table", { name: "任务管理表" });
+    const search = screen.getByRole("textbox", { name: "搜索任务、店铺或 Listing" });
+    await userEvent.type(search, "合成");
+    let rejectRefresh;
+    apiMock.tasks.mockReturnValueOnce(
+      new Promise((resolve, reject) => {
+        rejectRefresh = reject;
+      }),
+    );
+    fireEvent(document, new Event("visibilitychange"));
+    expect(await screen.findByText("更新中…")).toBeVisible();
+    expect(screen.getByRole("table", { name: "任务管理表" })).toBe(table);
+    expect(search).toHaveValue("合成");
+    expect(document.activeElement).toBe(search);
+    await act(async () => rejectRefresh(new Error("合成刷新中断")));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("当前显示上一次数据");
+    expect(table).toBeVisible();
+    fireEvent.click(within(alert).getByRole("button", { name: "重新加载" }));
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    expect(search).toHaveValue("合成");
+    expect(table).toBeVisible();
   });
 
   test("任务管理表支持创建类似任务和批量归档", async () => {

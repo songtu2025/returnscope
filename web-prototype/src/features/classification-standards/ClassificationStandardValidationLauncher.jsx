@@ -18,8 +18,8 @@ function validationRunDisabledReason({
   reviewFile,
   sourceId,
 }) {
-  if (busy) return "正在创建验证任务，请稍候。";
   if (active) return "已有样本验证正在运行，请等待完成。";
+  if (busy) return "正在创建验证任务，请稍候。";
   if (draft.validation.blocking.length > 0) return "请先解决结构检查中的阻断项。";
   if (reviewMode && !reviewFile) return "请选择 Review 表格后开始验证。";
   if (!reviewMode && !sourceId) return "请选择样本来源后开始验证。";
@@ -123,7 +123,7 @@ export function ClassificationStandardValidationLauncher({
         )}
         <ValidationActions
           runDisabledReason={runDisabledReason}
-          busy={busy}
+          busy={busy && !active}
           disabled={
             busy ||
             active ||

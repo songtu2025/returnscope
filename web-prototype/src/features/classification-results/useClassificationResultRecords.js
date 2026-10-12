@@ -4,7 +4,7 @@ import useSWR from "swr";
 import { api } from "../../api";
 import { errorMessage } from "../../shared/api/requestErrors";
 import { serverStateKeys } from "../../shared/serverState";
-import { runResultRequest } from "./resultRequestLifecycle";
+import { runResultRequest } from "../../shared/api/requestLifecycle";
 
 /** @typedef {import("./classificationResultRoute").ClassificationResultRoute} ClassificationResultRoute */
 /** @param {{ route: ClassificationResultRoute, notify: (message: string, type: "error") => void }} options */
@@ -85,6 +85,7 @@ export function useClassificationResultRecords({ route, notify }) {
     data: recordData,
     error: recordsError,
     isLoading: recordsLoading,
+    isValidating,
     mutate,
   } = useSWR(
     route.tab === "history"
@@ -102,7 +103,7 @@ export function useClassificationResultRecords({ route, notify }) {
   return {
     records: recordData?.records ?? null,
     drilldowns: recordData?.drilldowns ?? emptyDrilldowns,
-    recordsLoading: route.tab === "history" ? false : recordsLoading,
+    recordsLoading: route.tab === "history" ? false : recordsLoading || isValidating,
     recordsError: recordsError ? errorMessage(recordsError) : "",
     retryRecords: () => void mutate(),
   };

@@ -1,4 +1,4 @@
-import { CheckCircle, SpinnerGap, WarningCircle } from "@phosphor-icons/react";
+import { CheckCircle, Clock, WarningCircle } from "@phosphor-icons/react";
 
 /** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardValidationRunSummary} ClassificationStandardValidationRunSummary */
 
@@ -42,7 +42,7 @@ export function ClassificationStandardValidationHistory({
                 ) : run.status === "failed" ? (
                   <WarningCircle size={16} weight="fill" aria-hidden="true" />
                 ) : (
-                  <SpinnerGap size={16} className="spin" aria-hidden="true" />
+                  <Clock size={16} aria-hidden="true" />
                 )}
                 {statusLabels[run.status]}
               </span>

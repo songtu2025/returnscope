@@ -23,7 +23,12 @@ function reviewError(error) {
 export function ReviewCenter({ notify, onChanged, focus }) {
   const { mutate: mutateServerState } = useSWRConfig();
   const [status, setStatus] = useState("pending");
-  const [rows, setRows] = useState(/** @type {LegacyReviewRecord[]} */ ([]));
+  const [listState, setListState] = useState({
+    status: "pending",
+    rows: /** @type {LegacyReviewRecord[]} */ ([]),
+    loading: true,
+    error: "",
+  });
   const [selectedId, setSelectedId] = useState(/** @type {string | null} */ (null));
   const [selected, setSelected] = useState(
     /** @type {LegacyReviewRecord | null} */ (null),
@@ -33,53 +38,102 @@ export function ReviewCenter({ notify, onChanged, focus }) {
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const loadRequest = useRef(0);
+  const detailRequest = useRef(0);
+  const [detailState, setDetailState] = useState({ id: "", loading: false, error: "" });
+  const rows = listState.status === status ? listState.rows : [];
+  const visibleSelected = selected?.id === selectedId ? selected : null;
+  const detailLoading =
+    Boolean(selectedId) && (detailState.id !== selectedId || detailState.loading);
+  const detailError = detailState.id === selectedId ? detailState.error : "";
 
   const load = useCallback(async () => {
     const request = ++loadRequest.current;
-    const values = await api.reviews(status);
-    if (request !== loadRequest.current) return;
-    setRows(values);
-    setSelectedId((current) =>
-      values.some((item) => item.id === current) ? current : (values[0]?.id ?? null),
-    );
+    setListState((current) => ({
+      status,
+      rows: current.status === status ? current.rows : [],
+      loading: true,
+      error: "",
+    }));
+    try {
+      const values = await api.reviews(status);
+      if (request !== loadRequest.current) return;
+      setListState({ status, rows: values, loading: false, error: "" });
+      setSelectedId((current) =>
+        values.some((item) => item.id === current) ? current : (values[0]?.id ?? null),
+      );
+    } catch (error) {
+      if (request === loadRequest.current)
+        setListState((current) => ({
+          ...current,
+          loading: false,
+          error: reviewError(error).message,
+        }));
+    }
   }, [status]);
   useEffect(() => {
-    load().catch((error) => notify(reviewError(error).message, "error"));
-  }, [load, notify]);
+    load();
+    return () => {
+      loadRequest.current += 1;
+    };
+  }, [load]);
   useEffect(() => {
     if (!focus) return;
     setStatus(focus.status ?? "pending");
     setSelectedId(focus.id);
   }, [focus]);
-  useEffect(() => {
-    if (!selectedId) {
-      setSelected(null);
-      return;
-    }
-    api
-      .review(selectedId)
-      .then((value) => {
+  const loadDetail = useCallback(
+    /** @param {{preserveDraft?: boolean, loadTaxonomy?: boolean}} [options] */
+    async ({ preserveDraft = false, loadTaxonomy = true } = {}) => {
+      if (!selectedId) return null;
+      const request = ++detailRequest.current;
+      setDetailState({ id: selectedId, loading: true, error: "" });
+      try {
+        const value = await api.review(selectedId);
+        if (request !== detailRequest.current) return null;
+        const taxonomy = loadTaxonomy
+          ? await api.reviewTaxonomy(value.base_result_version_id)
+          : null;
+        if (request !== detailRequest.current) return null;
         setSelected(value);
-        setLabelCode(
-          value.classification.primary_label_codes?.[0] ??
-            value.classification.problem_label_codes?.[0] ??
-            "",
-        );
-        setNote("");
-        return api.reviewTaxonomy(value.base_result_version_id);
-      })
-      .then((value) => {
-        if (value) setLabels(value.labels ?? []);
-      })
-      .catch((error) => notify(reviewError(error).message, "error"));
-  }, [selectedId, notify]);
+        if (taxonomy) setLabels(taxonomy.labels ?? []);
+        if (!preserveDraft) {
+          setLabelCode(
+            value.classification.primary_label_codes?.[0] ??
+              value.classification.problem_label_codes?.[0] ??
+              "",
+          );
+          setNote("");
+        }
+        setDetailState({ id: selectedId, loading: false, error: "" });
+        return value;
+      } catch (error) {
+        if (request === detailRequest.current)
+          setDetailState({
+            id: selectedId,
+            loading: false,
+            error: reviewError(error).message,
+          });
+        return null;
+      }
+    },
+    [selectedId],
+  );
+  useEffect(() => {
+    setSelected(null);
+    setLabels([]);
+    setNote("");
+    loadDetail();
+    return () => {
+      detailRequest.current += 1;
+    };
+  }, [loadDetail]);
 
   const resolve = async () => {
-    if (!selected) return;
+    if (!visibleSelected || detailLoading || detailError) return;
     setSaving(true);
     try {
-      await api.resolveReview(selected.id, {
-        expected_revision: selected.revision,
+      await api.resolveReview(visibleSelected.id, {
+        expected_revision: visibleSelected.revision,
         label_code: labelCode || null,
         note,
       });
@@ -93,13 +147,18 @@ export function ReviewCenter({ notify, onChanged, focus }) {
       onChanged();
     } catch (error) {
       const requestError = reviewError(error);
-      notify(
-        requestError.status === 409
-          ? "该记录已被他人修改，已为你刷新"
-          : requestError.message,
-        "error",
-      );
-      if (requestError.status === 409) setSelected(await api.review(selected.id));
+      if (requestError.status === 409) {
+        const refreshed = await loadDetail({
+          preserveDraft: true,
+          loadTaxonomy: false,
+        });
+        notify(
+          refreshed
+            ? "该记录已被他人修改，已为你刷新"
+            : "最新复核记录读取失败，输入已保留",
+          "error",
+        );
+      } else notify(requestError.message, "error");
     } finally {
       setSaving(false);
     }
@@ -117,11 +176,22 @@ export function ReviewCenter({ notify, onChanged, focus }) {
           status={status}
           rows={rows}
           selectedId={selectedId}
-          onStatus={setStatus}
+          loading={listState.status !== status || listState.loading}
+          showLoading={!detailLoading}
+          error={listState.status === status ? listState.error : ""}
+          onReload={load}
+          disabled={saving}
+          onStatus={(value) => {
+            setStatus(value);
+            setSelectedId(null);
+          }}
           onSelectId={setSelectedId}
         />
         <LegacyReviewWorkspace
-          selected={selected}
+          selected={visibleSelected}
+          loading={detailLoading}
+          error={detailError}
+          onRetry={() => loadDetail({ preserveDraft: Boolean(visibleSelected) })}
           labels={labels}
           labelCode={labelCode}
           note={note}

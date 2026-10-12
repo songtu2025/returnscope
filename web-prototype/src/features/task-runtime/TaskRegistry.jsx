@@ -143,13 +143,18 @@ export function TaskRegistry({
   };
 
   return (
-    <section className="task-list-panel task-registry" aria-label="任务列表">
+    <section
+      className="task-list-panel task-registry"
+      aria-label="任务列表"
+      aria-busy={loading}
+    >
       <TaskRegistryFilters
         viewState={viewState}
         onViewStateChange={onViewStateChange}
         owners={owners}
         counts={counts}
         searchInputRef={searchInputRef}
+        updating={loading && hasData}
       />
 
       <TaskRegistryStates
@@ -168,7 +173,7 @@ export function TaskRegistry({
         onReload={onReload}
         onCreate={onCreate}
       />
-      {!loading && (!error || hasData) && visibleTasks.length > 0 && (
+      {(!loading || hasData) && (!error || hasData) && visibleTasks.length > 0 && (
         <div className="task-registry-table" role="table" aria-label="任务管理表">
           <div className="task-registry-head" role="row">
             <span role="columnheader">

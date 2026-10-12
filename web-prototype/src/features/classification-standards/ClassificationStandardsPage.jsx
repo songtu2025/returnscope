@@ -46,11 +46,12 @@ function classificationStandardDetailStatus({
 }) {
   const detailError = pageError?.id === selectedId ? pageError.message : "";
   const detailPending =
-    mode === "edit" && (pageLoading || (!detailError && detail?.id !== selectedId));
+    mode === "edit" && detail?.id !== selectedId && (pageLoading || !detailError);
   return {
     detailError,
     detailPending,
-    showDetailState: detailPending || (detailError && mode === "edit"),
+    showDetailState:
+      detailPending || (detailError && mode === "edit" && detail?.id !== selectedId),
   };
 }
 
@@ -156,7 +157,8 @@ export function ClassificationStandardsPage({ route, notify }) {
     }
   };
 
-  if (loading && !hasData) return <ClassificationStandardPageLoading mode={mode} />;
+  if (loading && !hasData && mode !== "list")
+    return <ClassificationStandardPageLoading mode={mode} />;
 
   const { detailError, detailPending, showDetailState } =
     classificationStandardDetailStatus({
@@ -205,7 +207,14 @@ export function ClassificationStandardsPage({ route, notify }) {
             />
           ) : (
             <ClassificationStandardWorkspace
-              key={`${selectedId || "new"}-${detail?.standard_version_id || ""}`}
+              key={selectedId || "new"}
+              updating={pageLoading}
+              updateError={detailError}
+              onRetry={() =>
+                loadSelected(selectedId).catch((error) =>
+                  notify(errorMessage(error), "error"),
+                )
+              }
               initiallyEditing={initiallyEditing}
               versions={versions}
               notify={notify}

@@ -70,7 +70,7 @@ export function TaskMonitor(props) {
             <ArrowLeft size={17} /> 全部任务
           </button>
           {!visibleSelected && !detailError && (
-            <PageLoadingState label="正在读取任务…" />
+            <PageLoadingState title="分析任务" label="正在读取任务…" />
           )}
           {visibleSelected && detailError && (
             <div className="task-action-error" role="alert">

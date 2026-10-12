@@ -62,7 +62,7 @@
 }
 
 .standard-search-box {
-  flex: 1 1 320px;
+  flex: 1 1 200px;
   max-width: 480px;
 }
 .standard-library-toolbar > .standard-search-box {

@@ -30,14 +30,56 @@
   font-size: 13px;
   line-height: 1.5;
 }
-.inline-loading {
+.inline-loading.ant-spin {
   display: flex;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
   gap: 7px;
-  min-height: 100px;
+  width: 100%;
+  min-height: 112px;
   color: var(--muted);
   font-size: 13px;
+}
+.inline-loading .ant-spin-description {
+  line-height: 1.5;
+  text-shadow: none;
+}
+.inline-loading:not(.ant-spin-spinning) {
+  visibility: hidden;
+}
+/* 工具栏始终保留同一个小槽位，更新提示出现时不挤动控件或表格。 */
+.inline-loading.ant-spin.is-compact {
+  flex: 0 0 88px;
+  width: 88px;
+  min-height: var(--desktop-control-height);
+  white-space: nowrap;
+  font-size: 12px;
+}
+.spin {
+  animation: loading-rotate 1s linear infinite;
+}
+@keyframes loading-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  body .spin,
+  body .ant-spin .ant-spin-dot-holder,
+  body .ant-spin .ant-spin-dot,
+  body .ant-spin .ant-spin-dot-item,
+  body .ant-btn .anticon-spin,
+  body .status-pill.running i,
+  body .live-tag i,
+  body .validation-pulse {
+    animation: none;
+    transition: none;
+  }
+}
+.loading-region {
+  display: flow-root;
+  min-width: 0;
 }
 .muted-line {
   margin: 12px 0;

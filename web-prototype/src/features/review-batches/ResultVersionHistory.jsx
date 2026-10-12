@@ -1,5 +1,5 @@
 import { ClockCounterClockwise, WarningCircle } from "@phosphor-icons/react";
-import { EmptyState, InlineLoading } from "../../components/SharedUi";
+import { CardHeading, EmptyState, InlineLoading } from "../../components/SharedUi";
 import Button from "antd/es/button";
 import { formatTime } from "../../lib/presentation";
 import { SemanticResultPanel } from "../classification-results/SemanticResultPanel";
@@ -98,12 +98,12 @@ function ResultVersionHistoryItem({
   );
 }
 /**
- * @param {{history: ResultVersion[], resultVersionId: string, loading: boolean,
+ * @param {{history: ResultVersion[], resultVersionId: string,
  *   onSelectVersion: (versionId: string) => void}} props
  */
-function ResultVersionChain({ history, resultVersionId, loading, onSelectVersion }) {
+function ResultVersionChain({ history, resultVersionId, onSelectVersion }) {
   return (
-    <ol className={`result-version-chain ${loading ? "is-loading" : ""}`}>
+    <ol className="result-version-chain">
       {history.map((version, index) => {
         const current = version.version_id === resultVersionId;
         const parent = history.find(
@@ -145,13 +145,27 @@ export function ResultVersionHistory({
 }) {
   const ready = !loading && !error;
   return (
-    <div className="result-version-panel-body">
-      {loading && <InlineLoading label="正在读取修改历史…" />}
+    <div className="result-version-panel-body" aria-busy={loading}>
+      <CardHeading
+        title="修改历史"
+        action={
+          <InlineLoading
+            label="更新中…"
+            compact
+            active={loading && history.length > 0}
+          />
+        }
+      />
+      {loading && !history.length && <InlineLoading label="正在读取修改历史…" />}
       {error && (
         <div className="review-batch-error" role="alert">
           <WarningCircle size={22} />
           <div>
-            <b>修改历史读取失败</b>
+            <b>
+              {history.length
+                ? "修改历史更新失败，当前显示上一次数据"
+                : "修改历史读取失败"}
+            </b>
             <p>{error}</p>
           </div>
           <Button onClick={onReload}>重新加载</Button>
@@ -164,11 +178,10 @@ export function ResultVersionHistory({
           description="当前没有可展示的修改记录。"
         />
       )}
-      {!error && history.length > 0 && (
+      {history.length > 0 && (
         <ResultVersionChain
           history={history}
           resultVersionId={resultVersionId}
-          loading={loading}
           onSelectVersion={onSelectVersion}
         />
       )}

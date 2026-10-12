@@ -4,7 +4,7 @@ import useSWR from "swr";
 import { api } from "../../api";
 import { errorMessage, errorStatus } from "../../shared/api/requestErrors";
 import { serverStateKeys } from "../../shared/serverState";
-import { runResultRequest } from "./resultRequestLifecycle";
+import { runResultRequest } from "../../shared/api/requestLifecycle";
 import { useNewResultNotice } from "./useNewResultNotice";
 
 /** @param {NonNullable<import("../../shared/api/generated/classification-results/types.gen").ListResultsApiClassificationResultsGetData["query"]>} query */
@@ -25,9 +25,7 @@ export function useClassificationResultListData(query) {
     isLoading,
     isValidating,
     mutate,
-  } = useSWR(serverStateKeys.classificationResultList(query), fetchResults, {
-    keepPreviousData: true,
-  });
+  } = useSWR(serverStateKeys.classificationResultList(query), fetchResults);
   const { hasNewResults, resetNotice } = useNewResultNotice(query, data);
   const load = useCallback(async () => {
     resetNotice();

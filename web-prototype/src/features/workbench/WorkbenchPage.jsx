@@ -2,7 +2,7 @@ import useSWR from "swr";
 import "../../styles/workbench.css";
 
 import { Plus, WarningCircle } from "@phosphor-icons/react";
-import { PageHeading } from "../../components/SharedUi";
+import { InlineLoading, PageHeading } from "../../components/SharedUi";
 import { workbenchApi } from "../../shared/api/workbenchApi";
 import { serverStateKeys } from "../../shared/serverState";
 import { WorkbenchActions } from "./WorkbenchActions";
@@ -13,7 +13,7 @@ import { WorkbenchOutputs } from "./WorkbenchOutputs";
 
 /** @param {{onNavigate: (destination: string) => void}} props */
 export function WorkbenchPage({ onNavigate }) {
-  const { data, error, isLoading, mutate } = useSWR(
+  const { data, error, isLoading, isValidating, mutate } = useSWR(
     serverStateKeys.workbenchSummary(5),
     () => workbenchApi.summary(5),
   );
@@ -22,8 +22,8 @@ export function WorkbenchPage({ onNavigate }) {
   const hasData = data !== undefined;
   const message =
     error instanceof Error ? error.message : error ? "首页数据读取失败" : "";
-  const load = () => mutate();
-  const state = { isLoading, hasData, message };
+  const load = () =>
+    mutate((current) => current, { revalidate: true, throwOnError: false });
 
   return (
     <div className="standard-page workbench-page">
@@ -31,10 +31,20 @@ export function WorkbenchPage({ onNavigate }) {
         eyebrow="运营首页"
         title="首页"
         action={
-          <button className="primary-button" onClick={() => onNavigate("task-create")}>
-            <Plus size={18} />
-            创建分析任务
-          </button>
+          <>
+            <InlineLoading
+              label="读取首页…"
+              compact
+              active={isLoading || isValidating}
+            />
+            <button
+              className="primary-button"
+              onClick={() => onNavigate("task-create")}
+            >
+              <Plus size={18} />
+              创建分析任务
+            </button>
+          </>
         }
       />
 
@@ -46,11 +56,14 @@ export function WorkbenchPage({ onNavigate }) {
         />
       )}
 
-      <div className="workbench-grid workbench-focus-grid">
-        <WorkbenchActions actions={actions} state={state} onNavigate={onNavigate} />
+      <div
+        className="workbench-grid workbench-focus-grid"
+        aria-busy={isLoading || isValidating}
+      >
+        <WorkbenchActions actions={actions} hasData={hasData} onNavigate={onNavigate} />
         <WorkbenchOutputs
           recentOutputs={recentOutputs}
-          state={state}
+          hasData={hasData}
           onNavigate={onNavigate}
         />
       </div>

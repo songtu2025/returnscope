@@ -126,7 +126,7 @@ test("模型服务加载完成前不显示未创建状态", async () => {
 
   render(<ModelServicePage notify={vi.fn()} />);
 
-  expect(screen.getByText("正在读取模型服务…")).toBeVisible();
+  expect(await screen.findByText("正在读取模型服务…")).toBeVisible();
   expect(screen.queryByText("尚未创建模型服务")).not.toBeInTheDocument();
   expect(
     screen.queryByRole("button", { name: "新增模型服务" }),

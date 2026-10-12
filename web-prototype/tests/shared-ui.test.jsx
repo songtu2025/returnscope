@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { ListChecks } from "@phosphor-icons/react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 
 import {
   EmptyState,
@@ -11,7 +11,10 @@ import {
   PageLoadingState,
 } from "../src/components/SharedUi";
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 function ModalHarness() {
   const [open, setOpen] = useState(false);
@@ -79,8 +82,13 @@ test("公共空状态保留业务图标、说明和操作", () => {
 });
 
 test("公共行内加载态展示可访问的忙碌状态和文案", () => {
+  vi.useFakeTimers();
   const { container } = render(<InlineLoading label="正在读取复核批次…" />);
 
+  expect(screen.queryByText("正在读取复核批次…")).not.toBeInTheDocument();
+  act(() => vi.advanceTimersByTime(199));
+  expect(container.querySelector(".ant-spin-dot")).not.toBeInTheDocument();
+  act(() => vi.advanceTimersByTime(1));
   expect(container.firstChild).toHaveClass("ant-spin", "inline-loading");
   expect(container.firstChild).toHaveAttribute("aria-busy", "true");
   expect(container.firstChild).toHaveAttribute("aria-live", "polite");
@@ -88,16 +96,34 @@ test("公共行内加载态展示可访问的忙碌状态和文案", () => {
   expect(container.querySelector(".ant-spin-dot")).toBeInTheDocument();
 });
 
-test("页面加载态保留标题与内容占位，且继续复用行内加载组件", () => {
-  const { container, rerender } = render(<PageLoadingState label="正在读取详情…" />);
+test("快速请求不闪烁，后续慢请求延迟提示，完成立即结束", () => {
+  vi.useFakeTimers();
+  const { container, rerender } = render(<InlineLoading label="更新中…" compact />);
+  act(() => vi.advanceTimersByTime(100));
+  rerender(<InlineLoading label="更新中…" compact active={false} />);
+  act(() => vi.advanceTimersByTime(200));
+  expect(container.querySelector(".ant-spin-dot")).not.toBeInTheDocument();
+  rerender(<InlineLoading label="更新中…" compact />);
+  act(() => vi.advanceTimersByTime(200));
+  expect(screen.getByText("更新中…")).toBeVisible();
+  rerender(<InlineLoading label="更新中…" compact active={false} />);
+  expect(container.querySelector(".ant-spin-dot")).not.toBeInTheDocument();
+});
+
+test("页面加载态展示真实标题，且继续复用延迟的行内加载组件", () => {
+  vi.useFakeTimers();
+  const { container, rerender } = render(
+    <PageLoadingState title="分类结果" label="正在读取详情…" />,
+  );
 
   expect(container.firstChild).toHaveClass("page-loading-state");
   expect(container.firstChild).toHaveAttribute("aria-busy", "true");
-  expect(container.querySelector(".page-loading-heading")).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "分类结果" })).toBeVisible();
+  act(() => vi.advanceTimersByTime(200));
   expect(screen.getByText("正在读取详情…").closest(".inline-loading")).toHaveClass(
     "ant-spin",
   );
 
-  rerender(<PageLoadingState label="正在读取详情…" heading={false} />);
-  expect(container.querySelector(".page-loading-heading")).not.toBeInTheDocument();
+  rerender(<PageLoadingState label="正在读取详情…" />);
+  expect(screen.queryByRole("heading")).not.toBeInTheDocument();
 });

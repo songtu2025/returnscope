@@ -1,4 +1,6 @@
 import { InlineLoading } from "../../components/SharedUi";
+import { useRef } from "react";
+import { useLoadingHeight } from "../../hooks/useLoadingHeight";
 import { formatNumber, formatPercent } from "../../lib/presentation";
 import { OverviewSection } from "./OverviewSection";
 import { DiagnosisSection } from "./DiagnosisSection";
@@ -56,8 +58,8 @@ function MetricCards({ metrics }) {
   );
 }
 
-/** @param {Pick<AnalysisViewsProps, "activeTab" | "onTab">} props */
-function AnalysisTabs({ activeTab, onTab }) {
+/** @param {Pick<AnalysisViewsProps, "activeTab" | "onTab" | "loading">} props */
+function AnalysisTabs({ activeTab, onTab, loading }) {
   return (
     <div className="analysis-tabs" role="tablist" aria-label="分析结果视图">
       {TABS.map(([id, label]) => (
@@ -71,6 +73,7 @@ function AnalysisTabs({ activeTab, onTab }) {
           {label}
         </button>
       ))}
+      <InlineLoading label="更新中…" compact active={loading} />
     </div>
   );
 }
@@ -120,17 +123,19 @@ function AnalysisSection({
 export function AnalysisViews(props) {
   const { analysis, activeTab, loading, onTab } = props;
   const activeViewReady = !analysis?.view || analysis.view === activeTab;
+  const regionRef = useRef(/** @type {HTMLDivElement | null} */ (null));
+  useLoadingHeight(loading, regionRef);
   return (
     <>
       <MetricCards metrics={analysis.overview.metrics} />
-      <AnalysisTabs activeTab={activeTab} onTab={onTab} />
-      <div className={`analysis-tab-panel ${loading ? "is-loading" : ""}`}>
+      <AnalysisTabs
+        activeTab={activeTab}
+        onTab={onTab}
+        loading={loading && activeViewReady}
+      />
+      <div ref={regionRef} className="analysis-tab-panel" aria-busy={loading}>
         {activeViewReady && <AnalysisSection {...props} />}
-        {loading && (
-          <div className="analysis-loading">
-            <InlineLoading label="正在更新分析结果…" />
-          </div>
-        )}
+        {loading && !activeViewReady && <InlineLoading label="正在读取分析结果…" />}
       </div>
     </>
   );

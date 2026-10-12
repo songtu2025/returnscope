@@ -146,7 +146,7 @@ test("创建类似任务时只继承名称和模型策略", async () => {
     />,
   );
 
-  expect(screen.getByText("正在读取原任务配置…")).toBeVisible();
+  expect(screen.queryByText("正在读取原任务配置…")).not.toBeInTheDocument();
   await waitFor(() => expect(newTaskPageProbe).toHaveBeenCalled());
   expect(newTaskPageProbe.mock.calls.at(-1)[0].draft).toMatchObject({
     step: 1,

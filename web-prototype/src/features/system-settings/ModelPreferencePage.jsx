@@ -14,7 +14,7 @@ export function ModelPreferencePage({ notify }) {
         description="新建任务会默认带入此策略；你仍可在创建任务时针对本次执行调整。"
       />
       {preference.loading ? (
-        <PageLoadingState label="正在读取个人模型偏好…" heading={false} />
+        <PageLoadingState label="正在读取个人模型偏好…" />
       ) : preference.error ? (
         <div role="alert">
           <EmptyState

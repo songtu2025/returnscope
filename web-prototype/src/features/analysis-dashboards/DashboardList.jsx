@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLoadingHeight } from "../../hooks/useLoadingHeight";
 import {
   CaretRight,
   ChartBar,
@@ -142,8 +143,14 @@ function DashboardListFilters({ filters, setFilters, updateRoute }) {
 /** @param {DashboardListContext} context */
 function DashboardListResults(context) {
   const { isLoading, dashboardData, message, load, route, updateRoute } = context;
+  const regionRef = useRef(/** @type {HTMLElement | null} */ (null));
+  useLoadingHeight(isLoading || context.isValidating, regionRef);
   return (
-    <section className="dashboard-list-card">
+    <section
+      ref={regionRef}
+      className="dashboard-list-card loading-region"
+      aria-busy={context.isValidating}
+    >
       {isLoading && !dashboardData && <InlineLoading label="正在读取分析看板…" />}
       {message && (
         <div className="dashboard-error" role="alert">
@@ -197,7 +204,7 @@ function DashboardListTable({
   return (
     <>
       <div
-        className={`dashboard-list-table ${isValidating ? "is-loading" : ""}`}
+        className="dashboard-list-table"
         role="table"
         aria-label="分析看板列表"
         aria-busy={isValidating}

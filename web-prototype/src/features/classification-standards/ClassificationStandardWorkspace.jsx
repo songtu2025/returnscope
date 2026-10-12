@@ -6,6 +6,7 @@ import { useStandardWorkspace } from "./useStandardWorkspace";
 import { StandardWorkspaceSettings } from "./StandardWorkspaceSettings";
 import { StandardWorkspaceReview } from "./StandardWorkspaceReview";
 import { StandardWorkspaceFooter } from "./StandardWorkspaceFooter";
+import { WarningCircle } from "@phosphor-icons/react";
 
 /** @param {import("./classificationStandardWorkspaceContracts").ClassificationStandardWorkspaceProps} props */
 export function ClassificationStandardWorkspace(props) {
@@ -32,6 +33,15 @@ export function ClassificationStandardWorkspace(props) {
   return (
     <>
       <StandardWorkspaceHeader {...context} />
+      {props.updateError && (
+        <div className="form-error" role="alert">
+          <WarningCircle size={18} />
+          <span>分类标准更新失败，当前内容已保留：{props.updateError}</span>
+          <button className="text-button" onClick={props.onRetry}>
+            重新加载
+          </button>
+        </div>
+      )}
 
       <nav className="standard-editor-tabs" aria-label="标准管理分区">
         {[

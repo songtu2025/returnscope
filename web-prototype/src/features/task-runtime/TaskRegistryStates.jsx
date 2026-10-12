@@ -66,7 +66,7 @@ export function TaskRegistryStates(props) {
   const { loading, error, hasData, visibleCount } = props;
   return (
     <>
-      {loading && <InlineLoading label="读取任务…" />}
+      {loading && !hasData && <InlineLoading label="读取任务…" />}
       {!loading && error && (
         <RegistryError error={error} hasData={hasData} onReload={props.onReload} />
       )}

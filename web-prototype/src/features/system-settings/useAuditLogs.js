@@ -1,56 +1,38 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useRef } from "react";
+import useSWR from "swr";
 import { auditApi } from "../../shared/api/auditApi";
+import { errorMessage } from "../../shared/api/requestErrors";
+import { runResultRequest } from "../../shared/api/requestLifecycle";
 import { filtersFromRoute, getDateRangeError, PAGE_SIZE } from "./auditLogPolicy";
 
-/** @typedef {import("../../shared/api/systemSettingsContracts").AuditLogPage} AuditPageData */
 /** @param {import("./auditLogPolicy").AuditRoute} route @param {number} page */
 export function useAuditLogs(route, page) {
-  const [state, setState] = useState(
-    /** @type {{loading: boolean, error: string, data: AuditPageData | null}} */ ({
-      loading: true,
-      error: "",
-      data: null,
-    }),
+  const filters = filtersFromRoute(route);
+  const valid = !getDateRangeError(filters);
+  const controllerRef = useRef(/** @type {AbortController | null} */ (null));
+  const {
+    data = null,
+    error,
+    isLoading,
+    isValidating,
+    mutate,
+  } = useSWR(valid ? ["audit-logs", filters, page] : null, () =>
+    runResultRequest(
+      controllerRef,
+      (signal) => auditApi.logs({ ...filters, page, page_size: PAGE_SIZE }, { signal }),
+      (value) => value,
+    ),
   );
   const load = useCallback(
-    /** @param {AbortSignal} [signal] */
-    async (signal) => {
-      if (
-        getDateRangeError({
-          date_from: route.query.date_from || "",
-          date_to: route.query.date_to || "",
-        })
-      ) {
-        setState({ loading: false, error: "", data: null });
-        return;
-      }
-      setState({ loading: true, error: "", data: null });
-      try {
-        const data = await auditApi.logs(
-          {
-            ...filtersFromRoute({ query: route.query }),
-            page,
-            page_size: PAGE_SIZE,
-          },
-          { signal },
-        );
-        setState({ loading: false, error: "", data });
-      } catch (error) {
-        const requestError =
-          error instanceof Error ? error : new Error("审计记录读取失败");
-        if (requestError.name !== "AbortError") {
-          setState({ loading: false, error: requestError.message, data: null });
-        }
-      }
-    },
-    [page, route.query],
+    () => mutate((current) => current, { revalidate: true, throwOnError: false }),
+    [mutate],
   );
-
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, [load]);
-
-  return { state, load };
+  return {
+    state: {
+      data,
+      loading: isLoading || isValidating,
+      error: error ? errorMessage(error) : "",
+    },
+    load,
+  };
 }

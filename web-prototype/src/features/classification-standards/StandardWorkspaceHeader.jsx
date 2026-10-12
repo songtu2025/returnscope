@@ -1,5 +1,6 @@
 import { useDismissibleDetails } from "../../hooks/useDismissibleDetails";
 import { ArrowLeft } from "@phosphor-icons/react";
+import { InlineLoading } from "../../components/SharedUi";
 
 /** @typedef {import("./classificationStandardWorkspaceContracts").StandardWorkspaceContext} StandardWorkspaceContext */
 
@@ -13,6 +14,7 @@ export function StandardWorkspaceHeader({
   draft,
   busy,
   onDelete,
+  updating,
 }) {
   const { detailsProps, summaryProps } = useDismissibleDetails({ menu: true });
   return (
@@ -37,6 +39,7 @@ export function StandardWorkspaceHeader({
               : "新建标准"}
         </span>
       </div>
+      <InlineLoading label="更新中…" compact active={updating} />
       {detail && (detail.status === "active" || detail.delete_mode === "delete") && (
         <details {...detailsProps} className="standard-more-menu">
           <summary {...summaryProps}>更多</summary>

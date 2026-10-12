@@ -64,7 +64,7 @@ test("用户数据加载完成前不显示零用户状态", async () => {
     />,
   );
 
-  expect(screen.getByText("正在读取用户与安全设置…")).toBeVisible();
+  expect(await screen.findByText("正在读取用户与安全设置…")).toBeVisible();
   expect(screen.queryByText("0 个启用账号 · 0 个待注册")).not.toBeInTheDocument();
   expect(screen.queryByText("暂无用户账号")).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "邀请用户" })).not.toBeInTheDocument();

@@ -166,25 +166,26 @@ export function EmptyState({ icon: Icon, title, description, action }) {
   );
 }
 
-/** @param {{label: import("react").ReactNode}} props */
-export function InlineLoading({ label }) {
+/** @param {{label: import("react").ReactNode, active?: boolean, compact?: boolean}} props */
+export function InlineLoading({ label, active = true, compact = false }) {
   return (
     <AntdProvider>
-      <Spin className="inline-loading" size="small" description={label} />
+      <Spin
+        className={classNames("inline-loading", compact && "is-compact")}
+        size="small"
+        spinning={active}
+        delay={200}
+        description={label}
+      />
     </AntdProvider>
   );
 }
 
-/** @param {{label: import("react").ReactNode, heading?: boolean}} props */
-export function PageLoadingState({ label, heading = true }) {
+/** @param {{label: import("react").ReactNode, title?: import("react").ReactNode}} props */
+export function PageLoadingState({ label, title }) {
   return (
     <section className="page-loading-state" aria-busy="true">
-      {heading && (
-        <header className="page-loading-heading" aria-hidden="true">
-          <span className="page-loading-title" />
-          <span className="page-loading-subtitle" />
-        </header>
-      )}
+      {title && <PageHeading title={title} />}
       <InlineLoading label={label} />
     </section>
   );

@@ -18,7 +18,7 @@ export function ClassificationStandardPageLoading({ mode }) {
   return (
     <div className="standard-page classification-standard-page">
       {mode === "edit" && <ClassificationStandardBackButton />}
-      <PageLoadingState label="正在读取分类标准…" />
+      <PageLoadingState title="分类标准" label="正在读取分类标准…" />
     </div>
   );
 }
@@ -28,7 +28,7 @@ export function ClassificationStandardDetailState({ pending, error, onRetry }) {
     <>
       <ClassificationStandardBackButton />
       {pending ? (
-        <PageLoadingState label="正在读取分类标准…" />
+        <PageLoadingState title="分类标准" label="正在读取分类标准…" />
       ) : (
         <EmptyState
           icon={WarningCircle}

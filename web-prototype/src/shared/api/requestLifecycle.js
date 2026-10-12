@@ -1,4 +1,4 @@
-/**
+/** 复用请求取消逻辑，切换查询时终止上一轮读取。
  * @template Value, Result
  * @param {import("react").RefObject<AbortController | null>} controllerRef
  * @param {(signal: AbortSignal) => Promise<Value>} loadValue

@@ -254,8 +254,8 @@ test("归档分组恢复传false，查看和创建类似任务传原对象", asy
 });
 
 test("加载、首次错误、过期数据和空列表保持原反馈及重试入口", async () => {
-  const { props, rerender } = setup({ loading: true });
-  expect(screen.getByText("读取任务…")).toBeVisible();
+  const { props, rerender } = setup({ loading: true, hasData: false });
+  expect(await screen.findByText("读取任务…")).toBeVisible();
   expect(screen.queryByRole("table")).toBeNull();
   rerender(
     <TaskRegistry {...props} loading={false} error="合成失败" hasData={false} />,

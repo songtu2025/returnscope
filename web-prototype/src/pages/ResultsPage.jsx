@@ -228,11 +228,7 @@ export function ResultsPage({ notify, onNavigate, focus = null }) {
             </>
           )}
 
-          {!analysis && loading && (
-            <div className="analysis-first-loading">
-              <InlineLoading label="正在准备分析工作台…" />
-            </div>
-          )}
+          {!analysis && loading && <InlineLoading label="正在准备分析工作台…" />}
         </>
       )}
     </div>

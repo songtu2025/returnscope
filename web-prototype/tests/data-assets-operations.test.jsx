@@ -1,4 +1,4 @@
-import { cleanup, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -183,6 +183,45 @@ test("任务上传支持 CSV 和 XLSX", () => {
     ".csv,.xlsx",
   );
   unmount();
+});
+
+test("任务引用翻页隐藏旧记录，迟到响应不能覆盖当前页", async () => {
+  let finishFirst;
+  let finishSecond;
+  dataVersionReferences.mockImplementation(
+    (_id, { page }) =>
+      new Promise((resolve) => {
+        if (page === 1) finishFirst = resolve;
+        else finishSecond = resolve;
+      }),
+  );
+  const props = {
+    currentVersionId: "synthetic-source",
+    onRouteChange: vi.fn(),
+    onNavigate: vi.fn(),
+  };
+  const view = render(<DatasetReferences {...props} page={1} />);
+  await waitFor(() => expect(dataVersionReferences).toHaveBeenCalledTimes(1));
+  view.rerender(<DatasetReferences {...props} page={2} />);
+  await waitFor(() => expect(dataVersionReferences).toHaveBeenCalledTimes(2));
+  const response = {
+    total: 21,
+    page: 2,
+    items: [
+      { task_id: "second-task", title: "合成第二页任务", reference_type: "products" },
+    ],
+  };
+  await act(async () => finishSecond(response));
+  expect(await screen.findByText("合成第二页任务")).toBeVisible();
+  await act(async () =>
+    finishFirst({
+      ...response,
+      page: 1,
+      items: [{ ...response.items[0], task_id: "first-task", title: "合成第一页任务" }],
+    }),
+  );
+  expect(screen.queryByText("合成第一页任务")).toBeNull();
+  expect(screen.getByText("合成第二页任务")).toBeVisible();
 });
 
 test("数据版本引用显示历史任务固化快照并精确跳转", async () => {

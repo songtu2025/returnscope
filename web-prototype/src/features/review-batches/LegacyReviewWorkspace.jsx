@@ -1,7 +1,8 @@
-import { CheckCircle, ListChecks } from "@phosphor-icons/react";
+import { CheckCircle, ListChecks, WarningCircle } from "@phosphor-icons/react";
 import {
   CardHeading,
   EmptyState,
+  InlineLoading,
   InfoRow,
   StatusBadge,
 } from "../../components/SharedUi";
@@ -10,10 +11,10 @@ import { formatTime } from "../../lib/presentation";
 /** @typedef {import("../../shared/api/reviewBatchContracts").LegacyReviewRecord} LegacyReviewRecord */
 /** @typedef {import("../../shared/api/reviewBatchContracts").ReviewClassification} ReviewClassification */
 /** @typedef {import("../../shared/api/reviewBatchContracts").ReviewLabel} ReviewLabel */
-/** @typedef {{selected: LegacyReviewRecord | null, labels: ReviewLabel[], labelCode: string, note: string, saving: boolean, onLabelCode: (code: string) => void, onNote: (note: string) => void, onResolve: () => Promise<void>}} LegacyReviewWorkspaceProps */
+/** @typedef {{selected: LegacyReviewRecord | null, labels: ReviewLabel[], labelCode: string, note: string, saving: boolean, loading: boolean, error: string, onRetry: () => Promise<unknown>, disabled?: boolean, onLabelCode: (code: string) => void, onNote: (note: string) => void, onResolve: () => Promise<void>}} LegacyReviewWorkspaceProps */
 
-/** @param {{selected: LegacyReviewRecord}} props */
-function LegacyReviewHeader({ selected }) {
+/** @param {{selected: LegacyReviewRecord, loading: boolean}} props */
+function LegacyReviewHeader({ selected, loading }) {
   return (
     <header className="review-header">
       <div>
@@ -25,6 +26,7 @@ function LegacyReviewHeader({ selected }) {
           记录版本 #{selected.revision} · 最近修改 {formatTime(selected.updated_at)}
         </p>
       </div>
+      <InlineLoading label="更新中…" compact active={loading} />
       <StatusBadge value={selected.classification.status} />
     </header>
   );
@@ -48,7 +50,7 @@ function LegacyReviewEvidence({ selected }) {
   );
 }
 
-/** @param {Omit<LegacyReviewWorkspaceProps, "saving" | "onResolve"> & {selected: LegacyReviewRecord}} props */
+/** @param {Pick<LegacyReviewWorkspaceProps, "labels" | "labelCode" | "note" | "onLabelCode" | "onNote" | "disabled"> & {selected: LegacyReviewRecord}} props */
 function LegacyReviewFields({
   selected,
   labels,
@@ -56,13 +58,14 @@ function LegacyReviewFields({
   note,
   onLabelCode,
   onNote,
+  disabled,
 }) {
   return (
     <>
       <label>
         最终标签
         <select
-          disabled={selected.workflow_status === "resolved"}
+          disabled={disabled || selected.workflow_status === "resolved"}
           value={labelCode}
           onChange={(event) => onLabelCode(event.target.value)}
         >
@@ -77,7 +80,7 @@ function LegacyReviewFields({
       <label>
         修改说明
         <textarea
-          disabled={selected.workflow_status === "resolved"}
+          disabled={disabled || selected.workflow_status === "resolved"}
           value={note}
           onChange={(event) => onNote(event.target.value)}
           rows={4}
@@ -89,7 +92,7 @@ function LegacyReviewFields({
   );
 }
 
-/** @param {LegacyReviewWorkspaceProps & {selected: LegacyReviewRecord}} props */
+/** @param {Pick<LegacyReviewWorkspaceProps, "labels" | "labelCode" | "note" | "saving" | "onLabelCode" | "onNote" | "onResolve" | "disabled"> & {selected: LegacyReviewRecord}} props */
 function LegacyReviewEditor({
   selected,
   labels,
@@ -99,6 +102,7 @@ function LegacyReviewEditor({
   onLabelCode,
   onNote,
   onResolve,
+  disabled,
 }) {
   return (
     <section className="content-card">
@@ -110,11 +114,12 @@ function LegacyReviewEditor({
         note={note}
         onLabelCode={onLabelCode}
         onNote={onNote}
+        disabled={disabled}
       />
       {selected.workflow_status === "pending" && (
         <button
           className="primary-button full-button"
-          disabled={saving || !note.trim()}
+          disabled={disabled || saving || !note.trim()}
           onClick={onResolve}
         >
           {saving ? "正在写入新版本…" : "确认并完成复核"}
@@ -195,10 +200,26 @@ export function LegacyReviewWorkspace({
   onLabelCode,
   onNote,
   onResolve,
+  loading,
+  error,
+  onRetry,
 }) {
   return (
-    <section className="review-workspace">
-      {!selected && (
+    <section className="review-workspace" aria-busy={loading}>
+      {loading && !selected && <InlineLoading label="正在读取复核详情…" />}
+      {error && (
+        <EmptyState
+          icon={WarningCircle}
+          title={selected ? "复核记录更新失败，输入已保留" : "复核记录读取失败"}
+          description={error}
+          action={
+            <button className="secondary-button" onClick={onRetry}>
+              重新加载
+            </button>
+          }
+        />
+      )}
+      {!selected && !loading && !error && (
         <EmptyState
           icon={ListChecks}
           title="选择一条复核记录"
@@ -207,7 +228,7 @@ export function LegacyReviewWorkspace({
       )}
       {selected && (
         <>
-          <LegacyReviewHeader selected={selected} />
+          <LegacyReviewHeader selected={selected} loading={loading} />
           <LegacyReviewEvidence selected={selected} />
           <div className="review-grid">
             <LegacyReviewEditor
@@ -219,6 +240,7 @@ export function LegacyReviewWorkspace({
               onLabelCode={onLabelCode}
               onNote={onNote}
               onResolve={onResolve}
+              disabled={saving || loading || Boolean(error)}
             />
             <LegacyReviewModel selected={selected} />
             <LegacyReviewHistory selected={selected} labels={labels} />

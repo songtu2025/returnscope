@@ -910,14 +910,16 @@ test("查看与编辑原位切换，保留搜索、选中标签和未保存内�
   copy.mockRestore();
 });
 
-test("分类标准首次读取统一使用公共加载态", () => {
+test("分类标准首次读取保留标题和筛选栏，延迟展示公共加载态", async () => {
   standardApiMock.classificationStandards.mockReturnValue(new Promise(() => {}));
 
   render(<ClassificationStandardsPage route={{ query: {} }} notify={vi.fn()} />);
 
-  expect(screen.getByText("正在读取分类标准…").closest(".inline-loading")).toHaveClass(
-    "ant-spin",
-  );
+  expect(screen.getByRole("heading", { name: "分类标准" })).toBeVisible();
+  expect(screen.getByRole("textbox", { name: "搜索分类标准" })).toBeVisible();
+  expect(
+    (await screen.findByText("正在读取分类标准…")).closest(".inline-loading"),
+  ).toHaveClass("ant-spin");
   expect(
     screen.getByText("正在读取分类标准…").closest(".standard-page"),
   ).toBeInTheDocument();
@@ -936,7 +938,7 @@ test("分类标准详情加载时保留返回入口，不先展示旧详情", as
   await waitFor(() =>
     expect(standardApiMock.classificationStandard).toHaveBeenCalledWith(standard.id),
   );
-  expect(screen.getByText("正在读取分类标准…")).toBeVisible();
+  expect(await screen.findByText("正在读取分类标准…")).toBeVisible();
   expect(screen.getByRole("button", { name: "返回" })).toBeVisible();
   expect(
     screen.queryByRole("heading", { name: standard.name }),
@@ -1541,6 +1543,34 @@ test("测试后修改内容，保存并启用不沿用旧测试记录", async ()
   );
 });
 
+test("启用后刷新等待和失败不卸载工作区或重置页签及输入", async () => {
+  mockEditableDraft();
+  standardApiMock.publishClassificationStandardDraft.mockResolvedValue(detail);
+  renderEditPage();
+  await userEvent.click(
+    await screen.findByRole("button", { name: "标准设置", exact: true }),
+  );
+  const nameInput = screen.getByRole("textbox", { name: "标准名称" });
+  let failRefresh;
+  standardApiMock.classificationStandard.mockReturnValueOnce(
+    new Promise((_, reject) => {
+      failRefresh = reject;
+    }),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "保存并启用" }));
+  await waitFor(() =>
+    expect(standardApiMock.publishClassificationStandardDraft).toHaveBeenCalled(),
+  );
+  expect(screen.getByRole("textbox", { name: "标准名称" })).toBe(nameInput);
+  expect(screen.getByRole("button", { name: "标准设置", exact: true })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  await act(async () => failRefresh(new Error("合成读取失败")));
+  expect(screen.getByRole("textbox", { name: "标准名称" })).toBe(nameInput);
+  expect(await screen.findByRole("button", { name: "重新加载" })).toBeVisible();
+});
+
 test("启用成功后刷新失败，提示实际已启用", async () => {
   mockEditableDraft();
   standardApiMock.publishClassificationStandardDraft.mockResolvedValue(detail);
@@ -1982,6 +2012,41 @@ test("Review 上传入口不依赖退货数据资产", async () => {
   await userEvent.click(button);
   expect(onRun).toHaveBeenCalledWith(file, "standard_version");
 });
+
+test.each(["queued", "running"])(
+  "样本验证 %s 时仅进度区保留动画，创建提示不与运行提示叠加",
+  async (status) => {
+    const { ClassificationStandardValidation } =
+      await import("../src/features/classification-standards/ClassificationStandardValidation");
+    const run = { ...readyRun, status, processed_count: 4 };
+    render(
+      <ClassificationStandardValidation
+        draft={validDraft}
+        sources={[validationSource]}
+        runs={[run]}
+        selectedRun={run}
+        sourceId={validationSource.result_version_id}
+        sampleSize={20}
+        busy
+        dirty={false}
+        onRun={vi.fn()}
+        onSelectRun={vi.fn()}
+        onSourceChange={vi.fn()}
+        onSampleSizeChange={vi.fn()}
+      />,
+    );
+    expect(document.querySelectorAll("svg.spin")).toHaveLength(1);
+    expect(
+      document.querySelector(".standard-validation-runtime svg.spin"),
+    ).toBeInTheDocument();
+    expect(document.querySelector(".standard-validation-history svg.spin")).toBeNull();
+    expect(document.querySelector(".standard-validation-actions svg.spin")).toBeNull();
+    expect(screen.getByRole("button", { name: "开始样本验证" })).toBeDisabled();
+    expect(screen.getByText("已有样本验证正在运行，请等待完成。")).toBeVisible();
+    expect(screen.queryByText("正在创建验证任务，请稍候。")).toBeNull();
+    expect(screen.getAllByText("4/20 条")).toHaveLength(1);
+  },
+);
 
 test("样本验证按钮解释当前优先禁用原因", async () => {
   const { ClassificationStandardValidation } =

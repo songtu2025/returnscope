@@ -45,7 +45,7 @@ export function ReviewBatchWorkspace(props) {
         {batchState.error ? (
           <ReviewBatchError error={batchState.error} onRetry={loadBatch} />
         ) : (
-          <PageLoadingState label="正在读取历史复核记录…" />
+          <PageLoadingState title="历史复核记录" label="正在读取历史复核记录…" />
         )}
       </div>
     );

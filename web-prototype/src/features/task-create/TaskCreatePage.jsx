@@ -3,7 +3,7 @@ import "../../styles/task-flow.css";
 import useSWR from "swr";
 
 import { api } from "../../api";
-import { InlineLoading } from "../../components/SharedUi";
+import { PageLoadingState } from "../../components/SharedUi";
 import { serverStateKeys } from "../../shared/serverState";
 import { NewTaskPage } from "./NewTaskPage";
 import {
@@ -126,9 +126,9 @@ export function TaskCreatePage({ route, notify, onNavigate, onChanged, userId })
   );
 
   return templateLoading ? (
-    <section className="content-card task-template-loading">
-      <InlineLoading label="正在读取原任务配置…" />
-    </section>
+    <div className="standard-page new-task-page">
+      <PageLoadingState title="创建分析任务" label="正在读取原任务配置…" />
+    </div>
   ) : (
     <NewTaskPage
       key={templateTask?.id ?? "new-task"}
