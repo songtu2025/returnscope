@@ -29,7 +29,7 @@ export function AppPages({ route, user, notify, navigate, refreshSystem }) {
       : [...PRIMARY_NAV_ITEMS, SETTINGS_NAV_ITEM].find((item) => item.id === page)
           ?.label;
   return (
-    <PageLoadingScope key={page}>
+    <PageLoadingScope key={page} title={title}>
       <PageErrorBoundary>
         <Suspense
           fallback={

@@ -25,7 +25,10 @@ export function SystemSettingsPage({ route, notify, currentUser }) {
   return (
     <>
       <div className="standard-page settings-hub-page">
-        <div className="data-tabs settings-tabs" aria-label="系统设置分类">
+        <div
+          className="data-tabs settings-tabs page-loading-navigation"
+          aria-label="系统设置分类"
+        >
           <button
             className={tab === "model-preference" ? "active" : ""}
             aria-current={tab === "model-preference" ? "page" : undefined}

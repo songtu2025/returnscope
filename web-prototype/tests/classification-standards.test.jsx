@@ -928,7 +928,7 @@ test("分类标准首次读取保留标题和筛选栏，延迟展示公共加�
   ).toBeInTheDocument();
 });
 
-test("分类标准详情加载时保留返回入口，不先展示旧详情", async () => {
+test("分类标准详情不等待列表读取，加载时保留返回入口", async () => {
   let resolveDetail;
   standardApiMock.classificationStandard.mockReturnValue(
     new Promise((resolve) => {
@@ -942,6 +942,7 @@ test("分类标准详情加载时保留返回入口，不先展示旧详情", as
     expect(standardApiMock.classificationStandard).toHaveBeenCalledWith(standard.id),
   );
   expect(await screen.findByText("正在读取分类标准…")).toBeVisible();
+  expect(standardApiMock.classificationStandards).not.toHaveBeenCalled();
   expect(screen.getByRole("button", { name: "返回" })).toBeVisible();
   expect(
     screen.queryByRole("heading", { name: standard.name }),

@@ -90,7 +90,7 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
     return (
       <div className="standard-page classification-results-page">
         <button
-          className="text-button result-back-button"
+          className="text-button result-back-button page-loading-navigation"
           onClick={() => updateRoute({ version: "" })}
         >
           <ArrowLeft size={17} /> 返回分类结果池
@@ -104,7 +104,7 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
     return (
       <div className="standard-page classification-results-page">
         <button
-          className="text-button result-back-button"
+          className="text-button result-back-button page-loading-navigation"
           onClick={() => updateRoute({ version: "" })}
         >
           <ArrowLeft size={17} /> 返回结果池

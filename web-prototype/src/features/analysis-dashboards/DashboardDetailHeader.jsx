@@ -71,6 +71,7 @@ export function DashboardDetailHeader({
         <div>
           <Button
             size="small"
+            className="page-loading-navigation"
             aria-label="返回分析看板列表"
             icon={<ArrowLeft size={18} />}
             onClick={onBack}

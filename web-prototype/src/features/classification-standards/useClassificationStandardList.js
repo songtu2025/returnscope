@@ -63,11 +63,12 @@ export function useClassificationStandardList(notify, enabled = true) {
   }, []);
 
   useEffect(() => {
+    if (!enabled) return undefined;
     loadStandards().catch((error) => notify(errorMessage(error), "error"));
     return () => {
       generationRef.current += 1;
     };
-  }, [loadStandards, notify]);
+  }, [enabled, loadStandards, notify]);
 
   useDataRefresh(() => loadStandards(true), {
     enabled,

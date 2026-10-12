@@ -8,7 +8,7 @@ const TABS = [
 /** @param {{current: string, onChange: (view: string) => void}} props */
 export function DataAssetTabs({ current, onChange }) {
   return (
-    <div className="data-tabs" aria-label="产品信息管理导航">
+    <div className="data-tabs page-loading-navigation" aria-label="产品信息管理导航">
       {TABS.map(({ id, label, icon: Icon }) => (
         <button
           key={id}

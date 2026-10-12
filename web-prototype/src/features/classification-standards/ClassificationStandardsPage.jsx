@@ -2,10 +2,7 @@ import { useState } from "react";
 import "../../styles/classification-standards.css";
 import { classificationDraftErrorMessage as errorMessage } from "./classificationDraftSelection";
 import { useClassificationStandardList } from "./useClassificationStandardList";
-import {
-  ClassificationStandardPageLoading,
-  ClassificationStandardDetailState,
-} from "./ClassificationStandardPageStates";
+import { ClassificationStandardDetailState } from "./ClassificationStandardPageStates";
 
 import { navigateHash } from "../../app/hashRouter";
 import { AntdProvider } from "../../components/AntdProvider";
@@ -159,9 +156,6 @@ export function ClassificationStandardsPage({ route, notify }) {
       setBusy("");
     }
   };
-
-  if (loading && !hasData && mode !== "list")
-    return <ClassificationStandardPageLoading mode={mode} />;
 
   const { detailError, detailPending, showDetailState } =
     classificationStandardDetailStatus({

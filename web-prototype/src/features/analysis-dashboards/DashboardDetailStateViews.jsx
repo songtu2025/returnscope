@@ -28,7 +28,10 @@ export function DashboardDetailError({ error, onBack, onReload, hasData = false 
   if (hasData) return alert;
   return (
     <div className="standard-page analysis-dashboard-page">
-      <button className="text-button result-back-button" onClick={onBack}>
+      <button
+        className="text-button result-back-button page-loading-navigation"
+        onClick={onBack}
+      >
         <ArrowLeft size={17} /> 返回分析看板
       </button>
       {alert}

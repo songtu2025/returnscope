@@ -1,19 +1,22 @@
 import { createContext, useContext, useId, useLayoutEffect } from "react";
 
 export const PageLoadingContext = createContext(
-  /** @type {((id: string, active: boolean) => void) | null} */ (null),
+  /** @type {{report: (id: string, active: boolean) => void, initial: boolean} | null} */ (
+    null
+  ),
 );
 
-/** 页面首读向常驻提示汇报，局部刷新仍在原区域显示。
+/** 首次进入合并必要读取；页面展示后，后续加载留在原区域。
  * @param {boolean} active
  * @param {boolean} page
  */
 export function usePageLoading(active, page) {
-  const report = useContext(PageLoadingContext);
+  const context = useContext(PageLoadingContext);
+  const report = context?.report;
   const id = useId();
-  const scoped = page && report !== null;
+  const scoped = page && Boolean(context?.initial);
   useLayoutEffect(() => {
-    if (!scoped) return undefined;
+    if (!scoped || !report) return undefined;
     report(id, active);
     return () => report(id, false);
   }, [active, id, report, scoped]);

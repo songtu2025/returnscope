@@ -90,7 +90,7 @@ test("交接空档保留已显示节点，但快请求与空闲交接不闪烁",
   expect(container.querySelector(".loading-indicator")).not.toBeInTheDocument();
 });
 
-test("并行首读合并，局部刷新和弹窗不占用页面提示，输入焦点保留", () => {
+test("并行首读整体隐藏正文，后续更新只在局部显示并保留输入焦点", () => {
   vi.useFakeTimers();
   const view = (first, second, local = false) => (
     <PageLoadingScope>
@@ -101,8 +101,7 @@ test("并行首读合并，局部刷新和弹窗不占用页面提示，输入�
     </PageLoadingScope>
   );
   const { container, rerender } = render(view(true, true));
-  const input = screen.getByRole("textbox", { name: "草稿" });
-  input.focus();
+  expect(screen.queryByRole("textbox", { name: "草稿" })).not.toBeInTheDocument();
   advance(200);
   expect(container.querySelectorAll(".loading-indicator")).toHaveLength(1);
   rerender(view(false, true));
@@ -110,12 +109,21 @@ test("并行首读合并，局部刷新和弹窗不占用页面提示，输入�
     "aria-busy",
     "true",
   );
-  rerender(view(false, false, true));
+  rerender(view(false, false));
+  advance(80);
+  const input = screen.getByRole("textbox", { name: "草稿" });
+  input.focus();
+  rerender(view(true, false, true));
   advance(200);
   expect(
     container.querySelector(".page-loading-slot .loading-indicator"),
   ).not.toBeInTheDocument();
   expect(screen.getByText("更新中…")).toBeVisible();
+  expect(screen.getByText("列表")).toBeVisible();
+  expect(container.querySelector(".page-loading-scope")).toHaveAttribute(
+    "aria-busy",
+    "false",
+  );
   expect(document.activeElement).toBe(input);
   expect(input).toHaveValue("保留输入");
 });
@@ -144,6 +152,43 @@ test("页面切换清理旧提示，失败结束后重试重新延迟", () => {
   expect(container.querySelector(".loading-indicator")).not.toBeInTheDocument();
   advance(1);
   expect(container.querySelectorAll(".loading-indicator")).toHaveLength(1);
+  expect(
+    container.querySelector(".page-loading-slot .loading-indicator"),
+  ).not.toBeInTheDocument();
+});
+
+test("缓存页面立即可见，快请求不显示动画，首次结束后不再隐藏已有正文", () => {
+  vi.useFakeTimers();
+  const { container, rerender } = render(
+    <PageLoadingScope key="cache" title="页面标题">
+      <p>缓存内容</p>
+    </PageLoadingScope>,
+  );
+  expect(screen.getByText("缓存内容")).toBeVisible();
+  rerender(
+    <PageLoadingScope key="cache" title="页面标题">
+      <p>缓存内容</p>
+      <InlineLoading scope="page" label="局部读取" />
+    </PageLoadingScope>,
+  );
+  expect(screen.getByText("缓存内容")).toBeVisible();
+  rerender(
+    <PageLoadingScope key="fast" title="页面标题">
+      <p>首读正文</p>
+      <InlineLoading scope="page" label="读取中" />
+    </PageLoadingScope>,
+  );
+  expect(screen.getByRole("heading", { name: "页面标题" })).toBeVisible();
+  expect(screen.getByText("首读正文")).not.toBeVisible();
+  advance(100);
+  rerender(
+    <PageLoadingScope key="fast" title="页面标题">
+      <p>准备好的正文</p>
+    </PageLoadingScope>,
+  );
+  advance(80);
+  expect(container.querySelector(".loading-indicator")).not.toBeInTheDocument();
+  expect(screen.getByText("准备好的正文")).toBeVisible();
 });
 
 test("实际 AppPages 产品列表、详情与行数据首读始终共用提示", async () => {
@@ -193,6 +238,8 @@ test("实际 AppPages 产品列表、详情与行数据首读始终共用提示"
   expect(container.querySelector(".loading-indicator")).toBe(indicator);
   await act(async () => resolveDetail(product));
   expect(container.querySelector(".loading-indicator")).toBe(indicator);
+  expect(screen.getByText("产品记录")).not.toBeVisible();
+  expect(screen.getByRole("heading", { name: "产品信息管理" })).toBeVisible();
   await act(async () =>
     resolveRows({ records: [], total: 0, facets: { stores: [], categories: [] } }),
   );
@@ -204,4 +251,33 @@ test("实际 AppPages 产品列表、详情与行数据首读始终共用提示"
   );
   await act(async () => new Promise((resolve) => setTimeout(resolve, 100)));
   expect(container.querySelector(".loading-indicator")).not.toBeInTheDocument();
+  expect(screen.getByText("产品记录")).toBeVisible();
+});
+
+test("任务详情首读只等待当前详情，不被隐藏的任务列表阻塞", async () => {
+  apiMock.tasks.mockImplementation(() => new Promise(() => {}));
+  apiMock.task.mockResolvedValue({
+    id: "qa-task",
+    title: "合成详情",
+    status: "completed",
+    revision: 1,
+    segments: [],
+  });
+  const { container } = renderWithServerState(
+    <AppPages
+      route={{ page: "analysis-tasks", query: { task_id: "qa-task" } }}
+      user={{ id: "qa" }}
+      notify={vi.fn()}
+      navigate={vi.fn()}
+      refreshSystem={vi.fn()}
+    />,
+  );
+  await waitFor(() =>
+    expect(screen.getByRole("heading", { name: "合成详情" })).toBeVisible(),
+  );
+  expect(apiMock.tasks).toHaveBeenCalled();
+  expect(container.querySelector(".page-loading-scope")).toHaveAttribute(
+    "aria-busy",
+    "false",
+  );
 });

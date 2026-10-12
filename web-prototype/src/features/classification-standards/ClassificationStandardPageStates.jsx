@@ -5,21 +5,12 @@ function ClassificationStandardBackButton() {
   return (
     <button
       type="button"
-      className="icon-button"
+      className="icon-button page-loading-navigation"
       aria-label="返回"
       onClick={() => navigateHash("classification-standards")}
     >
       <ArrowLeft size={18} />
     </button>
-  );
-}
-/** @param {{mode: string}} props */
-export function ClassificationStandardPageLoading({ mode }) {
-  return (
-    <div className="standard-page classification-standard-page">
-      {mode === "edit" && <ClassificationStandardBackButton />}
-      <PageLoadingState title="分类标准" label="正在读取分类标准…" />
-    </div>
   );
 }
 /** @param {{pending: boolean, error: string, onRetry: () => void}} props */

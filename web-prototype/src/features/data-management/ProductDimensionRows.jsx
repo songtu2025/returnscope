@@ -1,4 +1,5 @@
 import { useProtectedData } from "../../hooks/useProtectedData";
+import { useLoadingHeight } from "../../hooks/useLoadingHeight";
 import { useDataRefresh } from "../../hooks/useDataRefresh";
 import { MANAGED_REFRESH_OPTIONS } from "../../shared/refreshPolicy";
 import { useLayoutEffect, useRef, useState } from "react";
@@ -33,6 +34,7 @@ export function ProductDimensionRows({
 }) {
   const [editing, setEditing] = useState(/** @type {DatasetRow | null} */ (null));
   const editingVersion = useRef(dataset.current_version);
+  const regionRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const [conflict, setConflict] = useState(false);
   const isEditing = Boolean(editing);
   useLayoutEffect(() => {
@@ -78,6 +80,7 @@ export function ProductDimensionRows({
     category,
   ]);
   const data = useProtectedData(fetchedData, Boolean(editing), identity);
+  useLoadingHeight(isLoading || isValidating, regionRef);
   useDataRefresh(() => mutate(), { loading: isLoading || isValidating, identity });
   const load = () =>
     onRefresh
@@ -151,31 +154,37 @@ export function ProductDimensionRows({
         load={load}
         loading={isValidating}
       />
-      <ProductLoadFeedback
-        error={parentError ? null : error}
-        loading={isLoading || isValidating}
-        hasData={Boolean(data)}
-        onRetry={load}
-      />
-      {data && (
-        <ProductDimensionTable
-          data={data}
-          page={page}
-          pageSize={pageSize}
-          pageStart={pageStart}
-          totalPages={totalPages}
-          visiblePages={visiblePages}
-          setPage={setPage}
-          hasFilters={hasFilters}
-          clearFilters={clearFilters}
-          onEdit={(row) => {
-            editingVersion.current = dataset.current_version;
-            setConflict(false);
-            setEditing(row);
-            setChangeNote("");
-          }}
+      <div
+        ref={regionRef}
+        className="loading-region"
+        aria-busy={isLoading || isValidating}
+      >
+        <ProductLoadFeedback
+          error={parentError ? null : error}
+          loading={isLoading || isValidating}
+          hasData={Boolean(data)}
+          onRetry={load}
         />
-      )}
+        {data && (
+          <ProductDimensionTable
+            data={data}
+            page={page}
+            pageSize={pageSize}
+            pageStart={pageStart}
+            totalPages={totalPages}
+            visiblePages={visiblePages}
+            setPage={setPage}
+            hasFilters={hasFilters}
+            clearFilters={clearFilters}
+            onEdit={(row) => {
+              editingVersion.current = dataset.current_version;
+              setConflict(false);
+              setEditing(row);
+              setChangeNote("");
+            }}
+          />
+        )}
+      </div>
       {editing && (
         <ProductDimensionEditDialog
           editing={editing}

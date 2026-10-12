@@ -35,7 +35,7 @@ export function ReviewBatchWorkspace(props) {
     return (
       <div className="standard-page review-batch-page review-batch-stable-state">
         <Button
-          className="review-batch-back"
+          className="review-batch-back page-loading-navigation"
           type="text"
           icon={<ArrowLeft size={17} />}
           onClick={returnToList}

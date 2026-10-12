@@ -10,7 +10,7 @@ export function useLoadingHeight(loading, regionRef) {
     const region = regionRef.current;
     if (!region) return undefined;
     if (loading) {
-      region.style.minHeight = heightRef.current ? `${heightRef.current}px` : "";
+      region.style.minHeight = `${heightRef.current || 112}px`;
       return undefined;
     }
     region.style.minHeight = "";

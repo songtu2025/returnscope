@@ -63,23 +63,42 @@
   flex: none;
 }
 .page-loading-scope {
+  position: relative;
   min-width: 0;
 }
-/* 提示位常驻在内容区顶部，不跟随各阶段的内容高度改变坐标。 */
+/* 首读占据首屏工作区，串行读取期间隐藏正文，保留挂载与页头布局。 */
+.page-loading-scope.is-initial-loading .page-loading-content {
+  height: min(560px, calc(100dvh - 68px));
+  overflow: clip;
+}
+.page-loading-scope.is-initial-loading .page-loading-content * {
+  visibility: hidden;
+}
+.page-loading-scope.is-initial-loading .page-loading-navigation,
+.page-loading-scope.is-initial-loading .page-loading-navigation * {
+  visibility: visible;
+}
+.page-loading-scope > .page-loading-heading {
+  position: absolute;
+  inset: 72px 0 auto;
+  padding: 0 var(--desktop-page-padding);
+}
+.page-loading-heading .page-heading {
+  min-height: 0;
+}
+/* 加载提示属于主内容区，不占页头空间，也不随正文高度移动。 */
 .page-loading-slot {
-  position: sticky;
-  top: 68px;
-  z-index: 12;
-  height: 28px;
+  position: absolute;
+  inset: 160px var(--desktop-page-padding) auto;
+  display: grid;
+  place-items: center;
+  height: min(400px, max(160px, calc(100dvh - 228px)));
   pointer-events: none;
 }
 .page-loading-slot .inline-loading {
-  position: absolute;
-  top: 0;
-  left: 50%;
-  width: 225px;
+  width: auto;
   min-height: 28px;
-  transform: translateX(-50%);
+  grid-template-columns: 18px auto;
 }
 .spin {
   animation: loading-rotate 1s linear infinite;
@@ -105,6 +124,17 @@
 .loading-region {
   display: flow-root;
   min-width: 0;
+}
+.loading-region > .inline-loading {
+  min-height: inherit;
+  align-items: start;
+  padding-top: calc(var(--desktop-page-padding) * 2);
+}
+/* 长列表只保留区域尺寸，提示贴近可见内容并在滚动时避开顶部栏。 */
+.loading-region > .inline-loading .ant-spin-dot,
+.loading-region > .inline-loading .ant-spin-description {
+  position: sticky;
+  top: calc(68px + var(--desktop-page-padding));
 }
 .muted-line {
   margin: 12px 0;

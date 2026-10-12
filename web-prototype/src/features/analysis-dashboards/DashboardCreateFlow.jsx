@@ -42,7 +42,7 @@ export function DashboardCreateFlow(props) {
   return (
     <div className="standard-page analysis-dashboard-page dashboard-create-page">
       <button
-        className="text-button result-back-button"
+        className="text-button result-back-button page-loading-navigation"
         disabled={context.submitting || insight.insightState.submitting}
         onClick={() =>
           navigateHash("classification-results", {

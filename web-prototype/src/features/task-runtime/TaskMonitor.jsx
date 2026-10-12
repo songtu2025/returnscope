@@ -52,7 +52,7 @@ export function TaskMonitor(props) {
           selectedId={selectedId}
           viewState={listState}
           onViewStateChange={updateListState}
-          loading={loading}
+          loading={loading && !showTaskDetail}
           error={listError}
           hasData={taskData !== undefined}
           onReload={loadTasks}
@@ -66,7 +66,10 @@ export function TaskMonitor(props) {
       </div>
       {showTaskDetail && (
         <section className="task-detail-panel">
-          <button className="task-back-button" onClick={returnToList}>
+          <button
+            className="task-back-button page-loading-navigation"
+            onClick={returnToList}
+          >
             <ArrowLeft size={17} /> 全部任务
           </button>
           {!visibleSelected && !detailError && (

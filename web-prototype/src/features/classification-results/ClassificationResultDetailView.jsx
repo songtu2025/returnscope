@@ -35,7 +35,7 @@ export function ClassificationResultDetailView(props) {
   return (
     <div className="standard-page classification-results-page result-detail-page">
       <button
-        className="text-button result-back-button"
+        className="text-button result-back-button page-loading-navigation"
         onClick={() =>
           updateRoute({
             version: "",

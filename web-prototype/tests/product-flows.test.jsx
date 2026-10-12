@@ -889,7 +889,7 @@ describe("关键用户流程", () => {
 
     render(<App />);
 
-    expect(await screen.findByText("旧版单记录复核")).toBeVisible();
+    await waitFor(() => expect(screen.getByText("旧版单记录复核")).toBeVisible());
     expect(
       screen.getByText("仅用于历史任务，与新版复核批次和派生版本相互独立。"),
     ).toBeVisible();
