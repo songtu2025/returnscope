@@ -1,6 +1,6 @@
 import { WarningCircle } from "@phosphor-icons/react";
 
-/** @param {Pick<import("./modelServiceViewContracts").ModelServiceSummaryProps, "draftVersion" | "activeVersion" | "busy" | "validationActive" | "discardConfirmation" | "onCancelDiscard" | "onDiscardDraft" | "onPublishDraft" | "onContinueDraft" | "onConfirmDiscard">} props */
+/** @param {Pick<import("./modelServiceViewContracts").ModelServiceSummaryProps, "draftVersion" | "activeVersion" | "busy" | "validationActive" | "discardConfirmation" | "onCancelDiscard" | "onDiscardDraft" | "onPublishDraft" | "onContinueDraft" | "onConfirmDiscard" | "onValidateDraft">} props */
 
 export function ModelServiceDraftSummary({
   draftVersion,
@@ -12,6 +12,7 @@ export function ModelServiceDraftSummary({
   onDiscardDraft,
   onPublishDraft,
   onContinueDraft,
+  onValidateDraft,
   onConfirmDiscard,
 }) {
   if (!draftVersion) return null;
@@ -46,11 +47,18 @@ export function ModelServiceDraftSummary({
             onClick={
               draftVersion.validation_status === "validated"
                 ? onPublishDraft
-                : onContinueDraft
+                : onValidateDraft
             }
             disabled={Boolean(busy) || validationActive}
           >
-            {draftVersion.validation_status === "validated" ? "发布版本" : "继续处理"}
+            {draftVersion.validation_status === "validated" ? "发布草稿" : "验证草稿"}
+          </button>
+          <button
+            className="secondary-button"
+            onClick={onContinueDraft}
+            disabled={Boolean(busy) || validationActive}
+          >
+            编辑草稿
           </button>
           <button
             className="text-button"
@@ -80,8 +88,9 @@ function ModelServiceDraftCopy({ draftVersion, activeVersion }) {
               : "待验证"}
         </b>
         <span>
-          {draftVersion.change_note || "未填写变更说明"}；当前运行
-          {activeVersion ? ` #${activeVersion.version}` : ""} 不受影响
+          {activeVersion
+            ? `已发布配置 #${activeVersion.version} 继续供新任务使用`
+            : "尚未发布配置，请验证后发布"}
         </span>
       </p>
     </div>

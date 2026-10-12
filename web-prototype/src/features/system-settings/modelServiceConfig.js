@@ -12,6 +12,8 @@ const EFFORT_LABEL_MAP = /** @type {Record<string, string>} */ (EFFORT_LABELS);
 /** @type {Array<[ConfigDiffKey, string]>} */
 const CONFIG_DIFF_FIELDS = [
   ["base_url", "Base URL"],
+  ["primary_model", "验证模型"],
+  ["primary_effort", "推理强度"],
   ["requests_per_minute", "每分钟请求"],
   ["max_workers", "单任务并发"],
   ["timeout_seconds", "请求超时"],
@@ -44,10 +46,10 @@ export const EMPTY_MODEL_SERVICE_FORM = {
  */
 export function preferredVersion(connection, selectedVersionId, focusConfigVersionId) {
   return (
+    connection.versions?.find((version) => version.id === selectedVersionId) ??
     connection.versions?.find(
       (version) => String(version.id) === String(focusConfigVersionId),
     ) ??
-    connection.versions?.find((version) => version.id === selectedVersionId) ??
     connection.versions?.find(
       (version) => version.id !== connection.active_version_id && !version.published_at,
     ) ??
@@ -59,27 +61,24 @@ export function preferredVersion(connection, selectedVersionId, focusConfigVersi
 
 /**
  * @param {ModelConnection | null | undefined} connection
- * @param {ConfigVersion} version
- * @param {boolean} [resetChangeNote]
+ * @param {ConfigVersion | null} version
  * @returns {ModelServiceForm}
  */
-export function formForVersion(connection, version, resetChangeNote = false) {
+export function formForVersion(connection, version) {
   return {
     ...EMPTY_MODEL_SERVICE_FORM,
     ...version,
     name: connection?.name ?? "",
     api_key: "",
     connection_id: connection?.id,
-    ...(resetChangeNote ? { change_note: "" } : {}),
+    change_note: "",
   };
 }
 
 /** @param {CatalogModel[]} catalogModels @param {ModelServiceForm} form @returns {ModelOption[]} */
 export function createModelOptions(catalogModels, form) {
   const historicalModelKeys = [];
-  if (form.cheap_model) historicalModelKeys.push(form.cheap_model);
   if (form.primary_model) historicalModelKeys.push(form.primary_model);
-  if (form.secondary_model) historicalModelKeys.push(form.secondary_model);
   return [
     ...catalogModels,
     ...historicalModelKeys
@@ -134,16 +133,11 @@ export { errorMessage } from "../../shared/api/requestErrors";
 /**
  * @param {ConfigVersion} left
  * @param {ConfigVersion | null} right
- * @param {string} key
+ * @param {ConfigDiffKey} key
  */
 function configValuesDiffer(left, right, key) {
   if (!right) return false;
-  if (key === "base_url") return left.base_url !== right.base_url;
-  if (key === "requests_per_minute")
-    return left.requests_per_minute !== right.requests_per_minute;
-  if (key === "max_workers") return left.max_workers !== right.max_workers;
-  if (key === "timeout_seconds") return left.timeout_seconds !== right.timeout_seconds;
-  return false;
+  return left[key] !== right[key];
 }
 
 /** @param {ModelServiceForm} form @param {boolean} editing @param {boolean} hasConnection */
@@ -160,9 +154,26 @@ export function getConfigFormState(form, editing, hasConnection) {
     baseUrlError,
     apiKeyError,
     !form.primary_model ? "请选择验证模型。" : "",
-    !form.change_note?.trim() ? "请填写配置变更原因。" : "",
+    ...getRuntimeErrors(form),
   ].filter(Boolean);
   return { nameError, baseUrlError, apiKeyError, configFormErrors };
+}
+
+/** @param {ModelServiceForm} form */
+function getRuntimeErrors(form) {
+  return [
+    [form.requests_per_minute, 1, 10000, "每分钟请求须为 1–10000 的整数。"],
+    [form.max_workers, 1, 16, "单任务并发须为 1–16 的整数。"],
+    [form.timeout_seconds, 5, 600, "请求超时须为 5–600 秒的整数。"],
+  ]
+    .map(([value, min, max, message]) =>
+      Number.isInteger(value) &&
+      Number(value) >= Number(min) &&
+      Number(value) <= Number(max)
+        ? ""
+        : String(message),
+    )
+    .filter(Boolean);
 }
 
 /** @param {ModelConnection | undefined} selectedConnection @param {ConfigVersion | null} selectedVersion */

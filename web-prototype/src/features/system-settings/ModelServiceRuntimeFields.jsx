@@ -1,5 +1,12 @@
-/** @param {Pick<import("./modelServiceViewContracts").ModelServiceEditorProps, "form" | "onFormChange"> & {formDisabled: boolean}} props */
-export function ModelServiceRuntimeFields({ form, onFormChange, formDisabled }) {
+/** @param {Pick<import("./modelServiceViewContracts").ModelServiceEditorProps, "form" | "onFormChange" | "onFieldBlur" | "touchedFields" | "configFormErrors"> & {formDisabled: boolean}} props */
+export function ModelServiceRuntimeFields({
+  form,
+  onFormChange,
+  formDisabled,
+  onFieldBlur,
+  touchedFields,
+  configFormErrors,
+}) {
   return (
     <>
       <div className="runtime-grid">
@@ -7,6 +14,9 @@ export function ModelServiceRuntimeFields({ form, onFormChange, formDisabled }) 
           每分钟请求
           <input
             type="number"
+            min={1}
+            max={10000}
+            onBlur={() => onFieldBlur("runtime")}
             disabled={formDisabled}
             value={form.requests_per_minute}
             onChange={(event) =>
@@ -21,6 +31,9 @@ export function ModelServiceRuntimeFields({ form, onFormChange, formDisabled }) 
           单任务并发
           <input
             type="number"
+            min={1}
+            max={16}
+            onBlur={() => onFieldBlur("runtime")}
             disabled={formDisabled}
             value={form.max_workers}
             onChange={(event) =>
@@ -35,6 +48,9 @@ export function ModelServiceRuntimeFields({ form, onFormChange, formDisabled }) 
           请求超时（秒）
           <input
             type="number"
+            min={5}
+            max={600}
+            onBlur={() => onFieldBlur("runtime")}
             disabled={formDisabled}
             value={form.timeout_seconds}
             onChange={(event) =>
@@ -46,26 +62,11 @@ export function ModelServiceRuntimeFields({ form, onFormChange, formDisabled }) 
           />
         </label>
       </div>
-      <div className="config-change-reason">
-        <label>
-          配置变更原因
-          <textarea
-            disabled={formDisabled}
-            aria-label="配置变更原因"
-            value={form.change_note ?? ""}
-            onChange={(event) =>
-              onFormChange({ ...form, change_note: event.target.value })
-            }
-            rows={3}
-            maxLength={500}
-            placeholder="必填：说明本次新增或调整配置的原因"
-            required
-          />
-          {!form.change_note?.trim() && (
-            <small className="config-field-error">请填写配置变更原因。</small>
-          )}
-        </label>
-      </div>
+      {touchedFields.includes("runtime") && configFormErrors.length > 0 && (
+        <p className="config-field-error" role="alert">
+          {configFormErrors.join("；")}
+        </p>
+      )}
     </>
   );
 }

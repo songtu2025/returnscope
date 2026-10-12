@@ -1,5 +1,6 @@
 import { Plus } from "@phosphor-icons/react";
 import Button from "antd/es/button";
+import { useState } from "react";
 import { CardHeading } from "../../components/SharedUi";
 import { ModelCatalogRow } from "./ModelCatalogRow";
 import { ValidationProcess } from "./ModelValidationProcess";
@@ -18,12 +19,11 @@ import { ValidationProcess } from "./ModelValidationProcess";
  *   focusedModelRef: import("react").Ref<HTMLDivElement>,
  *   onCloseValidation: () => void,
  *   onOpenModelEditor: (model?: CatalogModel) => void,
- *   onPublish: () => void,
+ *   onDiscoverModels: () => void,
  *   onToggleModel: (model: CatalogModel) => void,
  *   onValidateModel: (model: CatalogModel) => void,
  *   selectedConnection: ModelConnection | null | undefined,
  *   selectedVersion: ConfigVersion | null,
- *   selectedVersionIsActive: boolean,
  *   validationActive: boolean,
  *   validationElapsed: number,
  *   validationEvents: ValidationEvent[],
@@ -31,15 +31,31 @@ import { ValidationProcess } from "./ModelValidationProcess";
  * }} props
  */
 export function ModelCatalogSection(props) {
+  const [showInactive, setShowInactive] = useState(Boolean(props.focusModelId));
+  const visibleModels = props.catalogModels.filter(
+    (model) => model.active || showInactive,
+  );
   return (
     <div className="config-section" id="available-models">
       <ModelCatalogHeading
         busy={props.busy}
         selectedConnection={props.selectedConnection}
         onOpenModelEditor={props.onOpenModelEditor}
+        onDiscoverModels={props.onDiscoverModels}
       />
+      <label className="model-catalog-filter">
+        <input
+          type="checkbox"
+          checked={showInactive}
+          onChange={(event) => setShowInactive(event.target.checked)}
+        />
+        显示停用模型
+      </label>
       <div className="model-catalog-list">
-        {props.catalogModels.map((model) => (
+        {!visibleModels.length && (
+          <p className="muted-line">暂无模型，请同步目录或添加模型。</p>
+        )}
+        {visibleModels.map((model) => (
           <ModelCatalogRow
             key={model.id}
             model={model}
@@ -58,37 +74,49 @@ export function ModelCatalogSection(props) {
       <ValidationProcess
         busy={props.busy}
         onClose={props.onCloseValidation}
-        onPublish={props.onPublish}
         selectedVersion={props.selectedVersion}
-        selectedVersionIsActive={props.selectedVersionIsActive}
         validationActive={props.validationActive}
         validationElapsed={props.validationElapsed}
         validationEvents={props.validationEvents}
-        validationRun={props.validationRun}
+        validationRun={
+          props.validationRun?.kind === "model" ? props.validationRun : null
+        }
       />
     </div>
   );
 }
 
-/** @param {Pick<Parameters<typeof ModelCatalogSection>[0], "busy" | "selectedConnection" | "onOpenModelEditor">} props */
-function ModelCatalogHeading({ busy, selectedConnection, onOpenModelEditor }) {
+/** @param {Pick<Parameters<typeof ModelCatalogSection>[0], "busy" | "selectedConnection" | "onOpenModelEditor" | "onDiscoverModels">} props */
+function ModelCatalogHeading({
+  busy,
+  selectedConnection,
+  onOpenModelEditor,
+  onDiscoverModels,
+}) {
   return (
     <CardHeading
-      title="可用模型"
+      title="模型目录"
       note={
         selectedConnection
-          ? "目录来自当前接入的 /models；仅已启用且验证通过的模型可供选择。"
+          ? "已启用且验证通过的模型可用于分析任务。"
           : "请添加接入方提供的模型 ID；保存后可同步真实目录并验证。"
       }
       action={
-        <Button
-          autoInsertSpace={false}
-          icon={<Plus size={16} />}
-          onClick={() => onOpenModelEditor()}
-          disabled={Boolean(busy)}
-        >
-          添加模型
-        </Button>
+        <div className="model-service-catalog-actions">
+          {selectedConnection && (
+            <Button onClick={onDiscoverModels} disabled={Boolean(busy)}>
+              同步模型目录
+            </Button>
+          )}
+          <Button
+            autoInsertSpace={false}
+            icon={<Plus size={16} />}
+            onClick={() => onOpenModelEditor()}
+            disabled={Boolean(busy)}
+          >
+            添加模型
+          </Button>
+        </div>
       }
     />
   );

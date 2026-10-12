@@ -39,7 +39,10 @@ export function useModelServiceConnections({ notify, focusConnectionId }) {
   const loadGeneration = useRef(0);
 
   const load = useCallback(
-    async (background = false) => {
+    async (
+      background = false,
+      nextConnectionId = /** @type {string | null} */ (null),
+    ) => {
       const generation = ++loadGeneration.current;
       const isInitialLoad = !hasLoadedConnections.current;
       if (isInitialLoad) {
@@ -54,9 +57,10 @@ export function useModelServiceConnections({ notify, focusConnectionId }) {
         setSelectedConnectionId((current) =>
           background && protectedRef.current
             ? current
-            : (values.find((item) => String(item.id) === String(focusConnectionId))
-                ?.id ??
+            : (nextConnectionId ??
               current ??
+              values.find((item) => String(item.id) === String(focusConnectionId))
+                ?.id ??
               values[0]?.id ??
               null),
         );

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { modelApi as modelServiceApi } from "../../shared/api/modelApi";
 import { errorMessage, getModelDraftError } from "./modelServiceConfig";
+import { useModelServiceEditing } from "./useModelServiceEditing";
 
 /** @typedef {import("./modelServiceViewContracts").CatalogModel} CatalogModel */
 /** @typedef {import("../../shared/api/systemSettingsContracts").ModelEditorMode} ModelEditorMode */
@@ -36,28 +37,32 @@ export function useModelServiceCatalog({
     /** @type {ModelEditorMode | null} */ (null),
   );
   const [modelDraft, setModelDraft] = useState(/** @type {ModelDraft | null} */ (null));
+  const modelEditState = useModelServiceEditing();
+  const [syncConfirmation, setSyncConfirmation] = useState(false);
   /** @param {CatalogModel | null} [model] */
   const openModelEditor = (model = null) => {
     setModelEditor(model ? "edit" : "create");
-    setModelDraft(
-      model
-        ? {
-            ...model,
-            supported_efforts: [...model.supported_efforts],
-          }
-        : {
-            model_key: "",
-            display_name: "",
-            supported_efforts: ["low", "medium", "high"],
-            active: true,
-          },
-    );
+    const nextDraft = model
+      ? {
+          ...model,
+          supported_efforts: [...model.supported_efforts],
+        }
+      : {
+          model_key: "",
+          display_name: "",
+          supported_efforts: ["low", "medium", "high"],
+          active: true,
+        };
+    setModelDraft(nextDraft);
+    modelEditState.reset(nextDraft);
   };
 
   const closeModelEditor = () => {
     if (busy === "model-save") return;
-    setModelEditor(null);
-    setModelDraft(null);
+    modelEditState.requestExit(modelEditState.isDirty(modelDraft), () => {
+      setModelEditor(null);
+      setModelDraft(null);
+    });
   };
 
   /**
@@ -140,14 +145,8 @@ export function useModelServiceCatalog({
 
   /** @param {CatalogModel} model */
   const toggleModel = async (model) => {
-    if (
-      !selectedConnection &&
-      model.active &&
-      [form.cheap_model, form.primary_model, form.secondary_model].includes(
-        model.model_key,
-      )
-    ) {
-      notify("请先从模型流水线中移除该模型", "error");
+    if (!selectedConnection && model.active && form.primary_model === model.model_key) {
+      notify("请先更换验证模型", "error");
       return;
     }
     if (!selectedConnection) {
@@ -188,17 +187,22 @@ export function useModelServiceCatalog({
     }
   };
 
-  const discoverModels = async () => {
+  const confirmDiscoverModels = async () => {
     if (!selectedConnection) return;
     setBusy("model-discover");
     try {
       const value = await modelServiceApi.discoverModels(selectedConnection.id);
-      await load();
-      notify(`已读取 ${value.count} 个接入方模型；目录外模型已停用`, "success");
+      try {
+        await load();
+      } catch {
+        notify("模型目录已同步，列表刷新失败，请重新加载。", "error");
+      }
+      notify(`已同步 ${value.count} 个模型；未返回的模型已停用`, "success");
     } catch (error) {
       notify(errorMessage(error), "error");
     } finally {
       setBusy("");
+      setSyncConfirmation(false);
     }
   };
 
@@ -212,6 +216,12 @@ export function useModelServiceCatalog({
     saveModel,
     toggleModel,
     validateCatalogModel,
-    discoverModels,
+    discoverModels: () => setSyncConfirmation(true),
+    syncConfirmation,
+    cancelDiscoverModels: () => {
+      if (!busy) setSyncConfirmation(false);
+    },
+    confirmDiscoverModels,
+    modelEditState,
   };
 }

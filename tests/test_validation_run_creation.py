@@ -202,7 +202,7 @@ def test_public_entry_maps_target_and_configuration_version(
         run = service.start_config_validation(str(first["id"]), ACTOR_ID)
         expected_version = first["id"]
         expected_target = first["id"]
-        expected_role = "低成本初筛 / 主分析 / 风险二次复核"
+        expected_role = "连接与验证模型"
 
     assert run["kind"] == kind
     assert run["target_id"] == expected_target
@@ -214,3 +214,43 @@ def test_public_entry_maps_target_and_configuration_version(
     assert run["items"][0]["model_key"] == "primary-model"
     assert run["items"][0]["effort"] == "medium"
     assert run["items"][0]["role"] == expected_role
+
+
+def test_service_validation_uses_saved_draft_and_only_marks_selected_model(
+    tmp_path: Path, monkeypatch
+) -> None:
+    service = ConfigService(_database(tmp_path), _secret_box())
+    first = _create_version(service)
+    model = service.model_catalog.get_by_key(first["connection_id"], "primary-model")
+    service.update_model(model["id"], ACTOR_ID, "主模型", ["medium", "high"], True)
+    monkeypatch.setattr(service.model_probe, "test", lambda *_args: None)
+    service.validate(first["id"], ACTOR_ID)
+    service.publish(first["id"], ACTOR_ID)
+    latest = _create_version(
+        service,
+        connection_id=first["connection_id"],
+        api_key="",
+        models=None,
+        base_url="https://draft.example.com/v1",
+        primary_effort="high",
+        change_note="",
+    )
+    calls = []
+
+    def probe(config, model_key, effort, **_kwargs):
+        calls.append((config["id"], config["base_url"], model_key, effort))
+        return {"http_status": 200, "duration_ms": 25, "response_model": model_key}
+
+    monkeypatch.setattr(service.model_probe, "test", probe)
+    run = service.start_config_validation(latest["id"], ACTOR_ID)
+    assert run["total_count"] == 1
+    with pytest.raises(ValueError, match="验证"):
+        service.publish(latest["id"], ACTOR_ID)
+    service.run_validation(run["id"])
+    assert calls == [(latest["id"], latest["base_url"], "primary-model", "high")]
+    assert service.get_validation_run(run["id"])["status"] == "passed"
+    assert service.publish(latest["id"], ACTOR_ID)["published_at"]
+    models = {model["model_key"]: model for model in service.list()[0]["models"]}
+    assert models["primary-model"]["validation_status"] == "validated"
+    assert models["cheap-model"]["validation_status"] == "draft"
+    assert service.get_version(first["id"])["base_url"] == first["base_url"]

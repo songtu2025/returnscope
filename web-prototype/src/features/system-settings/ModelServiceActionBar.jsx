@@ -57,7 +57,7 @@ export function ModelServiceActionBar({
 
 /** @param {Pick<import("./modelServiceViewContracts").ModelServiceEditorProps, "selectedVersion" | "editing" | "configFormErrors">} props */
 function ModelServiceValidationStatus({ selectedVersion, editing, configFormErrors }) {
-  const validationStatus = selectedVersion?.validation_status;
+  const validationStatus = editing ? "draft" : selectedVersion?.validation_status;
   return (
     <div>
       <span className={classNames("validation-state", validationStatus)}>
@@ -66,12 +66,13 @@ function ModelServiceValidationStatus({ selectedVersion, editing, configFormErro
         ) : (
           <WarningCircle size={18} />
         )}
-        {selectedVersion?.validation_message ||
-          (editing ? "修改会创建新草稿版本" : "配置尚未验证")}
+        {editing
+          ? "未保存修改，保存后验证"
+          : selectedVersion?.validation_message || "配置尚未验证"}
       </span>
       {configFormErrors.length > 0 && (
         <small className="config-save-disabled-reason" role="status">
-          暂时无法保存：{configFormErrors.join("；")}
+          请完善必填信息和请求限制后保存。
         </small>
       )}
     </div>

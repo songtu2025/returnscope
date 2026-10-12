@@ -43,6 +43,7 @@ class _ConfigVersionCreation:
         ).fetchone()
         is_new_connection = existing is None
         api_key_ciphertext = ""
+        previous = None
         if is_new_connection:
             if not values.name.strip():
                 raise ValueError("接入名称不能为空")
@@ -65,24 +66,27 @@ class _ConfigVersionCreation:
         else:
             latest = connection.execute(
                 """
-                SELECT version, api_key_ciphertext
+                SELECT *
                 FROM api_config_versions
                 WHERE connection_id = ?
                 ORDER BY version DESC LIMIT 1
                 """,
                 (context.connection_id,),
             ).fetchone()
-            version = int(latest["version"]) + 1
-            if not values.api_key.strip():
+            version = int(latest["version"]) + 1 if latest else 1
+            previous = dict(latest) if latest else {}
+            previous["name"] = existing["name"]
+            if latest and not values.api_key.strip():
                 api_key_ciphertext = str(latest["api_key_ciphertext"])
         if values.api_key.strip():
             api_key_ciphertext = self.secret_box.encrypt(values.api_key.strip())
-        elif is_new_connection:
+        elif not api_key_ciphertext:
             raise ValueError("API 密钥不能为空")
         return _ConnectionVersionContext(
             version=version,
             api_key_ciphertext=api_key_ciphertext,
             is_new_connection=is_new_connection,
+            previous=previous,
         )
 
     def _prepare_model_catalog(
@@ -163,6 +167,6 @@ class _ConfigVersionCreation:
             ),
         )
         connection.execute(
-            "UPDATE api_connections SET updated_at = ? WHERE id = ?",
-            (context.now, context.connection_id),
+            "UPDATE api_connections SET name = ?, provider = ?, updated_at = ? WHERE id = ?",
+            (values.name.strip(), values.provider, context.now, context.connection_id),
         )

@@ -93,13 +93,6 @@
   padding-bottom: 15px;
   border-bottom: 1px solid var(--line);
 }
-.config-change-note {
-  display: block;
-  max-width: 520px;
-  margin-top: 5px;
-  color: var(--muted);
-  font-size: 12px;
-}
 .config-section {
   padding: 16px 0;
   border-bottom: 1px solid var(--line);

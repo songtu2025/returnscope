@@ -65,7 +65,7 @@ from web_backend.config_service import ConfigService
                     {"model_key": "duplicate"},
                 ],
             },
-            "请填写配置变更原因",
+            "模型列表中存在重复的模型 ID",
         ),
         (
             {

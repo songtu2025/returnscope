@@ -7,7 +7,8 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react";
 import Button from "antd/es/button";
-import { classNames } from "../../lib/presentation";
+import { classNames, formatTime } from "../../lib/presentation";
+import { configValue } from "./modelServiceConfig";
 
 /** @param {Pick<import("./modelServiceViewContracts").ModelServiceSummaryProps, "selectedConnection" | "activeVersion" | "availableModelCount" | "busy" | "validationActive" | "onStartValidation" | "onOpenNewConnection" | "onEditConnection" | "onEditLimits" | "onOpenVersions">} props */
 
@@ -63,7 +64,7 @@ function ModelServiceRuntimeInfo({
   const validationStatus = activeVersion?.validation_status;
   const statusLabel =
     validationStatus === "validated"
-      ? "运行正常"
+      ? "上次验证通过"
       : activeVersion
         ? "等待验证"
         : "尚未发布";
@@ -82,6 +83,15 @@ function ModelServiceRuntimeInfo({
         </span>
         <span>运行版本 {activeVersion ? "#" + activeVersion.version : "—"}</span>
         <span>{availableModelCount} 个可用模型</span>
+        {activeVersion && (
+          <span>
+            验证模型 {activeVersion.primary_model} ·{" "}
+            {configValue("primary_effort", activeVersion.primary_effort)}
+          </span>
+        )}
+        {activeVersion?.validated_at && (
+          <span>最后验证 {formatTime(activeVersion.validated_at)}</span>
+        )}
       </div>
     </div>
   );
@@ -158,7 +168,7 @@ function ModelServiceRuntimeActions({
               onClick={onOpenVersions}
               disabled={Boolean(busy)}
             >
-              配置版本
+              修改历史
             </button>
             {activeVersion && (
               <button

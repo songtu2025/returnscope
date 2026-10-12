@@ -199,16 +199,30 @@ class ConfigService(
             )
         )
         connection_context = self._persist_created_version(context)
+        fields = (
+            "name",
+            "base_url",
+            "primary_model",
+            "primary_effort",
+            "requests_per_minute",
+            "max_workers",
+            "timeout_seconds",
+        )
         add_audit(
             self.database,
             "api_connection",
             context.connection_id,
             "create_version",
             actor_id,
+            before={key: connection_context.previous.get(key) for key in fields}
+            if connection_context.previous
+            else None,
             after={
+                **{key: getattr(context.values, key) for key in fields},
                 "version": connection_context.version,
                 "version_id": context.version_id,
                 "note": context.values.change_note,
+                "key_updated": bool(context.values.api_key.strip()),
             },
         )
         return self.get_version(context.version_id) or {}

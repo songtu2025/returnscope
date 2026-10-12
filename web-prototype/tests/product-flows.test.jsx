@@ -3741,9 +3741,9 @@ describe("关键用户流程", () => {
     expect(modelSelect).toBeVisible();
     expect(modelSelect).toHaveValue("retired-model");
     expect(screen.getByRole("option", { name: /旧模型.*已停用/ })).toBeVisible();
-    expect(screen.getByText(/分类标准的 Review 样本/)).toBeVisible();
+    expect(screen.getByText(/分类标准样本也使用此模型/)).toBeVisible();
     await user.selectOptions(modelSelect, "available-model");
-    await user.type(screen.getByLabelText("配置变更原因"), "替换停用的样本验证模型");
+    expect(screen.queryByLabelText("配置变更原因")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "保存草稿" }));
 
     await waitFor(() =>
@@ -3803,7 +3803,7 @@ describe("关键用户流程", () => {
     render(<ModelServicePage notify={vi.fn()} />);
 
     expect(await screen.findByText("草稿 #2 · 可发布")).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "发布版本" }));
+    await user.click(screen.getByRole("button", { name: "发布草稿" }));
     await waitFor(() => expect(apiMock.publishConfig).toHaveBeenCalledWith("cfg-2"));
 
     expect(
@@ -3819,8 +3819,8 @@ describe("关键用户流程", () => {
     await user.click(screen.getByRole("button", { name: "返回服务摘要" }));
 
     await user.click(screen.getByRole("button", { name: "更多" }));
-    await user.click(screen.getByRole("menuitem", { name: "配置版本" }));
-    expect(screen.getByRole("heading", { name: "配置版本" })).toBeVisible();
+    await user.click(screen.getByRole("menuitem", { name: "修改历史" }));
+    expect(screen.getByRole("heading", { name: "修改历史" })).toBeVisible();
 
     await user.click(screen.getByRole("button", { name: "返回服务摘要" }));
     await user.click(screen.getByRole("button", { name: "更多" }));

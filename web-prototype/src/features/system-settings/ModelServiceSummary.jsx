@@ -24,6 +24,7 @@ export function ModelServiceSummary({
   onDiscardDraft,
   onPublishDraft,
   onContinueDraft,
+  onValidateDraft,
   onConfirmDiscard,
   onDiscoverModels,
   onOpenModelCatalog,
@@ -70,6 +71,7 @@ export function ModelServiceSummary({
           onDiscardDraft={onDiscardDraft}
           onPublishDraft={onPublishDraft}
           onContinueDraft={onContinueDraft}
+          onValidateDraft={onValidateDraft}
           onConfirmDiscard={onConfirmDiscard}
         />
       )}

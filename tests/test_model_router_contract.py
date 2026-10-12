@@ -190,7 +190,7 @@ def test_missing_validation_run_keeps_each_read_contract(
         ("update_model", "display_name", "m" * 81),
         ("create_version", "base_url", ""),
         ("create_version", "primary_model", ""),
-        ("create_version", "change_note", ""),
+        ("create_version", "change_note", "x" * 501),
         ("create_version", "cheap_audit_percent", -1),
         ("create_version", "cheap_audit_percent", 101),
         ("create_version", "requests_per_minute", 0),
@@ -241,3 +241,19 @@ def test_model_creation_forwards_explicit_definition(harness: SimpleNamespace) -
     response = harness.client.post(case.path, **case.request)
     assert response.status_code == 201
     assert harness.service.mock_calls == [call.add_model(**case.kwargs)]
+
+
+@pytest.mark.parametrize("note", (None, "", " "))
+def test_config_create_accepts_omitted_or_blank_change_note(
+    harness: SimpleNamespace, note: str | None
+) -> None:
+    case = CASES_BY_METHOD["create_version"]
+    payload = {**case.request["json"]}
+    payload.pop("change_note")
+    if note is not None:
+        payload["change_note"] = note
+    harness.service.create_version.return_value = {}
+    assert harness.client.post(case.path, json=payload).status_code == case.status
+    assert harness.service.create_version.call_args.kwargs["change_note"] == (
+        note or ""
+    )

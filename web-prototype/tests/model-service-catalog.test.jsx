@@ -111,7 +111,7 @@ test("用户可以从模型列表启动真实验证", async () => {
     screen.queryByRole("heading", { name: "智能体模型策略" }),
   ).not.toBeInTheDocument();
   await user.click(await screen.findByRole("button", { name: /管理目录/ }));
-  expect(screen.getByRole("heading", { name: "可用模型" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "模型目录" })).toBeVisible();
   expect(screen.getAllByRole("button", { name: "添加模型" })).toHaveLength(1);
   expect(screen.queryByText("连接信息")).not.toBeInTheDocument();
   expect((await screen.findAllByText("gpt-main"))[0]).toBeVisible();
@@ -183,7 +183,15 @@ test("模型服务仅保留接入方同步后的可用模型", async () => {
   render(<ModelServicePage notify={vi.fn()} />);
 
   await user.click(await screen.findByRole("button", { name: "同步目录" }));
+  expect(apiMock.discoverModels).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "取消", exact: true }));
+  expect(apiMock.discoverModels).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "同步目录" }));
+  await user.click(screen.getByRole("button", { name: "确认同步" }));
   await waitFor(() => expect(apiMock.discoverModels).toHaveBeenCalledWith("conn-1"));
   expect(await screen.findByText("provider-model")).toBeVisible();
   expect(screen.queryByText("gpt-5.6")).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "管理目录" }));
+  await user.click(screen.getByRole("checkbox", { name: "显示停用模型" }));
+  expect(screen.getAllByText("gpt-5.6")[0]).toBeVisible();
 });

@@ -9,6 +9,7 @@ from web_backend.model_catalog import (
     ModelCatalogService,
 )
 from web_backend.model_probe import ModelProbe
+from web_backend.model_services.config_inputs import service_validation_models
 from web_backend.security import utc_now
 
 
@@ -86,11 +87,7 @@ class _ConfigVersionLifecycle:
         config = self.get_version(version_id, include_secret=True)
         if config is None:
             raise ValueError("配置版本不存在")
-        models = [
-            (config["primary_model"], config["primary_effort"]),
-            (config.get("cheap_model"), config["cheap_effort"]),
-            (config.get("secondary_model"), config["secondary_effort"]),
-        ]
+        models = service_validation_models(config)
         with self.database.connect() as connection:
             self.model_catalog.ensure_pipeline_models(
                 connection,
@@ -172,14 +169,7 @@ class _ConfigVersionLifecycle:
             self.model_catalog.ensure_pipeline_models(
                 connection,
                 str(config["connection_id"]),
-                [
-                    (config["primary_model"], config["primary_effort"]),
-                    (config.get("cheap_model"), config["cheap_effort"]),
-                    (
-                        config.get("secondary_model"),
-                        config["secondary_effort"],
-                    ),
-                ],
+                service_validation_models(config),
                 require_validated=True,
             )
         already_published = False

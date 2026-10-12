@@ -1,7 +1,12 @@
 import { WarningCircle } from "@phosphor-icons/react";
 import Button from "antd/es/button";
 import { AntdProvider } from "../../components/AntdProvider";
-import { EmptyState, InlineLoading, PageHeading } from "../../components/SharedUi";
+import {
+  EmptyState,
+  InlineLoading,
+  Modal,
+  PageHeading,
+} from "../../components/SharedUi";
 import { ModelEditorDialog } from "./ModelEditorDialog";
 import { ModelServiceEditor } from "./ModelServiceEditor";
 import { ModelServiceSummary } from "./ModelServiceSummary";
@@ -33,7 +38,6 @@ export function ModelServiceView({
   const {
     connections,
     selectedConnectionId,
-    setSelectedConnectionId,
     selectedConnection,
     activeVersion,
     draftVersion,
@@ -71,6 +75,8 @@ export function ModelServiceView({
     selectPipelineModel,
     createDraftFromVersion,
     showVersion,
+    selectConnection,
+    editState,
   } = configuration;
   const {
     catalogModels,
@@ -83,6 +89,10 @@ export function ModelServiceView({
     toggleModel,
     validateCatalogModel,
     discoverModels,
+    syncConfirmation,
+    cancelDiscoverModels,
+    confirmDiscoverModels,
+    modelEditState,
   } = catalog;
   const {
     run: validationRun,
@@ -96,6 +106,7 @@ export function ModelServiceView({
     (model) => model.active && model.validation_status === "validated",
   ).length;
   const validate = () => startValidation(selectedVersion);
+  const exitState = modelEditState.pendingExit ? modelEditState : editState;
   return (
     <AntdProvider>
       <div className="standard-page api-page">
@@ -151,7 +162,7 @@ export function ModelServiceView({
             draftVersion={draftVersion}
             discardConfirmation={discardConfirmation}
             visibleCatalogModels={visibleCatalogModels}
-            onSelectConnection={setSelectedConnectionId}
+            onSelectConnection={selectConnection}
             onStartValidation={startValidation}
             onOpenNewConnection={openNewConnection}
             onEditConnection={() => beginConfigEdit("connection")}
@@ -161,6 +172,7 @@ export function ModelServiceView({
             onDiscardDraft={discardDraft}
             onPublishDraft={() => publishVersion(draftVersion)}
             onContinueDraft={() => beginConfigEdit("connection")}
+            onValidateDraft={() => startValidation(draftVersion)}
             onConfirmDiscard={() => setDiscardConfirmation(true)}
             onDiscoverModels={discoverModels}
             onOpenModelCatalog={openModelCatalog}
@@ -171,7 +183,7 @@ export function ModelServiceView({
             activePanel={activePanel}
             connections={connections}
             selectedConnectionId={selectedConnectionId}
-            onSelectConnection={setSelectedConnectionId}
+            onSelectConnection={selectConnection}
             selectedVersion={selectedVersion}
             selectedConnection={selectedConnection}
             editing={editing}
@@ -183,6 +195,9 @@ export function ModelServiceView({
             nameError={nameError}
             baseUrlError={baseUrlError}
             apiKeyError={apiKeyError}
+            onFieldBlur={editState.touch}
+            touchedFields={editState.touched}
+            onDiscoverModels={discoverModels}
             catalogModels={catalogModels}
             focusModelId={focusModelId}
             focusedModelRef={focusedModelRef}
@@ -209,14 +224,50 @@ export function ModelServiceView({
           />
         )}
       </div>
-      <ModelEditorDialog
-        busy={busy}
-        editorMode={modelEditor}
-        modelDraft={modelDraft}
-        onChange={setModelDraft}
-        onClose={closeModelEditor}
-        onSave={saveModel}
-      />
+      {!modelEditState.pendingExit && (
+        <ModelEditorDialog
+          busy={busy}
+          editorMode={modelEditor}
+          modelDraft={modelDraft}
+          onChange={setModelDraft}
+          onClose={closeModelEditor}
+          onSave={saveModel}
+        />
+      )}
+      {exitState.pendingExit && (
+        <Modal
+          eyebrow="未保存修改"
+          title="放弃未保存的修改？"
+          onClose={exitState.continueEditing}
+        >
+          <p>尚未保存的内容会丢失。</p>
+          <div className="modal-actions">
+            <Button onClick={exitState.continueEditing}>继续编辑</Button>
+            <Button danger onClick={exitState.discardChanges}>
+              放弃修改
+            </Button>
+          </div>
+        </Modal>
+      )}
+      {syncConfirmation && (
+        <Modal eyebrow="模型目录" title="同步模型目录？" onClose={cancelDiscoverModels}>
+          <p>
+            将新增或启用接入方返回的模型，并停用未返回的模型。已启动任务仍使用原配置快照。
+          </p>
+          <div className="modal-actions">
+            <Button onClick={cancelDiscoverModels} disabled={Boolean(busy)}>
+              取消
+            </Button>
+            <Button
+              type="primary"
+              onClick={confirmDiscoverModels}
+              disabled={Boolean(busy)}
+            >
+              {busy === "model-discover" ? "同步中…" : "确认同步"}
+            </Button>
+          </div>
+        </Modal>
+      )}
     </AntdProvider>
   );
 }

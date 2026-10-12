@@ -1,22 +1,23 @@
 import { CardHeading } from "../../components/SharedUi";
 import { EFFORT_LABELS } from "../../constants";
 
-/** @param {Pick<import("./modelServiceViewContracts").ModelServiceEditorProps, "form" | "onFormChange" | "modelOptions" | "onSelectPipelineModel"> & {formDisabled: boolean}} props */
+/** @param {Pick<import("./modelServiceViewContracts").ModelServiceEditorProps, "form" | "onFormChange" | "modelOptions" | "onSelectPipelineModel" | "onFieldBlur" | "touchedFields"> & {formDisabled: boolean}} props */
 export function ModelServicePipelineFields({
   form,
   onFormChange,
   modelOptions,
   onSelectPipelineModel,
   formDisabled,
+  onFieldBlur,
+  touchedFields,
 }) {
   return (
     <div className="config-section" id="model-pipeline">
       <CardHeading
-        title="共享验证模型"
-        note="用于验证连接及分类标准的 Review 样本；保存、验证并发布配置后生效。"
+        title="验证模型"
+        note="服务验证仅发送一次最小请求；分类标准样本也使用此模型。"
       />
       <div className="model-config-row primary">
-        <span className="model-number">1</span>
         <div>
           <b>
             验证模型 <em>必选</em>
@@ -29,6 +30,7 @@ export function ModelServicePipelineFields({
             disabled={formDisabled}
             aria-label="模型"
             required
+            onBlur={() => onFieldBlur("primary_model")}
             value={form.primary_model ?? ""}
             onChange={(event) =>
               onSelectPipelineModel(
@@ -54,7 +56,7 @@ export function ModelServicePipelineFields({
               </option>
             ))}
           </select>
-          {!form.primary_model && (
+          {touchedFields.includes("primary_model") && !form.primary_model && (
             <small className="config-field-error">请选择验证模型。</small>
           )}
         </label>
@@ -73,6 +75,7 @@ export function ModelServicePipelineFields({
                   ).includes(effort)
                 }
                 className={form.primary_effort === effort ? "active" : ""}
+                aria-pressed={form.primary_effort === effort}
                 key={effort}
                 onClick={() => onFormChange({ ...form, primary_effort: effort })}
               >

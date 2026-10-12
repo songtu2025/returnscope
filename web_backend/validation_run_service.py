@@ -5,6 +5,7 @@ from typing import Any, Callable
 from web_backend.database import Database
 from web_backend.model_catalog import ModelCatalogService
 from web_backend.model_probe import ModelProbe
+from web_backend.model_services.config_inputs import service_validation_models
 from web_backend.model_services.validation_execution import _ValidationRunExecution
 from web_backend.model_services.validation_records import _ValidationTarget
 
@@ -60,39 +61,23 @@ class ValidationRunService(_ValidationRunExecution):
         config = self.get_version(version_id)
         if config is None:
             raise ValueError("配置版本不存在")
-        pipeline = [
-            (config.get("cheap_model"), config["cheap_effort"], "低成本初筛"),
-            (config["primary_model"], config["primary_effort"], "主分析"),
-            (
-                config.get("secondary_model"),
-                config["secondary_effort"],
-                "风险二次复核",
-            ),
-        ]
+        models = service_validation_models(config)
         with self.database.connect() as connection:
             self.model_catalog.ensure_pipeline_models(
                 connection,
                 str(config["connection_id"]),
-                [(model, effort) for model, effort, _role in pipeline],
+                models,
             )
         items: list[dict[str, Any]] = []
-        by_key: dict[str, dict[str, Any]] = {}
-        for model_key, effort, role in pipeline:
-            if not model_key:
-                continue
-            existing = by_key.get(str(model_key))
-            if existing:
-                existing["role"] = f"{existing['role']} / {role}"
-                continue
+        for model_key, effort in models:
             model = self.model_catalog.get_by_key(
                 str(config["connection_id"]),
                 str(model_key),
             )
             if model is None:
                 raise ValueError(f"模型 {model_key} 不存在")
-            item = self._validation_item(model, str(effort), role)
+            item = self._validation_item(model, str(effort), "连接与验证模型")
             items.append(item)
-            by_key[str(model_key)] = item
         return self._create_validation_run(
             target=_ValidationTarget(
                 kind="config",

@@ -16,7 +16,7 @@ def lifecycle_service(tmp_path: Path) -> tuple[ConfigService, dict[str, Any]]:
 
 
 @pytest.mark.parametrize("repeated_model", (False, True))
-def test_validation_keeps_pipeline_order_and_deduplicates_models(
+def test_validation_only_checks_selected_model_with_legacy_policy_fields(
     lifecycle_service, monkeypatch, repeated_model
 ) -> None:
     service, version = lifecycle_service
@@ -36,8 +36,6 @@ def test_validation_keeps_pipeline_order_and_deduplicates_models(
     monkeypatch.setattr(service.model_probe, "test", probe)
     result = service.validate(version["id"], "user-1")
     expected = [(version["id"], "primary-model", "medium")]
-    if not repeated_model:
-        expected.append((version["id"], "cheap-model", "low"))
     assert calls == expected
     assert result["validation_status"] == "validated"
     assert result["validation_message"] == f"连接与 {len(expected)} 个模型均测试通过"
@@ -60,24 +58,22 @@ def test_validation_keeps_pipeline_order_and_deduplicates_models(
     }
 
 
-@pytest.mark.parametrize("failure_index", (0, 1))
 @pytest.mark.parametrize("message", ("合成探测失败", "长" * 620))
 def test_validation_stops_on_failure_and_saves_truncated_result(
-    lifecycle_service, monkeypatch, failure_index, message
+    lifecycle_service, monkeypatch, message
 ) -> None:
     service, version = lifecycle_service
     calls = []
 
     def probe(_config, model_key, _effort):
         calls.append(model_key)
-        if len(calls) == failure_index + 1:
-            raise RuntimeError(message)
+        raise RuntimeError(message)
 
     monkeypatch.setattr(service.model_probe, "test", probe)
     with pytest.raises(ValueError) as error:
         service.validate(version["id"], "user-1")
     assert str(error.value) == message[:500]
-    assert calls == ["primary-model", "cheap-model"][: failure_index + 1]
+    assert calls == ["primary-model"]
     result = service.get_version(version["id"])
     assert result["validation_status"] == "failed"
     assert result["validation_message"] == message[:500]
@@ -85,10 +81,7 @@ def test_validation_stops_on_failure_and_saves_truncated_result(
     models = {model["model_key"]: model for model in service.list()[0]["models"]}
     assert models[calls[-1]]["validation_status"] == "failed"
     assert models[calls[-1]]["validation_message"] == message[:500]
-    if failure_index:
-        assert models["primary-model"]["validation_status"] == "validated"
-    else:
-        assert models["cheap-model"]["validation_status"] == "draft"
+    assert models["cheap-model"]["validation_status"] == "draft"
     config_audits = [
         row
         for row in audit_rows(service.database)
@@ -163,3 +156,16 @@ def test_discard_removes_draft_after_failed_validation(
     ]
     assert len(discards) == 1
     assert discards[0]["entity_id"] == version["connection_id"]
+    with pytest.raises(ValueError, match="API 密钥不能为空"):
+        _create_version(
+            service, connection_id=version["connection_id"], models=None, api_key=""
+        )
+    recreated = _create_version(
+        service,
+        connection_id=version["connection_id"],
+        models=None,
+        api_key="synthetic-replacement",
+    )
+    assert recreated["connection_id"] == version["connection_id"]
+    assert recreated["version"] == 1
+    assert len(service.list()) == 1

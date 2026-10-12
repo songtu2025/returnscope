@@ -1,9 +1,9 @@
 /**
- * @typedef {"connection" | "limits" | "models" | "versions"} ActivePanel
+ * @typedef {"connection" | "limits" | "models" | "versions" | "validation"} ActivePanel
  * @typedef {"create" | "edit"} ModelEditorMode
  * @typedef {"cheap_model" | "primary_model" | "secondary_model"} PipelineModelKey
  * @typedef {"cheap_effort" | "primary_effort" | "secondary_effort"} PipelineEffortKey
- * @typedef {"base_url" | "requests_per_minute" | "max_workers" | "timeout_seconds"} ConfigDiffKey
+ * @typedef {"base_url" | "primary_model" | "primary_effort" | "requests_per_minute" | "max_workers" | "timeout_seconds"} ConfigDiffKey
  *
  * @typedef {Object} ModelServiceForm
  * @property {string} name
@@ -42,6 +42,7 @@
  * @typedef {Object} ConfigVersion
  * @property {string} id
  * @property {string} connection_id
+ * @property {string} [connection_name]
  * @property {number} version
  * @property {string} base_url
  * @property {string} primary_model
@@ -87,6 +88,7 @@
  * @property {string} [error_message]
  * @property {string} [suggestion]
  * @property {string} [target_id]
+ * @property {string} [config_version_id]
  *
  * @typedef {{id: string | number, created_at: string, message: string}} ValidationEvent
  * @typedef {Array<[ConfigDiffKey, string]>} VersionChanges

@@ -1,7 +1,7 @@
 import Input from "antd/es/input";
 import { CardHeading } from "../../components/SharedUi";
 
-/** @param {Pick<import("./modelServiceViewContracts").ModelServiceEditorProps, "form" | "onFormChange" | "selectedConnection" | "nameError" | "baseUrlError" | "apiKeyError"> & {formDisabled: boolean}} props */
+/** @param {Pick<import("./modelServiceViewContracts").ModelServiceEditorProps, "form" | "onFormChange" | "selectedConnection" | "nameError" | "baseUrlError" | "apiKeyError" | "onFieldBlur"> & {formDisabled: boolean}} props */
 export function ModelServiceConnectionFields({
   form,
   onFormChange,
@@ -10,6 +10,7 @@ export function ModelServiceConnectionFields({
   baseUrlError,
   apiKeyError,
   formDisabled,
+  onFieldBlur,
 }) {
   return (
     <div className="config-section">
@@ -23,6 +24,7 @@ export function ModelServiceConnectionFields({
             value={form.name}
             onChange={(event) => onFormChange({ ...form, name: event.target.value })}
             required
+            onBlur={() => onFieldBlur("name")}
             aria-invalid={Boolean(nameError)}
             aria-describedby={nameError ? "model-service-name-error" : undefined}
           />
@@ -58,6 +60,7 @@ export function ModelServiceConnectionFields({
               onFormChange({ ...form, base_url: event.target.value })
             }
             placeholder="https://api.example.com/v1"
+            onBlur={() => onFieldBlur("base_url")}
             aria-invalid={Boolean(baseUrlError)}
             aria-describedby={baseUrlError ? "model-service-base-url-error" : undefined}
           />
@@ -79,7 +82,12 @@ export function ModelServiceConnectionFields({
             aria-label="API 密钥"
             value={form.api_key}
             onChange={(event) => onFormChange({ ...form, api_key: event.target.value })}
-            placeholder={selectedConnection ? "留空则沿用原密钥" : "sk-…"}
+            placeholder={
+              selectedConnection?.versions?.length
+                ? "留空则沿用原密钥"
+                : "输入接入方提供的 API 密钥"
+            }
+            onBlur={() => onFieldBlur("api_key")}
             aria-invalid={Boolean(apiKeyError)}
             aria-describedby={apiKeyError ? "model-service-api-key-error" : undefined}
           />

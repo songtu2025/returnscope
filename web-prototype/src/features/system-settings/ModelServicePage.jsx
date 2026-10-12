@@ -63,7 +63,7 @@ export function ModelServicePage({
     if (!version) return;
     const ownerId = selectedConnectionId;
     showVersion(version);
-    setActivePanel("models");
+    setActivePanel("validation");
     setBusy("validation-start");
     try {
       const value = await modelServiceApi.startConfigValidation(version.id);

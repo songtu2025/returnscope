@@ -35,7 +35,7 @@ export function ModelEditorDialog({
             value={modelDraft.model_key}
             disabled={editorMode === "edit" || Boolean(busy)}
             maxLength={120}
-            placeholder="例如 deepseek-reasoner"
+            placeholder="输入接入方提供的模型 ID"
             onChange={(event) =>
               onChange({
                 ...modelDraft,
@@ -72,6 +72,7 @@ export function ModelEditorDialog({
                 <button
                   type="button"
                   className={selected ? "active" : ""}
+                  aria-pressed={selected}
                   key={effort}
                   disabled={Boolean(busy)}
                   onClick={() =>

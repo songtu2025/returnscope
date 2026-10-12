@@ -38,7 +38,7 @@ class ConfigVersionRequest(BaseModel):
     requests_per_minute: int = Field(default=60, ge=1, le=10000)
     max_workers: int = Field(default=4, ge=1, le=16)
     timeout_seconds: int = Field(default=120, ge=5, le=600)
-    change_note: str = Field(min_length=1, max_length=500)
+    change_note: str = Field(default="", max_length=500)
     models: list[ModelDefinitionRequest] | None = Field(
         default=None,
         max_length=50,

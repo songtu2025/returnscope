@@ -40,7 +40,7 @@ export function ModelServiceInspector({
           )}
         >
           <span />
-          <b>{selectedConnection?.active_version ? "运行配置正常" : "尚未发布"}</b>
+          <b>{selectedConnection?.active_version ? "已有配置发布" : "尚未发布"}</b>
         </div>
         <InfoRow
           label="当前版本"
@@ -62,8 +62,8 @@ export function ModelServiceInspector({
       {selectedConnection && (
         <section className="content-card config-version-card">
           <CardHeading
-            title="配置版本"
-            note={`${selectedConnection.versions.length} 个不可变版本`}
+            title="修改历史"
+            note={`${selectedConnection.versions.length} 次保存`}
           />
           <div className="config-version-list">
             {selectedConnection.versions.map((version) => (
@@ -74,7 +74,7 @@ export function ModelServiceInspector({
                 disabled={Boolean(busy)}
               >
                 <b>#{version.version}</b>
-                <span>{version.change_note || "未填写原因"}</span>
+                <span>{version.change_note || "保存模型服务配置"}</span>
                 <em>
                   {version.id === selectedConnection.active_version_id
                     ? "当前运行"
@@ -105,7 +105,7 @@ export function ModelServiceInspector({
                 onClick={() => onCreateDraft(selectedVersion)}
                 disabled={Boolean(busy) || validationActive}
               >
-                基于此版本创建草稿
+                使用此配置编辑
               </button>
             }
           />

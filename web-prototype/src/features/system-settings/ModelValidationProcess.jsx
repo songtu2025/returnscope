@@ -20,9 +20,7 @@ const VALIDATION_STATUS_LABELS = {
  * @typedef {{
  *   busy: string,
  *   onClose: () => void,
- *   onPublish: () => void,
  *   selectedVersion: ConfigVersion | null,
- *   selectedVersionIsActive: boolean,
  *   validationActive: boolean,
  *   validationElapsed: number,
  *   validationEvents: ValidationEvent[],
@@ -62,7 +60,7 @@ function ValidationProcessHeader(props) {
     <header>
       <div>
         <span className="validation-process-kicker">
-          {props.validationRun.kind === "config" ? "模型流水线验证" : "单模型验证"}
+          {props.validationRun.kind === "config" ? "连接与验证模型" : "单模型验证"}
         </span>
         <h4>
           {VALIDATION_STATUS_LABELS[props.validationRun.status] ??
@@ -74,18 +72,6 @@ function ValidationProcessHeader(props) {
       </div>
       {!props.validationActive && (
         <div className="validation-process-actions">
-          {props.validationRun.kind === "config" &&
-            props.validationRun.status === "passed" &&
-            !props.selectedVersionIsActive && (
-              <button
-                className="primary-button"
-                type="button"
-                onClick={props.onPublish}
-                disabled={Boolean(props.busy)}
-              >
-                发布新版本
-              </button>
-            )}
           <button type="button" onClick={props.onClose} disabled={Boolean(props.busy)}>
             关闭
           </button>
@@ -114,7 +100,10 @@ function ValidationContext({ validationRun, selectedVersion }) {
         </div>
         <div>
           <span>验证范围</span>
-          <b>配置 #{selectedVersion?.version} · 连接及策略使用的全部模型</b>
+          <b>
+            {selectedVersion ? `配置 #${selectedVersion.version}` : "已保存配置"} ·{" "}
+            {validationRun.total_count} 个模型
+          </b>
         </div>
       </div>
       <p className="validation-cost-note">

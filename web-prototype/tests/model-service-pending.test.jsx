@@ -80,10 +80,7 @@ test.each(["success", "failure"])("保存草稿 %s 后恢复连接切换", async
   render(<ModelServicePage notify={notify} />);
 
   await user.click(await screen.findByRole("button", { name: "编辑连接" }));
-  await user.type(
-    screen.getByRole("textbox", { name: "配置变更原因" }),
-    "调整验证模型",
-  );
+  await user.type(screen.getByRole("textbox", { name: "Base URL" }), "/updated");
   await user.click(screen.getByRole("button", { name: "保存草稿" }));
 
   await waitFor(() => expect(apiMock.createConfig).toHaveBeenCalledTimes(1));
@@ -91,7 +88,9 @@ test.each(["success", "failure"])("保存草稿 %s 后恢复连接切换", async
   expect(otherConnection).toBeDisabled();
   expect(screen.getByRole("button", { name: "返回服务摘要" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "取消" })).toBeDisabled();
-  expect(screen.getByRole("textbox", { name: "配置变更原因" })).toBeDisabled();
+  expect(
+    screen.queryByRole("textbox", { name: "配置变更原因" }),
+  ).not.toBeInTheDocument();
 
   await act(async () => {
     if (outcome === "success") {
@@ -107,18 +106,21 @@ test.each(["success", "failure"])("保存草稿 %s 后恢复连接切换", async
 
   await waitFor(() => expect(otherConnection).toBeEnabled());
   if (outcome === "failure") {
-    expect(screen.getByRole("textbox", { name: "配置变更原因" })).toHaveValue(
-      "调整验证模型",
+    expect(screen.getByRole("textbox", { name: "Base URL" })).toHaveValue(
+      "https://api.example.com/v1/updated",
     );
     expect(notify).toHaveBeenCalledWith("保存失败", "error");
   }
   await user.click(otherConnection);
+  if (outcome === "failure")
+    await user.click(screen.getByRole("button", { name: "放弃修改", exact: true }));
   expect(await screen.findByRole("heading", { name: "线路 B" })).toBeVisible();
-  expect(screen.getByRole("textbox", { name: "接入名称" })).toHaveValue("线路 B");
+  if (outcome === "failure")
+    expect(screen.getByRole("textbox", { name: "接入名称" })).toHaveValue("线路 B");
 });
 
 test.each([
-  ["发布版本", "publishConfig", "A-version-2"],
+  ["发布草稿", "publishConfig", "A-version-2"],
   ["确认放弃", "discardConfig", "A-version-2"],
   ["同步目录", "discoverModels", "A"],
 ])("%s 进行中锁定摘要页连接选择", async (action, apiMethod, targetId) => {
@@ -133,6 +135,8 @@ test.each([
     await user.click(screen.getByRole("button", { name: "放弃草稿" }));
   }
   await user.click(screen.getByRole("button", { name: action }));
+  if (action === "同步目录")
+    await user.click(screen.getByRole("button", { name: "确认同步" }));
 
   await waitFor(() => expect(apiMock[apiMethod]).toHaveBeenCalledWith(targetId));
   expect(selector).toBeDisabled();
@@ -190,14 +194,46 @@ test("保存新草稿后保持选中新版本", async () => {
   render(<ModelServicePage notify={notify} />);
 
   await user.click(await screen.findByRole("button", { name: "编辑连接" }));
-  await user.type(
-    screen.getByRole("textbox", { name: "配置变更原因" }),
-    "更新验证模型",
-  );
+  await user.type(screen.getByRole("textbox", { name: "接入名称" }), " 更新");
   await user.click(screen.getByRole("button", { name: "保存草稿" }));
 
-  expect(await screen.findByText(/配置 #3 ·/)).toBeVisible();
-  expect(screen.getByRole("textbox", { name: "配置变更原因" })).toHaveValue(
-    "更新验证模型",
-  );
+  expect((await screen.findAllByText(/配置 #3 ·/))[0]).toBeVisible();
+  expect(screen.getByRole("heading", { name: "验证连接与选定模型" })).toBeVisible();
+  expect(screen.queryByLabelText("配置变更原因")).not.toBeInTheDocument();
+});
+
+test("未保存修改可继续编辑或放弃，已发布的验证状态不会用于编辑表单", async () => {
+  const user = userEvent.setup();
+  render(<ModelServicePage notify={notify} />);
+  await user.click(await screen.findByRole("button", { name: "编辑连接" }));
+  await user.type(screen.getByLabelText("接入名称"), " 未保存");
+  await user.click(screen.getByRole("button", { name: "返回服务摘要" }));
+  expect(screen.getByRole("dialog", { name: "放弃未保存的修改？" })).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "继续编辑" }));
+  expect(screen.getByLabelText("接入名称")).toHaveValue("线路 A 未保存");
+  await user.click(screen.getByRole("button", { name: "取消", exact: true }));
+  await user.click(screen.getByRole("button", { name: "放弃修改", exact: true }));
+  expect(screen.getByLabelText("接入名称")).toHaveValue("线路 A");
+  expect(apiMock.createConfig).not.toHaveBeenCalled();
+});
+
+test("无配置的已有服务重新编辑时清空旧表单并要求提供密钥", async () => {
+  const user = userEvent.setup();
+  const empty = {
+    ...connection("B"),
+    active_version_id: null,
+    active_version: null,
+    versions: [],
+  };
+  apiMock.configs.mockResolvedValue([connection("A"), empty]);
+  render(<ModelServicePage notify={notify} />);
+  await user.click(await screen.findByRole("button", { name: "编辑连接" }));
+  await user.click(screen.getByRole("button", { name: /线路 B/ }));
+  await user.click(screen.getByRole("button", { name: "返回服务摘要" }));
+  await user.click(screen.getByRole("button", { name: "编辑连接" }));
+  expect(screen.getByLabelText("接入名称")).toHaveValue("线路 B");
+  expect(screen.getByLabelText("Base URL")).toHaveValue("");
+  expect(screen.getByLabelText("API 密钥")).toHaveValue("");
+  await user.tab();
+  expect(screen.getByRole("button", { name: "保存草稿" })).toBeDisabled();
 });

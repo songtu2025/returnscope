@@ -57,6 +57,12 @@ class _ConnectionVersionContext:
     version: int
     api_key_ciphertext: str
     is_new_connection: bool
+    previous: dict[str, Any] | None = None
+
+
+def service_validation_models(config: dict[str, Any]) -> list[tuple[str | None, str]]:
+    """服务验证与发布只检查本配置选定的验证模型，任务策略独立维护。"""
+    return [(str(config["primary_model"]), str(config["primary_effort"]))]
 
 
 def _prepare_create_version(values: _CreateVersionInput) -> _CreateVersionContext:
@@ -80,9 +86,10 @@ def _prepare_create_version(values: _CreateVersionInput) -> _CreateVersionContex
         raise ValueError("单任务并发必须在 1 到 16 之间")
     if not 5 <= values.timeout_seconds <= 600:
         raise ValueError("请求超时必须在 5 到 600 秒之间")
-    change_note = values.change_note.strip()
-    if not change_note:
-        raise ValueError("请填写配置变更原因")
+    automatic_note = "更新模型服务配置" if values.connection_id else "新增模型服务"
+    if values.connection_id and values.api_key.strip():
+        automatic_note += "及密钥"
+    change_note = values.change_note.strip() or automatic_note
     model_definitions = [
         clean_model_definition(value) for value in (values.models or [])
     ]
@@ -91,6 +98,7 @@ def _prepare_create_version(values: _CreateVersionInput) -> _CreateVersionContex
         raise ValueError("模型列表中存在重复的模型 ID")
     normalized_values = replace(
         values,
+        provider=values.provider.strip() or "responses-compatible",
         base_url=base_url,
         primary_model=primary_model,
         primary_effort=primary_effort,

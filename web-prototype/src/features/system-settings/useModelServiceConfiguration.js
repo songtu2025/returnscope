@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { modelApi as modelServiceApi } from "../../shared/api/modelApi";
+import { useModelServiceEditing } from "./useModelServiceEditing";
+import { useModelServiceOperations } from "./useModelServiceOperations";
 import {
   EMPTY_MODEL_SERVICE_FORM,
   createModelOptions,
-  errorMessage,
   formForVersion,
   getConfigFormState,
   getConfigVersionState,
@@ -45,7 +45,6 @@ export function useModelServiceConfiguration({
     selectedConnection,
     activeVersion,
     draftVersion,
-    load,
   } = connectionState;
   const [selectedVersion, setSelectedVersion] = useState(
     /** @type {ConfigVersion | null} */ (null),
@@ -60,6 +59,9 @@ export function useModelServiceConfiguration({
   const [discardConfirmation, setDiscardConfirmation] = useState(false);
   const preserveConfigFormRef = useRef(false);
   const formConnectionRef = useRef(selectedConnectionId);
+  const editState = useModelServiceEditing();
+  const editingValue = { form, models: selectedConnection ? [] : draftModels };
+  const dirty = editing && editState.isDirty(editingValue);
   useEffect(() => {
     if (focusModelId) setActivePanel("models");
     else if (focusConfigVersionId) setActivePanel("versions");
@@ -71,9 +73,12 @@ export function useModelServiceConfiguration({
   const { nameError, baseUrlError, apiKeyError, configFormErrors } = getConfigFormState(
     form,
     editing,
-    Boolean(selectedConnection),
+    Boolean(selectedConnection?.versions?.length),
   );
-  const saveDisabled = Boolean(busy) || configFormErrors.length > 0;
+  const saveDisabled =
+    Boolean(busy) ||
+    configFormErrors.length > 0 ||
+    (Boolean(selectedConnection) && !dirty);
   const configSaving = busy === "save";
   useEffect(() => {
     // 保存响应先给出新修订，连接列表随后同步；不能被尚未更新的旧列表改回。
@@ -91,7 +96,7 @@ export function useModelServiceConfiguration({
       focusConfigVersionId,
     );
     setSelectedVersion(value);
-    if (value) setForm(formForVersion(selectedConnection, value));
+    setForm(formForVersion(selectedConnection, value));
     setEditing(false);
   }, [
     configSaving,
@@ -121,9 +126,14 @@ export function useModelServiceConfiguration({
     setDraftModels([]);
     setEditing(true);
     setActivePanel("connection");
+    editState.reset({ form: EMPTY_MODEL_SERVICE_FORM, models: [] });
   };
   const closePanel = () => {
     if (selectedVersion) showVersion(selectedVersion);
+    else {
+      setEditing(false);
+      setSelectedConnectionId(formConnectionRef.current ?? connections[0]?.id ?? null);
+    }
     setActivePanel(null);
   };
   /**
@@ -136,10 +146,13 @@ export function useModelServiceConfiguration({
       draftVersion ??
       selectedConnection?.active_version ??
       selectedVersion;
-    if (value) {
-      setSelectedVersion(value);
-      setForm(formForVersion(selectedConnection, value, true));
-    }
+    setSelectedVersion(value);
+    const nextForm = formForVersion(selectedConnection, value);
+    setForm(nextForm);
+    editState.reset({
+      form: nextForm,
+      models: selectedConnection ? [] : draftModels,
+    });
     setEditing(true);
     setActivePanel(panel);
   };
@@ -150,66 +163,29 @@ export function useModelServiceConfiguration({
   const cancelEdit = () => {
     const value = draftVersion ?? selectedConnection?.active_version ?? selectedVersion;
     if (value) showVersion(value);
-    else {
-      setEditing(false);
-      setActivePanel(null);
-    }
+    else closePanel();
   };
 
-  const save = async () => {
-    setBusy("save");
-    try {
-      const value = await modelServiceApi.createConfig({
-        ...form,
-        connection_id: selectedConnection?.id ?? null,
-        models: selectedConnection
-          ? undefined
-          : draftModels.map((model) => ({
-              model_key: model.model_key,
-              display_name: model.display_name,
-              supported_efforts: model.supported_efforts,
-              active: model.active,
-            })),
-      });
+  const operations = useModelServiceOperations({
+    connectionState,
+    form,
+    draftModels,
+    selectedVersion,
+    setBusy,
+    notify,
+    onDiscarded: () => setDiscardConfirmation(false),
+    onSaved: (value) => {
+      preserveConfigFormRef.current = true;
+      formConnectionRef.current = value.connection_id;
+      setSelectedConnectionId(value.connection_id);
       setSelectedVersion(value);
+      setForm({ ...form, api_key: "" });
       setEditing(false);
-      await load();
-      notify(`配置 #${value.version} 草稿已保存`);
-    } catch (error) {
-      notify(errorMessage(error), "error");
-    } finally {
-      setBusy("");
-    }
-  };
-  /** @param {ConfigVersion | null} [version] */
-  const publishVersion = async (version = selectedVersion) => {
-    if (!version) return;
-    setBusy("publish");
-    try {
-      await modelServiceApi.publishConfig(version.id);
-      await load();
-      notify(`配置 #${version.version} 已发布`);
-    } catch (error) {
-      notify(errorMessage(error), "error");
-    } finally {
-      setBusy("");
-    }
-  };
-  const publish = () => publishVersion(selectedVersion);
-  const discardDraft = async () => {
-    if (!draftVersion) return;
-    setBusy("discard-draft");
-    try {
-      await modelServiceApi.discardConfig(draftVersion.id);
-      await load();
-      notify(`草稿 #${draftVersion.version} 已放弃`);
-    } catch (error) {
-      notify(errorMessage(error), "error");
-    } finally {
-      setBusy("");
-      setDiscardConfirmation(false);
-    }
-  };
+      setActivePanel("validation");
+    },
+  });
+  const leave = (/** @type {() => void} */ action) =>
+    editState.requestExit(dirty, action);
 
   /**
    * @param {PipelineModelKey} modelKey
@@ -242,24 +218,27 @@ export function useModelServiceConfiguration({
     discardConfirmation,
     setDiscardConfirmation,
     showVersion,
-    nameError,
-    baseUrlError,
-    apiKeyError,
+    nameError: editState.touched.includes("name") ? nameError : "",
+    baseUrlError: editState.touched.includes("base_url") ? baseUrlError : "",
+    apiKeyError: editState.touched.includes("api_key") ? apiKeyError : "",
+    editState,
     configFormErrors,
     saveDisabled,
     previousVersion,
     versionChanges,
     selectedVersionIsActive,
     modelOptions,
-    openNewConnection,
-    closePanel,
+    openNewConnection: () => leave(openNewConnection),
+    closePanel: () => leave(closePanel),
+    selectConnection: (/** @type {string} */ id) =>
+      leave(() => {
+        setEditing(false);
+        setSelectedConnectionId(id);
+      }),
     openModelCatalog,
     beginConfigEdit,
-    cancelEdit,
-    save,
-    publish,
-    publishVersion,
-    discardDraft,
+    cancelEdit: () => leave(cancelEdit),
+    ...operations,
     selectPipelineModel,
     createDraftFromVersion,
   };
