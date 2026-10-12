@@ -3985,6 +3985,43 @@ describe("关键用户流程", () => {
     }
   });
 
+  test("任务详情更新失败保留当前页签，重试成功清除提示", async () => {
+    const task = {
+      id: "task-refresh-error",
+      title: "合成当前任务",
+      status: "completed",
+      segments: [],
+      metrics: {},
+      snapshot: {},
+    };
+    apiMock.tasks.mockResolvedValue([task]);
+    apiMock.task.mockResolvedValue(task);
+    const view = render(
+      <TaskMonitor
+        notify={vi.fn()}
+        onNavigate={vi.fn()}
+        onChanged={vi.fn()}
+        focusId={task.id}
+      />,
+    );
+    const detail = view.container.querySelector(".task-detail-panel");
+    expect(await within(detail).findByText(task.title)).toBeVisible();
+    fireEvent.click(within(detail).getByRole("tab", { name: "任务配置" }));
+    apiMock.task.mockRejectedValueOnce(new Error("合成更新中断"));
+    fireEvent(window, new Event("focus"));
+    const alert = await within(detail).findByRole("alert");
+    expect(alert).toHaveTextContent("任务更新失败，当前显示上一次数据");
+    expect(within(detail).getByText(task.title)).toBeVisible();
+    fireEvent.click(within(alert).getByRole("button", { name: "重新加载" }));
+    await waitFor(() =>
+      expect(within(detail).queryByRole("alert")).not.toBeInTheDocument(),
+    );
+    expect(within(detail).getByRole("tab", { name: "任务配置" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
   test("任务列表恢复可见时立即刷新", async () => {
     apiMock.tasks.mockResolvedValue([]);
     Object.defineProperty(document, "hidden", { configurable: true, value: true });

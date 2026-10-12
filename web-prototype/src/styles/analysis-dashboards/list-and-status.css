@@ -205,6 +205,11 @@
   color: var(--muted);
   font-size: 12px;
 }
+.dashboard-error.is-update {
+  min-height: 0;
+  padding: 12px 16px;
+  margin-bottom: var(--desktop-section-gap);
+}
 .dashboard-error button {
   grid-column: 2;
   grid-row: 1 / 3;

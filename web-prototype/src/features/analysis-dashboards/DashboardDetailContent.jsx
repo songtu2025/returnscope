@@ -117,32 +117,40 @@ export function DashboardDetailContent({
         <InlineLoading label="正在读取 AI 洞察报告…" />
       )}
       {route.tab === "report" && reports.error && (
-        <section className="dashboard-error" role="alert">
-          <b>AI 洞察报告读取失败</b>
+        <section
+          className={`dashboard-error${reports.items.length ? " is-update" : ""}`}
+          role="alert"
+        >
+          <b>
+            {reports.items.length
+              ? "AI 洞察报告更新失败，当前显示上一次数据"
+              : "AI 洞察报告读取失败"}
+          </b>
           <span>{reports.error}</span>
           <button className="secondary-button" onClick={onReloadReports}>
             重新加载
           </button>
         </section>
       )}
-      {route.tab === "report" && !reports.error && !reports.loading && (
-        <AiInsightReport
-          report={selectedReport}
-          reports={publishedReports}
-          attempts={generationAttempts}
-          latestReport={latestPublishedReport}
-          dashboard={dashboard}
-          version={selectedVersion}
-          onGenerate={onOpenReportGeneration}
-          onRetry={onRetryReport}
-          selectedIssueId={route.issueId}
-          decisionState={decisionState}
-          onDecision={onIssueDecision}
-          onSelectIssue={onSelectIssue}
-          onSelect={onSelectReport}
-          analysisContext={analysisContext}
-        />
-      )}
+      {route.tab === "report" &&
+        (reports.items.length > 0 || (!reports.error && !reports.loading)) && (
+          <AiInsightReport
+            report={selectedReport}
+            reports={publishedReports}
+            attempts={generationAttempts}
+            latestReport={latestPublishedReport}
+            dashboard={dashboard}
+            version={selectedVersion}
+            onGenerate={onOpenReportGeneration}
+            onRetry={onRetryReport}
+            selectedIssueId={route.issueId}
+            decisionState={decisionState}
+            onDecision={onIssueDecision}
+            onSelectIssue={onSelectIssue}
+            onSelect={onSelectReport}
+            analysisContext={analysisContext}
+          />
+        )}
       {!content.error && route.tab === "source" && content.data && (
         <DashboardDetailSources
           data={/** @type {DashboardSourceData} */ (content.data)}

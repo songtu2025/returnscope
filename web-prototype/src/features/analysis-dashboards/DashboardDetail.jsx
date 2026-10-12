@@ -55,12 +55,12 @@ export function DashboardDetail(props) {
   /** @type {import("react").RefObject<HTMLElement | null>} */
   const evidenceTriggerRef = useRef(null);
 
-  if (main.error) {
+  if (main.error && !main.dashboard) {
     return (
       <DashboardDetailError
         error={main.error}
         onBack={() => updateRoute({ dashboardId: "", versionId: "" })}
-        onReload={loadMain}
+        onReload={() => loadMain()}
       />
     );
   }
@@ -76,6 +76,13 @@ export function DashboardDetail(props) {
 
   return (
     <div className="standard-page analysis-dashboard-page dashboard-detail-page return-insight-page">
+      {main.error && (
+        <DashboardDetailError
+          error={main.error}
+          onReload={() => loadMain(true)}
+          hasData
+        />
+      )}
       <DashboardDetailHeader
         dashboard={dashboard}
         selectedVersion={selectedVersion}

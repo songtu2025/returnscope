@@ -91,10 +91,24 @@ export function useTaskMonitorState({
     async (options = {}) => {
       if (!selectedId) return null;
       const generation = ++selectedRequestGeneration.current;
-      const value = await taskMonitorApi.task(selectedId, options);
-      if (selectedRequestGeneration.current === generation && !options.signal?.aborted)
-        setSelected(value);
-      return value;
+      try {
+        const value = await taskMonitorApi.task(selectedId, options);
+        if (
+          selectedRequestGeneration.current === generation &&
+          !options.signal?.aborted
+        ) {
+          setSelected(value);
+          setDetailError("");
+        }
+        return value;
+      } catch (error) {
+        if (
+          selectedRequestGeneration.current === generation &&
+          !options.signal?.aborted
+        )
+          setDetailError(errorMessage(error));
+        throw error;
+      }
     },
     [selectedId],
   );
@@ -120,13 +134,8 @@ export function useTaskMonitorState({
       setSelected(null);
       return () => controller.abort();
     }
-    loadSelected({ signal: controller.signal }).catch((error) => {
-      if (
-        (!(error instanceof Error) || error.name !== "AbortError") &&
-        !controller.signal.aborted
-      )
-        setDetailError(errorMessage(error));
-    });
+    // 请求错误由 loadSelected 写入详情状态。
+    loadSelected({ signal: controller.signal }).catch(() => {});
     return () => {
       controller.abort();
       selectedRequestGeneration.current += 1;
@@ -168,9 +177,7 @@ export function useTaskMonitorState({
     const refresh = () => {
       if (document.hidden) return;
       if (!selectedId) return void loadTasks(true);
-      loadSelected({ signal: controller.signal }).catch((error) => {
-        if (!controller.signal.aborted) setDetailError(errorMessage(error));
-      });
+      loadSelected({ signal: controller.signal }).catch(() => {});
     };
     const hasActiveTasks = tasks.some((task) =>
       ["queued", "running"].includes(task.status),

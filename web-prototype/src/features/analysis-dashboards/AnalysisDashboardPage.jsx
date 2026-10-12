@@ -108,6 +108,7 @@ export function AnalysisDashboardPage({ route: appRoute, notify, userId }) {
       <AntdProvider>
         <Suspense fallback={<DashboardDetailLoading />}>
           <DashboardDetail
+            key={route.dashboardId}
             route={route}
             updateRoute={updateRoute}
             notify={notify}

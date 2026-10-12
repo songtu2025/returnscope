@@ -8,6 +8,7 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { SWRConfig } from "swr";
 
 const { apiMock, dashboardApiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -272,6 +273,49 @@ test("打开证据后晚到的版本查询不会切换页面或打断人工编�
   expect(window.location.hash).toContain("classification-version-1");
   expect(window.location.hash).not.toContain("classification-version-2");
   expect(opinion).toHaveValue("保留当前草稿");
+});
+
+test("分类结果更新失败保留内容和输入，重复失败后仍可恢复", async () => {
+  window.location.hash = "classification-results?version=classification-version-1";
+  render(<ClassificationResultsPage notify={vi.fn()} />);
+  expect(await screen.findByRole("heading", { name: "SR001 分类结果" })).toBeVisible();
+  const orderInput = screen.getByRole("textbox", { name: "搜索 order-id" });
+  fireEvent.change(orderInput, { target: { value: "未提交的订单筛选" } });
+  apiMock.classificationResultVersions.mockRejectedValueOnce(new Error("合成更新中断"));
+  fireEvent(window, new Event("focus"));
+  const alert = await screen.findByRole("alert");
+  expect(alert).toHaveTextContent("分类结果更新失败，当前显示上一次数据");
+  expect(screen.getByRole("heading", { name: "SR001 分类结果" })).toBeVisible();
+  apiMock.classificationResult.mockRejectedValueOnce(new Error("合成详情更新失败"));
+  await userEvent.click(within(alert).getByRole("button", { name: "重试" }));
+  expect(await screen.findByText("合成详情更新失败")).toBeVisible();
+  expect(screen.getByRole("heading", { name: "SR001 分类结果" })).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "重试" }));
+  await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+  expect(orderInput).toHaveValue("未提交的订单筛选");
+});
+
+test("人工编辑期间详情更新失败不关闭抽屉或清空草稿", async () => {
+  apiMock.resultTaxonomy.mockResolvedValue({ labels: [], parts: [] });
+  window.location.hash = "classification-results?version=classification-version-1";
+  render(
+    <SWRConfig value={{ focusThrottleInterval: 0 }}>
+      <ClassificationResultsPage notify={vi.fn()} />
+    </SWRConfig>,
+  );
+  await userEvent.click(await screen.findByRole("button", { name: "查看证据" }));
+  const drawer = screen.getByRole("dialog", { name: "分类结果与证据" });
+  await userEvent.click(within(drawer).getByRole("button", { name: "人工修正" }));
+  const opinion = await within(drawer).findByRole("textbox", {
+    name: "观点 1 用户观点",
+  });
+  await userEvent.clear(opinion);
+  await userEvent.type(opinion, "更新中断时保留草稿");
+  apiMock.classificationResult.mockRejectedValueOnce(new Error("合成编辑期间更新失败"));
+  fireEvent(window, new Event("focus"));
+  expect(await screen.findByText("合成编辑期间更新失败")).toBeInTheDocument();
+  expect(screen.getByRole("dialog", { name: "分类结果与证据" })).toBeVisible();
+  expect(opinion).toHaveValue("更新中断时保留草稿");
 });
 
 test("分类结果详情加载时在原页面保留返回入口与稳定占位", async () => {

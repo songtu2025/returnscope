@@ -7,6 +7,7 @@ import { ResultDetailHeader } from "./ResultDetailHeader";
 import { ResultDetailMetrics } from "./ResultDetailMetrics";
 import { ResultDetailDrilldown } from "./ResultDetailDrilldown";
 import { ResultDetailRecords } from "./ResultDetailRecords";
+import { ResultError } from "./ClassificationResultCommon";
 
 /** @typedef {import("./classificationResultDetailContracts").ResultDetailViewProps} ResultDetailViewProps */
 
@@ -51,6 +52,10 @@ export function ClassificationResultDetailView(props) {
       </button>
 
       <ResultDetailHeader {...context} />
+
+      {props.error && (
+        <ResultError message={props.error} onRetry={props.retry} hasData />
+      )}
 
       {policy.blockingReason && (
         <div className={`result-action-guidance is-${policy.state}`} role="status">

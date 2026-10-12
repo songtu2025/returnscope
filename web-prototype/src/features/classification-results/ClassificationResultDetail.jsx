@@ -6,6 +6,7 @@ import { createResultDashboard } from "./resultSelectionActions";
 import { ResultError } from "./ClassificationResultCommon";
 import { useClassificationResultDetailData } from "./useClassificationResultDetailData";
 import { api } from "../../api";
+import { errorMessage } from "../../shared/api/requestErrors";
 
 /** @typedef {import("./classificationResultDetailContracts").ClassificationResultGroup} ClassificationResultGroup */
 /** @typedef {import("./classificationResultDetailContracts").ClassificationResultDetailProps} ClassificationResultDetailProps */
@@ -16,6 +17,8 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
     /** @type {ClassificationResultGroup | null} */ (null),
   );
   const [orderInput, setOrderInput] = useState(route.orderId);
+  const [versionRefreshError, setVersionRefreshError] = useState("");
+  const [refreshAttempt, setRefreshAttempt] = useState(0);
   const evidenceTriggerRef = useRef(/** @type {HTMLButtonElement | null} */ (null));
   const closeEvidence = useCallback(() => setSelectedGroup(null), []);
 
@@ -33,6 +36,7 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
   };
 
   useEffect(() => setOrderInput(route.orderId), [route.orderId]);
+  useEffect(() => setVersionRefreshError(""), [route.version, route.tab]);
   useEffect(
     () => setSelectedGroup(null),
     [
@@ -82,6 +86,7 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
         .classificationResultVersions(route.version, { signal: controller.signal })
         .then((versions) => {
           if (controller.signal.aborted) return;
+          setVersionRefreshError("");
           const latest = versions.find(
             (version) => version.publish_status === "published",
           );
@@ -92,8 +97,8 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
           )
             updateRoute({ version: latest.version_id, recordPage: 1 });
         })
-        .catch(() => {
-          /* 详情请求负责显示错误，后台刷新不打断当前页面。 */
+        .catch((reason) => {
+          if (!controller.signal.aborted) setVersionRefreshError(errorMessage(reason));
         });
     };
     refresh();
@@ -106,7 +111,15 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [result, error, route.version, route.tab, selectedGroup, updateRoute]);
+  }, [
+    result,
+    error,
+    route.version,
+    route.tab,
+    selectedGroup,
+    updateRoute,
+    refreshAttempt,
+  ]);
 
   if (loading && !result) {
     return (
@@ -122,7 +135,7 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
     );
   }
 
-  if (error) {
+  if (error && !result) {
     return (
       <div className="standard-page classification-results-page">
         <button
@@ -169,8 +182,11 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
       createDashboardFromResult={createDashboardFromResult}
       openOrderRecords={openOrderRecords}
       loading={loading}
-      error={error}
-      retry={retry}
+      error={error || versionRefreshError}
+      retry={() => {
+        retry();
+        setRefreshAttempt((current) => current + 1);
+      }}
     />
   );
 }

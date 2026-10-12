@@ -1708,6 +1708,144 @@ test("筛选失败保留旧结果并可重试，切换版本不混用旧结果",
   expect(await screen.findByText("2 条")).toBeVisible();
 });
 
+test("看板后台更新失败保留图表和筛选，重试后恢复", async () => {
+  dashboardApiMock.analysisDashboardInsights.mockResolvedValue({
+    summary: { record_count: 10 },
+    date_range: {},
+    filter_options: { listings: ["L001"] },
+    category_groups: [],
+    reasons: [],
+  });
+  window.location.hash =
+    "#analysis-dashboards?dashboard=dashboard-default&version=dashboard-version-default&listing=L001";
+  render(<DashboardHarness />);
+  expect(await screen.findByText("10 条")).toBeVisible();
+  dashboardApiMock.analysisDashboard.mockRejectedValueOnce(
+    new Error("合成看板更新中断"),
+  );
+  fireEvent(window, new Event("focus"));
+  const alert = await screen.findByRole("alert");
+  expect(alert).toHaveTextContent("分析看板更新失败，当前显示上一次数据");
+  expect(screen.getByText("10 条")).toBeVisible();
+  expect(screen.getByRole("combobox", { name: "Listing" })).toHaveValue("L001");
+  await userEvent.click(within(alert).getByRole("button", { name: "重新加载" }));
+  await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+  expect(screen.getByText("10 条")).toBeVisible();
+});
+
+test("报告后台更新失败保留正文和选择，重试成功清除提示", async () => {
+  const report = {
+    id: "report-retained",
+    status: "completed",
+    version_no: 1,
+    prompt_version: "ai-return-insight-v6",
+    content: {
+      title: "合成已发布报告",
+      issues: [
+        {
+          id: "issue-retained",
+          title: "合成问题",
+          rank: 1,
+          metrics: {},
+          evidence_ids: [],
+        },
+      ],
+    },
+  };
+  dashboardApiMock.analysisDashboardInsightReports.mockResolvedValue([report]);
+  window.location.hash =
+    "#analysis-dashboards?dashboard=dashboard-default&version=dashboard-version-default&tab=report&report=report-retained&issue=issue-retained";
+  render(<DashboardHarness />);
+  expect(
+    await screen.findByRole("heading", { name: report.content.title }),
+  ).toBeVisible();
+  dashboardApiMock.analysisDashboardInsightReports.mockRejectedValueOnce(
+    new Error("合成报告更新中断"),
+  );
+  fireEvent(window, new Event("focus"));
+  const alert = await screen.findByRole("alert");
+  expect(alert).toHaveTextContent("AI 洞察报告更新失败，当前显示上一次数据");
+  expect(screen.getByRole("heading", { name: report.content.title })).toBeVisible();
+  await userEvent.click(within(alert).getByRole("button", { name: "重新加载" }));
+  await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+  expect(window.location.hash).toContain("report=report-retained");
+  expect(window.location.hash).toContain("issue=issue-retained");
+});
+
+test.each([
+  ["overview", "analysisDashboard", "分析看板详情读取失败"],
+  ["report", "analysisDashboardInsightReports", "AI 洞察报告读取失败"],
+])("%s 首次读取失败显示错误且可重试", async (tab, method, title) => {
+  dashboardApiMock[method].mockRejectedValueOnce(new Error("合成首次读取失败"));
+  window.location.hash = `#analysis-dashboards?dashboard=dashboard-default&version=dashboard-version-default&tab=${tab}`;
+  render(<DashboardHarness />);
+  const alert = await screen.findByRole("alert");
+  expect(alert).toHaveTextContent(title);
+  expect(screen.queryByText("当前数据版本还没有 AI 洞察报告")).not.toBeInTheDocument();
+  await userEvent.click(within(alert).getByRole("button", { name: "重新加载" }));
+  await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+});
+
+test("切换看板立即移除旧内容，晚到的旧请求不能覆盖新看板", async () => {
+  let resolveNew;
+  let rejectOld;
+  window.location.hash =
+    "#analysis-dashboards?dashboard=dashboard-default&version=dashboard-version-default";
+  dashboardApiMock.analysisDashboardInsights.mockResolvedValue({
+    summary: { record_count: 10 },
+    date_range: {},
+    filter_options: {},
+    category_groups: [],
+    reasons: [],
+  });
+  render(<DashboardHarness />);
+  expect(await screen.findByText("10 条")).toBeVisible();
+  dashboardApiMock.analysisDashboard.mockImplementationOnce(
+    () =>
+      new Promise((_resolve, reject) => {
+        rejectOld = reject;
+      }),
+  );
+  fireEvent(window, new Event("focus"));
+  await waitFor(() => expect(rejectOld).toBeTypeOf("function"));
+  const oldSignal = dashboardApiMock.analysisDashboard.mock.lastCall[2].signal;
+  dashboardApiMock.analysisDashboard.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolveNew = resolve;
+      }),
+  );
+  dashboardApiMock.analysisDashboardVersions.mockResolvedValue([
+    { version_id: "new-version", version: 1 },
+  ]);
+  dashboardApiMock.analysisDashboardInsights.mockResolvedValue({
+    summary: { record_count: 2 },
+    date_range: {},
+    filter_options: {},
+    category_groups: [],
+    reasons: [],
+  });
+  await act(async () => {
+    window.location.hash =
+      "#analysis-dashboards?dashboard=new-dashboard&version=new-version";
+  });
+  await waitFor(() => expect(resolveNew).toBeTypeOf("function"));
+  expect(screen.queryByText("10 条")).not.toBeInTheDocument();
+  expect(oldSignal.aborted).toBe(true);
+  await act(async () =>
+    resolveNew({
+      id: "new-dashboard",
+      name: "合成新看板",
+      current_version_id: "new-version",
+      version: { version_id: "new-version", version: 1 },
+    }),
+  );
+  expect(await screen.findByText("2 条")).toBeVisible();
+  await act(async () => rejectOld(new Error("旧看板读取失败")));
+  expect(screen.queryByText("旧看板读取失败")).not.toBeInTheDocument();
+  expect(screen.getByText("2 条")).toBeVisible();
+});
+
 test("看板默认读取最新结果，窗口重新获得焦点后自动更新", async () => {
   const updateRoute = vi.fn();
   const latest = { version_id: "live-2", version: 2 };

@@ -5,7 +5,6 @@ import { TaskRegistry } from "./TaskRegistry";
 import { useTaskMonitorState } from "./useTaskMonitorState";
 import { taskLifecycleActions } from "./taskLifecycleActions";
 import { taskExecutionActions } from "./taskExecutionActions";
-import { errorMessage } from "./taskMonitorRequests";
 
 /** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
 /** @typedef {import("./taskRuntimeContracts").TaskSegment} TaskSegment */
@@ -73,6 +72,17 @@ export function TaskMonitor(props) {
           {!visibleSelected && !detailError && (
             <PageLoadingState label="正在读取任务…" />
           )}
+          {visibleSelected && detailError && (
+            <div className="task-action-error" role="alert">
+              <span>任务更新失败，当前显示上一次数据 · {detailError}</span>
+              <button
+                className="secondary-button"
+                onClick={() => loadSelected().catch(() => {})}
+              >
+                重新加载
+              </button>
+            </div>
+          )}
           {!visibleSelected && detailError && (
             <EmptyState
               icon={Pulse}
@@ -83,9 +93,7 @@ export function TaskMonitor(props) {
                   className="secondary-button"
                   onClick={() => {
                     setDetailError("");
-                    loadSelected().catch((error) =>
-                      setDetailError(errorMessage(error)),
-                    );
+                    loadSelected().catch(() => {});
                   }}
                 >
                   重新加载
