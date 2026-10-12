@@ -11,7 +11,6 @@ export function ClassificationResultList(props) {
   const context = { ...props, ...state };
   const {
     route,
-    isVersionCreation,
     selectedResults,
     clearSelection,
     continueToDashboard,
@@ -30,19 +29,16 @@ export function ClassificationResultList(props) {
               title={selectedResults.length ? "" : "请先勾选分类结果"}
               onClick={continueToDashboard}
             >
-              <ChartBar size={18} />{" "}
-              {isVersionCreation ? "创建看板新版本" : "新建分析看板"}
+              <ChartBar size={18} /> 新建分析看板
             </button>
-            {!isVersionCreation && (
-              <button
-                className="secondary-button"
-                disabled={!selectedResults.length}
-                title={selectedResults.length ? "" : "请先勾选分类结果"}
-                onClick={continueToInsight}
-              >
-                <Sparkle size={18} /> 生成 AI 洞察
-              </button>
-            )}
+            <button
+              className="secondary-button"
+              disabled={!selectedResults.length}
+              title={selectedResults.length ? "" : "请先勾选分类结果"}
+              onClick={continueToInsight}
+            >
+              <Sparkle size={18} /> 生成 AI 洞察
+            </button>
           </div>
         }
       />
@@ -50,11 +46,7 @@ export function ClassificationResultList(props) {
       {route.selectionToken && (
         <div className="dashboard-selection-notice" role="status">
           <div>
-            <b>
-              {isVersionCreation
-                ? "正在为现有看板选择新版本数据"
-                : "当前勾选结果可用于分析看板或 AI 洞察"}
-            </b>
+            <b>当前勾选结果可用于分析看板或 AI 洞察</b>
             <span>默认仅纳入可用记录，统计范围可在确认时调整。</span>
           </div>
           <button className="text-button" onClick={() => clearSelection(true)}>

@@ -13,10 +13,13 @@ export function LegacyReviewPage({ route, notify, navigate, refreshSystem }) {
       <div className="legacy-review-notice" role="status">
         <div>
           <b>旧版单记录复核</b>
-          <span>仅用于历史任务，与新版复核批次和派生版本相互独立。</span>
+          <span>仅用于历史任务。当前反馈请在分类结果中查看证据并人工修正。</span>
         </div>
-        <button className="secondary-button" onClick={() => navigate("review-center")}>
-          进入分类结果复核记录
+        <button
+          className="secondary-button"
+          onClick={() => navigate("classification-results")}
+        >
+          查看当前分类结果
         </button>
       </div>
       <ReviewCenter

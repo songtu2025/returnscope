@@ -46,6 +46,7 @@ export function AppPages({ route, user, notify, navigate, refreshSystem }) {
               notify={notify}
               onChanged={refreshSystem}
               userId={user.id}
+              canManageModels={user.is_admin === true}
             />
           )}
           {page === "analysis-tasks" && (

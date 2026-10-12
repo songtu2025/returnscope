@@ -54,7 +54,6 @@ export function dashboardCreationPlan(value, selection, resultVersionIds) {
     warnings: plan.warnings ?? [],
     currentSources: plannedSources(value, selection, resultVersionIds),
     summary: plan.summary ?? {},
-    isVersionCreation: Boolean(selection?.target_dashboard_id),
   };
 }
 /** @param {import("./dashboardCreateContracts").DashboardPlan | null} plan @param {DashboardSelection | null} selection @param {string[]} ids */
@@ -75,7 +74,7 @@ export function dashboardCreationStage(state, route, selection, ids) {
   };
 }
 
-/** @param {{name:string,reason:string}} form @param {boolean} isVersionCreation */
-export function isDashboardCreationFormValid(form, isVersionCreation) {
-  return Boolean(isVersionCreation ? form.reason.trim() : form.name.trim());
+/** @param {{name:string}} form */
+export function isDashboardCreationFormValid(form) {
+  return Boolean(form.name.trim());
 }

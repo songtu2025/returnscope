@@ -1,6 +1,6 @@
 import { useDataRefresh } from "../../hooks/useDataRefresh";
 import { MANAGED_REFRESH_OPTIONS } from "../../shared/refreshPolicy";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useLayoutEffect, useRef } from "react";
 import useSWR from "swr";
 
 import { api } from "../../api";
@@ -39,7 +39,8 @@ export function useClassificationResultListData(query, protectedOperation = fals
     identity: JSON.stringify(query),
   });
   const requestIdentity = JSON.stringify(query);
-  useEffect(() => () => listControllerRef.current?.abort(), [requestIdentity]);
+  // 在新查询启动前清理旧读取，避免被动清理误取消新请求。
+  useLayoutEffect(() => () => listControllerRef.current?.abort(), [requestIdentity]);
   const load = useCallback(async () => {
     await mutate();
   }, [mutate]);

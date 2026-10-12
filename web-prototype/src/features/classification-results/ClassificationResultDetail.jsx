@@ -22,7 +22,7 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
 
   const createDashboardFromResult = () => {
     if (!result) return;
-    createResultDashboard(userId, result);
+    createResultDashboard(userId, result, route);
   };
 
   const openOrderRecords = () => {

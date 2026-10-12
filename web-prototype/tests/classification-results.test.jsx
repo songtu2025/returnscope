@@ -645,8 +645,25 @@ test("从分类结果快速确认并创建 AI 洞察报告任务", async () => {
   expect(window.location.hash).toContain("report=report-ai-insight");
 });
 
+test("从第二页首次勾选结果不改变当前页码", async () => {
+  window.location.hash = "classification-results?page=2";
+  apiMock.classificationResults.mockResolvedValue({
+    items: [resultVersion],
+    total: 21,
+    page: 2,
+    page_size: 20,
+  });
+  render(<ResultCreationHarness />);
+  await userEvent.click(
+    await screen.findByRole("checkbox", { name: "选择 SR001 结果 v1" }),
+  );
+  expect(new URLSearchParams(window.location.hash.split("?")[1]).get("page")).toBe("2");
+});
+
 test("两个创建入口共用跨页选择，取消后保留看板草稿", async () => {
   const user = userEvent.setup();
+  window.location.hash =
+    "classification-results?q=合成筛选&store_site=SEEKWAY%3AUS&quality_status=review_required";
   apiMock.classificationResults.mockResolvedValue({
     items: [resultVersion],
     total: 21,
@@ -676,6 +693,11 @@ test("两个创建入口共用跨页选择，取消后保留看板草稿", async
   await user.type(await screen.findByLabelText("看板名称"), "每周反馈看板");
   await user.click(screen.getByRole("button", { name: /返回选择分类结果/ }));
   expect(await screen.findByText("已选 2 个结果版本")).toBeVisible();
+  const restoredQuery = new URLSearchParams(window.location.hash.split("?")[1]);
+  expect(restoredQuery.get("q")).toBe("合成筛选");
+  expect(restoredQuery.get("store_site")).toBe("SEEKWAY:US");
+  expect(restoredQuery.get("quality_status")).toBe("review_required");
+  expect(restoredQuery.get("page")).toBe("2");
   await user.click(screen.getByRole("button", { name: "新建分析看板" }));
   expect(await screen.findByLabelText("看板名称")).toHaveValue("每周反馈看板");
   await user.click(screen.getByRole("button", { name: /返回选择分类结果/ }));
@@ -761,7 +783,7 @@ test("AI 洞察处理版本冲突后仅提交选定版本，失败可重试", as
   );
 });
 
-test("为已有看板选择新版本时保留目标，清空后禁用创建", async () => {
+test("旧看板选择会话恢复为当前创建流程，清空后禁用创建", async () => {
   const { createDashboardSelection } =
     await import("../src/features/analysis-dashboards/dashboardSelectionStorage");
   const token = createDashboardSelection("user-1", {
@@ -772,17 +794,19 @@ test("为已有看板选择新版本时保留目标，清空后禁用创建", as
   const user = userEvent.setup();
   render(<ResultCreationHarness />);
   await user.click(await screen.findByRole("checkbox", { name: "选择 SR001 结果 v1" }));
-  expect(
-    screen.queryByRole("button", { name: "生成 AI 洞察" }),
-  ).not.toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "创建看板新版本" }));
-  expect(await screen.findByText("基于新分类结果创建版本")).toBeVisible();
-  expect(readDashboardSelection("user-1", token).target_dashboard_id).toBe(
-    "existing-dashboard",
+  expect(screen.getByRole("button", { name: "生成 AI 洞察" })).toBeEnabled();
+  expect(readDashboardSelection("user-1", token)).not.toHaveProperty(
+    "target_dashboard_id",
   );
+  expect(readDashboardSelection("user-1", token)).not.toHaveProperty(
+    "expected_revision",
+  );
+  await user.click(screen.getByRole("button", { name: "新建分析看板" }));
+  expect(await screen.findByRole("heading", { name: "创建分析看板" })).toBeVisible();
+  expect(screen.queryByLabelText("版本原因")).not.toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: /返回选择分类结果/ }));
   await user.click(await screen.findByRole("button", { name: "清空" }));
-  expect(screen.getByRole("button", { name: "创建看板新版本" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "新建分析看板" })).toBeDisabled();
 });
 
 test("AI 提交期间防止重复操作，计划过期后保留参数并再次确认", async () => {
@@ -1261,7 +1285,7 @@ test("版本历史显示真实派生链且历史版本主动作进入最新版�
   expect(apiMock.classificationResultRecordGroups).not.toHaveBeenCalled();
   expect(apiMock.classificationResultDrilldown).not.toHaveBeenCalled();
 
-  await userEvent.click(screen.getByRole("button", { name: "查看版本" }));
+  await userEvent.click(screen.getByRole("button", { name: "查看修改记录" }));
   expect(window.location.hash).toContain("result_version_id=classification-version-2");
   expect(window.location.hash).toContain("tab=history");
 });

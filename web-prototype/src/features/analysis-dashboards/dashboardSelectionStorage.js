@@ -33,7 +33,19 @@ export function readDashboardSelection(userId, token) {
       sessionStorage.getItem(storageKey(userId, token)) || "null",
     );
     if (!value || !Array.isArray(value.selected)) return null;
-    return /** @type {DashboardSelection} */ (value);
+    // 仅恢复当前选择流程的数据，旧会话的目标看板和版本原因不再驱动操作。
+    return /** @type {DashboardSelection} */ ({
+      selected: value.selected,
+      resolved_result_version_ids: value.resolved_result_version_ids,
+      filters: value.filters,
+      intent: value.intent,
+      result_pool_query: value.result_pool_query,
+      dashboard_form: value.dashboard_form
+        ? { name: value.dashboard_form.name || "" }
+        : undefined,
+      insight_form: value.insight_form,
+      updated_at: value.updated_at,
+    });
   } catch {
     return null;
   }

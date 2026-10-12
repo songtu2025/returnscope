@@ -129,9 +129,8 @@
  * @property {string[]} [resolved_result_version_ids]
  * @property {Record<string, string | string[] | null>} [filters]
  * @property {"dashboard" | "insight"} [intent]
- * @property {string} [target_dashboard_id]
- * @property {number} [expected_revision]
- * @property {{name: string, reason?: string}} [dashboard_form]
+ * @property {Record<string, string | number>} [result_pool_query]
+ * @property {{name: string}} [dashboard_form]
  * @property {InsightGenerationForm} [insight_form]
  * @property {string} [updated_at]
  *

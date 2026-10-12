@@ -1,6 +1,6 @@
 import { useDataRefresh } from "../../hooks/useDataRefresh";
 import { MANAGED_REFRESH_OPTIONS } from "../../shared/refreshPolicy";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import useSWR from "swr";
 
 import { readResultRecords, resultRecordQuery } from "./classificationResultReads";
@@ -44,7 +44,8 @@ export function useClassificationResultRecords({ route, notify }) {
     identity: JSON.stringify([route.version, detailQuery]),
   });
   const requestIdentity = JSON.stringify([route.version, detailQuery]);
-  useEffect(() => () => recordsControllerRef.current?.abort(), [requestIdentity]);
+  // 在新查询启动前清理旧读取，避免被动清理误取消新请求。
+  useLayoutEffect(() => () => recordsControllerRef.current?.abort(), [requestIdentity]);
 
   useEffect(() => {
     if (!recordsError) return;

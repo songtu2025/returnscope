@@ -19,11 +19,12 @@ import { submitNewTask } from "./newTaskSubmission";
 
 /** @typedef {import("./taskCreateContracts").TaskDraft} TaskDraft */
 /**
- * @param {{onNavigate: import("../../app/navigation").Navigate, notify: (message: string, type?: "success" | "error") => void, onChanged: () => void | Promise<unknown>, draft?: TaskDraft | null, onDraftChange?: (draft: TaskDraft) => void, onDraftComplete?: () => void}} props
+ * @param {{onNavigate: import("../../app/navigation").Navigate, canManageModels?: boolean, notify: (message: string, type?: "success" | "error") => void, onChanged: () => void | Promise<unknown>, draft?: TaskDraft | null, onDraftChange?: (draft: TaskDraft) => void, onDraftComplete?: () => void}} props
  */
 
 export function NewTaskPage({
   onNavigate,
+  canManageModels = false,
   notify,
   onChanged,
   draft,
@@ -242,6 +243,7 @@ export function NewTaskPage({
           onNavigate,
           products,
           publishedConfigs,
+          canManageModels,
         }}
         data={{
           form,

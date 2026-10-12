@@ -18,10 +18,17 @@ import {
 /** @typedef {import("./taskCreateContracts").TaskModelPolicy} TaskModelPolicy */
 /** @typedef {import("../task-runtime/taskRuntimeContracts").AnalysisTask} AnalysisTask */
 /**
- * @param {{route: import("../../app/navigation").AppRoute, notify: (message: string, type?: "success" | "error") => void, onNavigate: import("../../app/navigation").Navigate, onChanged: () => void | Promise<unknown>, userId: string}} props
+ * @param {{route: import("../../app/navigation").AppRoute, notify: (message: string, type?: "success" | "error") => void, onNavigate: import("../../app/navigation").Navigate, onChanged: () => void | Promise<unknown>, userId: string, canManageModels?: boolean}} props
  */
 
-export function TaskCreatePage({ route, notify, onNavigate, onChanged, userId }) {
+export function TaskCreatePage({
+  route,
+  notify,
+  onNavigate,
+  onChanged,
+  userId,
+  canManageModels = false,
+}) {
   const templateTaskId = route.query.template_task;
   const {
     data: templateTask = null,
@@ -135,6 +142,7 @@ export function TaskCreatePage({ route, notify, onNavigate, onChanged, userId })
     <NewTaskPage
       key={templateTask?.id ?? "new-task"}
       onNavigate={navigate}
+      canManageModels={canManageModels}
       notify={notify}
       onChanged={onChanged}
       draft={draft}

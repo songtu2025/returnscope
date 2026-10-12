@@ -41,7 +41,6 @@
 }
 .dashboard-list-filters select,
 .dashboard-confirm-form input,
-.dashboard-confirm-form textarea,
 .dashboard-version-controls select {
   width: 100%;
   min-width: 0;

@@ -4,7 +4,7 @@ import { useRef } from "react";
 
 /** @typedef {import("./taskCreateContracts").DataVersion} DataVersion */
 /** @typedef {import("./taskCreateContracts").MysqlFormState} MysqlFormState */
-/** @typedef {readonly [boolean, string, string, () => void]} SetupRow */
+/** @typedef {readonly [boolean, string, string, (() => void) | null]} SetupRow */
 
 /**
  * @param {{prepared: boolean, dataEntryMode: "mysql" | "upload", mysqlState: MysqlFormState, selectedReturns?: DataVersion, submitting: boolean, canContinue: boolean, launchStatus: string, submitError: string, submitLabel: string, onSubmit: () => void | Promise<void>}} props
@@ -83,7 +83,7 @@ function launchStatusText({
 }
 
 /**
- * @param {{onNavigate: import("../../app/navigation").Navigate, onUploadReturns: () => void, hasReturns: boolean, hasProducts: boolean, hasConfig: boolean}} props
+ * @param {{onNavigate: import("../../app/navigation").Navigate, onUploadReturns: () => void, hasReturns: boolean, hasProducts: boolean, hasConfig: boolean, canManageModels?: boolean}} props
  */
 export function SetupBlock({
   onNavigate,
@@ -91,6 +91,7 @@ export function SetupBlock({
   hasReturns,
   hasProducts,
   hasConfig,
+  canManageModels = false,
 }) {
   /** @type {SetupRow[]} */
   const rows = [
@@ -101,7 +102,20 @@ export function SetupBlock({
       "先建立系统统一复用的产品信息",
       () => onNavigate("data"),
     ],
-    [hasConfig, "发布模型配置", "先验证连接，再发布配置版本", () => onNavigate("api")],
+    [
+      hasConfig,
+      hasConfig
+        ? "模型服务已就绪"
+        : canManageModels
+          ? "发布模型配置"
+          : "联系管理员发布模型配置",
+      hasConfig
+        ? "可使用已发布的模型配置"
+        : canManageModels
+          ? "先验证连接，再发布配置版本"
+          : "模型服务由系统管理员维护，发布后可继续创建任务",
+      canManageModels ? () => onNavigate("api") : null,
+    ],
   ];
   return (
     <section className="setup-block">
@@ -113,6 +127,7 @@ export function SetupBlock({
           {rows.map(([done, title, note, action]) => (
             <button
               key={title}
+              disabled={!done && !action}
               onClick={() => !done && action?.()}
               className={done ? "done" : ""}
             >

@@ -8,6 +8,7 @@ import {
 } from "../analysis-dashboards/dashboardSelectionStorage";
 import { isDashboardSelectable, resultVersionId } from "./resultActionPolicy";
 import { runResultPrimaryAction } from "./resultSelectionActions";
+import { classificationResultPoolQuery } from "./classificationResultRoute";
 
 /** @typedef {import("./classificationResultListContracts").ClassificationResultVersion} ClassificationResultVersion */
 /** @typedef {import("./classificationResultListContracts").DashboardSelection} DashboardSelection */
@@ -24,7 +25,6 @@ export function useResultSelection({ route, updateRoute, userId }) {
   }, [route.selectionToken, userId]);
 
   const selectedResults = useMemo(() => selection?.selected ?? [], [selection]);
-  const isVersionCreation = Boolean(selection?.target_dashboard_id);
   const selectedIds = useMemo(
     () => new Set(selectedResults.map((item) => item.result_version_id)),
     [selectedResults],
@@ -38,7 +38,7 @@ export function useResultSelection({ route, updateRoute, userId }) {
         selected: [selectionItem(result)],
       });
       setSelection(readDashboardSelection(userId, token));
-      updateRoute({ selectionToken: token, page: 1 });
+      updateRoute({ selectionToken: token });
       return;
     }
     const id = resultVersionId(result);
@@ -78,7 +78,8 @@ export function useResultSelection({ route, updateRoute, userId }) {
     if (!selectedResults.length) return;
     const next = updateDashboardSelection(userId, route.selectionToken, (current) => ({
       ...current,
-      intent: isVersionCreation ? "dashboard" : intent,
+      intent,
+      result_pool_query: classificationResultPoolQuery(route),
     }));
     setSelection(next);
     navigateHash("analysis-dashboards", {
@@ -88,10 +89,10 @@ export function useResultSelection({ route, updateRoute, userId }) {
   };
 
   /** @param {ClassificationResultVersion} result */
-  const runPrimaryAction = (result) => runResultPrimaryAction(result, { userId });
+  const runPrimaryAction = (result) =>
+    runResultPrimaryAction(result, { userId, route });
 
   return {
-    isVersionCreation,
     selectedResults,
     selectedIds,
     toggleSelection,

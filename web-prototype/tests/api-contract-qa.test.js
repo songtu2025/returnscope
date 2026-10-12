@@ -151,13 +151,7 @@ test("分析看板 API 使用冻结路径、计划哈希和服务端下钻", asy
     plan_hash: "plan-1",
     reason: "首次生成",
   });
-  await api.createAnalysisDashboardVersion("dashboard-1", {
-    expected_revision: 2,
-    result_version_ids: ["result-2"],
-    filters: {},
-    plan_hash: "plan-2",
-    reason: "更新来源",
-  });
+  expect(api).not.toHaveProperty("createAnalysisDashboardVersion");
   await api.analysisDashboardDrilldown("dashboard-1", "version-2", "product_name", {
     problem: "FIT_TOO_SMALL",
     listing: "L001",
@@ -180,23 +174,10 @@ test("分析看板 API 使用冻结路径、计划哈希和服务端下钻", asy
     }),
   ]);
   expect(fetchMock.mock.calls[1][0]).toBe("/api/analysis-dashboards");
-  expect(fetchMock.mock.calls[2]).toEqual([
-    "/api/analysis-dashboards/dashboard-1/versions",
-    expect.objectContaining({
-      method: "POST",
-      body: JSON.stringify({
-        expected_revision: 2,
-        result_version_ids: ["result-2"],
-        filters: {},
-        plan_hash: "plan-2",
-        reason: "更新来源",
-      }),
-    }),
-  ]);
-  expect(fetchMock.mock.calls[3][0]).toBe(
+  expect(fetchMock.mock.calls[2][0]).toBe(
     "/api/analysis-dashboards/dashboard-1/versions/version-2/drilldown?group_by=product_name&problem=FIT_TOO_SMALL&listing=L001",
   );
-  expect(fetchMock.mock.calls[4][0]).toBe(
+  expect(fetchMock.mock.calls[3][0]).toBe(
     "/api/analysis-dashboards/dashboard-1/versions/version-2/records?page=2&page_size=50&product_name=%E4%BA%A7%E5%93%81A&order_id=ORDER-1",
   );
 });

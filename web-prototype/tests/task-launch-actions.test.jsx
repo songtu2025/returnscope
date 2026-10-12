@@ -1,7 +1,10 @@
 import { cleanup, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
-import { TaskLaunchActions } from "../src/features/task-create/NewTaskActions";
+import {
+  TaskLaunchActions,
+  SetupBlock,
+} from "../src/features/task-create/NewTaskActions";
 import { TaskPlanReviewStep } from "../src/features/task-create/TaskPlanReviewStep";
 import { renderWithServerState as render } from "./renderWithServerState";
 
@@ -130,4 +133,48 @@ test("数据库准备提交表单，正式创建使用提交回调", async () =>
   view.rerender(<TaskLaunchActions {...props} prepared submitError="合成创建失败" />);
   expect(screen.getByRole("status")).toHaveFocus();
   expect(screen.getByRole("button", { name: "重试创建" })).toBeEnabled();
+});
+
+test.each([false, true])(
+  "任务准备按模型维护权限提供下一步：管理员=%s",
+  async (canManageModels) => {
+    const onNavigate = vi.fn();
+    render(
+      <SetupBlock
+        onNavigate={onNavigate}
+        onUploadReturns={vi.fn()}
+        hasReturns={false}
+        hasProducts
+        hasConfig={false}
+        canManageModels={canManageModels}
+      />,
+    );
+    const button = screen.getByRole("button", {
+      name: canManageModels ? /^发布模型配置/ : /联系管理员发布模型配置/,
+    });
+    if (canManageModels) {
+      expect(button).toBeEnabled();
+      await userEvent.click(button);
+      expect(onNavigate).toHaveBeenCalledWith("api");
+    } else {
+      expect(button).toBeDisabled();
+      expect(screen.getByText(/模型服务由系统管理员维护/)).toBeVisible();
+      await userEvent.click(button);
+      expect(onNavigate).not.toHaveBeenCalled();
+    }
+  },
+);
+
+test("模型服务已就绪时不再提示普通用户联系管理员发布", () => {
+  render(
+    <SetupBlock
+      onNavigate={vi.fn()}
+      onUploadReturns={vi.fn()}
+      hasReturns={false}
+      hasProducts={false}
+      hasConfig
+    />,
+  );
+  expect(screen.getByText("模型服务已就绪")).toBeVisible();
+  expect(screen.queryByText("联系管理员发布模型配置")).not.toBeInTheDocument();
 });

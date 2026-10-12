@@ -29,13 +29,15 @@ export function ResultDetailHeader(context) {
 
 /** @param {import("./classificationResultDetailContracts").ResultDetailContext} context */
 function ResultDetailActions(context) {
-  const { result, policy, runPrimaryAction } = context;
+  const { result, route, policy, runPrimaryAction } = context;
   return (
     <div className="result-detail-actions">
       <Button
         type="primary"
         disabled={policy.primary.disabled}
-        title={policy.primary.disabled ? policy.blockingReason : ""}
+        title={
+          policy.primary.disabled ? policy.blockingReason : "使用最新分类结果创建看板"
+        }
         icon={<ChartBar size={18} />}
         onClick={runPrimaryAction}
       >
@@ -45,7 +47,8 @@ function ResultDetailActions(context) {
         className="secondary-button"
         href={api.classificationResultDownloadUrl(result.version_id)}
       >
-        <DownloadSimple size={18} /> 下载当前版本
+        <DownloadSimple size={18} />
+        {route.tab === "history" ? "下载所选历史结果" : "下载当前版本"}
       </a>
     </div>
   );

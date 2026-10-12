@@ -75,16 +75,23 @@ export function classificationResultRouteState(query) {
 }
 
 /** @param {ClassificationResultRoute} route */
-export function writeClassificationResultRoute(route) {
-  navigateHash("classification-results", {
-    result_version_id: route.version,
+export function classificationResultPoolQuery(route) {
+  return {
     page: route.page > 1 ? route.page : "",
-    record_page: route.recordPage > 1 ? route.recordPage : "",
     page_size: route.pageSize !== 20 ? route.pageSize : "",
     q: route.q,
     store_site: route.storeSite,
     listing: route.listing,
     quality_status: route.qualityStatus,
+  };
+}
+
+/** @param {ClassificationResultRoute} route */
+export function writeClassificationResultRoute(route) {
+  navigateHash("classification-results", {
+    ...classificationResultPoolQuery(route),
+    result_version_id: route.version,
+    record_page: route.recordPage > 1 ? route.recordPage : "",
     record_quality_status: route.recordQualityStatus,
     comment_status: route.commentStatus,
     system_rerun_required: route.systemRerunRequired,

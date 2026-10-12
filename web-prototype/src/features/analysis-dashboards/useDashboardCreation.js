@@ -40,18 +40,14 @@ export function useDashboardCreation({ route, updateRoute, notify, userId }) {
   );
   const [form, setFormState] = useState(() => ({
     name: selection?.dashboard_form?.name ?? "",
-    reason: selection?.target_dashboard_id
-      ? (selection.dashboard_form?.reason ?? "")
-      : "",
   }));
-  /** @param {{name: string, reason: string}} next */
+  /** @param {{name: string}} next */
   const setForm = (next) => {
     setFormState(next);
     updateDashboardSelection(userId, route.selectionToken, (current) => ({
       ...current,
       dashboard_form: {
         name: next.name,
-        ...(current.target_dashboard_id ? { reason: next.reason } : {}),
       },
     }));
   };
@@ -139,7 +135,7 @@ export function useDashboardCreation({ route, updateRoute, notify, userId }) {
     };
   }, [resultVersionIds, runPreflight]);
 
-  const { conflicts, blockers, warnings, currentSources, summary, isVersionCreation } =
+  const { conflicts, blockers, warnings, currentSources, summary } =
     dashboardCreationPlan(state.plan, selection, resultVersionIds);
   const resolveConflicts = () => {
     if (conflicts.some((conflict, index) => !choices[conflictId(conflict, index)])) {
@@ -165,25 +161,8 @@ export function useDashboardCreation({ route, updateRoute, notify, userId }) {
     updateRoute({ step: "check" });
   };
 
-  /** @param {string | undefined} targetDashboardId */
-  const refreshSubmissionConflict = async (targetDashboardId) => {
-    const [plan, latest] = await Promise.all([
-      runPreflight(resultVersionIds, false),
-      isVersionCreation && targetDashboardId
-        ? dashboardApi.analysisDashboard(targetDashboardId).catch(() => null)
-        : Promise.resolve(null),
-    ]);
-    if (latest?.revision != null) {
-      const next = updateDashboardSelection(
-        userId,
-        route.selectionToken,
-        /** @param {DashboardSelection} current */ (current) => ({
-          ...current,
-          expected_revision: latest.revision,
-        }),
-      );
-      setSelection(next);
-    }
+  const refreshSubmissionConflict = async () => {
+    const plan = await runPreflight(resultVersionIds, false);
     setConfirmationMessage(
       plan
         ? "数据计划已变化，已保留你的输入并刷新计划。请核对后再次确认。"
@@ -193,30 +172,27 @@ export function useDashboardCreation({ route, updateRoute, notify, userId }) {
   const submit = async () => {
     if (!selection) return;
     if (state.loading || state.error || state.plan?.ready !== true) return;
-    if (!isDashboardCreationFormValid(form, isVersionCreation)) return;
-    const targetDashboardId = selection.target_dashboard_id;
+    if (!isDashboardCreationFormValid(form)) return;
     setSubmitting(true);
     setConfirmationMessage("");
     const common = {
       result_version_ids: resultVersionIds,
       filters: selection?.filters ?? {},
       plan_hash: state.plan?.plan_hash,
-      reason: isVersionCreation ? form.reason.trim() : "创建分析看板",
+      reason: "创建分析看板",
     };
     try {
       const created = await createDashboardFromPlan({
-        selection,
         form,
         common,
-        isVersionCreation,
       });
-      const destination = createdDashboardRoute(created, selection);
+      const destination = createdDashboardRoute(created);
       clearDashboardSelection(userId, route.selectionToken);
-      notify(isVersionCreation ? "看板新版本已生成" : "分析看板已生成");
+      notify("分析看板已生成");
       navigateHash("analysis-dashboards", destination);
     } catch (error) {
       if (errorStatus(error) === 409) {
-        await refreshSubmissionConflict(targetDashboardId);
+        await refreshSubmissionConflict();
       } else {
         setConfirmationMessage(errorMessage(error));
       }
@@ -242,7 +218,6 @@ export function useDashboardCreation({ route, updateRoute, notify, userId }) {
     warnings,
     currentSources,
     summary,
-    isVersionCreation,
     resolveConflicts,
     submit,
   };

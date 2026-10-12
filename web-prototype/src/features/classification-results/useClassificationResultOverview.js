@@ -1,6 +1,6 @@
 import { useDataRefresh } from "../../hooks/useDataRefresh";
 import { MANAGED_REFRESH_OPTIONS } from "../../shared/refreshPolicy";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useLayoutEffect, useRef } from "react";
 import useSWR from "swr";
 
 import { readResultOverview } from "./classificationResultReads";
@@ -31,7 +31,8 @@ export function useClassificationResultOverview(version) {
     MANAGED_REFRESH_OPTIONS,
   );
   useDataRefresh(() => mutate(), { loading: isLoading, identity: version });
-  useEffect(() => () => controllerRef.current?.abort(), [version]);
+  // 在新查询启动前清理旧读取，避免被动清理误取消新请求。
+  useLayoutEffect(() => () => controllerRef.current?.abort(), [version]);
   const retry = useCallback(() => void mutate(), [mutate]);
   return {
     result: overview?.result ?? null,

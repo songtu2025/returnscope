@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+} from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { api } from "../../api";
 import { useDataRefresh } from "../../hooks/useDataRefresh";
@@ -89,6 +96,7 @@ export function useLatestResult({
   useEffect(() => {
     if (refreshAttempt) void mutate();
   }, [mutate, refreshAttempt]);
-  useEffect(() => () => controllerRef.current?.abort(), [route.version]);
+  // 在新查询启动前清理旧读取，避免被动清理误取消新请求。
+  useLayoutEffect(() => () => controllerRef.current?.abort(), [route.version]);
   return syncError || (error ? errorMessage(error) : "");
 }

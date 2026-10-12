@@ -3,39 +3,19 @@ import { dashboardApi } from "../../shared/api/dashboardApi";
 /** @typedef {import("./dashboardCreateContracts").DashboardCreateResponse} DashboardCreateResponse */
 /** @typedef {import("./dashboardCreateContracts").DashboardSelection} DashboardSelection */
 
-/** @param {{selection:DashboardSelection,form:{name:string},common:{result_version_ids:string[],filters:DashboardSelection["filters"],plan_hash?:string,reason:string},isVersionCreation:boolean}} input */
-export async function createDashboardFromPlan({
-  selection,
-  form,
-  common,
-  isVersionCreation,
-}) {
-  const targetDashboardId = selection.target_dashboard_id;
-  /** @type {DashboardCreateResponse} */
-  let created;
-  if (isVersionCreation) {
-    if (!targetDashboardId) {
-      throw new Error("缺少目标看板，无法创建新版本");
-    }
-    created = await dashboardApi.createAnalysisDashboardVersion(targetDashboardId, {
-      expected_revision: selection.expected_revision,
-      ...common,
-    });
-  } else {
-    created = await dashboardApi.createAnalysisDashboard({
-      name: form.name.trim(),
-      description: "",
-      ...common,
-    });
-  }
-  return created;
+/** @param {{form:{name:string},common:{result_version_ids:string[],filters:DashboardSelection["filters"],plan_hash?:string,reason:string}}} input */
+export async function createDashboardFromPlan({ form, common }) {
+  return dashboardApi.createAnalysisDashboard({
+    name: form.name.trim(),
+    description: "",
+    ...common,
+  });
 }
-/** @param {DashboardCreateResponse} created @param {DashboardSelection} selection */
-export function createdDashboardRoute(created, selection) {
+/** @param {DashboardCreateResponse} created */
+export function createdDashboardRoute(created) {
   const dashboard = created.dashboard ?? created;
   const version = createdDashboardVersion(created);
-  const dashboardId =
-    dashboard.dashboard_id || dashboard.id || selection.target_dashboard_id;
+  const dashboardId = dashboard.dashboard_id || dashboard.id;
   const versionId =
     version.version_id || dashboard.current_version_id || created.version_id;
   if (!dashboardId || !versionId) {

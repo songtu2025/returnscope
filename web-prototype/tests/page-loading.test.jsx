@@ -5,6 +5,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { InlineLoading, PageLoadingState } from "../src/components/SharedUi";
 import { PageLoadingScope } from "../src/app/PageLoadingScope";
 import { AppPages } from "../src/app/AppPages";
+import { preloadPage } from "../src/app/pageModules";
 import { renderWithServerState } from "./renderWithServerState";
 
 afterEach(() => {
@@ -255,6 +256,8 @@ test("实际 AppPages 产品列表、详情与行数据首读始终共用提示"
 });
 
 test("任务详情首读只等待当前详情，不被隐藏的任务列表阻塞", async () => {
+  // 本场景核验数据依赖，先完成真实页面模块加载，避免并行编译耗时影响断言。
+  await preloadPage("analysis-tasks");
   apiMock.tasks.mockImplementation(() => new Promise(() => {}));
   apiMock.task.mockResolvedValue({
     id: "qa-task",

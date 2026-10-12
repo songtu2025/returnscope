@@ -91,7 +91,7 @@ function ResultVersionHistoryItem({
       </div>
       {!current && (
         <Button size="small" onClick={() => onSelectVersion(version.version_id)}>
-          查看版本
+          查看修改记录
         </Button>
       )}
     </li>
@@ -148,6 +148,7 @@ export function ResultVersionHistory({
     <div className="result-version-panel-body" aria-busy={loading}>
       <CardHeading
         title="修改历史"
+        note="此处查看历史修改记录；分类数据始终显示最新结果。"
         action={
           <InlineLoading
             label="更新中…"

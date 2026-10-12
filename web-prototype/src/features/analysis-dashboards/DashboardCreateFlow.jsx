@@ -14,9 +14,8 @@ import { DashboardInsightConfirmation } from "./DashboardInsightConfirmation";
 /** @param {DashboardCreateProps} props */
 export function DashboardCreateFlow(props) {
   const context = { ...props, ...useDashboardCreation(props) };
-  const { route, selection, state, resultVersionIds, runPreflight, isVersionCreation } =
-    context;
-  const isInsightCreation = selection?.intent === "insight" && !isVersionCreation;
+  const { route, selection, state, resultVersionIds, runPreflight } = context;
+  const isInsightCreation = selection?.intent === "insight";
   const insight = useDashboardInsightCreation({ ...context, isInsightCreation });
 
   const stage = dashboardCreationStage(state, route, selection, resultVersionIds);
@@ -46,28 +45,14 @@ export function DashboardCreateFlow(props) {
         disabled={context.submitting || insight.insightState.submitting}
         onClick={() =>
           navigateHash("classification-results", {
+            ...selection?.result_pool_query,
             selection_token: route.selectionToken,
           })
         }
       >
         <ArrowLeft size={17} /> 返回选择分类结果
       </button>
-      <PageHeading
-        eyebrow={
-          isVersionCreation
-            ? "创建看板新版本"
-            : isInsightCreation
-              ? undefined
-              : undefined
-        }
-        title={
-          isVersionCreation
-            ? "基于新分类结果创建版本"
-            : isInsightCreation
-              ? "生成 AI 洞察"
-              : "创建分析看板"
-        }
-      />
+      <PageHeading title={isInsightCreation ? "生成 AI 洞察" : "创建分析看板"} />
 
       {state.loading && !state.plan && (
         <InlineLoading scope="page" label="正在检查分类结果与 Listing 冲突…" />

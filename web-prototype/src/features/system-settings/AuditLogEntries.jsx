@@ -7,6 +7,9 @@ import { writeAuditRoute } from "./auditLogPolicy";
 
 /** @type {Record<string, string>} */
 const ACTION_LABELS = {
+  manual_correction: "人工修正语义",
+  product_update: "更新产品信息",
+  dimension_row_update: "修改产品信息",
   task_create: "创建任务",
   task_pause: "暂停任务",
   task_resume: "继续任务",

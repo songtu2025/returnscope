@@ -891,9 +891,9 @@ describe("关键用户流程", () => {
 
     await waitFor(() => expect(screen.getByText("旧版单记录复核")).toBeVisible());
     expect(
-      screen.getByText("仅用于历史任务，与新版复核批次和派生版本相互独立。"),
+      screen.getByText("仅用于历史任务。当前反馈请在分类结果中查看证据并人工修正。"),
     ).toBeVisible();
-    expect(screen.getByRole("button", { name: "进入分类结果复核记录" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "查看当前分类结果" })).toBeVisible();
   });
 
   test("分析结果可以在五个分析层级间切换", async () => {

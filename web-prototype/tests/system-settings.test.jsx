@@ -270,3 +270,17 @@ test("审计筛选拒绝错误日期并隐藏旧结果", async () => {
   expect(window.location.hash).toBe(originalHash);
   expect(logs).toHaveBeenCalledTimes(1);
 });
+
+test.each([
+  ["manual_correction", "人工修正语义"],
+  ["product_update", "更新产品信息"],
+  ["dimension_row_update", "修改产品信息"],
+])("新业务审计动作使用中文名称：%s", (action, label) => {
+  render(
+    <AuditLogEntries
+      items={[{ id: "synthetic-action", action, entity_type: "classification_result" }]}
+    />,
+  );
+  expect(screen.getByText(label)).toBeVisible();
+  expect(screen.getByText(action, { selector: "code" })).toBeVisible();
+});

@@ -45,7 +45,6 @@ function jsonRequest(path, method, payload, options = {}) {
  * @type {{
  *   dashboardPreflight: (payload: DashboardPayload, options?: RequestInit) => DashboardRequest,
  *   createAnalysisDashboard: (payload: DashboardPayload, options?: RequestInit) => DashboardRequest,
- *   createAnalysisDashboardVersion: (dashboardId: string, payload: DashboardPayload, options?: RequestInit) => DashboardRequest,
  *   analysisDashboards: (filters?: DashboardQuery, options?: RequestInit) => DashboardRequest,
  *   analysisDashboard: (dashboardId: string, versionId?: string, options?: RequestInit) => DashboardRequest,
  *   analysisDashboardVersions: (dashboardId: string, options?: RequestInit) => DashboardRequest,
@@ -68,13 +67,6 @@ export const dashboardApi = {
     jsonRequest("/api/dashboard-plans/preflight", "POST", payload, options),
   createAnalysisDashboard: (payload, options = {}) =>
     jsonRequest("/api/analysis-dashboards", "POST", payload, options),
-  createAnalysisDashboardVersion: (dashboardId, payload, options = {}) =>
-    jsonRequest(
-      `/api/analysis-dashboards/${dashboardId}/versions`,
-      "POST",
-      payload,
-      options,
-    ),
   analysisDashboards: (filters = {}, options = {}) =>
     readDashboard(`/api/analysis-dashboards${queryString(filters)}`, options),
   analysisDashboard: (dashboardId, versionId = "", options = {}) =>

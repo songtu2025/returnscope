@@ -2480,11 +2480,12 @@ test("需复核来源可创建看板并展示实际纳入范围", async () => {
   expect(screen.getByRole("button", { name: "确认生成分析看板" })).toBeEnabled();
 });
 
-test("当前看板可基于选择结果生成新版本并携带revision", async () => {
+test("旧会话恢复后只创建新看板，保留名称且不再填写版本原因", async () => {
   const user = userEvent.setup();
   const token = createDashboardSelection("user-1", {
     target_dashboard_id: "dashboard-1",
     expected_revision: 7,
+    dashboard_form: { name: "保留的看板名称", reason: "旧版原因" },
     selected: [
       {
         result_version_id: "result-v1",
@@ -2496,34 +2497,33 @@ test("当前看板可基于选择结果生成新版本并携带revision", async 
     ],
   });
   dashboardApiMock.dashboardPreflight.mockResolvedValue(planFor(["result-v1"]));
-  dashboardApiMock.createAnalysisDashboardVersion.mockResolvedValue({
-    id: "dashboard-1",
-    current_version_id: "dashboard-version-3",
-    revision: 8,
-    version: { version_id: "dashboard-version-3", version: 3 },
+  dashboardApiMock.createAnalysisDashboard.mockResolvedValue({
+    id: "new-dashboard",
+    current_version_id: "new-dashboard-v1",
+    version: { version_id: "new-dashboard-v1", version: 1 },
   });
-  dashboardApiMock.analysisDashboard.mockImplementation(
-    () => dashboardApiMock.createAnalysisDashboardVersion.mock.results[0].value,
-  );
+  dashboardApiMock.analysisDashboard.mockResolvedValue({
+    id: "new-dashboard",
+    current_version_id: "new-dashboard-v1",
+    version: { version_id: "new-dashboard-v1", version: 1 },
+  });
   window.location.hash = `#analysis-dashboards?selection_token=${token}&step=check`;
   render(<DashboardHarness />);
-
-  expect(await screen.findByText("基于新分类结果创建版本")).toBeVisible();
-  expect(screen.queryByLabelText("看板名称")).not.toBeInTheDocument();
-  await user.type(screen.getByLabelText("版本原因"), "采用复核后的分类结果");
-  await user.click(screen.getByRole("button", { name: "确认生成新版本" }));
-
+  expect(await screen.findByLabelText("看板名称")).toHaveValue("保留的看板名称");
+  expect(screen.queryByLabelText("版本原因")).not.toBeInTheDocument();
+  expect(screen.queryByText(/历史看板不会自动漂移/)).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "确认生成分析看板" }));
   await waitFor(() =>
-    expect(dashboardApiMock.createAnalysisDashboardVersion).toHaveBeenCalledWith(
-      "dashboard-1",
+    expect(dashboardApiMock.createAnalysisDashboard).toHaveBeenCalledWith(
       expect.objectContaining({
-        expected_revision: 7,
+        name: "保留的看板名称",
         result_version_ids: ["result-v1"],
-        reason: "采用复核后的分类结果",
+        reason: "创建分析看板",
       }),
     ),
   );
-  expect(window.location.hash).toContain("version=dashboard-version-3");
+  expect(dashboardApiMock.createAnalysisDashboardVersion).not.toHaveBeenCalled();
+  expect(window.location.hash).toContain("dashboard=new-dashboard");
 });
 
 test("看板详情聚焦退货原因洞察并保留证据与版本入口", async () => {
