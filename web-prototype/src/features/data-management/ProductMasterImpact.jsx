@@ -43,7 +43,7 @@ function ProductAuditEntry({ entry }) {
   if (entry.action === "product_update")
     return (
       <div>
-        <b>{entry.actor_name} · 商品资料更新</b>
+        <b>{entry.actor_name} · 产品资料更新</b>
         <p>
           {entry.before?.row_count} 条 → {entry.after?.row_count} 条
         </p>

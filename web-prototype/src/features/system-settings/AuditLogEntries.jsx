@@ -28,7 +28,7 @@ const ENTITY_LABELS = {
   task_segment: "Listing 片段",
   review: "历史复核记录",
   review_batch: "复核批次",
-  dataset: "数据资产",
+  dataset: "数据集",
   data_version: "数据版本",
   api_connection: "API 接入",
   config_version: "模型配置版本",
@@ -50,6 +50,16 @@ export function AuditLogEntries({ items }) {
 
 /** @param {{item: import("../../shared/api/systemSettingsContracts").AuditLogEntry}} props */
 function AuditLogEntry({ item }) {
+  const snapshot = [item.after, item.before].find(
+    (value) => typeof value === "object" && value !== null && "kind" in value,
+  );
+  const datasetKind = item.target?.view ?? snapshot?.kind;
+  const datasetLabel =
+    datasetKind === "products"
+      ? "产品信息"
+      : datasetKind === "returns"
+        ? "用户反馈数据"
+        : "数据集";
   return (
     <article>
       <header>
@@ -64,6 +74,7 @@ function AuditLogEntry({ item }) {
           <AuditTerm
             value={item.entity_type}
             labels={ENTITY_LABELS}
+            label={item.entity_type === "dataset" ? datasetLabel : undefined}
             fallback="未提供对象"
           />
           <span>· {item.entity_id || "未提供 ID"}</span>
@@ -87,10 +98,10 @@ function AuditLogEntry({ item }) {
   );
 }
 
-/** @param {{value?: string, labels: Record<string, string>, fallback: string}} props */
-function AuditTerm({ value, labels, fallback }) {
+/** @param {{value?: string, labels: Record<string, string>, label?: string, fallback: string}} props */
+function AuditTerm({ value, labels, label: suppliedLabel, fallback }) {
   if (!value) return <span>{fallback}</span>;
-  const label = labels[value];
+  const label = suppliedLabel ?? labels[value];
   return (
     <span className="audit-technical-term">
       {label ?? value}

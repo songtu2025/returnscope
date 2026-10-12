@@ -35,7 +35,7 @@ def list_import_rules() -> dict[str, list[dict[str, Any]]]:
         {
             "id": "products-standard-v1",
             "kind": "products",
-            "name": "标准商品信息",
+            "name": "标准产品信息",
             "version": 1,
             "status": "active",
             "source": "system",

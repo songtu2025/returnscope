@@ -96,10 +96,10 @@ def _inspect_products(path: Path) -> tuple[pd.DataFrame, dict[str, Any]]:
     try:
         frame = pd.read_excel(path, sheet_name=PRODUCT_WORKSHEET, dtype=str)
     except ValueError as exc:
-        raise ValueError("商品维度缺少“产品信息汇总表”工作表") from exc
+        raise ValueError("产品信息缺少“产品信息汇总表”工作表") from exc
     missing = [column for column in PRODUCT_COLUMNS if column not in frame.columns]
     if missing:
-        raise ValueError(f"商品维度缺少字段：{', '.join(missing)}")
+        raise ValueError(f"产品信息缺少字段：{', '.join(missing)}")
     complete = int(
         frame[PRODUCT_COLUMNS]
         .fillna("")

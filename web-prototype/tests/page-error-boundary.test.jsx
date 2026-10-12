@@ -9,7 +9,7 @@ vi.mock("../src/app/pageModules", async () => {
   const EmptyPage = () => null;
   return {
     WorkbenchPage: lazy(() => Promise.reject(new Error("模拟脚本加载失败"))),
-    DataAssetsPage: () => <h1>数据资产</h1>,
+    DataAssetsPage: () => <h1>产品信息管理</h1>,
     TaskCreatePage: EmptyPage,
     TaskRuntimePage: EmptyPage,
     ClassificationStandardsPage: EmptyPage,
@@ -62,7 +62,7 @@ describe("页面加载错误恢复", () => {
 
     rerender(view("data-assets"));
     await waitFor(() =>
-      expect(screen.getByRole("heading", { name: "数据资产" })).toBeInTheDocument(),
+      expect(screen.getByRole("heading", { name: "产品信息管理" })).toBeInTheDocument(),
     );
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });

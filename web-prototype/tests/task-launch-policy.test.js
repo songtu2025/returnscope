@@ -22,7 +22,7 @@ test.each([
   [{}, "开始分析", "确认任务名称与模型后，即可开始分析。"],
   [
     { submitting: true, submitError: "合成错误", categoryCompletionRequired: true },
-    "请先补齐商品品类",
+    "请先补齐产品品类",
     "正在创建任务，请稍候…",
   ],
   [
@@ -43,8 +43,8 @@ test.each([
   ],
   [
     { categoryCompletionRequired: true, countMismatch: true, noExecutable: true },
-    "请先补齐商品品类",
-    "请先补齐上方提示的商品品类。",
+    "请先补齐产品品类",
+    "请先补齐上方提示的产品品类。",
   ],
   [
     { countMismatch: true, noExecutable: true },

@@ -185,7 +185,7 @@ def load_return_dataset(
     if listing is not None:
         records = records.loc[records["sku"].isin(mskus)].copy()
     lookup_rows = _product_scope_lookup(
-        products, "MSKU", "同一店铺内 MSKU 对应多个商品信息"
+        products, "MSKU", "同一店铺内 MSKU 对应多个产品信息"
     )
     records = records.merge(
         lookup_rows,

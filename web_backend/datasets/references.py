@@ -110,7 +110,7 @@ class _DatasetReferences:
                 (version_id,),
             ).fetchone()
         if row is None or row["kind"] != "products":
-            raise ValueError("商品资料不存在或已归档")
+            raise ValueError("产品资料不存在或已归档")
         frame = pd.read_excel(
             Path(str(row["file_path"])),
             sheet_name=PRODUCT_WORKSHEET,

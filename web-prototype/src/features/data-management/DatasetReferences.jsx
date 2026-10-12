@@ -86,7 +86,7 @@ export function DatasetReferences({
         <EmptyState
           icon={Database}
           title="尚未被任务引用"
-          description="使用这份商品资料的任务会显示在这里。"
+          description="使用这份产品资料的任务会显示在这里。"
         />
       ) : (
         <>

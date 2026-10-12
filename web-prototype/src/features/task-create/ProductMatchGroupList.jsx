@@ -28,7 +28,7 @@ function ProductMatchGroupEditor({ group, workbench }) {
     <div className="product-match-examples">
       <div className="product-match-examples-heading">
         <div>
-          <b>补充商品信息</b>
+          <b>补充产品信息</b>
           <span>可修改 Listing，并从系统品类规则中选择品类。</span>
         </div>
         <label className="product-match-select-group-products">

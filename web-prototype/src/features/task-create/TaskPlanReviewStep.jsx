@@ -145,7 +145,7 @@ function planReviewNotice(state, counts) {
     return {
       warning: true,
       title: "需要处理",
-      description: "补充商品信息，或选择如何处理已就绪片段。",
+      description: "补充产品信息，或选择如何处理已就绪片段。",
     };
   if (state.countMismatch)
     return {

@@ -26,7 +26,7 @@ const taskSearchItem = (task) => ({
 /** @param {SearchDataset} dataset @returns {GlobalSearchItem} */
 const datasetSearchItem = (dataset) => ({
   id: dataset.id,
-  type: "商品信息",
+  type: "产品信息",
   icon: Database,
   title: dataset.name,
   meta: `当前数据 · ${dataset.row_count.toLocaleString()} 行`,

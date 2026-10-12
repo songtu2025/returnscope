@@ -143,7 +143,7 @@ class DataQualityService:
         if returns is None or returns["kind"] != "returns":
             raise ValueError("用户反馈数据版本不存在或类型不正确")
         if products is None or products["kind"] != "products":
-            raise ValueError("商品资料不存在或类型不正确")
+            raise ValueError("产品资料不存在或类型不正确")
         cache_key = (
             str(returns["id"]),
             str(returns["sha256"]),

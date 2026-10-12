@@ -47,7 +47,7 @@ export function taskLaunchCopy({
 
 /** @param {Pick<TaskLaunchState, "blocked" | "categoryCompletionRequired" | "countMismatch" | "noExecutable" | "partialPlan" | "planCounts" | "unresolvedPolicy">} state */
 function taskSubmitLabel(state) {
-  if (state.categoryCompletionRequired) return "请先补齐商品品类";
+  if (state.categoryCompletionRequired) return "请先补齐产品品类";
   if (state.countMismatch) return "评论数量需要重新预检";
   if (state.noExecutable) return "没有可执行评论";
   if (state.blocked) {
@@ -78,7 +78,7 @@ function pendingLaunchStatus(state) {
 
 /** @param {Pick<TaskLaunchState, "categoryCompletionRequired" | "countMismatch" | "noExecutable" | "blocked" | "unresolvedPolicy" | "requiresScopeConfirmation" | "scopeConfirmed">} state */
 function planLaunchStatus(state) {
-  if (state.categoryCompletionRequired) return "请先补齐上方提示的商品品类。";
+  if (state.categoryCompletionRequired) return "请先补齐上方提示的产品品类。";
   if (state.countMismatch) return "评论数量校验未通过，请重新检查数据。";
   if (state.noExecutable) return "当前范围没有可执行评论，请修改分析数据。";
   if (state.blocked && !state.unresolvedPolicy) {

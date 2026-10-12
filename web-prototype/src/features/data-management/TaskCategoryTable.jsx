@@ -109,7 +109,7 @@ function CompletionProductDescription({ item }) {
   return (
     <span>
       <code>{item.msku || "缺失 SKU"}</code>
-      <small>{item.product_name || "暂无商品名称"}</small>
+      <small>{item.product_name || "暂无产品名称"}</small>
       <em>
         {item.issue === "product_not_found"
           ? "产品信息中不存在，将新增"

@@ -20,7 +20,7 @@ import {
 /** @type {NavigationItem[]} */
 export const PRIMARY_NAV_ITEMS = [
   { id: "workbench", label: "首页", icon: SquaresFour },
-  { id: "data-assets", label: "数据资产", icon: Database },
+  { id: "data-assets", label: "产品信息管理", icon: Database },
   { id: "classification-standards", label: "分类标准", icon: BookOpenText },
   { id: "analysis-tasks", label: "分析任务", icon: PlayCircle },
   { id: "classification-results", label: "分类结果", icon: TreeStructure },

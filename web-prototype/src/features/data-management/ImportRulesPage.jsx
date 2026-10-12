@@ -48,8 +48,8 @@ export function ImportRulesPage() {
   return (
     <div className="standard-page data-page import-rules-page">
       <PageHeading
-        eyebrow="可复用数据资产"
-        title="数据资产"
+        eyebrow="导入规则"
+        title="产品信息管理"
         description="查看系统当前生效的标准导入规则；规则由系统维护，页面只读。"
       />
       <DataAssetTabs

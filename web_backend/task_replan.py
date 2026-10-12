@@ -75,7 +75,7 @@ class TaskReplanMixin(TaskReplanSegmentsMixin):
                 current_product is None
                 or current_product["sha256"] != prepared.products["sha256"]
             ):
-                raise TaskPlanConflict("商品信息已更新，请重新预检")
+                raise TaskPlanConflict("产品信息已更新，请重新预检")
             row = self._replan_task_row(connection, task_id, expected_revision)
             old_segments = connection.execute(
                 "SELECT * FROM task_segments WHERE task_id = ?",

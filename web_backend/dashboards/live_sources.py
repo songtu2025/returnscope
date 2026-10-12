@@ -71,7 +71,7 @@ def refresh_related_dashboards(
                 (row["id"],),
             ).fetchone()[0],
             plan=plan,
-            reason="商品信息更新，自动同步"
+            reason="产品信息更新，自动同步"
             if product_dataset_id
             else "分类结果更新，自动同步",
             actor_id=row["created_by"],

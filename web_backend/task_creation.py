@@ -91,7 +91,7 @@ class TaskCreationMixin(TaskSnapshotsMixin):
                 current_products is None
                 or current_products["sha256"] != products["sha256"]
             ):
-                raise TaskPlanConflict("商品信息已更新，请重新预检")
+                raise TaskPlanConflict("产品信息已更新，请重新预检")
             task_id = new_id("task")
             now = utc_now()
             snapshot = {

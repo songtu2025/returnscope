@@ -143,7 +143,7 @@ class DatasetService(
                 original_name=original_name,
                 content_type=content_type,
                 change_note=change_note
-                or ("导入商品信息" if kind == "products" else "创建任务输入"),
+                or ("导入产品信息" if kind == "products" else "创建任务输入"),
                 actor_id=actor_id,
                 _inspection=_inspection,
             )

@@ -54,9 +54,9 @@ class DatasetProductWorkbookMixin:
                 (dataset_id,),
             ).fetchone()
         if row is None or row["kind"] != "products":
-            raise ValueError("商品维度不存在")
+            raise ValueError("产品信息不存在")
         if int(row["current_version"]) != expected_version:
-            raise DatasetRevisionConflict("商品维度已被其他用户修改，请刷新后重试")
+            raise DatasetRevisionConflict("产品信息已被其他用户修改，请刷新后重试")
         return dict(row)
 
     @staticmethod
@@ -72,7 +72,7 @@ class DatasetProductWorkbookMixin:
         )
         frame = workbook.get(PRODUCT_WORKSHEET)
         if frame is None:
-            raise ValueError("商品维度缺少“产品信息汇总表”工作表")
+            raise ValueError("产品信息缺少“产品信息汇总表”工作表")
         return _ProductWorkbookEdit(
             dataset_id=dataset_id,
             expected_version=expected_version,
@@ -250,7 +250,7 @@ class DatasetProductWorkbookMixin:
             },
         }
         return self._persist_product_workbook(
-            edit, change_note or f"修改商品维度第 {row_index + 2} 行", actor_id, audit
+            edit, change_note or f"修改产品信息第 {row_index + 2} 行", actor_id, audit
         )
 
     def complete_product_categories(

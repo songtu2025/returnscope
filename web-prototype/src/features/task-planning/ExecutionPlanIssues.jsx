@@ -64,14 +64,14 @@ function TaskPlanCategoryIssue({
           {missingCategoryProducts.toLocaleString()} 个商品缺少品类A或品类B，影响{" "}
           {missingCategoryComments.toLocaleString()} 条评论
         </b>
-        <p>请先补齐商品品类。保存后更新当前商品资料，并自动重新预检。</p>
+        <p>请先补齐产品品类。保存后更新当前产品资料，并自动重新预检。</p>
         {onResolveCategories && (
           <button
             type="button"
             className="secondary-button"
             onClick={onResolveCategories}
           >
-            补齐商品品类
+            补齐产品品类
             <ArrowRight size={16} />
           </button>
         )}
@@ -141,8 +141,8 @@ function TaskPlanBlockedComments({ plan, onResolveCategories }) {
             onClick={onResolveCategories}
           >
             {plan.unresolved_product_count
-              ? `处理 ${plan.unresolved_product_count.toLocaleString()} 个商品匹配异常`
-              : "前往补充商品信息"}
+              ? `处理 ${plan.unresolved_product_count.toLocaleString()} 个产品匹配异常`
+              : "前往补充产品信息"}
             <ArrowRight size={16} />
           </button>
         )}

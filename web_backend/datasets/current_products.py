@@ -1,4 +1,4 @@
-"""维护一份当前商品资料，修订号仅用于并发校验。"""
+"""维护一份当前产品资料，修订号仅用于并发校验。"""
 
 from __future__ import annotations
 
@@ -51,9 +51,9 @@ def update_current_products(connection: Any, write: Any, now: str) -> tuple[int,
         (write.dataset_id,),
     ).fetchone()
     if source is None:
-        raise ValueError("商品信息不存在")
+        raise ValueError("产品信息不存在")
     if write.expected_current_version != source["version"]:
-        raise DatasetRevisionConflict("商品信息已被其他用户修改，请刷新后重试")
+        raise DatasetRevisionConflict("产品信息已被其他用户修改，请刷新后重试")
     freeze_existing_product_inputs(connection, source)
     revision = int(source["version"]) + 1
     fields = (

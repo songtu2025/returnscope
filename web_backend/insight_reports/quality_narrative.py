@@ -125,14 +125,14 @@ def _quality_gate_actions(context: _LiveQualityEvaluation) -> list[dict[str, Any
                 "priority": "P0",
                 "target": "商品主数据映射",
                 "action": (
-                    "核对源 SKU、商品 SKU 与商品名称的对应关系后，再下发商品级整改。"
+                    "核对源 SKU、商品 SKU 与产品名称的对应关系后，再下发商品级整改。"
                 ),
                 "rationale": (
                     "存在未匹配或缺少名称的商品记录，"
                     "当前不能确认商品级热点对应的真实对象。"
                 ),
                 "success_signal": (
-                    "源 SKU、商品 SKU 与商品名称形成唯一且可追溯的映射。"
+                    "源 SKU、商品 SKU 与产品名称形成唯一且可追溯的映射。"
                 ),
                 "evidence_ids": ["product_mapping", "scope"],
             }

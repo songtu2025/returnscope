@@ -15,7 +15,7 @@ import { TaskCategoryTable } from "./TaskCategoryTable";
 function requestError(error) {
   return error instanceof Error
     ? /** @type {DataRequestError} */ (error)
-    : new Error("保存商品品类失败");
+    : new Error("保存产品品类失败");
 }
 
 /**
@@ -42,7 +42,7 @@ export function TaskCategoryCompletion({ dataset, focus, notify, onReturnToTask 
   const [listingFilter, setListingFilter] = useState("all");
   const [bulkCategory, setBulkCategory] = useState("");
   const [changeNote, setChangeNote] = useState(
-    `补充任务“${focus.taskTitle || focus.store}”缺失的商品品类`,
+    `补充任务“${focus.taskTitle || focus.store}”缺失的产品品类`,
   );
   const [saving, setSaving] = useState(false);
   const listingGroups = Array.from(

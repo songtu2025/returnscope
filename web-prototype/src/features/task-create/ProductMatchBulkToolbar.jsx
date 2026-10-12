@@ -15,9 +15,9 @@ export function ProductMatchBulkToolbar({ workbench }) {
   } = workbench;
 
   return (
-    <section className="product-match-bulk-toolbar" aria-label="批量修改商品品类">
+    <section className="product-match-bulk-toolbar" aria-label="批量修改产品品类">
       <div className="product-match-bulk-summary">
-        <b>批量修改商品品类</b>
+        <b>批量修改产品品类</b>
         <span>
           已选择 {selectedProductCount} 个销售 SKU；应用后需重新确认对应 Listing。
         </span>

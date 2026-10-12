@@ -193,7 +193,7 @@ def _product_mapping_check(
         "missing_name_record_count": missing,
         "examples": [],
         "note": (
-            f"当前有 {unmatched} 条未匹配商品记录、{missing} 条缺少商品名称，"
+            f"当前有 {unmatched} 条未匹配商品记录、{missing} 条缺少产品名称，"
             "商品级行动前需补全已发布商品主数据关系。"
         ),
     }

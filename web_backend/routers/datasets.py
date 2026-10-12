@@ -171,7 +171,7 @@ def _register_dataset_upload_routes(
         if kind != "products":
             raise HTTPException(
                 status_code=400,
-                detail="用户反馈请通过分析任务导入，数据资产仅维护商品信息",
+                detail="用户反馈请通过分析任务导入，产品信息管理仅维护产品资料",
             )
         suffix = Path(file.filename or "upload").suffix.lower()
         temp_path = settings.data_dir / "tmp" / f"{secrets.token_hex(12)}{suffix}"

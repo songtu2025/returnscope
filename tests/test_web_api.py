@@ -302,7 +302,7 @@ def test_product_edit_rejections_do_not_create_partial_versions(
             },
         )
         assert conflict.status_code == 409
-        assert conflict.json()["detail"] == "商品维度已被其他用户修改，请刷新后重试"
+        assert conflict.json()["detail"] == "产品信息已被其他用户修改，请刷新后重试"
 
         duplicate_batch = client.post(
             f"/api/datasets/{products['id']}/category-completion",

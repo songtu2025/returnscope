@@ -25,7 +25,7 @@ export function ProductMasterWorkspace(props) {
   return (
     <div className="standard-page data-page product-master-page">
       <PageHeading
-        title="商品信息汇总"
+        title="产品信息管理"
         description="维护跨分析任务复用的产品名称、店铺映射和品类信息；用户反馈在分析任务中导入。"
         action={
           <Button
@@ -65,14 +65,14 @@ export function ProductMasterWorkspace(props) {
           <EmptyState
             icon={Database}
             title="尚未建立产品信息"
-            description="导入商品资料后，可维护商品映射、品类和修改记录。"
+            description="导入产品资料后，可维护产品映射、品类和修改记录。"
             action={
               <Button
                 type="primary"
                 icon={<UploadSimple size={17} />}
                 onClick={() => setDialog({ mode: "create", kind: "products" })}
               >
-                导入商品信息
+                导入产品信息
               </Button>
             }
           />

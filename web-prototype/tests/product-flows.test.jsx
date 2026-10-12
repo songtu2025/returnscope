@@ -31,7 +31,7 @@ describe("商品页面和旧任务草稿的恢复", () => {
   const product = {
     id: "synthetic-products",
     kind: "products",
-    name: "合成商品信息",
+    name: "合成产品信息",
     current_version: 1,
     version_id: "synthetic-products-v1",
     row_count: 1,
@@ -216,7 +216,9 @@ describe("商品页面和旧任务草稿的恢复", () => {
     expect(screen.getByRole("button", { name: "导入产品信息" })).toBeDisabled();
     await act(async () => resolveList([]));
     expect(await screen.findByText("尚未建立产品信息")).toBeVisible();
-    expect(screen.getByRole("button", { name: "导入商品信息" })).toBeEnabled();
+    screen.getAllByRole("button", { name: "导入产品信息" }).forEach((button) => {
+      expect(button).toBeEnabled();
+    });
   });
 
   test("商品详情失败不能误报无商品且可以重试", async () => {
@@ -353,7 +355,7 @@ describe("商品页面和旧任务草稿的恢复", () => {
 
     render(<App />);
     expect(
-      await screen.findByRole("heading", { name: "商品信息汇总", level: 1 }),
+      await screen.findByRole("heading", { name: "产品信息管理", level: 1 }),
     ).toBeVisible();
     await waitFor(() =>
       expect(apiMock.dataVersionReferences).toHaveBeenCalledWith(
@@ -736,11 +738,11 @@ describe("关键用户流程", () => {
     window.dispatchEvent(new HashChangeEvent("hashchange"));
 
     expect(
-      await screen.findByRole("heading", { name: "商品信息汇总", level: 1 }),
+      await screen.findByRole("heading", { name: "产品信息管理", level: 1 }),
     ).toBeVisible();
   });
 
-  test("旧匹配质量地址回落到商品信息汇总", async () => {
+  test("旧匹配质量地址回落到产品信息管理", async () => {
     apiMock.me.mockResolvedValue({
       id: "user-1",
       email: "admin@example.com",
@@ -755,7 +757,7 @@ describe("关键用户流程", () => {
       expect(window.location.hash).toBe("#data-assets?view=products"),
     );
     expect(
-      await screen.findByRole("heading", { name: "商品信息汇总", level: 1 }),
+      await screen.findByRole("heading", { name: "产品信息管理", level: 1 }),
     ).toBeVisible();
     expect(
       screen.queryByRole("button", { name: "匹配与质量" }),
@@ -1670,9 +1672,9 @@ describe("关键用户流程", () => {
     await screen.findByRole("region", { name: "选择分析数据" });
     await prepareTaskUpload(user);
     await user.click(
-      await screen.findByRole("button", { name: /处理 3 个商品匹配异常/ }),
+      await screen.findByRole("button", { name: /处理 3 个产品匹配异常/ }),
     );
-    expect(screen.getByRole("heading", { name: "处理商品匹配异常" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "处理产品匹配异常" })).toBeVisible();
     expect(screen.getByRole("tab", { name: "高匹配建议（1）" })).toBeVisible();
     expect(screen.getByRole("tab", { name: "需人工确认（1）" })).toBeVisible();
     expect(
@@ -1757,13 +1759,13 @@ describe("关键用户流程", () => {
       "active",
     );
     expect(
-      screen.getByRole("heading", { name: "商品信息汇总", level: 2 }),
+      screen.getByRole("heading", { name: "产品信息管理", level: 2 }),
     ).toBeVisible();
     await user.click(await screen.findByRole("button", { name: /返回任务并重新预检/ }));
     expect(onReturnToTask).toHaveBeenCalledWith("products-v2");
   });
 
-  test("商品信息搜索支持回车提交并可从无结果清除筛选", async () => {
+  test("产品信息搜索支持回车提交并可从无结果清除筛选", async () => {
     const user = userEvent.setup();
     const productDataset = {
       id: "products-dataset",
@@ -2877,7 +2879,7 @@ describe("关键用户流程", () => {
       updated_at: "2026-08-16T01:20:00Z",
       dataset_name: "退货数据",
       dataset_version: 6,
-      product_name: "商品信息汇总",
+      product_name: "产品信息管理",
       product_version: 3,
       connection_name: "生产线路",
       config_version: 2,

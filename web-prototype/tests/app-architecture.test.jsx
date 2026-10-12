@@ -27,7 +27,7 @@ describe("应用壳层与路由", () => {
   test("一级导航只保留六个稳定业务入口并单列系统设置", () => {
     expect(PRIMARY_NAV_ITEMS.map((item) => item.label)).toEqual([
       "首页",
-      "数据资产",
+      "产品信息管理",
       "分类标准",
       "分析任务",
       "分类结果",

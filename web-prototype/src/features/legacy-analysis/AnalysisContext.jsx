@@ -93,7 +93,7 @@ function AnalysisContextBar({
 function AnalysisQualityWarning({ analysis, onNavigate, onQuality }) {
   const primaryQualityReason = analysis?.quality_gate?.review_reasons?.[0]?.name;
   const qualityAction = primaryQualityReason?.includes("品类")
-    ? { page: "data", label: "补充商品信息" }
+    ? { page: "data", label: "补充产品信息" }
     : { page: "api", label: "检查模型配置" };
   return (
     <div className="plan-state warning result-quality-warning" role="alert">

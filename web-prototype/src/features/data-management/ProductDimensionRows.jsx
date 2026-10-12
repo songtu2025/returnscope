@@ -178,7 +178,7 @@ function ProductDimensionSearch({ draftQuery, setDraftQuery, setPage, setQuery }
         prefix={<MagnifyingGlass size={15} />}
         value={draftQuery}
         onChange={(event) => setDraftQuery(event.target.value)}
-        placeholder="搜索 MSKU、商品名称或 Listing"
+        placeholder="搜索 MSKU、产品名称或 Listing"
       />
       <Button htmlType="submit" autoInsertSpace={false}>
         搜索

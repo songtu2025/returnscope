@@ -52,11 +52,11 @@ export function ProductMatchWorkbench({ plan, saving, onBack, onSave }) {
           确认执行计划
         </button>
         <CaretRight size={13} />
-        <span>处理商品匹配异常</span>
+        <span>处理产品匹配异常</span>
       </nav>
       <header className="product-match-heading">
         <div>
-          <h1>处理商品匹配异常</h1>
+          <h1>处理产品匹配异常</h1>
           <p>
             系统已用结构化 SKU 规则匹配现有商品。确认关联后，销售 SKU 将继承商品的
             Listing 与品类信息。
@@ -89,7 +89,7 @@ export function ProductMatchWorkbench({ plan, saving, onBack, onSave }) {
           <li className="active">
             <span>2</span>
             <div>
-              <b>商品匹配</b>
+              <b>产品匹配</b>
               <small>处理中</small>
             </div>
           </li>

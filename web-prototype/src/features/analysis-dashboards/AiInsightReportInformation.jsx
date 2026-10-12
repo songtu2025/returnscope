@@ -98,7 +98,7 @@ function InformationSamples({ informationSamples }) {
         <blockquote className="ai-report-featured-quote">
           <Quotes size={22} weight="fill" />
           <p>“{informationSamples[0].comment || informationSamples[0].reason}”</p>
-          <cite>{informationSamples[0].product_name || "未提供商品名称"}</cite>
+          <cite>{informationSamples[0].product_name || "未提供产品名称"}</cite>
         </blockquote>
       )}
       {informationSamples.length > 1 && (
@@ -110,7 +110,7 @@ function InformationSamples({ informationSamples }) {
             {informationSamples.slice(1, 3).map((sample, index) => (
               <blockquote key={`${sample.comment || sample.reason}-${index}`}>
                 “{sample.comment || sample.reason}”
-                <cite>{sample.product_name || "未提供商品名称"}</cite>
+                <cite>{sample.product_name || "未提供产品名称"}</cite>
               </blockquote>
             ))}
           </div>

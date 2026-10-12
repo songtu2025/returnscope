@@ -55,14 +55,14 @@ export function useProductMasterState({ notify, focus, routeDetailTab = "" }) {
   useEffect(() => {
     if (!datasetsError) return;
     notify(
-      datasetsError instanceof Error ? datasetsError.message : "商品数据读取失败",
+      datasetsError instanceof Error ? datasetsError.message : "产品信息读取失败",
       "error",
     );
   }, [datasetsError, notify]);
   useEffect(() => {
     if (!detailError) return;
     notify(
-      detailError instanceof Error ? detailError.message : "商品详情读取失败",
+      detailError instanceof Error ? detailError.message : "产品详情读取失败",
       "error",
     );
   }, [detailError, notify]);

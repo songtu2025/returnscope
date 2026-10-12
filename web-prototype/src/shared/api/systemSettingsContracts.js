@@ -93,7 +93,7 @@
  *
  * @typedef {{connection_id: string, cheap_model: string, cheap_effort: string, primary_model: string, primary_effort: string, secondary_model: string, secondary_effort: string, cheap_audit_percent: number}} ModelPreference
  *
- * @typedef {{route?: string, task_id?: string, segment_id?: string, result_version_id?: string, dashboard_id?: string, version_id?: string, report_id?: string, user_id?: string}} AuditTarget
+ * @typedef {{route?: string, task_id?: string, segment_id?: string, result_version_id?: string, dashboard_id?: string, version_id?: string, report_id?: string, user_id?: string, view?: string, dataset_id?: string}} AuditTarget
  * @typedef {{id: string, actor_name?: string, action?: string, entity_type?: string, entity_id?: string, created_at?: string, target?: AuditTarget, before?: unknown, after?: unknown}} AuditLogEntry
  * @typedef {{items: AuditLogEntry[], total: number}} AuditLogPage
  *

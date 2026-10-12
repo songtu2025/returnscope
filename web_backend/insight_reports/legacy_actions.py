@@ -91,9 +91,9 @@ def _quality_actions(
                 "target": f"Listing {product_mapping.get('listing')} 的商品主数据映射",
                 "finding_id": "finding.structure",
                 "evidence_ids": ["product_mapping", "scope"],
-                "fallback_action": "核对源 SKU、商品 SKU 与商品名称的对应关系后再下发商品级整改。",
+                "fallback_action": "核对源 SKU、商品 SKU 与产品名称的对应关系后再下发商品级整改。",
                 "fallback_rationale": "存在未匹配或缺少名称的商品记录，当前不能确认商品级热点对应的真实对象。",
-                "fallback_success_signal": "源 SKU、商品 SKU 与商品名称形成唯一且可追溯的映射。",
+                "fallback_success_signal": "源 SKU、商品 SKU 与产品名称形成唯一且可追溯的映射。",
             }
         )
     return actions

@@ -20,7 +20,7 @@ export function ProductTaskRepair({
       {focus?.returnToTask && taskDraft && (
         <section className="task-return-banner" role="status">
           <div>
-            <b>正在补充任务所需的商品信息</b>
+            <b>正在补充任务所需的产品信息</b>
             <p>{productRepairMessage(focus)}</p>
           </div>
           <button

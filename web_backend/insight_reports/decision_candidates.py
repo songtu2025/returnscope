@@ -72,7 +72,7 @@ def _build_issue_candidate(
             ),
             "suggested_evidence": [
                 f"复核命中的{original_feedback}",
-                "核对相同范围的商品信息与实物表现",
+                "核对相同范围的产品信息与实物表现",
                 "补充订单量或销量分母",
             ],
         },
@@ -133,7 +133,7 @@ def _coverage_issue(
         "known": ["当前已分析范围内没有形成可定位到具体问题的稳定信号。"],
         "fallback_evidence_explanation": "现有数据只能说明覆盖范围，不能支持具体问题判断。",
         "fallback_unknown": list(profile.further_questions)[:5]
-        or ["是否需要补充更完整的分类与商品信息？"],
+        or ["是否需要补充更完整的分类与产品信息？"],
         "fallback_recommendation": {
             "label": "建议验证",
             "validation_question": "是否需要先补充分类与商品证据？",

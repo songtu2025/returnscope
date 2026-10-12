@@ -172,7 +172,7 @@ test("品类补齐提示显示商品与评论口径，保留补齐回调并隐�
   expect(
     screen.queryByRole("button", { name: "处理排除原因" }),
   ).not.toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "补齐商品品类" }));
+  await user.click(screen.getByRole("button", { name: "补齐产品品类" }));
   expect(onResolveCategories).toHaveBeenCalledOnce();
 });
 
@@ -221,7 +221,7 @@ test("阻断范围、商品修复和处理策略保留各自的动作", async ()
   expect(screen.getByRole("radio", { name: /全部阻断/ })).toBeChecked();
   await user.click(screen.getByRole("radio", { name: /先运行已就绪/ }));
   expect(onPolicyChange).toHaveBeenCalledExactlyOnceWith("run_ready");
-  await user.click(screen.getByRole("button", { name: "处理 2 个商品匹配异常" }));
+  await user.click(screen.getByRole("button", { name: "处理 2 个产品匹配异常" }));
   expect(onResolveCategories).toHaveBeenCalledOnce();
 });
 

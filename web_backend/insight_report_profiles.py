@@ -37,7 +37,7 @@ GENERIC_PROFILE = InsightReportProfile(
     diagnostic_empty="高频商品问题需要按商品变体和时间继续拆解。",
     variant_label="商品变体",
     diagnostic_action="核对高频问题对应的商品变体、实物表现和页面说明。",
-    diagnostic_rationale="评论只能确认顾客感知的问题，需要结合商品信息验证具体原因。",
+    diagnostic_rationale="评论只能确认顾客感知的问题，需要结合产品信息验证具体原因。",
     diagnostic_success_signal="目标问题在相同评论口径下持续下降，且相关反向问题不升高。",
     further_questions=(
         "问题是否集中在特定商品变体或时间段？",

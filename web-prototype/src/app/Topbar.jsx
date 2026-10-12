@@ -19,12 +19,6 @@ export function Topbar({ user, system, onRefresh, onNavigate, onSearch, onLogout
         <kbd>Ctrl K</kbd>
       </button>
       <div className="topbar-actions">
-        <span
-          className="system-timezone"
-          title="系统时间统一按 Asia/Shanghai 显示，业务源日期保持原值"
-        >
-          北京时间
-        </span>
         <button
           className="capacity-chip"
           onClick={async () => {

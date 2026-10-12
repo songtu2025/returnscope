@@ -261,11 +261,6 @@
   margin: 0 auto;
 }
 
-.system-timezone {
-  color: var(--muted);
-  font-size: var(--font-assist);
-  white-space: nowrap;
-}
 .nav-item:focus-visible {
   outline-color: #fff;
 }

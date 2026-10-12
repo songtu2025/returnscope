@@ -7,6 +7,7 @@ const { logs } = vi.hoisted(() => ({ logs: vi.fn() }));
 vi.mock("../src/shared/api/auditApi", () => ({ auditApi: { logs } }));
 
 import { AuditLogPage } from "../src/features/system-settings/AuditLogPage";
+import { AuditLogEntries } from "../src/features/system-settings/AuditLogEntries";
 
 beforeEach(() => {
   logs.mockReset();
@@ -14,6 +15,48 @@ beforeEach(() => {
 });
 
 afterEach(() => cleanup());
+
+test.each([
+  [{ target: { view: "products" }, after: { kind: "returns" } }, "产品信息"],
+  [{ after: { kind: "products" } }, "产品信息"],
+  [{ after: { kind: "returns" } }, "用户反馈数据"],
+  [{ after: { version: 1 }, before: { kind: "returns" } }, "用户反馈数据"],
+  [{ before: null, after: null }, "数据集"],
+  [{ after: { kind: "unknown" } }, "数据集"],
+  [{ before: "历史描述", after: 1 }, "数据集"],
+])("审计按已有对象信息显示名称，未知类型不误标：%s", (context, label) => {
+  render(
+    <AuditLogEntries
+      items={[{ id: "audit-dataset", entity_type: "dataset", ...context }]}
+    />,
+  );
+  expect(screen.getByText(label)).toBeVisible();
+  expect(screen.getByText("dataset", { selector: "code" })).toBeVisible();
+  expect(screen.queryByText("数据资产")).not.toBeInTheDocument();
+});
+
+test("产品信息审计支持键盘打开原有对象链接，其他对象名称不受影响", async () => {
+  const user = userEvent.setup();
+  render(
+    <AuditLogEntries
+      items={[
+        {
+          id: "audit-product",
+          entity_type: "dataset",
+          entity_id: "products-1",
+          target: { route: "data", view: "products", dataset_id: "products-1" },
+        },
+        { id: "audit-task", entity_type: "task", after: { kind: "products" } },
+      ]}
+    />,
+  );
+  expect(screen.getByText("产品信息")).toBeVisible();
+  expect(screen.getByText("分析任务")).toBeVisible();
+  await user.tab();
+  expect(screen.getByRole("button", { name: "查看对象" })).toHaveFocus();
+  await user.keyboard("{Enter}");
+  expect(window.location.hash).toBe("#data-assets?dataset=products-1&view=products");
+});
 
 test("审计记录按字段对齐展示差异、掩码敏感值并精确跳转", async () => {
   logs.mockResolvedValue({

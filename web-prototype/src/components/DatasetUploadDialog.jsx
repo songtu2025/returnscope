@@ -86,7 +86,7 @@ export function DatasetUploadDialog({ dialog, onClose, onDone, onConflict }) {
 
   return (
     <Modal
-      eyebrow="商品信息"
+      eyebrow="产品信息"
       title={dialog.mode === "create" ? "导入产品信息" : `更新 ${dialog.dataset.name}`}
       onClose={onClose}
     >
@@ -129,7 +129,7 @@ export function DatasetUploadDialog({ dialog, onClose, onDone, onConflict }) {
             value={note}
             onChange={(event) => setNote(event.target.value)}
             maxLength={500}
-            placeholder="必填：例如补充商品名称和品类"
+            placeholder="必填：例如补充产品名称和品类"
             required
           />
         </label>
