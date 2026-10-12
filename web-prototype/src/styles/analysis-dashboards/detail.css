@@ -19,9 +19,6 @@
   color: var(--muted);
   font-size: 12px;
 }
-.dashboard-version-controls label {
-  min-width: 150px;
-}
 .dashboard-summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

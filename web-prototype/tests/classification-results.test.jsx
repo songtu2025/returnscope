@@ -706,6 +706,12 @@ test("两个创建入口共用跨页选择，取消后保留看板草稿", async
   await user.click(await within(dialog).findByRole("button", { name: "中" }));
   await user.click(within(dialog).getByRole("button", { name: "取消" }));
   expect(await screen.findByText("已选 2 个结果版本")).toBeVisible();
+  const insightReturnedQuery = new URLSearchParams(window.location.hash.split("?")[1]);
+  expect(insightReturnedQuery.get("q")).toBe("合成筛选");
+  expect(insightReturnedQuery.get("store_site")).toBe("SEEKWAY:US");
+  expect(insightReturnedQuery.get("quality_status")).toBe("review_required");
+  expect(insightReturnedQuery.get("page")).toBe("2");
+  expect(insightReturnedQuery.get("selection_token")).toBe(token);
   await user.click(screen.getByRole("button", { name: "生成 AI 洞察" }));
   const restored = await screen.findByRole("dialog", { name: "生成 AI 洞察报告" });
   expect(await within(restored).findByRole("button", { name: "中" })).toHaveAttribute(

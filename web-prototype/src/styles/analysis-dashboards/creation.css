@@ -141,8 +141,7 @@
   grid-column: 1 / -1;
   margin: 0;
 }
-.dashboard-confirm-form label,
-.dashboard-version-controls label {
+.dashboard-confirm-form label {
   display: grid;
   gap: 6px;
   color: var(--muted);

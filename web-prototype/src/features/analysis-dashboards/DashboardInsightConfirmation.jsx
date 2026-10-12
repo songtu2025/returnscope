@@ -14,6 +14,7 @@ export function DashboardInsightConfirmation(context) {
     currentSources,
     summary,
     route,
+    selection,
     blockers,
     qualityStatuses,
     setQualityStatuses,
@@ -25,6 +26,7 @@ export function DashboardInsightConfirmation(context) {
       onClose={() => {
         if (!insightState.submitting)
           navigateHash("classification-results", {
+            ...selection?.result_pool_query,
             selection_token: route.selectionToken,
           });
       }}
