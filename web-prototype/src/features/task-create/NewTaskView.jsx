@@ -99,7 +99,7 @@ export function NewTaskView({
       <PageHeading titleRef={headingRef} title="创建分析任务" />
       {loadingSetup && (
         <section className="new-task-loading">
-          <InlineLoading label="正在读取数据与模型配置…" />
+          <InlineLoading scope="page" label="正在读取数据与模型配置…" />
         </section>
       )}
       {!loadingSetup && setupError && (

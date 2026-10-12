@@ -33,6 +33,7 @@ export function WorkbenchPage({ onNavigate }) {
         action={
           <>
             <InlineLoading
+              scope={hasData ? "local" : "page"}
               label="读取首页…"
               compact
               active={isLoading || isValidating}

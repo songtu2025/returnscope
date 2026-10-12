@@ -80,7 +80,9 @@ export function DatasetReferences({
         }
       />
       <div ref={regionRef} className="loading-region">
-        {state.loading && !data && <InlineLoading label="正在读取任务引用…" />}
+        {state.loading && !data && (
+          <InlineLoading scope="page" label="正在读取任务引用…" />
+        )}
         {state.error && (
           <div className="plan-state error dataset-reference-error" role="alert">
             <div>

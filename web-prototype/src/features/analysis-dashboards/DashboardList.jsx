@@ -151,7 +151,9 @@ function DashboardListResults(context) {
       className="dashboard-list-card loading-region"
       aria-busy={context.isValidating}
     >
-      {isLoading && !dashboardData && <InlineLoading label="正在读取分析看板…" />}
+      {isLoading && !dashboardData && (
+        <InlineLoading scope="page" label="正在读取分析看板…" />
+      )}
       {message && (
         <div className="dashboard-error" role="alert">
           <b>

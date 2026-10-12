@@ -156,7 +156,9 @@ export function ResultVersionHistory({
           />
         }
       />
-      {loading && !history.length && <InlineLoading label="正在读取修改历史…" />}
+      {loading && !history.length && (
+        <InlineLoading scope="page" label="正在读取修改历史…" />
+      )}
       {error && (
         <div className="review-batch-error" role="alert">
           <WarningCircle size={22} />

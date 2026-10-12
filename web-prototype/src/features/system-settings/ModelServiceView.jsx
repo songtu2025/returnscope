@@ -116,7 +116,7 @@ export function ModelServiceView({
           }
         />
         {loadState === "loading" ? (
-          <InlineLoading label="正在读取模型服务…" />
+          <InlineLoading scope="page" label="正在读取模型服务…" />
         ) : loadState === "error" ? (
           <section role="alert">
             <EmptyState

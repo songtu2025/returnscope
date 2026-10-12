@@ -131,7 +131,9 @@ export function TeamPage({
   return (
     <div className="standard-page team-page">
       <PageHeading eyebrow="账号管理" title="用户与安全" />
-      {loadState === "loading" && <InlineLoading label="正在读取用户与安全设置…" />}
+      {loadState === "loading" && (
+        <InlineLoading scope="page" label="正在读取用户与安全设置…" />
+      )}
       {loadState === "error" && (
         <section role="alert">
           <EmptyState

@@ -114,7 +114,7 @@ export function DashboardDetailContent({
         />
       )}
       {route.tab === "report" && reports.loading && !reports.items.length && (
-        <InlineLoading label="正在读取 AI 洞察报告…" />
+        <InlineLoading scope="page" label="正在读取 AI 洞察报告…" />
       )}
       {route.tab === "report" && reports.error && (
         <section

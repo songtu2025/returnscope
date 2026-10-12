@@ -22,7 +22,9 @@ export function AuditLogResults({ state, load, dateRangeError, page, route }) {
         </div>
       ) : (
         <>
-          {state.loading && !state.data && <InlineLoading label="正在读取审计记录…" />}
+          {state.loading && !state.data && (
+            <InlineLoading scope="page" label="正在读取审计记录…" />
+          )}
           {state.error && (
             <div className="plan-state error audit-error" role="alert">
               <div>

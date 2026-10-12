@@ -66,7 +66,7 @@ export function LegacyReviewList({
         {loading &&
           !rows.length &&
           (showLoading ? (
-            <InlineLoading label="正在读取复核记录…" />
+            <InlineLoading scope="page" label="正在读取复核记录…" />
           ) : (
             <p className="muted-line">正在读取复核列表…</p>
           ))}

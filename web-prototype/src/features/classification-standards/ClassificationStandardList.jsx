@@ -113,7 +113,9 @@ export function ClassificationStandardList({
             }
           </div>
         </div>
-        {loading && !hasData && <InlineLoading label="正在读取分类标准…" />}
+        {loading && !hasData && (
+          <InlineLoading scope="page" label="正在读取分类标准…" />
+        )}
         {error && (
           <div role="alert">
             <EmptyState

@@ -208,7 +208,9 @@ function BatchContents({ state, route, onRetry, updateRoute, onEmptyAction }) {
   const items = state.data?.items ?? [];
   return (
     <section className="review-batch-list-card">
-      {state.loading && !state.data && <InlineLoading label="正在读取复核批次…" />}
+      {state.loading && !state.data && (
+        <InlineLoading scope="page" label="正在读取复核批次…" />
+      )}
       {state.error && (
         <ReviewBatchError
           error={state.error}

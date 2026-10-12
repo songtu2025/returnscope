@@ -15,7 +15,7 @@ export function ResultPoolStatus({
   return (
     <>
       {" "}
-      {loading && !data && <InlineLoading label="正在读取分类结果…" />}
+      {loading && !data && <InlineLoading scope="page" label="正在读取分类结果…" />}
       {error && <ResultError message={error} onRetry={load} hasData={Boolean(data)} />}
       {!loading && !error && data?.items?.length === 0 && (
         <ResultPoolEmpty activeFilters={activeFilters} updateRoute={updateRoute} />

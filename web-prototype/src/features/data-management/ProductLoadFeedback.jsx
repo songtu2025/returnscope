@@ -10,7 +10,8 @@ export function ProductLoadFeedback({
   label = "读取产品信息…",
   onRetry,
 }) {
-  if (!error) return loading && !hasData ? <InlineLoading label={label} /> : null;
+  if (!error)
+    return loading && !hasData ? <InlineLoading scope="page" label={label} /> : null;
   return (
     <div className="plan-state error" role="alert">
       <div>

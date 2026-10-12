@@ -70,7 +70,7 @@ export function DashboardCreateFlow(props) {
       />
 
       {state.loading && !state.plan && (
-        <InlineLoading label="正在检查分类结果与 Listing 冲突…" />
+        <InlineLoading scope="page" label="正在检查分类结果与 Listing 冲突…" />
       )}
       {state.error && (
         <section className="dashboard-error" role="alert">

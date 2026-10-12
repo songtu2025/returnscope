@@ -1,8 +1,9 @@
-import { X } from "@phosphor-icons/react";
+import { SpinnerGap, X } from "@phosphor-icons/react";
 import Empty from "antd/es/empty";
 import Spin from "antd/es/spin";
 import { STATUS_LABELS } from "../constants";
 import { useDialogFocus } from "../hooks/useDialogFocus";
+import { usePageLoading } from "../hooks/usePageLoading";
 import { classNames } from "../lib/presentation";
 import { AntdProvider } from "./AntdProvider";
 
@@ -166,15 +167,24 @@ export function EmptyState({ icon: Icon, title, description, action }) {
   );
 }
 
-/** @param {{label: import("react").ReactNode, active?: boolean, compact?: boolean}} props */
-export function InlineLoading({ label, active = true, compact = false }) {
+/** @param {{label: import("react").ReactNode, active?: boolean, compact?: boolean, scope?: "local" | "page", delay?: number}} props */
+export function InlineLoading({
+  label,
+  active = true,
+  compact = false,
+  scope = "local",
+  delay = 200,
+}) {
+  const scoped = usePageLoading(active, scope === "page");
+  if (scoped) return null;
   return (
     <AntdProvider>
       <Spin
         className={classNames("inline-loading", compact && "is-compact")}
         size="small"
         spinning={active}
-        delay={200}
+        delay={delay}
+        indicator={<SpinnerGap size={18} className="spin loading-indicator" />}
         description={label}
       />
     </AntdProvider>
@@ -186,7 +196,7 @@ export function PageLoadingState({ label, title }) {
   return (
     <section className="page-loading-state" aria-busy="true">
       {title && <PageHeading title={title} />}
-      <InlineLoading label={label} />
+      <InlineLoading label={label} scope="page" />
     </section>
   );
 }

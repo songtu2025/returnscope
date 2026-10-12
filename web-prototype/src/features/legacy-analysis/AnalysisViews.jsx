@@ -135,7 +135,9 @@ export function AnalysisViews(props) {
       />
       <div ref={regionRef} className="analysis-tab-panel" aria-busy={loading}>
         {activeViewReady && <AnalysisSection {...props} />}
-        {loading && !activeViewReady && <InlineLoading label="正在读取分析结果…" />}
+        {loading && !activeViewReady && (
+          <InlineLoading scope="page" label="正在读取分析结果…" />
+        )}
       </div>
     </>
   );

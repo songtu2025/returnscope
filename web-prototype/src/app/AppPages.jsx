@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { PageLoadingState } from "../components/SharedUi";
 import { PageErrorBoundary } from "./PageErrorBoundary";
+import { PageLoadingScope } from "./PageLoadingScope";
 import { PRIMARY_NAV_ITEMS, SETTINGS_NAV_ITEM } from "./navigation";
 import { LegacyResultsPage, LegacyReviewPage } from "./LegacyPages";
 import {
@@ -28,72 +29,66 @@ export function AppPages({ route, user, notify, navigate, refreshSystem }) {
       : [...PRIMARY_NAV_ITEMS, SETTINGS_NAV_ITEM].find((item) => item.id === page)
           ?.label;
   return (
-    <PageErrorBoundary key={page}>
-      <Suspense
-        fallback={
-          <div className="standard-page">
-            <PageLoadingState title={title} label="正在读取页面…" />
-          </div>
-        }
-      >
-        {page === "workbench" && <WorkbenchPage onNavigate={navigate} />}
-        {page === "task-create" && (
-          <TaskCreatePage
-            route={route}
-            onNavigate={navigate}
-            notify={notify}
-            onChanged={refreshSystem}
-            userId={user.id}
-          />
-        )}
-        {page === "analysis-tasks" && (
-          <TaskRuntimePage
-            route={route}
-            notify={notify}
-            onNavigate={navigate}
-            onChanged={refreshSystem}
-          />
-        )}
-        {page === "review" && (
-          <LegacyReviewPage
-            route={route}
-            notify={notify}
-            navigate={navigate}
-            refreshSystem={refreshSystem}
-          />
-        )}
-        {page === "data-assets" && (
-          <DataAssetsPage
-            route={route}
-            notify={notify}
-            onNavigate={navigate}
-            userId={user.id}
-          />
-        )}
-        {page === "classification-standards" && (
-          <ClassificationStandardsPage route={route} notify={notify} />
-        )}
-        {page === "legacy-results" && (
-          <LegacyResultsPage route={route} notify={notify} navigate={navigate} />
-        )}
-        {page === "classification-results" && (
-          <Suspense
-            fallback={
-              <div className="standard-page classification-results-page">
-                <PageLoadingState title="分类结果" label="正在读取分类结果…" />
-              </div>
-            }
-          >
+    <PageLoadingScope key={page}>
+      <PageErrorBoundary>
+        <Suspense
+          fallback={
+            <div className="standard-page">
+              <PageLoadingState title={title} label="正在读取页面…" />
+            </div>
+          }
+        >
+          {page === "workbench" && <WorkbenchPage onNavigate={navigate} />}
+          {page === "task-create" && (
+            <TaskCreatePage
+              route={route}
+              onNavigate={navigate}
+              notify={notify}
+              onChanged={refreshSystem}
+              userId={user.id}
+            />
+          )}
+          {page === "analysis-tasks" && (
+            <TaskRuntimePage
+              route={route}
+              notify={notify}
+              onNavigate={navigate}
+              onChanged={refreshSystem}
+            />
+          )}
+          {page === "review" && (
+            <LegacyReviewPage
+              route={route}
+              notify={notify}
+              navigate={navigate}
+              refreshSystem={refreshSystem}
+            />
+          )}
+          {page === "data-assets" && (
+            <DataAssetsPage
+              route={route}
+              notify={notify}
+              onNavigate={navigate}
+              userId={user.id}
+            />
+          )}
+          {page === "classification-standards" && (
+            <ClassificationStandardsPage route={route} notify={notify} />
+          )}
+          {page === "legacy-results" && (
+            <LegacyResultsPage route={route} notify={notify} navigate={navigate} />
+          )}
+          {page === "classification-results" && (
             <ClassificationResultsPage notify={notify} route={route} userId={user.id} />
-          </Suspense>
-        )}
-        {page === "analysis-dashboards" && (
-          <AnalysisDashboardPage route={route} notify={notify} userId={user.id} />
-        )}
-        {page === "settings" && (
-          <SystemSettingsPage route={route} notify={notify} currentUser={user} />
-        )}
-      </Suspense>
-    </PageErrorBoundary>
+          )}
+          {page === "analysis-dashboards" && (
+            <AnalysisDashboardPage route={route} notify={notify} userId={user.id} />
+          )}
+          {page === "settings" && (
+            <SystemSettingsPage route={route} notify={notify} currentUser={user} />
+          )}
+        </Suspense>
+      </PageErrorBoundary>
+    </PageLoadingScope>
   );
 }

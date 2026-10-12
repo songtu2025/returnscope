@@ -65,7 +65,7 @@ export function ImportRulesPage() {
           </div>
         </header>
         {state.loading ? (
-          <InlineLoading label="正在读取导入规则…" />
+          <InlineLoading scope="page" label="正在读取导入规则…" />
         ) : state.error ? (
           <div className="plan-state error import-rules-error" role="alert">
             <div>

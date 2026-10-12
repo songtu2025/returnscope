@@ -228,7 +228,9 @@ export function ResultsPage({ notify, onNavigate, focus = null }) {
             </>
           )}
 
-          {!analysis && loading && <InlineLoading label="正在准备分析工作台…" />}
+          {!analysis && loading && (
+            <InlineLoading scope="page" label="正在准备分析工作台…" />
+          )}
         </>
       )}
     </div>

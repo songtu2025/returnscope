@@ -67,7 +67,9 @@ function ReviewRecordStatus({ recordsState, records, recordItems, loadRecords })
   return (
     <>
       {" "}
-      {recordsState.loading && !records && <InlineLoading label="正在读取复核记录…" />}
+      {recordsState.loading && !records && (
+        <InlineLoading scope="page" label="正在读取复核记录…" />
+      )}
       {recordsState.error && (
         <ReviewBatchError error={recordsState.error} onRetry={loadRecords} />
       )}

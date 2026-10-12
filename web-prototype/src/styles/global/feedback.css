@@ -31,8 +31,8 @@
   line-height: 1.5;
 }
 .inline-loading.ant-spin {
-  display: flex;
-  flex-direction: row;
+  display: grid;
+  grid-template-columns: 18px 200px;
   align-items: center;
   justify-content: center;
   gap: 7px;
@@ -55,6 +55,31 @@
   min-height: var(--desktop-control-height);
   white-space: nowrap;
   font-size: 12px;
+  grid-template-columns: 18px minmax(0, 1fr);
+}
+.inline-loading .loading-indicator {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+.page-loading-scope {
+  min-width: 0;
+}
+/* 提示位常驻在内容区顶部，不跟随各阶段的内容高度改变坐标。 */
+.page-loading-slot {
+  position: sticky;
+  top: 68px;
+  z-index: 12;
+  height: 28px;
+  pointer-events: none;
+}
+.page-loading-slot .inline-loading {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 225px;
+  min-height: 28px;
+  transform: translateX(-50%);
 }
 .spin {
   animation: loading-rotate 1s linear infinite;

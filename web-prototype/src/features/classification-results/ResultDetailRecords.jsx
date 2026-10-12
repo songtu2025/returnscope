@@ -30,7 +30,9 @@ export function ResultDetailRecords(context) {
       <ResultRecordHeading {...context} />
       <div ref={regionRef} className="loading-region" aria-busy={recordsLoading}>
         {recordsError && <ResultError message={recordsError} onRetry={retryRecords} />}
-        {recordsLoading && !records && <InlineLoading label="正在读取订单记录…" />}
+        {recordsLoading && !records && (
+          <InlineLoading scope="page" label="正在读取订单记录…" />
+        )}
         {!recordsError && !recordsLoading && records?.items?.length === 0 && (
           <ResultRecordEmpty isUserFeedback={isUserFeedback} />
         )}

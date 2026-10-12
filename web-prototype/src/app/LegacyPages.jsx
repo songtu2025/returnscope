@@ -39,7 +39,7 @@ export function LegacyReviewPage({ route, notify, navigate, refreshSystem }) {
 /** @param {{route: AppRoute, notify: Notify, navigate: Navigate}} props */
 export function LegacyResultsPage({ route, notify, navigate }) {
   return (
-    <Suspense fallback={<InlineLoading label="正在加载旧版任务分析…" />}>
+    <Suspense fallback={<InlineLoading scope="page" label="正在加载旧版任务分析…" />}>
       <div className="legacy-results-notice" role="status">
         <div>
           <b>旧版任务分析</b>

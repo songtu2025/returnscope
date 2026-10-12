@@ -24,7 +24,12 @@ export function MysqlReturnImportForm(props) {
       className="mysql-return-import"
       aria-label="从数据库取数"
     >
-      {loading && <InlineLoading label="正在连接数据库并读取字段…" />}
+      {loading && (
+        <InlineLoading
+          scope={schema ? "local" : "page"}
+          label="正在连接数据库并读取字段…"
+        />
+      )}
       {displayError && (
         <div className="form-error" role="alert">
           {displayError}

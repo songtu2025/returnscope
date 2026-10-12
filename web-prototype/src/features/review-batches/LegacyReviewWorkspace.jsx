@@ -206,7 +206,7 @@ export function LegacyReviewWorkspace({
 }) {
   return (
     <section className="review-workspace" aria-busy={loading}>
-      {loading && !selected && <InlineLoading label="正在读取复核详情…" />}
+      {loading && !selected && <InlineLoading scope="page" label="正在读取复核详情…" />}
       {error && (
         <EmptyState
           icon={WarningCircle}
