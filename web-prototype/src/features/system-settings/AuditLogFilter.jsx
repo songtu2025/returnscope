@@ -1,16 +1,18 @@
+import { useState } from "react";
+import { ACTION_LABELS, ENTITY_LABELS } from "./auditLogPresentation";
 import { writeAuditRoute } from "./auditLogPolicy";
 
 /** @typedef {{draft: import("./auditLogPolicy").AuditFilters, setDraft: import("react").Dispatch<import("react").SetStateAction<import("./auditLogPolicy").AuditFilters>>, dateToRef: import("react").RefObject<HTMLInputElement | null>, dateRangeError: string}} FilterState */
-/** @type {Array<{field: "actor_id" | "entity_type" | "entity_id" | "action", label: string, placeholder?: string}>} */
-const TEXT_FILTERS = [
-  { field: "actor_id", label: "操作人 ID" },
-  { field: "entity_type", label: "对象类型", placeholder: "如 task" },
-  { field: "entity_id", label: "对象 ID" },
-  { field: "action", label: "动作" },
-];
-
 /** @param {FilterState & {route: import("./auditLogPolicy").AuditRoute}} props */
 export function AuditLogFilter({ draft, setDraft, dateToRef, dateRangeError, route }) {
+  const [advanced, setAdvanced] = useState(
+    Boolean(
+      draft.actor_id ||
+      draft.entity_id ||
+      (draft.action && !ACTION_LABELS[draft.action]) ||
+      (draft.entity_type && !ENTITY_LABELS[draft.entity_type]),
+    ),
+  );
   return (
     <form
       className="audit-filter-form"
@@ -23,23 +25,92 @@ export function AuditLogFilter({ draft, setDraft, dateToRef, dateRangeError, rou
         writeAuditRoute(route, { ...draft, page: "" });
       }}
     >
-      {TEXT_FILTERS.map(({ field, label, placeholder }) => (
-        <label key={field}>
-          {label}
-          <input
-            value={draft[field]}
-            placeholder={placeholder}
-            onChange={(event) => setDraft({ ...draft, [field]: event.target.value })}
-          />
-        </label>
-      ))}
+      <AuditSelect
+        label="对象类型"
+        field="entity_type"
+        labels={ENTITY_LABELS}
+        draft={draft}
+        setDraft={setDraft}
+      />
+      <AuditSelect
+        label="操作"
+        field="action"
+        labels={ACTION_LABELS}
+        draft={draft}
+        setDraft={setDraft}
+      />
       <AuditDateFilters
         draft={draft}
         setDraft={setDraft}
         dateToRef={dateToRef}
         dateRangeError={dateRangeError}
       />
-      <button className="primary-button">筛选</button>
+      <div className="audit-filter-actions">
+        <button className="primary-button">筛选</button>
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={() => {
+            const empty = {
+              actor_id: "",
+              entity_type: "",
+              entity_id: "",
+              action: "",
+              date_from: "",
+              date_to: "",
+            };
+            setDraft(empty);
+            writeAuditRoute(route, { ...empty, page: "" });
+          }}
+        >
+          重置
+        </button>
+        <button
+          type="button"
+          className="text-button"
+          aria-expanded={advanced}
+          aria-controls="audit-advanced-filters"
+          onClick={() => setAdvanced(!advanced)}
+        >
+          高级筛选
+        </button>
+      </div>
+      {advanced && (
+        <div id="audit-advanced-filters" className="audit-advanced-filters">
+          <label>
+            对象类型代码
+            <input
+              value={draft.entity_type}
+              onChange={(event) =>
+                setDraft({ ...draft, entity_type: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            操作代码
+            <input
+              value={draft.action}
+              onChange={(event) => setDraft({ ...draft, action: event.target.value })}
+            />
+          </label>
+          <label>
+            操作人 ID
+            <input
+              value={draft.actor_id}
+              onChange={(event) => setDraft({ ...draft, actor_id: event.target.value })}
+            />
+          </label>
+          <label>
+            对象 ID
+            <input
+              value={draft.entity_id}
+              onChange={(event) =>
+                setDraft({ ...draft, entity_id: event.target.value })
+              }
+            />
+          </label>
+        </div>
+      )}
     </form>
   );
 }
@@ -74,5 +145,31 @@ function AuditDateFilters({ draft, setDraft, dateToRef, dateRangeError }) {
         )}
       </label>
     </>
+  );
+}
+
+/** @param {{label: string, field: "entity_type" | "action", labels: Record<string, string>, draft: FilterState["draft"], setDraft: FilterState["setDraft"]}} props */
+function AuditSelect({ label, field, labels, draft, setDraft }) {
+  return (
+    <label>
+      {label}
+      <select
+        value={draft[field]}
+        onChange={(event) => setDraft({ ...draft, [field]: event.target.value })}
+      >
+        <option value="">全部{label}</option>
+        {draft[field] && !labels[draft[field]] && (
+          <option value={draft[field]}>{draft[field]}</option>
+        )}
+        {Object.entries(labels).map(([value, text]) => (
+          <option key={value} value={value}>
+            {text}
+            {Object.values(labels).filter((label) => label === text).length > 1
+              ? `（${value}）`
+              : ""}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

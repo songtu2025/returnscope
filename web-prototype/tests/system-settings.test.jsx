@@ -8,7 +8,6 @@ const { logs } = vi.hoisted(() => ({ logs: vi.fn() }));
 vi.mock("../src/shared/api/auditApi", () => ({ auditApi: { logs } }));
 
 import { AuditLogPage } from "../src/features/system-settings/AuditLogPage";
-import { AuditLogEntries } from "../src/features/system-settings/AuditLogEntries";
 import { AuditLogResults } from "../src/features/system-settings/AuditLogResults";
 import { useAuditLogs } from "../src/features/system-settings/useAuditLogs";
 
@@ -90,48 +89,6 @@ test("审计同条件刷新保留数据，失败可重试；翻页不混用旧�
   expect(await screen.findByText("合成新记录")).toBeVisible();
 });
 
-test.each([
-  [{ target: { view: "products" }, after: { kind: "returns" } }, "产品信息"],
-  [{ after: { kind: "products" } }, "产品信息"],
-  [{ after: { kind: "returns" } }, "用户反馈数据"],
-  [{ after: { version: 1 }, before: { kind: "returns" } }, "用户反馈数据"],
-  [{ before: null, after: null }, "数据集"],
-  [{ after: { kind: "unknown" } }, "数据集"],
-  [{ before: "历史描述", after: 1 }, "数据集"],
-])("审计按已有对象信息显示名称，未知类型不误标：%s", (context, label) => {
-  render(
-    <AuditLogEntries
-      items={[{ id: "audit-dataset", entity_type: "dataset", ...context }]}
-    />,
-  );
-  expect(screen.getByText(label)).toBeVisible();
-  expect(screen.getByText("dataset", { selector: "code" })).toBeVisible();
-  expect(screen.queryByText("数据资产")).not.toBeInTheDocument();
-});
-
-test("产品信息审计支持键盘打开原有对象链接，其他对象名称不受影响", async () => {
-  const user = userEvent.setup();
-  render(
-    <AuditLogEntries
-      items={[
-        {
-          id: "audit-product",
-          entity_type: "dataset",
-          entity_id: "products-1",
-          target: { route: "data", view: "products", dataset_id: "products-1" },
-        },
-        { id: "audit-task", entity_type: "task", after: { kind: "products" } },
-      ]}
-    />,
-  );
-  expect(screen.getByText("产品信息")).toBeVisible();
-  expect(screen.getByText("分析任务")).toBeVisible();
-  await user.tab();
-  expect(screen.getByRole("button", { name: "查看对象" })).toHaveFocus();
-  await user.keyboard("{Enter}");
-  expect(window.location.hash).toBe("#data-assets?dataset=products-1&view=products");
-});
-
 test("审计记录按字段对齐展示差异、掩码敏感值并精确跳转", async () => {
   logs.mockResolvedValue({
     total: 1,
@@ -173,21 +130,22 @@ test("审计记录按字段对齐展示差异、掩码敏感值并精确跳转",
   );
 
   expect(await screen.findByText("系统管理员")).toBeVisible();
-  expect(screen.getByText("准备回填历史结果")).toBeVisible();
+  expect(screen.getByText("准备回填历史结果", { selector: "td" })).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "查看详情" }));
   expect(
     screen.getByText("legacy_result_backfill_prepare", { selector: "code" }),
   ).toBeVisible();
-  expect(screen.getByText("复核批次")).toBeVisible();
+  expect(screen.getByText("复核批次", { selector: "b" })).toBeVisible();
   expect(screen.getByText("review_batch", { selector: "code" })).toBeVisible();
-  await userEvent.click(screen.getByText("查看字段差异"));
-  const apiKeyRow = screen.getByText("api_key").closest("div");
+  await userEvent.click(screen.getByText("未变化字段 · 1 项"));
+  const apiKeyRow = screen.getByText("api_key").closest("tr");
   expect(within(apiKeyRow).getAllByText("••••••")).toHaveLength(2);
   expect(screen.queryByText("old-secret")).not.toBeInTheDocument();
   expect(screen.getByText("draft")).toBeVisible();
   expect(screen.getByText("resolved")).toBeVisible();
   expect(screen.getByText("预检哈希")).toBeVisible();
   expect(screen.getByText("preview_hash", { selector: "code" })).toBeVisible();
-  expect(screen.getByText("操作人")).toBeVisible();
+  expect(screen.getAllByText("操作人")).toHaveLength(2);
   expect(screen.getByText("actor", { selector: "code" })).toBeVisible();
   expect(screen.getByText("结果发布状态")).toBeVisible();
   expect(screen.getByText("result_publish_status", { selector: "code" })).toBeVisible();
@@ -271,16 +229,35 @@ test("审计筛选拒绝错误日期并隐藏旧结果", async () => {
   expect(logs).toHaveBeenCalledTimes(1);
 });
 
-test.each([
-  ["manual_correction", "人工修正语义"],
-  ["product_update", "更新产品信息"],
-  ["dimension_row_update", "修改产品信息"],
-])("新业务审计动作使用中文名称：%s", (action, label) => {
+test("中文筛选提交原始代码，重置清除高级条件及页码", async () => {
+  logs.mockResolvedValue({ total: 0, items: [] });
+  const user = userEvent.setup();
   render(
-    <AuditLogEntries
-      items={[{ id: "synthetic-action", action, entity_type: "classification_result" }]}
+    <AuditLogPage
+      route={{
+        query: {
+          actor_id: "synthetic-user",
+          entity_id: "synthetic-object",
+          action: "future_action",
+          page: "3",
+        },
+      }}
     />,
   );
-  expect(screen.getByText(label)).toBeVisible();
-  expect(screen.getByText(action, { selector: "code" })).toBeVisible();
+  expect(screen.getByLabelText("操作人 ID")).toBeVisible();
+  expect(screen.getByLabelText("操作")).toHaveValue("future_action");
+  await user.selectOptions(screen.getByLabelText("对象类型"), "api_model");
+  await user.selectOptions(screen.getByLabelText("操作"), "validate");
+  await user.click(screen.getByRole("button", { name: "筛选" }));
+  expect(window.location.hash).toContain("entity_type=api_model");
+  expect(window.location.hash).toContain("action=validate");
+  expect(window.location.hash).not.toContain("page=");
+  await user.clear(screen.getByLabelText("操作代码"));
+  await user.type(screen.getByLabelText("操作代码"), "future_action");
+  await user.click(screen.getByRole("button", { name: "筛选" }));
+  expect(window.location.hash).toContain("action=future_action");
+  await user.click(screen.getByRole("button", { name: "重置" }));
+  expect(window.location.hash).toBe("#settings?tab=audit");
+  expect(screen.getByLabelText("操作人 ID")).toHaveValue("");
+  expect(screen.getByLabelText("对象类型")).toHaveValue("");
 });

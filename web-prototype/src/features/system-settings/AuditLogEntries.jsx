@@ -1,3 +1,9 @@
+import { useId, useState } from "react";
+import {
+  ACTION_LABELS,
+  auditObjectLabel,
+  auditObjectName,
+} from "./auditLogPresentation";
 import { ArrowRight } from "@phosphor-icons/react";
 import { navigateHash } from "../../app/hashRouter";
 import { routeForTarget } from "../../app/navigation";
@@ -5,111 +11,100 @@ import { formatTime } from "../../lib/presentation";
 import { AuditDiff } from "./AuditLogDiff";
 import { writeAuditRoute } from "./auditLogPolicy";
 
-/** @type {Record<string, string>} */
-const ACTION_LABELS = {
-  manual_correction: "人工修正语义",
-  product_update: "更新产品信息",
-  dimension_row_update: "修改产品信息",
-  task_create: "创建任务",
-  task_pause: "暂停任务",
-  task_resume: "继续任务",
-  task_cancel: "取消任务",
-  segment_pause: "暂停 Listing",
-  segment_resume: "继续 Listing",
-  segment_cancel: "取消 Listing",
-  segment_retry: "重试 Listing",
-  review_update: "更新复核记录",
-  review_batch_update: "更新复核批次",
-  review_batch_publish: "发布复核版本",
-  legacy_result_backfill_prepare: "准备回填历史结果",
-  config_publish: "发布模型配置",
-  user_update: "更新用户",
-};
-/** @type {Record<string, string>} */
-const ENTITY_LABELS = {
-  task: "分析任务",
-  task_segment: "Listing 片段",
-  review: "历史复核记录",
-  review_batch: "复核批次",
-  dataset: "数据集",
-  data_version: "数据版本",
-  api_connection: "API 接入",
-  config_version: "模型配置版本",
-  model: "模型",
-  user: "用户",
-  classification_result: "分类结果",
-  analysis_dashboard: "分析看板",
-};
 /** @param {{items: import("../../shared/api/systemSettingsContracts").AuditLogEntry[]}} props */
 export function AuditLogEntries({ items }) {
   return (
-    <div className="audit-list">
-      {items.map((item) => (
-        <AuditLogEntry key={item.id} item={item} />
-      ))}
+    <div className="audit-table-wrap">
+      <table className="audit-table" aria-label="审计记录列表">
+        <thead>
+          <tr>
+            <th scope="col">时间</th>
+            <th scope="col">操作人</th>
+            <th scope="col">操作</th>
+            <th scope="col">对象</th>
+            <th scope="col">详情</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => (
+            <AuditLogEntry key={item.id} item={item} />
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
 
 /** @param {{item: import("../../shared/api/systemSettingsContracts").AuditLogEntry}} props */
 function AuditLogEntry({ item }) {
-  const snapshot = [item.after, item.before].find(
-    (value) => typeof value === "object" && value !== null && "kind" in value,
-  );
-  const datasetKind = item.target?.view ?? snapshot?.kind;
-  const datasetLabel =
-    datasetKind === "products"
-      ? "产品信息"
-      : datasetKind === "returns"
-        ? "用户反馈数据"
-        : "数据集";
+  const [expanded, setExpanded] = useState(false);
+  const detailId = useId();
+  const destination = item.target ? routeForTarget(item.target) : null;
   return (
-    <article>
-      <header>
-        <div>
-          <b>{item.actor_name || "未提供操作人"}</b>
-          <AuditTerm value={item.action} labels={ACTION_LABELS} fallback="未提供动作" />
-        </div>
-        <time>{formatTime(item.created_at)}</time>
-      </header>
-      <div className="audit-object-line">
-        <span className="audit-object-identity">
-          <AuditTerm
-            value={item.entity_type}
-            labels={ENTITY_LABELS}
-            label={item.entity_type === "dataset" ? datasetLabel : undefined}
-            fallback="未提供对象"
-          />
-          <span>· {item.entity_id || "未提供 ID"}</span>
-        </span>
-        {item.target?.route && (
+    <>
+      <tr className={expanded ? "is-expanded" : undefined}>
+        <td>
+          <time>{formatTime(item.created_at)}</time>
+        </td>
+        <td>{item.actor_name || "未提供操作人"}</td>
+        <td>{ACTION_LABELS[item.action ?? ""] ?? item.action ?? "未提供动作"}</td>
+        <td>
+          <b>{auditObjectLabel(item)}</b>
+          <span className="audit-object-name" title={auditObjectName(item)}>
+            {auditObjectName(item)}
+          </span>
+        </td>
+        <td className="audit-row-actions">
+          {destination && (
+            <button
+              className="text-button"
+              onClick={() => navigateHash(destination.page, destination.query)}
+            >
+              查看对象 <ArrowRight size={14} />
+            </button>
+          )}
           <button
             className="text-button"
-            onClick={() => {
-              const destination = routeForTarget(item.target);
-              if (destination) {
-                navigateHash(destination.page, destination.query);
-              }
-            }}
+            aria-expanded={expanded}
+            aria-controls={detailId}
+            onClick={() => setExpanded(!expanded)}
           >
-            查看对象 <ArrowRight size={14} />
+            {expanded ? "收起详情" : "查看详情"}
           </button>
-        )}
-      </div>
-      <AuditDiff before={item.before} after={item.after} />
-    </article>
-  );
-}
-
-/** @param {{value?: string, labels: Record<string, string>, label?: string, fallback: string}} props */
-function AuditTerm({ value, labels, label: suppliedLabel, fallback }) {
-  if (!value) return <span>{fallback}</span>;
-  const label = suppliedLabel ?? labels[value];
-  return (
-    <span className="audit-technical-term">
-      {label ?? value}
-      {label && <code>{value}</code>}
-    </span>
+        </td>
+      </tr>
+      {expanded && (
+        <tr className="audit-detail-row">
+          <td colSpan={5}>
+            <div id={detailId} className="audit-entry-detail">
+              <dl className="audit-entry-meta">
+                <div>
+                  <dt>对象名称</dt>
+                  <dd>{auditObjectName(item)}</dd>
+                </div>
+                <div>
+                  <dt>对象 ID</dt>
+                  <dd>{item.entity_id || "--"}</dd>
+                </div>
+                <div>
+                  <dt>对象类型</dt>
+                  <dd>
+                    <code>{item.entity_type || "--"}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>操作代码</dt>
+                  <dd>
+                    <code>{item.action || "--"}</code>
+                  </dd>
+                </div>
+              </dl>
+              <AuditDiff before={item.before} after={item.after} />
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
