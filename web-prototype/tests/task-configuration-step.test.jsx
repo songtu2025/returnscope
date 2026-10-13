@@ -1,4 +1,4 @@
-import { createRef } from "react";
+import { createRef, useState } from "react";
 import { cleanup, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
@@ -54,6 +54,38 @@ function modelStage(label) {
     (item) => item.textContent.startsWith(label),
   );
 }
+
+test("可选模型停用时保留推理控件和摘要行", async () => {
+  function Settings() {
+    const props = configuration();
+    const [policy, setPolicy] = useState({
+      ...props.modelPolicy,
+      cheap_model: "primary",
+    });
+    return (
+      <TaskConfigurationStep
+        {...props}
+        modelPolicy={policy}
+        onModelPolicyChange={(changes) =>
+          setPolicy((current) => ({ ...current, ...changes }))
+        }
+      />
+    );
+  }
+  const user = userEvent.setup();
+  render(<Settings />);
+  await showSettings(user);
+  const summaryLines = document.querySelectorAll(".task-model-selection small").length;
+  await user.selectOptions(
+    within(modelStage("低成本初筛")).getAllByRole("combobox")[0],
+    "",
+  );
+  expect(screen.getByRole("combobox", { name: "低成本初筛推理强度" })).toBeDisabled();
+  expect(document.querySelectorAll(".task-model-selection small")).toHaveLength(
+    summaryLines,
+  );
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
 
 test.each([
   ["high", ["high", "low"], "high"],

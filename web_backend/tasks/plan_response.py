@@ -6,6 +6,22 @@ from return_semantics.capabilities import CapabilityRegistry
 from return_semantics.task_plan import CategoryExecutionPlan
 
 
+def data_plan_hash(plan: CategoryExecutionPlan, inputs: dict[str, Any]) -> str:
+    # 用户确认的是分析范围；最终模型在创建时独立校验并写入执行快照。
+    data_plan = CategoryExecutionPlan(
+        summary={
+            **plan.summary,
+            "segments": [
+                {key: value for key, value in segment.items() if key != "model_policy"}
+                for segment in plan.summary["segments"]
+            ],
+        },
+        assignments=plan.assignments,
+    )
+    context = {key: value for key, value in inputs.items() if key != "config"}
+    return str(data_plan.with_hash(context)["plan_hash"])
+
+
 def model_configuration(config: dict[str, Any]) -> dict[str, Any]:
     return {
         "primary_model": config["primary_model"],

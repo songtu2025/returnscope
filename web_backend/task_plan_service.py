@@ -20,6 +20,7 @@ from web_backend.tasks.plan_inputs import TaskPlanInputsMixin
 from web_backend.tasks.plan_response import (
     bind_standard_versions,
     category_options,
+    data_plan_hash,
     input_versions,
     model_configuration,
     unresolved_product_counts,
@@ -127,7 +128,8 @@ class TaskPlanService(TaskPlanInputsMixin, TaskProductResolutionMixin):
             },
         }
         response = {
-            **execution_plan.with_hash(inputs),
+            **execution_plan.summary,
+            "plan_hash": data_plan_hash(execution_plan, inputs),
             "inputs": inputs,
             **unresolved_product_counts(unresolved_products, missing_category_products),
             "category_options": category_options(registry, standards),

@@ -9,6 +9,7 @@ import {
   taskDataScopeLabel,
   taskLaunchCopy,
   taskPlanViewState,
+  taskModelPolicyError,
 } from "./newTaskPolicy";
 import { ProductMatchWorkbench } from "./ProductMatchWorkbench";
 import { useNewTaskSetup } from "./useNewTaskSetup";
@@ -117,19 +118,15 @@ export function NewTaskPage({
 
   /** @param {Record<string, string | number>} changes */
   const updateModelPolicy = (changes) => {
-    invalidateTaskPreflight();
+    setSubmitError("");
     setForm({ ...form, model_policy: { ...modelPolicy, ...changes } });
   };
   /** @param {string} configId */
   const selectConnection = (configId) => {
-    const modelPolicy = taskConnectionPolicy(publishedConfigs, configId);
-    if (!modelPolicy) return;
-    invalidateTaskPreflight();
-    setForm((current) => ({
-      ...current,
-      config_version_id: configId,
-      model_policy: modelPolicy,
-    }));
+    const policy = taskConnectionPolicy(publishedConfigs, configId);
+    if (!policy) return;
+    setSubmitError("");
+    updateForm({ ...form, config_version_id: configId, model_policy: policy });
   };
   const { matchingOpen, resolveCategories, saveProductMatches, setMatchingOpen } =
     useProductMatching({
@@ -178,7 +175,8 @@ export function NewTaskPage({
       onNavigate,
     });
 
-  const canContinue = planState.canContinue;
+  const modelError = taskModelPolicyError(availableModels, modelPolicy);
+  const canContinue = planState.canContinue && !modelError;
 
   useEffect(() => {
     // 只在用户主动准备成功后引导一次，恢复草稿和修改模型不移动焦点。
@@ -207,7 +205,7 @@ export function NewTaskPage({
       selectedReturns={selectedReturns}
       submitting={submitting}
       canContinue={canContinue}
-      launchStatus={launchStatus}
+      launchStatus={modelError || launchStatus}
       submitError={submitError}
       submitLabel={submitLabel}
       onSubmit={submit}

@@ -1,5 +1,6 @@
 import { CaretDown } from "@phosphor-icons/react";
 import { EFFORT_LABELS } from "../../constants";
+import { MODEL_STAGES, taskModelPolicyError } from "./newTaskPolicy";
 
 /** @typedef {import("./taskCreateContracts").AvailableModel} AvailableModel */
 /** @typedef {import("./taskCreateContracts").PublishedConfig} PublishedConfig */
@@ -11,13 +12,6 @@ import { EFFORT_LABELS } from "../../constants";
 /**
  * @typedef {{form: TaskForm, publishedConfigs: PublishedConfig[], selectedConfig?: PublishedConfig, availableModels: AvailableModel[], modelPolicy: TaskModelPolicy, onConnectionChange: (configId: string) => void, onModelPolicyChange: (changes: Record<string, string | number>) => void}} TaskModelSettingsProps
  */
-
-/** @type {readonly ModelStage[]} */
-const MODEL_STAGES = [
-  ["低成本初筛", "cheap_model", "cheap_effort", false],
-  ["主分析", "primary_model", "primary_effort", true],
-  ["风险复核", "secondary_model", "secondary_effort", false],
-];
 
 /** @param {string} effort */
 function effortLabel(effort) {
@@ -37,6 +31,7 @@ export function TaskModelSettings({
   onConnectionChange,
   onModelPolicyChange,
 }) {
+  const modelError = taskModelPolicyError(availableModels, modelPolicy);
   return (
     <details className="task-advanced-settings task-model-settings">
       <TaskModelSummary
@@ -65,6 +60,7 @@ export function TaskModelSettings({
           modelPolicy={modelPolicy}
           onModelPolicyChange={onModelPolicyChange}
         />
+        {modelError && <p role="alert">{modelError}</p>}
       </div>
     </details>
   );
@@ -87,17 +83,16 @@ function TaskModelSummary({ availableModels, modelPolicy, selectedConfig }) {
           {selectedConfig?.connection_name} · 推理强度
           {effortLabel(modelPolicy.primary_effort)}
         </small>
-        {MODEL_STAGES.filter(
-          ([, modelKey, , required]) => !required && modelPolicy[modelKey],
-        ).map(([label, modelKey, effortKey]) => (
-          <small key={modelKey}>
-            {label}：
-            {availableModels.find((model) => model.model_key === modelPolicy[modelKey])
-              ?.display_name || modelPolicy[modelKey]}
-            {" · 推理强度"}
-            {effortLabel(modelPolicy[effortKey])}
-          </small>
-        ))}
+        {MODEL_STAGES.filter(([, , , required]) => !required).map(
+          ([label, modelKey, effortKey]) => (
+            <small key={modelKey}>
+              {label}：
+              {modelPolicy[modelKey]
+                ? `${availableModels.find((model) => model.model_key === modelPolicy[modelKey])?.display_name || modelPolicy[modelKey]} · 推理强度${effortLabel(modelPolicy[effortKey])}`
+                : "不启用"}
+            </small>
+          ),
+        )}
       </div>
       <span className="task-model-edit">
         更改设置 <CaretDown size={16} />
@@ -140,15 +135,13 @@ function TaskModelStage({
           </option>
         ))}
       </select>
-      {modelPolicy[modelKey] && (
-        <TaskModelEffort
-          label={label}
-          effortKey={effortKey}
-          selectedModel={selectedModel}
-          modelPolicy={modelPolicy}
-          onModelPolicyChange={onModelPolicyChange}
-        />
-      )}
+      <TaskModelEffort
+        label={label}
+        effortKey={effortKey}
+        selectedModel={selectedModel}
+        modelPolicy={modelPolicy}
+        onModelPolicyChange={onModelPolicyChange}
+      />
     </label>
   );
 }
@@ -164,9 +157,11 @@ function TaskModelEffort({
   return (
     <select
       aria-label={`${label}推理强度`}
+      disabled={!selectedModel}
       value={modelPolicy[effortKey]}
       onChange={(event) => onModelPolicyChange({ [effortKey]: event.target.value })}
     >
+      {!selectedModel && <option value={modelPolicy[effortKey]}>不启用</option>}
       {(selectedModel?.supported_efforts ?? []).map((effort) => (
         <option key={effort} value={effort}>
           推理强度{effortLabel(effort)}
@@ -213,7 +208,6 @@ function TaskSamplingSettings({ modelPolicy, onModelPolicyChange }) {
             })
           }
         />
-        <small>修改后自动更新检查结果，仅用于本次任务。</small>
       </label>
     </div>
   );

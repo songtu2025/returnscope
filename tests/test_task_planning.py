@@ -2487,6 +2487,60 @@ def test_model_policy_normalizes_defaults_without_changing_published_config(
     assert selected["cheap_audit_percent"] == 7
 
 
+def test_data_confirmation_survives_model_change_and_saves_final_policy(tmp_path):
+    planner, _ = _published_policy_inputs(tmp_path)
+    inputs = dict(
+        dataset_version_id="version-returns",
+        product_version_id="version-products",
+        store="SEEKWAY:US",
+        listing="L1",
+        config_version_id="config-1",
+    )
+    first_policy = {"connection_id": "connection-1", "primary_model": "primary"}
+    final_policy = {
+        **first_policy,
+        "primary_model": "secondary",
+        "primary_effort": "high",
+        "cheap_audit_percent": 12,
+    }
+    before = planner.preflight(**inputs, model_policy=first_policy)
+    after = planner.preflight(**inputs, model_policy=final_policy)
+    assert before["plan_hash"] == after["plan_hash"]
+    task = TaskService(planner.database).create(
+        **inputs,
+        actor_id="user-1",
+        title="合成模型切换",
+        model_policy=final_policy,
+        plan_hash=before["plan_hash"],
+        unresolved_policy="run_ready",
+    )
+    assert task["snapshot"]["config"]["primary_model"] == "secondary"
+    assert task["snapshot"]["config"]["primary_effort"] == "high"
+    assert task["snapshot"]["config"]["cheap_audit_percent"] == 12
+    with planner.database.transaction() as connection:
+        connection.execute("UPDATE api_models SET active=0 WHERE model_key='secondary'")
+    with pytest.raises(ValueError, match="不可用"):
+        TaskService(planner.database).create(
+            **inputs,
+            actor_id="user-1",
+            title="合成失效模型",
+            model_policy=final_policy,
+            plan_hash=before["plan_hash"],
+        )
+    with planner.database.transaction() as connection:
+        connection.execute(
+            "UPDATE dataset_versions SET sha256='changed' WHERE id='version-products'"
+        )
+    with pytest.raises(TaskPlanConflict):
+        TaskService(planner.database).create(
+            **inputs,
+            actor_id="user-1",
+            title="合成变更资料",
+            model_policy=first_policy,
+            plan_hash=before["plan_hash"],
+        )
+
+
 @pytest.mark.parametrize(
     ("policy", "active_version", "message"),
     [

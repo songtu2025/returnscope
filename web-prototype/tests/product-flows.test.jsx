@@ -1265,6 +1265,7 @@ describe("关键用户流程", () => {
         name: "生产线路",
         active_version: {
           id: "cfg-1",
+          connection_id: "conn-1",
           version: 1,
           cheap_audit_percent: 5,
           cheap_model: "gpt-cheap",
@@ -1274,6 +1275,14 @@ describe("关键用户流程", () => {
           primary_model: "gpt-main",
           primary_effort: "medium",
         },
+        models: ["gpt-cheap", "gpt-main", "gpt-review"].map((model_key) => ({
+          id: model_key,
+          model_key,
+          display_name: model_key,
+          active: true,
+          validation_status: "validated",
+          supported_efforts: ["low", "medium", "high"],
+        })),
       },
     ]);
     apiMock.productScopes.mockResolvedValue([
@@ -1358,29 +1367,33 @@ describe("关键用户流程", () => {
     await user.clear(screen.getByLabelText("任务名称"));
     expect(apiMock.preflightTask).toHaveBeenCalledOnce();
     await user.click(screen.getByLabelText("分析设置"));
+    const primaryStage = [
+      ...document.querySelectorAll(".task-model-policy-grid > label"),
+    ].find((item) => item.textContent.startsWith("主分析"));
+    await user.selectOptions(
+      within(primaryStage).getAllByRole("combobox")[0],
+      "gpt-review",
+    );
+    expect(screen.getByLabelText(/我确认本次仅分析 8 组评论/)).toBeChecked();
+    expect(apiMock.preflightTask).toHaveBeenCalledOnce();
     await user.clear(screen.getByLabelText(/^本次初筛抽检比例/));
     await user.type(screen.getByLabelText(/^本次初筛抽检比例/), "12");
-    expect(screen.queryByRole("button", { name: /启动 8 组/ })).not.toBeInTheDocument();
-    expect(await screen.findByText("将分析 8 组评论")).toBeVisible();
+    expect(screen.getByRole("button", { name: /启动 8 组可执行评论/ })).toBeEnabled();
     expect(screen.getByLabelText(/^本次初筛抽检比例/)).toHaveFocus();
-    expect(apiMock.preflightTask).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        model_policy: expect.objectContaining({ cheap_audit_percent: 12 }),
-      }),
-    );
-    expect(screen.getByRole("button", { name: /启动 8 组可执行评论/ })).toBeDisabled();
-    await user.click(screen.getByLabelText(/我确认本次仅分析 8 组评论/));
+    expect(screen.getByLabelText(/我确认本次仅分析 8 组评论/)).toBeChecked();
+    expect(apiMock.preflightTask).toHaveBeenCalledOnce();
+    expect(apiMock.qualityPreflight).toHaveBeenCalledOnce();
     await user.click(screen.getByText("查看 2 个执行分组及顺序"));
     await user.click(screen.getByRole("button", { name: "置顶 SK002" }));
     expect(screen.getByLabelText(/我确认本次仅分析 8 组评论/)).toBeChecked();
-    expect(apiMock.preflightTask).toHaveBeenCalledTimes(2);
+    expect(apiMock.preflightTask).toHaveBeenCalledOnce();
     await user.click(screen.getByRole("button", { name: /启动 8 组可执行评论/ }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("创建服务暂时不可用");
     expect(screen.getByLabelText("任务名称")).toHaveValue("");
     expect(screen.getByLabelText(/^本次初筛抽检比例/)).toHaveValue(12);
     expect(screen.getByLabelText(/我确认本次仅分析 8 组评论/)).toBeChecked();
-    expect(apiMock.preflightTask).toHaveBeenCalledTimes(2);
+    expect(apiMock.preflightTask).toHaveBeenCalledOnce();
     expect(onNavigate).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "重试创建" }));
     await waitFor(() => expect(apiMock.createTask).toHaveBeenCalledTimes(2));
@@ -1398,7 +1411,10 @@ describe("关键用户流程", () => {
           plan_hash: "a".repeat(64),
           unresolved_policy: "block_all",
           segment_order: ["eyewear", "footwear"],
-          model_policy: expect.objectContaining({ cheap_audit_percent: 12 }),
+          model_policy: expect.objectContaining({
+            cheap_audit_percent: 12,
+            primary_model: "gpt-review",
+          }),
         }),
       ),
     );
@@ -1458,10 +1474,19 @@ describe("关键用户流程", () => {
         name: "生产线路",
         active_version: {
           id: "cfg-1",
+          connection_id: "conn-1",
           version: 1,
           primary_model: "gpt-main",
           primary_effort: "medium",
         },
+        models: ["gpt-cheap", "gpt-main", "gpt-review"].map((model_key) => ({
+          id: model_key,
+          model_key,
+          display_name: model_key,
+          active: true,
+          validation_status: "validated",
+          supported_efforts: ["low", "medium", "high"],
+        })),
       },
     ]);
     apiMock.productScopes.mockResolvedValue([
@@ -1556,10 +1581,19 @@ describe("关键用户流程", () => {
         name: "生产线路",
         active_version: {
           id: "cfg-1",
+          connection_id: "conn-1",
           version: 1,
           primary_model: "gpt-main",
           primary_effort: "medium",
         },
+        models: ["gpt-cheap", "gpt-main", "gpt-review"].map((model_key) => ({
+          id: model_key,
+          model_key,
+          display_name: model_key,
+          active: true,
+          validation_status: "validated",
+          supported_efforts: ["low", "medium", "high"],
+        })),
       },
     ]);
     apiMock.productScopes.mockResolvedValue([{ store: "SEEKWAY:US", listings: [] }]);
@@ -1706,10 +1740,19 @@ describe("关键用户流程", () => {
         name: "生产线路",
         active_version: {
           id: "cfg-1",
+          connection_id: "conn-1",
           version: 1,
           primary_model: "gpt-main",
           primary_effort: "medium",
         },
+        models: ["gpt-cheap", "gpt-main", "gpt-review"].map((model_key) => ({
+          id: model_key,
+          model_key,
+          display_name: model_key,
+          active: true,
+          validation_status: "validated",
+          supported_efforts: ["low", "medium", "high"],
+        })),
       },
     ]);
     apiMock.productScopes.mockResolvedValue([{ store: "SEEKWAY:US", listings: [] }]);
@@ -4064,7 +4107,9 @@ describe("关键用户流程", () => {
     await userEvent.click(screen.getByRole("button", { name: "未结束" }));
     await userEvent.type(screen.getByLabelText("搜索任务、店铺或 Listing"), "暂停");
     Object.defineProperty(window, "scrollY", { configurable: true, value: 240 });
-    await userEvent.click(screen.getByRole("button", { name: /暂停任务/ }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "暂停任务", exact: true }),
+    );
     expect(await screen.findByRole("heading", { name: "暂停任务" })).toBeVisible();
     expect(screen.queryByRole("table", { name: "任务管理表" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "全部任务" }));

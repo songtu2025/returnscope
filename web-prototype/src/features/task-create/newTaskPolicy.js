@@ -1,5 +1,32 @@
 export { taskLaunchCopy } from "./taskLaunchPolicy";
 
+/** @type {readonly (readonly [string, "cheap_model" | "primary_model" | "secondary_model", "cheap_effort" | "primary_effort" | "secondary_effort", boolean])[]} */
+export const MODEL_STAGES = [
+  ["低成本初筛", "cheap_model", "cheap_effort", false],
+  ["主分析", "primary_model", "primary_effort", true],
+  ["风险复核", "secondary_model", "secondary_effort", false],
+];
+
+/** @param {import("./taskCreateContracts").AvailableModel[]} models
+ * @param {TaskModelPolicy} policy
+ */
+export function taskModelPolicyError(models, policy) {
+  const auditPercent = policy.cheap_audit_percent ?? 5;
+  if (!Number.isInteger(auditPercent) || auditPercent < 0 || auditPercent > 100)
+    return "初筛抽检比例应为 0 到 100 的整数";
+  for (const [label, modelKey, effortKey, required] of MODEL_STAGES) {
+    if (!policy[modelKey]) {
+      if (required) return `请选择${label}模型`;
+      continue;
+    }
+    const model = models.find((item) => item.model_key === policy[modelKey]);
+    if (!model) return `${label}模型不可用，请重新选择`;
+    if (!model.supported_efforts.includes(policy[effortKey]))
+      return `${label}模型不支持当前推理强度，请重新选择`;
+  }
+  return "";
+}
+
 /** @typedef {import("./taskCreateContracts").ApiConnection} ApiConnection */
 /** @typedef {import("./taskCreateContracts").DataVersion} DataVersion */
 /** @typedef {import("./taskCreateContracts").PublishedConfig} PublishedConfig */
