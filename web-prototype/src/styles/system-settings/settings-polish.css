@@ -56,13 +56,6 @@
   border-color: #dfe7e2;
 }
 
-.model-service-summary .model-service-runtime {
-  min-height: 118px;
-  border-color: #d9e3dd;
-  border-radius: 13px;
-  box-shadow: 0 10px 26px rgb(25 52 40 / 5%);
-}
-
 .model-service-summary .model-service-draft-strip {
   min-height: 68px;
   border-radius: 10px;

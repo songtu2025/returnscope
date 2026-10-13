@@ -102,9 +102,6 @@ export function ModelServiceView({
     clearRun,
   } = validation;
   const visibleCatalogModels = catalogModels.filter((model) => model.active);
-  const availableModelCount = catalogModels.filter(
-    (model) => model.active && model.validation_status === "validated",
-  ).length;
   const validate = () => startValidation(selectedVersion);
   const exitState = modelEditState.pendingExit ? modelEditState : editState;
   return (
@@ -156,7 +153,6 @@ export function ModelServiceView({
             selectedConnectionId={selectedConnectionId}
             selectedConnection={selectedConnection}
             activeVersion={activeVersion}
-            availableModelCount={availableModelCount}
             busy={busy}
             validationActive={validationActive}
             draftVersion={draftVersion}

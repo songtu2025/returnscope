@@ -1,21 +1,13 @@
 import { useDismissibleDetails } from "../../hooks/useDismissibleDetails";
-import {
-  CaretDown,
-  CheckCircle,
-  Plus,
-  Power,
-  WarningCircle,
-} from "@phosphor-icons/react";
+import { CaretDown, Plus, Power } from "@phosphor-icons/react";
 import Button from "antd/es/button";
-import { classNames, formatTime } from "../../lib/presentation";
-import { configValue } from "./modelServiceConfig";
+import { classNames } from "../../lib/presentation";
 
-/** @param {Pick<import("./modelServiceViewContracts").ModelServiceSummaryProps, "selectedConnection" | "activeVersion" | "availableModelCount" | "busy" | "validationActive" | "onStartValidation" | "onOpenNewConnection" | "onEditConnection" | "onEditLimits" | "onOpenVersions">} props */
+/** @param {Pick<import("./modelServiceViewContracts").ModelServiceSummaryProps, "selectedConnection" | "activeVersion" | "busy" | "validationActive" | "onStartValidation" | "onOpenNewConnection" | "onEditConnection" | "onEditLimits" | "onOpenVersions">} props */
 
 export function ModelServiceRuntimeSummary({
   selectedConnection,
   activeVersion,
-  availableModelCount,
   busy,
   validationActive,
   onStartValidation,
@@ -24,20 +16,11 @@ export function ModelServiceRuntimeSummary({
   onEditLimits,
   onOpenVersions,
 }) {
-  const validated = activeVersion?.validation_status === "validated";
   return (
     <section className="content-card model-service-runtime">
-      <div className={classNames("model-service-runtime-icon", validated && "online")}>
-        {validated ? (
-          <CheckCircle size={36} weight="duotone" />
-        ) : (
-          <WarningCircle size={36} weight="duotone" />
-        )}
-      </div>
       <ModelServiceRuntimeInfo
         selectedConnection={selectedConnection}
         activeVersion={activeVersion}
-        availableModelCount={availableModelCount}
       />
       <ModelServiceRuntimeActions
         selectedConnection={selectedConnection}
@@ -54,13 +37,9 @@ export function ModelServiceRuntimeSummary({
   );
 }
 
-/** @param {Pick<import("./modelServiceViewContracts").ModelServiceSummaryProps, "selectedConnection" | "activeVersion" | "availableModelCount">} props */
+/** @param {Pick<import("./modelServiceViewContracts").ModelServiceSummaryProps, "selectedConnection" | "activeVersion">} props */
 
-function ModelServiceRuntimeInfo({
-  selectedConnection,
-  activeVersion,
-  availableModelCount,
-}) {
+function ModelServiceRuntimeInfo({ selectedConnection, activeVersion }) {
   const validationStatus = activeVersion?.validation_status;
   const statusLabel =
     validationStatus === "validated"
@@ -70,29 +49,15 @@ function ModelServiceRuntimeInfo({
         : "尚未发布";
   return (
     <div className="model-service-runtime-main">
-      <span className="asset-type">当前接入</span>
       <div className="model-service-runtime-title">
         <h2>{selectedConnection?.name ?? "尚未创建模型服务"}</h2>
         <span className={classNames("model-service-status", validationStatus)}>
           {statusLabel}
         </span>
       </div>
-      <div className="model-service-runtime-meta">
-        <span>
-          服务地址 <b>{activeVersion?.base_url ?? "—"}</b>
-        </span>
-        <span>运行版本 {activeVersion ? "#" + activeVersion.version : "—"}</span>
-        <span>{availableModelCount} 个可用模型</span>
-        {activeVersion && (
-          <span>
-            验证模型 {activeVersion.primary_model} ·{" "}
-            {configValue("primary_effort", activeVersion.primary_effort)}
-          </span>
-        )}
-        {activeVersion?.validated_at && (
-          <span>最后验证 {formatTime(activeVersion.validated_at)}</span>
-        )}
-      </div>
+      <p className="model-service-runtime-address" title={activeVersion?.base_url}>
+        {activeVersion?.base_url ?? "—"}
+      </p>
     </div>
   );
 }
@@ -136,7 +101,6 @@ function ModelServiceRuntimeActions({
       {selectedConnection && (
         <Button
           autoInsertSpace={false}
-          size="small"
           type="link"
           onClick={onEditConnection}
           disabled={Boolean(busy)}

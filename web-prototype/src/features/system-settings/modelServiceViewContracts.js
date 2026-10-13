@@ -62,7 +62,6 @@
  *   selectedConnectionId: string | null,
  *   selectedConnection: ModelConnection | null | undefined,
  *   activeVersion: ConfigVersion | null,
- *   availableModelCount: number,
  *   busy: string,
  *   validationActive: boolean,
  *   draftVersion: ConfigVersion | null | undefined,

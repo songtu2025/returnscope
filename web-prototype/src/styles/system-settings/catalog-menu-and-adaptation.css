@@ -123,11 +123,11 @@
 }
 @media (max-width: 860px) {
   .model-service-runtime {
-    grid-template-columns: 36px minmax(0, 1fr);
-    padding: 18px;
+    grid-template-columns: minmax(0, 1fr);
+    padding: 16px;
   }
   .model-service-runtime-actions {
-    grid-column: 1 / -1;
+    flex-wrap: wrap;
   }
   .model-service-draft-strip {
     grid-template-columns: 1fr;
@@ -143,7 +143,6 @@
   }
 }
 @media (max-width: 580px) {
-  .model-service-runtime-title,
   .model-service-catalog > header {
     align-items: flex-start;
     flex-direction: column;

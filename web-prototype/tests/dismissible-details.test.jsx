@@ -107,7 +107,6 @@ const menus = [
       <ModelServiceRuntimeSummary
         selectedConnection={{ name: "合成连接" }}
         onEditLimits={action}
-        availableModelCount={0}
       />
     ),
     "更多",

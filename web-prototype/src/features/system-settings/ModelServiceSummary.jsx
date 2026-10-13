@@ -8,7 +8,6 @@ export function ModelServiceSummary({
   selectedConnectionId,
   selectedConnection,
   activeVersion,
-  availableModelCount,
   busy,
   validationActive,
   draftVersion,
@@ -51,7 +50,6 @@ export function ModelServiceSummary({
       <ModelServiceRuntimeSummary
         selectedConnection={selectedConnection}
         activeVersion={activeVersion}
-        availableModelCount={availableModelCount}
         busy={busy}
         validationActive={validationActive}
         onStartValidation={onStartValidation}

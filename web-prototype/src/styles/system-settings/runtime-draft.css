@@ -5,51 +5,45 @@
 }
 .model-service-runtime {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 16px;
-  min-height: 130px;
-  padding: 24px;
-}
-.model-service-runtime-icon {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  color: var(--amber);
-}
-.model-service-runtime-icon.online {
-  color: var(--green);
+  padding: 16px 20px;
+  box-shadow: none;
 }
 .model-service-runtime-main {
   min-width: 0;
 }
 .model-service-runtime-title {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  margin-top: 4px;
+  gap: 8px 12px;
 }
-.model-service-runtime h2,
+.model-service-runtime h2 {
+  min-width: 0;
+  margin: 0;
+  font-size: 18px;
+  line-height: 24px;
+  overflow-wrap: anywhere;
+}
+.model-service-runtime .model-service-status {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  font-weight: 600;
+}
 .model-service-catalog h3 {
   margin: 0;
   font-size: 22px;
 }
-.model-service-runtime-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 18px;
-  margin-top: 8px;
+.model-service-runtime-address {
+  overflow: hidden;
+  margin: 6px 0 0;
   color: var(--muted);
   font-size: 12px;
-}
-.model-service-runtime-meta b {
-  display: inline-block;
-  max-width: 420px;
-  overflow: hidden;
-  color: var(--ink);
+  line-height: 18px;
   text-overflow: ellipsis;
-  vertical-align: bottom;
   white-space: nowrap;
 }
 .model-service-runtime-actions,
