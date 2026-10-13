@@ -1,6 +1,7 @@
 import Button from "antd/es/button";
 import { ChartBar, DownloadSimple } from "@phosphor-icons/react";
 import { api } from "../../api";
+import { DeliveryLifecycleControls } from "../../components/DeliveryLifecycleControls";
 import { formatTime } from "../../lib/presentation";
 import { PUBLISH_LABELS } from "./classificationResultConstants";
 
@@ -11,8 +12,9 @@ export function ResultDetailHeader(context) {
     <header className="result-detail-header">
       <div>
         <span className="result-publish-note">
-          版本发布：
-          {PUBLISH_LABELS[result.publish_status] ?? result.publish_status ?? "未提供"}
+          {result.deleted_at
+            ? "已删除"
+            : `版本发布：${PUBLISH_LABELS[result.publish_status] ?? result.publish_status ?? "未提供"}`}
         </span>
         <h1>{result.listing || "未提供 Listing"} 分类结果</h1>
         <p>
@@ -32,6 +34,14 @@ function ResultDetailActions(context) {
   const { result, route, policy, runPrimaryAction } = context;
   return (
     <div className="result-detail-actions">
+      <DeliveryLifecycleControls
+        kind="result"
+        id={result.version_id}
+        name={result.listing || "分类结果"}
+        revision={result.revision || 1}
+        deleted={Boolean(result.deleted_at)}
+        onChanged={context.retry}
+      />
       <Button
         type="primary"
         disabled={policy.primary.disabled}

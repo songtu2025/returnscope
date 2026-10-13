@@ -44,6 +44,8 @@
  * @property {Record<string, string | string[] | null>} [filters]
  *
  * @typedef {Object} DashboardListItem
+ * @property {string | null} [deleted_at]
+ * @property {number} [revision]
  * @property {string} [id]
  * @property {string} [dashboard_id]
  * @property {string} [name]

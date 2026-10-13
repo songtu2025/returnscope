@@ -106,6 +106,7 @@ export function ClassificationResultDetailView(props) {
           {selectedGroup && (
             <EvidenceDrawer
               group={selectedGroup}
+              disabled={Boolean(result.deleted_at)}
               analysisContext={result.analysis_context}
               onClose={closeEvidence}
               onSaved={(version) => {

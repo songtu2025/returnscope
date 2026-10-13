@@ -18,6 +18,7 @@ import { ManualSemanticEditor } from "./ManualSemanticEditor";
  *   analysisContext: string,
  *   onClose: () => void,
  *   onSaved?: (versionId: string) => void,
+ *   disabled?: boolean,
  *   returnFocusRef: { current: HTMLElement | null }
  * }} props
  */
@@ -26,6 +27,7 @@ export function EvidenceDrawer({
   analysisContext,
   onClose,
   onSaved,
+  disabled,
   returnFocusRef,
 }) {
   const [editing, setEditing] = useState(false);
@@ -94,7 +96,7 @@ export function EvidenceDrawer({
               </small>
             )}
           </div>
-          {onSaved && !editing && (
+          {onSaved && !disabled && !editing && (
             <button
               className="primary-button compact-button"
               onClick={() => setEditing(true)}

@@ -31,6 +31,7 @@ export function taskFilterGroup(task) {
 
 /** @param {TaskSegment} segment */
 export function segmentNeedsAttention(segment) {
+  if (segment.result_deleted_at) return false;
   if (isPublishedResult(segment)) {
     return (
       Number(segment.system_failure_count || 0) > 0 ||

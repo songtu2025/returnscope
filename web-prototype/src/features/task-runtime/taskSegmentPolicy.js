@@ -12,7 +12,7 @@ export function resultPublishStatus(segment) {
  * @returns {segment is TaskSegment & {result_version_id: string}}
  */
 export function isPublishedResult(segment) {
-  return resultPublishStatus(segment) === "published";
+  return resultPublishStatus(segment) === "published" && !segment.result_deleted_at;
 }
 
 /** @param {TaskSegment} segment */

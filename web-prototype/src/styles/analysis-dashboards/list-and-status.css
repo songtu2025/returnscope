@@ -70,7 +70,7 @@
 .dashboard-list-head,
 .dashboard-list-row {
   display: grid;
-  grid-template-columns: 72px minmax(160px, 1.35fr) 72px 104px 88px 120px 94px 72px;
+  grid-template-columns: 72px minmax(160px, 1.35fr) 72px 104px 88px 120px 94px 140px;
   align-items: center;
   gap: 10px;
   min-width: 0;
@@ -209,4 +209,15 @@
   display: grid;
   place-items: center;
   min-height: 260px;
+}
+
+.dashboard-list-row .dashboard-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.dashboard-row-actions button {
+  white-space: nowrap;
 }

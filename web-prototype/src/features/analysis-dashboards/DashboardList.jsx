@@ -2,23 +2,18 @@ import { useDataRefresh } from "../../hooks/useDataRefresh";
 import { MANAGED_REFRESH_OPTIONS } from "../../shared/refreshPolicy";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLoadingHeight } from "../../hooks/useLoadingHeight";
-import {
-  CaretRight,
-  ChartBar,
-  FunnelSimple,
-  MagnifyingGlass,
-} from "@phosphor-icons/react";
+import { ChartBar, FunnelSimple, MagnifyingGlass } from "@phosphor-icons/react";
 import Button from "antd/es/button";
 import Input from "antd/es/input";
 import useSWR from "swr";
 import { navigateHash } from "../../app/hashRouter";
 import { Pagination } from "../../components/Pagination";
 import { EmptyState, InlineLoading, PageHeading } from "../../components/SharedUi";
-import { formatTime } from "../../lib/presentation";
 import { dashboardApi } from "../../shared/api/dashboardApi";
 import { errorStatus } from "../../shared/api/requestErrors";
 import { serverStateKeys } from "../../shared/serverState";
 import { createDashboardSelection } from "./dashboardSelectionStorage";
+import { DashboardRow } from "./DashboardRow";
 
 /** @typedef {import("./analysisDashboardContracts").DashboardListItem} DashboardListItem */
 /** @typedef {import("./analysisDashboardContracts").DashboardListPage} DashboardListPage */
@@ -131,6 +126,7 @@ function DashboardListFilters({ filters, setFilters, updateRoute }) {
           <option value="">全部状态</option>
           <option value="active">可用</option>
           <option value="archived">已归档</option>
+          <option value="deleted">已删除</option>
         </select>
       </label>
       <Button
@@ -251,43 +247,5 @@ function DashboardListTable({
         onPageSize={(pageSize) => updateRoute({ page: 1, pageSize })}
       />
     </>
-  );
-}
-
-/** @param {{dashboard: DashboardListItem, onOpen: () => void}} props */
-function DashboardRow({ dashboard, onOpen }) {
-  const statusLabels = /** @type {Record<string, string>} */ ({
-    active: "可用",
-    archived: "已归档",
-  });
-  const summary = dashboard.summary ?? {};
-  const status = dashboard.status || "active";
-  return (
-    <article className="dashboard-list-row" role="row">
-      <span role="cell" className={`dashboard-status ${status}`}>
-        {statusLabels[status] || status}
-      </span>
-      <div role="cell">
-        <b>{dashboard.name || "未命名看板"}</b>
-        {dashboard.description && <small>{dashboard.description}</small>}
-      </div>
-      <b role="cell">v{dashboard.current_version || dashboard.version || 1}</b>
-      <span role="cell">
-        {Number(summary.listing_count || 0).toLocaleString()} 个 Listing
-      </span>
-      <span role="cell">
-        {Number(summary.comment_count ?? summary.record_count ?? 0).toLocaleString()}{" "}
-        {summary.counting_basis === "feedback_group" ? "个反馈组" : "条"}
-      </span>
-      <span role="cell">
-        {formatTime(dashboard.updated_at || dashboard.created_at)}
-      </span>
-      <span role="cell">{dashboard.created_by_name || "未提供"}</span>
-      <div role="cell">
-        <button className="secondary-button compact-button" onClick={onOpen}>
-          查看 <CaretRight size={15} />
-        </button>
-      </div>
-    </article>
   );
 }

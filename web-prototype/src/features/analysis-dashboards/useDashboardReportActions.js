@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { dashboardApi } from "../../shared/api/dashboardApi";
+import { cancelInsightGeneration } from "../../shared/api/deliveryApi";
 import { errorMessage } from "./dashboardRequestErrors";
 import { useDashboardReportGeneration } from "./useDashboardReportGeneration";
 
@@ -15,6 +16,24 @@ export function useDashboardReportActions({
   setReports,
   selectedReport,
 }) {
+  const [cancelling, setCancelling] = useState(false);
+  const cancelReport = async () => {
+    if (!selectedReport || cancelling) return;
+    setCancelling(true);
+    try {
+      await cancelInsightGeneration(selectedReport.id);
+      const report = await dashboardApi.insightReport(selectedReport.id);
+      setReports((current) => ({
+        ...current,
+        items: current.items.map((item) => (item.id === report.id ? report : item)),
+      }));
+      notify?.("本次生成已取消，已有报告保留");
+    } catch (error) {
+      setReports((current) => ({ ...current, error: errorMessage(error) }));
+    } finally {
+      setCancelling(false);
+    }
+  };
   const { decisionState, setIssueDecision } = useDashboardIssueDecision({
     notify,
     setReports,
@@ -54,6 +73,8 @@ export function useDashboardReportActions({
     openReportGeneration,
     submitReportGeneration,
     retryReport,
+    cancelReport,
+    cancelling,
     setIssueDecision,
   };
 }

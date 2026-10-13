@@ -17,6 +17,7 @@
  *
  * @typedef {Object} TaskSegment
  * @property {string | null} [deleted_at]
+ * @property {string | null} [result_deleted_at]
  * @property {string} segment_key
  * @property {string} id
  * @property {string} agent_key

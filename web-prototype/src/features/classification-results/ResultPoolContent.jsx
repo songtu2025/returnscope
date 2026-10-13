@@ -51,6 +51,7 @@ export function ResultPoolContent(context) {
               <ResultPoolRow
                 key={result.version_id}
                 result={result}
+                onChanged={context.load}
                 selectable
                 selected={selectedIds.has(resultVersionId(result))}
                 onToggle={() => toggleSelection(result)}

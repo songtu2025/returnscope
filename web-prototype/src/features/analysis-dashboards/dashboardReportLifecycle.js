@@ -70,7 +70,15 @@ export function useDashboardReportPolling({ generationAttempts, setReports, noti
         setReports((current) => ({
           ...current,
           error: "",
-          items: current.items.map((item) => (item.id === updated.id ? updated : item)),
+          items: current.items.map((item) =>
+            item.id === updated.id &&
+            !(
+              item.status === "cancelled" &&
+              ["queued", "running"].includes(updated.status)
+            )
+              ? updated
+              : item,
+          ),
         }));
         if (updated.status === "completed") notify?.("AI 洞察报告已生成");
         else if (updated.status === "failed")

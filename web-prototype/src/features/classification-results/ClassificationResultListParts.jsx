@@ -1,6 +1,7 @@
 import { CaretRight, DownloadSimple } from "@phosphor-icons/react";
 import Button from "antd/es/button";
 import Checkbox from "antd/es/checkbox";
+import { DeliveryLifecycleControls } from "../../components/DeliveryLifecycleControls";
 
 import { api } from "../../api";
 import { formatTime } from "../../lib/presentation";
@@ -35,7 +36,8 @@ function productNames(result) {
  *   onPrimary: () => void,
  *   selectable: boolean,
  *   selected: boolean,
- *   onToggle: () => void
+ *   onToggle: () => void,
+ *   onChanged?: () => void | Promise<void>
  * }} ResultPoolRowProps
  */
 /** @param {ResultPoolRowProps} props */
@@ -46,6 +48,7 @@ export function ResultPoolRow({
   selectable,
   selected,
   onToggle,
+  onChanged,
 }) {
   const policy = resultActionPolicy(result);
   return (
@@ -59,6 +62,14 @@ export function ResultPoolRow({
       />
       <ResultPoolMetadata result={result} onOpen={onOpen} />
       <div className="result-row-actions" role="cell">
+        <DeliveryLifecycleControls
+          kind="result"
+          id={result.version_id}
+          name={result.listing || "分类结果"}
+          revision={result.revision || 1}
+          deleted={Boolean(result.deleted_at)}
+          onChanged={onChanged}
+        />
         <Button
           size="small"
           disabled={policy.primary.disabled}
@@ -102,9 +113,11 @@ function ResultPoolStatus({ result, policy, selectable, selected, onToggle }) {
       )}
       <div className="result-state-cell" role="cell">
         <span className={`result-quality-badge ${policy.state}`}>{policy.label}</span>
-        <small>
-          {`版本发布：${PUBLISH_LABELS[result.publish_status] ?? result.publish_status ?? "未提供"}`}
-        </small>
+        {!result.deleted_at && (
+          <small>
+            {`版本发布：${PUBLISH_LABELS[result.publish_status] ?? result.publish_status ?? "未提供"}`}
+          </small>
+        )}
       </div>
     </>
   );

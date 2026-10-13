@@ -15,7 +15,7 @@ export function resultActionPolicy(result) {
   const dashboardSelectable = isDashboardSelectable(result);
   return {
     state: published ? "ready" : "unknown",
-    label: published ? "已发布" : "未发布",
+    label: result?.deleted_at ? "已删除" : published ? "已发布" : "未发布",
     dashboardSelectable,
     primary: {
       kind: "create-dashboard",
@@ -23,6 +23,10 @@ export function resultActionPolicy(result) {
       disabled: !dashboardSelectable,
     },
     secondary: null,
-    blockingReason: published ? "" : "分类结果版本尚未发布",
+    blockingReason: result?.deleted_at
+      ? "请先恢复分类结果"
+      : published
+        ? ""
+        : "分类结果版本尚未发布",
   };
 }

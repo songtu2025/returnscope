@@ -30,8 +30,10 @@ export function useResultPoolWorkspace({ route, updateRoute, userId }) {
       store_site: route.storeSite,
       listing: route.listing,
       quality_status: route.qualityStatus,
+      ...(route.lifecycle ? { lifecycle: route.lifecycle } : {}),
     }),
     [
+      route.lifecycle,
       route.listing,
       route.page,
       route.pageSize,
@@ -47,7 +49,11 @@ export function useResultPoolWorkspace({ route, updateRoute, userId }) {
   );
 
   const activeFilters = Boolean(
-    route.q || route.storeSite || route.listing || route.qualityStatus,
+    route.q ||
+    route.storeSite ||
+    route.listing ||
+    route.qualityStatus ||
+    route.lifecycle,
   );
   const totalPages = Math.max(Math.ceil((data?.total ?? 0) / route.pageSize), 1);
 

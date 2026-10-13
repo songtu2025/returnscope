@@ -6,7 +6,7 @@ import { AiInsightLegacyReport } from "./AiInsightLegacyReport";
 /** @typedef {import("./analysisDashboardContracts").Dashboard} Dashboard */
 /** @typedef {import("./analysisDashboardContracts").DashboardDecisionState} DashboardDecisionState */
 /** @typedef {import("./analysisDashboardContracts").DashboardVersion} DashboardVersion */
-/** @typedef {{report: InsightReport | null, reports: InsightReport[], attempts?: InsightReport[], latestReport: InsightReport | null, dashboard: Dashboard, version: DashboardVersion | null, analysisContext: string, onGenerate: () => void | Promise<void>, onRetry: () => void | Promise<void>, onSelect: (reportId: string) => void, selectedIssueId: string, decisionState: DashboardDecisionState, onDecision: (issueId: string, status: string) => void | Promise<void>, onSelectIssue: (issueId: string) => void}} AiInsightReportProps */
+/** @typedef {{report: InsightReport | null, reports: InsightReport[], attempts?: InsightReport[], latestReport: InsightReport | null, dashboard: Dashboard, version: DashboardVersion | null, analysisContext: string, onGenerate: () => void | Promise<void>, onRetry: () => void | Promise<void>, onCancel?: () => void | Promise<void>, cancelling?: boolean, onSelect: (reportId: string) => void, selectedIssueId: string, decisionState: DashboardDecisionState, onDecision: (issueId: string, status: string) => void | Promise<void>, onSelectIssue: (issueId: string) => void}} AiInsightReportProps */
 
 /** @param {{onGenerate: () => void | Promise<void>}} props */
 function InsightReportEmpty({ onGenerate }) {
@@ -33,6 +33,8 @@ export function AiInsightReport(props) {
         latestReport={latestReport}
         onRetry={onRetry}
         onSelect={onSelect}
+        onCancel={props.onCancel}
+        cancelling={props.cancelling}
       />
     );
   }
@@ -53,6 +55,19 @@ export function AiInsightReport(props) {
     );
   return (
     <>
+      {(props.attempts || [])
+        .filter((job) => ["queued", "running"].includes(job.status))
+        .map((job) => (
+          <div className="result-action-guidance" role="status" key={job.id}>
+            <span>
+              生成尝试 {job.attempt_no} ·{" "}
+              {job.status === "queued" ? "等待生成" : "正在生成"}
+            </span>
+            <button className="secondary-button" onClick={() => onSelect(job.id)}>
+              查看进度与取消
+            </button>
+          </div>
+        ))}
       {Boolean(report.source_outdated) && (
         <div className="result-action-guidance is-needs-review" role="status">
           <span>数据已更新，报告需更新</span>

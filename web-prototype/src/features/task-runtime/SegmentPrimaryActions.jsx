@@ -87,6 +87,20 @@ function SegmentRetryControls({ task, segment, actions }) {
 function SegmentResultControls({ segment, rowState, actions, publishStatus }) {
   const { retryingPublishId, setRetryingPublishId } = rowState;
   const { onViewClassification, onRetryPublish } = actions;
+  if (segment.result_deleted_at && segment.result_version_id)
+    return (
+      <Button
+        className="secondary-button compact-button"
+        onClick={() =>
+          onViewClassification({
+            ...segment,
+            result_version_id: String(segment.result_version_id),
+          })
+        }
+      >
+        查看已删除结果
+      </Button>
+    );
   return (
     <>
       {isPublishedResult(segment) && Number(segment.pending_review_count || 0) > 0 && (
@@ -148,7 +162,7 @@ export function SegmentPrimaryActions({
           {!segment.deleted_at && (
             <SegmentExecutionControls segment={segment} actions={actions} />
           )}
-          {!segment.deleted_at && (
+          {!segment.deleted_at && !segment.result_deleted_at && (
             <SegmentRetryControls task={task} segment={segment} actions={actions} />
           )}
           <SegmentRemovalControls segment={segment} actions={actions} />

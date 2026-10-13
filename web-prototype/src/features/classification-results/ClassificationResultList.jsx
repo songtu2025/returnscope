@@ -55,6 +55,26 @@ export function ClassificationResultList(props) {
       )}
 
       <ResultPoolFilters {...context} />
+      <div className="result-detail-tabs" role="group" aria-label="分类结果状态">
+        <button
+          className={route.lifecycle !== "deleted" ? "active" : ""}
+          onClick={() => {
+            clearSelection();
+            props.updateRoute({ lifecycle: "", page: 1 });
+          }}
+        >
+          当前结果
+        </button>
+        <button
+          className={route.lifecycle === "deleted" ? "active" : ""}
+          onClick={() => {
+            clearSelection();
+            props.updateRoute({ lifecycle: "deleted", page: 1 });
+          }}
+        >
+          已删除
+        </button>
+      </div>
 
       <ResultPoolContent {...context} />
       {selectedResults.length > 0 && (

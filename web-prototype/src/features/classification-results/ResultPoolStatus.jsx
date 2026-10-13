@@ -11,6 +11,7 @@ export function ResultPoolStatus({
   load,
   activeFilters,
   updateRoute,
+  route,
 }) {
   return (
     <>
@@ -18,14 +19,18 @@ export function ResultPoolStatus({
       {loading && !data && <InlineLoading scope="page" label="正在读取分类结果…" />}
       {error && <ResultError message={error} onRetry={load} hasData={Boolean(data)} />}
       {!loading && !error && data?.items?.length === 0 && (
-        <ResultPoolEmpty activeFilters={activeFilters} updateRoute={updateRoute} />
+        <ResultPoolEmpty
+          activeFilters={activeFilters}
+          updateRoute={updateRoute}
+          route={route}
+        />
       )}
     </>
   );
 }
 
-/** @param {Pick<import("./classificationResultListContracts").ResultPoolContext, "activeFilters" | "updateRoute">} props */
-function ResultPoolEmpty({ activeFilters, updateRoute }) {
+/** @param {Pick<import("./classificationResultListContracts").ResultPoolContext, "activeFilters" | "updateRoute" | "route">} props */
+function ResultPoolEmpty({ activeFilters, updateRoute, route }) {
   return (
     <EmptyState
       icon={Package}
@@ -45,6 +50,7 @@ function ResultPoolEmpty({ activeFilters, updateRoute }) {
                   storeSite: "",
                   listing: "",
                   qualityStatus: "",
+                  ...(route?.lifecycle ? { lifecycle: "" } : {}),
                   page: 1,
                 })
               : navigateHash("task-create")

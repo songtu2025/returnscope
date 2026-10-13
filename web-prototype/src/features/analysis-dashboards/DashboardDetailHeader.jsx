@@ -10,6 +10,7 @@ import Button from "antd/es/button";
 import { dashboardVersionNumber } from "./dashboardFields";
 import { dashboardVersionId } from "./DashboardDetailHelpers";
 import { analysisContextTerms } from "./analysisContextPresentation";
+import { DeliveryLifecycleControls } from "../../components/DeliveryLifecycleControls";
 
 /** @typedef {import("./analysisDashboardContracts").Dashboard} Dashboard */
 /** @typedef {import("./analysisDashboardContracts").DashboardTab} DashboardTab */
@@ -38,6 +39,7 @@ import { analysisContextTerms } from "./analysisContextPresentation";
  * @property {() => void} onShowHistory
  * @property {() => void} onShowOverview
  * @property {() => void} onShowReport
+ * @property {() => void | Promise<void>} [onChanged]
  */
 
 /** @param {DashboardDetailHeaderProps} props */
@@ -63,6 +65,7 @@ export function DashboardDetailHeader({
   onShowHistory,
   onShowOverview,
   onShowReport,
+  onChanged,
 }) {
   const terms = analysisContextTerms(analysisContext);
   return (
@@ -80,9 +83,21 @@ export function DashboardDetailHeader({
           <span>{dashboard.name || "未命名看板"}</span>
         </div>
         <div className="return-insight-header-actions">
+          <DeliveryLifecycleControls
+            kind="dashboard"
+            id={dashboard.id}
+            name={dashboard.name || "分析看板"}
+            revision={dashboard.revision}
+            deleted={Boolean(dashboard.deleted_at)}
+            onChanged={onChanged}
+          />
           {showReport ? (
             <>
-              <button className="secondary-button" onClick={onOpenReportGeneration}>
+              <button
+                className="secondary-button"
+                disabled={Boolean(dashboard.deleted_at)}
+                onClick={onOpenReportGeneration}
+              >
                 <ArrowsClockwise size={17} /> {selectedReport ? "重新生成" : "生成报告"}
               </button>
               <button

@@ -23,11 +23,13 @@ function SegmentResultCells({ segment, presentation }) {
         <span
           className={`segment-status ${publishStatus === "published" ? qualityState : publishStatus || "pending"}`}
         >
-          {publishStatus || isLegacyResult(segment)
-            ? isLegacyResult(segment)
-              ? "旧结果"
-              : stateLabel
-            : "未生成"}
+          {segment.result_deleted_at
+            ? "结果已删除"
+            : publishStatus || isLegacyResult(segment)
+              ? isLegacyResult(segment)
+                ? "旧结果"
+                : stateLabel
+              : "未生成"}
         </span>
         {publishStatus === "failed" && (
           <small className="result-publish-error">{stateDescription}</small>

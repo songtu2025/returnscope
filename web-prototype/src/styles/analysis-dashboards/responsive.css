@@ -4,7 +4,7 @@
   }
   .dashboard-list-head,
   .dashboard-list-row {
-    grid-template-columns: 64px minmax(140px, 1.4fr) 56px 86px 74px 98px 78px 60px;
+    grid-template-columns: 64px minmax(140px, 1.4fr) 56px 86px 74px 98px 78px 140px;
     gap: 8px;
   }
   .dashboard-drilldown-grid {
@@ -26,7 +26,7 @@
 @media (min-width: 1600px) {
   .analysis-dashboard-page .dashboard-list-head,
   .analysis-dashboard-page .dashboard-list-row {
-    grid-template-columns: 76px minmax(220px, 1.5fr) 76px 116px 94px 138px 104px 78px;
+    grid-template-columns: 76px minmax(220px, 1.5fr) 76px 116px 94px 138px 104px 140px;
   }
 }
 

@@ -89,7 +89,7 @@ export function resultStateLabel(result) {
 
 /** @param {ResultPolicyInput | null | undefined} result @returns {boolean} */
 export function isDashboardSelectable(result) {
-  return result?.publish_status === "published";
+  return result?.publish_status === "published" && !result.deleted_at;
 }
 
 /** @param {ResultPolicyInput | null | undefined} result */

@@ -45,8 +45,15 @@ export function SectionHeading({ number: sectionNumber, title }) {
   );
 }
 
-/** @param {{report: InsightReport, latestReport: InsightReport | null, onRetry: () => void | Promise<void>, onSelect: (reportId: string) => void}} props */
-export function ReportStatus({ report, latestReport, onRetry, onSelect }) {
+/** @param {{report: InsightReport, latestReport: InsightReport | null, onRetry: () => void | Promise<void>, onCancel?: () => void | Promise<void>, cancelling?: boolean, onSelect: (reportId: string) => void}} props */
+export function ReportStatus({
+  report,
+  latestReport,
+  onRetry,
+  onSelect,
+  onCancel,
+  cancelling,
+}) {
   const status = reportRuntimePresentation(report, latestReport);
   return (
     <section className={`ai-report-runtime-state ${report.status}`} role="status">
@@ -73,6 +80,11 @@ export function ReportStatus({ report, latestReport, onRetry, onSelect }) {
       {status.kind === "running" && latestReport && (
         <button className="secondary-button" onClick={() => onSelect(latestReport.id)}>
           查看已发布报告
+        </button>
+      )}
+      {status.kind === "running" && onCancel && (
+        <button className="secondary-button" disabled={cancelling} onClick={onCancel}>
+          {cancelling ? "正在取消…" : "取消本次生成"}
         </button>
       )}
       {report.status === "failed" && status.kind !== "historical_failure" && (

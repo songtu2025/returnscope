@@ -47,6 +47,8 @@ export function DashboardDetail(props) {
     openReportGeneration,
     submitReportGeneration,
     retryReport,
+    cancelReport,
+    cancelling,
     setIssueDecision,
   } = useDashboardReportActions({ ...props, ...reportState });
 
@@ -90,6 +92,7 @@ export function DashboardDetail(props) {
       )}
       <DashboardDetailHeader
         dashboard={dashboard}
+        onChanged={loadMain}
         selectedVersion={selectedVersion}
         showReport={showReport}
         selectedReport={selectedReport}
@@ -165,6 +168,8 @@ export function DashboardDetail(props) {
         onReloadReports={loadReports}
         onOpenReportGeneration={openReportGeneration}
         onRetryReport={retryReport}
+        onCancelReport={cancelReport}
+        cancelling={cancelling}
         onIssueDecision={setIssueDecision}
         onSelectIssue={
           /** @param {string} issueId */ (issueId) =>

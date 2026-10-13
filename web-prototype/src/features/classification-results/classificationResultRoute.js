@@ -15,6 +15,7 @@ import { RESULT_PAGE_SIZES } from "./classificationResultConstants";
  * @property {string} storeSite
  * @property {string} listing
  * @property {string} qualityStatus
+ * @property {string} [lifecycle]
  * @property {string} recordQualityStatus
  * @property {string} commentStatus
  * @property {string} systemRerunRequired
@@ -57,6 +58,7 @@ export function classificationResultRouteState(query) {
     storeSite: queryValue(query, "store_site"),
     listing: queryValue(query, "listing"),
     qualityStatus: queryValue(query, "quality_status"),
+    lifecycle: queryValue(query, "lifecycle"),
     recordQualityStatus: queryValue(query, "record_quality_status"),
     commentStatus: queryValue(query, "comment_status"),
     systemRerunRequired: queryValue(query, "system_rerun_required"),
@@ -83,6 +85,7 @@ export function classificationResultPoolQuery(route) {
     store_site: route.storeSite,
     listing: route.listing,
     quality_status: route.qualityStatus,
+    ...(route.lifecycle ? { lifecycle: route.lifecycle } : {}),
   };
 }
 

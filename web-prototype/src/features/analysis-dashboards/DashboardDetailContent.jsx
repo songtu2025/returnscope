@@ -34,6 +34,8 @@ import { DashboardDetailLoadingBody } from "./DashboardDetailStateViews";
  * @property {InsightReport | null} selectedReport
  * @property {InsightReport[]} publishedReports
  * @property {InsightReport[]} generationAttempts
+ * @property {() => Promise<void>} onCancelReport
+ * @property {boolean} cancelling
  * @property {InsightReport | null} latestPublishedReport
  * @property {Dashboard} dashboard
  * @property {DashboardVersion | null} selectedVersion
@@ -62,6 +64,8 @@ export function DashboardDetailContent({
   selectedReport,
   publishedReports,
   generationAttempts,
+  onCancelReport,
+  cancelling,
   latestPublishedReport,
   dashboard,
   selectedVersion,
@@ -143,6 +147,8 @@ export function DashboardDetailContent({
             version={selectedVersion}
             onGenerate={onOpenReportGeneration}
             onRetry={onRetryReport}
+            onCancel={onCancelReport}
+            cancelling={cancelling}
             selectedIssueId={route.issueId}
             decisionState={decisionState}
             onDecision={onIssueDecision}

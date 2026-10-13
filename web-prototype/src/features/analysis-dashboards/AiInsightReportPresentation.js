@@ -5,6 +5,7 @@ export const STATUS_LABELS = /** @type {Record<string, string>} */ ({
   running: "正在生成",
   completed: "生成完成",
   failed: "生成失败",
+  cancelled: "已取消",
 });
 
 export const QUALITY_GATE_LABELS = /** @type {Record<string, string>} */ ({
@@ -37,6 +38,13 @@ export function number(value) {
 
 /** @param {InsightReport} report @param {InsightReport | null} latestReport @returns {ReportRuntimePresentation} */
 export function reportRuntimePresentation(report, latestReport) {
+  if (report.status === "cancelled")
+    return {
+      kind: "failed",
+      latestReport,
+      title: "本次生成已取消",
+      description: "已有报告保留，本次生成不会发布新的报告。",
+    };
   if (report.status === "queued" || report.status === "running") {
     return {
       kind: "running",

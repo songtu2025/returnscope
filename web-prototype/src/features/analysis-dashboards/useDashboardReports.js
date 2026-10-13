@@ -56,7 +56,7 @@ function useReportList({ route }) {
           items: reportItems.map((item) => {
             const previous = current.items.find((value) => value.id === item.id);
             return previous &&
-              ["completed", "failed"].includes(previous.status) &&
+              ["completed", "failed", "cancelled"].includes(previous.status) &&
               ["queued", "running"].includes(item.status)
               ? previous
               : item;
