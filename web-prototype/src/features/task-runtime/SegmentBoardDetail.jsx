@@ -1,17 +1,10 @@
-import {
-  ArrowLineUp,
-  ArrowUp,
-  ArrowDown,
-  DownloadSimple,
-  X,
-} from "@phosphor-icons/react";
-import Button from "antd/es/button";
+import { ArrowLineUp, ArrowUp, ArrowDown, DownloadSimple } from "@phosphor-icons/react";
 import { api } from "../../api";
 import { formatTime } from "../../lib/presentation";
 import { isPublishedResult, isLegacyResult, moveSegmentKey } from "./taskSegmentPolicy";
 
 /** @typedef {import("./taskRuntimeContracts").TaskSegment} TaskSegment */
-/** @typedef {Pick<import("./segmentBoardRowContracts").SegmentBoardRowProps, "task" | "segment" | "queue" | "actions"> & {canOrder: boolean, orderableIndex: number, stateLabel: string, stateDescription: string | undefined}} SegmentDetailProps */
+/** @typedef {Pick<import("./segmentBoardRowContracts").SegmentBoardRowProps, "task" | "segment" | "queue"> & {canOrder: boolean, orderableIndex: number, stateLabel: string, stateDescription: string | undefined}} SegmentDetailProps */
 
 /** @param {{segment: TaskSegment}} props */
 function SegmentModelMetrics({ segment }) {
@@ -128,16 +121,8 @@ function SegmentOrderControls({ segment, orderableIndex, queue }) {
   );
 }
 
-/** @param {Pick<SegmentDetailProps, "task" | "segment" | "canOrder" | "orderableIndex" | "queue" | "actions">} props */
-function SegmentSecondaryActions({
-  task,
-  segment,
-  canOrder,
-  orderableIndex,
-  queue,
-  actions,
-}) {
-  const { onCancel } = actions;
+/** @param {Pick<SegmentDetailProps, "task" | "segment" | "canOrder" | "orderableIndex" | "queue">} props */
+function SegmentSecondaryActions({ task, segment, canOrder, orderableIndex, queue }) {
   return (
     <div className="listing-secondary-actions">
       {canOrder && (
@@ -146,16 +131,6 @@ function SegmentSecondaryActions({
           orderableIndex={orderableIndex}
           queue={queue}
         />
-      )}
-      {["queued", "retry_pending", "running", "paused", "failed"].includes(
-        segment.status,
-      ) && (
-        <Button
-          className="secondary-button compact-button listing-cancel-button"
-          onClick={() => onCancel(segment)}
-        >
-          <X size={14} /> 取消
-        </Button>
       )}
       {["completed", "completed_with_errors"].includes(segment.status) &&
         isPublishedResult(segment) && (
@@ -186,7 +161,6 @@ export function SegmentBoardDetail({
   canOrder,
   orderableIndex,
   queue,
-  actions,
   stateDescription,
   stateLabel,
 }) {
@@ -206,7 +180,6 @@ export function SegmentBoardDetail({
         canOrder={canOrder}
         orderableIndex={orderableIndex}
         queue={queue}
-        actions={actions}
       />
     </div>
   );

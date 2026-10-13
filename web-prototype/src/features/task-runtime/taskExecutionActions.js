@@ -1,9 +1,10 @@
 import { taskMonitorApi, errorMessage, errorStatus } from "./taskMonitorRequests";
+import { refreshServerState } from "../../shared/serverState";
 
 /** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
 /** @typedef {import("./taskRuntimeContracts").TaskPayload} TaskPayload */
 /** @typedef {import("./taskRuntimeContracts").SegmentAction} SegmentAction */
-/** @typedef {Pick<ReturnType<typeof import("./useTaskMonitorState").useTaskMonitorState>,"setSelected"|"setSelectedId"|"setEventStreamVersion"|"setActionError"|"loadTasks"|"loadSelected"|"updateListState"> & Pick<import("./taskMonitorContracts").TaskMonitorProps,"notify"|"onNavigate"|"onTaskFocus"> & {selected: AnalysisTask}} TaskActionContext */
+/** @typedef {Pick<ReturnType<typeof import("./useTaskMonitorState").useTaskMonitorState>,"mutateCache"|"setSelected"|"setSelectedId"|"setEventStreamVersion"|"setActionError"|"loadTasks"|"loadSelected"|"updateListState"> & Pick<import("./taskMonitorContracts").TaskMonitorProps,"notify"|"onNavigate"|"onTaskFocus"> & {selected: AnalysisTask}} TaskActionContext */
 
 /** @param {TaskActionContext} context */
 export function taskExecutionActions({
@@ -13,6 +14,7 @@ export function taskExecutionActions({
   setActionError,
   loadTasks,
   loadSelected,
+  mutateCache,
 }) {
   return {
     onRetrySegment: async (
@@ -85,8 +87,11 @@ export function taskExecutionActions({
             pause: "Listing 暂停请求已提交",
             resume: "Listing 已重新进入等待队列",
             cancel: "Listing 取消请求已提交",
+            delete: "Listing 已删除，结果和看板已保留",
+            restore: "Listing 已恢复，不会自动执行",
           }[action],
         );
+        await refreshServerState(mutateCache, ["workbench", "data-assets"]);
         return true;
       } catch (error) {
         if (errorStatus(error) === 409) await loadSelected();

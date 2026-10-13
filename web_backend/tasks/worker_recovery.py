@@ -61,7 +61,7 @@ class TaskWorkerRecoveryMixin:
                         SET status = 'cancelled', requested_action = NULL,
                             error = NULL, completed_at = ?, heartbeat_at = ?,
                             revision = revision + 1
-                        WHERE task_id = ?
+                        WHERE task_id = ? AND deleted_at IS NULL
                           AND status IN (
                               'queued', 'retry_pending', 'paused',
                               'not_started', 'blocked', 'failed'
@@ -75,7 +75,7 @@ class TaskWorkerRecoveryMixin:
                         UPDATE task_segments
                         SET status = 'paused', requested_action = NULL,
                             heartbeat_at = ?, revision = revision + 1
-                        WHERE task_id = ?
+                        WHERE task_id = ? AND deleted_at IS NULL
                           AND status IN ('queued', 'retry_pending', 'not_started')
                         """,
                     (now, task_id),
@@ -94,7 +94,7 @@ class TaskWorkerRecoveryMixin:
         statuses = [
             str(row["status"])
             for row in connection.execute(
-                "SELECT status FROM task_segments WHERE task_id = ?",
+                "SELECT status FROM active_task_segments WHERE task_id = ? AND deleted_at IS NULL",
                 (task_id,),
             ).fetchall()
         ]

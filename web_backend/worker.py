@@ -104,26 +104,26 @@ class TaskWorker(TaskWorkerRecoveryMixin, WorkerHealthMixin):
             row = connection.execute(
                 """
                 SELECT s.id AS segment_id, s.task_id
-                FROM task_segments s
+                FROM active_task_segments s
                 JOIN tasks t ON t.id = s.task_id
                 WHERE s.status IN ('queued', 'retry_pending')
                   AND t.status IN ('queued', 'running')
                   AND t.cancel_requested = 0
                   AND t.pause_requested = 0
                   AND (
-                      SELECT COUNT(*) FROM task_segments active
+                      SELECT COUNT(*) FROM active_task_segments active
                       WHERE active.task_id = t.id AND active.status = 'running'
                   ) < t.max_parallel_segments
                   AND (
                       SELECT COUNT(*)
-                      FROM task_segments owner_active
+                      FROM active_task_segments owner_active
                       JOIN tasks owner_task ON owner_task.id = owner_active.task_id
                       WHERE owner_task.owner_id = t.owner_id
                         AND owner_active.status = 'running'
                   ) < ?
                 ORDER BY
                   (
-                      SELECT COUNT(*) FROM task_segments active
+                      SELECT COUNT(*) FROM active_task_segments active
                       WHERE active.task_id = t.id AND active.status = 'running'
                   ) ASC,
                   COALESCE(t.last_scheduled_at, t.created_at) ASC,
@@ -184,7 +184,7 @@ class TaskWorker(TaskWorkerRecoveryMixin, WorkerHealthMixin):
                 """
                 SELECT DISTINCT t.id
                 FROM tasks t
-                JOIN task_segments s ON s.task_id = t.id
+                JOIN active_task_segments s ON s.task_id = t.id
                 WHERE t.status IN ('completed', 'partial', 'cancelled')
                   AND t.result_file_path IS NULL
                   AND t.error IS NULL
@@ -209,7 +209,7 @@ class TaskWorker(TaskWorkerRecoveryMixin, WorkerHealthMixin):
                 """
                 SELECT s.id, s.task_id, s.requested_action,
                        t.cancel_requested, t.pause_requested
-                FROM task_segments s
+                FROM active_task_segments s
                 JOIN tasks t ON t.id = s.task_id
                 WHERE s.status = 'running'
                 """

@@ -43,7 +43,7 @@ WHERE t.id = ?
 COMPLETED_SEGMENTS_QUERY = """
 SELECT id, status, result_version, result_file_path,
        completed_at, scope_json
-FROM task_segments
+FROM active_task_segments
 WHERE task_id = ?
   AND status IN ('completed', 'completed_with_errors')
 ORDER BY execution_order, id

@@ -21,7 +21,6 @@ import { segmentNeedsAttention } from "./taskRegistryPolicy";
  * @property {(maxParallelSegments: number) => Promise<unknown>} onParallelism
  * @property {(segmentKeys: string[]) => Promise<unknown>} onReorder
  * @property {(segment: TaskSegment & {result_version_id: string}, qualityStatus?: string) => void} onViewClassification
- * @property {() => void} onResumeUnfinished
  */
 const ORDERABLE_SEGMENT_STATUSES = ["queued", "retry_pending", "paused"];
 const PAGE_SIZE = 20;
@@ -60,7 +59,6 @@ export function SegmentBoard({
   onParallelism,
   onReorder,
   onViewClassification,
-  onResumeUnfinished,
 }) {
   const [reordering, setReordering] = useState(false);
   const [changingParallelism, setChangingParallelism] = useState(false);
@@ -83,8 +81,13 @@ export function SegmentBoard({
   }, [focusSegmentId, page]);
 
   const queueSegments = useMemo(
-    () => (task.segments ?? []).filter((segment) => segment.agent_key !== "unknown"),
-    [task.segments],
+    () =>
+      (task.segments ?? []).filter(
+        (segment) =>
+          segment.agent_key !== "unknown" &&
+          Boolean(segment.deleted_at) === (statusFilter === "deleted"),
+      ),
+    [task.segments, statusFilter],
   );
   const excludedSegments = useMemo(
     () => (task.segments ?? []).filter((segment) => segment.agent_key === "unknown"),
@@ -119,7 +122,7 @@ export function SegmentBoard({
           .toLocaleLowerCase();
         return (
           (!deferredQuery || searchText.includes(deferredQuery)) &&
-          matchesStatusFilter(segment, statusFilter)
+          (statusFilter === "deleted" || matchesStatusFilter(segment, statusFilter))
         );
       }),
     [deferredQuery, queueSegments, statusFilter],
@@ -214,7 +217,6 @@ export function SegmentBoard({
                   setRetryingPublishId,
                 }}
                 actions={{
-                  onResumeUnfinished,
                   onAction,
                   onRetry,
                   onViewClassification,

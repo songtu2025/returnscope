@@ -47,6 +47,7 @@ class ParentResultMixin:
                     task_id,
                     str(exc),
                     str(task["status"]),
+                    int(task["revision"]),
                 )
 
     def _refresh_parent(
@@ -67,7 +68,9 @@ class ParentResultMixin:
                 try:
                     self._build_parent_result(task_id, dataset, state.status)
                 except Exception as exc:
-                    self._record_parent_result_error(task_id, str(exc), state.status)
+                    self._record_parent_result_error(
+                        task_id, str(exc), state.status, int(task["revision"])
+                    )
                     return
             self._persist_parent_refresh(task_id, task, state)
 
@@ -76,22 +79,25 @@ class ParentResultMixin:
         task_id: str,
         error: str,
         parent_status: str,
+        expected_revision: int,
     ) -> None:
         now = utc_now()
         clean_error = error[:500]
         safe_status = "cancelled" if parent_status == "cancelled" else "partial"
         with self.database.transaction(immediate=True) as connection:
-            connection.execute(
+            updated = connection.execute(
                 """
                 UPDATE tasks
                 SET status = ?, stage = '结果汇总异常',
                     message = 'Listing 已完成，但批量结果生成失败；单项结果仍可下载',
                     error = ?, completed_at = ?, heartbeat_at = ?,
                     revision = revision + 1
-                WHERE id = ?
+                WHERE id = ? AND revision = ?
                 """,
-                (safe_status, clean_error, now, now, task_id),
+                (safe_status, clean_error, now, now, task_id, expected_revision),
             )
+            if not updated.rowcount:
+                return
             connection.execute(
                 """
                 INSERT INTO task_events(
@@ -186,7 +192,7 @@ class ParentResultMixin:
         now = utc_now()
         with self.database.transaction(immediate=True) as connection:
             before_status = str(task["status"])
-            connection.execute(
+            updated = connection.execute(
                 """
                     UPDATE tasks
                     SET status = ?, stage = ?, message = ?,
@@ -195,7 +201,7 @@ class ParentResultMixin:
                         error = ?,
                         completed_at = CASE WHEN ? THEN ? ELSE NULL END,
                         heartbeat_at = ?, revision = revision + 1
-                    WHERE id = ?
+                    WHERE id = ? AND revision = ?
                     """,
                 (
                     state.status,
@@ -209,8 +215,11 @@ class ParentResultMixin:
                     now,
                     now,
                     task_id,
+                    int(task["revision"]),
                 ),
             )
+            if not updated.rowcount:
+                return
             if before_status != state.status:
                 connection.execute(
                     """

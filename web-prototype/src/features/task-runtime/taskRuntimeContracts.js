@@ -1,7 +1,7 @@
 /**
  * @typedef {"queued" | "running" | "paused" | "completed" | "partial" | "blocked" | "failed" | "cancelled"} TaskStatus
  * @typedef {"ready" | "queued" | "running" | "pause_pending" | "cancel_pending" | "paused" | "completed" | "completed_with_errors" | "failed" | "blocked" | "cancelled" | "not_started" | "retry_pending"} TaskSegmentStatus
- * @typedef {"pause" | "resume" | "cancel"} SegmentAction
+ * @typedef {"pause" | "resume" | "cancel" | "delete" | "restore"} SegmentAction
  *
  * @typedef {Object} TaskConfigSnapshot
  * @property {"connection" | "task"} [strategy_source]
@@ -16,6 +16,7 @@
  * @property {number} [record_count]
  *
  * @typedef {Object} TaskSegment
+ * @property {string | null} [deleted_at]
  * @property {string} segment_key
  * @property {string} id
  * @property {string} agent_key

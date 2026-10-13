@@ -266,6 +266,7 @@ export function useTaskMonitorState({
   };
 
   return {
+    mutateCache,
     listState,
     selectedId,
     selected,

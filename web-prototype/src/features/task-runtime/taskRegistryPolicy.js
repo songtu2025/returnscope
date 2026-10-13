@@ -74,7 +74,7 @@ function isPartiallyQueued(task) {
 
 /** @param {AnalysisTask} task */
 export function taskSummary(task) {
-  const segments = task.segments ?? [];
+  const segments = (task.segments ?? []).filter((segment) => !segment.deleted_at);
   const executable = segments.filter((segment) => segment.agent_key !== "unknown");
   const { total, generated, resultDescription } = taskResultCounts(task, executable);
   const issues = executable.filter(segmentNeedsAttention).length;

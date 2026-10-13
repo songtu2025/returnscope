@@ -31,7 +31,7 @@ class TaskListQueriesMixin:
                    rd.name AS dataset_name, rv.version AS dataset_version,
                    COALESCE(t.completed_at, t.heartbeat_at, t.started_at,
                             t.created_at) AS updated_at,
-                   (SELECT COUNT(*) FROM task_segments segment
+                   (SELECT COUNT(*) FROM active_task_segments segment
                     WHERE segment.task_id = t.id) AS listing_count,
                    (SELECT GROUP_CONCAT(
                                TRIM(
@@ -46,7 +46,7 @@ class TaskListQueriesMixin:
                                ),
                                ' '
                            )
-                    FROM task_segments segment
+                    FROM active_task_segments segment
                     WHERE segment.task_id = t.id) AS listing_search_text,
                    CASE WHEN t.status = 'queued'
                              AND json_extract(
@@ -92,7 +92,7 @@ class TaskListQueriesMixin:
                 SELECT task_id, agent_key, status, result_publish_status,
                        result_version_id, result_quality_status,
                        result_file_path, error, model_failures
-                FROM task_segments
+                FROM active_task_segments
                 WHERE task_id IN (SELECT value FROM json_each(?))
                 """,
                 (json_text(list(items)),),

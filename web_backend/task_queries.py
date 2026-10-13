@@ -43,7 +43,7 @@ class TaskQueriesMixin(
             row = connection.execute(
                 """
                 SELECT COUNT(*) AS count
-                FROM task_segments s
+                FROM active_task_segments s
                 JOIN tasks t ON t.id = s.task_id
                 WHERE t.owner_id = ? AND s.status = 'running'
                 """,

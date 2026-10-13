@@ -42,7 +42,7 @@ class TaskLifecycleMixin(TaskHistoryMixin, TaskExecutionControlMixin):
                 UPDATE task_segments
                 SET status = 'cancelled', requested_action = NULL,
                     completed_at = ?, revision = revision + 1
-                WHERE task_id = ?
+                WHERE task_id = ? AND deleted_at IS NULL
                   AND status IN ('queued', 'retry_pending', 'paused',
                                  'failed', 'not_started')
                 """,
@@ -52,7 +52,7 @@ class TaskLifecycleMixin(TaskHistoryMixin, TaskExecutionControlMixin):
                 """
                 UPDATE task_segments
                 SET requested_action = 'cancel', revision = revision + 1
-                WHERE task_id = ? AND status = 'running'
+                WHERE task_id = ? AND deleted_at IS NULL AND status = 'running'
                 """,
                 (task_id,),
             ).rowcount

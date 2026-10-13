@@ -35,7 +35,7 @@ def _task_action_rows(connection: Any) -> tuple[Any, Any]:
                owner.id AS actor_id, owner.display_name AS actor_name,
                COALESCE(s.heartbeat_at, s.completed_at, s.started_at,
                         s.created_at) AS updated_at
-        FROM task_segments s
+        FROM active_task_segments s
         JOIN tasks t ON t.id = s.task_id
         LEFT JOIN users owner ON owner.id = t.owner_id
         WHERE s.status IN ('blocked', 'failed', 'paused')

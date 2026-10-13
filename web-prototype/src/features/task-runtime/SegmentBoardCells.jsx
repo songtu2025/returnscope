@@ -13,7 +13,9 @@ function SegmentResultCells({ segment, presentation }) {
     <>
       <div className="listing-state" role="cell">
         <span className={`segment-status ${displayStatus}`}>
-          {SEGMENT_STATUS_LABELS[displayStatus] ?? displayStatus}
+          {segment.deleted_at
+            ? "已删除"
+            : (SEGMENT_STATUS_LABELS[displayStatus] ?? displayStatus)}
         </span>
         {segment.wait_reason && <small>{segment.wait_reason}</small>}
       </div>

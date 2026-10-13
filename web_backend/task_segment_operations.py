@@ -12,6 +12,7 @@ from web_backend.task_contracts import (
 )
 from web_backend.task_state import summarize_task_status
 from web_backend.tasks.scheduling import TaskSchedulingMixin
+from web_backend.tasks.segment_removal import TaskSegmentRemovalMixin
 from web_backend.tasks.segment_retry import TaskSegmentRetryMixin
 
 _SEGMENT_ACTION_MESSAGES = {
@@ -21,7 +22,9 @@ _SEGMENT_ACTION_MESSAGES = {
 }
 
 
-class TaskSegmentOperationsMixin(TaskSchedulingMixin, TaskSegmentRetryMixin):
+class TaskSegmentOperationsMixin(
+    TaskSchedulingMixin, TaskSegmentRetryMixin, TaskSegmentRemovalMixin
+):
     _insert_audit: Callable[..., None]
     _status_text: Callable[..., tuple[str, str]]
     database: Database
@@ -36,6 +39,14 @@ class TaskSegmentOperationsMixin(TaskSchedulingMixin, TaskSegmentRetryMixin):
         expected_revision: int,
         note: str = "",
     ) -> dict[str, Any]:
+        if action in {"delete", "restore"}:
+            return self.set_segment_deleted(
+                task_id,
+                segment_key,
+                actor_id,
+                expected_revision,
+                deleted=action == "delete",
+            )
         clean_note = self._validate_segment_action(action, note)
         now = utc_now()
         with self.database.transaction(immediate=True) as connection:
@@ -71,7 +82,7 @@ class TaskSegmentOperationsMixin(TaskSchedulingMixin, TaskSegmentRetryMixin):
             statuses = [
                 str(row["status"])
                 for row in connection.execute(
-                    "SELECT status FROM task_segments WHERE task_id = ?",
+                    "SELECT status FROM active_task_segments WHERE task_id = ?",
                     (task_id,),
                 ).fetchall()
             ]
@@ -82,7 +93,7 @@ class TaskSegmentOperationsMixin(TaskSchedulingMixin, TaskSegmentRetryMixin):
                 """
                 UPDATE tasks
                 SET status = ?, stage = ?, message = ?,
-                    pause_requested = ?,
+                    pause_requested = ?, cancel_requested = CASE WHEN ? = 'resume' THEN 0 ELSE cancel_requested END,
                     completed_at = CASE
                         WHEN ? IN ('completed', 'partial', 'cancelled', 'failed') THEN ?
                         ELSE NULL
@@ -95,6 +106,7 @@ class TaskSegmentOperationsMixin(TaskSchedulingMixin, TaskSegmentRetryMixin):
                     stage,
                     message,
                     pause_requested,
+                    action,
                     task_status,
                     now,
                     now,
@@ -157,15 +169,17 @@ class TaskSegmentOperationsMixin(TaskSchedulingMixin, TaskSegmentRetryMixin):
         task_id: str,
         segment_key: str,
         expected_revision: int,
+        *,
+        include_deleted: bool = False,
     ) -> tuple[Any, Any]:
         task = connection.execute(
-            "SELECT revision, stage, pause_requested FROM tasks WHERE id = ?",
+            "SELECT * FROM tasks WHERE id = ?",
             (task_id,),
         ).fetchone()
         self._validate_task_revision(task, expected_revision)
         segment = connection.execute(
             """
-            SELECT id, status, requested_action, agent_key
+            SELECT id, status, requested_action, agent_key, deleted_at
             FROM task_segments
             WHERE task_id = ? AND segment_key = ?
             """,
@@ -173,6 +187,8 @@ class TaskSegmentOperationsMixin(TaskSchedulingMixin, TaskSegmentRetryMixin):
         ).fetchone()
         if segment is None:
             raise ValueError("Listing 片段不存在")
+        if segment["deleted_at"] and not include_deleted:
+            raise ValueError("Listing 已删除，请先恢复")
         if segment["agent_key"] == "unknown" or segment["status"] == "blocked":
             raise ValueError("未配置品类不会进入 Listing 执行队列")
         return task, segment
@@ -196,8 +212,8 @@ class TaskSegmentOperationsMixin(TaskSchedulingMixin, TaskSegmentRetryMixin):
                 return "running", "pause"
             raise ValueError("当前状态不能暂停")
         if action == "resume":
-            if before_status != "paused":
-                raise ValueError("仅已暂停的 Listing 可以继续")
+            if before_status not in {"paused", "cancelled"}:
+                raise ValueError("仅已暂停或已取消的 Listing 可以继续")
             return "queued", None
         if before_status == "running":
             return "running", "cancel"

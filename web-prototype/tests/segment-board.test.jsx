@@ -50,6 +50,34 @@ function propsFor(segments, fields = {}) {
   };
 }
 
+test("Listing 删除需要确认，已删除筛选可以恢复且不触发重新排队", async () => {
+  const item = segment(1, { status: "completed" });
+  const props = propsFor([item]);
+  props.onAction.mockResolvedValue(true);
+  const view = render(<SegmentBoard {...props} />);
+  await userEvent.click(screen.getByLabelText("更多 Listing 操作：SYNTHETIC-1"));
+  await userEvent.click(screen.getByRole("button", { name: "删除此 Listing" }));
+  expect(screen.getByRole("dialog")).toHaveTextContent("分类结果和看板保留");
+  expect(props.onAction).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByRole("button", { name: "确认删除 Listing" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(props.onAction).toHaveBeenCalledWith(item.segment_key, "delete");
+  props.task = { ...props.task, segments: [{ ...item, deleted_at: "2026-10-13" }] };
+  view.rerender(<SegmentBoard {...props} />);
+  expect(screen.queryByText("SYNTHETIC-1")).toBeNull();
+  await userEvent.selectOptions(
+    screen.getByLabelText("按 Listing 状态筛选"),
+    "deleted",
+  );
+  expect(screen.getByText("SYNTHETIC-1")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "重试" })).toBeNull();
+  await userEvent.click(screen.getByRole("button", { name: "恢复 Listing" }));
+  await waitFor(() =>
+    expect(props.onAction).toHaveBeenLastCalledWith(item.segment_key, "restore"),
+  );
+  expect(props.onResumeUnfinished).not.toHaveBeenCalled();
+});
+
 test("每页20条，搜索跨全部Listing并重置页码，数据减少后修正页码", async () => {
   const user = userEvent.setup();
   const segments = Array.from({ length: 25 }, (_, index) => segment(index));

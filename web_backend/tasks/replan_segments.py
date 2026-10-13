@@ -25,6 +25,9 @@ class TaskReplanSegmentsMixin:
         for old_segment in old_segments:
             agent_key = str(old_segment["agent_key"])
             segment_key = str(old_segment["segment_key"])
+            if old_segment["deleted_at"]:
+                preserved[segment_key] = old_segment
+                continue
             if (
                 agent_key == "unknown"
                 or old_segment["status"] not in protected_statuses
@@ -76,6 +79,11 @@ class TaskReplanSegmentsMixin:
             created_at=context.now,
         )
         for planned_segment_key, segment in context.planned_segments.items():
+            if (
+                planned_segment_key in context.preserved
+                and context.preserved[planned_segment_key]["deleted_at"]
+            ):
+                continue
             remaining_keys = [
                 key
                 for key in context.planned_keys.get(planned_segment_key, [])

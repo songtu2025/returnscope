@@ -120,7 +120,7 @@ class TaskResultPublishMixin:
         self._validate_task_revision(task, expected_revision)
         segment = connection.execute(
             """
-            SELECT * FROM task_segments
+            SELECT * FROM active_task_segments
             WHERE task_id = ? AND id = ?
             """,
             (task_id, segment_id),

@@ -94,18 +94,22 @@ export function TaskDetail({
     setListingFilter(filter);
     setActiveTab("execution");
   };
-  const hasUnfinishedSegments = task.segments?.some((segment) =>
-    [
-      "cancelled",
-      "not_started",
-      "running",
-      "queued",
-      "retry_pending",
-      "paused",
-    ].includes(segment.status),
+  const hasUnfinishedSegments = task.segments?.some(
+    (segment) =>
+      !segment.deleted_at &&
+      [
+        "cancelled",
+        "not_started",
+        "running",
+        "queued",
+        "retry_pending",
+        "paused",
+      ].includes(segment.status),
   );
   const executableSegments =
-    task.segments?.filter((segment) => segment.agent_key !== "unknown") ?? [];
+    task.segments?.filter(
+      (segment) => segment.agent_key !== "unknown" && !segment.deleted_at,
+    ) ?? [];
   const modelServiceIssue = executableSegments.find(
     (segment) =>
       ["paused", "failed", "running"].includes(segment.status) &&
@@ -182,7 +186,6 @@ export function TaskDetail({
               onParallelism={onParallelism}
               onReorder={onReorderSegments}
               onViewClassification={onViewClassification}
-              onResumeUnfinished={() => setResumeOpen(true)}
             />
           }
         />

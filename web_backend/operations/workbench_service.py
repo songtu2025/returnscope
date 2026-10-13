@@ -22,13 +22,13 @@ class WorkbenchService:
                     SELECT
                       (SELECT COUNT(*) FROM tasks
                        WHERE status = 'blocked') AS blocked_tasks,
-                      (SELECT COUNT(*) FROM task_segments
+                      (SELECT COUNT(*) FROM active_task_segments
                        WHERE status = 'blocked') AS blocked_segments,
-                      (SELECT COUNT(*) FROM task_segments
+                      (SELECT COUNT(*) FROM active_task_segments
                        WHERE status = 'failed') AS failed_segments,
                       (SELECT COUNT(*) FROM tasks
                        WHERE status = 'paused') AS paused_tasks,
-                      (SELECT COUNT(*) FROM task_segments
+                      (SELECT COUNT(*) FROM active_task_segments
                        WHERE status = 'paused') AS paused_segments,
                       (SELECT COUNT(*) FROM classification_result_versions
                        WHERE publish_status = 'published'

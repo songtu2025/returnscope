@@ -2,24 +2,24 @@ import { ArrowClockwise, ChartBar, Pause, Play } from "@phosphor-icons/react";
 import Button from "antd/es/button";
 import { isPublishedResult } from "./taskSegmentPolicy";
 import { canRetrySegment } from "./segmentBoardRowPolicy";
+import { SegmentRemovalControls } from "./SegmentRemovalControls";
 
 /** @typedef {import("./segmentBoardRowContracts").SegmentBoardRowProps} SegmentBoardRowProps */
 /** @typedef {Pick<SegmentBoardRowProps, "task" | "segment" | "rowState" | "actions"> & {publishStatus: string}} PrimaryActionsProps */
 
-/** @param {Pick<PrimaryActionsProps, "task" | "segment" | "actions">} props */
-function SegmentExecutionControls({ task, segment, actions }) {
-  const { onResumeUnfinished, onAction } = actions;
+/** @param {Pick<PrimaryActionsProps, "segment" | "actions">} props */
+function SegmentExecutionControls({ segment, actions }) {
+  const { onAction } = actions;
   return (
     <>
-      {task.status === "cancelled" &&
-        ["cancelled", "not_started", "paused"].includes(segment.status) && (
-          <Button
-            className="secondary-button compact-button listing-resume-button"
-            onClick={onResumeUnfinished}
-          >
-            <ArrowClockwise size={14} /> 重新排队
-          </Button>
-        )}
+      {segment.status === "cancelled" && (
+        <Button
+          className="secondary-button compact-button listing-resume-button"
+          onClick={() => onAction(segment.segment_key, "resume")}
+        >
+          <ArrowClockwise size={14} /> 重新排队
+        </Button>
+      )}
       {["queued", "retry_pending"].includes(segment.status) && (
         <Button
           className="secondary-button compact-button"
@@ -106,7 +106,7 @@ function SegmentResultControls({ segment, rowState, actions, publishStatus }) {
             <ChartBar size={14} /> 查看分类结果
           </Button>
         )}
-      {publishStatus === "failed" && (
+      {publishStatus === "failed" && !segment.deleted_at && (
         <Button
           className="secondary-button compact-button"
           disabled={retryingPublishId === segment.id}
@@ -145,25 +145,32 @@ export function SegmentPrimaryActions({
     >
       <div className="listing-action-groups">
         <div className="listing-control-actions">
-          <SegmentExecutionControls task={task} segment={segment} actions={actions} />
-          <SegmentRetryControls task={task} segment={segment} actions={actions} />
+          {!segment.deleted_at && (
+            <SegmentExecutionControls segment={segment} actions={actions} />
+          )}
+          {!segment.deleted_at && (
+            <SegmentRetryControls task={task} segment={segment} actions={actions} />
+          )}
+          <SegmentRemovalControls segment={segment} actions={actions} />
           <SegmentResultControls
             segment={segment}
             rowState={rowState}
             actions={actions}
             publishStatus={publishStatus}
           />
-          <button
-            className="secondary-button compact-button listing-detail-button"
-            aria-expanded={expandedSegmentKey === segment.segment_key}
-            onClick={() =>
-              setExpandedSegmentKey((current) =>
-                current === segment.segment_key ? null : segment.segment_key,
-              )
-            }
-          >
-            {expandedSegmentKey === segment.segment_key ? "收起详情" : "查看详情"}
-          </button>
+          {!segment.deleted_at && (
+            <button
+              className="secondary-button compact-button listing-detail-button"
+              aria-expanded={expandedSegmentKey === segment.segment_key}
+              onClick={() =>
+                setExpandedSegmentKey((current) =>
+                  current === segment.segment_key ? null : segment.segment_key,
+                )
+              }
+            >
+              {expandedSegmentKey === segment.segment_key ? "收起详情" : "查看详情"}
+            </button>
+          )}
         </div>
       </div>
     </div>

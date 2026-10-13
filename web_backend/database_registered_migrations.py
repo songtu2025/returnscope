@@ -8,6 +8,25 @@ from web_backend.database_sql_migrations import (
     apply_sql_migration,
 )
 
+SEGMENT_REMOVAL_SQL = """
+ALTER TABLE task_segments ADD COLUMN deleted_at TEXT;
+CREATE VIEW active_task_segments AS SELECT * FROM task_segments WHERE deleted_at IS NULL;
+"""
+
+
+def migrate_segment_removal(connection: sqlite3.Connection) -> None:
+    apply_sql_migration(
+        connection,
+        RegisteredSqlMigration(
+            "20261013_listing_soft_delete",
+            hashlib.sha256(SEGMENT_REMOVAL_SQL.encode("utf-8")).hexdigest(),
+            SEGMENT_REMOVAL_SQL,
+        ),
+        savepoint="listing_soft_delete",
+        checksum_error="Listing 删除迁移校验失败",
+    )
+
+
 RESULT_SOURCE_ORIGIN_MIGRATION = "20260921_result_source_origin"
 RESULT_SOURCE_ORIGIN_MIGRATION_CHECKSUM = hashlib.sha256(
     b"classification_result_records.source_origin_id:TEXT:v1"

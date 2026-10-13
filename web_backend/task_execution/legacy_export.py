@@ -127,7 +127,7 @@ class LegacyResultExportMixin:
                 UPDATE tasks
                 SET metrics_json = ?, result_file_path = ?,
                     results_json_path = ?, result_version = ?, heartbeat_at = ?
-                WHERE id = ?
+                WHERE id = ? AND revision = ?
                 """,
                 (
                     json_text(metrics),
@@ -136,6 +136,7 @@ class LegacyResultExportMixin:
                     result_version,
                     now,
                     task_id,
+                    int(task["revision"]),
                 ),
             )
 
@@ -145,6 +146,7 @@ class LegacyResultExportMixin:
         completed_segments = [
             segment
             for segment in self._load_segments(task_id)
+            if not segment.get("deleted_at")
             if segment["status"] in COMPLETED_SEGMENT_STATUSES
         ]
         results, completed_keys = self._completed_segment_results(completed_segments)
@@ -206,7 +208,11 @@ class LegacyResultExportMixin:
             key: value.model_dump(mode="json") for key, value in data.results.items()
         }
         review_count = self._review_count(serialized)
-        persisted_segments = self._load_segments(data.task_id)
+        persisted_segments = [
+            segment
+            for segment in self._load_segments(data.task_id)
+            if not segment.get("deleted_at")
+        ]
         statuses = Counter((value["status"] for value in serialized.values()))
         snapshot = json_value(task.get("snapshot_json"), {})
         plan_summary = snapshot.get("execution_plan", {}).get("summary", {})

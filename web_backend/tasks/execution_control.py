@@ -37,7 +37,7 @@ class TaskExecutionControlMixin:
                 UPDATE task_segments
                 SET status = 'paused', requested_action = NULL,
                     revision = revision + 1
-                WHERE task_id = ? AND status IN ('queued', 'retry_pending')
+                WHERE task_id = ? AND deleted_at IS NULL AND status IN ('queued', 'retry_pending')
                 """,
                 (task_id,),
             )
@@ -45,7 +45,7 @@ class TaskExecutionControlMixin:
                 """
                 UPDATE task_segments
                 SET requested_action = 'pause', revision = revision + 1
-                WHERE task_id = ? AND status = 'running'
+                WHERE task_id = ? AND deleted_at IS NULL AND status = 'running'
                 """,
                 (task_id,),
             ).rowcount
@@ -107,8 +107,8 @@ class TaskExecutionControlMixin:
             source_status = str(task["status"])
             resumable = connection.execute(
                 """
-                SELECT COUNT(*) AS count FROM task_segments
-                WHERE task_id = ?
+                SELECT COUNT(*) AS count FROM active_task_segments
+                WHERE task_id = ? AND deleted_at IS NULL
                   AND status IN (
                       'cancelled', 'not_started', 'running',
                       'queued', 'retry_pending', 'paused'
@@ -132,7 +132,7 @@ class TaskExecutionControlMixin:
                     error = NULL, requested_action = NULL,
                     started_at = NULL, completed_at = NULL,
                     revision = revision + 1
-                WHERE task_id = ?
+                WHERE task_id = ? AND deleted_at IS NULL
                   AND status IN (
                       'cancelled', 'not_started', 'running',
                       'queued', 'retry_pending', 'paused'

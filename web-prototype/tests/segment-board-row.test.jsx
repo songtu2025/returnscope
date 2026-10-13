@@ -165,7 +165,8 @@ test("排序边界及提交期间禁用按键，取消使用原片段对象", as
     "synthetic-other",
     "synthetic-key",
   ]);
-  await userEvent.click(screen.getByRole("button", { name: "取消" }));
+  await userEvent.click(screen.getByLabelText("更多 Listing 操作：SYNTHETIC"));
+  await userEvent.click(screen.getByRole("button", { name: "取消此 Listing" }));
   expect(props.actions.onCancel).toHaveBeenCalledExactlyOnceWith(props.segment);
   view.rerender(
     <SegmentBoardRow {...props} queue={{ ...props.queue, reordering: true }} />,
@@ -218,10 +219,14 @@ test("系统异常重试优先于通用重试，运行任务禁止系统异常�
 });
 
 test("已取消任务保留重新排队入口，暂停与继续传入片段键", async () => {
-  const props = rowProps({ status: "paused" }, "cancelled");
+  const props = rowProps({ status: "cancelled" }, "cancelled");
   const view = render(<SegmentBoardRow {...props} />);
   await userEvent.click(screen.getByRole("button", { name: "重新排队" }));
-  expect(props.actions.onResumeUnfinished).toHaveBeenCalledOnce();
+  expect(props.actions.onResumeUnfinished).not.toHaveBeenCalled();
+  expect(props.actions.onAction).toHaveBeenCalledWith("synthetic-key", "resume");
+  view.rerender(
+    <SegmentBoardRow {...props} segment={{ ...props.segment, status: "paused" }} />,
+  );
   await userEvent.click(screen.getByRole("button", { name: "继续" }));
   expect(props.actions.onAction).toHaveBeenCalledWith("synthetic-key", "resume");
   view.rerender(

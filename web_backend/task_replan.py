@@ -105,7 +105,7 @@ class TaskReplanMixin(TaskReplanSegmentsMixin):
             statuses = [
                 str(value["status"])
                 for value in connection.execute(
-                    "SELECT status FROM task_segments WHERE task_id = ?",
+                    "SELECT status FROM active_task_segments WHERE task_id = ?",
                     (task_id,),
                 ).fetchall()
             ]

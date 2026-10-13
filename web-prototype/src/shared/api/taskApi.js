@@ -3,7 +3,7 @@ import { API_BASE, queryString, request } from "./request";
 /**
  * @typedef {Record<string, string | number | boolean | null | undefined>} TaskQuery
  * @typedef {Record<string, unknown>} TaskPayload
- * @typedef {"pause" | "resume" | "cancel"} TaskControlAction
+ * @typedef {"pause" | "resume" | "cancel" | "delete" | "restore"} TaskControlAction
  * @typedef {ReturnType<typeof request>} TaskRequest
  */
 

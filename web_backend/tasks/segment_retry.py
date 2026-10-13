@@ -126,7 +126,7 @@ class TaskSegmentRetryMixin:
         self._validate_task_revision(task, expected_revision)
         segment = connection.execute(
             """
-                SELECT * FROM task_segments
+                SELECT * FROM active_task_segments
                 WHERE task_id = ? AND segment_key = ?
                 """,
             (task_id, segment_key),
@@ -151,7 +151,7 @@ class TaskSegmentRetryMixin:
         )
         blocked_exists = connection.execute(
             """
-                    SELECT 1 FROM task_segments
+                    SELECT 1 FROM active_task_segments
                     WHERE task_id = ? AND status = 'blocked' LIMIT 1
                     """,
             (task_id,),

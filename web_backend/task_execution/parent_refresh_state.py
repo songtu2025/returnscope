@@ -31,7 +31,18 @@ def _parent_refresh_state(
     segments: list[dict[str, Any]],
     status_text: Callable[[str, int], tuple[str, str]],
 ) -> _ParentRefreshState:
-    executable = [segment for segment in segments if segment["agent_key"] != "unknown"]
+    executable = [
+        segment
+        for segment in segments
+        if segment["agent_key"] != "unknown" and not segment.get("deleted_at")
+    ]
+    if not executable and any(
+        segment.get("deleted_at") and segment["agent_key"] != "unknown"
+        for segment in segments
+    ):
+        return _ParentRefreshState(
+            "cancelled", "已取消", "全部 Listing 已删除", None, 0, 0, 0, True, False
+        )
     parent_status, stage, message, parent_error = _parent_status_details(
         task, executable, status_text
     )

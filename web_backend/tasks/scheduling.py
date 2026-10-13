@@ -88,7 +88,7 @@ class TaskSchedulingMixin:
             rows = connection.execute(
                 """
                 SELECT id, segment_key, status, execution_order
-                FROM task_segments
+                FROM active_task_segments
                 WHERE task_id = ?
                 ORDER BY execution_order, segment_key
                 """,
