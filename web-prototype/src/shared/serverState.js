@@ -26,6 +26,54 @@ export function refreshServerState(mutate, domains) {
   return mutate((key) => Array.isArray(key) && domains.includes(key[0]));
 }
 
+/** 按任务 ID 更新已访问页面的名称，避免切回页面时先显示旧缓存。
+ * @param {import("swr").ScopedMutator} mutate
+ * @param {import("../features/task-runtime/taskRuntimeContracts").AnalysisTask} task
+ * @param {string} previousTitle
+ */
+export async function refreshTaskNameState(mutate, task, previousTitle) {
+  await Promise.all([
+    mutate(
+      (key) => Array.isArray(key) && key[0] === "workbench",
+      (
+        /** @type {import("./api/workbenchContracts").WorkbenchSummary | undefined} */ current,
+      ) =>
+        current && {
+          ...current,
+          actions: current.actions.map((action) => {
+            if (action.target.task_id !== task.id) return action;
+            if (action.object_type === "task") return { ...action, title: task.title };
+            if (
+              action.object_type === "task_segment" &&
+              action.title.startsWith(`${previousTitle} / `)
+            )
+              return {
+                ...action,
+                title: task.title + action.title.slice(previousTitle.length),
+              };
+            return action;
+          }),
+        },
+      { revalidate: false },
+    ),
+    mutate(
+      (key) =>
+        Array.isArray(key) && key[0] === "data-assets" && key[1] === "references",
+      (
+        /** @type {import("./api/dataManagementContracts").DatasetReferencePage | undefined} */ current,
+      ) =>
+        current && {
+          ...current,
+          items: current.items.map((item) =>
+            item.task_id === task.id ? { ...item, title: task.title } : item,
+          ),
+        },
+      { revalidate: false },
+    ),
+  ]);
+  return refreshServerState(mutate, ["workbench", "data-assets"]);
+}
+
 export const serverStateKeys = {
   /** @param {number} limit */
   workbenchSummary: (limit) => ["workbench", "summary", limit],

@@ -85,10 +85,6 @@
   font-size: 12px;
   font-weight: 700;
 }
-.task-rename-action {
-  width: 40px;
-  padding: 0;
-}
 .task-result-retained {
   display: flex;
   align-items: flex-start;

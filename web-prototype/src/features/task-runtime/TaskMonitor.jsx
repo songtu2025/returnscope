@@ -34,14 +34,8 @@ export function TaskMonitor(props) {
     setActionError,
     setDetailError,
     updateListState,
+    onTaskRenamed,
   } = state;
-  /** @param {AnalysisTask} updated */
-  const onTaskRenamed = async (updated) => {
-    state.setSelected(updated);
-    await state.loadTasks();
-    state.setEventStreamVersion((current) => current + 1);
-    notify("任务名称已修改");
-  };
   return (
     <div className="standard-page task-page task-runtime-workspace">
       <div hidden={showTaskDetail}>

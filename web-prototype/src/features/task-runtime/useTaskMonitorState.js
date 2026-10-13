@@ -6,7 +6,11 @@ import {
 } from "../../shared/refreshPolicy";
 import { useCallback, useEffect, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
-import { refreshServerState, serverStateKeys } from "../../shared/serverState";
+import {
+  refreshServerState,
+  refreshTaskNameState,
+  serverStateKeys,
+} from "../../shared/serverState";
 import { taskMonitorApi, errorMessage } from "./taskMonitorRequests";
 
 /** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
@@ -239,6 +243,19 @@ export function useTaskMonitorState({
     }
   };
 
+  /** @param {AnalysisTask} updated */
+  const onTaskRenamed = async (updated) => {
+    const previousTitle =
+      tasks.find((task) => task.id === updated.id)?.title ?? selected?.title ?? "";
+    setSelected(updated);
+    await Promise.all([
+      loadTasks(),
+      refreshTaskNameState(mutateCache, updated, previousTitle),
+    ]);
+    setEventStreamVersion((current) => current + 1);
+    notify("任务名称已修改");
+  };
+
   /** @param {AnalysisTask} task */
   const openTask = (task) => {
     listScroll.current = window.scrollY;
@@ -267,6 +284,7 @@ export function useTaskMonitorState({
     visibleSelected,
     returnToList,
     archiveTasks,
+    onTaskRenamed,
     setSelectedId,
     setSelected,
     setActionError,
