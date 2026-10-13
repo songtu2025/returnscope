@@ -116,8 +116,6 @@ class TaskLifecycleMixin(TaskHistoryMixin, TaskExecutionControlMixin):
         if not clean_title:
             raise ValueError("任务名称不能为空")
         clean_note = note.strip()
-        if not clean_note:
-            raise ValueError("请填写修改原因")
         with self.database.transaction(immediate=True) as connection:
             row = connection.execute(
                 "SELECT title, revision, stage FROM tasks WHERE id = ?",

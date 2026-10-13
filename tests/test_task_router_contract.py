@@ -35,9 +35,13 @@ def test_task_router_registration_and_openapi_contract(
         route.dependant.dependencies[0].call is harness.current_user for route in routes
     )
     # 固定拆分前的完整接口定义，覆盖参数、模型、操作标识和响应描述。
-    schema = json.dumps(harness.app.openapi(), ensure_ascii=False, sort_keys=True)
+    contract = harness.app.openapi()
+    rename = contract["components"]["schemas"]["TaskRenameRequest"]
+    assert "note" not in rename["required"]
+    assert rename["properties"]["note"]["default"] == ""
+    schema = json.dumps(contract, ensure_ascii=False, sort_keys=True)
     assert hashlib.sha256(schema.encode()).hexdigest() == (
-        "1c12666cb00aa8a4a1291dd301d27c266b8a098741e711bd1430dc96a90da415"
+        "73c0b623c93f3da0383a201fb6467ed61ddf91337afcb9e13023e3567fc64d27"
     )
 
 
@@ -181,3 +185,14 @@ def test_missing_task_responses(
     response = _request(harness, name)
     assert response.status_code == 404
     assert response.json() == {"detail": message}
+
+
+def test_rename_endpoint_accepts_name_without_reason(harness: SimpleNamespace) -> None:
+    response = harness.client.patch(
+        "/api/tasks/task-1", json={"title": "同名任务", "expected_revision": 3}
+    )
+    assert response.status_code == 200
+    assert harness.task.rename.call_args.kwargs["task_id"] == "task-1"
+    assert harness.task.rename.call_args.kwargs["title"] == "同名任务"
+    assert harness.task.rename.call_args.kwargs["note"] == ""
+    assert harness.task.rename.call_args.kwargs["expected_revision"] == 3

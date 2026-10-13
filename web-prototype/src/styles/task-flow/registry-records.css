@@ -226,23 +226,67 @@
   }
 }
 
-.task-registry-identity {
+.task-name-editor {
+  min-width: 0;
+  width: 100%;
+}
+.task-name-display {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-.task-registry-identity > button:first-child {
-  flex: 1;
   min-width: 0;
 }
-.task-registry-identity .task-rename-action {
+.task-registry-identity .task-name-open {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+.task-name-editor .task-rename-action {
+  display: flex;
   flex: none;
   width: 28px;
   min-height: 28px;
+  padding: 4px;
   align-items: center;
   justify-content: center;
+  border: 0;
+  border-radius: 6px;
   color: var(--green);
+  background: transparent;
+  cursor: pointer;
 }
-.task-registry-identity .task-rename-action:hover {
+.task-name-editor .task-rename-action:hover {
   background: var(--green-pale);
+}
+.task-name-editor form {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.task-name-editor input {
+  width: 100%;
+  height: var(--desktop-control-height);
+  font-size: 14px;
+}
+.task-name-edit-actions {
+  display: flex;
+  gap: 12px;
+}
+.task-name-editor .task-name-edit-actions button {
+  width: auto;
+  display: inline-flex;
+  padding: 4px 0;
+  color: var(--green);
+  font-size: 12px;
+}
+.task-name-editor .task-name-error {
+  color: var(--red);
+  font-size: 12px;
+  margin: 6px 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.task-name-editor.is-heading {
+  width: auto;
+  flex: 1;
 }

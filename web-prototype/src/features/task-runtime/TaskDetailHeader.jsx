@@ -1,3 +1,4 @@
+import { TaskNameEditor } from "./TaskNameEditor";
 import { useDismissibleDetails } from "../../hooks/useDismissibleDetails";
 import {
   Archive,
@@ -5,7 +6,6 @@ import {
   ChartBar,
   DotsThreeVertical,
   DownloadSimple,
-  GearSix,
   Pause,
   PlayCircle,
   X,
@@ -24,7 +24,7 @@ import { FINAL_TASK_STATUSES } from "./taskRegistryPolicy";
  * @property {boolean | undefined} hasUnfinishedSegments
  * @property {() => void} onOpenReplan
  * @property {() => void} onOpenResume
- * @property {() => void} onOpenRename
+ * @property {(task: AnalysisTask) => Promise<unknown>} onTaskRenamed
  * @property {() => void} onOpenCancel
  * @property {() => void | Promise<unknown>} onPause
  * @property {() => void | Promise<unknown>} onRetry
@@ -88,8 +88,8 @@ function TaskExecutionActions({ task, summary, onPause, onRetry, showListings })
   );
 }
 
-/** @param {Pick<TaskDetailHeaderProps, "task" | "onRetry" | "onArchive" | "onOpenRename" | "onOpenCancel">} props */
-function TaskMoreActions({ task, onRetry, onArchive, onOpenRename, onOpenCancel }) {
+/** @param {Pick<TaskDetailHeaderProps, "task" | "onRetry" | "onArchive" | "onOpenCancel">} props */
+function TaskMoreActions({ task, onRetry, onArchive, onOpenCancel }) {
   const { detailsProps, summaryProps } = useDismissibleDetails({ menu: true });
   return (
     <details {...detailsProps} className="task-more-actions">
@@ -103,9 +103,6 @@ function TaskMoreActions({ task, onRetry, onArchive, onOpenRename, onOpenCancel 
             {task.status === "cancelled" ? "下载部分结果" : "下载结果"}
           </a>
         )}
-        <button onClick={onOpenRename}>
-          <GearSix size={16} /> 修改名称
-        </button>
         {task.status === "completed" && (
           <button onClick={onRetry}>
             <ArrowClockwise size={16} /> 再次运行
@@ -135,7 +132,7 @@ export function TaskDetailHeader({
   hasUnfinishedSegments,
   onOpenReplan,
   onOpenResume,
-  onOpenRename,
+  onTaskRenamed,
   onOpenCancel,
   onPause,
   onRetry,
@@ -146,7 +143,7 @@ export function TaskDetailHeader({
     <header className="task-command-header">
       <div className="task-detail-summary">
         <div className="task-title-row">
-          <h2>{task.title}</h2>
+          <TaskNameEditor task={task} onSaved={onTaskRenamed} heading />
           <span className={classNames("task-status-badge", task.status)}>
             {summary.statusLabel}
           </span>
@@ -175,7 +172,6 @@ export function TaskDetailHeader({
           task={task}
           onRetry={onRetry}
           onArchive={onArchive}
-          onOpenRename={onOpenRename}
           onOpenCancel={onOpenCancel}
         />
       </div>

@@ -1,9 +1,9 @@
+import { TaskNameEditor } from "./TaskNameEditor";
 import { useDismissibleDetails } from "../../hooks/useDismissibleDetails";
 import {
   Archive,
   ArrowCounterClockwise,
   CopySimple,
-  PencilSimple,
   DotsThreeVertical,
 } from "@phosphor-icons/react";
 import { StatusPill } from "../../components/SharedUi";
@@ -19,7 +19,7 @@ import { taskSummary } from "./taskRegistryPolicy";
  * @property {boolean} selectable
  * @property {boolean} saving
  * @property {() => void} onToggle
- * @property {() => void} [onRename]
+ * @property {(task: AnalysisTask) => Promise<unknown>} [onTaskRenamed]
  * @property {() => void} onOpen
  * @property {() => void} onCreateSimilar
  * @property {() => void} onArchive
@@ -34,7 +34,7 @@ export function TaskRegistryRow({
   saving,
   onToggle,
   onOpen,
-  onRename,
+  onTaskRenamed,
   onCreateSimilar,
   onArchive,
 }) {
@@ -58,7 +58,7 @@ export function TaskRegistryRow({
           aria-label={`选择任务：${task.title}`}
         />
       </span>
-      <RegistryIdentity task={task} onOpen={onOpen} onRename={onRename} />
+      <RegistryIdentity task={task} onOpen={onOpen} onTaskRenamed={onTaskRenamed} />
       <span role="cell" className="task-registry-status">
         <StatusPill status={task.status} label={summary.statusLabel} />
       </span>
@@ -79,27 +79,20 @@ export function TaskRegistryRow({
   );
 }
 
-/** @param {Pick<TaskRegistryRowProps, "task" | "onOpen" | "onRename">} props */
-function RegistryIdentity({ task, onOpen, onRename }) {
+/** @param {Pick<TaskRegistryRowProps, "task" | "onOpen" | "onTaskRenamed">} props */
+function RegistryIdentity({ task, onOpen, onTaskRenamed }) {
   return (
     <span role="cell" className="task-registry-identity">
-      <button type="button" onClick={onOpen}>
-        <b>{task.title}</b>
-        <small>
-          {[task.store, task.owner_name].filter(Boolean).join(" · ") || "分析任务"}
-        </small>
-      </button>
-      {onRename && (
-        <button
-          type="button"
-          className="task-rename-action"
-          aria-label={`修改任务名称：${task.title}`}
-          title="修改名称"
-          onClick={onRename}
-        >
-          <PencilSimple size={16} />
+      {onTaskRenamed ? (
+        <TaskNameEditor task={task} onSaved={onTaskRenamed} onOpen={onOpen} />
+      ) : (
+        <button type="button" onClick={onOpen}>
+          <b>{task.title}</b>
         </button>
       )}
+      <small>
+        {[task.store, task.owner_name].filter(Boolean).join(" · ") || "分析任务"}
+      </small>
     </span>
   );
 }

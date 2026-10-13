@@ -23,7 +23,7 @@ import { TaskRegistryStates } from "./TaskRegistryStates";
  * @property {boolean} hasData
  * @property {() => void | Promise<unknown>} onReload
  * @property {() => void} onCreate
- * @property {(task: AnalysisTask) => void} [onRename]
+ * @property {(task: AnalysisTask) => Promise<unknown>} [onTaskRenamed]
  * @property {(task: AnalysisTask) => void} onOpen
  * @property {(taskIds: string[], archived: boolean) => Promise<boolean>} onArchive
  * @property {(task: AnalysisTask) => void} onCreateSimilar
@@ -40,7 +40,7 @@ export function TaskRegistry({
   onReload,
   onCreate,
   onOpen,
-  onRename,
+  onTaskRenamed,
   onArchive,
   onCreateSimilar,
 }) {
@@ -205,7 +205,7 @@ export function TaskRegistry({
               saving={saving}
               onToggle={() => toggleTask(task.id)}
               onOpen={() => onOpen(task)}
-              onRename={onRename ? () => onRename(task) : undefined}
+              onTaskRenamed={onTaskRenamed}
               onCreateSimilar={() => onCreateSimilar(task)}
               onArchive={() => applyArchive([task.id], !task.archived_at)}
             />

@@ -70,11 +70,11 @@ const menus = [
       <TaskDetailHeader
         task={task}
         summary={{ statusLabel: "已完成", generated: 0 }}
-        onOpenRename={action}
+        onArchive={action}
       />
     ),
     "更多任务操作",
-    "修改名称",
+    "归档任务",
   ],
   [
     "分类标准",

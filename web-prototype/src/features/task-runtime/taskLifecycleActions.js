@@ -2,7 +2,7 @@ import { taskMonitorApi, errorMessage, errorStatus } from "./taskMonitorRequests
 
 /** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
 /** @typedef {import("./taskRuntimeContracts").TaskPayload} TaskPayload */
-/** @typedef {Pick<ReturnType<typeof import("./useTaskMonitorState").useTaskMonitorState>,"setSelected"|"setSelectedId"|"setEventStreamVersion"|"setActionError"|"loadTasks"|"loadSelected"|"updateListState"> & Pick<import("./taskMonitorContracts").TaskMonitorProps,"notify"|"onNavigate"|"onTaskFocus"> & {selected: AnalysisTask}} TaskActionContext */
+/** @typedef {Pick<ReturnType<typeof import("./useTaskMonitorState").useTaskMonitorState>,"setSelected"|"setSelectedId"|"setActionError"|"loadTasks"|"loadSelected"|"updateListState"> & Pick<import("./taskMonitorContracts").TaskMonitorProps,"notify"|"onNavigate"|"onTaskFocus"> & {selected: AnalysisTask}} TaskActionContext */
 
 /** @param {TaskActionContext} context */
 export function taskLifecycleActions({
@@ -12,27 +12,12 @@ export function taskLifecycleActions({
   selected,
   setSelected,
   setSelectedId,
-  setEventStreamVersion,
   setActionError,
   loadTasks,
   loadSelected,
   updateListState,
 }) {
   return {
-    onRename: async (/** @type {TaskPayload} */ payload) => {
-      try {
-        const updated = await taskMonitorApi.renameTask(selected.id, payload);
-        setSelected(updated);
-        await loadTasks();
-        setEventStreamVersion((current) => current + 1);
-        notify("任务名称已修改并记录操作人");
-        return true;
-      } catch (error) {
-        if (errorStatus(error) === 409) await loadSelected();
-        notify(errorMessage(error), "error");
-        return false;
-      }
-    },
     onCancel: async (/** @type {TaskPayload} */ payload) => {
       try {
         await taskMonitorApi.cancelTask(selected.id, payload);

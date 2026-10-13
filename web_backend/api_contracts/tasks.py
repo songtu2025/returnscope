@@ -63,7 +63,7 @@ class TaskSegmentOrderRequest(BaseModel):
 class TaskRenameRequest(BaseModel):
     expected_revision: int = Field(ge=1)
     title: str = Field(min_length=1, max_length=120)
-    note: str = Field(min_length=1, max_length=500)
+    note: str = Field(default="", max_length=500)
 
 
 class TaskActionRequest(BaseModel):

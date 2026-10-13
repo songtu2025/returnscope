@@ -23,7 +23,7 @@ class TaskListQueriesMixin:
         include_archived: bool = False,
     ) -> list[dict[str, Any]]:
         query = """
-            SELECT t.id, t.title, t.store, t.listing, t.status,
+            SELECT t.id, t.title, t.revision, t.store, t.listing, t.status,
                    t.progress_current, t.progress_total, t.progress_percent,
                    t.result_file_path, t.result_version,
                    t.created_at, t.completed_at, t.archived_at,

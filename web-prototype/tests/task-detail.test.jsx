@@ -16,9 +16,6 @@ vi.mock("../src/features/task-runtime/SegmentBoard", () => ({
 }));
 
 vi.mock("../src/features/task-runtime/TaskActionDialogs", () => ({
-  TaskRenameDialog: ({ onSave }) => (
-    <button onClick={() => onSave({ title: "合成新名称" })}>保存合成名称</button>
-  ),
   TaskCancelDialog: () => null,
   TaskResumeDialog: () => null,
   SegmentCancelDialog: () => null,
@@ -49,7 +46,7 @@ function detailProps(task = {}) {
     events: [],
     actionError: "",
     onClearActionError: vi.fn(),
-    onRename: vi.fn().mockResolvedValue(true),
+    onTaskRenamed: vi.fn().mockResolvedValue(true),
     onArchive: vi.fn(),
     onCancel: vi.fn(),
     onPause: vi.fn(),
@@ -234,18 +231,14 @@ test("重试片段时错误留在弹窗内，失败保留弹窗，成功后关�
   });
 });
 
-test("重命名保存失败保留弹窗，成功关闭，列表焦点变化恢复执行页", async () => {
+test("详情页可以行内改名，取消后列表焦点变化恢复执行页", async () => {
   const props = detailProps();
-  props.onRename.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
   const view = render(<TaskDetail {...props} />);
-  await userEvent.click(screen.getByLabelText("更多任务操作"));
-  await userEvent.click(screen.getByRole("button", { name: "修改名称" }));
-  await userEvent.click(screen.getByRole("button", { name: "保存合成名称" }));
-  expect(screen.getByRole("button", { name: "保存合成名称" })).toBeVisible();
-  await userEvent.click(screen.getByRole("button", { name: "保存合成名称" }));
-  expect(
-    screen.queryByRole("button", { name: "保存合成名称" }),
-  ).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "修改任务名称：合成任务" }));
+  expect(screen.getByLabelText("任务名称")).toBeVisible();
+  expect(screen.queryByRole("dialog")).toBeNull();
+  await userEvent.keyboard("{Escape}");
+  expect(screen.queryByLabelText("任务名称")).toBeNull();
   await userEvent.click(screen.getByRole("tab", { name: "任务配置" }));
   view.rerender(<TaskDetail {...props} focusSegmentId="synthetic-focus" />);
   expect(screen.getByRole("tab", { name: "Listing" })).toHaveAttribute(

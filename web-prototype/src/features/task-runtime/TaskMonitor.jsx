@@ -1,6 +1,3 @@
-import { useState } from "react";
-import { TaskRenameDialog } from "./TaskActionDialogs";
-import { taskMonitorApi } from "./taskMonitorRequests";
 import { ArrowLeft, Plus, Pulse } from "@phosphor-icons/react";
 import { EmptyState, PageHeading, PageLoadingState } from "../../components/SharedUi";
 import { TaskDetail } from "./TaskDetail";
@@ -15,9 +12,6 @@ import { taskExecutionActions } from "./taskExecutionActions";
 /** @param {import("./taskMonitorContracts").TaskMonitorProps} props */
 export function TaskMonitor(props) {
   const state = useTaskMonitorState(props);
-  const [renamingTask, setRenamingTask] = useState(
-    /** @type {AnalysisTask | null} */ (null),
-  );
   const { notify, onNavigate, onTaskFocus, focusSegmentId = null } = props;
   const {
     listState,
@@ -41,6 +35,13 @@ export function TaskMonitor(props) {
     setDetailError,
     updateListState,
   } = state;
+  /** @param {AnalysisTask} updated */
+  const onTaskRenamed = async (updated) => {
+    state.setSelected(updated);
+    await state.loadTasks();
+    state.setEventStreamVersion((current) => current + 1);
+    notify("任务名称已修改");
+  };
   return (
     <div className="standard-page task-page task-runtime-workspace">
       <div hidden={showTaskDetail}>
@@ -64,7 +65,7 @@ export function TaskMonitor(props) {
           onReload={loadTasks}
           onCreate={() => onNavigate("new")}
           onOpen={openTask}
-          onRename={setRenamingTask}
+          onTaskRenamed={onTaskRenamed}
           onCreateSimilar={(/** @type {AnalysisTask} */ task) =>
             onNavigate("new", { kind: "task-template", id: task.id })
           }
@@ -115,6 +116,7 @@ export function TaskMonitor(props) {
             <TaskDetail
               key={selected.id}
               task={selected}
+              onTaskRenamed={onTaskRenamed}
               {...taskLifecycleActions({
                 ...state,
                 notify,
@@ -150,27 +152,6 @@ export function TaskMonitor(props) {
             />
           )}
         </section>
-      )}
-      {renamingTask && (
-        <TaskRenameDialog
-          task={renamingTask}
-          onClose={() => setRenamingTask(null)}
-          onSave={async (payload) => {
-            const saved = await taskLifecycleActions({
-              ...state,
-              notify,
-              onNavigate,
-              onTaskFocus,
-              selected: renamingTask,
-              loadSelected: async () => {
-                const latest = await taskMonitorApi.task(renamingTask.id);
-                setRenamingTask(latest);
-                return latest;
-              },
-            }).onRename(payload);
-            if (saved) setRenamingTask(null);
-          }}
-        />
       )}
     </div>
   );

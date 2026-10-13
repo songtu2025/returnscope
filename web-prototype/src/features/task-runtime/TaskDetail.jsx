@@ -4,7 +4,6 @@ import {
   SegmentCancelDialog,
   SegmentRetryDialog,
   TaskCancelDialog,
-  TaskRenameDialog,
   TaskResumeDialog,
 } from "./TaskActionDialogs";
 import { SegmentBoard } from "./SegmentBoard";
@@ -30,7 +29,7 @@ import { taskSummary } from "./taskRegistryPolicy";
  * @property {(segment: TaskSegment & {result_version_id: string}, qualityStatus?: string) => void} onViewClassification
  * @property {string} actionError
  * @property {() => void} onClearActionError
- * @property {(payload: TaskPayload) => Promise<boolean>} onRename
+ * @property {(task: AnalysisTask) => Promise<unknown>} onTaskRenamed
  * @property {() => void | Promise<unknown>} onArchive
  * @property {(payload: TaskPayload) => Promise<boolean>} onCancel
  * @property {() => void | Promise<unknown>} onPause
@@ -58,7 +57,7 @@ export function TaskDetail({
   onViewClassification,
   actionError,
   onClearActionError,
-  onRename,
+  onTaskRenamed,
   onArchive,
   onCancel,
   onPause,
@@ -72,7 +71,6 @@ export function TaskDetail({
   onPreflightReplan,
   onReplan,
 }) {
-  const [renameOpen, setRenameOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [resumeOpen, setResumeOpen] = useState(false);
   const [retrySegment, setRetrySegment] = useState(
@@ -124,7 +122,7 @@ export function TaskDetail({
           hasUnfinishedSegments={hasUnfinishedSegments}
           onOpenReplan={() => setReplanOpen(true)}
           onOpenResume={() => setResumeOpen(true)}
-          onOpenRename={() => setRenameOpen(true)}
+          onTaskRenamed={onTaskRenamed}
           onOpenCancel={() => setCancelOpen(true)}
           onPause={onPause}
           onRetry={onRetry}
@@ -189,16 +187,6 @@ export function TaskDetail({
           }
         />
 
-        {renameOpen && (
-          <TaskRenameDialog
-            task={task}
-            onClose={() => setRenameOpen(false)}
-            onSave={async (payload) => {
-              const saved = await onRename(payload);
-              if (saved) setRenameOpen(false);
-            }}
-          />
-        )}
         {cancelOpen && (
           <TaskCancelDialog
             task={task}
