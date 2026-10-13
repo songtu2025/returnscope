@@ -225,3 +225,24 @@
     flex: 0 0 auto;
   }
 }
+
+.task-registry-identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.task-registry-identity > button:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.task-registry-identity .task-rename-action {
+  flex: none;
+  width: 28px;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  color: var(--green);
+}
+.task-registry-identity .task-rename-action:hover {
+  background: var(--green-pale);
+}
