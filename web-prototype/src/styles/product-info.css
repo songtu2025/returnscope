@@ -200,3 +200,9 @@
     width: 100%;
   }
 }
+
+/* 产品页面的标题位于导航前，首读占位保持同一位置。 */
+.page-loading-scope:has(.product-master-page) > .page-loading-heading {
+  inset-block-start: 0;
+  padding-top: 30px;
+}
