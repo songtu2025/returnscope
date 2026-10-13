@@ -55,6 +55,7 @@ def _result_report_action_rows(connection: Any) -> tuple[Any, Any]:
         JOIN classification_results r ON r.id = v.result_id
         LEFT JOIN users creator ON creator.id = v.created_by
         WHERE v.publish_status = 'published'
+          AND r.deleted_at IS NULL
           AND v.quality_status = 'review_required'
         """
     ).fetchall()
@@ -70,14 +71,14 @@ def _result_report_action_rows(connection: Any) -> tuple[Any, Any]:
         JOIN analysis_dashboards dashboard
           ON dashboard.id = report.dashboard_id
         LEFT JOIN users creator ON creator.id = report.created_by
-        WHERE report.status IN ('queued', 'running')
+        WHERE dashboard.deleted_at IS NULL AND report.cancelled_at IS NULL AND (report.status IN ('queued', 'running')
            OR (
                 report.status = 'failed'
                 AND NOT EXISTS (
                     SELECT 1 FROM ai_insight_reports child
                     WHERE child.parent_job_id = report.id
                 )
-           )
+           ))
         """
     ).fetchall()
     return result_rows, report_rows

@@ -186,14 +186,18 @@ class _ClassificationResultQueries:
         store_site: str | None = None,
         listing: str | None = None,
         quality_status: str | None = None,
+        lifecycle: str | None = None,
     ) -> dict[str, Any]:
         page, page_size = self._validate_page(page, page_size)
+        if lifecycle not in {None, "", "active", "deleted"}:
+            raise ValueError("结果状态不合法")
         filters = version_list_filters(
             {
                 "q": q,
                 "store_site": store_site,
                 "listing": listing,
                 "quality_status": quality_status,
+                "lifecycle": lifecycle,
             },
             self._contains_pattern,
             self._validate_quality_status,

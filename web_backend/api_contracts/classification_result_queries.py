@@ -15,6 +15,7 @@ class ResultVersionQuery(ResultPaginationQuery):
     store_site: str | None = None
     listing: str | None = None
     quality_status: str | None = None
+    lifecycle: str | None = None
 
 
 class ResultRecordQuery(ResultPaginationQuery):

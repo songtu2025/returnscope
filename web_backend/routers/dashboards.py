@@ -16,6 +16,7 @@ from web_backend.routers.dashboard_analysis_routes import (
     _register_dashboard_analysis,
     _register_dashboard_evidence,
 )
+from web_backend.routers.delivery_lifecycle_routes import register_delivery_actions
 
 
 def create_dashboard_router(
@@ -23,6 +24,9 @@ def create_dashboard_router(
     current_user: Callable[..., dict[str, Any]],
 ) -> APIRouter:
     router = APIRouter()
+    register_delivery_actions(
+        router, lambda: dashboard_service.database, current_user, kind="dashboard"
+    )
     _register_dashboard_creation(router, dashboard_service, current_user)
     _register_dashboard_queries(router, dashboard_service, current_user)
     _register_dashboard_analysis(router, dashboard_service, current_user)

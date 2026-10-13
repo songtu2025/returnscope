@@ -107,13 +107,23 @@ class _InsightReportExecution(_InsightReportPublication):
                 json_text(evidence).encode("utf-8")
             ).hexdigest()
             self._persist_report_evidence(report_id, evidence, evidence_hash)
+            self._ensure_report_running(report_id)
             result = self._generate_report(report, prompt_version, evidence)
+            self._ensure_report_running(report_id)
             content_json = self._assemble_report(
                 report_id, prompt_version, evidence, result
             )
             self._publish_report(report_id, report, result, content_json)
         except Exception as exc:
             self._fail_report(report_id, exc)
+
+    def _ensure_report_running(self, report_id: str) -> None:
+        with self.database.connect() as connection:
+            row = connection.execute(
+                "SELECT status FROM ai_insight_reports WHERE id=?", (report_id,)
+            ).fetchone()
+        if row is None or row["status"] != "running":
+            raise RuntimeError("生成已取消，停止后续处理")
 
     def _report_analysis(self, report: dict[str, Any]) -> dict[str, Any]:
         analysis = self.dashboard_service.insights(
@@ -158,7 +168,7 @@ class _InsightReportExecution(_InsightReportPublication):
                     UPDATE ai_insight_reports
                     SET evidence_json = ?, evidence_hash = ?,
                         stage = 'calling_model'
-                    WHERE id = ?
+                    WHERE id = ? AND status = 'running'
                     """,
                 (json_text(evidence), evidence_hash, report_id),
             )
@@ -177,6 +187,7 @@ class _InsightReportExecution(_InsightReportPublication):
             secondary_model=None,
         )
         client = self.client_factory(settings)
+        client.checkpoint = lambda: self._ensure_report_running(str(report["id"]))
         messages = (
             self._messages_v6(evidence)
             if prompt_version == PROMPT_VERSION

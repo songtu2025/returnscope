@@ -78,7 +78,7 @@ def _load_sources(
         SELECT {DASHBOARD_SOURCE_COLUMNS_SQL}
         FROM classification_result_versions v
         {DASHBOARD_SOURCE_JOINS_SQL}
-        WHERE v.id IN ({placeholders})
+        WHERE v.id IN ({placeholders}) AND r.deleted_at IS NULL
         ORDER BY v.id
         """,
         tuple(version_ids),

@@ -23,6 +23,7 @@ from web_backend.routers.classification_result_query_routes import (
 from web_backend.routers.classification_result_record_routes import (
     register_result_record_routes,
 )
+from web_backend.routers.delivery_lifecycle_routes import register_delivery_actions
 
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -33,6 +34,9 @@ def create_classification_result_router(
     standard_service: ClassificationStandardService | None = None,
 ) -> APIRouter:
     router = APIRouter()
+    register_delivery_actions(
+        router, lambda: result_service.database, current_user, kind="result"
+    )
     standards = standard_service or ClassificationStandardService(
         result_service.database
     )

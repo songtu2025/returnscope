@@ -30,9 +30,13 @@ class _DashboardCatalog:
         status: str | None = None,
     ) -> dict[str, Any]:
         page, page_size = validate_page(page, page_size)
-        where = ["1 = 1"]
+        where = [
+            "d.deleted_at IS NOT NULL"
+            if status == "deleted"
+            else "d.deleted_at IS NULL"
+        ]
         params: list[Any] = []
-        if status:
+        if status and status != "deleted":
             if status not in {"active", "archived"}:
                 raise ValueError("status 不合法")
             where.append("d.status = ?")

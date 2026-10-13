@@ -73,6 +73,11 @@ class _InsightReportCreation(_InsightReportRecords):
         report_id = new_id("insight_report")
         now = utc_now()
         with self.database.transaction(immediate=True) as connection:
+            dashboard = connection.execute(
+                "SELECT deleted_at FROM analysis_dashboards WHERE id=?", (dashboard_id,)
+            ).fetchone()
+            if dashboard is None or dashboard["deleted_at"]:
+                raise InsightReportConflict("请先恢复分析看板，再生成报告")
             active = connection.execute(
                 """
                 SELECT id FROM ai_insight_reports

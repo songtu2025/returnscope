@@ -5,6 +5,7 @@ from typing import Any
 
 from web_backend.common import json_text
 from web_backend.database import Database
+from web_backend.delivery_lifecycle import require_active_segment_result
 from web_backend.security import utc_now
 
 _PAUSABLE_TASK_STATUSES = frozenset({"queued", "running"})
@@ -105,6 +106,13 @@ class TaskExecutionControlMixin:
             if task["status"] not in _RESUMABLE_TASK_STATUSES:
                 raise ValueError("仅已暂停或已取消任务可以继续执行")
             source_status = str(task["status"])
+            candidates = connection.execute(
+                """SELECT id FROM active_task_segments WHERE task_id=?
+                   AND status IN ('paused','cancelled','not_started','queued','retry_pending')""",
+                (task_id,),
+            ).fetchall()
+            for candidate in candidates:
+                require_active_segment_result(connection, str(candidate["id"]))
             resumable = connection.execute(
                 """
                 SELECT COUNT(*) AS count FROM active_task_segments

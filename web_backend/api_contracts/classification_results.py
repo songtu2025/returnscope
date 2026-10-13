@@ -72,6 +72,8 @@ class ClassificationManualChangeResponse(CompatibleResponse):
 
 
 class ClassificationResultVersionResponse(CompatibleResponse):
+    deleted_at: str | None = None
+    revision: int = 1
     version_id: str
     result_id: str
     version: int

@@ -943,6 +943,10 @@ export type ClassificationResultVersionResponse = {
    */
   dataset_version_id: string;
   /**
+   * Deleted At
+   */
+  deleted_at?: string | null;
+  /**
    * Delivery Status
    */
   delivery_status: "ready" | "needs_review" | "review-derived" | "unusable";
@@ -1011,6 +1015,10 @@ export type ClassificationResultVersionResponse = {
    * Result Id
    */
   result_id: string;
+  /**
+   * Revision
+   */
+  revision?: number;
   /**
    * Source Review Batch Id
    */
@@ -1229,6 +1237,20 @@ export type ClassificationUnknownSemanticResponse = {
    */
   reason?: string;
   [key: string]: unknown;
+};
+
+/**
+ * DeliveryActionRequest
+ */
+export type DeliveryActionRequest = {
+  /**
+   * Action
+   */
+  action: "delete" | "restore";
+  /**
+   * Expected Revision
+   */
+  expected_revision: number;
 };
 
 /**
@@ -1705,6 +1727,10 @@ export type ListResultsApiClassificationResultsGetData = {
      * Quality Status
      */
     quality_status?: string | null;
+    /**
+     * Lifecycle
+     */
+    lifecycle?: string | null;
   };
   url: "/api/classification-results";
 };
@@ -1764,6 +1790,42 @@ export type SearchFeedbackApiClassificationResultsSearchGetResponses = {
 
 export type SearchFeedbackApiClassificationResultsSearchGetResponse =
   SearchFeedbackApiClassificationResultsSearchGetResponses[keyof SearchFeedbackApiClassificationResultsSearchGetResponses];
+
+export type ChangeLifecycleApiClassificationResultsObjectIdLifecyclePostData = {
+  body: DeliveryActionRequest;
+  path: {
+    /**
+     * Object Id
+     */
+    object_id: string;
+  };
+  query?: never;
+  url: "/api/classification-results/{object_id}/lifecycle";
+};
+
+export type ChangeLifecycleApiClassificationResultsObjectIdLifecyclePostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ChangeLifecycleApiClassificationResultsObjectIdLifecyclePostError =
+  ChangeLifecycleApiClassificationResultsObjectIdLifecyclePostErrors[keyof ChangeLifecycleApiClassificationResultsObjectIdLifecyclePostErrors];
+
+export type ChangeLifecycleApiClassificationResultsObjectIdLifecyclePostResponses = {
+  /**
+   * Response Change Lifecycle Api Classification Results  Object Id  Lifecycle Post
+   *
+   * Successful Response
+   */
+  200: {
+    [key: string]: boolean;
+  };
+};
+
+export type ChangeLifecycleApiClassificationResultsObjectIdLifecyclePostResponse =
+  ChangeLifecycleApiClassificationResultsObjectIdLifecyclePostResponses[keyof ChangeLifecycleApiClassificationResultsObjectIdLifecyclePostResponses];
 
 export type GetResultApiClassificationResultsVersionIdGetData = {
   body?: never;

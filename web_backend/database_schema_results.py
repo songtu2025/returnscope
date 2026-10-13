@@ -2,6 +2,8 @@ from __future__ import annotations
 
 RESULT_SCHEMA = """CREATE TABLE IF NOT EXISTS classification_results (
     id TEXT PRIMARY KEY,
+    deleted_at TEXT,
+    revision INTEGER NOT NULL DEFAULT 1,
     source_task_id TEXT NOT NULL,
     source_segment_id TEXT NOT NULL UNIQUE,
     dataset_version_id TEXT NOT NULL REFERENCES dataset_versions(id),

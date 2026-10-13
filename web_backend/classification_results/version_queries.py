@@ -25,7 +25,7 @@ VERSION_SELECT_SQL = f"""
                        WHERE parent.id = v.parent_version_id
                    ) AS parent_version_no,
                    {REVIEW_CHANGED_UNIT_COUNT_SQL} AS changed_unit_count,
-                   r.source_task_id, r.source_segment_id,
+                   r.source_task_id, r.source_segment_id, r.deleted_at, r.revision,
                    COALESCE(
                        json_extract(task.snapshot_json, '$.analysis_context'),
                        'returns'
@@ -89,6 +89,9 @@ def version_list_filters(
     validate_quality_status: Callable[[str], None],
 ) -> tuple[str, list[Any]]:
     where = [
+        "r.deleted_at IS NOT NULL"
+        if filters.get("lifecycle") == "deleted"
+        else "r.deleted_at IS NULL",
         "v.publish_status = 'published'",
         """
         v.version_no = (

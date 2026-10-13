@@ -130,7 +130,8 @@ class _ClassificationResultRecords(
         where = """
             r.result_version_id IN (
                 SELECT v.id FROM classification_result_versions v
-                WHERE v.publish_status = 'published' AND v.version_no = (
+                JOIN classification_results result ON result.id=v.result_id
+                WHERE result.deleted_at IS NULL AND v.publish_status = 'published' AND v.version_no = (
                     SELECT MAX(latest.version_no) FROM classification_result_versions latest
                     WHERE latest.result_id = v.result_id AND latest.publish_status = 'published'
                 )

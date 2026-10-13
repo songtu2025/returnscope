@@ -5,6 +5,7 @@ from typing import Any
 
 from web_backend.common import json_text
 from web_backend.database import Database
+from web_backend.delivery_lifecycle import require_active_segment_result
 from web_backend.security import utc_now
 from web_backend.task_contracts import (
     WAITING_SEGMENT_STATUSES,
@@ -58,6 +59,8 @@ class TaskSegmentOperationsMixin(
             )
 
             before_status = str(segment["status"])
+            if action == "resume":
+                require_active_segment_result(connection, str(segment["id"]))
             after_status, requested_action = self._segment_action_transition(
                 before_status,
                 action,

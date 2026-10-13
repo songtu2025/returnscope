@@ -91,7 +91,10 @@ class TaskListQueriesMixin:
                 """
                 SELECT task_id, agent_key, status, result_publish_status,
                        result_version_id, result_quality_status,
-                       result_file_path, error, model_failures
+                       result_file_path, error, model_failures,
+                       (SELECT result.deleted_at FROM classification_results result
+                        JOIN classification_result_versions version ON version.result_id=result.id
+                        WHERE version.id=active_task_segments.result_version_id) AS result_deleted_at
                 FROM active_task_segments
                 WHERE task_id IN (SELECT value FROM json_each(?))
                 """,

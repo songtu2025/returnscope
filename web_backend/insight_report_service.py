@@ -165,6 +165,8 @@ class InsightReportService(_InsightReportCreation, _InsightReportExecution):
         decisions: builtins.list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         value["attempt_no"] = int(value.pop("version_no"))
+        if value.get("cancelled_at"):
+            value["status"] = "cancelled"
         published_version = value.pop("published_version_no", None)
         value["version_no"] = (
             int(published_version) if published_version is not None else None

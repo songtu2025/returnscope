@@ -32,17 +32,20 @@ class WorkbenchService:
                        WHERE status = 'paused') AS paused_segments,
                       (SELECT COUNT(*) FROM classification_result_versions
                        WHERE publish_status = 'published'
+                         AND result_id IN (SELECT id FROM classification_results WHERE deleted_at IS NULL)
                          AND quality_status = 'review_required')
                         AS review_required_results,
                       (SELECT COUNT(*) FROM classification_result_versions
                        WHERE publish_status = 'published'
+                         AND result_id IN (SELECT id FROM classification_results WHERE deleted_at IS NULL)
                          AND quality_status = 'ready') AS ready_results,
                       (SELECT COUNT(*) FROM analysis_dashboards
-                       WHERE status = 'active') AS dashboards,
+                       WHERE status = 'active' AND deleted_at IS NULL) AS dashboards,
                       (SELECT COUNT(*) FROM ai_insight_reports
                        WHERE status IN ('queued', 'running')) AS running_reports,
                       (SELECT COUNT(*) FROM ai_insight_reports
-                       WHERE status = 'failed') AS failed_reports
+                       WHERE status = 'failed' AND cancelled_at IS NULL
+                         AND dashboard_id IN (SELECT id FROM analysis_dashboards WHERE deleted_at IS NULL)) AS failed_reports
                     """
                 ).fetchone()
             )

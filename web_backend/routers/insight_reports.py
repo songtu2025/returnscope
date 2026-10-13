@@ -13,6 +13,7 @@ from web_backend.insight_report_service import (
     InsightReportNotFound,
     InsightReportService,
 )
+from web_backend.routers.delivery_lifecycle_routes import register_report_cancel
 
 
 def create_insight_report_router(
@@ -20,6 +21,7 @@ def create_insight_report_router(
     current_user: Callable[..., dict[str, Any]],
 ) -> APIRouter:
     router = APIRouter()
+    register_report_cancel(router, lambda: service.database, current_user)
     _register_report_creation(router, service, current_user)
     _register_report_queries(router, service, current_user)
     _register_report_actions(router, service, current_user)

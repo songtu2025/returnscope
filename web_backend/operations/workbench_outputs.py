@@ -30,7 +30,7 @@ def _recent_output_rows(
                r.store_site, r.listing
         FROM classification_result_versions v
         JOIN classification_results r ON r.id = v.result_id
-        WHERE v.publish_status = 'published' AND v.quality_status = 'ready'
+        WHERE r.deleted_at IS NULL AND v.publish_status = 'published' AND v.quality_status = 'ready'
         ORDER BY COALESCE(v.published_at, v.created_at) DESC, v.id ASC
         LIMIT ?
         """,
@@ -42,7 +42,7 @@ def _recent_output_rows(
                v.version_no
         FROM analysis_dashboards d
         JOIN dashboard_versions v ON v.id = d.current_version_id
-        WHERE d.status = 'active'
+        WHERE d.status = 'active' AND d.deleted_at IS NULL
         ORDER BY d.updated_at DESC, d.id ASC
         LIMIT ?
         """,
@@ -58,6 +58,7 @@ def _recent_output_rows(
         JOIN ai_insight_reports report ON report.id = published.job_id
         JOIN analysis_dashboards dashboard
           ON dashboard.id = report.dashboard_id
+        WHERE dashboard.deleted_at IS NULL
         ORDER BY published.published_at DESC, published.id ASC
         LIMIT ?
         """,

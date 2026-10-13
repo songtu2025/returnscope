@@ -36,6 +36,8 @@ def correct_group(
     now = utc_now()
     with service.database.transaction(immediate=True) as connection:
         base = service._get_version_with_connection(connection, version_id)
+        if base.get("deleted_at"):
+            raise ResultPublicationConflict("请先恢复分类结果，再修改语义")
         latest = connection.execute(
             "SELECT id FROM classification_result_versions WHERE result_id = ? AND publish_status = 'published' ORDER BY version_no DESC LIMIT 1",
             (base["result_id"],),

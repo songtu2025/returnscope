@@ -2,6 +2,7 @@ from __future__ import annotations
 
 DASHBOARD_SCHEMA = """CREATE TABLE IF NOT EXISTS analysis_dashboards (
     id TEXT PRIMARY KEY,
+    deleted_at TEXT,
     name TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'active'
@@ -63,6 +64,7 @@ ON dashboard_versions(dashboard_id, version_no DESC);
 
 CREATE TABLE IF NOT EXISTS ai_insight_reports (
     id TEXT PRIMARY KEY,
+    cancelled_at TEXT,
     dashboard_id TEXT NOT NULL
         REFERENCES analysis_dashboards(id) ON DELETE CASCADE,
     dashboard_version_id TEXT NOT NULL

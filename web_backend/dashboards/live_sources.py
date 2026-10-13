@@ -18,6 +18,7 @@ def refresh_related_dashboards(
     *,
     product_dataset_id: str | None = None,
     product_scopes: dict[str, dict[str, list[str]]] | None = None,
+    dashboard_id: str | None = None,
 ) -> None:
     rows = connection.execute(
         """
@@ -29,10 +30,18 @@ def refresh_related_dashboards(
         JOIN classification_result_versions r ON r.id = s.result_version_id
         JOIN classification_results result ON result.id = r.result_id
         JOIN dataset_versions product ON product.id = result.product_version_id
-        WHERE (? IS NULL OR r.result_id = ?) AND d.status = 'active'
+        WHERE (? IS NULL OR r.result_id = ?) AND d.status = 'active' AND d.deleted_at IS NULL
           AND (? IS NULL OR product.dataset_id = ?)
+          AND (? IS NULL OR d.id = ?)
         """,
-        (result_id, result_id, product_dataset_id, product_dataset_id),
+        (
+            result_id,
+            result_id,
+            product_dataset_id,
+            product_dataset_id,
+            dashboard_id,
+            dashboard_id,
+        ),
     ).fetchall()
     storage = _DashboardVersionStorage()
     storage.database = database

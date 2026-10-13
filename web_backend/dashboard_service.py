@@ -121,6 +121,8 @@ class DashboardService(_DashboardCatalog, _DashboardVersionStorage, _DashboardAn
             ).fetchone()
             if dashboard is None:
                 raise DashboardNotFound("分析看板不存在")
+            if dashboard["deleted_at"]:
+                raise DashboardConflict("请先恢复分析看板")
             if int(dashboard["revision"]) != expected_revision:
                 raise DashboardConflict("看板已被其他用户更新，请刷新后重试")
             plan = build_plan(self.database, connection, result_version_ids, filters)

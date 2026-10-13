@@ -40,9 +40,12 @@ _TASK_DETAIL_SQL = """
 
 _TASK_SEGMENTS_SQL = """
                 SELECT segment.*, standard.name AS standard_name,
+                       result.deleted_at AS result_deleted_at,
                        standard.id AS standard_id,
                        standard_version.version_no AS standard_version
                 FROM task_segments segment
+                LEFT JOIN classification_result_versions result_version ON result_version.id=segment.result_version_id
+                LEFT JOIN classification_results result ON result.id=result_version.result_id
                 LEFT JOIN classification_standard_versions standard_version
                   ON standard_version.id = segment.standard_version_id
                 LEFT JOIN classification_standards standard

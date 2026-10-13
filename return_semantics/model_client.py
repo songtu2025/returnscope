@@ -7,7 +7,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from return_semantics.model_cache import JsonlCache as JsonlCache
 from return_semantics.model_payload import _output_text_parts
@@ -81,6 +81,7 @@ class Sub2APIClient:
         rate_limiter: RequestRateLimiter | None = None,
     ) -> None:
         self.settings = settings
+        self.checkpoint: Callable[[], None] | None = None
         self._rate_limiter = rate_limiter or RequestRateLimiter(
             settings.requests_per_minute,
         )
@@ -126,6 +127,8 @@ class Sub2APIClient:
         timeout_failures = 0
         started_at = time.monotonic()
         for attempt in range(self.settings.retries + 1):
+            if self.checkpoint:
+                self.checkpoint()
             try:
                 response = self._post(payload)
                 return self._response_result(response, model_name, attempt, started_at)
@@ -142,7 +145,14 @@ class Sub2APIClient:
                     timeout_failures += 1
                 if not self._can_retry(exc, attempt, timeout_failures):
                     break
-                time.sleep(self._retry_delay(exc, attempt))
+                delay = self._retry_delay(exc, attempt)
+                if self.checkpoint is None:
+                    time.sleep(delay)
+                else:
+                    deadline = time.monotonic() + delay
+                    while time.monotonic() < deadline:
+                        self.checkpoint()
+                        time.sleep(min(0.2, max(0, deadline - time.monotonic())))
         raise RuntimeError(f"Sub2API 调用失败: {last_error}") from last_error
 
     def _request_payload(
@@ -221,6 +231,8 @@ class Sub2APIClient:
 
     def _post(self, payload: dict[str, Any]) -> dict[str, Any]:
         self._rate_limiter.wait()
+        if self.checkpoint:
+            self.checkpoint()
         request = urllib.request.Request(
             url=f"{self.settings.base_url.rstrip('/')}/responses",
             data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),

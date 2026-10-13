@@ -13,6 +13,36 @@ ALTER TABLE task_segments ADD COLUMN deleted_at TEXT;
 CREATE VIEW active_task_segments AS SELECT * FROM task_segments WHERE deleted_at IS NULL;
 """
 
+DELIVERY_LIFECYCLE_SQL = """
+ALTER TABLE classification_results ADD COLUMN deleted_at TEXT;
+ALTER TABLE classification_results ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE analysis_dashboards ADD COLUMN deleted_at TEXT;
+ALTER TABLE ai_insight_reports ADD COLUMN cancelled_at TEXT;
+"""
+
+
+def migrate_delivery_lifecycle(connection: sqlite3.Connection) -> None:
+    pending = []
+    for statement in DELIVERY_LIFECYCLE_SQL.split(";"):
+        if not statement.strip():
+            continue
+        parts = statement.split()
+        columns = {
+            row["name"] for row in connection.execute(f"PRAGMA table_info({parts[2]})")
+        }
+        if parts[5] not in columns:
+            pending.append(statement)
+    apply_sql_migration(
+        connection,
+        RegisteredSqlMigration(
+            "20261013_delivery_lifecycle",
+            hashlib.sha256(DELIVERY_LIFECYCLE_SQL.encode("utf-8")).hexdigest(),
+            ";".join(pending),
+        ),
+        savepoint="delivery_lifecycle",
+        checksum_error="交付对象生命周期迁移校验失败",
+    )
+
 
 def migrate_segment_removal(connection: sqlite3.Connection) -> None:
     apply_sql_migration(

@@ -7,6 +7,7 @@ from typing import Any
 from web_backend.classification_result_queries import system_rerun_count
 from web_backend.common import json_text, json_value
 from web_backend.database import Database
+from web_backend.delivery_lifecycle import require_active_segment_result
 from web_backend.security import utc_now
 
 _RETRYABLE_SEGMENT_STATUSES = frozenset(
@@ -133,6 +134,7 @@ class TaskSegmentRetryMixin:
         ).fetchone()
         if segment is None:
             raise ValueError("任务片段不存在")
+        require_active_segment_result(connection, str(segment["id"]))
         if segment["agent_key"] == "unknown" or segment["status"] == "blocked":
             raise ValueError("未知品类仍未解决，不能直接重试")
         if segment["status"] not in _RETRYABLE_SEGMENT_STATUSES:
