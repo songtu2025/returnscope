@@ -1,4 +1,4 @@
-import { ArrowRight } from "@phosphor-icons/react";
+import { AuditDiff } from "../system-settings/AuditLogDiff";
 import { CardHeading } from "../../components/SharedUi";
 import { DatasetReferences } from "./DatasetReferences";
 import { formatTime } from "../../lib/presentation";
@@ -40,57 +40,34 @@ export function ProductMasterImpact({
 
 /** @param {{entry: NonNullable<DatasetRecord["audit"]>[number]}} props */
 function ProductAuditEntry({ entry }) {
-  if (entry.action === "product_update")
-    return (
-      <div>
-        <b>{entry.actor_name} · 产品资料更新</b>
-        <p>
-          {entry.before?.row_count} 条 → {entry.after?.row_count} 条
-        </p>
-        <small>
-          {entry.after?.note} · {formatTime(entry.created_at)}
-        </small>
-      </div>
-    );
-  if (entry.action === "dimension_category_completion")
-    return <ProductCategoryAudit entry={entry} />;
-  const changes = Object.keys(entry.after?.values ?? {}).filter(
-    (field) => entry.before?.values?.[field] !== entry.after?.values?.[field],
-  );
+  const update = entry.action === "product_update";
+  const category = entry.action === "dimension_category_completion";
+  const title = update
+    ? "产品资料更新"
+    : category
+      ? `批量补充 ${(entry.after?.items ?? []).length} 个商品`
+      : `修改第 ${(entry.after?.row_index ?? 0) + 2} 行`;
   return (
-    <div key={entry.id}>
-      <b>
-        {entry.actor_name} · 第 {(entry.after?.row_index ?? 0) + 2} 行
-      </b>
-      {changes.map((field) => (
-        <p key={field}>
-          <span>{field}</span>
-          <code>{entry.before?.values?.[field] || "空"}</code>
-          <ArrowRight size={12} />
-          <code>{entry.after?.values?.[field] || "空"}</code>
-        </p>
-      ))}
-      <small>
-        原因：{entry.after?.note} · {formatTime(entry.created_at)}
-      </small>
-    </div>
-  );
-}
-/** @param {{entry: NonNullable<DatasetRecord["audit"]>[number]}} props */
-function ProductCategoryAudit({ entry }) {
-  return (
-    <div key={entry.id}>
-      <b>
-        {entry.actor_name} · 批量补充 {(entry.after?.items ?? []).length} 个商品
-      </b>
-      <p>
-        <span>店铺</span>
-        <code>{entry.after?.store || "—"}</code>
-        <span>品类补充</span>
-      </p>
-      <small>
-        原因：{entry.after?.note} · {formatTime(entry.created_at)}
-      </small>
+    <div className="product-audit-entry">
+      <header>
+        <b>
+          {entry.actor_name || "未提供操作人"} · {title}
+        </b>
+        <time>{formatTime(entry.created_at)}</time>
+      </header>
+      {category ? (
+        <p>店铺：{entry.after?.store || "--"} · 品类补充</p>
+      ) : (
+        <AuditDiff
+          before={
+            update ? { 产品记录数: entry.before?.row_count } : entry.before?.values
+          }
+          after={update ? { 产品记录数: entry.after?.row_count } : entry.after?.values}
+        />
+      )}
+      {entry.after?.note && (
+        <p className="product-audit-reason">修改原因：{entry.after.note}</p>
+      )}
     </div>
   );
 }

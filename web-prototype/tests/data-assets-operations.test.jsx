@@ -254,7 +254,8 @@ test("数据版本引用显示历史任务固化快照并精确跳转", async ()
   );
 
   expect(await screen.findByText("八月退货分析")).toBeVisible();
-  expect(screen.getByText(/已暂停 · 系统管理员/)).toBeVisible();
+  expect(screen.getByText("已暂停")).toBeVisible();
+  expect(screen.getByText("系统管理员")).toBeVisible();
   expect(screen.queryByText(/paused ·/)).not.toBeInTheDocument();
   expect(screen.getByText("任务输入资料")).toBeVisible();
   await userEvent.click(screen.getByText("任务输入资料"));

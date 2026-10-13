@@ -112,9 +112,10 @@
 }
 
 .product-master-page .data-audit-list > .muted-line {
-  display: grid;
-  min-height: 116px;
-  place-items: center;
+  display: block;
+  min-height: 0;
+  padding: 12px;
+  text-align: left;
 }
 
 .modal:has(.product-info-edit-form) {
@@ -205,4 +206,40 @@
 .page-loading-scope:has(.product-master-page) > .page-loading-heading {
   inset-block-start: 0;
   padding-top: 30px;
+}
+
+.product-master-impact .data-audit-list {
+  border: 0;
+  margin-top: 8px;
+}
+.product-master-impact .data-audit-list > .product-audit-entry {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.product-audit-entry > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.product-audit-entry time {
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.product-audit-entry .product-audit-reason {
+  display: block;
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.product-master-impact .card-heading h3 {
+  font-size: 14px;
+}
+.product-master-impact .product-audit-entry > p,
+.product-master-impact .audit-diff > p {
+  display: block;
+  font-size: 13px;
 }

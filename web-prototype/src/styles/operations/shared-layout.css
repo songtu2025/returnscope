@@ -22,8 +22,7 @@
   color: var(--muted);
   font-size: 12px;
 }
-.import-rule-list,
-.dataset-reference-list {
+.import-rule-list {
   display: grid;
   gap: 10px;
   margin-top: 16px;

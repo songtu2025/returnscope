@@ -5,12 +5,11 @@ import useSWR from "swr";
 import { useLoadingHeight } from "../../hooks/useLoadingHeight";
 import { runResultRequest } from "../../shared/api/requestLifecycle";
 import { errorMessage } from "../../shared/api/requestErrors";
-import { ArrowClockwise, ArrowRight, Database } from "@phosphor-icons/react";
+import { ArrowClockwise, Database } from "@phosphor-icons/react";
 import Button from "antd/es/button";
 import { api } from "../../api";
 import { CardHeading, EmptyState, InlineLoading } from "../../components/SharedUi";
-import { STATUS_LABELS } from "../../constants";
-import { formatTime } from "../../lib/presentation";
+import { DatasetReferenceTable } from "./DatasetReferenceTable";
 
 /** @typedef {import("../../app/navigation").Navigate} Navigate */
 
@@ -78,7 +77,6 @@ export function DatasetReferences({
     >
       <CardHeading
         title="任务引用"
-        note="任务执行时保留启动时的输入资料"
         action={
           <InlineLoading
             label="更新中…"
@@ -113,42 +111,7 @@ export function DatasetReferences({
         )}
         {data && data.items.length > 0 && (
           <>
-            <div className="dataset-reference-list">
-              {data.items.map((item) => (
-                <article key={`${item.task_id}-${item.reference_type}`}>
-                  <span className="dataset-reference-role">
-                    {item.reference_type === "returns" ? "退货明细" : "产品信息"}
-                  </span>
-                  <div>
-                    <b>{item.title || `任务 #${item.task_id}`}</b>
-                    <p>
-                      {(item.status
-                        ? /** @type {Record<string, string>} */ (STATUS_LABELS)[
-                            item.status
-                          ]
-                        : undefined) ??
-                        item.status ??
-                        "未提供状态"}{" "}
-                      · {item.owner?.name || "未提供所有者"} ·{" "}
-                      {formatTime(item.created_at)}
-                    </p>
-                    <details>
-                      <summary>任务输入资料</summary>
-                      <SnapshotFields value={item.version_snapshot} />
-                    </details>
-                  </div>
-                  <button
-                    className="secondary-button"
-                    onClick={() =>
-                      onNavigate?.("analysis-tasks", { kind: "task", id: item.task_id })
-                    }
-                  >
-                    查看任务
-                    <ArrowRight size={15} />
-                  </button>
-                </article>
-              ))}
-            </div>
+            <DatasetReferenceTable items={data.items} onNavigate={onNavigate} />
             <footer className="quality-pagination">
               <span>
                 共 {total.toLocaleString()} 条 · 第 {page}/{pages} 页
@@ -172,27 +135,5 @@ export function DatasetReferences({
         )}
       </div>
     </section>
-  );
-}
-
-/** @param {{value?: Record<string, unknown>}} props */
-function SnapshotFields({ value }) {
-  const entries = Object.entries(value ?? {}).filter(
-    ([key]) => !["version", "version_id"].includes(key),
-  );
-  if (!entries.length) return <p>未提供快照明细</p>;
-  return (
-    <dl className="snapshot-field-list">
-      {entries.map(([key, fieldValue]) => (
-        <div key={key}>
-          <dt>{key}</dt>
-          <dd>
-            {fieldValue && typeof fieldValue === "object"
-              ? JSON.stringify(fieldValue)
-              : String(fieldValue ?? "未提供")}
-          </dd>
-        </div>
-      ))}
-    </dl>
   );
 }

@@ -12,29 +12,66 @@
   color: var(--muted);
   font-size: 12px;
 }
-.dataset-reference-list article {
-  display: grid;
-  grid-template-columns: 80px minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 12px;
+.dataset-reference-table-wrap {
+  margin-top: 12px;
+  overflow-x: auto;
+}
+.dataset-reference-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.dataset-reference-table > thead {
+  background: var(--surface-soft);
+}
+.dataset-reference-table th,
+.dataset-reference-table td {
+  text-align: left;
+  vertical-align: top;
   padding: 12px;
-  border: 1px solid var(--line-soft);
-  border-radius: 9px;
+  border-bottom: 1px solid var(--line-soft);
+  overflow-wrap: anywhere;
 }
-.dataset-reference-role {
-  width: max-content;
-  border-radius: 999px;
-  padding: 4px 7px;
-  background: #e7f5ef;
-  color: var(--green-dark);
-  font-size: 11px;
-  font-weight: 700;
+.dataset-reference-table > thead th {
+  padding-block: 10px;
+  font-size: 12px;
+  font-weight: 600;
 }
-.dataset-reference-list p,
-.dataset-reference-list details {
-  margin: 4px 0 0;
-  color: var(--muted);
-  font-size: 11px;
+.dataset-reference-table > thead th:nth-child(1) {
+  width: 28%;
+}
+.dataset-reference-table > thead th:nth-child(2) {
+  width: 11%;
+}
+.dataset-reference-table > thead th:nth-child(3) {
+  width: 11%;
+}
+.dataset-reference-table > thead th:nth-child(4) {
+  width: 12%;
+}
+.dataset-reference-table > thead th:nth-child(5) {
+  width: 17%;
+}
+.dataset-reference-table > thead th:nth-child(6) {
+  width: 21%;
+}
+.dataset-reference-table time {
+  font-variant-numeric: tabular-nums;
+}
+.dataset-reference-actions .text-button {
+  font-size: 12px;
+  white-space: nowrap;
+  margin-right: 12px;
+}
+.dataset-reference-details > td {
+  background: var(--surface-soft);
+}
+@media (max-width: 1180px) {
+  .dataset-reference-actions .text-button {
+    display: flex;
+    margin-right: 0;
+  }
 }
 .snapshot-field-list {
   display: grid;
