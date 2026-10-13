@@ -13,24 +13,21 @@ const EFFORT_OPTIONS = [
   ["high", "高"],
 ];
 
-/** @type {Array<{label: string, note: string, modelField: PipelineModelKey, effortField: PipelineEffortKey, optional?: boolean}>} */
+/** @type {Array<{label: string, modelField: PipelineModelKey, effortField: PipelineEffortKey, optional?: boolean}>} */
 const POLICY_ROWS = [
   {
     label: "低成本初筛",
-    note: "可选；用于快速筛选。抽检比例在模型服务或创建任务时设置。",
     modelField: "cheap_model",
     effortField: "cheap_effort",
     optional: true,
   },
   {
     label: "主分析",
-    note: "必选；用于完成主要语义分析。",
     modelField: "primary_model",
     effortField: "primary_effort",
   },
   {
     label: "风险复核",
-    note: "可选；用于高风险或需要复核的结果。",
     modelField: "secondary_model",
     effortField: "secondary_effort",
     optional: true,
@@ -69,6 +66,11 @@ function PreferenceRows({ models, policy, updateModel, setPolicy }) {
     </p>
   ) : (
     <div className="model-preference-rows">
+      <div className="model-preference-columns" aria-hidden="true">
+        <span>用途</span>
+        <span>模型</span>
+        <span>推理强度</span>
+      </div>
       {POLICY_ROWS.map((row) => (
         <PolicyRow
           key={row.modelField}
@@ -106,7 +108,7 @@ export function ModelPreferenceForm(props) {
           onClick={save}
           disabled={saving || !models.length || !policy.primary_model}
         >
-          {saving ? "保存中…" : "保存为我的默认策略"}
+          {saving ? "保存中…" : "保存偏好"}
         </button>
       </footer>
     </section>
@@ -116,7 +118,6 @@ export function ModelPreferenceForm(props) {
 /**
  * @param {{
  *   label: string,
- *   note: string,
  *   modelField: PipelineModelKey,
  *   effortField: PipelineEffortKey,
  *   optional?: boolean,
@@ -128,7 +129,6 @@ export function ModelPreferenceForm(props) {
  */
 function PolicyRow({
   label,
-  note,
   modelField,
   effortField,
   optional = false,
@@ -140,9 +140,9 @@ function PolicyRow({
   const selected = models.find((item) => item.model_key === policy[modelField]);
   return (
     <div className="model-preference-row">
-      <div>
+      <div className="model-preference-purpose">
         <b>{label}</b>
-        <span>{note}</span>
+        <span>{optional ? "可选" : "必选"}</span>
       </div>
       <select
         aria-label={`${label}模型`}
@@ -162,9 +162,10 @@ function PolicyRow({
         disabled={!selected}
         onChange={(event) => onEffortChange(effortField, event.target.value)}
       >
+        {!selected && <option value={policy[effortField]}>--</option>}
         {(selected?.supported_efforts ?? []).map((effort) => (
           <option key={effort} value={effort}>
-            推理强度 {EFFORT_OPTIONS.find(([key]) => key === effort)?.[1] ?? effort}
+            {EFFORT_OPTIONS.find(([key]) => key === effort)?.[1] ?? effort}
           </option>
         ))}
       </select>

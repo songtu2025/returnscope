@@ -19,11 +19,6 @@
   box-shadow: 0 10px 26px rgb(25 52 40 / 5%);
 }
 
-.model-preference-page .model-preference-row {
-  padding-block: 18px;
-  border-color: var(--line-soft);
-}
-
 .audit-page .audit-filter-form {
   gap: 12px;
   padding: 4px 4px 18px;

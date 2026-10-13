@@ -3592,7 +3592,7 @@ describe("关键用户流程", () => {
 
     expect(await screen.findByRole("heading", { name: "我的模型偏好" })).toBeVisible();
     expect(screen.queryByLabelText(/初筛抽检比例/)).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "保存为我的默认策略" }));
+    await user.click(screen.getByRole("button", { name: "保存偏好" }));
 
     expect(apiMock.saveModelPreference).toHaveBeenCalledWith(
       expect.objectContaining({ cheap_audit_percent: 11 }),
@@ -4551,9 +4551,7 @@ test.each(["configs", "modelPreference"])(
     render(<ModelPreferencePage notify={vi.fn()} />);
     expect(await screen.findByRole("alert")).toHaveTextContent("合成偏好读取失败");
     expect(screen.queryByText(/暂无已发布的模型服务/)).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "保存为我的默认策略" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "保存偏好" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "重试" }));
     expect(await screen.findByText(/暂无已发布的模型服务/)).toBeVisible();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
@@ -4585,7 +4583,7 @@ test("模型偏好保存失败保留已选推理强度，重试保存同一草�
   render(<ModelPreferencePage notify={notify} />);
   const effort = await screen.findByLabelText("主分析推理强度");
   await userEvent.selectOptions(effort, "high");
-  const save = screen.getByRole("button", { name: "保存为我的默认策略" });
+  const save = screen.getByRole("button", { name: "保存偏好" });
   await userEvent.click(save);
   await waitFor(() => expect(notify).toHaveBeenCalledWith("合成保存失败", "error"));
   expect(effort).toHaveValue("high");

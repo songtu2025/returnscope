@@ -1,55 +1,87 @@
 .model-preference-card {
   display: grid;
-  gap: 18px;
+  gap: 20px;
 }
 .model-preference-card > footer {
   display: flex;
   justify-content: flex-end;
+  padding-top: 16px;
+  border-top: 1px solid var(--line-soft);
 }
 .model-preference-field {
   display: grid;
-  max-width: 460px;
-  gap: 6px;
-  color: var(--muted);
+  width: min(100%, 480px);
+  gap: 8px;
+  color: var(--ink);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 .model-preference-field select,
-.model-preference-field input,
 .model-preference-row select {
   width: 100%;
-  min-height: 38px;
+  min-width: 0;
+  height: var(--desktop-control-height);
   border: 1px solid var(--line);
   border-radius: 7px;
-  background: #fff;
+  background: var(--panel);
   color: var(--ink);
+  font-size: 14px;
 }
-.model-preference-rows {
-  display: grid;
-  gap: 10px;
+.model-preference-row select:disabled {
+  background: var(--surface-soft);
+  color: var(--muted);
 }
+.model-preference-columns,
 .model-preference-row {
   display: grid;
-  grid-template-columns: minmax(190px, 1fr) minmax(180px, 1fr) 140px;
+  grid-template-columns: minmax(140px, 0.8fr) minmax(0, 2fr) 140px;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--canvas);
+  gap: 16px;
 }
-.model-preference-row b,
-.model-preference-row span {
-  display: block;
+.model-preference-columns {
+  padding: 10px 12px;
+  background: var(--surface-soft);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
 }
-.model-preference-row span,
-.model-preference-empty {
-  margin: 4px 0 0;
+.model-preference-row {
+  padding: 16px 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.model-preference-row:last-child {
+  border-bottom: 0;
+}
+.model-preference-purpose {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.model-preference-purpose b {
+  font-size: 14px;
+}
+.model-preference-purpose span {
   color: var(--muted);
   font-size: 12px;
-  line-height: 1.5;
+}
+.model-preference-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+@media (max-width: 1100px) {
+  .model-preference-columns,
+  .model-preference-row {
+    grid-template-columns: 130px minmax(0, 1fr) 110px;
+    gap: 12px;
+  }
 }
 @media (max-width: 720px) {
+  .model-preference-columns {
+    display: none;
+  }
   .model-preference-row {
     grid-template-columns: 1fr;
   }
