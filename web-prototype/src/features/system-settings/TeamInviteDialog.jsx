@@ -10,11 +10,7 @@ export function TeamInviteDialog({
 }) {
   const inviteHint = /^\S+@\S+\.\S+$/.test(inviteEmail) ? "" : "请填写有效邮箱。";
   return (
-    <Modal
-      eyebrow="团队邀请"
-      title="邀请用户"
-      onClose={() => setShowInviteModal(false)}
-    >
+    <Modal title="邀请用户" onClose={() => setShowInviteModal(false)}>
       <form className="modal-form invite-card" onSubmit={submit}>
         <label>
           邮箱

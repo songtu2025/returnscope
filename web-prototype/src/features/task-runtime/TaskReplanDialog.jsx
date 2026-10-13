@@ -57,7 +57,7 @@ export function TaskReplanDialog({ task, onClose, onPreflight, onSave }) {
   };
 
   return (
-    <Modal eyebrow="任务恢复" title="重新预检并规划" onClose={onClose}>
+    <Modal title="重新预检并规划" onClose={onClose}>
       <form className="modal-form replan-form" onSubmit={submit}>
         {loading && <InlineLoading label="正在重新预检执行计划…" />}
         {error && (

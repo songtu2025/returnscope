@@ -14,7 +14,7 @@ export function ModelServiceConnectionFields({
 }) {
   return (
     <div className="config-section">
-      <CardHeading title="连接信息" note="API 密钥加密保存在服务端" />
+      <CardHeading title="连接信息" />
       <div className="config-fields">
         <label>
           接入名称

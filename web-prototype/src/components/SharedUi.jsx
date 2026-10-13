@@ -9,24 +9,18 @@ import { AntdProvider } from "./AntdProvider";
 
 /**
  * @param {{
- *   eyebrow?: import("react").ReactNode,
  *   title: import("react").ReactNode,
- *   description?: import("react").ReactNode,
  *   action?: import("react").ReactNode,
  *   titleRef?: import("react").Ref<HTMLHeadingElement>,
  * }} props
  */
-export function PageHeading({ eyebrow, title, description, action, titleRef }) {
+export function PageHeading({ title, action, titleRef }) {
   return (
-    <header
-      className={description ? "page-heading" : "page-heading page-heading-compact"}
-    >
+    <header className="page-heading page-heading-compact">
       <div>
-        {eyebrow && <p className="eyebrow">{eyebrow}</p>}
         <h1 ref={titleRef} tabIndex={titleRef ? -1 : undefined}>
           {title}
         </h1>
-        {description && <span>{description}</span>}
       </div>
       {action && <div className="heading-action">{action}</div>}
     </header>
@@ -58,7 +52,6 @@ export function InfoRow({ label, value }) {
 
 /**
  * @param {{
- *   eyebrow?: import("react").ReactNode,
  *   title: string,
  *   description?: import("react").ReactNode,
  *   className?: string,
@@ -66,14 +59,7 @@ export function InfoRow({ label, value }) {
  *   children: import("react").ReactNode,
  * }} props
  */
-export function Modal({
-  eyebrow = "数据版本",
-  title,
-  description = "",
-  className = "",
-  onClose,
-  children,
-}) {
+export function Modal({ title, description = "", className = "", onClose, children }) {
   const { dialogRef, constrainFocus } = useDialogFocus({ open: true, onClose });
 
   return (
@@ -92,7 +78,6 @@ export function Modal({
       >
         <header>
           <div>
-            {eyebrow && <p className="eyebrow">{eyebrow}</p>}
             <h2>{title}</h2>
             {description && <span className="modal-description">{description}</span>}
           </div>

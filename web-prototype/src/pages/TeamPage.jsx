@@ -130,7 +130,7 @@ export function TeamPage({
   };
   return (
     <div className="standard-page team-page">
-      <PageHeading eyebrow="账号管理" title="用户与安全" />
+      <PageHeading title="用户与安全" />
       {loadState === "loading" && (
         <InlineLoading scope="page" label="正在读取用户与安全设置…" />
       )}

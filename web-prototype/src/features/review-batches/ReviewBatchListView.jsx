@@ -250,10 +250,7 @@ export function ReviewBatchListView({
       <Button type="text" onClick={() => navigateHash("classification-results")}>
         返回分类结果池
       </Button>
-      <PageHeading
-        title="历史复核记录"
-        description="旧批次仅供查看；人工修正请在分类结果的反馈记录中完成。"
-      />
+      <PageHeading title="历史复核记录" />
       <BatchFilters filters={filters} onFilters={onFilters} updateRoute={updateRoute} />
       <BatchContents
         state={state}

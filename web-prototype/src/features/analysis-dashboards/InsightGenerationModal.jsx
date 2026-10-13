@@ -67,9 +67,7 @@ export function InsightGenerationModal({
   return (
     <Modal
       className="insight-generation-modal"
-      eyebrow=""
       title="生成 AI 洞察报告"
-      description="确认本次分析范围和运行参数"
       onClose={() => {
         if (!submitting) onClose();
       }}

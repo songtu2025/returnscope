@@ -39,7 +39,6 @@ export function StandardWorkspaceReview(context) {
           <h2>变更检查</h2>
           <span>对比当前生效标准</span>
         </header>
-        <p>可以直接保存并启用，也可以先测试分类效果。</p>
         <ClassificationHierarchyChanges content={content} baseContent={baseContent} />
         <StandardStrategyChanges content={content} baseContent={baseContent} />
         {changes.length ? (

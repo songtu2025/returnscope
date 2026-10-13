@@ -13,7 +13,6 @@ export function LabelActionConfirmation({
 }) {
   return (
     <Modal
-      eyebrow="标签修改"
       title={
         pending.type === "replace"
           ? "创建替代标签"

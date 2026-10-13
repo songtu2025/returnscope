@@ -18,7 +18,7 @@ export function ProductMasterImpact({
   return (
     <div className="product-master-impact">
       <section className="dataset-view-panel">
-        <CardHeading title="信息修改记录" note="记录原值、新值和修改原因" />
+        <CardHeading title="信息修改记录" />
         <div className="data-audit-list">
           {dimensionAudit.map((entry) => (
             <ProductAuditEntry key={entry.id} entry={entry} />

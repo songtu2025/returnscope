@@ -86,7 +86,6 @@ export function DatasetUploadDialog({ dialog, onClose, onDone, onConflict }) {
 
   return (
     <Modal
-      eyebrow="产品信息"
       title={dialog.mode === "create" ? "导入产品信息" : `更新 ${dialog.dataset.name}`}
       onClose={onClose}
     >

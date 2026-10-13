@@ -73,7 +73,6 @@ export function StandardDraftBasicInformation({
         <div>
           <h2>基本信息</h2>
         </div>
-        <p>说明这套标准适用于什么商品。</p>
       </header>
       <fieldset disabled={!editable} className="standard-editor-fields two-columns">
         <StandardName

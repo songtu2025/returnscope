@@ -61,10 +61,6 @@
   display: grid;
   gap: 4px;
 }
-.workbench-card > header span {
-  color: var(--muted);
-  font-size: 12px;
-}
 .workbench-action-list,
 .workbench-output-list {
   display: grid;

@@ -46,7 +46,7 @@ export function EmailChangeModal({ currentEmail, onClose, notify }) {
 
   if (sentEmail) {
     return (
-      <Modal eyebrow="账号安全" title="验证新邮箱" onClose={onClose}>
+      <Modal title="验证新邮箱" onClose={onClose}>
         <div className="modal-form invite-card auth-result-card">
           <div className="login-icon">
             <EnvelopeSimple size={24} />
@@ -66,7 +66,7 @@ export function EmailChangeModal({ currentEmail, onClose, notify }) {
   }
 
   return (
-    <Modal eyebrow="账号安全" title="修改我的邮箱" onClose={onClose}>
+    <Modal title="修改我的邮箱" onClose={onClose}>
       <form className="modal-form invite-card" onSubmit={submit}>
         <label>
           当前邮箱

@@ -76,7 +76,6 @@ export function ResetPasswordPage({ token }) {
       <div className="login-icon">
         <Key size={24} />
       </div>
-      <p className="eyebrow">账号安全</p>
       <h2>设置新密码</h2>
       <p>更新后，其他设备上的登录会话会自动失效。</p>
       <label>

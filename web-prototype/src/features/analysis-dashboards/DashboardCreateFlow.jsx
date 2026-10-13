@@ -22,11 +22,7 @@ export function DashboardCreateFlow(props) {
   if (!stage.hasSelection) {
     return (
       <div className="standard-page analysis-dashboard-page">
-        <PageHeading
-          eyebrow="生成分析看板"
-          title="还没有选择分类结果"
-          description="选择内容只保存在当前账号的本次浏览器会话中。"
-        />
+        <PageHeading title="还没有选择分类结果" />
         <section className="dashboard-create-empty">
           <button
             className="primary-button"

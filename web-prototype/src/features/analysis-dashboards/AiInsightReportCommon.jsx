@@ -33,14 +33,13 @@ export function EvidenceLine({ ids, catalog }) {
   );
 }
 
-/** @param {{number: string, title?: import("react").ReactNode, description?: import("react").ReactNode}} props */
-export function SectionHeading({ number: sectionNumber, title, description }) {
+/** @param {{number: string, title?: import("react").ReactNode}} props */
+export function SectionHeading({ number: sectionNumber, title }) {
   return (
     <header className="ai-report-section-heading">
       <span>{sectionNumber}</span>
       <div>
         <h3>{title}</h3>
-        {description && <p>{description}</p>}
       </div>
     </header>
   );

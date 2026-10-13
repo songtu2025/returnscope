@@ -27,7 +27,6 @@ export function SegmentRetryDialog({ task, segment, error, onClose, onSave }) {
   };
   return (
     <Modal
-      eyebrow="Listing 重试"
       title={
         isFailureRetry
           ? "重试分析失败项？"
@@ -91,7 +90,6 @@ export function SegmentCancelDialog({ segment, onClose, onSave }) {
   };
   return (
     <Modal
-      eyebrow="Listing 任务控制"
       title={`取消 ${segment.scope?.listing || segment.segment_key}`}
       onClose={onClose}
     >

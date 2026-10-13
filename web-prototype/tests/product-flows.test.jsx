@@ -2012,11 +2012,9 @@ describe("关键用户流程", () => {
     );
 
     expect(
-      await screen.findByText(
-        "这里只显示阻断当前任务的商品，不需要在完整产品信息中搜索。",
-      ),
+      await screen.findByRole("region", { name: "当前任务待补充商品" }),
     ).toBeVisible();
-    expect(screen.getByText("SKU-1")).toBeVisible();
+    expect(await screen.findByText("SKU-1")).toBeVisible();
     expect(screen.getByText("SKU-2")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "选择当前 2 个" }));
     await user.selectOptions(screen.getByLabelText("批量设置品类"), "0");

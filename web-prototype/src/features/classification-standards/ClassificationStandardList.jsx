@@ -54,9 +54,7 @@ export function ClassificationStandardList({
   return (
     <>
       <PageHeading
-        eyebrow="语义分类治理"
         title="分类标准"
-        description="维护产品品类与用户反馈标签，新分析任务自动使用当前生效标准。"
         action={
           <Button type="primary" icon={<Plus size={16} />} onClick={onCreate}>
             新建分类标准

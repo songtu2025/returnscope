@@ -137,11 +137,7 @@ export function ProductDimensionEditDialog({
   onClose,
 }) {
   return (
-    <Modal
-      eyebrow="产品信息"
-      title={`编辑产品信息 · ${editing.MSKU}`}
-      onClose={onClose}
-    >
+    <Modal title={`编辑产品信息 · ${editing.MSKU}`} onClose={onClose}>
       <form className="modal-form product-info-edit-form" onSubmit={onSave}>
         {conflict && (
           <p className="form-error" role="alert">

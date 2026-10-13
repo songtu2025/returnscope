@@ -17,11 +17,7 @@ export function ModelEditorDialog({
 }) {
   if (!editorMode || !modelDraft) return null;
   return (
-    <Modal
-      eyebrow="模型列表"
-      title={editorMode === "create" ? "添加模型" : "编辑模型"}
-      onClose={onClose}
-    >
+    <Modal title={editorMode === "create" ? "添加模型" : "编辑模型"} onClose={onClose}>
       <form
         className="modal-form model-editor-form"
         onSubmit={(event) => {

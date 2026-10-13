@@ -114,7 +114,6 @@ export function ReportExecutiveSummary({
   const terms = analysisContextTerms(analysisContext);
   return (
     <section className="ai-report-executive" id="report-summary">
-      <span className="ai-report-eyebrow">Executive Summary</span>
       <h3>执行摘要</h3>
       <ol className="ai-report-summary-list ai-report-generated-summary">
         {(content.executive_summary ?? []).map((item, index) => (
@@ -185,7 +184,6 @@ export function ReportStructureSection({
       <SectionHeading
         number="01"
         title={structureFinding?.title || terms.problemStructure}
-        description="先区分可行动的商品问题与宽泛的非商品原因。"
       />
       <div className="ai-report-editorial-intro">
         <p>

@@ -12,10 +12,6 @@
   line-height: 1.2;
   letter-spacing: -0.035em;
 }
-.page-heading > div > span {
-  color: var(--muted);
-  font-size: 11px;
-}
 .eyebrow {
   margin: 0;
   color: var(--green);

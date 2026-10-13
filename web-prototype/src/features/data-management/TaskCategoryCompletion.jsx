@@ -137,7 +137,6 @@ export function TaskCategoryCompletion({ dataset, focus, notify, onReturnToTask 
         <div>
           <span>当前任务待补充</span>
           <h3>{focus.taskTitle || "待创建分析任务"}</h3>
-          <p>这里只显示阻断当前任务的商品，不需要在完整产品信息中搜索。</p>
         </div>
         <div className="completion-stats">
           <span>

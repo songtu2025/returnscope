@@ -98,7 +98,6 @@ export function StandardDraftAdvancedSettings({
     <details className="standard-advanced-settings" hidden={section !== "settings"}>
       <summary>高级分类设置</summary>
       <fieldset disabled={!editable}>
-        <p>通常无需修改。这里控制智能体的补充判断说明和可输出证据部位。</p>
         <DraftInstructions content={content} onChange={onChange} />
         <fieldset>
           <legend>可识别证据部位</legend>

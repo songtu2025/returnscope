@@ -91,9 +91,7 @@ export function DashboardList({ route, updateRoute, userId }) {
   return (
     <div className="standard-page analysis-dashboard-page">
       <PageHeading
-        eyebrow="可追溯分析交付"
         title="分析看板"
-        description="选择分类结果和统计范围创建看板，后续自动显示最新数据。"
         action={
           <button className="primary-button" onClick={chooseResults}>
             <ChartBar size={18} /> 选择分类结果

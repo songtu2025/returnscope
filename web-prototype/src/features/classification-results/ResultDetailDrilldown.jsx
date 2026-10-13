@@ -9,7 +9,6 @@ export function ResultDetailDrilldown(context) {
       <header>
         <div>
           <b>业务下钻</b>
-          <span>问题 → Listing → 产品名称 → 产品SKU → order-id → 分类结果与证据</span>
         </div>
         {(route.problem || route.productName || route.productSku || route.orderId) && (
           <button

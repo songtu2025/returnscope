@@ -30,7 +30,6 @@ export function ReportDiagnosticsSection(props) {
       <SectionHeading
         number="02"
         title={diagnosticFinding?.title || "关键发现与业务含义"}
-        description="比较时间变化和商品内部发生比例，避免把总量误当成整改优先级。"
       />
       <DiagnosticFindingIntro diagnosticFinding={diagnosticFinding} />
       {hasBusinessIssues && (

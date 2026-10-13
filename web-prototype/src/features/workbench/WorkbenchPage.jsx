@@ -32,7 +32,6 @@ export function WorkbenchPage({ onNavigate }) {
   return (
     <div className="standard-page workbench-page">
       <PageHeading
-        eyebrow="运营首页"
         title="首页"
         action={
           <>

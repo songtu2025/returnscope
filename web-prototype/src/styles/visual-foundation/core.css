@@ -42,13 +42,6 @@
   letter-spacing: -0.04em;
 }
 
-.page-heading > div > span {
-  display: block;
-  max-width: 780px;
-  font-size: 12px;
-  line-height: 1.6;
-}
-
 .eyebrow {
   font-size: 12px;
   letter-spacing: 0.1em;

@@ -15,7 +15,6 @@ export function TeamAccountStatusDialog({
 }) {
   return (
     <Modal
-      eyebrow="团队账号"
       title={`${statusTarget.active ? "停用" : "恢复"}${statusTarget.display_name}的账号`}
       onClose={() => {
         setStatusTarget(null);

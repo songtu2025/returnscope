@@ -108,9 +108,7 @@ export function ModelServiceView({
     <AntdProvider>
       <div className="standard-page api-page">
         <PageHeading
-          eyebrow="共享系统配置"
           title="模型服务"
-          description="维护共享接入、模型可用性与运行限制；个人策略与任务选择在各自页面保存。"
           action={
             activePanel ? (
               <Button
@@ -231,11 +229,7 @@ export function ModelServiceView({
         />
       )}
       {exitState.pendingExit && (
-        <Modal
-          eyebrow="未保存修改"
-          title="放弃未保存的修改？"
-          onClose={exitState.continueEditing}
-        >
+        <Modal title="放弃未保存的修改？" onClose={exitState.continueEditing}>
           <p>尚未保存的内容会丢失。</p>
           <div className="modal-actions">
             <Button onClick={exitState.continueEditing}>继续编辑</Button>
@@ -246,7 +240,7 @@ export function ModelServiceView({
         </Modal>
       )}
       {syncConfirmation && (
-        <Modal eyebrow="模型目录" title="同步模型目录？" onClose={cancelDiscoverModels}>
+        <Modal title="同步模型目录？" onClose={cancelDiscoverModels}>
           <p>
             将新增或启用接入方返回的模型，并停用未返回的模型。已启动任务仍使用原配置快照。
           </p>

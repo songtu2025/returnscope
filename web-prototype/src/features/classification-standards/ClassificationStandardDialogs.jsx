@@ -22,7 +22,6 @@ export function ClassificationStandardDeleteDialog({
   return (
     <Modal
       className="standard-lifecycle-modal"
-      eyebrow={target.delete_mode === "delete" ? "删除分类标准" : "停用分类标准"}
       title={
         target.delete_mode === "delete"
           ? `永久删除“${target.name}”`
@@ -73,7 +72,6 @@ export function ClassificationStandardRestoreDialog({
   if (!target) return null;
   return (
     <Modal
-      eyebrow="采用历史内容"
       title={`采用第 ${target.version_no} 次更新的内容？`}
       description="内容会暂存供你检查，保存并启用后才生效。修改记录保留。"
       onClose={onClose}

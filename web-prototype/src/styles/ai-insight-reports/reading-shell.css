@@ -128,13 +128,6 @@
   background: #f7faf8;
 }
 
-.ai-report-eyebrow {
-  color: #176e55;
-  font-size: 12px;
-  font-weight: 750;
-  letter-spacing: 0.12em;
-}
-
 .ai-report-executive h3 {
   max-width: 700px;
   margin: 10px 0 13px;
@@ -268,10 +261,4 @@
 .ai-report-section-heading h3 {
   font-size: 20px;
   line-height: 1.4;
-}
-
-.ai-report-section-heading p {
-  margin-top: 5px;
-  font-size: 12px;
-  line-height: 1.6;
 }

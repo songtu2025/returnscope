@@ -132,7 +132,6 @@ export function ClassificationExcelImport({ prepareDraft, onApply, disabled }) {
       {error && !state && <p role="alert">{error}</p>}
       {state && (
         <Modal
-          eyebrow="标签框架导入"
           title="预览标签框架"
           onClose={() => {
             if (!busy) {

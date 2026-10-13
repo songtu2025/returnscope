@@ -31,7 +31,6 @@ export function ForgotPasswordPage() {
         <div className="login-icon">
           <EnvelopeSimple size={24} />
         </div>
-        <p className="eyebrow">密码重置</p>
         <h2 id="reset-sent">请检查邮箱</h2>
         <p>如果该邮箱对应可用账号，我们已发送重置链接。请在 30 分钟内完成操作。</p>
         <button
@@ -50,9 +49,7 @@ export function ForgotPasswordPage() {
       <div className="login-icon">
         <EnvelopeSimple size={24} />
       </div>
-      <p className="eyebrow">密码重置</p>
       <h2>找回密码</h2>
-      <p>填写登录邮箱，我们会发送一次性重置链接。</p>
       <label>
         邮箱
         <input

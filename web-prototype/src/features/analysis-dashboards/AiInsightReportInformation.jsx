@@ -136,7 +136,6 @@ export function ReportInformationSection({
       <SectionHeading
         number="03"
         title={informationFinding?.title || "宽泛原因需要进一步拆解"}
-        description="区分顾客意图、订单操作和商品问题，避免把非商品原因转化为商品整改。"
       />
       <InformationLead
         informationFinding={informationFinding}

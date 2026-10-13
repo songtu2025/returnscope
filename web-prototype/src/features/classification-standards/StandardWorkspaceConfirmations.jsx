@@ -9,11 +9,7 @@ export function StandardWorkspaceConfirmations(context) {
   return (
     <>
       {confirmBack && (
-        <Modal
-          eyebrow="未保存修改"
-          title="离开编辑页？"
-          onClose={() => setConfirmBack(false)}
-        >
+        <Modal title="离开编辑页？" onClose={() => setConfirmBack(false)}>
           <div className="label-action-confirm">
             <p>尚未保存的修改会丢失。可以继续编辑，或放弃本次未保存内容。</p>
             <div>

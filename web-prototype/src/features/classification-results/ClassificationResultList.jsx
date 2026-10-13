@@ -20,7 +20,6 @@ export function ClassificationResultList(props) {
     <div className="standard-page classification-results-page">
       <PageHeading
         title="分类结果池"
-        description="查看最新分类结果，在反馈记录中查看证据或人工修正语义。"
         action={
           <div className="result-creation-actions">
             <button

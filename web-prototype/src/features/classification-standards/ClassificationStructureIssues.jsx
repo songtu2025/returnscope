@@ -33,7 +33,6 @@ export function ClassificationStructureIssues({ validation, content, onFix, busy
   return (
     <section className="standard-structure-issues" aria-label="结构检查">
       <h3>结构检查 · {issues.length} 项待处理</h3>
-      <p>逐项修正后保存草稿，系统会重新检查；通过后即可运行样本验证。</p>
       {[...groups].map(([kind, rows]) => (
         <details key={kind} open={rows.length <= 5}>
           <summary>

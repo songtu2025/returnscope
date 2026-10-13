@@ -168,11 +168,7 @@ export function ReviewCenter({ notify, onChanged, focus }) {
 
   return (
     <div className="standard-page review-page">
-      <PageHeading
-        eyebrow="人工质量闸门"
-        title="复核中心"
-        description="所有用户可处理任意任务的待复核项；提交时使用版本号防止相互覆盖。"
-      />
+      <PageHeading title="复核中心" />
       <div className="review-layout">
         <LegacyReviewList
           status={status}

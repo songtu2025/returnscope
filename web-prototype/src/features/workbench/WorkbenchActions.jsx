@@ -12,7 +12,6 @@ export function WorkbenchActions({ actions, hasData, onNavigate }) {
       <header>
         <div>
           <b>待处理与后台进度</b>
-          <span>阻断、失败、需复核、暂停和报告生成进度，最多显示 5 项</span>
         </div>
         <button className="text-button" onClick={() => onNavigate("analysis-tasks")}>
           查看分析任务 <ArrowRight size={15} />

@@ -1915,7 +1915,7 @@ test("删除已发布标准时明确执行停用", async () => {
   expect(screen.queryByText("更多")).not.toBeInTheDocument();
   await userEvent.click(deactivate);
   expect(screen.getByText(`停用“${standard.name}”`)).toBeVisible();
-  expect(screen.getByText("停用分类标准")).toBeVisible();
+  expect(screen.getByRole("dialog", { name: `停用“${standard.name}”` })).toBeVisible();
   expect(screen.getByText(/草稿及其样本验证记录将一并删除，无法恢复/)).toBeVisible();
   expect(standardApiMock.deleteClassificationStandard).not.toHaveBeenCalled();
   await userEvent.click(screen.getByRole("button", { name: "取消" }));

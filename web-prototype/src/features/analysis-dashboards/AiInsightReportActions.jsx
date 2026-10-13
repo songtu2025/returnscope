@@ -70,7 +70,6 @@ export function ReportActionsSection({
           informationFinding || informationDiagnostic || informationReason ? "04" : "03"
         }
         title="按证据强度执行行动计划"
-        description="每项行动绑定目标对象和可观察的验证条件。"
       />
       {primaryAction && <PrimaryAction primaryAction={primaryAction} />}
       {followupActions.length > 0 && (

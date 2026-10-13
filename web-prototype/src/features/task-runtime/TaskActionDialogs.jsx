@@ -38,7 +38,7 @@ export function TaskRenameDialog({ task, onClose, onSave }) {
   };
 
   return (
-    <Modal eyebrow="协作修改" title="修改任务名称" onClose={close}>
+    <Modal title="修改任务名称" onClose={close}>
       {confirmClose ? (
         <div className="modal-form">
           <p>尚未保存的名称和修改原因会丢失，是否放弃修改？</p>
@@ -78,7 +78,6 @@ export function TaskRenameDialog({ task, onClose, onSave }) {
               required
             />
           </label>
-          <p className="form-hint">仅修改任务名称，不改变分析数据、模型或范围。</p>
           <div className="modal-actions">
             <button type="button" className="secondary-button" onClick={close}>
               取消
@@ -112,7 +111,7 @@ export function TaskCancelDialog({ task, onClose, onSave }) {
   };
 
   return (
-    <Modal eyebrow="任务控制" title={`取消“${task.title}”`} onClose={onClose}>
+    <Modal title={`取消“${task.title}”`} onClose={onClose}>
       <form className="modal-form" onSubmit={submit}>
         <p className="form-hint">
           当前片段会在安全点停止，等待片段不再执行；已完成的 Listing
@@ -164,7 +163,6 @@ export function TaskResumeDialog({ task, onClose, onSave }) {
 
   return (
     <Modal
-      eyebrow="任务控制"
       title={`${restarting ? "重新排队" : "继续"}“${task.title}”`}
       onClose={onClose}
     >

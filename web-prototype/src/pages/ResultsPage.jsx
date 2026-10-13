@@ -160,11 +160,7 @@ export function ResultsPage({ notify, onNavigate, focus = null }) {
 
   return (
     <div className="standard-page results-page analysis-workbench">
-      <PageHeading
-        eyebrow="可交付分析结果"
-        title="退货问题分析"
-        description="从全局问题发现到商品和评论证据下钻，所有指标均来自当前任务结果版本。"
-      />
+      <PageHeading title="退货问题分析" />
 
       {tasks.length === 0 && (
         <section className="empty-card">

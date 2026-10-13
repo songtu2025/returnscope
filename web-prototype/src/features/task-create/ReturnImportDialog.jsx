@@ -73,12 +73,7 @@ export function ReturnImportDialog({ onClose, onDone }) {
   const submitLabel = duplicate ? "使用已导入的数据" : "导入并分析本批";
 
   return (
-    <Modal
-      eyebrow="待分析数据"
-      title="导入一批用户反馈"
-      className="return-import-modal"
-      onClose={onClose}
-    >
+    <Modal title="导入一批用户反馈" className="return-import-modal" onClose={onClose}>
       {!inspection ? (
         <form className="return-import-form" onSubmit={inspect}>
           <p className="return-import-intro">

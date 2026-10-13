@@ -12,7 +12,6 @@ export function WorkbenchOutputs({ recentOutputs, hasData, onNavigate }) {
       <header>
         <div>
           <b>最近产出</b>
-          <span>分类结果、分析看板和已发布 AI 洞察报告</span>
         </div>
         <button
           className="text-button"

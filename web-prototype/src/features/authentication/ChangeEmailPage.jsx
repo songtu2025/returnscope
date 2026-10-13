@@ -71,7 +71,6 @@ export function ChangeEmailPage({ token, onSessionEnded }) {
       <div className="login-icon">
         <EnvelopeSimple size={24} />
       </div>
-      <p className="eyebrow">账号安全</p>
       <h2 id="email-change-title">确认修改登录邮箱</h2>
       <p>
         登录邮箱将修改为 <b>{maskedEmail(email)}</b>

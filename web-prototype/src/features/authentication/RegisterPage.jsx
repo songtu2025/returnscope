@@ -88,9 +88,7 @@ export function RegisterPage({ token, onLogin }) {
       <div className="login-icon">
         <ShieldCheck size={24} />
       </div>
-      <p className="eyebrow">团队邀请</p>
       <h2>完成注册</h2>
-      <p>设置姓名和密码后即可进入团队工作台。</p>
       <label>
         受邀邮箱
         <input value={email} readOnly aria-readonly="true" />

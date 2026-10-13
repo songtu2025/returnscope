@@ -21,7 +21,6 @@ function ExplorerHeader({ onUpdateRoute }) {
         <span>1</span>
         <div>
           <h2>选择主题与原因</h2>
-          <p>先定位问题对象，再进入具体原因</p>
         </div>
       </div>
       <button onClick={resetReasonFilters}>

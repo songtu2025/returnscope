@@ -21,9 +21,7 @@ export function AuditLogPage({ route }) {
   return (
     <div className="standard-page audit-page">
       <PageHeading
-        eyebrow="系统治理"
         title="审计记录"
-        description="按操作人、对象和日期追溯系统变更；敏感字段始终掩码。"
         action={
           <InlineLoading
             label="更新中…"

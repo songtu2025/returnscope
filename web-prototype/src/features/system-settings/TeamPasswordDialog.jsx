@@ -20,11 +20,7 @@ export function TeamPasswordDialog({
 }) {
   const passwordFormHint = passwordHint(passwordForm);
   return (
-    <Modal
-      eyebrow="账号安全"
-      title="修改我的密码"
-      onClose={() => setShowPasswordModal(false)}
-    >
+    <Modal title="修改我的密码" onClose={() => setShowPasswordModal(false)}>
       <form className="modal-form invite-card" onSubmit={changePassword}>
         <label>
           当前密码

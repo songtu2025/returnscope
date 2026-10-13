@@ -47,7 +47,6 @@ export function InvalidLinkCard({
       <div className="login-icon auth-warning-icon">
         <WarningCircle size={24} />
       </div>
-      <p className="eyebrow">链接验证</p>
       <h2>{title}</h2>
       <p>{description}</p>
       <button
