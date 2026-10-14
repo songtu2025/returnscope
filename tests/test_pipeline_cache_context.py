@@ -201,8 +201,8 @@ def _system_error() -> ModelCallResult:
             "needs_review": True,
             "review_diagnostics": [
                 ReviewDiagnostic(
-                    code="COVERAGE_AUDIT_FAILED",
-                    detail="合成异常",
+                    code="MODEL_RUN_TIMEOUT",
+                    detail="合成请求超时",
                     action="SYSTEM_RERUN",
                 )
             ],

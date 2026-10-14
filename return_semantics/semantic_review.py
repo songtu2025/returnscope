@@ -24,6 +24,7 @@ from return_semantics.semantic_review_diagnostics import (
 from return_semantics.semantic_review_diagnostics import (
     _SYSTEM_REVIEW_REASON_PREFIXES as _SYSTEM_REVIEW_REASON_PREFIXES,
 )
+from return_semantics.semantic_review_diagnostics import SYSTEM_RETRY_DIAGNOSTIC_CODES
 from return_semantics.semantic_review_diagnostics import (
     _failure_diagnostic as _failure_diagnostic,
 )
@@ -219,8 +220,7 @@ def review_route(
 def _has_system_rerun_diagnostic(items: list[dict[str, object]]) -> bool:
     return any(
         item.get("disposition") == ANALYSIS_FAILURE
-        and item.get("business_review_required") is False
-        and item.get("diagnostic_code") not in _NON_BLOCKING_DIAGNOSTIC_CODES
+        and item.get("diagnostic_code") in SYSTEM_RETRY_DIAGNOSTIC_CODES
         for item in items
     )
 

@@ -30,6 +30,27 @@ test("空语义项保留默认投影与编号", () => {
   });
 });
 
+test("语义分歧按人工待判断计数，不沿用旧系统失败汇总", () => {
+  const summary = suppliedSummary({
+    semantic_review: {
+      semantic_items: [
+        {
+          item_id: "difference",
+          disposition: "ANALYSIS_FAILURE",
+          business_review_required: true,
+        },
+        {
+          item_id: "timeout",
+          disposition: "ANALYSIS_FAILURE",
+          business_review_required: false,
+        },
+      ],
+      coverage_summary: { analysis_failure: 2, unexplained_fragment_count: 1 },
+    },
+  });
+  expect(summary).toEqual({ mapped: 0, informational: 0, needsReview: 2, failures: 1 });
+});
+
 test.each([
   ["semantic_item_id", "semantic-1"],
   ["item_id", "item-1"],

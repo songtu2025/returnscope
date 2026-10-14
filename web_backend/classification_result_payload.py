@@ -11,8 +11,10 @@ from return_semantics.schemas import (
     ValidatedClassification,
 )
 from return_semantics.semantic_review import (
+    BUSINESS_REVIEW_REQUIRED,
+    SYSTEM_RERUN_REQUIRED,
     build_semantic_review_view,
-    requires_system_rerun,
+    review_route,
 )
 from web_backend.classification_results.payload_facts import (
     _fact_id_by_label as _fact_id_by_label,
@@ -74,13 +76,16 @@ def _classification_quality(
     source_text: str = "",
     taxonomy: TaxonomyConfig | None = None,
 ) -> str:
-    if requires_system_rerun(
+    route = review_route(
         result,
         source_text,
         taxonomy,
         processing_status=result.status,
-    ):
+    )
+    if route == SYSTEM_RERUN_REQUIRED:
         return "unusable"
+    if route == BUSINESS_REVIEW_REQUIRED:
+        return "review_required"
     if semantic_disposition in REVIEW_DISPOSITIONS:
         return "review_required"
     if semantic_disposition in {

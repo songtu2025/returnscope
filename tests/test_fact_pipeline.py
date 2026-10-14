@@ -756,7 +756,17 @@ def test_two_calls_map_only_selected_branch_and_cache(fact_taxonomy, tmp_path):
     assert result.classification.extracted_facts == [fact]
 
 
-def test_system_rerun_cache_entry_is_ignored_and_replaced(fact_taxonomy, tmp_path):
+@pytest.mark.parametrize(
+    "diagnostic_code,should_reuse",
+    [
+        ("MODEL_RUN_FAILED", False),
+        ("COVERAGE_AUDIT_FAILED", True),
+        ("MODEL_RESULT_MISMATCH", True),
+    ],
+)
+def test_cache_retries_only_execution_failure(
+    fact_taxonomy, tmp_path, diagnostic_code, should_reuse
+):
     cache = JsonlCache(tmp_path / "cache.jsonl")
     claims = ListingClaimsConfig(version="none", claims=[])
     cache_key = build_cache_key(
@@ -778,10 +788,10 @@ def test_system_rerun_cache_entry_is_ignored_and_replaced(fact_taxonomy, tmp_pat
             classification=ModelClassification.model_validate(
                 {
                     "needs_review": True,
-                    "review_reasons": ["覆盖审计失败，分析结果尚未完成"],
+                    "review_reasons": ["历史缓存诊断"],
                     "review_diagnostics": [
                         {
-                            "code": "COVERAGE_AUDIT_FAILED",
+                            "code": diagnostic_code,
                             "detail": "历史异常缓存",
                             "action": "SYSTEM_RERUN",
                         }
@@ -820,11 +830,15 @@ def test_system_rerun_cache_entry_is_ignored_and_replaced(fact_taxonomy, tmp_pat
     result, cached = _call_with_cache(**kwargs)
     again, cached_again = _call_with_cache(**kwargs)
 
-    assert not cached
+    assert cached is should_reuse
     assert cached_again
     assert result == again
-    assert result.classification.review_diagnostics == []
-    assert len(client.messages) == 4
+    if should_reuse:
+        assert result.classification.review_diagnostics[0].code == diagnostic_code
+        assert client.messages == []
+    else:
+        assert result.classification.review_diagnostics == []
+        assert len(client.messages) == 4
 
 
 def test_different_objects_and_conditions_survive(fact_taxonomy):

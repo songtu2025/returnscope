@@ -17,17 +17,27 @@ _DETAILS_NOT_RETAINED = "NOT_RETAINED"
 
 _DETAILS_NOT_APPLICABLE = "NOT_APPLICABLE"
 
+SYSTEM_RETRY_DIAGNOSTIC_CODES = frozenset(
+    {
+        "MODEL_RUN_TIMEOUT",
+        "MODEL_RUN_FAILED",
+        "SECONDARY_MODEL_TIMEOUT",
+        "SECONDARY_MODEL_CALL_FAILED",
+        "SECONDARY_RESULT_INVALID",
+    }
+)
+
 
 _DIAGNOSTIC_METADATA = {
     "COVERAGE_AUDIT_FAILED": (
         "SEMANTIC_ANALYSIS_QUALITY",
         "可能存在用户反馈漏抽",
-        "请核对疑似漏抽片段；没有片段时请系统重跑。",
+        "请核对原文与现有观点，补充遗漏语义；缺少定位片段时仍可人工核对。",
     ),
     "MODEL_RESULT_MISMATCH": (
         "SEMANTIC_ANALYSIS_QUALITY",
         "两次模型结果不一致",
-        "请核对两次模型的逐项差异；没有差异明细时请系统重跑。",
+        "请以原文为准核对两次结果；缺少差异明细时核对现有观点并人工修正。",
     ),
     "LABEL_RULE_REVIEW_REQUIRED": (
         "SEMANTIC_ANALYSIS_QUALITY",
@@ -101,14 +111,10 @@ def _failure_code(reason: str, *, model_error: bool = False) -> str:
 def _legacy_diagnostic_action(code: str, action: str) -> str:
     if code == "COVERAGE_AUDIT_FAILED":
         return (
-            "当前结果未保留疑似漏抽的原文片段，业务员无法据此判断；"
-            "请系统重跑并保留疑似漏抽片段。"
+            "当前结果未保留疑似漏抽的原文片段；请核对完整原文与现有观点，补充遗漏语义。"
         )
     if code == "MODEL_RESULT_MISMATCH":
-        return (
-            "当前结果未保留两次模型的差异明细，业务员无法据此判断；"
-            "请系统重跑并保留逐项差异。"
-        )
+        return "当前结果未保留两次模型的差异明细；请以原文为准核对现有观点并人工修正。"
     return action
 
 
@@ -126,7 +132,7 @@ def _failure_diagnostic(reason: str, *, model_error: bool = False) -> dict[str, 
             else _DETAILS_NOT_APPLICABLE
         ),
         "action": action,
-        "business_review_required": False,
+        "business_review_required": domain == "SEMANTIC_ANALYSIS_QUALITY",
     }
 
 
@@ -140,16 +146,15 @@ def _structured_failure_diagnostic(value: object) -> dict[str, object]:
 
     domain, title, default_action = _DIAGNOSTIC_METADATA.get(
         code,
-        _DIAGNOSTIC_METADATA["MODEL_RUN_FAILED"],
+        ("SEMANTIC_ANALYSIS_QUALITY", "分析结果待核对", "请核对原文与现有分析结果。"),
     )
 
     has_details = _diagnostic_has_details(
         code, evidence_text, primary_result, secondary_result
     )
     is_system_action = action in {"SYSTEM_RERUN", "SYSTEM_RETRY", "ADMIN_CONFIG"}
-    action_text = _structured_diagnostic_action(
-        code, action, default_action, is_system_action
-    )
+    # 旧数据中的系统动作不能将语义分歧重新判成执行失败。
+    action_text = default_action if not action or is_system_action else action
     return {
         "diagnostic_domain": domain,
         "diagnostic_code": code,
@@ -166,9 +171,7 @@ def _structured_failure_diagnostic(value: object) -> dict[str, object]:
         "secondary_result": secondary_result,
         "detail": detail,
         "action": action_text,
-        "business_review_required": domain == "SEMANTIC_ANALYSIS_QUALITY"
-        and has_details
-        and not is_system_action,
+        "business_review_required": domain == "SEMANTIC_ANALYSIS_QUALITY",
     }
 
 
@@ -183,16 +186,3 @@ def _diagnostic_has_details(
     if code in {"MODEL_RESULT_MISMATCH", "LABEL_RULE_REVIEW_REQUIRED"}:
         return bool(evidence_text or primary_result or secondary_result)
     return False
-
-
-def _structured_diagnostic_action(
-    code: str,
-    action: str,
-    default_action: str,
-    is_system_action: bool,
-) -> str:
-    if is_system_action and code == "COVERAGE_AUDIT_FAILED":
-        return "无需业务员判断本次运行异常；请系统重跑，疑似片段仅用于定位。"
-    if is_system_action and code == "MODEL_RESULT_MISMATCH":
-        return "无需业务员判断本次运行异常；请系统重跑，差异明细仅用于定位。"
-    return default_action if not action or is_system_action else action

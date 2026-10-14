@@ -49,6 +49,8 @@ def refresh_related_dashboards(
         sources = connection.execute(
             """
             SELECT s.result_version_id AS previous_id,
+                   json_extract(s.source_snapshot_json, '$.content_hash') AS previous_hash,
+                   original.content_hash AS current_hash,
                    (SELECT latest.id FROM classification_result_versions latest
                     WHERE latest.result_id = original.result_id AND latest.publish_status = 'published'
                     ORDER BY latest.version_no DESC LIMIT 1) AS latest_id
@@ -59,7 +61,9 @@ def refresh_related_dashboards(
             (row["dataset_id"],),
         ).fetchall()
         if product_dataset_id is None and all(
-            source["previous_id"] == source["latest_id"] for source in sources
+            source["previous_id"] == source["latest_id"]
+            and source["previous_hash"] == source["current_hash"]
+            for source in sources
         ):
             continue
         plan = build_plan(

@@ -2,7 +2,7 @@ import {
   semanticConclusions,
   semanticUnknownGroups,
 } from "../classification-results/semanticResultPresentation";
-import { dispositionTone } from "./semanticReviewPolicy";
+import { dispositionTone, semanticReviewSummary } from "./semanticReviewPolicy";
 
 /**
  * @typedef {import("../../shared/api/reviewBatchContracts").ReviewRecord} ReviewRecord
@@ -122,6 +122,17 @@ export function unexplainedItems(record, startIndex) {
 export function suppliedSummary(record) {
   const summary = suppliedReview(record).coverage_summary;
   if (!summary || typeof summary !== "object") return null;
+  const items = suppliedItems(record) ?? [];
+  if (items.length) {
+    const current = semanticReviewSummary(
+      items.map((item, index) => normalizeItem(item, index)),
+    );
+    return {
+      ...current,
+      needsReview:
+        current.needsReview + Number(summary.unexplained_fragment_count || 0),
+    };
+  }
   return {
     mapped: Number(summary.mapped || 0),
     informational: Number(summary.no_tag_needed || 0),

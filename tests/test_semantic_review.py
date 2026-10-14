@@ -1,3 +1,5 @@
+import pytest
+
 from return_semantics.semantic_review import (
     BUSINESS_REVIEW_REQUIRED,
     READY,
@@ -249,7 +251,7 @@ def test_system_review_reason_is_exposed_without_primary_noise() -> None:
     assert failure["diagnostic_code"] == "COVERAGE_AUDIT_FAILED"
     assert failure["detail_status"] == "NOT_RETAINED"
     assert "未保留疑似漏抽的原文片段" in failure["action"]
-    assert failure["business_review_required"] is False
+    assert failure["business_review_required"] is True
     assert view["coverage_summary"]["analysis_failure"] == 1
     assert view["coverage_summary"]["complete"] is False
 
@@ -334,7 +336,7 @@ def test_structured_diagnostic_is_preferred_over_legacy_reason() -> None:
     assert diagnostic["action"] == "请业务员核对是否应保留轻便标签。"
 
 
-def test_structured_system_rerun_is_not_assigned_to_business() -> None:
+def test_legacy_system_action_does_not_turn_semantic_mismatch_into_retry() -> None:
     result = {
         "status": "MANUAL_REVIEW",
         "review_diagnostics": [
@@ -354,11 +356,49 @@ def test_structured_system_rerun_is_not_assigned_to_business() -> None:
     ][0]
 
     assert diagnostic["detail_status"] == "AVAILABLE"
-    assert diagnostic["business_review_required"] is False
-    assert diagnostic["action"] == (
-        "无需业务员判断本次运行异常；请系统重跑，差异明细仅用于定位。"
-    )
-    assert requires_business_review(result, "warm without bulk") is False
+    assert diagnostic["business_review_required"] is True
+    assert "人工修正" in diagnostic["action"]
+    assert requires_business_review(result, "warm without bulk") is True
+    assert requires_system_rerun(result, "warm without bulk") is False
+
+
+@pytest.mark.parametrize("code", ["MODEL_RESULT_MISMATCH", "COVERAGE_AUDIT_FAILED"])
+@pytest.mark.parametrize("action", ["", "SYSTEM_RERUN", "SYSTEM_RETRY"])
+def test_semantic_disagreement_without_details_always_requires_human_review(
+    code: str, action: str
+) -> None:
+    result = {
+        "status": "SUCCESS",
+        "review_diagnostics": [{"code": code, "action": action}],
+    }
+    assert review_route(result, "Too small") == BUSINESS_REVIEW_REQUIRED
+    assert requires_system_rerun(result, "Too small") is False
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "MODEL_RUN_TIMEOUT",
+        "MODEL_RUN_FAILED",
+        "SECONDARY_MODEL_TIMEOUT",
+        "SECONDARY_MODEL_CALL_FAILED",
+        "SECONDARY_RESULT_INVALID",
+    ],
+)
+def test_only_execution_failures_require_retry_unless_manually_resolved(
+    code: str,
+) -> None:
+    result = {"review_diagnostics": [{"code": code}]}
+    assert requires_system_rerun(result, "Too small") is True
+    result["human_review_assessment"] = {"resolved": True}
+    assert review_route(result, "Too small") == READY
+
+
+def test_unknown_diagnostic_does_not_assume_request_failure() -> None:
+    result = {
+        "review_diagnostics": [{"code": "UNRECOGNIZED", "action": "SYSTEM_RERUN"}]
+    }
+    assert review_route(result, "Too small") == BUSINESS_REVIEW_REQUIRED
 
 
 def test_true_ambiguity_is_assigned_to_business_review() -> None:
