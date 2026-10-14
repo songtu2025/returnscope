@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-from io import BytesIO
 from typing import TYPE_CHECKING, Any
 
-import pandas as pd
-
 from return_semantics.schemas import TaxonomyConfig
+from web_backend.classification_results.record_groups import assemble_record_groups
 from web_backend.classification_results.result_export import (
-    classification_export_row,
+    feedback_export_row,
     semantic_export_rows,
+    source_export_rows,
 )
+from web_backend.classification_results.result_workbook import result_workbook
 from web_backend.database import Database
+from web_backend.result_hierarchy import feedback_group_key_sql
 
 
 class _ClassificationResultDownload:
@@ -48,29 +49,45 @@ class _ClassificationResultDownload:
         )
 
     def _download_versions(self, versions: list[dict[str, Any]]) -> bytes:
-        output = []
+        output: list[dict[str, Any]] = []
         semantics = []
+        sources = []
         for version in versions:
             version_id = version["version_id"]
             rows = self._export_records(version_id)
+            source_records = {row["source_record_id"]: row for row in rows}
             taxonomy = self.taxonomy(version_id)
-            for row in rows:
-                item = self._enrich_record(self._serialize_record(dict(row)), taxonomy)
-                semantics.extend(semantic_export_rows(item, version))
-                output.append(classification_export_row(item))
-        buffer = BytesIO()
-        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-            pd.DataFrame(output).to_excel(writer, sheet_name="分类结果", index=False)
-            pd.DataFrame(semantics).to_excel(writer, sheet_name="语义层级", index=False)
-        return buffer.getvalue()
+
+            def prepare_record(
+                row: dict[str, Any], taxonomy: TaxonomyConfig | None = taxonomy
+            ) -> dict[str, Any]:
+                return self._enrich_record(self._serialize_record(row), taxonomy)
+
+            groups = assemble_record_groups(rows, prepare_record)
+            for group in groups:
+                feedback_id = f"F{len(output) + 1:06d}"
+                details = semantic_export_rows(group["record"], feedback_id)
+                semantics.extend(details)
+                output.append(feedback_export_row(group, feedback_id, details))
+                sources.extend(
+                    source_export_rows(
+                        [
+                            source_records[member["source_record_id"]]
+                            for member in group["members"]
+                        ],
+                        feedback_id,
+                    )
+                )
+        return result_workbook(output, semantics, sources)
 
     def _export_records(self, version_id: str) -> list[Any]:
         with self.database.connect() as connection:
             return connection.execute(
                 f"""
-                {self._records_select()}
-                WHERE r.result_version_id = ?
-                ORDER BY r.source_row ASC, r.id ASC
+                SELECT item.*, {feedback_group_key_sql("item")} AS display_key,
+                       COUNT(*) OVER (PARTITION BY {feedback_group_key_sql("item")}) AS member_count
+                FROM ({self._records_select()} WHERE r.result_version_id = ?) item
+                ORDER BY item.source_row ASC, item.id ASC
                 """,
                 (version_id,),
             ).fetchall()

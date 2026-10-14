@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +10,7 @@ import pandas as pd
 
 from web_backend.common import insert_audit, json_text, json_value
 from web_backend.dashboards.product_scope import capture_dashboard_product_scopes
+from web_backend.database import Database
 from web_backend.dataset_files import PRODUCT_WORKSHEET, DatasetRevisionConflict
 from web_backend.datasets.product_aliases import product_aliases, save_product_aliases
 
@@ -112,22 +114,68 @@ def update_current_products(connection: Any, write: Any, now: str) -> tuple[int,
     return revision, str(source["id"])
 
 
+@dataclass(frozen=True)
+class ProductDisplaySnapshot:
+    dataset_id: str
+    file_path: str
+    sha256: str
+    frame: pd.DataFrame
+
+    def current_frame(self, dataset_id: str, source: Any) -> pd.DataFrame:
+        if (
+            self.dataset_id != dataset_id
+            or self.file_path != source["file_path"]
+            or self.sha256 != source["sha256"]
+        ):
+            raise DatasetRevisionConflict("产品信息已更新，请重新生成分类结果")
+        return self.frame
+
+
+def load_product_display(
+    database: Database, task_id: str
+) -> ProductDisplaySnapshot | None:
+    """在结果发布取得写锁前读取产品文件，提交时再核对当前文件摘要。"""
+    with database.connect() as connection:
+        source = connection.execute(
+            """SELECT d.id AS dataset_id, v.file_path, v.sha256 FROM tasks t
+            JOIN dataset_versions input ON input.id = t.product_version_id
+            JOIN datasets d ON d.id = input.dataset_id
+            JOIN dataset_versions v ON v.dataset_id = d.id AND v.version = d.current_version
+            WHERE t.id = ?""",
+            (task_id,),
+        ).fetchone()
+    if source is None:
+        return None
+    frame = _product_display_frame(source["dataset_id"], source)
+    return ProductDisplaySnapshot(**dict(source), frame=frame)
+
+
+def _product_display_frame(
+    dataset_id: str, source: Any, snapshot: ProductDisplaySnapshot | None = None
+) -> pd.DataFrame:
+    if snapshot is not None:
+        return snapshot.current_frame(dataset_id, source)
+    return pd.read_excel(
+        Path(source["file_path"]), sheet_name=PRODUCT_WORKSHEET, dtype=str
+    ).fillna("")
+
+
 def sync_product_display(
     connection: Any,
     dataset_id: str,
     previous_identities: list[tuple[str, str]] | None = None,
+    *,
+    snapshot: ProductDisplaySnapshot | None = None,
 ) -> None:
     """只同步商品展示字段，不改写已计算的品类、Listing 或分类语义。"""
     source = connection.execute(
-        """SELECT v.file_path FROM datasets d JOIN dataset_versions v
+        """SELECT v.file_path, v.sha256 FROM datasets d JOIN dataset_versions v
         ON v.dataset_id = d.id AND v.version = d.current_version WHERE d.id = ?""",
         (dataset_id,),
     ).fetchone()
     if source is None:
         return
-    frame = pd.read_excel(
-        Path(source["file_path"]), sheet_name=PRODUCT_WORKSHEET, dtype=str
-    ).fillna("")
+    frame = _product_display_frame(dataset_id, source, snapshot)
     grouped: dict[tuple[str, str], list[dict[Any, Any]]] = {}
     identities = product_identities(frame)
     if previous_identities is not None:

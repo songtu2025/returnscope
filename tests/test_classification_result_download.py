@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -16,34 +15,17 @@ from test_result_version_reviews import _publish_review_required
 
 from web_backend.classification_result_service import ClassificationResultService
 from web_backend.classification_results.manual_correction import correct_group
-from web_backend.classification_results.result_export import semantic_export_rows
+from web_backend.classification_results.result_export import (
+    SEMANTIC_COLUMNS,
+    SOURCE_COLUMNS,
+    SUMMARY_COLUMNS,
+    semantic_export_rows,
+)
 from web_backend.classification_standard_service import ClassificationStandardService
 from web_backend.routers.task_download_routes import register_task_download_routes
 from web_backend.task_service import TaskService
 
-RESULT_COLUMNS = [
-    "source_record_id",
-    "source_row",
-    "return_date",
-    "order_id",
-    "store_site",
-    "listing",
-    "product_name",
-    "source_sku",
-    "matched_msku",
-    "product_sku",
-    "asin",
-    "category_a",
-    "category_b",
-    "reason",
-    "comment",
-    "product_match_status",
-    "quality_status",
-    "processing_status",
-    "semantic_disposition",
-    "problem_labels",
-    "classification_json",
-]
+SHEETS = ["反馈汇总", "语义明细", "源明细"]
 
 
 @pytest.fixture
@@ -59,81 +41,119 @@ def context(tmp_path: Path) -> SimpleNamespace:
     return value
 
 
-def test_workbook_keeps_source_rows_fields_json_and_semantic_paths(context) -> None:
+def _rows(sheet):
+    values = list(sheet.values)
+    return [dict(zip(values[0], row, strict=True)) for row in values[1:]]
+
+
+def test_workbook_groups_match_page_and_preserve_all_sources(context):
+    with context.database.transaction() as connection:
+        connection.execute(
+            "UPDATE classification_result_records SET fnsku='FIRST-FNSKU' WHERE source_row=2"
+        )
+        connection.execute(
+            "UPDATE classification_result_records SET fnsku='SECOND-FNSKU' WHERE source_row=3"
+        )
     version_id = context.version["version_id"]
     content, filename = context.service.download(version_id)
     book = load_workbook(BytesIO(content))
     assert filename == "classification-L1-v1.xlsx"
-    assert book.sheetnames == ["分类结果", "语义层级"]
-    results = list(book["分类结果"].values)
-    assert list(results[0]) == RESULT_COLUMNS
-    assert [row[1] for row in results[1:]] == [2, 3, 4]
-    records = context.service.records(version_id)["items"]
-    for row, record in zip(results[1:], records, strict=True):
-        exported = dict(zip(RESULT_COLUMNS, row, strict=True))
-        assert json.loads(exported["classification_json"]) == record["classification"]
-        assert exported["product_name"] == "产品表权威名称"
-        assert exported["comment"] == record["comment"]
-        assert exported["problem_labels"] == " | ".join(record["problem_labels"])
-    semantics = list(book["语义层级"].values)
-    for row, record in zip(semantics[1:], records, strict=True):
-        exported = dict(zip(semantics[0], row, strict=True))
-        fact = record["atomic_facts"][0]
-        assert exported["完整路径"] == " → ".join(fact["label_path"])
-        assert exported["label_code"] == fact["label_code"]
-        assert exported["source_row"] == record["source_row"]
+    assert book.sheetnames == SHEETS
+    summaries, semantics, sources = [_rows(book[name]) for name in SHEETS]
+    groups = context.service.record_groups(version_id)["items"]
+    assert len(summaries) == len(groups) == 2
+    assert len(sources) == 3
+    assert [row["源文件行号"] for row in sources] == [2, 3, 4]
+    for row, group in zip(summaries, groups, strict=True):
+        record = group["record"]
+        assert row["源明细数"] == group["member_count"]
+        assert row["产品名称"] == record["product_name"]
+        assert row["反馈正文"] == record["comment"]
+        assert row["结果状态"] == "可用"
+        assert row["是否需重跑"] == "否"
+        details = [item for item in semantics if item["反馈编号"] == row["反馈编号"]]
+        assert len(details) == len(
+            record["classification"]["semantic_review"]["semantic_items"]
+        )
+        assert row["中文语义"] == "\n".join(
+            f"{item['语义序号']}. {item['中文语义']}" for item in details
+        )
+        assert row["分类路径"] == "\n".join(
+            f"{item['语义序号']}. {item['分类路径']}" for item in details
+        )
+        assert (
+            len([s for s in sources if s["反馈编号"] == row["反馈编号"]])
+            == group["member_count"]
+        )
+    assert sources[0]["反馈编号"] == sources[1]["反馈编号"]
+    assert [row["FNSKU"] for row in sources[:2]] == ["FIRST-FNSKU", "SECOND-FNSKU"]
+    for sheet, columns in zip(
+        book, [SUMMARY_COLUMNS, SEMANTIC_COLUMNS, SOURCE_COLUMNS], strict=True
+    ):
+        assert list(next(sheet.values)) == columns
+        assert sheet.freeze_panes == ("D2" if sheet.title == "反馈汇总" else "C2")
+        assert sheet.auto_filter.ref == sheet.dimensions
+        assert not sheet.merged_cells
+        assert sheet["A2"].alignment.wrap_text
+        assert sheet.column_dimensions["F"].width >= 20
+    assert all("classification_json" not in next(sheet.values) for sheet in book)
     book.close()
 
 
-def test_empty_workbook_keeps_empty_sheets_and_fallback_filename(context) -> None:
+def test_empty_workbook_keeps_headers_and_fallback_filename(context):
     with context.database.transaction() as connection:
         connection.execute("DELETE FROM classification_result_records")
         connection.execute("UPDATE classification_results SET listing = NULL")
     content, filename = context.service.download(context.version["version_id"])
     assert filename == f"classification-{context.version['result_id']}-v1.xlsx"
     book = load_workbook(BytesIO(content))
-    assert book.sheetnames == ["分类结果", "语义层级"]
-    assert all(list(book[name].values) == [] for name in book.sheetnames)
+    assert book.sheetnames == SHEETS
+    assert all(sheet.max_row == 1 and not _rows(sheet) for sheet in book)
     book.close()
 
 
-def test_semantic_rows_keep_dynamic_column_order_and_optional_values() -> None:
-    condition = {"surface": "湿地"}
+def test_semantic_rows_keep_multiple_opinions_evidence_and_review_reasons():
     item = {
-        "source_record_id": "合成来源",
-        "source_row": 2,
-        "atomic_facts": [
-            {"label_code": "A", "label_path": ["一级"], "condition": condition},
-            {
-                "label_code": "B",
-                "label_path": ["一级", "二级", "三级"],
-                "certainty": "UNCERTAIN",
-                "fact_text_zh": "合成事实",
-                "evidence": "原文",
-            },
-        ],
+        "classification": {
+            "semantic_review": {
+                "semantic_items": [
+                    {
+                        "opinion": "尺码偏小",
+                        "label_code": "A",
+                        "label_path": ["尺码", "偏小"],
+                        "evidence_text": "too small",
+                        "disposition": "MAPPED",
+                    },
+                    {
+                        "opinion": "另一条待判断语义",
+                        "evidence_text": "原文片段",
+                        "disposition": "TRUE_AMBIGUITY",
+                        "reason": "含义存在歧义",
+                    },
+                ]
+            }
+        }
     }
-    rows = semantic_export_rows(item, {"standard_version_id": "合成标准"})
-    assert [row["label_code"] for row in rows] == ["A", "B"]
-    assert rows[0]["条件"] is condition
-    assert rows[0]["确定性"] == "AFFIRMED"
-    assert rows[0]["因果归属"] == rows[0]["证据来源"] == "UNKNOWN"
-    assert rows[0]["中文事实"] == ""
-    assert rows[1]["完整路径"] == "一级 → 二级 → 三级"
-    assert rows[1]["确定性"] == "UNCERTAIN"
-    assert list(rows[1])[-5:] == [
-        "第1级标签",
-        "第2级标签",
-        "第3级标签",
-        "证据原文",
-        "标准版本",
-    ]
-    assert semantic_export_rows({**item, "atomic_facts": []}, {}) == []
+    rows = semantic_export_rows(item, "F000001")
+    assert [row["语义序号"] for row in rows] == [1, 2]
+    assert rows[0]["分类路径"] == "尺码 → 偏小"
+    assert rows[0]["原文证据"] == "too small"
+    assert rows[1]["处置状态"] == "原文含义不明确"
+    assert rows[1]["判断说明"] == "含义存在歧义"
+    assert semantic_export_rows({"classification": {}}, "F000002") == []
+    unexplained = semantic_export_rows(
+        {
+            "classification": {
+                "semantic_review": {"unexplained_fragments": ["剩余原文"]}
+            }
+        },
+        "F000003",
+    )
+    assert unexplained[0]["原文证据"] == "剩余原文"
+    assert unexplained[0]["处置状态"] == "未解释原文片段"
 
 
-def test_download_keeps_three_reads_without_member_queries(
-    context, monkeypatch
-) -> None:
+def test_download_keeps_three_reads_without_member_queries(context, monkeypatch):
     statements = []
     connect = context.database.connect
 
@@ -145,11 +165,13 @@ def test_download_keeps_three_reads_without_member_queries(
     monkeypatch.setattr(context.database, "connect", traced_connection)
     content, _ = context.service.download(context.version["version_id"])
     assert content.startswith(b"PK")
-    reads = [sql for sql in statements if sql.lstrip().upper().startswith("SELECT")]
-    assert len(reads) == 3
+    assert (
+        len([sql for sql in statements if sql.lstrip().upper().startswith("SELECT")])
+        == 3
+    )
 
 
-def test_task_downloads_use_current_manual_result_instead_of_checkpoint(tmp_path: Path):
+def test_task_downloads_use_current_manual_result_instead_of_checkpoint(tmp_path):
     context, version = _publish_review_required(tmp_path)
     service = ClassificationResultService(context.database)
     correct_group(
@@ -162,21 +184,84 @@ def test_task_downloads_use_current_manual_result_instead_of_checkpoint(tmp_path
     app = FastAPI()
     app.include_router(router)
     client = TestClient(app)
-    paths = [
+    for path in [
         f"/api/tasks/{context.task_id}/download",
         f"/api/tasks/{context.task_id}/segments/{segment['segment_key']}/download",
-    ]
-    for path in paths:
+    ]:
         response = client.get(path)
         assert response.status_code == 200
         book = load_workbook(BytesIO(response.content))
-        values = list(book["分类结果"].values)
-        records = [dict(zip(values[0], row, strict=True)) for row in values[1:]]
-        for record in records:
-            classification = json.loads(record["classification_json"])
-            if record["order_id"] == "ORDER-DUP":
-                assert classification["semantic_units"][0]["opinion"] == "整体尺寸偏小"
-                assert record["quality_status"] == "ready"
+        for record in _rows(book["反馈汇总"]):
+            if record["订单号"] == "ORDER-DUP":
+                assert "整体尺寸偏小" in record["中文语义"]
+                assert record["结果状态"] == "可用"
+                assert record["人工修正情况"] == "人工已修正"
+                assert record["修正人"]
+                assert record["是否需重跑"] == "否"
             else:
-                assert record["quality_status"] == "review_required"
+                assert record["结果状态"] == "需复核"
         book.close()
+
+
+def test_combined_download_has_unique_feedback_numbers(context):
+    content = context.service.download_versions([context.version["version_id"]] * 2)
+    book = load_workbook(BytesIO(content))
+    summaries = _rows(book["反馈汇总"])
+    assert len(summaries) == len({row["反馈编号"] for row in summaries}) == 4
+    assert len(_rows(book["源明细"])) == 6
+    book.close()
+
+
+@pytest.mark.parametrize(
+    "quality, rerun",
+    [("ready", 0), ("review_required", 0), ("unusable", 1), ("excluded", 0)],
+)
+def test_feedback_without_semantics_or_with_failure_is_not_lost(
+    context, quality, rerun
+):
+    with context.database.transaction() as connection:
+        connection.execute(
+            "UPDATE classification_units SET classification_json='{}', processing_status=?, system_rerun_required=?",
+            ("MODEL_ERROR" if rerun else "AUTO_APPROVED", rerun),
+        )
+        connection.execute(
+            "UPDATE classification_result_records SET quality_status=?", (quality,)
+        )
+    content, _ = context.service.download(context.version["version_id"])
+    book = load_workbook(BytesIO(content))
+    assert len(_rows(book["反馈汇总"])) == 2
+    assert len(_rows(book["源明细"])) == 3
+    expected = {
+        "ready": "可用",
+        "review_required": "需复核",
+        "unusable": "不可用",
+        "excluded": "已忽略",
+    }
+    assert all(
+        row["结果状态"] == expected[quality]
+        and row["是否需重跑"] == ("是" if rerun else "否")
+        for row in _rows(book["反馈汇总"])
+    )
+    if rerun:
+        assert "系统处理失败" in {row["处置状态"] for row in _rows(book["语义明细"])}
+    book.close()
+
+
+def test_blank_orders_stay_separate_and_long_text_is_literal(context):
+    text = "=原文不是公式\n" + "完整反馈 " * 600
+    with context.database.transaction() as connection:
+        connection.execute(
+            "UPDATE classification_result_records SET order_id='', comment=?", (text,)
+        )
+    content, _ = context.service.download(context.version["version_id"])
+    book = load_workbook(BytesIO(content))
+    assert len(_rows(book["反馈汇总"])) == 3
+    for title in ["反馈汇总", "源明细"]:
+        sheet = book[title]
+        column = list(next(sheet.values)).index("反馈正文") + 1
+        assert all(
+            sheet.cell(index, column).value == text
+            and sheet.cell(index, column).data_type == "s"
+            for index in range(2, 5)
+        )
+    book.close()

@@ -58,10 +58,10 @@ def test_result_tree_filters_count_feedback_groups_and_exports_paths(
     assert root["unit_count"] == 1
     assert root["label_path"] == ["尺码"]
     content, _ = service.download(version_id)
-    exported = pd.read_excel(BytesIO(content), sheet_name="语义层级")
-    assert len(exported) == 3
-    assert exported["第1级标签"].tolist() == ["尺码"] * 3
-    assert exported["证据原文"].tolist() == ["Too small"] * 3
+    exported = pd.read_excel(BytesIO(content), sheet_name="语义明细")
+    assert len(exported) == 2
+    assert exported["分类路径"].str.startswith("尺码 → 不合身 → ").all()
+    assert exported["原文证据"].tolist() == ["Too small"] * 2
     workbook = tmp_path / "hierarchy.xlsx"
     export_results(workbook, context.dataset, context.results, taxonomy)
     data = load_analysis_data(workbook)

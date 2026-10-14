@@ -16,6 +16,7 @@ from web_backend.classification_results.publication_transaction import (
     publish_with_connection,
 )
 from web_backend.database import Database
+from web_backend.datasets.current_products import load_product_display
 from web_backend.security import utc_now
 
 CONFIRMED_STATEMENT_TYPES = _payload.CONFIRMED_STATEMENT_TYPES
@@ -70,6 +71,9 @@ class ClassificationResultService(
         now = utc_now()
         conflict: str | None = None
         try:
+            prepared["product_display"] = load_product_display(
+                self.database, segment_state.task_id
+            )
             with self.database.transaction(immediate=True) as connection:
                 existing, conflict = publish_with_connection(
                     self, connection, prepared, segment_state, now

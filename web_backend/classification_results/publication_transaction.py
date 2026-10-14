@@ -113,7 +113,11 @@ def publish_with_connection(
         "SELECT dataset_id FROM dataset_versions WHERE id = ?",
         (task["product_version_id"],),
     ).fetchone()
-    sync_product_display(connection, product_dataset["dataset_id"])
+    sync_product_display(
+        connection,
+        product_dataset["dataset_id"],
+        snapshot=prepared.get("product_display"),
+    )
     refresh_related_dashboards(service.database, connection, version.result_id, now)
     return None, None
 

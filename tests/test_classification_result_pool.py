@@ -996,9 +996,11 @@ def test_download_keeps_filename_sheets_and_empty_data(tmp_path: Path) -> None:
     workbook = pd.ExcelFile(BytesIO(content))
 
     assert filename == "classification-L1-v1.xlsx"
-    assert workbook.sheet_names == ["分类结果", "语义层级"]
-    assert pd.read_excel(BytesIO(content), sheet_name="分类结果").empty
-    assert pd.read_excel(BytesIO(content), sheet_name="语义层级").empty
+    assert workbook.sheet_names == ["反馈汇总", "语义明细", "源明细"]
+    assert all(
+        pd.read_excel(BytesIO(content), sheet_name=name).empty
+        for name in workbook.sheet_names
+    )
 
 
 def test_review_service_result_helper_entry_points_keep_signatures(
