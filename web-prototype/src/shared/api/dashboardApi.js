@@ -45,6 +45,7 @@ function jsonRequest(path, method, payload, options = {}) {
  * @type {{
  *   dashboardPreflight: (payload: DashboardPayload, options?: RequestInit) => DashboardRequest,
  *   createAnalysisDashboard: (payload: DashboardPayload, options?: RequestInit) => DashboardRequest,
+ *   updateAnalysisDashboard: (id: string, payload: DashboardPayload) => DashboardRequest,
  *   analysisDashboards: (filters?: DashboardQuery, options?: RequestInit) => DashboardRequest,
  *   analysisDashboard: (dashboardId: string, versionId?: string, options?: RequestInit) => DashboardRequest,
  *   analysisDashboardVersions: (dashboardId: string, options?: RequestInit) => DashboardRequest,
@@ -58,6 +59,7 @@ function jsonRequest(path, method, payload, options = {}) {
  *   createAnalysisDashboardInsightReport: (dashboardId: string, versionId: string, payload: DashboardPayload, options?: RequestInit) => DashboardRequest,
  *   analysisDashboardInsightReports: (dashboardId: string, versionId: string, options?: RequestInit) => DashboardRequest,
  *   insightReport: (reportId: string, options?: RequestInit) => DashboardRequest,
+ *   deletedInsightReports: (dashboardId: string, versionId: string) => DashboardRequest,
  *   retryInsightReport: (reportId: string, options?: RequestInit) => DashboardRequest,
  *   setInsightReportIssueDecision: (reportId: string, issueId: string, status: string, options?: RequestInit) => DashboardRequest
  * }}
@@ -67,6 +69,8 @@ export const dashboardApi = {
     jsonRequest("/api/dashboard-plans/preflight", "POST", payload, options),
   createAnalysisDashboard: (payload, options = {}) =>
     jsonRequest("/api/analysis-dashboards", "POST", payload, options),
+  updateAnalysisDashboard: (id, payload) =>
+    jsonRequest(`/api/analysis-dashboards/${id}/versions`, "POST", payload, {}),
   analysisDashboards: (filters = {}, options = {}) =>
     readDashboard(`/api/analysis-dashboards${queryString(filters)}`, options),
   analysisDashboard: (dashboardId, versionId = "", options = {}) =>
@@ -143,6 +147,11 @@ export const dashboardApi = {
     ),
   insightReport: (reportId, options = {}) =>
     readDashboard(`/api/ai-insight-reports/${reportId}`, options),
+  deletedInsightReports: (dashboardId, versionId) =>
+    readDashboard(
+      `/api/analysis-dashboards/${dashboardId}/ai-insight-reports${queryString({ version_id: versionId, include_deleted: true })}`,
+      {},
+    ),
   retryInsightReport: (reportId, options = {}) =>
     jsonRequest(`/api/ai-insight-reports/${reportId}/retry`, "POST", {}, options),
   setInsightReportIssueDecision: (reportId, issueId, status, options = {}) =>

@@ -7,3 +7,7 @@ from web_backend.api_contracts.reviews import AddedSemanticItemRequest
 
 class ManualCorrectionRequest(BaseModel):
     semantic_items: list[AddedSemanticItemRequest] = Field(max_length=100)
+
+
+class SemanticRestoreRequest(BaseModel):
+    audit_id: str = Field(min_length=1, max_length=120)

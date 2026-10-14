@@ -33,6 +33,8 @@ class FakeModelCatalog:
         status: str,
         message: str,
         actor_id: str,
+        *,
+        validation_run_id: str | None = None,
     ) -> None:
         self.validation_updates.append((str(model["id"]), status, message, actor_id))
 

@@ -23,11 +23,11 @@ def register_delivery_actions(
     kind: str,
 ) -> None:
     User = Annotated[dict[str, Any], Depends(current_user)]
-    path = (
-        "/api/classification-results/{object_id}/lifecycle"
-        if kind == "result"
-        else "/api/analysis-dashboards/{object_id}/lifecycle"
-    )
+    path = {
+        "result": "/api/classification-results/{object_id}/lifecycle",
+        "dashboard": "/api/analysis-dashboards/{object_id}/lifecycle",
+        "report": "/api/ai-insight-reports/{object_id}/lifecycle",
+    }[kind]
 
     @router.post(path)
     def change_lifecycle(
@@ -35,7 +35,11 @@ def register_delivery_actions(
     ) -> dict[str, bool]:
         try:
             service = DeliveryLifecycleService(database())
-            action = service.result if kind == "result" else service.dashboard
+            action = {
+                "result": service.result,
+                "dashboard": service.dashboard,
+                "report": service.report,
+            }[kind]
             action(
                 object_id,
                 revision=payload.expected_revision,

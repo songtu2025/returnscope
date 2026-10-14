@@ -9,6 +9,7 @@ from web_backend.api_contracts.classification_standards import (
 from web_backend.classification_standard_validation_service import (
     ClassificationStandardValidationService,
 )
+from web_backend.validation_cancellation import cancel_validation
 
 _MAX_REVIEW_UPLOAD_BYTES = 20 * 1024 * 1024
 
@@ -80,6 +81,16 @@ def register_validation_routes(
 ) -> None:
     User = Annotated[dict[str, Any], Depends(current_user)]
     operations = _ValidationOperations(validation_service, handle_error)
+
+    @router.post("/api/classification-standard-validation-runs/{run_id}/cancel")
+    def cancel_run(run_id: str, user: User) -> dict[str, bool]:
+        try:
+            cancel_validation(
+                validation_service.database, "standard", run_id, str(user["id"])
+            )
+        except ValueError as exc:
+            raise handle_error(exc) from exc
+        return {"ok": True}
 
     @router.get("/api/classification-standard-drafts/{draft_id}/validation-sources")
     def validation_sources(draft_id: str, _user: User) -> list[dict[str, Any]]:

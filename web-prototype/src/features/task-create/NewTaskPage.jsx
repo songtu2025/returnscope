@@ -20,7 +20,7 @@ import { submitNewTask } from "./newTaskSubmission";
 
 /** @typedef {import("./taskCreateContracts").TaskDraft} TaskDraft */
 /**
- * @param {{onNavigate: import("../../app/navigation").Navigate, canManageModels?: boolean, notify: (message: string, type?: "success" | "error") => void, onChanged: () => void | Promise<unknown>, draft?: TaskDraft | null, onDraftChange?: (draft: TaskDraft) => void, onDraftComplete?: () => void}} props
+ * @param {{onNavigate: import("../../app/navigation").Navigate, canManageModels?: boolean, notify: (message: string, type?: "success" | "error") => void, onChanged: () => void | Promise<unknown>, draft?: TaskDraft | null, onDraftChange?: (draft: TaskDraft) => void, onDraftComplete?: () => void, onDiscard?: () => void}} props
  */
 
 export function NewTaskPage({
@@ -31,6 +31,7 @@ export function NewTaskPage({
   draft,
   onDraftChange,
   onDraftComplete,
+  onDiscard,
 }) {
   const { mutate: mutateServerState } = useSWRConfig();
   const [prepared, setPrepared] = useState(Boolean(draft?.resumePreflight));
@@ -232,6 +233,7 @@ export function NewTaskPage({
   return (
     <AntdProvider>
       <NewTaskView
+        onDiscard={onDiscard}
         headingRef={headingRef}
         setup={{
           loading: loadingSetup,

@@ -124,6 +124,7 @@ class ClassificationExecutionMixin:
         samples: list[dict[str, Any]],
         source: dict[str, Any],
         progress: Callable[[int, int], None] | None = None,
+        checkpoint: Callable[[], None] | None = None,
     ) -> PipelineRun:
         unique_comments = pd.DataFrame(
             [
@@ -139,7 +140,7 @@ class ClassificationExecutionMixin:
         )
         if source.get("kind") in _RAW_SAMPLE_SOURCE_KINDS:
             return self._classify_source_sample(
-                unique_comments, taxonomy, source, progress
+                unique_comments, taxonomy, source, progress, checkpoint
             )
         task = source["task"]
         segment = source["segment"]
@@ -152,6 +153,8 @@ class ClassificationExecutionMixin:
             str(task["store"]),
             task.get("listing"),
         )
+        if isinstance(runtime.client, Sub2APIClient):
+            runtime.client.checkpoint = checkpoint
         return classify_comments(
             unique_comments=unique_comments,
             taxonomy=taxonomy,
@@ -171,6 +174,7 @@ class ClassificationExecutionMixin:
         taxonomy: TaxonomyConfig,
         source: dict[str, Any],
         progress: Callable[[int, int], None] | None,
+        checkpoint: Callable[[], None] | None,
     ) -> PipelineRun:
         config_version_id = str(source["config_version_id"])
         settings = self.config_service.build_model_settings(config_version_id)
@@ -189,6 +193,7 @@ class ClassificationExecutionMixin:
                 config_version_id, settings.requests_per_minute
             ),
         )
+        client.checkpoint = checkpoint
         return classify_comments(
             unique_comments=unique_comments,
             taxonomy=taxonomy,

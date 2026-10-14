@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from web_backend.config_service import ConfigService
+from web_backend.routers.model_route_support import require_model_admin
+from web_backend.validation_cancellation import cancel_validation
 
 
 def register_model_validation_routes(
@@ -14,6 +16,15 @@ def register_model_validation_routes(
     current_user: Callable[..., dict[str, Any]],
 ) -> None:
     User = Annotated[dict[str, Any], Depends(current_user)]
+
+    @router.post("/api/validation-runs/{run_id}/cancel")
+    def cancel_run(run_id: str, user: User) -> dict[str, bool]:
+        require_model_admin(user)
+        try:
+            cancel_validation(config_service.database, "model", run_id, str(user["id"]))
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return {"ok": True}
 
     @router.get("/api/connections/{connection_id}/active-validation")
     def active_validation(
@@ -66,7 +77,7 @@ async def _validation_event_stream(
                 f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
             )
         run = config_service.get_validation_run(run_id)
-        if run and run["status"] in {"passed", "failed"}:
+        if run and run["status"] in {"passed", "failed", "cancelled"}:
             yield "event: close\ndata: {}\n\n"
             return
         yield ": keepalive\n\n"

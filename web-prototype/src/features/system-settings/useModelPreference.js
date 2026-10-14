@@ -135,5 +135,10 @@ export function useModelPreference(notify) {
     setPolicy,
     updateModel,
     save,
+    dirty,
+    reset: () => {
+      setPolicyState(displayed?.policy ?? EMPTY_POLICY);
+      setDirty(false);
+    },
   };
 }

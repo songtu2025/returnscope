@@ -5,7 +5,7 @@ import { modelApi as api } from "../../shared/api/modelApi";
 /** @typedef {import("react").Dispatch<import("react").SetStateAction<ValidationSelection>>} SetSelection */
 /** @typedef {import("react").RefObject<number>} Generation */
 /** @typedef {(message: string, type?: "success" | "error") => void} Notify */
-const FINISHED_STATUSES = ["passed", "failed"];
+const FINISHED_STATUSES = ["passed", "failed", "cancelled"];
 /** @typedef {{runId: string, connectionId: string | null, notify: Notify, onCompleted: () => Promise<void>, streamGeneration: Generation, setSelection: SetSelection}} StreamOptions */
 /** @param {{source: EventSource, isCurrent: () => boolean, onCompleted: () => Promise<void>, notify: Notify}} context @param {ValidationRun} value */
 function announceCompletion({ source, isCurrent, onCompleted, notify }, value) {
@@ -16,8 +16,12 @@ function announceCompletion({ source, isCurrent, onCompleted, notify }, value) {
     }
   });
   notify(
-    value.status === "passed" ? "模型验证通过" : "模型验证失败",
-    value.status === "passed" ? "success" : "error",
+    value.status === "cancelled"
+      ? "本次验证已取消"
+      : value.status === "passed"
+        ? "模型验证通过"
+        : "模型验证失败",
+    value.status === "failed" ? "error" : "success",
   );
 }
 

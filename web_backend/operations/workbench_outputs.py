@@ -58,7 +58,7 @@ def _recent_output_rows(
         JOIN ai_insight_reports report ON report.id = published.job_id
         JOIN analysis_dashboards dashboard
           ON dashboard.id = report.dashboard_id
-        WHERE dashboard.deleted_at IS NULL
+        WHERE dashboard.deleted_at IS NULL AND report.deleted_at IS NULL
         ORDER BY published.published_at DESC, published.id ASC
         LIMIT ?
         """,

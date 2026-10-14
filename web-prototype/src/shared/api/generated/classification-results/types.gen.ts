@@ -1434,6 +1434,16 @@ export type ManualResultAssessmentResponse = {
 };
 
 /**
+ * SemanticRestoreRequest
+ */
+export type SemanticRestoreRequest = {
+  /**
+   * Audit Id
+   */
+  audit_id: string;
+};
+
+/**
  * SemanticReviewCoverageResponse
  */
 export type SemanticReviewCoverageResponse = {
@@ -2127,6 +2137,92 @@ export type ListRecordsApiClassificationResultsVersionIdRecordsGetResponses = {
 
 export type ListRecordsApiClassificationResultsVersionIdRecordsGetResponse =
   ListRecordsApiClassificationResultsVersionIdRecordsGetResponses[keyof ListRecordsApiClassificationResultsVersionIdRecordsGetResponses];
+
+export type HistoryApiClassificationResultsVersionIdRecordsRecordIdCorrectionsGetData =
+  {
+    body?: never;
+    path: {
+      /**
+       * Version Id
+       */
+      version_id: string;
+      /**
+       * Record Id
+       */
+      record_id: string;
+    };
+    query?: never;
+    url: "/api/classification-results/{version_id}/records/{record_id}/corrections";
+  };
+
+export type HistoryApiClassificationResultsVersionIdRecordsRecordIdCorrectionsGetErrors =
+  {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+  };
+
+export type HistoryApiClassificationResultsVersionIdRecordsRecordIdCorrectionsGetError =
+  HistoryApiClassificationResultsVersionIdRecordsRecordIdCorrectionsGetErrors[keyof HistoryApiClassificationResultsVersionIdRecordsRecordIdCorrectionsGetErrors];
+
+export type HistoryApiClassificationResultsVersionIdRecordsRecordIdCorrectionsGetResponses =
+  {
+    /**
+     * Response History Api Classification Results  Version Id  Records  Record Id  Corrections Get
+     *
+     * Successful Response
+     */
+    200: Array<{
+      [key: string]: unknown;
+    }>;
+  };
+
+export type HistoryApiClassificationResultsVersionIdRecordsRecordIdCorrectionsGetResponse =
+  HistoryApiClassificationResultsVersionIdRecordsRecordIdCorrectionsGetResponses[keyof HistoryApiClassificationResultsVersionIdRecordsRecordIdCorrectionsGetResponses];
+
+export type RestoreApiClassificationResultsVersionIdRecordsRecordIdRestoreSemanticsPostData =
+  {
+    body: SemanticRestoreRequest;
+    path: {
+      /**
+       * Version Id
+       */
+      version_id: string;
+      /**
+       * Record Id
+       */
+      record_id: string;
+    };
+    query?: never;
+    url: "/api/classification-results/{version_id}/records/{record_id}/restore-semantics";
+  };
+
+export type RestoreApiClassificationResultsVersionIdRecordsRecordIdRestoreSemanticsPostErrors =
+  {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+  };
+
+export type RestoreApiClassificationResultsVersionIdRecordsRecordIdRestoreSemanticsPostError =
+  RestoreApiClassificationResultsVersionIdRecordsRecordIdRestoreSemanticsPostErrors[keyof RestoreApiClassificationResultsVersionIdRecordsRecordIdRestoreSemanticsPostErrors];
+
+export type RestoreApiClassificationResultsVersionIdRecordsRecordIdRestoreSemanticsPostResponses =
+  {
+    /**
+     * Response Restore Api Classification Results  Version Id  Records  Record Id  Restore Semantics Post
+     *
+     * Successful Response
+     */
+    200: {
+      [key: string]: unknown;
+    };
+  };
+
+export type RestoreApiClassificationResultsVersionIdRecordsRecordIdRestoreSemanticsPostResponse =
+  RestoreApiClassificationResultsVersionIdRecordsRecordIdRestoreSemanticsPostResponses[keyof RestoreApiClassificationResultsVersionIdRecordsRecordIdRestoreSemanticsPostResponses];
 
 export type CorrectRecordApiClassificationResultsVersionIdRecordsRecordIdSemanticsPatchData =
   {

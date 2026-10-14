@@ -1,9 +1,11 @@
 import Button from "antd/es/button";
+import { useState } from "react";
 
 /** @typedef {import("./classificationStandardWorkspaceContracts").StandardWorkspaceContext} StandardWorkspaceContext */
 
 /** @param {StandardWorkspaceContext} context */
 export function StandardWorkspaceFooter(context) {
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const {
     draft,
     busy,
@@ -13,6 +15,8 @@ export function StandardWorkspaceFooter(context) {
     validationEvidence,
     publishDisabled,
     publishLabel,
+    onDiscard,
+    editable,
   } = context;
   return (
     <footer className="standard-editor-footer">
@@ -24,12 +28,36 @@ export function StandardWorkspaceFooter(context) {
         </span>
       </div>
       <div>
+        {draft &&
+          onDiscard &&
+          (confirmDiscard ? (
+            <>
+              <span>放弃暂存及未保存的修改？</span>
+              <Button disabled={Boolean(busy)} onClick={() => setConfirmDiscard(false)}>
+                保留修改
+              </Button>
+              <Button
+                danger
+                disabled={Boolean(busy)}
+                onClick={async () => {
+                  await onDiscard();
+                  setConfirmDiscard(false);
+                }}
+              >
+                确认放弃
+              </Button>
+            </>
+          ) : (
+            <Button disabled={Boolean(busy)} onClick={() => setConfirmDiscard(true)}>
+              放弃暂存修改
+            </Button>
+          ))}
         <Button disabled={Boolean(busy)} onClick={onSave}>
           {busy === "save" ? "暂存中" : "暂存修改"}
         </Button>
         <Button
           type="primary"
-          disabled={publishDisabled}
+          disabled={publishDisabled || !editable}
           title={publishDisabled ? publishLabel : undefined}
           onClick={() => void onPublish(validationEvidence?.id ?? null)}
         >

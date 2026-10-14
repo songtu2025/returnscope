@@ -148,6 +148,10 @@ export function TaskCreatePage({
       draft={draft}
       onDraftChange={(next) => writeTaskDraft(userId, next)}
       onDraftComplete={() => clearTaskDraft(userId)}
+      onDiscard={() => {
+        clearTaskDraft(userId);
+        onNavigate("tasks");
+      }}
     />
   );
 }

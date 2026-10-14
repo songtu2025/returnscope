@@ -17,6 +17,10 @@ from web_backend.classification_results.publication_transaction import (
     new_publication_version,
 )
 from web_backend.classification_results.publication_writes import insert_version
+from web_backend.classification_results.semantic_history import (
+    SemanticRestore,
+    restored_classification,
+)
 from web_backend.common import insert_audit, json_text
 from web_backend.dashboards.live_sources import refresh_related_dashboards
 from web_backend.result_hierarchy import feedback_group_key_sql, result_taxonomy
@@ -30,9 +34,11 @@ def correct_group(
     service: Any,
     version_id: str,
     record_id: str,
-    items: list[dict[str, Any]],
+    items: list[dict[str, Any]] | SemanticRestore,
     actor_id: str,
 ) -> dict[str, Any]:
+    restore_audit_id = items.audit_id if isinstance(items, SemanticRestore) else None
+    items = [] if isinstance(items, SemanticRestore) else items
     now = utc_now()
     with service.database.transaction(immediate=True) as connection:
         base = service._get_version_with_connection(connection, version_id)
@@ -75,8 +81,21 @@ def correct_group(
             str(members[0]["comment"] or ""),
             {label.code for label in taxonomy.labels},
         )
-        classification = _manual_classification(
-            original["classification"], items, taxonomy, actor_id, now
+        classification = (
+            restored_classification(
+                connection,
+                base["result_id"],
+                [member["source_row"] for member in members],
+                restore_audit_id,
+                taxonomy,
+            )
+            if restore_audit_id
+            else _manual_classification(
+                original["classification"], items, taxonomy, actor_id, now
+            )
+        )
+        classification["human_review_assessment"].update(
+            {"assessed_by": actor_id, "assessed_at": now}
         )
         old_key = original["classification_key"]
         source_rows = sorted(member["source_row"] for member in members)
@@ -134,14 +153,14 @@ def correct_group(
             connection,
             "classification_result",
             base["result_id"],
-            "manual_correction",
+            "semantic_restore" if restore_audit_id else "manual_correction",
             actor_id,
             {"version_id": version_id, "classification": original["classification"]},
             {
                 "version_id": version.version_id,
                 "source_rows": source_rows,
                 "classification": classification,
-                "reason": "人工修正语义",
+                "reason": "还原人工语义修改" if restore_audit_id else "人工修正语义",
             },
             now,
         )

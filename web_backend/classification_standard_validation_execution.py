@@ -202,7 +202,11 @@ class ClassificationStandardValidationExecutionMixin(
         taxonomy = TaxonomyConfig.model_validate(taxonomy_data)
         stage = "calling_model"
 
+        def checkpoint() -> None:
+            self._require_active_validation(run_id)
+
         def progress(current: int, total: int) -> None:
+            checkpoint()
             if current == 1 or current == total or current % 5 == 0:
                 self._save_validation_progress(run_id, stage, current, total)
 
@@ -213,14 +217,18 @@ class ClassificationStandardValidationExecutionMixin(
             base_taxonomy = self._baseline_taxonomy(validation, source)
             stage = "comparing_baseline"
             baseline_pipeline = self._classify_baseline(
-                base_taxonomy, samples, source, progress
+                base_taxonomy, samples, source, progress, checkpoint
             )
         else:
             baseline_pipeline = None
         stage = "calling_model"
         progress(0, len(samples))
         pipeline = self.runner.classify_taxonomy_sample(
-            taxonomy=taxonomy, samples=samples, source=source, progress=progress
+            taxonomy=taxonomy,
+            samples=samples,
+            source=source,
+            progress=progress,
+            checkpoint=checkpoint,
         )
         return (pipeline, baseline_pipeline)
 
@@ -241,10 +249,15 @@ class ClassificationStandardValidationExecutionMixin(
         samples: list[dict[str, Any]],
         source: dict[str, Any],
         progress: Callable[[int, int], None],
+        checkpoint: Callable[[], None],
     ) -> PipelineRun:
         progress(0, len(samples))
         baseline_pipeline = self.runner.classify_taxonomy_sample(
-            taxonomy=base_taxonomy, samples=samples, source=source, progress=progress
+            taxonomy=base_taxonomy,
+            samples=samples,
+            source=source,
+            progress=progress,
+            checkpoint=checkpoint,
         )
         for sample in samples:
             key = str(sample["classification_key"])

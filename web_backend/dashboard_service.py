@@ -113,6 +113,7 @@ class DashboardService(_DashboardCatalog, _DashboardVersionStorage, _DashboardAn
         plan_hash: str,
         reason: str,
         actor_id: str,
+        name: str | None = None,
     ) -> dict[str, Any]:
         with self.database.transaction(immediate=True) as connection:
             dashboard = connection.execute(
@@ -125,6 +126,8 @@ class DashboardService(_DashboardCatalog, _DashboardVersionStorage, _DashboardAn
                 raise DashboardConflict("请先恢复分析看板")
             if int(dashboard["revision"]) != expected_revision:
                 raise DashboardConflict("看板已被其他用户更新，请刷新后重试")
+            if name is not None and not name.strip():
+                raise ValueError("看板名称不能为空")
             plan = build_plan(self.database, connection, result_version_ids, filters)
             self._require_ready_plan(plan, plan_hash)
             version_no = int(
@@ -150,12 +153,13 @@ class DashboardService(_DashboardCatalog, _DashboardVersionStorage, _DashboardAn
                 """
                 UPDATE analysis_dashboards
                 SET current_version_id = ?, revision = revision + 1,
-                    updated_at = ?
+                    updated_at = ?, name = ?
                 WHERE id = ? AND revision = ?
                 """,
                 (
                     version_ids["version_id"],
                     now,
+                    name.strip() if name is not None else dashboard["name"],
                     dashboard_id,
                     expected_revision,
                 ),
@@ -169,10 +173,12 @@ class DashboardService(_DashboardCatalog, _DashboardVersionStorage, _DashboardAn
                 action="create_version",
                 actor_id=actor_id,
                 before={
+                    "name": dashboard["name"],
                     "revision": expected_revision,
                     "current_version_id": dashboard["current_version_id"],
                 },
                 after={
+                    "name": name.strip() if name is not None else dashboard["name"],
                     **version_ids,
                     "revision": expected_revision + 1,
                     "plan_hash": plan["plan_hash"],

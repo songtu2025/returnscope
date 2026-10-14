@@ -2,6 +2,7 @@ import { useState } from "react";
 import "../../styles/classification-standards.css";
 import { classificationDraftErrorMessage as errorMessage } from "./classificationDraftSelection";
 import { useClassificationStandardList } from "./useClassificationStandardList";
+import { useStandardLifecycle } from "./useStandardLifecycle";
 import { ClassificationStandardDetailState } from "./ClassificationStandardPageStates";
 
 import { navigateHash } from "../../app/hashRouter";
@@ -117,6 +118,15 @@ export function ClassificationStandardsPage({ route, notify }) {
     setBusy,
   });
 
+  const lifecycle = useStandardLifecycle({
+    detail,
+    draft,
+    setBusy,
+    loadStandards,
+    loadSelected,
+    notify,
+  });
+
   const deleteStandard = async () => {
     if (!deleteTarget) return;
     setBusy("delete");
@@ -217,6 +227,8 @@ export function ClassificationStandardsPage({ route, notify }) {
               notify={notify}
               onDelete={() => setDeleteTarget(detail)}
               onRestore={setRestoreTarget}
+              onEnable={lifecycle.enable}
+              onDiscard={lifecycle.discard}
               savedContent={savedContent}
               focusLabelCode={route.query.label}
               isNew={mode === "new"}

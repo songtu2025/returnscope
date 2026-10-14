@@ -51,6 +51,10 @@ class ClassificationStandardCreateRequest(BaseModel):
     category_b: str = Field(min_length=1, max_length=100)
 
 
+class ClassificationStandardEnableRequest(BaseModel):
+    expected_version_id: str = Field(min_length=1, max_length=120)
+
+
 class ClassificationStandardDraftUpdateRequest(BaseModel):
     expected_revision: int = Field(ge=1)
     content: ClassificationStandardDraftContentRequest

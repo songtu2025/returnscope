@@ -6,6 +6,7 @@ from fastapi.responses import Response
 
 from web_backend.api_contracts.classification_standards import (
     ClassificationStandardCreateRequest,
+    ClassificationStandardEnableRequest,
 )
 from web_backend.classification_standard_contracts import (
     ClassificationStandardNotFound,
@@ -114,6 +115,17 @@ def register_standard_version_routes(
     @router.delete("/api/classification-standards/{standard_id}")
     def delete_standard(standard_id: str, user: User) -> dict[str, Any]:
         return operations.delete_standard(standard_id, user)
+
+    @router.post("/api/classification-standards/{standard_id}/enable")
+    def enable_standard(
+        standard_id: str, payload: ClassificationStandardEnableRequest, user: User
+    ) -> dict[str, Any]:
+        try:
+            return service.enable_standard(
+                standard_id, payload.expected_version_id, str(user["id"])
+            )
+        except ValueError as exc:
+            raise handle_error(exc) from exc
 
     @router.get(
         "/api/classification-standards/{standard_id}/versions",

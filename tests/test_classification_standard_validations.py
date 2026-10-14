@@ -32,12 +32,15 @@ class FakeRunner:
         samples: list[dict[str, Any]],
         source: dict[str, Any],
         progress: Any,
+        checkpoint: Any = None,
     ) -> PipelineRun:
         del source
         taxonomy_codes = {label.code for label in taxonomy.labels}
         is_draft = str(taxonomy.version).startswith("draft-")
         classifications = {}
         for position, sample in enumerate(samples, start=1):
+            if checkpoint:
+                checkpoint()
             baseline = sample["baseline"].get("primary_label_codes", [])
             if not is_draft:
                 label_codes = (
@@ -197,6 +200,7 @@ def test_validation_routes_preserve_registration_contract(tmp_path: Path) -> Non
         if isinstance(route, APIRoute) and "validation" in route.path
     ]
     expected_routes = [
+        "POST|/api/classification-standard-validation-runs/{run_id}/cancel|cancel_run|200|sync|run_id,user",
         "GET|/api/classification-standard-drafts/{draft_id}/validation-sources|validation_sources|200|sync|draft_id,_user",
         "GET|/api/classification-standard-drafts/{draft_id}/validation-runs|validation_runs|200|sync|draft_id,_user",
         "POST|/api/classification-standard-drafts/{draft_id}/validation-runs|create_validation_run|201|sync|draft_id,payload,user",

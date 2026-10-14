@@ -3,6 +3,10 @@ from datetime import date
 from pydantic import BaseModel, Field
 
 
+class ProductRestoreRequest(BaseModel):
+    expected_version: int = Field(ge=1)
+
+
 class MySQLReturnImportRequest(BaseModel):
     mapping: dict[str, str] = Field(max_length=10)
     default_store: str = Field(default="", max_length=100)

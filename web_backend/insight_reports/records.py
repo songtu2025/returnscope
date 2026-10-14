@@ -23,16 +23,18 @@ class _InsightReportRecords:
         self,
         dashboard_id: str,
         dashboard_version_id: str,
+        *,
+        include_deleted: bool = False,
     ) -> list[dict[str, Any]]:
         self.dashboard_service.get(dashboard_id, dashboard_version_id)
         with self.database.connect() as connection:
             rows = connection.execute(
                 f"""
                 {self._select_sql()}
-                WHERE report.dashboard_id = ?
+                WHERE report.dashboard_id = ? AND (? OR report.deleted_at IS NULL)
                 ORDER BY report.version_no DESC
                 """,
-                (dashboard_id,),
+                (dashboard_id, include_deleted),
             ).fetchall()
             decisions = self._decision_map(
                 connection,
@@ -182,13 +184,15 @@ class _InsightReportRecords:
     ) -> None:
         report = connection.execute(
             """
-                SELECT prompt_version, status, content_json
+                SELECT prompt_version, status, content_json, deleted_at
                 FROM ai_insight_reports WHERE id = ?
                 """,
             (report_id,),
         ).fetchone()
         if report is None:
             raise InsightReportNotFound("AI 洞察报告不存在")
+        if report["deleted_at"]:
+            raise InsightReportConflict("请先恢复报告记录")
         if (
             report["status"] != "completed"
             or report["prompt_version"] != PROMPT_VERSION

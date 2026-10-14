@@ -1,5 +1,6 @@
 import { X } from "@phosphor-icons/react";
 import { useState } from "react";
+import { SemanticHistory } from "./SemanticHistory";
 
 import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { resultLabelText } from "../../lib/taxonomyPresentation";
@@ -105,6 +106,14 @@ export function EvidenceDrawer({
             </button>
           )}
         </section>
+        {onSaved && !disabled && !editing && (
+          <SemanticHistory
+            versionId={record.result_version_id}
+            recordId={record.id}
+            onSaved={onSaved}
+            onBusyChange={setSaving}
+          />
+        )}
         {confirmClose && (
           <section className="drawer-section" role="alert">
             <p>有未保存的修改，是否放弃？</p>

@@ -17,6 +17,7 @@ from web_backend.classification_standard_drafts import ClassificationStandardDra
 from web_backend.classification_standard_publication import (
     ClassificationStandardPublicationMixin,
 )
+from web_backend.classification_standards.lifecycle import StandardLifecycleMixin
 from web_backend.classification_standards.snapshot_encoding import (
     encode_snapshot,
     encoded_snapshot_hash,
@@ -41,6 +42,7 @@ ClassificationStandardValidationError.__module__ = __name__
 
 
 class ClassificationStandardService(
+    StandardLifecycleMixin,
     ClassificationStandardBootstrapMixin,
     ClassificationStandardCatalogMixin,
     ClassificationStandardDraftsMixin,

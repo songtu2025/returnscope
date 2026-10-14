@@ -6,6 +6,7 @@ import { ReturnImportDialog } from "./ReturnImportDialog";
 import { TaskConfigurationStep } from "./TaskConfigurationStep";
 import { TaskDataStep } from "./TaskDataStep";
 import { TaskPlanReviewStep } from "./TaskPlanReviewStep";
+import { TaskDraftActions } from "./TaskDraftActions";
 
 /** @typedef {import("./taskCreateContracts").AvailableModel} AvailableModel */
 /** @typedef {import("./taskCreateContracts").DataVersion} DataVersion */
@@ -28,6 +29,7 @@ import { TaskPlanReviewStep } from "./TaskPlanReviewStep";
  * @property {{confirmationRef: import("react").RefObject<HTMLHeadingElement | null>, selectedConfig?: PublishedConfig, availableModels: AvailableModel[], modelPolicy: TaskModelPolicy, selectConnection: (configId: string) => void, updateModelPolicy: (changes: Record<string, string | number>) => void, submitError: string, submitting: boolean}} configuration
  * @property {{open: boolean, onOpen: () => void, onClose: () => void, onDone: (result: ReturnImportResult, source: "mysql" | "upload") => void | Promise<void>}} upload
  * @property {import("react").ReactNode} taskActions
+ * @property {() => void} [onDiscard]
  */
 
 /** @param {NewTaskViewProps} props */
@@ -39,6 +41,7 @@ export function NewTaskView({
   configuration,
   upload,
   taskActions,
+  onDiscard,
 }) {
   const {
     loading: loadingSetup,
@@ -97,7 +100,18 @@ export function NewTaskView({
   } = upload;
   return (
     <div className="standard-page new-task-page">
-      <PageHeading titleRef={headingRef} title="创建分析任务" />
+      <PageHeading
+        titleRef={headingRef}
+        title="创建分析任务"
+        action={
+          onDiscard && (
+            <TaskDraftActions
+              disabled={submitting || Boolean(mysqlState.busy)}
+              onDiscard={onDiscard}
+            />
+          )
+        }
+      />
       {loadingSetup && (
         <section className="new-task-loading">
           <InlineLoading scope="page" label="正在读取数据与模型配置…" />

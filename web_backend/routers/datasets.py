@@ -16,6 +16,7 @@ from web_backend.routers.dataset_catalog_routes import (
     _register_dataset_read_routes,
     _register_dataset_version_queries,
 )
+from web_backend.routers.product_restore_routes import register_product_restore
 from web_backend.settings import Settings
 
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024
@@ -57,6 +58,7 @@ def create_dataset_router(
     _register_dataset_read_routes(router, dataset_service, current_user)
     _register_dataset_upload_routes(router, dataset_service, settings, current_user)
     _register_product_data_routes(router, dataset_service, current_user)
+    register_product_restore(router, dataset_service, current_user)
     return router
 
 

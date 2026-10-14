@@ -1,6 +1,7 @@
 import { ClassificationStandardValidationHistory } from "./ClassificationStandardValidationHistory";
 import { ClassificationStandardValidationLauncher } from "./ClassificationStandardValidationLauncher";
 import { ClassificationStandardValidationResult } from "./ClassificationStandardValidationResult";
+import { ValidationCancelButton } from "../../components/ValidationCancelButton";
 
 const STATUS_LABELS = {
   queued: "等待运行",
@@ -67,6 +68,13 @@ export function ClassificationStandardValidation({
         statusLabels={STATUS_LABELS}
         onSelectRun={onSelectRun}
       />
+      {selectedRun && ["queued", "running"].includes(selectedRun.status) && (
+        <ValidationCancelButton
+          kind="standard"
+          id={selectedRun.id}
+          onChanged={() => onSelectRun(selectedRun.id)}
+        />
+      )}
       {selectedRun && (
         <ClassificationStandardValidationResult
           key={selectedRun.id}

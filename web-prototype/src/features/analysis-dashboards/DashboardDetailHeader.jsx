@@ -40,6 +40,7 @@ import { DeliveryLifecycleControls } from "../../components/DeliveryLifecycleCon
  * @property {() => void} onShowOverview
  * @property {() => void} onShowReport
  * @property {() => void | Promise<void>} [onChanged]
+ * @property {() => void} [onEdit]
  */
 
 /** @param {DashboardDetailHeaderProps} props */
@@ -66,6 +67,7 @@ export function DashboardDetailHeader({
   onShowOverview,
   onShowReport,
   onChanged,
+  onEdit,
 }) {
   const terms = analysisContextTerms(analysisContext);
   return (
@@ -83,6 +85,9 @@ export function DashboardDetailHeader({
           <span>{dashboard.name || "未命名看板"}</span>
         </div>
         <div className="return-insight-header-actions">
+          {!dashboard.deleted_at && onEdit && (
+            <Button onClick={onEdit}>编辑看板</Button>
+          )}
           <DeliveryLifecycleControls
             kind="dashboard"
             id={dashboard.id}

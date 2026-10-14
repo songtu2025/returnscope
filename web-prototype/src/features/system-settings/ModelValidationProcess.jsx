@@ -1,6 +1,7 @@
 import { WarningCircle } from "@phosphor-icons/react";
 import { classNames, formatTime } from "../../lib/presentation";
 import { ModelValidationProgress } from "./ModelValidationProgress";
+import { ValidationCancelButton } from "../../components/ValidationCancelButton";
 
 /** @typedef {import("../../shared/api/systemSettingsContracts").ConfigVersion} ConfigVersion */
 /** @typedef {import("../../shared/api/systemSettingsContracts").ValidationRun} ValidationRun */
@@ -14,6 +15,7 @@ const VALIDATION_STATUS_LABELS = {
   failed: "验证失败",
   skipped: "已跳过",
   pending: "等待验证",
+  cancelled: "已取消",
 };
 
 /**
@@ -70,6 +72,9 @@ function ValidationProcessHeader(props) {
           )}
         </h4>
       </div>
+      {props.validationActive && (
+        <ValidationCancelButton kind="model" id={props.validationRun.id} />
+      )}
       {!props.validationActive && (
         <div className="validation-process-actions">
           <button type="button" onClick={props.onClose} disabled={Boolean(props.busy)}>

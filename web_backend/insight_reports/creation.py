@@ -25,6 +25,8 @@ class _InsightReportCreation(_InsightReportRecords):
         if row is None:
             raise InsightReportNotFound("AI 洞察报告不存在")
         source = dict(row)
+        if source["deleted_at"]:
+            raise InsightReportConflict("请先恢复报告记录")
         if source["status"] != "failed":
             raise InsightReportConflict("只有生成失败的尝试可以重试")
         retried = self._create_report(

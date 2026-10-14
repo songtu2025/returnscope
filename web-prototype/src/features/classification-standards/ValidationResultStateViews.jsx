@@ -32,8 +32,12 @@ export function ValidationFailed({ run }) {
     <section className="standard-validation-runtime failed" role="alert">
       <WarningCircle size={19} weight="fill" aria-hidden="true" />
       <div>
-        <b>样本验证失败</b>
-        <span>{run.error || "模型调用未完成，请重新运行。"}</span>
+        <b>{run.stage === "cancelled" ? "样本验证已取消" : "样本验证失败"}</b>
+        <span>
+          {run.stage === "cancelled"
+            ? "已有标准保持不变，可重新发起验证。"
+            : run.error || "模型调用未完成，请重新运行。"}
+        </span>
       </div>
     </section>
   );

@@ -1,8 +1,12 @@
 import { request } from "./request";
 
-/** @param {"result" | "dashboard"} kind @param {string} id @param {"delete" | "restore"} action @param {number} revision */
+/** @param {"result" | "dashboard" | "report"} kind @param {string} id @param {"delete" | "restore"} action @param {number} revision */
 export function changeDeliveryLifecycle(kind, id, action, revision) {
-  const path = kind === "result" ? "classification-results" : "analysis-dashboards";
+  const path = {
+    result: "classification-results",
+    dashboard: "analysis-dashboards",
+    report: "ai-insight-reports",
+  }[kind];
   return request(`/api/${path}/${id}/lifecycle`, {
     method: "POST",
     body: JSON.stringify({ action, expected_revision: revision }),

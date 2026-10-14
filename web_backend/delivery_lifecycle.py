@@ -27,6 +27,40 @@ class DeliveryLifecycleService:
     def __init__(self, database: Database) -> None:
         self.database = database
 
+    def report(
+        self, report_id: str, *, revision: int, deleted: bool, actor: str
+    ) -> None:
+        with self.database.transaction(immediate=True) as connection:
+            row = connection.execute(
+                "SELECT * FROM ai_insight_reports WHERE id=?", (report_id,)
+            ).fetchone()
+            self._validate(row, revision, deleted)
+            if row["status"] in {"queued", "running"}:
+                raise DeliveryLifecycleConflict("请先取消正在生成的报告")
+            if (
+                not deleted
+                and connection.execute(
+                    "SELECT 1 FROM analysis_dashboards WHERE id=? AND deleted_at IS NOT NULL",
+                    (row["dashboard_id"],),
+                ).fetchone()
+            ):
+                raise DeliveryLifecycleConflict("请先恢复分析看板")
+            now = utc_now()
+            connection.execute(
+                "UPDATE ai_insight_reports SET deleted_at=?, revision=revision+1 WHERE id=?",
+                (now if deleted else None, report_id),
+            )
+            insert_audit(
+                connection,
+                "ai_insight_report",
+                report_id,
+                "delete" if deleted else "restore",
+                actor,
+                {"deleted_at": row["deleted_at"]},
+                {"deleted_at": now if deleted else None},
+                now,
+            )
+
     @staticmethod
     def _validate(row: Any, revision: int, deleted: bool) -> None:
         if row is None:

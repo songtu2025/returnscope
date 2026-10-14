@@ -18,6 +18,7 @@ class DashboardCreateRequest(DashboardPlanRequest):
 
 
 class DashboardVersionCreateRequest(DashboardPlanRequest):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
     expected_revision: int = Field(ge=1)
     plan_hash: str = Field(min_length=64, max_length=64)
     reason: str = Field(min_length=1, max_length=500)

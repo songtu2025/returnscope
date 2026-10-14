@@ -35,11 +35,17 @@ class _ValidationRunExecution(_ValidationRunRecords, _ValidationRunEvents):
         if context is None:
             return
         for index, item in enumerate(context.run["items"]):
+            if not self._validation_active(run_id):
+                return
             error = self._run_validation_item(context, index, item)
             if error is not None:
                 self._finish_failed_validation(context, index, error)
                 return
         self._finish_successful_validation(context)
+
+    def _validation_active(self, run_id: str) -> bool:
+        run = self.get_validation_run(run_id)
+        return bool(run and run["status"] == "running")
 
     def _prepare_validation_context(
         self,
@@ -82,6 +88,8 @@ class _ValidationRunExecution(_ValidationRunRecords, _ValidationRunEvents):
             data: dict[str, Any],
             item_index: int = index,
         ) -> None:
+            if not self._validation_active(run_id):
+                raise RuntimeError("本次验证已取消")
             self._update_validation_item(
                 run_id,
                 item_index,
@@ -90,6 +98,8 @@ class _ValidationRunExecution(_ValidationRunRecords, _ValidationRunEvents):
             )
 
         started = time.monotonic()
+        if not self._validation_active(run_id):
+            return None
         try:
             report = self.model_probe.test(
                 context.config,
@@ -134,6 +144,8 @@ class _ValidationRunExecution(_ValidationRunRecords, _ValidationRunEvents):
     ) -> None:
         run = context.run
         run_id = str(run["id"])
+        if not self._validation_active(run_id):
+            return
         model = self.model_catalog.get(str(item["model_id"]))
         if model:
             self.model_catalog.set_validation(
@@ -141,6 +153,7 @@ class _ValidationRunExecution(_ValidationRunRecords, _ValidationRunEvents):
                 "failed",
                 str(error)[:MODEL_VALIDATION_MESSAGE_LIMIT],
                 str(run["created_by"]),
+                validation_run_id=run_id,
             )
         self._update_validation_item(
             run_id,
@@ -176,6 +189,8 @@ class _ValidationRunExecution(_ValidationRunRecords, _ValidationRunEvents):
     ) -> None:
         run = context.run
         run_id = str(run["id"])
+        if not self._validation_active(run_id):
+            return
         model = self.model_catalog.get(str(item["model_id"]))
         message = (
             f"HTTP {report['http_status']} · {report['duration_ms']} ms · "
@@ -187,6 +202,7 @@ class _ValidationRunExecution(_ValidationRunRecords, _ValidationRunEvents):
                 "validated",
                 message,
                 str(run["created_by"]),
+                validation_run_id=run_id,
             )
         self._update_validation_item(
             run_id,
@@ -221,6 +237,7 @@ class _ValidationRunExecution(_ValidationRunRecords, _ValidationRunEvents):
                 "failed",
                 str(error)[:MODEL_VALIDATION_MESSAGE_LIMIT],
                 str(run["created_by"]),
+                validation_run_id=str(run["id"]),
             )
         self._finish_validation_run(
             run,
@@ -241,6 +258,7 @@ class _ValidationRunExecution(_ValidationRunRecords, _ValidationRunEvents):
                 "validated",
                 f"连接与 {len(run['items'])} 个模型均测试通过",
                 str(run["created_by"]),
+                validation_run_id=str(run["id"]),
             )
         self._finish_validation_run(
             run,

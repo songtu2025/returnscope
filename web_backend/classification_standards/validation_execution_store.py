@@ -11,6 +11,15 @@ from web_backend.security import utc_now
 class ClassificationStandardValidationStoreMixin:
     database: Database
 
+    def _require_active_validation(self, run_id: str) -> None:
+        with self.database.connect() as connection:
+            active = connection.execute(
+                "SELECT 1 FROM classification_standard_validation_runs WHERE id=? AND status='running'",
+                (run_id,),
+            ).fetchone()
+        if active is None:
+            raise RuntimeError("样本验证已取消")
+
     def _save_validation_progress(
         self, run_id: str, stage: str, current: int, total: int
     ) -> None:

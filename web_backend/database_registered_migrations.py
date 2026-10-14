@@ -44,6 +44,32 @@ def migrate_delivery_lifecycle(connection: sqlite3.Connection) -> None:
     )
 
 
+def migrate_report_removal(connection: sqlite3.Connection) -> None:
+    sql = (
+        "ALTER TABLE ai_insight_reports ADD COLUMN deleted_at TEXT;"
+        "ALTER TABLE ai_insight_reports ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;"
+    )
+    columns = {
+        row["name"]
+        for row in connection.execute("PRAGMA table_info(ai_insight_reports)")
+    }
+    pending = [
+        statement
+        for statement in sql.split(";")
+        if statement.strip() and statement.split()[5] not in columns
+    ]
+    apply_sql_migration(
+        connection,
+        RegisteredSqlMigration(
+            "20261014_report_removal",
+            hashlib.sha256(sql.encode()).hexdigest(),
+            ";".join(pending),
+        ),
+        savepoint="report_removal",
+        checksum_error="报告删除迁移校验失败",
+    )
+
+
 def migrate_segment_removal(connection: sqlite3.Connection) -> None:
     apply_sql_migration(
         connection,

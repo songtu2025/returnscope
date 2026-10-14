@@ -7,6 +7,8 @@ import "../../styles/ai-insight-reports.css";
 import { DashboardDetailContent } from "./DashboardDetailContent";
 import { DashboardDetailEvidenceDrawer } from "./DashboardDetailEvidenceDrawer";
 import { DashboardDetailHeader } from "./DashboardDetailHeader";
+import { DashboardSettingsEditor } from "./DashboardSettingsEditor";
+import { ReportLifecyclePanel } from "./ReportLifecyclePanel";
 import { dashboardVersionId } from "./DashboardDetailHelpers";
 import {
   DashboardDetailError,
@@ -25,6 +27,7 @@ import { useDashboardReportActions } from "./useDashboardReportActions";
 
 /** @param {DashboardDetailProps} props */
 export function DashboardDetail(props) {
+  const [editingSettings, setEditingSettings] = useState(false);
   const { route, updateRoute } = props;
   const { content, selectedRecord, setSelectedRecord, loadContent } =
     useDashboardContent(props);
@@ -55,7 +58,10 @@ export function DashboardDetail(props) {
   const { main, selectedVersion, loadMain } = useDashboardVersion({
     ...props,
     protectedOperation:
-      Boolean(selectedRecord) || generationOpen || decisionState.loading,
+      Boolean(selectedRecord) ||
+      generationOpen ||
+      decisionState.loading ||
+      editingSettings,
   });
 
   const [showDataInfo, setShowDataInfo] = useState(false);
@@ -91,6 +97,7 @@ export function DashboardDetail(props) {
         />
       )}
       <DashboardDetailHeader
+        onEdit={() => setEditingSettings(true)}
         dashboard={dashboard}
         onChanged={loadMain}
         selectedVersion={selectedVersion}
@@ -141,6 +148,25 @@ export function DashboardDetail(props) {
         onShowReport={() => updateRoute({ tab: "report", problem: "", labelGroup: "" })}
       />
 
+      {editingSettings && (
+        <DashboardSettingsEditor
+          dashboard={dashboard}
+          onClose={() => setEditingSettings(false)}
+          onSaved={async (id) => {
+            setEditingSettings(false);
+            updateRoute({ versionId: id, tab: "overview" });
+            await loadMain();
+          }}
+        />
+      )}
+      {showReport && (
+        <ReportLifecyclePanel
+          dashboardId={dashboard.id}
+          versionId={route.versionId}
+          report={selectedReport}
+          onChanged={() => loadReports()}
+        />
+      )}
       <DashboardDetailContent
         route={route}
         showDataInfo={showDataInfo}

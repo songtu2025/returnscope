@@ -49,6 +49,7 @@ from web_backend.database_registered_migrations import (
     migrate_auth_action_tokens,
     migrate_delivery_lifecycle,
     migrate_email_change_tokens,
+    migrate_report_removal,
     migrate_result_source_origin,
     migrate_segment_removal,
     require_result_source_origin,
@@ -147,6 +148,7 @@ class DatabaseMigrations(DatabaseTableRebuilds):
         self._migrate_task_segment_columns(connection)
         migrate_segment_removal(connection)
         migrate_delivery_lifecycle(connection)
+        migrate_report_removal(connection)
         repair_missing_empty_checkpoint_references(connection)
         self._migrate_result_version_columns(connection)
         self._migrate_classification_result_columns(connection)

@@ -89,7 +89,7 @@ function PreferenceRows({ models, policy, updateModel, setPolicy }) {
 
 /** @param {PreferenceFormProps} props */
 export function ModelPreferenceForm(props) {
-  const { connections, policy, models, saving, save } = props;
+  const { connections, policy, models, saving, save, dirty, reset } = props;
   return (
     <section className="content-card model-preference-card">
       {!connections.length ? (
@@ -103,6 +103,13 @@ export function ModelPreferenceForm(props) {
         </>
       )}
       <footer>
+        <button
+          className="secondary-button"
+          onClick={reset}
+          disabled={saving || !dirty}
+        >
+          撤销修改
+        </button>
         <button
           className="primary-button"
           onClick={save}

@@ -34,7 +34,7 @@ class _ValidationRunEvents:
         now = utc_now()
         with self.database.transaction(immediate=True) as connection:
             row = connection.execute(
-                "SELECT items_json FROM api_validation_runs WHERE id = ?",
+                "SELECT items_json FROM api_validation_runs WHERE id = ? AND status='running'",
                 (run_id,),
             ).fetchone()
             if row is None:
@@ -79,7 +79,7 @@ class _ValidationRunEvents:
         now = utc_now()
         with self.database.transaction(immediate=True) as connection:
             row = connection.execute(
-                "SELECT items_json FROM api_validation_runs WHERE id = ?",
+                "SELECT items_json FROM api_validation_runs WHERE id = ? AND status='running'",
                 (run_id,),
             ).fetchone()
             if row is None:
@@ -123,6 +123,14 @@ class _ValidationRunEvents:
         now = utc_now()
         stage = "passed" if status == "passed" else "failed"
         with self.database.transaction(immediate=True) as connection:
+            if (
+                connection.execute(
+                    "SELECT 1 FROM api_validation_runs WHERE id=? AND status='running'",
+                    (run["id"],),
+                ).fetchone()
+                is None
+            ):
+                return
             connection.execute(
                 """
                 UPDATE api_validation_runs
@@ -169,9 +177,20 @@ class _ValidationRunEvents:
         status: str,
         message: str,
         actor_id: str,
+        *,
+        validation_run_id: str | None = None,
     ) -> None:
         now = utc_now()
         with self.database.transaction() as connection:
+            if (
+                validation_run_id is not None
+                and connection.execute(
+                    "SELECT 1 FROM api_validation_runs WHERE id=? AND status='running'",
+                    (validation_run_id,),
+                ).fetchone()
+                is None
+            ):
+                return
             connection.execute(
                 """
                 UPDATE api_config_versions

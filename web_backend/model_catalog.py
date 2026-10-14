@@ -6,6 +6,7 @@ from typing import Any
 from web_backend.common import add_audit, new_id
 from web_backend.database import Database
 from web_backend.model_services import catalog_definitions as _definitions
+from web_backend.model_services.validation_status import ModelValidationStatusMixin
 from web_backend.security import utc_now
 
 EFFORTS = _definitions.EFFORTS
@@ -16,7 +17,7 @@ validate_supported_efforts = _definitions.validate_supported_efforts
 clean_model_definition = _definitions.clean_model_definition
 
 
-class ModelCatalogService:
+class ModelCatalogService(ModelValidationStatusMixin):
     def __init__(self, database: Database) -> None:
         self.database = database
 
@@ -187,34 +188,6 @@ class ModelCatalogService:
                 (connection_id, model_key),
             ).fetchone()
         return self.get(str(row["id"])) if row else None
-
-    def set_validation(
-        self,
-        model: dict[str, Any],
-        status: str,
-        message: str,
-        actor_id: str,
-    ) -> None:
-        now = utc_now()
-        with self.database.transaction() as connection:
-            connection.execute(
-                """
-                UPDATE api_models
-                SET validation_status = ?, validation_message = ?,
-                    validated_at = ?, updated_by = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (status, message, now, actor_id, now, model["id"]),
-            )
-        add_audit(
-            self.database,
-            "api_model",
-            str(model["id"]),
-            "validate",
-            actor_id,
-            before={"status": model["validation_status"]},
-            after={"status": status, "message": message},
-        )
 
     @staticmethod
     def insert_model_row(

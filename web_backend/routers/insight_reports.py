@@ -13,7 +13,10 @@ from web_backend.insight_report_service import (
     InsightReportNotFound,
     InsightReportService,
 )
-from web_backend.routers.delivery_lifecycle_routes import register_report_cancel
+from web_backend.routers.delivery_lifecycle_routes import (
+    register_delivery_actions,
+    register_report_cancel,
+)
 
 
 def create_insight_report_router(
@@ -22,6 +25,9 @@ def create_insight_report_router(
 ) -> APIRouter:
     router = APIRouter()
     register_report_cancel(router, lambda: service.database, current_user)
+    register_delivery_actions(
+        router, lambda: service.database, current_user, kind="report"
+    )
     _register_report_creation(router, service, current_user)
     _register_report_queries(router, service, current_user)
     _register_report_actions(router, service, current_user)
@@ -88,9 +94,12 @@ def _register_report_queries(
         dashboard_id: str,
         _user: User,
         version_id: str = Query(min_length=1),
+        include_deleted: bool = Query(default=False),
     ) -> list[dict[str, Any]]:
         try:
-            return service.list(dashboard_id, version_id)
+            return service.list(
+                dashboard_id, version_id, include_deleted=include_deleted
+            )
         except DashboardNotFound as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 

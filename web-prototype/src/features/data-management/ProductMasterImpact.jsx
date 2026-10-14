@@ -2,18 +2,22 @@ import { AuditDiff } from "../system-settings/AuditLogDiff";
 import { CardHeading } from "../../components/SharedUi";
 import { DatasetReferences } from "./DatasetReferences";
 import { formatTime } from "../../lib/presentation";
+import { HistoryRestoreButton } from "../../components/HistoryRestoreButton";
+import { restoreProductChange } from "../../shared/api/historyRestore";
 
 /** @typedef {import("./productMasterContracts").DatasetRecord} DatasetRecord */
 /** @typedef {import("./productMasterContracts").ProductMasterProps} ProductMasterProps */
 /** @typedef {ReturnType<typeof import("./useProductMasterState").useProductMasterState>} ProductMasterState */
 
-/** @param {Pick<ProductMasterState,"dimensionAudit"|"currentVersionId"> & Pick<ProductMasterProps,"routeReferencePage"|"onReferenceRouteChange"|"onNavigate">} props */
+/** @param {Pick<ProductMasterState,"dimensionAudit"|"currentVersionId"|"onProductChanged"> & Pick<ProductMasterProps,"routeReferencePage"|"onReferenceRouteChange"|"onNavigate"> & {selected: DatasetRecord}} props */
 export function ProductMasterImpact({
   dimensionAudit,
   currentVersionId,
   routeReferencePage = 1,
   onReferenceRouteChange,
   onNavigate,
+  selected,
+  onProductChanged,
 }) {
   return (
     <div className="product-master-impact">
@@ -21,7 +25,21 @@ export function ProductMasterImpact({
         <CardHeading title="信息修改记录" />
         <div className="data-audit-list">
           {dimensionAudit.map((entry) => (
-            <ProductAuditEntry key={entry.id} entry={entry} />
+            <div key={entry.id}>
+              <ProductAuditEntry entry={entry} />
+              {entry.action === "dimension_row_update" && (
+                <HistoryRestoreButton
+                  onRestore={async () => {
+                    const updated = await restoreProductChange(
+                      selected.id,
+                      entry.id,
+                      selected.current_version,
+                    );
+                    await onProductChanged(updated);
+                  }}
+                />
+              )}
+            </div>
           ))}
           {dimensionAudit.length === 0 && (
             <p className="muted-line">尚无产品信息人工修改。</p>

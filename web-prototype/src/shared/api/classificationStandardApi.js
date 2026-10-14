@@ -36,6 +36,12 @@ export const classificationStandardApi = {
   /** @returns {Promise<ClassificationStandardDetail>} */
   classificationStandard: (/** @type {string} */ standardId) =>
     request(`/api/classification-standards/${standardId}`),
+  /** @param {string} standardId @param {string} versionId @returns {Promise<ClassificationStandardDetail>} */
+  enableClassificationStandard: (standardId, versionId) =>
+    request(`/api/classification-standards/${standardId}/enable`, {
+      method: "POST",
+      body: JSON.stringify({ expected_version_id: versionId }),
+    }),
   /** @returns {Promise<ClassificationStandardDeleteResult>} */
   deleteClassificationStandard: (/** @type {string} */ standardId) =>
     request(`/api/classification-standards/${standardId}`, {

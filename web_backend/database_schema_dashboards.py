@@ -64,6 +64,8 @@ ON dashboard_versions(dashboard_id, version_no DESC);
 
 CREATE TABLE IF NOT EXISTS ai_insight_reports (
     id TEXT PRIMARY KEY,
+    deleted_at TEXT,
+    revision INTEGER NOT NULL DEFAULT 1,
     cancelled_at TEXT,
     dashboard_id TEXT NOT NULL
         REFERENCES analysis_dashboards(id) ON DELETE CASCADE,

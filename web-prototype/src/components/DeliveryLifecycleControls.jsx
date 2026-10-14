@@ -7,7 +7,7 @@ import { changeDeliveryLifecycle } from "../shared/api/deliveryApi";
 import { refreshServerState } from "../shared/serverState";
 import { errorMessage } from "../shared/api/requestErrors";
 
-/** @param {{kind:"result"|"dashboard",id:string,name:string,revision:number,deleted?:boolean,onChanged?:()=>void|Promise<void>}} props */
+/** @param {{kind:"result"|"dashboard"|"report",id:string,name:string,revision:number,deleted?:boolean,onChanged?:()=>void|Promise<void>}} props */
 export function DeliveryLifecycleControls({
   kind,
   id,
@@ -21,7 +21,7 @@ export function DeliveryLifecycleControls({
   const [error, setError] = useState("");
   const { mutate } = useSWRConfig();
   const { detailsProps, summaryProps } = useDismissibleDetails();
-  const label = kind === "result" ? "分类结果" : "分析看板";
+  const label = { result: "分类结果", dashboard: "分析看板", report: "报告" }[kind];
   const submit = async () => {
     setSaving(true);
     setError("");
@@ -84,9 +84,11 @@ export function DeliveryLifecycleControls({
           }}
         >
           <p>
-            {kind === "result"
-              ? "分类结果将移入“已删除”，可以恢复。存在看板引用或来源分析仍在执行时，无法删除。"
-              : "看板将移入“已删除”，分类结果和报告记录保留。恢复不会启动分析或生成报告。"}
+            {kind === "report"
+              ? "报告将移入已删除，可以恢复。看板及来源结果保留。"
+              : kind === "result"
+                ? "分类结果将移入“已删除”，可以恢复。存在看板引用或来源分析仍在执行时，无法删除。"
+                : "看板将移入“已删除”，分类结果和报告记录保留。恢复不会启动分析或生成报告。"}
           </p>
           {error && <p role="alert">{error}</p>}
           <div className="modal-actions">

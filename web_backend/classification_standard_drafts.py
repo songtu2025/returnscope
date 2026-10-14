@@ -191,6 +191,12 @@ class ClassificationStandardDraftsMixin(StandardDraftRecordsMixin):
             raise ValueError("变更说明不能为空")
         draft = self.get_draft(draft_id)
         with self.database.transaction(immediate=True) as connection:
+            if connection.execute(
+                "SELECT 1 FROM classification_standard_validation_runs "
+                "WHERE draft_id=? AND status IN ('queued', 'running')",
+                (draft_id,),
+            ).fetchone():
+                raise ClassificationStandardConflict("请先取消正在执行的样本验证")
             current = connection.execute(
                 "SELECT revision FROM classification_standard_drafts WHERE id = ?",
                 (draft_id,),

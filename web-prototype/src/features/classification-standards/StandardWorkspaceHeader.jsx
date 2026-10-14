@@ -15,6 +15,7 @@ export function StandardWorkspaceHeader({
   busy,
   onDelete,
   updating,
+  onEnable,
 }) {
   const { detailsProps, summaryProps } = useDismissibleDetails({ menu: true });
   return (
@@ -40,6 +41,15 @@ export function StandardWorkspaceHeader({
         </span>
       </div>
       <InlineLoading label="更新中…" compact active={updating} />
+      {detail?.status === "inactive" && Number(detail.version_no) > 0 && (
+        <button
+          className="secondary-button"
+          disabled={Boolean(busy)}
+          onClick={onEnable}
+        >
+          {busy === "enable" ? "启用中…" : "重新启用标准"}
+        </button>
+      )}
       {detail && (detail.status === "active" || detail.delete_mode === "delete") && (
         <details {...detailsProps} className="standard-more-menu">
           <summary {...summaryProps}>更多</summary>
