@@ -120,6 +120,8 @@ CREATE INDEX IF NOT EXISTS idx_classification_records_source_sku
 ON classification_result_records(result_version_id, source_sku, source_row);
 CREATE INDEX IF NOT EXISTS idx_classification_records_matched_msku
 ON classification_result_records(result_version_id, matched_msku, source_row);
+CREATE INDEX IF NOT EXISTS idx_result_records_product_display
+ON classification_result_records(store_site, matched_msku, result_version_id);
 CREATE INDEX IF NOT EXISTS idx_classification_records_product_sku
 ON classification_result_records(result_version_id, product_sku, source_row);
 CREATE INDEX IF NOT EXISTS idx_classification_records_product_name

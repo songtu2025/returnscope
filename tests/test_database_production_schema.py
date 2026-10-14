@@ -37,6 +37,29 @@ def test_production_startup_validates_schema_without_modifying_it(
     assert after == before
 
 
+def test_product_display_sync_index_survives_upgrade_and_avoids_full_scan(
+    tmp_path: Path,
+) -> None:
+    database = Database(tmp_path / "app.db")
+    database.initialize()
+    with database.connect() as connection:
+        connection.execute("DROP INDEX idx_result_records_product_display")
+    database.upgrade_schema()
+    with database.connect() as connection:
+        plan = connection.execute(
+            "EXPLAIN QUERY PLAN UPDATE classification_result_records "
+            "SET product_name = ? WHERE store_site = ? AND matched_msku = ? "
+            "AND result_version_id IN (SELECT v.id FROM classification_result_versions v "
+            "JOIN classification_results r ON r.id = v.result_id "
+            "JOIN dataset_versions p ON p.id = r.product_version_id WHERE p.dataset_id = ?)",
+            ("验收商品", "验收店铺", "验收SKU", "验收资料"),
+        ).fetchall()
+    assert any("idx_result_records_product_display" in row["detail"] for row in plan)
+    assert not any(
+        "SCAN classification_result_records" in row["detail"] for row in plan
+    )
+
+
 def test_production_startup_rejects_missing_database_and_index(
     tmp_path: Path,
 ) -> None:
