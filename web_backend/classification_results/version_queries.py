@@ -83,6 +83,14 @@ VERSION_SEARCH_SQL = """
                 """
 
 
+CURRENT_PUBLISHED_VERSION_SQL = """
+    v.version_no = (
+        SELECT MAX(latest.version_no) FROM classification_result_versions latest
+        WHERE latest.result_id = v.result_id AND latest.publish_status = 'published'
+    )
+"""
+
+
 def version_list_filters(
     filters: dict[str, str | None],
     contains_pattern: Callable[[str], str],
@@ -93,14 +101,7 @@ def version_list_filters(
         if filters.get("lifecycle") == "deleted"
         else "r.deleted_at IS NULL",
         "v.publish_status = 'published'",
-        """
-        v.version_no = (
-            SELECT MAX(latest.version_no)
-            FROM classification_result_versions latest
-            WHERE latest.result_id = v.result_id
-              AND latest.publish_status = 'published'
-        )
-        """,
+        CURRENT_PUBLISHED_VERSION_SQL,
     ]
     params: list[Any] = []
     clean_query = (filters.get("q") or "").strip()

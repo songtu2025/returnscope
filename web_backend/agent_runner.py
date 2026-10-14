@@ -34,6 +34,7 @@ from web_backend.config_service import ConfigService
 from web_backend.database import Database
 from web_backend.settings import PROJECT_ROOT, Settings
 from web_backend.task_execution.classification import ClassificationExecutionMixin
+from web_backend.task_execution.failure_diagnostics import log_segment_failure
 from web_backend.task_execution.legacy_export import LegacyResultExportMixin
 from web_backend.task_execution.model_runtime import ModelRuntimeMixin
 from web_backend.tasks.recycle_state import fail_pending_removal
@@ -106,26 +107,25 @@ class AgentRunner(
                 (time.perf_counter() - started) * 1000,
             )
             return
-        context = self._segment_run_context(task_id, segment_id, task, segment)
+        context = None
         try:
+            context = self._segment_run_context(task_id, segment_id, task, segment)
             self._execute_segment(context)
-        except PipelineCancelled:
-            outcome = "interrupted"
-            self._finish_interrupted_segment(context)
-        except ModelServiceUnavailable as exc:
-            outcome = "model_service_paused"
-            self._finish_model_service_paused(context, str(exc))
-        except ResultPublicationError as exc:
-            outcome = "result_publish_failed"
-            self._finish_result_publish_failed_segment(context, str(exc))
         except Exception as exc:
-            outcome = "failed"
-            self._finish_failed_segment(context, str(exc))
+            outcome = self._finish_run_failure(task_id, segment_id, context, exc)
         finally:
+            if cleanup_error := sys.exc_info()[1]:
+                log_segment_failure(
+                    task_id, segment_id, "failure_cleanup", cleanup_error
+                )
             if sys.exc_info()[0] is not None and fail_pending_removal(
                 self.database, segment_id
             ):
                 self._refresh_parent(task_id)
+            elif isinstance(cleanup_error, OSError):
+                self._finish_failed_without_checkpoint(
+                    task_id, segment_id, str(cleanup_error), stage="检查点保存失败"
+                )
             performance_logger.info(
                 "segment_performance task_id=%s segment_id=%s outcome=%s total_ms=%.2f",
                 task_id,
@@ -133,6 +133,35 @@ class AgentRunner(
                 outcome,
                 (time.perf_counter() - started) * 1000,
             )
+
+    def _finish_run_failure(
+        self,
+        task_id: str,
+        segment_id: str,
+        context: _SegmentRunContext | None,
+        error: Exception,
+    ) -> str:
+        if not isinstance(error, PipelineCancelled):
+            log_segment_failure(
+                task_id,
+                segment_id,
+                context.phase if context else "checkpoint_load",
+                error,
+            )
+        if context is None:
+            self._finish_failed_without_checkpoint(task_id, segment_id, str(error))
+            return "preparation_failed"
+        if isinstance(error, PipelineCancelled):
+            self._finish_interrupted_segment(context)
+            return "interrupted"
+        if isinstance(error, ModelServiceUnavailable):
+            self._finish_model_service_paused(context, str(error))
+            return "model_service_paused"
+        if isinstance(error, ResultPublicationError):
+            self._finish_result_publish_failed_segment(context, str(error))
+            return "result_publish_failed"
+        self._finish_failed_segment(context, str(error))
+        return "failed"
 
     def _get_rate_limiter(
         self,

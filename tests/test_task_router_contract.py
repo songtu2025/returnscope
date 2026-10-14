@@ -34,9 +34,9 @@ def test_task_router_registration_and_openapi_contract(
     assert all(
         route.dependant.dependencies[0].call is harness.current_user for route in routes
     )
-    # 固定拆分前的完整接口定义，覆盖参数、模型、操作标识和响应描述。
+    # 固定当前完整接口定义，包含回收站分页及确认操作原因可选的契约。
     contract = harness.app.openapi()
-    recycle = contract["paths"].pop("/api/tasks/recycle")["get"]
+    recycle = contract["paths"]["/api/tasks/recycle"]["get"]
     parameters = {item["name"]: item["schema"] for item in recycle["parameters"]}
     assert parameters["page_size"]["maximum"] == 100
     assert parameters["page"]["minimum"] == 1
@@ -45,7 +45,7 @@ def test_task_router_registration_and_openapi_contract(
     assert rename["properties"]["note"]["default"] == ""
     schema = json.dumps(contract, ensure_ascii=False, sort_keys=True)
     assert hashlib.sha256(schema.encode()).hexdigest() == (
-        "73c0b623c93f3da0383a201fb6467ed61ddf91337afcb9e13023e3567fc64d27"
+        "563eaa569cee3d7679dbd5b76dad4e552a1f3a230f25152495686ba05ecde4d7"
     )
 
 

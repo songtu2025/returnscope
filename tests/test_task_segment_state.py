@@ -105,3 +105,43 @@ def test_event_failure_rolls_back_progress_and_degradation(runtime, operation):
                 runtime.seed.task_id, runtime.seed.segment_id, "合成失败", 3
             )
     assert _state(runtime) == before
+
+
+def test_concurrent_listing_progress_keeps_parent_totals_consistent(runtime):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    from test_task_detail_queries import _add_segment
+
+    seed = runtime.seed
+    segment_ids = [seed.segment_id]
+    for index in range(2):
+        segment_id = f"parallel-{index}"
+        _add_segment(seed.database, seed.segment_id, segment_id, "running")
+        segment_ids.append(segment_id)
+    barrier = Barrier(3)
+
+    def update(segment_id):
+        barrier.wait(timeout=5)
+        for current in range(1, 6):
+            runtime.runner._update_segment_progress(
+                seed.task_id, segment_id, current, 5
+            )
+            runtime.runner._update_segment_runtime_metrics(segment_id, current, 0, 0)
+
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        list(executor.map(update, segment_ids))
+    state = _state(runtime)
+    assert state["task"]["progress_current"] == 15
+    assert state["task"]["progress_total"] == 15
+    assert state["task"]["progress_percent"] == 100
+    assert (
+        len(
+            [
+                event
+                for event in state["events"]
+                if event["event_type"] == "segment_progress"
+            ]
+        )
+        == 15
+    )

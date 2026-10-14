@@ -60,12 +60,15 @@ class ClassificationExecutionMixin:
                 or completed == 1
                 or completed % _PROGRESS_UPDATE_INTERVAL == 0
             ):
+                previous_phase = context.phase
+                context.phase = "progress_save"
                 self._update_segment_progress(
                     context.task_id,
                     context.segment_id,
                     completed,
                     total,
                 )
+                context.phase = previous_phase
 
         def checkpoint(run: PipelineRun) -> None:
             self._save_segment_checkpoint(context, run)

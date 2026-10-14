@@ -26,7 +26,8 @@ def test_retry_preserves_scope_history_and_transaction_budget(
     with database.transaction() as connection:
         connection.execute("UPDATE tasks SET status = ?", (parent_status,))
         connection.execute(
-            "UPDATE task_segments SET status = ? WHERE id = ?", (status, target["id"])
+            "UPDATE task_segments SET status = ?, progress_current = 2 WHERE id = ?",
+            (status, target["id"]),
         )
     before = service.get(task["id"])
     stored_before = segment_rows(database, task["id"])
@@ -43,7 +44,7 @@ def test_retry_preserves_scope_history_and_transaction_budget(
         else:
             assert new["status"] == "retry_pending"
             assert new["retry_count"] == old["retry_count"] + 1
-            assert new["progress_current"] == 0
+            assert new["progress_current"] == old["progress_current"] == 2
     statements = transaction_statements(queries)
     assert [sql.split()[0] for sql in statements] == (
         ["SELECT"] * (4 if status == "not_started" else 3)

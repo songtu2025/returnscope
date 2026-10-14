@@ -284,12 +284,11 @@ test("后端标记系统异常可重试时展示专用入口并复用 Listing �
         onRetry,
         onViewClassification: vi.fn(),
         onRetryPublish: vi.fn(),
-        onCancel: vi.fn(),
       }}
     />,
   );
 
-  const retryButton = screen.getByRole("button", { name: "重试分析失败项" });
+  const retryButton = screen.getByRole("button", { name: "重试失败项" });
   expect(retryButton).toHaveAttribute("title", "重新分析 2 个失败项");
   expect(screen.queryByRole("button", { name: "重试" })).toBeNull();
   await userEvent.click(retryButton);

@@ -26,6 +26,7 @@ class _SegmentRunContext:
     base_cache_hits: int
     base_model_failures: int
     latest_run: PipelineRun | None = None
+    phase: str = "preparing"
 
     def runtime_totals(self) -> tuple[int, int, int]:
         run = self.latest_run

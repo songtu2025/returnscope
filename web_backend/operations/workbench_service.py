@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from web_backend.classification_results.version_queries import (
+    CURRENT_PUBLISHED_VERSION_SQL,
+)
 from web_backend.database import Database
 from web_backend.operations.workbench_actions import _actions
 from web_backend.operations.workbench_common import ACTION_PRIORITY, _actor, _time_key
@@ -18,7 +21,7 @@ class WorkbenchService:
             recent_outputs = self._recent_outputs(connection, limit)
             counts = dict(
                 connection.execute(
-                    """
+                    f"""
                     SELECT
                       (SELECT COUNT(*) FROM tasks
                        WHERE status = 'blocked') AS blocked_tasks,
@@ -30,15 +33,17 @@ class WorkbenchService:
                        WHERE status = 'paused') AS paused_tasks,
                       (SELECT COUNT(*) FROM active_task_segments
                        WHERE status = 'paused') AS paused_segments,
-                      (SELECT COUNT(*) FROM classification_result_versions
-                       WHERE publish_status = 'published'
-                         AND result_id IN (SELECT id FROM classification_results WHERE deleted_at IS NULL)
-                         AND quality_status = 'review_required')
+                      (SELECT COUNT(*) FROM classification_result_versions v
+                       WHERE v.publish_status = 'published'
+                         AND v.result_id IN (SELECT id FROM classification_results WHERE deleted_at IS NULL)
+                         AND {CURRENT_PUBLISHED_VERSION_SQL}
+                         AND v.quality_status = 'review_required')
                         AS review_required_results,
-                      (SELECT COUNT(*) FROM classification_result_versions
-                       WHERE publish_status = 'published'
-                         AND result_id IN (SELECT id FROM classification_results WHERE deleted_at IS NULL)
-                         AND quality_status = 'ready') AS ready_results,
+                      (SELECT COUNT(*) FROM classification_result_versions v
+                       WHERE v.publish_status = 'published'
+                         AND v.result_id IN (SELECT id FROM classification_results WHERE deleted_at IS NULL)
+                         AND {CURRENT_PUBLISHED_VERSION_SQL}
+                         AND v.quality_status = 'ready') AS ready_results,
                       (SELECT COUNT(*) FROM analysis_dashboards
                        WHERE status = 'active' AND deleted_at IS NULL) AS dashboards,
                       (SELECT COUNT(*) FROM ai_insight_reports

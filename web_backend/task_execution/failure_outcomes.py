@@ -20,6 +20,32 @@ class SegmentFailureOutcomesMixin:
     ]
     database: Database
 
+    def _finish_failed_without_checkpoint(
+        self, task_id: str, segment_id: str, error: str, *, stage: str = "准备失败"
+    ) -> None:
+        """检查点无法读写时保留原文件引用和已落库进度，允许修复后重试。"""
+        now = utc_now()
+        with self.database.transaction(immediate=True) as connection:
+            updated = connection.execute(
+                """UPDATE task_segments SET status='failed', error=?,
+                   requested_action=NULL, completed_at=?, heartbeat_at=?, revision=revision+1
+                   WHERE id=? AND task_id=? AND status='running'""",
+                (error[:TASK_ERROR_TEXT_LIMIT], now, now, segment_id, task_id),
+            )
+            if updated.rowcount:
+                connection.execute(
+                    """INSERT INTO task_events(task_id,event_type,stage,message,data_json,created_at)
+                       VALUES (?,'segment_failed',?,?,?,?)""",
+                    (
+                        task_id,
+                        stage,
+                        error[:TASK_EVENT_ERROR_TEXT_LIMIT],
+                        json_text({"segment_id": segment_id}),
+                        now,
+                    ),
+                )
+        self._refresh_parent(task_id)
+
     def _finish_model_service_paused(
         self,
         context: _SegmentRunContext,

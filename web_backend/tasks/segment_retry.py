@@ -54,7 +54,7 @@ class TaskSegmentRetryMixin:
             connection.execute(
                 """
                 UPDATE task_segments
-                SET status = 'retry_pending', progress_current = 0,
+                SET status = 'retry_pending',
                     error = NULL, requested_action = NULL,
                     started_at = NULL, completed_at = NULL,
                     retry_count = retry_count + 1, revision = revision + 1

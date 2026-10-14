@@ -140,7 +140,21 @@ def sync_product_display(
             raise ValueError("历史商品标识被重复使用，请核对店铺和 MSKU")
         if current in grouped:
             grouped[previous] = grouped[current]
-    for identity, products in grouped.items():
+    # 只处理已有结果引用的商品，避免持有写锁时遍历整个商品库发送无效更新。
+    referenced = connection.execute(
+        """SELECT DISTINCT record.store_site, record.matched_msku
+        FROM classification_result_records record
+        JOIN classification_result_versions version ON version.id = record.result_version_id
+        JOIN classification_results result ON result.id = version.result_id
+        JOIN dataset_versions product ON product.id = result.product_version_id
+        WHERE product.dataset_id = ?""",
+        (dataset_id,),
+    ).fetchall()
+    for reference in referenced:
+        identity = tuple(reference)
+        products = grouped.get(identity)
+        if not products:
+            continue
         product = products[0]
         fields = {
             name: str(product[column]).strip()

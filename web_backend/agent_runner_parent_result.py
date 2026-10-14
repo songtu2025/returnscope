@@ -12,6 +12,7 @@ from web_backend.database import Database
 from web_backend.dataset_cache import load_cached_dataset
 from web_backend.security import utc_now
 from web_backend.settings import Settings
+from web_backend.task_execution.failure_diagnostics import log_segment_failure
 from web_backend.task_execution.parent_refresh_state import (
     _parent_refresh_state,
     _ParentRefreshState,
@@ -46,6 +47,7 @@ class ParentResultMixin:
             try:
                 self._build_parent_result(task_id, dataset, str(task["status"]))
             except Exception as exc:
+                log_segment_failure(task_id, None, "parent_export", exc)
                 self._record_parent_result_error(
                     task_id,
                     str(exc),
@@ -73,6 +75,7 @@ class ParentResultMixin:
                 try:
                     self._build_parent_result(task_id, dataset, state.status)
                 except Exception as exc:
+                    log_segment_failure(task_id, None, "parent_export", exc)
                     self._record_parent_result_error(
                         task_id, str(exc), state.status, int(task["revision"])
                     )

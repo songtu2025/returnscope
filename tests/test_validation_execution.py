@@ -81,3 +81,68 @@ def test_successful_probe_preserves_report_event_and_catalog_order(
     }
     assert len(catalog_at_event) == 1
     assert bool(catalog_at_event[0]) is not model_missing
+
+
+def test_config_completion_serializes_with_another_database_writer(
+    tmp_path, monkeypatch
+):
+    import sqlite3
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    from web_backend.database import ClosingConnection
+
+    harness = _build_harness(tmp_path)
+    run_id = str(_create_run(harness, "config", 1)["id"])
+    database = harness.database
+    original_connect = database.connect
+    assert harness.service._start_validation_run(run_id)
+    read_started, writer_done = Event(), Event()
+
+    def write_concurrently():
+        assert read_started.wait(5)
+        with original_connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute(
+                "UPDATE users SET last_seen_at='2026-10-14' WHERE id='user-1'"
+            )
+        writer_done.set()
+
+    class InterleavedConnection(ClosingConnection):
+        def execute(self, sql, parameters=()):
+            cursor = super().execute(sql, parameters)
+            if sql.startswith("SELECT 1 FROM api_validation_runs"):
+                # 在读取验证状态后插入另一个写入者，复现旧快照升级写事务的竞争。
+                read_started.set()
+                writer_done.wait(0.1)
+            return cursor
+
+    def connect():
+        connection = sqlite3.connect(
+            database.path,
+            timeout=5,
+            isolation_level=None,
+            factory=InterleavedConnection,
+        )
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys=ON")
+        return connection
+
+    monkeypatch.setattr(database, "connect", connect)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        writer = executor.submit(write_concurrently)
+        harness.service._set_config_validation(
+            "config-1", "validated", "合成验证通过", "user-1", validation_run_id=run_id
+        )
+        writer.result(timeout=5)
+    with original_connect() as connection:
+        assert (
+            connection.execute(
+                "SELECT validation_status FROM api_config_versions WHERE id='config-1'"
+            ).fetchone()[0]
+            == "validated"
+        )
+        assert (
+            connection.execute("SELECT last_seen_at FROM users").fetchone()[0]
+            == "2026-10-14"
+        )

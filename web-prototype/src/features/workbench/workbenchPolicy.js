@@ -8,6 +8,8 @@ import { routeForTarget } from "../../app/navigation";
 export const ACTION_LABELS = {
   blocked: "阻断",
   failed: "失败",
+  result_publish_failed: "结果生成失败",
+  system_retry_required: "有分析失败项",
   review_required: "需复核",
   paused: "已暂停",
   report_running: "报告生成中",
@@ -40,6 +42,8 @@ export function openTarget(target) {
 
 /** @param {WorkbenchAction} action */
 export function nextActionLabel(action) {
+  if (action.type === "result_publish_failed") return "查看并重新生成";
+  if (action.type === "system_retry_required") return "查看并重试失败项";
   if (action.type === "review_required") return "处理待复核记录";
   if (action.type === "report_running") return "查看进度";
   if (action.type === "report_failed") return "查看并重试";

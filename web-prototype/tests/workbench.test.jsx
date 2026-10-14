@@ -16,6 +16,30 @@ beforeEach(() => {
 
 afterEach(() => cleanup());
 
+test("发布失败保留真实执行状态，入口返回对应任务执行项", async () => {
+  summary.mockResolvedValue({
+    actions: [
+      {
+        type: "result_publish_failed",
+        status: "completed",
+        object_type: "task_segment",
+        object_id: "segment-1",
+        title: "合成任务 / LISTING",
+        reason: "分类结果生成失败",
+        target: { route: "tasks", task_id: "task-1", segment_id: "segment-1" },
+      },
+    ],
+    recent_outputs: [],
+    counts: {},
+  });
+  render(<WorkbenchPage onNavigate={vi.fn()} />);
+  expect(await screen.findByText("结果生成失败")).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: /查看并重新生成/ }));
+  expect(window.location.hash).toBe(
+    "#analysis-tasks?task_id=task-1&segment_id=segment-1",
+  );
+});
+
 test("首页慢请求只显示一个加载提示，两个卡片不重复加载或提前显示空态", async () => {
   let finish;
   summary.mockImplementation(

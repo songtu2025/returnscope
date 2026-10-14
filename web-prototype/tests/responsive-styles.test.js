@@ -185,17 +185,15 @@ test("用户与安全和审计记录使用紧凑桌面布局", () => {
     /@media \(max-width:\s*720px\)[\s\S]*?\.team-page \.access-table-scroll\s*{[^}]*max-width:\s*100%;[^}]*overflow-x:\s*auto;/,
   );
   expect(styles).toMatch(
-    /\.audit-filter-form\s*{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);/s,
+    /\.audit-filter-form\s*{[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\);/s,
   );
   expect(styles).toMatch(
-    /\.audit-filter-form \.primary-button\s*{[^}]*grid-row:\s*2;[^}]*grid-column:\s*3;[^}]*min-height:\s*var\(--desktop-control-height\);/s,
+    /\.audit-filter-actions\s*{[^}]*grid-column:\s*1 \/ -1;[^}]*display:\s*flex;[^}]*flex-wrap:\s*wrap;/s,
   );
   expect(styles).toMatch(
-    /\.audit-filter-form label:nth-of-type\(6\)\s*{[^}]*grid-row:\s*2;[^}]*grid-column:\s*3;/s,
+    /@media \(max-width:\s*1180px\)[\s\S]*?\.audit-filter-form\s*{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/s,
   );
-  expect(styles).toMatch(
-    /\.audit-list article\s*{[^}]*padding:\s*var\(--desktop-card-padding\);/s,
-  );
+  expect(styles).toMatch(/\.audit-table-wrap\s*{[^}]*overflow-x:\s*auto;/s);
 });
 
 test("复核批次的列表、抽屉与语义诊断纳入桌面样式验证", () => {

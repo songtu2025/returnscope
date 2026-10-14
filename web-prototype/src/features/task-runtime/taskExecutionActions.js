@@ -30,6 +30,9 @@ export function taskExecutionActions({
         setSelected(updated);
         setActionError("");
         await loadTasks();
+        void refreshServerState(mutateCache, ["workbench"]).catch(() =>
+          notify("重试已提交，关联数据刷新失败，可重试", "error"),
+        );
         notify("任务片段已重新排队");
         return true;
       } catch (error) {
@@ -56,7 +59,12 @@ export function taskExecutionActions({
         setSelected(updated);
         setActionError("");
         await loadTasks();
-        notify("分类结果正在重新生成");
+        void refreshServerState(mutateCache, [
+          "classification-results",
+          "analysis-dashboards",
+          "workbench",
+        ]).catch(() => notify("结果已重新生成，关联数据刷新失败，可重试", "error"));
+        notify("分类结果已重新生成");
         return true;
       } catch (error) {
         if (errorStatus(error) === 409) await loadSelected();

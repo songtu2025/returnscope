@@ -37,8 +37,9 @@ def publication(tmp_path):
 
 
 @pytest.mark.parametrize("status", ["completed", "completed_with_errors"])
+@pytest.mark.parametrize("reason", ["  合成发布  ", " ", ""])
 def test_result_retry_commits_before_publisher_and_preserves_query_budget(
-    publication, monkeypatch, status
+    publication, monkeypatch, status, reason
 ):
     seed, service = publication.seed, publication.service
     with seed.database.transaction() as connection:
@@ -61,7 +62,7 @@ def test_result_retry_commits_before_publisher_and_preserves_query_budget(
 
     publication.publisher.side_effect = publish
     result = service.retry_result_publish(
-        seed.task_id, seed.segment_id, "user-1", before["revision"], "  合成发布  "
+        seed.task_id, seed.segment_id, "user-1", before["revision"], reason
     )
     publication.publisher.assert_called_once_with(seed.task_id, seed.segment_id)
     assert result["revision"] == before["revision"] + 1
@@ -75,13 +76,13 @@ def test_result_retry_commits_before_publisher_and_preserves_query_budget(
     ]
     event = service.events(seed.task_id)[-1]
     assert event["event_type"] == "result_publish_retry"
-    assert event["data"]["reason"] == "合成发布"
+    assert event["data"]["reason"] == (reason.strip() or "重新生成分类结果")
 
 
 @pytest.mark.parametrize(
     "case, message",
     [
-        ("blank", "请填写结果发布重试原因"),
+        ("blank", "任务不存在"),
         ("service", "服务未配置"),
         ("missing", "任务不存在"),
         ("stale", "任务已被他人修改"),

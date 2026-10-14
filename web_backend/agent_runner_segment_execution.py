@@ -84,6 +84,7 @@ class SegmentExecutionMixin(SegmentStateMixin, SegmentConfigurationMixin):
         segment = context.segment
         snapshot = json_value(task.get("snapshot_json"), {})
         scope_mode = str(snapshot.get("scope", {}).get("mode", "manual"))
+        context.phase = "data_loading"
         data_started = time.perf_counter()
         dataset = load_cached_dataset(
             str(task["return_file_path"]),
@@ -97,17 +98,20 @@ class SegmentExecutionMixin(SegmentStateMixin, SegmentConfigurationMixin):
         )
         data_ms = (time.perf_counter() - data_started) * 1000
         setup_started = time.perf_counter()
+        context.phase = "configuration"
         setup = self._prepare_segment_run(
             context, dataset, snapshot, task=task, segment=segment
         )
         setup_ms = (time.perf_counter() - setup_started) * 1000
         model_started = time.perf_counter()
+        context.phase = "model_analysis"
         run = self._classify_segment(
             context, setup.selected, setup.taxonomy, setup.runtime, len(setup.all_keys)
         )
         model_ms = (time.perf_counter() - model_started) * 1000
         context.latest_run = run
         persist_started = time.perf_counter()
+        context.phase = "result_validation"
         self._complete_segment_run(
             context, dataset, setup.all_keys, setup.taxonomy, run
         )
@@ -130,11 +134,15 @@ class SegmentExecutionMixin(SegmentStateMixin, SegmentConfigurationMixin):
     ) -> None:
         context.latest_run = run
         combined = {**context.existing_results, **run.classifications}
+        previous_phase = context.phase
+        context.phase = "checkpoint_save"
         self._write_checkpoint(context.checkpoint_path, combined)
+        context.phase = "runtime_metrics"
         self._update_segment_runtime_metrics(
             context.segment_id,
             *context.runtime_totals(),
         )
+        context.phase = previous_phase
 
     def _complete_segment_run(
         self,
@@ -148,7 +156,9 @@ class SegmentExecutionMixin(SegmentStateMixin, SegmentConfigurationMixin):
         if set(results) != all_keys:
             missing_count = len(all_keys - set(results))
             raise ValueError(f"Listing 片段仍缺少 {missing_count} 组分类结果")
+        context.phase = "checkpoint_save"
         self._write_checkpoint(context.checkpoint_path, results)
+        context.phase = "result_preparation"
         segment_dataset = self._subset_dataset(dataset, all_keys)
         result_version = int(context.segment["result_version"] or 0) + 1
         output_path = (
@@ -158,6 +168,7 @@ class SegmentExecutionMixin(SegmentStateMixin, SegmentConfigurationMixin):
             / "segments"
             / f"{context.segment_id}-analysis-v{result_version}.xlsx"
         )
+        context.phase = "result_publish"
         self._complete_segment(
             context=context,
             result_version=result_version,
@@ -165,6 +176,7 @@ class SegmentExecutionMixin(SegmentStateMixin, SegmentConfigurationMixin):
             results=results,
             taxonomy=taxonomy,
         )
+        context.phase = "legacy_export"
         self._export_legacy_segment_result(
             context,
             output_path,
@@ -172,6 +184,7 @@ class SegmentExecutionMixin(SegmentStateMixin, SegmentConfigurationMixin):
             results,
             taxonomy,
         )
+        context.phase = "parent_refresh"
         self._refresh_parent(context.task_id, dataset)
 
     def _prepare_segment_run(

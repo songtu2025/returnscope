@@ -313,8 +313,8 @@ def test_publish_failure_keeps_quality_status_and_previous_error(runtime) -> Non
 
 
 @pytest.mark.parametrize("kind", list(OUTCOMES))
-def test_checkpoint_failure_does_not_update_database(
-    runtime, monkeypatch, kind
+def test_checkpoint_failure_preserves_saved_progress_and_marks_failed(
+    runtime, monkeypatch, kind, caplog
 ) -> None:
     _prepare_failure(runtime, kind)
     before = _state(runtime)
@@ -323,8 +323,28 @@ def test_checkpoint_failure_does_not_update_database(
     with pytest.raises(OSError) as caught:
         _run(runtime)
     assert caught.value is error
-    assert _state(runtime) == before
-    runtime.refresh_parent.assert_not_called()
+    after = _state(runtime)
+    segment = after["segments"][runtime.seed.segment_id]
+    old = before["segments"][runtime.seed.segment_id]
+    assert segment["status"] == "failed"
+    for field in [
+        "progress_current",
+        "progress_total",
+        "result_json_path",
+        "model_calls",
+        "cache_hits",
+        "model_failures",
+    ]:
+        assert segment[field] == old[field]
+    # 父任务沿用没有可执行片段时的阻断汇总；单项失败仍可重试。
+    assert after["task"]["status"] == "blocked"
+    event = next(
+        item for item in after["events"] if item["event_type"] == "segment_failed"
+    )
+    assert event["stage"] == "检查点保存失败"
+    runtime.refresh_parent.assert_called_once_with(runtime.seed.task_id)
+    assert "failure_cleanup" in caplog.text
+    assert str(error) not in caplog.text
 
 
 @pytest.mark.parametrize("kind", list(OUTCOMES))

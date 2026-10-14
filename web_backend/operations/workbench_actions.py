@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from web_backend.classification_result_queries import system_rerun_counts
+from web_backend.classification_results.version_queries import (
+    CURRENT_PUBLISHED_VERSION_SQL,
+)
 from web_backend.common import json_value
 from web_backend.operations.workbench_common import _actor
 
@@ -31,22 +35,43 @@ def _task_action_rows(connection: Any) -> tuple[Any, Any]:
     segment_rows = connection.execute(
         """
         SELECT s.id, s.task_id, s.segment_key, s.status, s.error,
-               s.result_publish_error, s.scope_json, t.title AS task_title,
+               s.result_version_id, s.result_publish_status, s.result_publish_error, s.scope_json, t.title AS task_title,
                owner.id AS actor_id, owner.display_name AS actor_name,
                COALESCE(s.heartbeat_at, s.completed_at, s.started_at,
                         s.created_at) AS updated_at
         FROM active_task_segments s
         JOIN tasks t ON t.id = s.task_id
         LEFT JOIN users owner ON owner.id = t.owner_id
-        WHERE s.status IN ('blocked', 'failed', 'paused')
+        WHERE s.status IN ('blocked', 'failed', 'paused', 'completed_with_errors') OR s.result_publish_status = 'failed'
         """
     ).fetchall()
-    return task_rows, segment_rows
+    rerun_counts = system_rerun_counts(
+        connection,
+        [
+            str(row["result_version_id"])
+            for row in segment_rows
+            if row["result_version_id"]
+        ],
+    )
+    segments = []
+    for row in segment_rows:
+        item = dict(row)
+        item["system_failure_count"] = rerun_counts.get(
+            str(item["result_version_id"]), 0
+        )
+        if (
+            item["status"] == "completed_with_errors"
+            and not item["system_failure_count"]
+            and item["result_publish_status"] != "failed"
+        ):
+            continue
+        segments.append(item)
+    return task_rows, segments
 
 
 def _result_report_action_rows(connection: Any) -> tuple[Any, Any]:
     result_rows = connection.execute(
-        """
+        f"""
         SELECT v.id, v.result_id, v.quality_status, v.published_at,
                v.created_at, v.created_by, creator.display_name,
                r.source_task_id, r.source_segment_id,
@@ -57,6 +82,7 @@ def _result_report_action_rows(connection: Any) -> tuple[Any, Any]:
         WHERE v.publish_status = 'published'
           AND r.deleted_at IS NULL
           AND v.quality_status = 'review_required'
+          AND {CURRENT_PUBLISHED_VERSION_SQL}
         """
     ).fetchall()
     report_rows = connection.execute(
@@ -113,19 +139,25 @@ def _segment_actions(segment_rows: Any) -> list[dict[str, Any]]:
     for row in segment_rows:
         item = dict(row)
         scope = json_value(item.pop("scope_json"), {}) or {}
+        publish_failed = item["result_publish_status"] == "failed"
+        action_type = item["status"]
+        if publish_failed:
+            action_type = "result_publish_failed"
+        elif item["status"] == "completed_with_errors" and item["system_failure_count"]:
+            action_type = "system_retry_required"
         listing = str(scope.get("listing") or item["segment_key"])
         output.append(
             {
-                "type": item["status"],
+                "type": action_type,
                 "object_type": "task_segment",
                 "object_id": item["id"],
                 "task_id": item["task_id"],
                 "segment_id": item["id"],
                 "result_version_id": None,
                 "title": f"{item['task_title']} / {listing}",
-                "reason": (
-                    item["error"] or item["result_publish_error"] or item["status"]
-                ),
+                "reason": f"{item['system_failure_count']} 个分析失败项待重试"
+                if action_type == "system_retry_required"
+                else (item["error"] or item["result_publish_error"] or item["status"]),
                 "status": item["status"],
                 "actor": _actor(item),
                 "updated_at": item["updated_at"],

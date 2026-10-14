@@ -15,6 +15,7 @@ from web_backend.classification_result_service import (
 )
 from web_backend.common import json_value
 from web_backend.dataset_cache import load_cached_dataset
+from web_backend.task_execution.failure_diagnostics import log_segment_failure
 
 
 class IncompleteResultCheckpoint(ValueError):
@@ -33,6 +34,7 @@ class ResultPublicationMixin:
         task_id: str,
         segment_id: str,
     ) -> dict[str, Any]:
+        phase = "publish_preparation"
         try:
             task = self._load_task(task_id)
             segment = self._load_segment(segment_id)
@@ -41,6 +43,7 @@ class ResultPublicationMixin:
             if segment["result_publish_status"] != "publishing":
                 raise ValueError("Listing 分类结果没有进入发布重试状态")
             prepared = self._prepare_completed_result(task, segment)
+            phase = "result_publish"
             return self.result_service.publish_v1(
                 dataset=prepared["dataset"],
                 results=prepared["results"],
@@ -58,6 +61,7 @@ class ResultPublicationMixin:
                 ),
             )
         except ResultPublicationError as exc:
+            log_segment_failure(task_id, segment_id, phase, exc)
             current = self._load_segment(segment_id)
             if current and current["result_publish_status"] != "failed":
                 self.result_service.mark_publish_failed(
@@ -67,6 +71,7 @@ class ResultPublicationMixin:
                 )
             raise
         except Exception as exc:
+            log_segment_failure(task_id, segment_id, phase, exc)
             self.result_service.mark_publish_failed(task_id, segment_id, str(exc))
             raise ResultPublicationError(str(exc)) from exc
 

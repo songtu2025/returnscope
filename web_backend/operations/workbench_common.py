@@ -6,6 +6,8 @@ from typing import Any
 ACTION_PRIORITY = {
     "blocked": 0,
     "failed": 1,
+    "result_publish_failed": 1,
+    "system_retry_required": 1,
     "report_failed": 1,
     "report_running": 2,
     "review_required": 3,

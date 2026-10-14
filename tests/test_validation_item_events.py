@@ -11,6 +11,12 @@ from test_validation_run_service import _build_harness, _create_run
 from web_backend.model_services.validation_events import _ValidationItemEvent
 
 
+def _running_run(harness, item_count):
+    run_id = str(_create_run(harness, "config", item_count)["id"])
+    assert harness.service._start_validation_run(run_id)
+    return run_id
+
+
 @pytest.mark.parametrize("index", (0, 1))
 @pytest.mark.parametrize(
     "case",
@@ -28,7 +34,7 @@ def test_item_update_keeps_state_and_event_fields_aligned(
 ) -> None:
     status, stage, event_type, completed = case
     harness = _build_harness(tmp_path)
-    run_id = str(_create_run(harness, "config", 2)["id"])
+    run_id = _running_run(harness, 2)
     service = harness.service
     service._update_validation_item(
         run_id,
@@ -62,7 +68,7 @@ def test_item_update_keeps_state_and_event_fields_aligned(
     assert result["items"][index] == {**before["items"][index], **changes}
     assert result["items"][1 - index] == before["items"][1 - index]
     events = service.validation_events(run_id)
-    assert len(events) == 4
+    assert len(events) == 5
     for event in events[-2:]:
         assert event["event_type"] == event_type
         assert event["stage"] == stage
@@ -79,7 +85,7 @@ def test_event_message_and_data_are_independent_from_item_changes(
     tmp_path: Path, data: dict[str, Any] | None
 ) -> None:
     harness = _build_harness(tmp_path)
-    run_id = str(_create_run(harness, "config", 1)["id"])
+    run_id = _running_run(harness, 1)
 
     harness.service._update_validation_item(
         run_id,
@@ -111,25 +117,40 @@ def test_saved_stage_callbacks_keep_each_model_index(
         on_stage: Callable[[str, str, dict[str, Any]], None],
     ) -> dict[str, Any]:
         callbacks.append(on_stage)
-        return original_test(config, model_key, effort, on_stage)
+        report = original_test(config, model_key, effort, on_stage)
+        if len(callbacks) == 2:
+            # 回调只在运行期间生效；第二个模型执行时核对闭包没有串到同一索引。
+            callbacks[0]("checking_a", "模型 A 回调", {"probe_marker": "a"})
+            callbacks[1]("checking_b", "模型 B 回调", {"probe_marker": "b"})
+            active = harness.service.get_validation_run(run_id)
+            assert [item["stage"] for item in active["items"]] == [
+                "checking_a",
+                "checking_b",
+            ]
+        return report
 
     monkeypatch.setattr(harness.probe, "test", capture_stage)
     harness.service.run_validation(run_id)
     assert len(callbacks) == 2
-    callbacks[0]("checking_a", "模型 A 回调", {"probe_marker": "a"})
-    callbacks[1]("checking_b", "模型 B 回调", {"probe_marker": "b"})
 
     result = harness.service.get_validation_run(run_id)
     assert result is not None
     assert result["completed_count"] == 2
     assert [item["probe_marker"] for item in result["items"]] == ["a", "b"]
-    assert [item["stage"] for item in result["items"]] == ["checking_a", "checking_b"]
-    events = harness.service.validation_events(run_id)[-2:]
+    events = [
+        event
+        for event in harness.service.validation_events(run_id)
+        if "probe_marker" in event["data"]
+    ]
     assert [(event["model_key"], event["data"]) for event in events] == [
         ("model-a", {"probe_marker": "a"}),
         ("model-b", {"probe_marker": "b"}),
     ]
     assert [event["message"] for event in events] == ["模型 A 回调", "模型 B 回调"]
+    for callback in callbacks:
+        with pytest.raises(RuntimeError, match="验证已取消"):
+            callback("late", "完成后回调", {})
+    assert harness.service.get_validation_run(run_id) == result
 
 
 @pytest.mark.parametrize(
@@ -149,7 +170,7 @@ def test_item_and_event_writes_roll_back_together(
     tmp_path: Path, trigger_sql: str
 ) -> None:
     harness = _build_harness(tmp_path)
-    run_id = str(_create_run(harness, "config", 2)["id"])
+    run_id = _running_run(harness, 2)
     before = harness.service.get_validation_run(run_id)
     events_before = harness.service.validation_events(run_id)
     with harness.database.transaction() as connection:

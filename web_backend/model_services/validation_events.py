@@ -181,7 +181,8 @@ class _ValidationRunEvents:
         validation_run_id: str | None = None,
     ) -> None:
         now = utc_now()
-        with self.database.transaction() as connection:
+        # 读取运行状态前取得写入资格，避免并发提交使读取快照无法升级为写事务。
+        with self.database.transaction(immediate=True) as connection:
             if (
                 validation_run_id is not None
                 and connection.execute(
