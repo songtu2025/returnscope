@@ -1939,7 +1939,7 @@ def test_cancelled_task_delivers_completed_listing_and_resumes_remaining(
     assert resumed["id"] == task["id"]
     assert resumed["status"] == "queued"
     assert resumed_segments["footwear"]["status"] == "completed"
-    assert resumed_segments["eyewear"]["status"] == "retry_pending"
+    assert resumed_segments["eyewear"]["status"] == "queued"
 
     resume_calls: list[str] = []
     _install_fake_runner(monkeypatch, resume_calls)

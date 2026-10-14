@@ -2,9 +2,7 @@ import { cleanup, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 import {
-  SegmentCancelDialog,
   SegmentRetryDialog,
-  TaskCancelDialog,
   TaskResumeDialog,
 } from "../src/features/task-runtime/TaskActionDialogs";
 import { renderWithServerState as render } from "./renderWithServerState";
@@ -25,22 +23,10 @@ const segment = {
 
 const forms = [
   {
-    Component: TaskCancelDialog,
-    field: "取消原因",
-    button: "确认取消任务",
-    payload: { expected_revision: 7 },
-  },
-  {
     Component: TaskResumeDialog,
     field: "继续执行原因",
     button: "继续未完成片段",
     payload: { expected_revision: 7 },
-  },
-  {
-    Component: SegmentCancelDialog,
-    field: "取消原因",
-    button: "确认取消 Listing",
-    payload: "",
   },
   {
     Component: SegmentRetryDialog,

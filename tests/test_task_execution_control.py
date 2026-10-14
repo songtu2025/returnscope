@@ -70,9 +70,14 @@ def test_resume_requeues_only_unfinished_segments(tmp_path, monkeypatch, status)
     assert not result["pause_requested"] and not result["cancel_requested"]
     assert result["revision"] == task["revision"] + 1
     for old, new in zip(before["segments"], result["segments"], strict=True):
-        if old["status"] in {"running", "cancelled"}:
-            assert new["status"] == "retry_pending" and new["progress_current"] == 0
-        elif old["status"] in {"queued", "retry_pending", "paused", "not_started"}:
+        if old["status"] in {
+            "running",
+            "cancelled",
+            "queued",
+            "retry_pending",
+            "paused",
+            "not_started",
+        }:
             assert new["status"] == "queued" and new["progress_current"] == 9
         else:
             assert new == old

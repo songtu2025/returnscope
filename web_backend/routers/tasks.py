@@ -16,6 +16,7 @@ from web_backend.routers.task_planning_routes import (
     register_task_collection_routes,
     register_task_replan_routes,
 )
+from web_backend.routers.task_recycle_routes import register_task_recycle_routes
 from web_backend.routers.task_segment_routes import (
     register_segment_control_routes,
     register_segment_retry_routes,
@@ -69,6 +70,7 @@ def create_task_router(
     current_user: Callable[..., dict[str, Any]],
 ) -> APIRouter:
     router = APIRouter()
+    register_task_recycle_routes(router, task_service, current_user)
     register_task_collection_routes(router, task_service, current_user)
     register_task_replan_routes(router, task_service, current_user)
     register_segment_retry_routes(router, task_service, current_user)

@@ -155,7 +155,7 @@ test("结果生成失败显示短错误，并等待重试返回后释放操作�
   );
 });
 
-test("排序边界及提交期间禁用按键，取消使用原片段对象", async () => {
+test("排序边界及提交期间禁用按键，移除需要确认", async () => {
   const props = rowProps();
   const view = render(<SegmentBoardRow {...props} />);
   expect(screen.getByRole("button", { name: "置顶 SYNTHETIC" })).toBeDisabled();
@@ -166,8 +166,10 @@ test("排序边界及提交期间禁用按键，取消使用原片段对象", as
     "synthetic-key",
   ]);
   await userEvent.click(screen.getByLabelText("更多 Listing 操作：SYNTHETIC"));
-  await userEvent.click(screen.getByRole("button", { name: "取消此 Listing" }));
-  expect(props.actions.onCancel).toHaveBeenCalledExactlyOnceWith(props.segment);
+  await userEvent.click(screen.getByRole("button", { name: "移除 Listing" }));
+  expect(screen.getByRole("dialog")).toHaveTextContent("回收站");
+  expect(props.actions.onAction).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByRole("button", { name: "返回" }));
   view.rerender(
     <SegmentBoardRow {...props} queue={{ ...props.queue, reordering: true }} />,
   );
@@ -184,12 +186,12 @@ test("收起详情隐藏下载与低频操作，切换展开通过原状态更�
   );
   expect(screen.queryByText("5 次请求")).not.toBeInTheDocument();
   expect(screen.queryByRole("link", { name: "下载旧结果" })).not.toBeInTheDocument();
-  await userEvent.click(screen.getByRole("button", { name: "查看详情" }));
+  await userEvent.click(screen.getByRole("button", { name: "查看 SYNTHETIC 详情" }));
   const update = props.rowState.setExpandedSegmentKey.mock.calls[0][0];
   expect(update(null)).toBe("synthetic-key");
   expect(update("synthetic-key")).toBeNull();
   view.rerender(<SegmentBoardRow {...props} />);
-  expect(screen.getByRole("button", { name: "收起详情" })).toHaveAttribute(
+  expect(screen.getByRole("button", { name: "查看 SYNTHETIC 详情" })).toHaveAttribute(
     "aria-expanded",
     "true",
   );
@@ -205,7 +207,7 @@ test("系统异常重试优先于通用重试，运行任务禁止系统异常�
     "completed",
   );
   const view = render(<SegmentBoardRow {...props} />);
-  const retry = screen.getByRole("button", { name: "重试分析失败项" });
+  const retry = screen.getByRole("button", { name: "重试失败项" });
   expect(retry).toHaveAttribute("title", "重新分析 2 个失败项");
   expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument();
   await userEvent.click(retry);
@@ -213,9 +215,7 @@ test("系统异常重试优先于通用重试，运行任务禁止系统异常�
   view.rerender(
     <SegmentBoardRow {...props} task={{ ...props.task, status: "running" }} />,
   );
-  expect(
-    screen.queryByRole("button", { name: "重试分析失败项" }),
-  ).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "重试失败项" })).not.toBeInTheDocument();
 });
 
 test("已取消任务保留重新排队入口，暂停与继续传入片段键", async () => {

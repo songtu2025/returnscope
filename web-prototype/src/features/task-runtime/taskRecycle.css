@@ -1,0 +1,54 @@
+.recycle-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+}
+.recycle-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+.recycle-table th,
+.recycle-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.recycle-table th {
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--surface-muted, #f4f8f6);
+}
+.recycle-table small {
+  display: block;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.recycle-table td:nth-child(2) {
+  max-width: 300px;
+  overflow-wrap: anywhere;
+}
+.recycle-actions,
+.recycle-pagination {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.recycle-actions {
+  white-space: nowrap;
+}
+.recycle-pagination {
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+.recycle-pagination > span {
+  margin-right: auto;
+  color: var(--muted);
+}
+
+.task-runtime-workspace .recycle-search-form {
+  justify-content: flex-start;
+}
+.recycle-actions .danger {
+  color: var(--red);
+}

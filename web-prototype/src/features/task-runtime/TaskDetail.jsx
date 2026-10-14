@@ -1,11 +1,6 @@
 import { useEffect, useState } from "react";
 import { AntdProvider } from "../../components/AntdProvider";
-import {
-  SegmentCancelDialog,
-  SegmentRetryDialog,
-  TaskCancelDialog,
-  TaskResumeDialog,
-} from "./TaskActionDialogs";
+import { SegmentRetryDialog, TaskResumeDialog } from "./TaskActionDialogs";
 import { SegmentBoard } from "./SegmentBoard";
 import { TaskDetailAlerts } from "./TaskDetailAlerts";
 import { TaskDetailHeader } from "./TaskDetailHeader";
@@ -31,7 +26,6 @@ import { taskSummary } from "./taskRegistryPolicy";
  * @property {() => void} onClearActionError
  * @property {(task: AnalysisTask) => Promise<unknown>} onTaskRenamed
  * @property {() => void | Promise<unknown>} onArchive
- * @property {(payload: TaskPayload) => Promise<boolean>} onCancel
  * @property {() => void | Promise<unknown>} onPause
  * @property {(payload: TaskPayload) => Promise<boolean>} onResume
  * @property {() => void | Promise<unknown>} onRetry
@@ -59,7 +53,6 @@ export function TaskDetail({
   onClearActionError,
   onTaskRenamed,
   onArchive,
-  onCancel,
   onPause,
   onResume,
   onRetry,
@@ -71,12 +64,8 @@ export function TaskDetail({
   onPreflightReplan,
   onReplan,
 }) {
-  const [cancelOpen, setCancelOpen] = useState(false);
   const [resumeOpen, setResumeOpen] = useState(false);
   const [retrySegment, setRetrySegment] = useState(
-    /** @type {TaskSegment | null} */ (null),
-  );
-  const [cancelSegment, setCancelSegment] = useState(
     /** @type {TaskSegment | null} */ (null),
   );
   const [replanOpen, setReplanOpen] = useState(false);
@@ -127,7 +116,6 @@ export function TaskDetail({
           onOpenReplan={() => setReplanOpen(true)}
           onOpenResume={() => setResumeOpen(true)}
           onTaskRenamed={onTaskRenamed}
-          onOpenCancel={() => setCancelOpen(true)}
           onPause={onPause}
           onRetry={onRetry}
           onArchive={onArchive}
@@ -181,7 +169,6 @@ export function TaskDetail({
                 setRetrySegment(segment);
               }}
               onRetryPublish={onRetryResultPublish}
-              onCancel={(segment) => setCancelSegment(segment)}
               onAction={onSegmentAction}
               onParallelism={onParallelism}
               onReorder={onReorderSegments}
@@ -190,16 +177,6 @@ export function TaskDetail({
           }
         />
 
-        {cancelOpen && (
-          <TaskCancelDialog
-            task={task}
-            onClose={() => setCancelOpen(false)}
-            onSave={async (payload) => {
-              const saved = await onCancel(payload);
-              if (saved) setCancelOpen(false);
-            }}
-          />
-        )}
         {resumeOpen && (
           <TaskResumeDialog
             task={task}
@@ -219,20 +196,6 @@ export function TaskDetail({
             onSave={async (payload) => {
               const saved = await onRetrySegment(retrySegment.segment_key, payload);
               if (saved) setRetrySegment(null);
-            }}
-          />
-        )}
-        {cancelSegment && (
-          <SegmentCancelDialog
-            segment={cancelSegment}
-            onClose={() => setCancelSegment(null)}
-            onSave={async (note) => {
-              const saved = await onSegmentAction(
-                cancelSegment.segment_key,
-                "cancel",
-                note,
-              );
-              if (saved) setCancelSegment(null);
             }}
           />
         )}

@@ -110,6 +110,7 @@ def _create_task_service(
         database,
         plan_service=task_plan_service,
         result_publisher=runner.retry_result_publish,
+        data_dir=runner.settings.data_dir,
     )
 
 

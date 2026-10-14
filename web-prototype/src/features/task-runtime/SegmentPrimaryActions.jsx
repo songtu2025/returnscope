@@ -1,6 +1,5 @@
-import { ArrowClockwise, ChartBar, Pause, Play } from "@phosphor-icons/react";
+import { ArrowClockwise, Pause, Play } from "@phosphor-icons/react";
 import Button from "antd/es/button";
-import { isPublishedResult } from "./taskSegmentPolicy";
 import { canRetrySegment } from "./segmentBoardRowPolicy";
 import { SegmentRemovalControls } from "./SegmentRemovalControls";
 
@@ -67,7 +66,7 @@ function SegmentRetryControls({ task, segment, actions }) {
           onClick={() => onRetry(segment)}
         >
           <ArrowClockwise size={15} />
-          重试分析失败项
+          重试失败项
         </Button>
       )}
       {!canRetrySystemAnomalies && canRetrySegment(task, segment) && (
@@ -83,62 +82,6 @@ function SegmentRetryControls({ task, segment, actions }) {
   );
 }
 
-/** @param {Pick<PrimaryActionsProps, "segment" | "rowState" | "actions" | "publishStatus">} props */
-function SegmentResultControls({ segment, rowState, actions, publishStatus }) {
-  const { retryingPublishId, setRetryingPublishId } = rowState;
-  const { onViewClassification, onRetryPublish } = actions;
-  if (segment.result_deleted_at && segment.result_version_id)
-    return (
-      <Button
-        className="secondary-button compact-button"
-        onClick={() =>
-          onViewClassification({
-            ...segment,
-            result_version_id: String(segment.result_version_id),
-          })
-        }
-      >
-        查看已删除结果
-      </Button>
-    );
-  return (
-    <>
-      {isPublishedResult(segment) && Number(segment.pending_review_count || 0) > 0 && (
-        <Button
-          className="secondary-button compact-button listing-view-button"
-          onClick={() => onViewClassification(segment, "review_required")}
-        >
-          处理待复核记录
-        </Button>
-      )}
-      {["completed", "completed_with_errors"].includes(segment.status) &&
-        isPublishedResult(segment) && (
-          <Button
-            className="secondary-button compact-button listing-view-button"
-            onClick={() => onViewClassification(segment)}
-          >
-            <ChartBar size={14} /> 查看分类结果
-          </Button>
-        )}
-      {publishStatus === "failed" && !segment.deleted_at && (
-        <Button
-          className="secondary-button compact-button"
-          disabled={retryingPublishId === segment.id}
-          title="仅重新生成现有分类结果，不会重新执行语义分析"
-          onClick={async () => {
-            setRetryingPublishId(segment.id);
-            await onRetryPublish(segment.id);
-            setRetryingPublishId(null);
-          }}
-        >
-          <ArrowClockwise size={14} />
-          {retryingPublishId === segment.id ? "正在重试" : "重试生成结果"}
-        </Button>
-      )}
-    </>
-  );
-}
-
 /** @param {PrimaryActionsProps} props */
 export function SegmentPrimaryActions({
   task,
@@ -147,45 +90,58 @@ export function SegmentPrimaryActions({
   actions,
   publishStatus,
 }) {
-  const { expandedSegmentKey, setExpandedSegmentKey } = rowState;
+  const unavailable = Boolean(
+    segment.deleted_at || segment.removal_requested_at || segment.requested_action,
+  );
+  const hasExecutionAction = [
+    "queued",
+    "retry_pending",
+    "running",
+    "paused",
+    "cancelled",
+  ].includes(segment.status);
   return (
-    <div
-      className="listing-actions"
-      role="cell"
-      onDragStart={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-      }}
-    >
-      <div className="listing-action-groups">
-        <div className="listing-control-actions">
-          {!segment.deleted_at && (
-            <SegmentExecutionControls segment={segment} actions={actions} />
-          )}
-          {!segment.deleted_at && !segment.result_deleted_at && (
-            <SegmentRetryControls task={task} segment={segment} actions={actions} />
-          )}
-          <SegmentRemovalControls segment={segment} actions={actions} />
-          <SegmentResultControls
-            segment={segment}
-            rowState={rowState}
-            actions={actions}
-            publishStatus={publishStatus}
-          />
-          {!segment.deleted_at && (
-            <button
-              className="secondary-button compact-button listing-detail-button"
-              aria-expanded={expandedSegmentKey === segment.segment_key}
-              onClick={() =>
-                setExpandedSegmentKey((current) =>
-                  current === segment.segment_key ? null : segment.segment_key,
-                )
-              }
-            >
-              {expandedSegmentKey === segment.segment_key ? "收起详情" : "查看详情"}
-            </button>
-          )}
-        </div>
+    <div className="listing-actions" role="cell">
+      <div className="listing-control-actions">
+        {segment.removal_requested_at ? (
+          <span role="status">正在移除…</span>
+        ) : (
+          <>
+            {!unavailable && !segment.result_deleted_at && (
+              <SegmentExecutionControls segment={segment} actions={actions} />
+            )}
+            {!unavailable &&
+              !hasExecutionAction &&
+              !segment.result_deleted_at &&
+              publishStatus !== "failed" && (
+                <SegmentRetryControls task={task} segment={segment} actions={actions} />
+              )}
+            {!unavailable && !hasExecutionAction && publishStatus === "failed" && (
+              <Button
+                className="secondary-button compact-button"
+                disabled={rowState.retryingPublishId === segment.id}
+                onClick={async () => {
+                  rowState.setRetryingPublishId(segment.id);
+                  try {
+                    await actions.onRetryPublish(segment.id);
+                  } finally {
+                    rowState.setRetryingPublishId(null);
+                  }
+                }}
+              >
+                {rowState.retryingPublishId === segment.id
+                  ? "正在重试"
+                  : "重试生成结果"}
+              </Button>
+            )}
+            {!unavailable && (
+              <SegmentRemovalControls segment={segment} actions={actions} />
+            )}
+            {segment.requested_action && !segment.removal_requested_at && (
+              <span role="status">正在暂停…</span>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

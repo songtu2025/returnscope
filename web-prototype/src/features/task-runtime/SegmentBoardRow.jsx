@@ -54,6 +54,8 @@ export function SegmentBoardRow({ task, segment, position, queue, rowState, acti
         segment={segment}
         position={position}
         presentation={presentation}
+        actions={actions}
+        rowState={rowState}
         primaryActions={
           <SegmentPrimaryActions
             task={task}

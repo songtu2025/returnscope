@@ -16,7 +16,6 @@ import { segmentNeedsAttention } from "./taskRegistryPolicy";
  * @property {string} [initialFilter]
  * @property {(segment: TaskSegment) => void} onRetry
  * @property {(segmentId: string) => Promise<unknown>} onRetryPublish
- * @property {(segment: TaskSegment) => void} onCancel
  * @property {(segmentKey: string, action: SegmentAction, note?: string) => Promise<unknown>} onAction
  * @property {(maxParallelSegments: number) => Promise<unknown>} onParallelism
  * @property {(segmentKeys: string[]) => Promise<unknown>} onReorder
@@ -54,7 +53,6 @@ export function SegmentBoard({
   initialFilter = "all",
   onRetry,
   onRetryPublish,
-  onCancel,
   onAction,
   onParallelism,
   onReorder,
@@ -83,11 +81,9 @@ export function SegmentBoard({
   const queueSegments = useMemo(
     () =>
       (task.segments ?? []).filter(
-        (segment) =>
-          segment.agent_key !== "unknown" &&
-          Boolean(segment.deleted_at) === (statusFilter === "deleted"),
+        (segment) => segment.agent_key !== "unknown" && !segment.deleted_at,
       ),
-    [task.segments, statusFilter],
+    [task.segments],
   );
   const excludedSegments = useMemo(
     () => (task.segments ?? []).filter((segment) => segment.agent_key === "unknown"),
@@ -221,7 +217,6 @@ export function SegmentBoard({
                   onRetry,
                   onViewClassification,
                   onRetryPublish,
-                  onCancel,
                 }}
               />
             ))}

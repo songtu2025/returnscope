@@ -35,7 +35,7 @@ class SegmentStateMixin:
         with self.database.connect() as connection:
             row = connection.execute(
                 """
-                SELECT s.requested_action, t.cancel_requested, t.pause_requested
+                SELECT s.requested_action, s.removal_requested_at, t.cancel_requested, t.pause_requested
                 FROM task_segments s
                 JOIN tasks t ON t.id = s.task_id
                 WHERE s.id = ? AND s.task_id = ?
@@ -46,6 +46,7 @@ class SegmentStateMixin:
             row
             and (
                 row["requested_action"]
+                or row["removal_requested_at"]
                 or row["cancel_requested"]
                 or row["pause_requested"]
             )
@@ -73,7 +74,7 @@ class SegmentStateMixin:
                 SELECT COALESCE(SUM(progress_current), 0) AS current,
                        COALESCE(SUM(progress_total), 0) AS total
                 FROM task_segments
-                WHERE task_id = ? AND agent_key != 'unknown'
+                WHERE task_id = ? AND agent_key != 'unknown' AND deleted_at IS NULL
                 """,
                 (task_id,),
             ).fetchone()

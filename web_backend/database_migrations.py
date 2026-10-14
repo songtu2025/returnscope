@@ -57,6 +57,7 @@ from web_backend.database_registered_migrations import (
 from web_backend.database_schema import SCHEMA
 from web_backend.database_table_rebuilds import DatabaseTableRebuilds
 from web_backend.datasets.product_aliases import migrate_product_aliases
+from web_backend.tasks.recycle_migration import migrate_segment_recycle
 
 CLASSIFICATION_UNIT_RERUN_MIGRATION = "20260919_classification_unit_rerun_state"
 CLASSIFICATION_UNIT_RERUN_MIGRATION_CHECKSUM = hashlib.sha256(
@@ -147,6 +148,7 @@ class DatabaseMigrations(DatabaseTableRebuilds):
         self._migrate_api_config_version_columns(connection)
         self._migrate_task_segment_columns(connection)
         migrate_segment_removal(connection)
+        migrate_segment_recycle(connection)
         migrate_delivery_lifecycle(connection)
         migrate_report_removal(connection)
         repair_missing_empty_checkpoint_references(connection)

@@ -50,7 +50,7 @@ _TASK_SEGMENTS_SQL = """
                   ON standard_version.id = segment.standard_version_id
                 LEFT JOIN classification_standards standard
                   ON standard.id = standard_version.standard_id
-                WHERE segment.task_id = ?
+                WHERE segment.task_id = ? AND segment.purged_at IS NULL
                 ORDER BY segment.execution_order, segment.segment_key
                 """
 

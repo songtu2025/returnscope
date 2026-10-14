@@ -87,11 +87,15 @@ export function taskExecutionActions({
             pause: "Listing 暂停请求已提交",
             resume: "Listing 已重新进入等待队列",
             cancel: "Listing 取消请求已提交",
-            delete: "Listing 已删除，结果和看板已保留",
+            delete: "Listing 移除请求已提交，结果和看板保留",
             restore: "Listing 已恢复，不会自动执行",
           }[action],
         );
-        await refreshServerState(mutateCache, ["workbench", "data-assets"]);
+        await refreshServerState(mutateCache, [
+          "workbench",
+          "data-assets",
+          "task-recycle",
+        ]);
         return true;
       } catch (error) {
         if (errorStatus(error) === 409) await loadSelected();

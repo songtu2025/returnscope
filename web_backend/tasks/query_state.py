@@ -14,6 +14,7 @@ class TaskQueryStateMixin:
     @staticmethod
     def _status_text(status: str) -> tuple[str, str]:
         values = {
+            "empty": ("无有效 Listing", "全部 Listing 已移除"),
             "queued": ("等待运行", "任务执行计划已更新并进入队列"),
             "running": ("语义分析", "Listing 片段正在运行"),
             "paused": ("已暂停", "未完成 Listing 已暂停"),
@@ -70,7 +71,11 @@ class TaskQueryStateMixin:
             None,
         )
         item.pop("classification_keys_json", None)
-        requested_action = item.get("requested_action")
+        requested_action = (
+            "remove"
+            if item.get("removal_requested_at")
+            else item.get("requested_action")
+        )
         item["display_status"] = (
             f"{requested_action}_pending"
             if item.get("status") == "running" and requested_action

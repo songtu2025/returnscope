@@ -37,16 +37,37 @@ class TaskSegmentRemovalMixin:
             )
             if bool(segment["deleted_at"]) == deleted:
                 raise ValueError("Listing 已删除" if deleted else "Listing 未删除")
-            if deleted and (
-                segment["status"]
-                not in {"failed", "cancelled", "completed", "completed_with_errors"}
-                or segment["requested_action"]
-            ):
-                raise ValueError("请先取消并等待 Listing 停止后再删除")
-            connection.execute(
-                "UPDATE task_segments SET deleted_at=?, revision=revision+1 WHERE id=?",
-                (now if deleted else None, segment["id"]),
-            )
+            if segment["purged_at"]:
+                raise ValueError("Listing 已永久删除，无法恢复")
+            if segment["removal_requested_at"]:
+                raise ValueError("Listing 正在移除，请等待执行停止")
+            if deleted and segment["status"] == "running":
+                connection.execute(
+                    """UPDATE task_segments SET removal_requested_at=?, deleted_by=?,
+                       requested_action='pause', revision=revision+1 WHERE id=?""",
+                    (now, actor_id, segment["id"]),
+                )
+                action = "remove_requested"
+            else:
+                restored_status = segment["status"]
+                if not deleted and restored_status in {
+                    "cancelled",
+                    "queued",
+                    "retry_pending",
+                    "not_started",
+                    "running",
+                }:
+                    restored_status = "paused"
+                connection.execute(
+                    """UPDATE task_segments SET deleted_at=?, deleted_by=?, status=?,
+                       requested_action=NULL, revision=revision+1 WHERE id=?""",
+                    (
+                        now if deleted else None,
+                        actor_id if deleted else None,
+                        restored_status,
+                        segment["id"],
+                    ),
+                )
             segments = [
                 dict(row)
                 for row in connection.execute(
@@ -54,15 +75,19 @@ class TaskSegmentRemovalMixin:
                     (task_id,),
                 )
             ]
+            state_task = dict(task)
+            if not deleted:
+                state_task.update(cancel_requested=0, pause_requested=0)
             state = _parent_refresh_state(
-                dict(task),
+                state_task,
                 segments,
                 lambda status, _: self._status_text(status),
             )
             connection.execute(
                 """UPDATE tasks SET status=?,stage=?,message=?,error=NULL,
                    progress_current=?,progress_total=?,progress_percent=?,
-                   result_file_path=NULL,completed_at=?,heartbeat_at=?,
+                   result_file_path=NULL,cancel_requested=?,pause_requested=?,
+                   completed_at=?,heartbeat_at=?,
                    revision=revision+1 WHERE id=?""",
                 (
                     state.status,
@@ -71,13 +96,17 @@ class TaskSegmentRemovalMixin:
                     state.current,
                     state.total,
                     state.percent,
+                    state_task["cancel_requested"],
+                    state_task["pause_requested"],
                     now if state.terminal else None,
                     now,
                     task_id,
                 ),
             )
             message = (
-                "Listing 已删除，结果和看板保留"
+                "Listing 正在移除，等待保存检查点"
+                if deleted and segment["status"] == "running"
+                else "Listing 已移除，结果和看板保留"
                 if deleted
                 else "Listing 已恢复，不会自动执行"
             )
@@ -100,7 +129,17 @@ class TaskSegmentRemovalMixin:
                 f"segment_{action}",
                 actor_id,
                 {"segment_key": segment_key, "deleted_at": segment["deleted_at"]},
-                {"segment_key": segment_key, "deleted_at": now if deleted else None},
+                {
+                    "segment_key": segment_key,
+                    "removal_requested_at": now
+                    if action == "remove_requested"
+                    else None,
+                    "deleted_at": segment["deleted_at"]
+                    if action == "remove_requested"
+                    else now
+                    if deleted
+                    else None,
+                },
                 now,
             )
         return self.get(task_id) or {}

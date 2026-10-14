@@ -2373,7 +2373,7 @@ describe("关键用户流程", () => {
       />,
     );
 
-    await user.click(await screen.findByRole("button", { name: "查看分类结果" }));
+    await user.click(await screen.findByRole("button", { name: "查看结果" }));
     expect(onNavigate).toHaveBeenCalledWith("classification-results", {
       kind: "classification-result",
       id: "classification-version-sr001",
@@ -2381,7 +2381,7 @@ describe("关键用户流程", () => {
       segmentId: "segment-sr001",
       listing: "SR001",
     });
-    await user.click(screen.getByRole("button", { name: "查看详情" }));
+    await user.click(screen.getByRole("button", { name: /查看 .* 详情/ }));
     expect(screen.getByRole("link", { name: "下载" })).toHaveAttribute(
       "href",
       "/classification-download",
@@ -2486,7 +2486,7 @@ describe("关键用户流程", () => {
     );
 
     expect(await screen.findByText("模型服务异常，任务已自动暂停")).toBeVisible();
-    await userEvent.click(screen.getByRole("button", { name: "查看详情" }));
+    await userEvent.click(screen.getByRole("button", { name: /查看 .* 详情/ }));
     expect(screen.getByText("5 次请求")).toBeVisible();
     expect(screen.getByText("成功 0 · 失败 5")).toBeVisible();
     expect(
@@ -2657,7 +2657,7 @@ describe("关键用户流程", () => {
     const publishingRow = await screen.findByRole("row", { name: /PUBLISHING/ });
     expect(within(publishingRow).getByText("正在生成结果")).toBeVisible();
     expect(
-      within(publishingRow).queryByRole("button", { name: "查看分类结果" }),
+      within(publishingRow).queryByRole("button", { name: "查看结果" }),
     ).not.toBeInTheDocument();
     expect(
       within(publishingRow).queryByRole("link", { name: "下载" }),
@@ -2685,17 +2685,17 @@ describe("关键用户流程", () => {
     expect(within(publishedRow).getByText("已发布")).toBeVisible();
     expect(within(publishedRow).getByText("已完成")).toBeVisible();
     expect(
-      within(publishedRow).getByRole("button", { name: "查看分类结果" }),
+      within(publishedRow).getByRole("button", { name: "查看结果" }),
     ).toBeEnabled();
-    await user.click(within(publishedRow).getByRole("button", { name: "查看详情" }));
+    await user.click(
+      within(publishedRow).getByRole("button", { name: /查看 .* 详情/ }),
+    );
     expect(within(publishedRow).getByRole("link", { name: "下载" })).toBeVisible();
 
     const reviewRow = screen.getByRole("row", { name: /REVIEW/ });
     expect(within(reviewRow).getByText("已发布")).toBeVisible();
     expect(within(reviewRow).getByText("分析完成")).toBeVisible();
-    expect(
-      within(reviewRow).getByRole("button", { name: "查看分类结果" }),
-    ).toBeEnabled();
+    expect(within(reviewRow).getByRole("button", { name: "查看结果" })).toBeEnabled();
     expect(
       within(reviewRow).queryByRole("button", { name: "重试" }),
     ).not.toBeInTheDocument();
@@ -2703,9 +2703,7 @@ describe("关键用户流程", () => {
     const unusableRow = screen.getByRole("row", { name: /UNUSABLE/ });
     expect(within(unusableRow).getByText("已发布")).toBeVisible();
     expect(within(unusableRow).getByText("已完成")).toBeVisible();
-    expect(
-      within(unusableRow).getByRole("button", { name: "查看分类结果" }),
-    ).toBeEnabled();
+    expect(within(unusableRow).getByRole("button", { name: "查看结果" })).toBeEnabled();
   });
 
   test("全部 Listing 已发布但仍保留真实模型异常的处理入口", async () => {
@@ -2825,14 +2823,12 @@ describe("关键用户流程", () => {
       />,
     );
 
-    await userEvent.click(await screen.findByRole("button", { name: "查看详情" }));
+    await userEvent.click(await screen.findByRole("button", { name: /查看 .* 详情/ }));
     expect(screen.getAllByRole("link", { name: "下载旧结果" })).toHaveLength(1);
-    expect(
-      screen.queryByRole("button", { name: "查看分类结果" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "查看结果" })).not.toBeInTheDocument();
   });
 
-  test("已暂停 Listing 可以继续，无需填写原因即可取消", async () => {
+  test("已暂停 Listing 可以继续或确认移入回收站", async () => {
     const user = userEvent.setup();
     const pausedSegment = {
       segment_key: "SEEKWAY:US/SK001/footwear",
@@ -2875,9 +2871,9 @@ describe("关键用户流程", () => {
     };
     const cancelledTask = {
       ...task,
-      status: "cancelled",
+      status: "empty",
       revision: 5,
-      segments: [{ ...pausedSegment, status: "cancelled" }],
+      segments: [{ ...pausedSegment, status: "paused", deleted_at: "2026-10-14" }],
     };
     apiMock.tasks.mockResolvedValue([task]);
     apiMock.task.mockResolvedValue(task);
@@ -2905,18 +2901,18 @@ describe("关键用户流程", () => {
       ),
     );
 
-    await user.click(screen.getByRole("button", { name: "查看详情" }));
+    await user.click(screen.getByRole("button", { name: /查看 .* 详情/ }));
     await user.click(screen.getByLabelText("更多 Listing 操作：SK001"));
-    await user.click(screen.getByRole("button", { name: "取消此 Listing" }));
-    expect(screen.getByRole("dialog", { name: "取消 SK001" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "移除 Listing" }));
+    expect(screen.getByRole("dialog", { name: "移除 SK001" })).toBeVisible();
     expect(screen.queryByLabelText("取消原因")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "确认取消 Listing" }));
+    await user.click(screen.getByRole("button", { name: "确认移除 Listing" }));
     await waitFor(() =>
       expect(apiMock.controlTaskSegment).toHaveBeenNthCalledWith(
         2,
         task.id,
         pausedSegment.segment_key,
-        "cancel",
+        "delete",
         { expected_revision: 4, note: "" },
       ),
     );
@@ -3004,7 +3000,7 @@ describe("关键用户流程", () => {
     );
     expect(screen.getAllByText("已取消").length).toBeGreaterThan(0);
     expect(document.querySelector(".task-stage-rail")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "查看分类结果" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "查看结果" })).toBeEnabled();
     await user.click(screen.getByRole("button", { name: "重新排队未完成" }));
     expect(screen.queryByLabelText("重新排队原因")).not.toBeInTheDocument();
     const resumeButtons = screen.getAllByRole("button", {
@@ -3266,7 +3262,7 @@ describe("关键用户流程", () => {
     );
 
     const orderedRow = await screen.findByRole("row", { name: /SK003/ });
-    await user.click(within(orderedRow).getByRole("button", { name: "查看详情" }));
+    await user.click(within(orderedRow).getByRole("button", { name: /查看 .* 详情/ }));
     await user.click(screen.getByRole("button", { name: "置顶 SK003" }));
 
     await waitFor(() =>

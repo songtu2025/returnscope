@@ -36,6 +36,10 @@ def test_task_router_registration_and_openapi_contract(
     )
     # 固定拆分前的完整接口定义，覆盖参数、模型、操作标识和响应描述。
     contract = harness.app.openapi()
+    recycle = contract["paths"].pop("/api/tasks/recycle")["get"]
+    parameters = {item["name"]: item["schema"] for item in recycle["parameters"]}
+    assert parameters["page_size"]["maximum"] == 100
+    assert parameters["page"]["minimum"] == 1
     rename = contract["components"]["schemas"]["TaskRenameRequest"]
     assert "note" not in rename["required"]
     assert rename["properties"]["note"]["default"] == ""

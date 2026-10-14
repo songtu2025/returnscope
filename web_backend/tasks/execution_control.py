@@ -115,7 +115,7 @@ class TaskExecutionControlMixin:
             resumable = connection.execute(
                 """
                 SELECT COUNT(*) AS count FROM active_task_segments
-                WHERE task_id = ? AND deleted_at IS NULL
+                WHERE task_id = ? AND deleted_at IS NULL AND removal_requested_at IS NULL
                   AND status IN (
                       'cancelled', 'not_started', 'running',
                       'queued', 'retry_pending', 'paused'
@@ -128,18 +128,11 @@ class TaskExecutionControlMixin:
             connection.execute(
                 """
                 UPDATE task_segments
-                SET status = CASE
-                        WHEN status IN ('cancelled', 'running') THEN 'retry_pending'
-                        ELSE 'queued'
-                    END,
-                    progress_current = CASE
-                        WHEN status IN ('cancelled', 'running') THEN 0
-                        ELSE progress_current
-                    END,
+                SET status = 'queued',
                     error = NULL, requested_action = NULL,
                     started_at = NULL, completed_at = NULL,
                     revision = revision + 1
-                WHERE task_id = ? AND deleted_at IS NULL
+                WHERE task_id = ? AND deleted_at IS NULL AND removal_requested_at IS NULL
                   AND status IN (
                       'cancelled', 'not_started', 'running',
                       'queued', 'retry_pending', 'paused'

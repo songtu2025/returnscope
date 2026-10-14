@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 import threading
 import time
 
@@ -35,6 +36,7 @@ from web_backend.settings import PROJECT_ROOT, Settings
 from web_backend.task_execution.classification import ClassificationExecutionMixin
 from web_backend.task_execution.legacy_export import LegacyResultExportMixin
 from web_backend.task_execution.model_runtime import ModelRuntimeMixin
+from web_backend.tasks.recycle_state import fail_pending_removal
 
 performance_logger = logging.getLogger("uvicorn.error.performance")
 
@@ -120,6 +122,10 @@ class AgentRunner(
             outcome = "failed"
             self._finish_failed_segment(context, str(exc))
         finally:
+            if sys.exc_info()[0] is not None and fail_pending_removal(
+                self.database, segment_id
+            ):
+                self._refresh_parent(task_id)
             performance_logger.info(
                 "segment_performance task_id=%s segment_id=%s outcome=%s total_ms=%.2f",
                 task_id,

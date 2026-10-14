@@ -127,17 +127,10 @@
   margin: 1px 0;
 }
 
-.listing-action-groups,
 .listing-order-actions,
 .listing-control-actions {
   display: flex;
   align-items: center;
-}
-
-.listing-action-groups {
-  align-items: flex-start;
-  flex-direction: column;
-  gap: 7px;
 }
 
 .listing-order-actions {
@@ -168,12 +161,6 @@
 .listing-control-actions .compact-button {
   flex: 0 0 auto;
   white-space: nowrap;
-}
-
-.listing-view-button {
-  border-color: #a9d5c4;
-  color: var(--green-dark);
-  background: var(--green-pale);
 }
 
 .result-publish-error {

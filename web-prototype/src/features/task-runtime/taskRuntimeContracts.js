@@ -1,6 +1,6 @@
 /**
- * @typedef {"queued" | "running" | "paused" | "completed" | "partial" | "blocked" | "failed" | "cancelled"} TaskStatus
- * @typedef {"ready" | "queued" | "running" | "pause_pending" | "cancel_pending" | "paused" | "completed" | "completed_with_errors" | "failed" | "blocked" | "cancelled" | "not_started" | "retry_pending"} TaskSegmentStatus
+ * @typedef {"empty" | "queued" | "running" | "paused" | "completed" | "partial" | "blocked" | "failed" | "cancelled"} TaskStatus
+ * @typedef {"ready" | "queued" | "running" | "pause_pending" | "remove_pending" | "cancel_pending" | "paused" | "completed" | "completed_with_errors" | "failed" | "blocked" | "cancelled" | "not_started" | "retry_pending"} TaskSegmentStatus
  * @typedef {"pause" | "resume" | "cancel" | "delete" | "restore"} SegmentAction
  *
  * @typedef {Object} TaskConfigSnapshot
@@ -16,6 +16,7 @@
  * @property {number} [record_count]
  *
  * @typedef {Object} TaskSegment
+ * @property {string | null} [removal_requested_at]
  * @property {string | null} [deleted_at]
  * @property {string | null} [result_deleted_at]
  * @property {string} segment_key

@@ -16,6 +16,7 @@ from web_backend.task_execution.parent_refresh_state import (
     _parent_refresh_state,
     _ParentRefreshState,
 )
+from web_backend.tasks.recycle_state import finish_pending_removals
 
 
 class ParentResultMixin:
@@ -32,6 +33,8 @@ class ParentResultMixin:
 
     def finalize_task(self, task_id: str) -> None:
         with self._get_task_lock(task_id):
+            with self.database.transaction(immediate=True) as connection:
+                finish_pending_removals(connection, task_id)
             task = self._load_task(task_id)
             if task is None or task["status"] not in {
                 "completed",
@@ -56,6 +59,8 @@ class ParentResultMixin:
         dataset: ReturnDataset | None = None,
     ) -> None:
         with self._get_task_lock(task_id):
+            with self.database.transaction(immediate=True) as connection:
+                finish_pending_removals(connection, task_id)
             task = self._load_task(task_id)
             if task is None:
                 return

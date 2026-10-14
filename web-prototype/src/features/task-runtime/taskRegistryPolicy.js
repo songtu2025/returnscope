@@ -10,6 +10,7 @@ import {
 
 const ACTIVE_TASK_STATUSES = ["queued", "running", "paused"];
 export const FINAL_TASK_STATUSES = [
+  "empty",
   "completed",
   "failed",
   "cancelled",

@@ -7,6 +7,7 @@ export const MODEL_STATUS_LABELS = {
 };
 
 export const STATUS_LABELS = {
+  empty: "无有效 Listing",
   queued: "排队中",
   running: "分析中",
   paused: "已暂停",

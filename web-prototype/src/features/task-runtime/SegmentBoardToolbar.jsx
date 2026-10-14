@@ -100,8 +100,7 @@ export function SegmentBoardToolbar({
           <option value="active">未结束</option>
           <option value="attention">需处理</option>
           <option value="delivered">已生成结果</option>
-          <option value="cancelled">已取消</option>
-          <option value="deleted">已删除</option>
+          <option value="cancelled">历史已取消</option>
         </select>
       </div>
       <ParallelismSettings task={task} parallelism={parallelism} />

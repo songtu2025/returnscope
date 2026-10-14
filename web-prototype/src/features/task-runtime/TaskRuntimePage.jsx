@@ -1,3 +1,4 @@
+import { TaskRecyclePage } from "./TaskRecyclePage";
 import { TaskMonitor } from "./TaskMonitor";
 import { navigateHash } from "../../app/hashRouter";
 import "../../styles/task-flow.css";
@@ -10,6 +11,7 @@ import "../../styles/task-flow.css";
  */
 
 export function TaskRuntimePage({ route, notify, onNavigate, onChanged }) {
+  if (route.query.view === "recycle") return <TaskRecyclePage notify={notify} />;
   const query = route.query;
   const filter =
     query.status === "active" ||

@@ -41,7 +41,7 @@ def _parent_refresh_state(
         for segment in segments
     ):
         return _ParentRefreshState(
-            "cancelled", "已取消", "全部 Listing 已删除", None, 0, 0, 0, True, False
+            "empty", "无有效 Listing", "全部 Listing 已移除", None, 0, 0, 0, True, False
         )
     parent_status, stage, message, parent_error = _parent_status_details(
         task, executable, status_text
@@ -49,7 +49,7 @@ def _parent_refresh_state(
     current = sum(int(segment["progress_current"]) for segment in executable)
     total = sum(int(segment["progress_total"]) for segment in executable)
     percent = round(current / total * 100, 2) if total else 0
-    terminal = parent_status in FINAL_STATUSES
+    terminal = parent_status in FINAL_STATUSES or parent_status == "empty"
     has_deliverable = any(
         segment["status"] in COMPLETED_SEGMENT_STATUSES for segment in executable
     )

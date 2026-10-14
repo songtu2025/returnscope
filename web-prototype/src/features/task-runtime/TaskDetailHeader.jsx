@@ -8,7 +8,6 @@ import {
   DownloadSimple,
   Pause,
   PlayCircle,
-  X,
 } from "@phosphor-icons/react";
 import Button from "antd/es/button";
 import { api } from "../../api";
@@ -25,7 +24,6 @@ import { FINAL_TASK_STATUSES } from "./taskRegistryPolicy";
  * @property {() => void} onOpenReplan
  * @property {() => void} onOpenResume
  * @property {(task: AnalysisTask) => Promise<unknown>} onTaskRenamed
- * @property {() => void} onOpenCancel
  * @property {() => void | Promise<unknown>} onPause
  * @property {() => void | Promise<unknown>} onRetry
  * @property {() => void | Promise<unknown>} onArchive
@@ -88,8 +86,8 @@ function TaskExecutionActions({ task, summary, onPause, onRetry, showListings })
   );
 }
 
-/** @param {Pick<TaskDetailHeaderProps, "task" | "onRetry" | "onArchive" | "onOpenCancel">} props */
-function TaskMoreActions({ task, onRetry, onArchive, onOpenCancel }) {
+/** @param {Pick<TaskDetailHeaderProps, "task" | "onRetry" | "onArchive">} props */
+function TaskMoreActions({ task, onRetry, onArchive }) {
   const { detailsProps, summaryProps } = useDismissibleDetails({ menu: true });
   return (
     <details {...detailsProps} className="task-more-actions">
@@ -114,12 +112,6 @@ function TaskMoreActions({ task, onRetry, onArchive, onOpenCancel }) {
             {task.archived_at ? "恢复任务" : "归档任务"}
           </button>
         )}
-        {["queued", "running", "paused"].includes(task.status) && (
-          <button className="danger" onClick={onOpenCancel}>
-            <X size={16} />
-            取消未完成
-          </button>
-        )}
       </div>
     </details>
   );
@@ -133,7 +125,6 @@ export function TaskDetailHeader({
   onOpenReplan,
   onOpenResume,
   onTaskRenamed,
-  onOpenCancel,
   onPause,
   onRetry,
   onArchive,
@@ -168,12 +159,7 @@ export function TaskDetailHeader({
           onRetry={onRetry}
           showListings={showListings}
         />
-        <TaskMoreActions
-          task={task}
-          onRetry={onRetry}
-          onArchive={onArchive}
-          onOpenCancel={onOpenCancel}
-        />
+        <TaskMoreActions task={task} onRetry={onRetry} onArchive={onArchive} />
       </div>
     </header>
   );

@@ -18,19 +18,6 @@ export function taskLifecycleActions({
   updateListState,
 }) {
   return {
-    onCancel: async (/** @type {TaskPayload} */ payload) => {
-      try {
-        await taskMonitorApi.cancelTask(selected.id, payload);
-        notify("取消请求已提交");
-        await loadTasks();
-        await loadSelected();
-        return true;
-      } catch (error) {
-        if (errorStatus(error) === 409) await loadSelected();
-        notify(errorMessage(error), "error");
-        return false;
-      }
-    },
     onPause: async () => {
       try {
         const updated = await taskMonitorApi.pauseTask(selected.id, {

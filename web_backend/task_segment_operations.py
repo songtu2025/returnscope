@@ -12,6 +12,7 @@ from web_backend.task_contracts import (
     TaskRevisionConflict,
 )
 from web_backend.task_state import summarize_task_status
+from web_backend.tasks.recycle import TaskRecycleService
 from web_backend.tasks.scheduling import TaskSchedulingMixin
 from web_backend.tasks.segment_removal import TaskSegmentRemovalMixin
 from web_backend.tasks.segment_retry import TaskSegmentRetryMixin
@@ -28,6 +29,7 @@ class TaskSegmentOperationsMixin(
 ):
     _insert_audit: Callable[..., None]
     _status_text: Callable[..., tuple[str, str]]
+    recycle: TaskRecycleService
     database: Database
     get: Callable[..., dict[str, Any] | None]
 
@@ -40,6 +42,9 @@ class TaskSegmentOperationsMixin(
         expected_revision: int,
         note: str = "",
     ) -> dict[str, Any]:
+        if action == "purge":
+            self.recycle.purge(task_id, segment_key, expected_revision, actor_id)
+            return self.get(task_id) or {}
         if action in {"delete", "restore"}:
             return self.set_segment_deleted(
                 task_id,
@@ -182,7 +187,8 @@ class TaskSegmentOperationsMixin(
         self._validate_task_revision(task, expected_revision)
         segment = connection.execute(
             """
-            SELECT id, status, requested_action, agent_key, deleted_at
+            SELECT id, status, requested_action, agent_key, deleted_at,
+                   removal_requested_at, purged_at
             FROM task_segments
             WHERE task_id = ? AND segment_key = ?
             """,
@@ -190,6 +196,10 @@ class TaskSegmentOperationsMixin(
         ).fetchone()
         if segment is None:
             raise ValueError("Listing 片段不存在")
+        if segment["purged_at"]:
+            raise ValueError("Listing 已永久删除")
+        if segment["removal_requested_at"] and not include_deleted:
+            raise ValueError("Listing 正在移除")
         if segment["deleted_at"] and not include_deleted:
             raise ValueError("Listing 已删除，请先恢复")
         if segment["agent_key"] == "unknown" or segment["status"] == "blocked":

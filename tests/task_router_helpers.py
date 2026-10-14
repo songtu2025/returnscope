@@ -19,6 +19,7 @@ from web_backend.task_service import (
 )
 
 ROUTES = [
+    "GET|/api/tasks/recycle|recycled_listings|200",
     "GET|/api/tasks|list_tasks|200",
     "POST|/api/tasks/preflight|preflight_task|200",
     "POST|/api/tasks|create_task|201",
@@ -92,6 +93,13 @@ def harness(tmp_path: Path) -> Iterator[SimpleNamespace]:
     result = tmp_path / "analysis.xlsx"
     result.write_bytes(b"synthetic-result")
     task = Mock(spec=TaskService)
+    task.recycle = Mock()
+    task.recycle.listings.return_value = {
+        "items": [],
+        "total": 0,
+        "page": 1,
+        "page_size": 20,
+    }
     task.list.return_value = [{"id": "task-1", "created_by": "another-user"}]
     for method in SERVICE_METHODS.values():
         getattr(task, method).return_value = {"status": "queued"}

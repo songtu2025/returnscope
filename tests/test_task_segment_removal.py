@@ -44,7 +44,7 @@ def test_deleted_listing_keeps_published_result_and_can_restore(tmp_path: Path):
         context.task_id, key, "delete", "user-1", before["revision"]
     )
     assert deleted["segments"][0]["deleted_at"]
-    assert deleted["status"] == "cancelled"
+    assert deleted["status"] == "empty"
     assert deleted["progress_total"] == 0
     assert service.list()[0]["listing_count"] == 0
     assert service.list()[0]["segments"] == []
@@ -82,8 +82,6 @@ def test_cancel_delete_restore_never_queues_deleted_listing(tmp_path: Path):
     task = _create_task(database, "run_ready")
     service = TaskService(database)
     key = task["segments"][0]["segment_key"]
-    with pytest.raises(ValueError, match="先取消"):
-        service.segment_action(task["id"], key, "delete", "user-1", task["revision"])
     cancelled = service.segment_action(
         task["id"], key, "cancel", "user-1", task["revision"], "合成取消"
     )
@@ -95,7 +93,7 @@ def test_cancel_delete_restore_never_queues_deleted_listing(tmp_path: Path):
     restored = service.segment_action(
         task["id"], key, "restore", "user-1", deleted["revision"]
     )
-    assert restored["segments"][0]["status"] == "cancelled"
+    assert restored["segments"][0]["status"] == "paused"
     assert worker._claim_next_segment() is None
     resumed = service.segment_action(
         task["id"], key, "resume", "user-1", restored["revision"]
@@ -113,15 +111,23 @@ def test_running_listing_must_stop_before_deletion(tmp_path: Path):
     service = TaskService(database)
     running = service.get(task["id"])
     key = running["segments"][0]["segment_key"]
-    with pytest.raises(ValueError, match="先取消"):
-        service.segment_action(task["id"], key, "delete", "user-1", running["revision"])
-    cancelling = service.segment_action(
-        task["id"], key, "cancel", "user-1", running["revision"], "合成取消"
+    removing = service.segment_action(
+        task["id"], key, "delete", "user-1", running["revision"]
     )
-    with pytest.raises(ValueError, match="先取消"):
+    assert removing["segments"][0]["removal_requested_at"]
+    assert removing["segments"][0]["deleted_at"] is None
+    with pytest.raises(ValueError, match="正在移除"):
         service.segment_action(
-            task["id"], key, "delete", "user-1", cancelling["revision"]
+            task["id"], key, "resume", "user-1", removing["revision"]
         )
+    from web_backend.tasks.recycle_state import finish_pending_removals
+
+    with database.transaction() as connection:
+        connection.execute("UPDATE task_segments SET status='paused'")
+        finish_pending_removals(connection, task["id"])
+    removed = service.get(task["id"])["segments"][0]
+    assert removed["deleted_at"]
+    assert removed["removal_requested_at"] is None
 
 
 def test_replan_keeps_removed_listing_and_only_queues_other_listing(tmp_path: Path):
@@ -182,7 +188,7 @@ def test_stale_parent_refresh_cannot_overwrite_deleted_listing_state(tmp_path: P
     )
     current = service.get(task["id"])
     assert current["revision"] == deleted["revision"]
-    assert current["status"] == "cancelled"
+    assert current["status"] == "empty"
     assert current["progress_total"] == 0
     assert current["error"] is None
 
@@ -258,12 +264,6 @@ def test_listing_removal_http_rejects_active_stale_and_anonymous_requests(
     app.include_router(router)
     client = TestClient(app)
     base = f"/api/tasks/{task['id']}/segments/{task['segments'][0]['segment_key']}"
-    assert (
-        client.post(
-            base + "/delete", json={"expected_revision": task["revision"]}
-        ).status_code
-        == 400
-    )
     cancelled = client.post(
         base + "/cancel",
         json={"expected_revision": task["revision"], "note": "合成取消"},

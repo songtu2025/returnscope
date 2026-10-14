@@ -4,6 +4,7 @@ import { isPublishedResult, resultPublishStatus } from "./taskSegmentPolicy";
 /** @typedef {import("./taskRuntimeContracts").TaskSegment} TaskSegment */
 const RETRYABLE_SEGMENT_STATUSES = ["failed", "completed_with_errors", "not_started"];
 export const SEGMENT_STATUS_LABELS = {
+  remove_pending: "正在移除",
   ready: "可执行",
   queued: "等待",
   running: "运行中",

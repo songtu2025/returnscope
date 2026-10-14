@@ -1,12 +1,13 @@
+import { CaretDown, CaretRight } from "@phosphor-icons/react";
 import { isLegacyResult } from "./taskSegmentPolicy";
 import { SEGMENT_STATUS_LABELS } from "./segmentBoardRowPolicy";
 import { segmentNeedsAttention } from "./taskRegistryPolicy";
 
 /** @typedef {import("./segmentBoardRowContracts").SegmentBoardRowProps} SegmentBoardRowProps */
-/** @typedef {Pick<SegmentBoardRowProps, "task" | "segment" | "position"> & {presentation: ReturnType<typeof import("./segmentBoardRowPolicy").segmentResultPresentation>, primaryActions: import("react").ReactNode}} SegmentCellsProps */
+/** @typedef {Pick<SegmentBoardRowProps, "task" | "segment" | "position"> & {presentation: ReturnType<typeof import("./segmentBoardRowPolicy").segmentResultPresentation>, primaryActions: import("react").ReactNode, actions: SegmentBoardRowProps["actions"], rowState: SegmentBoardRowProps["rowState"]}} SegmentCellsProps */
 
-/** @param {Pick<SegmentCellsProps, "segment" | "presentation">} props */
-function SegmentResultCells({ segment, presentation }) {
+/** @param {Pick<SegmentCellsProps, "segment" | "presentation" | "actions">} props */
+function SegmentResultCells({ segment, presentation, actions }) {
   const { displayStatus, publishStatus, qualityState, stateLabel, stateDescription } =
     presentation;
   return (
@@ -31,6 +32,37 @@ function SegmentResultCells({ segment, presentation }) {
                 : stateLabel
               : "未生成"}
         </span>
+        {segment.result_version_id && (
+          <button
+            className="text-button"
+            onClick={() =>
+              actions.onViewClassification({
+                ...segment,
+                result_version_id: String(segment.result_version_id),
+              })
+            }
+          >
+            {segment.result_deleted_at ? "查看已移除结果" : "查看结果"}
+          </button>
+        )}
+        {segment.result_version_id &&
+          !segment.result_deleted_at &&
+          Number(segment.pending_review_count || 0) > 0 && (
+            <button
+              className="text-button"
+              onClick={() =>
+                actions.onViewClassification(
+                  { ...segment, result_version_id: String(segment.result_version_id) },
+                  "review_required",
+                )
+              }
+            >
+              待复核 {segment.pending_review_count} 条
+            </button>
+          )}
+        {Number(segment.system_failure_count || 0) > 0 && (
+          <small>失败项 {segment.system_failure_count} 个</small>
+        )}
         {publishStatus === "failed" && (
           <small className="result-publish-error">{stateDescription}</small>
         )}
@@ -65,6 +97,8 @@ export function SegmentBoardCells({
   position,
   presentation,
   primaryActions,
+  actions,
+  rowState,
 }) {
   const { segmentIndex, page, pageSize } = position;
   return (
@@ -76,7 +110,23 @@ export function SegmentBoardCells({
           ).padStart(2, "0")}
         </b>
         <div>
-          <h4>{segment.scope?.listing || "未匹配 Listing"}</h4>
+          <button
+            className="listing-expand-button"
+            aria-expanded={rowState.expandedSegmentKey === segment.segment_key}
+            aria-label={`查看 ${segment.scope?.listing || "Listing"} 详情`}
+            onClick={() =>
+              rowState.setExpandedSegmentKey((current) =>
+                current === segment.segment_key ? null : segment.segment_key,
+              )
+            }
+          >
+            {rowState.expandedSegmentKey === segment.segment_key ? (
+              <CaretDown size={14} />
+            ) : (
+              <CaretRight size={14} />
+            )}
+            {segment.scope?.listing || "未匹配 Listing"}
+          </button>
           <p>{segment.scope?.store || task.store}</p>
         </div>
       </div>
@@ -88,7 +138,11 @@ export function SegmentBoardCells({
             .join("、")}
         </p>
       </div>
-      <SegmentResultCells segment={segment} presentation={presentation} />
+      <SegmentResultCells
+        segment={segment}
+        presentation={presentation}
+        actions={actions}
+      />
       <SegmentProgressCell segment={segment} />
       {primaryActions}
       {segment.error && segmentNeedsAttention(segment) && (

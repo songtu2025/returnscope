@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Callable
 
 from web_backend.database import Database
@@ -31,6 +32,7 @@ from web_backend.task_queries import TaskQueriesMixin
 from web_backend.task_replan import TaskReplanMixin
 from web_backend.task_result_publish import TaskResultPublishMixin
 from web_backend.task_segment_operations import TaskSegmentOperationsMixin
+from web_backend.tasks.recycle import TaskRecycleService
 
 
 class TaskService(
@@ -46,8 +48,10 @@ class TaskService(
         database: Database,
         plan_service: TaskPlanService | None = None,
         result_publisher: Callable[[str, str], dict[str, Any]] | None = None,
+        data_dir: Path | None = None,
     ) -> None:
         self.database = database
+        self.recycle = TaskRecycleService(database, data_dir or database.path.parent)
         self.plan_service = plan_service or TaskPlanService(database)
         self.result_publisher = result_publisher
 

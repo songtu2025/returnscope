@@ -1,5 +1,6 @@
 import { ArrowLeft, Plus, Pulse } from "@phosphor-icons/react";
 import { EmptyState, PageHeading, PageLoadingState } from "../../components/SharedUi";
+import { navigateHash } from "../../app/hashRouter";
 import { TaskDetail } from "./TaskDetail";
 import { TaskRegistry } from "./TaskRegistry";
 import { useTaskMonitorState } from "./useTaskMonitorState";
@@ -42,10 +43,18 @@ export function TaskMonitor(props) {
         <PageHeading
           title="分析任务"
           action={
-            <button className="primary-button" onClick={() => onNavigate("new")}>
-              <Plus size={18} />
-              新建任务
-            </button>
+            <div className="recycle-actions">
+              <button
+                className="secondary-button"
+                onClick={() => navigateHash("analysis-tasks", { view: "recycle" })}
+              >
+                回收站
+              </button>
+              <button className="primary-button" onClick={() => onNavigate("new")}>
+                <Plus size={18} />
+                新建任务
+              </button>
+            </div>
           }
         />
         <TaskRegistry

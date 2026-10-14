@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from web_backend.task_state import summarize_task_status
+from web_backend.tasks.recycle_state import finish_pending_removals
 
 
 class TaskWorkerRecoveryMixin:
@@ -98,6 +99,14 @@ class TaskWorkerRecoveryMixin:
                 (task_id,),
             ).fetchall()
         ]
+        if (
+            not statuses
+            and connection.execute(
+                "SELECT 1 FROM task_segments WHERE task_id=? AND deleted_at IS NOT NULL",
+                (task_id,),
+            ).fetchone()
+        ):
+            return "empty", "无有效 Listing"
         has_running = "running" in statuses
         if task and task["cancel_requested"] and not has_running:
             task_status = "cancelled"
@@ -123,22 +132,41 @@ class TaskWorkerRecoveryMixin:
         task_id: str,
         now: str,
     ) -> None:
+        finish_pending_removals(connection, task_id)
         task_status, stage = self._recovered_task_state(connection, task_id)
+        totals = connection.execute(
+            """SELECT COALESCE(SUM(progress_current),0), COALESCE(SUM(progress_total),0)
+               FROM active_task_segments WHERE task_id=? AND agent_key!='unknown'""",
+            (task_id,),
+        ).fetchone()
+        current, total = int(totals[0]), int(totals[1])
+        percent = round(current / total * 100, 2) if total else 0
         connection.execute(
             """
                     UPDATE tasks
                     SET status = ?, stage = ?,
+                        progress_current=?, progress_total=?, progress_percent=?,
                         message = '服务重启后已恢复 Listing 状态',
                         completed_at = CASE
                             WHEN ? IN ('cancelled', 'completed', 'partial',
-                                       'failed', 'blocked')
+                                       'failed', 'blocked', 'empty')
                             THEN COALESCE(completed_at, ?)
                             ELSE NULL
                         END,
                         heartbeat_at = ?, revision = revision + 1
                     WHERE id = ?
                     """,
-            (task_status, stage, task_status, now, now, task_id),
+            (
+                task_status,
+                stage,
+                current,
+                total,
+                percent,
+                task_status,
+                now,
+                now,
+                task_id,
+            ),
         )
         connection.execute(
             """

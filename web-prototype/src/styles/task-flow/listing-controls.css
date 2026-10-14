@@ -139,10 +139,6 @@
   font-size: 12px;
 }
 
-.listing-action-groups {
-  gap: 5px;
-}
-
 .listing-control-actions .compact-button {
   min-height: 30px;
   padding-inline: 9px;
