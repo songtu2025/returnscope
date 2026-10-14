@@ -126,6 +126,7 @@ export function canArchiveTask(task) {
 export function matchesQuery(task, query) {
   if (!query) return true;
   const source = [
+    task.id,
     task.title,
     task.store,
     task.listing,

@@ -1,4 +1,27 @@
 /* 数据资产 */
+.product-edit-fields {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.product-edit-comparison table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.product-edit-comparison th,
+.product-edit-comparison td {
+  padding: var(--desktop-field-gap);
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.product-edit-comparison,
+.product-edit-confirm {
+  display: grid;
+  gap: var(--desktop-field-gap);
+}
 .data-page .dataset-header > .dataset-actions {
   gap: 12px;
 }

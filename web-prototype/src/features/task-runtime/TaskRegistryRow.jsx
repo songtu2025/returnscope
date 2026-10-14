@@ -1,4 +1,5 @@
 import { TaskNameEditor } from "./TaskNameEditor";
+import { TaskIdentityCopy } from "./TaskIdentityCopy";
 import { useDismissibleDetails } from "../../hooks/useDismissibleDetails";
 import {
   Archive,
@@ -93,6 +94,7 @@ function RegistryIdentity({ task, onOpen, onTaskRenamed }) {
       <small>
         {[task.store, task.owner_name].filter(Boolean).join(" · ") || "分析任务"}
       </small>
+      <TaskIdentityCopy id={task.id} />
     </span>
   );
 }

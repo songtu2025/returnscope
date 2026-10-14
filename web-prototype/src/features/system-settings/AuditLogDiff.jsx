@@ -24,10 +24,14 @@ const FIELD_LABELS = {
   execution_order: "执行顺序",
 };
 
-/** @param {{before?: unknown, after?: unknown}} props */
-export function AuditDiff({ before, after }) {
+/** @param {{before?: unknown, after?: unknown, partialAfter?: boolean}} props */
+export function AuditDiff({ before, after, partialAfter = false }) {
   const beforeFields = flattenObject(before);
-  const afterFields = flattenObject(after);
+  // 产品行修改的新值是增量；缺省字段沿用旧值，显式空值仍表示清空。
+  const afterFields = {
+    ...(partialAfter ? beforeFields : {}),
+    ...flattenObject(after),
+  };
   const keys = Array.from(
     new Set([...Object.keys(beforeFields), ...Object.keys(afterFields)]),
   ).sort();

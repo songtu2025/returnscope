@@ -78,7 +78,7 @@ function RegistrySearch({
           ref={searchInputRef}
           value={query}
           onChange={(event) => onViewStateChange({ query: event.target.value })}
-          placeholder="搜索任务、店铺或 Listing"
+          placeholder="搜索任务名称、ID、店铺或 Listing"
           aria-label="搜索任务、店铺或 Listing"
         />
         {query && (

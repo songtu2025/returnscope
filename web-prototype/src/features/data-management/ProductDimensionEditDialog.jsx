@@ -1,5 +1,6 @@
 import Button from "antd/es/button";
 import { Modal } from "../../components/SharedUi";
+import { PRODUCT_EDIT_FIELDS } from "./useProductRowEditing";
 
 /** @typedef {import("../../shared/api/dataManagementContracts").DatasetRowsPage} DatasetRowsPage */
 /** @typedef {import("../../shared/api/dataManagementContracts").DatasetRow} DatasetRow */
@@ -109,7 +110,7 @@ function ProductChangeNote({ changeNote, setChangeNote }) {
 function ProductEditActions({ saving, conflict, onClose }) {
   return (
     <div className="modal-actions">
-      <Button autoInsertSpace={false} onClick={onClose}>
+      <Button autoInsertSpace={false} disabled={saving} onClick={onClose}>
         取消
       </Button>
       <Button
@@ -124,7 +125,7 @@ function ProductEditActions({ saving, conflict, onClose }) {
   );
 }
 
-/** @param {{editing: DatasetRow, setEditing: SetEditing, changeNote: string, setChangeNote: (value: string) => void, saving: boolean, conflict?: boolean, onSave: (event: import("react").FormEvent<HTMLFormElement>) => void | Promise<void>, onClose: () => void}} props */
+/** @param {ReturnType<typeof import("./useProductRowEditing").useProductRowEditing> & {editing: DatasetRow, onSave: (event: import("react").FormEvent<HTMLFormElement>) => void | Promise<void>, onClose: () => void}} props */
 export function ProductDimensionEditDialog({
   editing,
   setEditing,
@@ -134,18 +135,66 @@ export function ProductDimensionEditDialog({
   conflict = false,
   onSave,
   onClose,
+  latest,
+  error,
+  confirmClose,
+  continueEditing,
+  discard,
+  loadLatest,
+  acceptLatest,
 }) {
   return (
     <Modal title={`编辑产品信息 · ${editing.MSKU}`} onClose={onClose}>
       <form className="modal-form product-info-edit-form" onSubmit={onSave}>
-        {conflict && (
+        {error && (
           <p className="form-error" role="alert">
-            数据已更新，输入已保留。请关闭编辑，核对最新资料后重新修改。
+            {error}
           </p>
         )}
-        <ProductIdentityFields editing={editing} setEditing={setEditing} />
-        <ProductAttributeFields editing={editing} setEditing={setEditing} />
-        <ProductChangeNote changeNote={changeNote} setChangeNote={setChangeNote} />
+        {confirmClose && (
+          <section role="alert" className="product-edit-confirm">
+            <p>有未保存的修改，是否放弃？</p>
+            <Button onClick={continueEditing}>继续编辑</Button>
+            <Button onClick={discard}>放弃修改</Button>
+          </section>
+        )}
+        {conflict && (
+          <Button disabled={saving} onClick={loadLatest}>
+            {saving ? "正在读取…" : "读取最新资料"}
+          </Button>
+        )}
+        {latest && (
+          <section className="product-edit-comparison" aria-label="最新资料核对">
+            <table>
+              <thead>
+                <tr>
+                  <th>字段</th>
+                  <th>最新资料</th>
+                  <th>我的输入</th>
+                </tr>
+              </thead>
+              <tbody>
+                {PRODUCT_EDIT_FIELDS.filter(
+                  (key) => editing[key] !== undefined || latest.row[key] !== undefined,
+                ).map((key) => (
+                  <tr key={key}>
+                    <th>{key}</th>
+                    <td>{String(latest.row[key] ?? "--")}</td>
+                    <td>{String(editing[key] ?? "--")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <Button disabled={saving} onClick={acceptLatest}>
+              已核对，保留我的修改
+            </Button>
+          </section>
+        )}
+        <fieldset disabled={saving} className="product-edit-fields">
+          <ProductIdentityFields editing={editing} setEditing={setEditing} />
+          <ProductAttributeFields editing={editing} setEditing={setEditing} />
+          <ProductChangeNote changeNote={changeNote} setChangeNote={setChangeNote} />
+        </fieldset>
         <ProductEditActions saving={saving} conflict={conflict} onClose={onClose} />
       </form>
     </Modal>

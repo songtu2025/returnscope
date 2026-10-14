@@ -99,7 +99,11 @@ function AuditLogEntry({ item }) {
                   </dd>
                 </div>
               </dl>
-              <AuditDiff before={item.before} after={item.after} />
+              <AuditDiff
+                before={item.before}
+                after={item.after}
+                partialAfter={item.action === "dimension_row_update"}
+              />
             </div>
           </td>
         </tr>

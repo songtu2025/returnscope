@@ -443,7 +443,7 @@ describe("商品页面和旧任务草稿的恢复", () => {
     expect(screen.queryByText("SYNTHETIC-1")).not.toBeInTheDocument();
   });
 
-  test("后台读取保留产品编辑输入和原修订，冲突后关闭编辑再应用最新资料", async () => {
+  test("后台读取保留产品编辑输入和原修订，冲突后核对最新资料再应用用户输入", async () => {
     const user = userEvent.setup();
     render(<ProductMasterWorkspace {...props} />);
     await user.click(
@@ -494,10 +494,18 @@ describe("商品页面和旧任务草稿的恢复", () => {
         within(dialog).getByRole("button", { name: "保存", exact: true }),
       ).toBeDisabled();
       await act(async () =>
-        fireEvent.click(within(dialog).getByRole("button", { name: "取消" })),
+        fireEvent.click(within(dialog).getByRole("button", { name: "读取最新资料" })),
       );
-      expect(screen.queryByRole("dialog")).toBeNull();
-      expect(screen.getByText("最新产品名称")).toBeVisible();
+      expect(within(dialog).getByText("最新产品名称")).toBeVisible();
+      await act(async () =>
+        fireEvent.click(
+          within(dialog).getByRole("button", { name: "已核对，保留我的修改" }),
+        ),
+      );
+      expect(name).toHaveValue("我的产品输入");
+      expect(
+        within(dialog).getByRole("button", { name: "保存", exact: true }),
+      ).toBeEnabled();
     } finally {
       vi.useRealTimers();
     }

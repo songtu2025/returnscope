@@ -77,6 +77,7 @@ function ProductAuditEntry({ entry }) {
         <p>店铺：{entry.after?.store || "--"} · 品类补充</p>
       ) : (
         <AuditDiff
+          partialAfter={entry.action === "dimension_row_update"}
           before={
             update ? { 产品记录数: entry.before?.row_count } : entry.before?.values
           }

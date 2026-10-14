@@ -137,13 +137,14 @@ test("发布完成仍保留真实系统异常提示", () => {
   ).toMatchObject({ needsAttention: true, issues: 1 });
 });
 
-test("归档分组与最终状态选择保持独立，搜索覆盖原有六字段", () => {
+test("归档分组与最终状态选择保持独立，搜索覆盖任务 ID 及原有字段", () => {
   expect(taskFilterGroup({ status: "running", archived_at: "2026-10-01" })).toBe(
     "archived",
   );
   expect(canArchiveTask({ status: "running" })).toBe(false);
   expect(canArchiveTask({ status: "running", archived_at: "2026-10-01" })).toBe(true);
   for (const field of [
+    "id",
     "title",
     "store",
     "listing",
@@ -154,6 +155,13 @@ test("归档分组与最终状态选择保持独立，搜索覆盖原有六字�
     expect(matchesQuery({ [field]: "SYNTHETIC" }, "synthetic")).toBe(true);
   expect(matchesQuery({}, "synthetic")).toBe(false);
   expect(matchesQuery({}, "")).toBe(true);
+  const sameName = [
+    { id: "task_alpha", title: "同名任务" },
+    { id: "task_beta", title: "同名任务" },
+  ];
+  expect(sameName.filter((task) => matchesQuery(task, "task_beta"))).toEqual([
+    sameName[1],
+  ]);
 });
 
 test("排序复制原数组，同值保持顺序，更新时间缺失时回退创建时间", () => {

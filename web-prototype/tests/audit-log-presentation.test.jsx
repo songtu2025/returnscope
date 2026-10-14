@@ -122,3 +122,52 @@ test("模型名称优先，原始标识可在详情核对，未知动作保持�
   expect(screen.getByText("model-synthetic")).toBeVisible();
   expect(screen.getByText("api_model", { selector: "code" })).toBeVisible();
 });
+
+test("系统审计按产品增量记录显示实际变更，历史原值不被修改", async () => {
+  const before = {
+    row_index: 0,
+    values: { MSKU: "合成SKU", Listing: "L1", 产品名称: "旧名称" },
+  };
+  const after = { row_index: 0, values: { 产品名称: "新名称" } };
+  render(
+    <AuditLogEntries
+      items={[
+        {
+          id: "partial",
+          entity_type: "dataset",
+          action: "dimension_row_update",
+          before,
+          after,
+        },
+      ]}
+    />,
+  );
+  await userEvent.click(screen.getByRole("button", { name: "查看详情" }));
+  expect(screen.getByText("字段变化 · 1 项")).toBeVisible();
+  expect(screen.getByText("旧名称")).toBeVisible();
+  expect(screen.getByText("新名称")).toBeVisible();
+  expect(screen.getAllByText("合成SKU")[0]).not.toBeVisible();
+  expect(after.values).toEqual({ 产品名称: "新名称" });
+  expect(before.values.MSKU).toBe("合成SKU");
+});
+
+test.each(["", null])("增量记录保留显式清空字段：%s", (empty) => {
+  render(
+    <AuditDiff
+      partialAfter
+      before={{ name: "旧名称", count: 0 }}
+      after={{ name: empty }}
+    />,
+  );
+  expect(screen.getByText("字段变化 · 1 项")).toBeVisible();
+  const table = screen.getAllByRole("table", { name: "字段差异" })[0];
+  expect(within(table).getByText("未提供")).toBeVisible();
+  expect(within(table).queryByText("0")).toBeNull();
+});
+
+test("完整快照缺失字段仍按删除展示，不套用增量规则", () => {
+  render(<AuditDiff before={{ name: "旧名称", count: 0 }} after={{ count: 0 }} />);
+  expect(screen.getByText("字段变化 · 1 项")).toBeVisible();
+  expect(screen.getByText("旧名称")).toBeVisible();
+  expect(screen.getByText("未提供")).toBeVisible();
+});

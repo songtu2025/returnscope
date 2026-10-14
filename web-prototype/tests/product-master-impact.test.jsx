@@ -1,4 +1,4 @@
-import { cleanup, screen } from "@testing-library/react";
+import { cleanup, screen, within } from "@testing-library/react";
 import { renderWithServerState as render } from "./renderWithServerState";
 import { afterEach, expect, test } from "vitest";
 import { ProductMasterImpact } from "../src/features/data-management/ProductMasterImpact";
@@ -44,4 +44,25 @@ test("产品修改记录保留原值新值、操作者、原因和批量补充�
   expect(screen.getByText("12", { selector: "td" })).toBeVisible();
   expect(screen.getByText("合成管理员 · 批量补充 2 个商品")).toBeVisible();
   expect(screen.getByText("店铺：合成店铺 · 品类补充")).toBeVisible();
+});
+
+test("产品行增量新值不把未变化字段误显示为清空", () => {
+  render(
+    <ProductMasterImpact
+      dimensionAudit={[
+        {
+          id: "partial-product",
+          action: "dimension_row_update",
+          before: { values: { MSKU: "合成产品", Listing: "L1", 产品名称: "旧名称" } },
+          after: { values: { 产品名称: "新名称" } },
+        },
+      ]}
+    />,
+  );
+  expect(screen.getByText("字段变化 · 1 项")).toBeVisible();
+  const table = screen.getAllByRole("table", { name: "字段差异" })[0];
+  expect(within(table).getByText("旧名称")).toBeVisible();
+  expect(within(table).getByText("新名称")).toBeVisible();
+  expect(within(table).queryByText("MSKU")).toBeNull();
+  expect(within(table).queryByText("未提供")).toBeNull();
 });
