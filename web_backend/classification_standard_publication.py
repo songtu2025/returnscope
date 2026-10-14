@@ -43,8 +43,7 @@ class ClassificationStandardPublicationMixin:
         actor_id: str,
         validation_run_id: str | None = None,
     ) -> dict[str, Any]:
-        if not reason.strip():
-            raise ValueError("变更说明不能为空")
+        reason = reason.strip() or "启用分类标准修改"
         draft = self.get_draft(draft_id)
         validation = self._validate_candidate(
             str(draft["standard_id"]),

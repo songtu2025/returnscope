@@ -140,7 +140,7 @@ describe("商品页面和旧任务草稿的恢复", () => {
         container.querySelector('input[type="file"]'),
         new File(["synthetic"], "synthetic.xlsx"),
       );
-      await user.type(screen.getByLabelText("修改说明"), "合成修改说明");
+      await user.type(screen.getByLabelText("备注（可选）"), "合成修改说明");
       await user.click(screen.getByRole("button", { name: "保存更新" }));
       if (refreshFails) {
         expect(await screen.findByRole("alert")).toHaveTextContent("资料刷新失败");
@@ -151,7 +151,7 @@ describe("商品页面和旧任务草稿的恢复", () => {
       );
       expect(apiMock.updateDatasetContent).toHaveBeenCalledTimes(1);
       expect(screen.getByText("synthetic.xlsx")).toBeVisible();
-      expect(screen.getByLabelText("修改说明")).toHaveValue("合成修改说明");
+      expect(screen.getByLabelText("备注（可选）")).toHaveValue("合成修改说明");
       await user.click(screen.getByRole("button", { name: "保存更新" }));
       await waitFor(() => expect(onDone).toHaveBeenCalledOnce());
       expect(
@@ -456,7 +456,7 @@ describe("商品页面和旧任务草稿的恢复", () => {
     fireEvent.change(within(dialog).getByLabelText("店铺 / 站点"), {
       target: { value: "DEMO:US" },
     });
-    fireEvent.change(within(dialog).getByLabelText("修改原因"), {
+    fireEvent.change(within(dialog).getByLabelText("备注（可选）"), {
       target: { value: "核对产品名称" },
     });
     name.focus();
@@ -478,7 +478,7 @@ describe("商品页面和旧任务草稿的恢复", () => {
       expect(apiMock.datasetRows.mock.calls.length).toBeGreaterThan(1);
       expect(name).toHaveValue("我的产品输入");
       expect(name).toHaveFocus();
-      expect(within(dialog).getByLabelText("修改原因")).toHaveValue("核对产品名称");
+      expect(within(dialog).getByLabelText("备注（可选）")).toHaveValue("核对产品名称");
       expect(screen.queryByText("最新产品名称")).toBeNull();
       apiMock.updateDatasetRow.mockRejectedValue(
         Object.assign(new Error("合成并发冲突"), { status: 409 }),
@@ -2182,7 +2182,7 @@ describe("关键用户流程", () => {
       }),
     );
 
-    await user.type(screen.getByLabelText("重新规划原因"), "商品维度已修复");
+    expect(screen.queryByLabelText("重新规划原因")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "提交新执行计划" }));
 
     await waitFor(() =>
@@ -2191,7 +2191,6 @@ describe("关键用户流程", () => {
         expected_revision: 2,
         plan_hash: "a".repeat(64),
         unresolved_policy: "block_all",
-        reason: "商品维度已修复",
       }),
     );
   });
@@ -2825,7 +2824,7 @@ describe("关键用户流程", () => {
     ).not.toBeInTheDocument();
   });
 
-  test("已暂停 Listing 可以继续并提交取消原因", async () => {
+  test("已暂停 Listing 可以继续，无需填写原因即可取消", async () => {
     const user = userEvent.setup();
     const pausedSegment = {
       segment_key: "SEEKWAY:US/SK001/footwear",
@@ -2899,14 +2898,10 @@ describe("关键用户流程", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "查看详情" }));
-    await user.click(screen.getByRole("button", { name: "取消" }));
-    expect(screen.getByRole("button", { name: "取消" })).toHaveClass(
-      "secondary-button",
-      "compact-button",
-      "listing-cancel-button",
-    );
+    await user.click(screen.getByLabelText("更多 Listing 操作：SK001"));
+    await user.click(screen.getByRole("button", { name: "取消此 Listing" }));
     expect(screen.getByRole("dialog", { name: "取消 SK001" })).toBeVisible();
-    await user.type(screen.getByLabelText("取消原因"), "不再需要该 Listing");
+    expect(screen.queryByLabelText("取消原因")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "确认取消 Listing" }));
     await waitFor(() =>
       expect(apiMock.controlTaskSegment).toHaveBeenNthCalledWith(
@@ -2914,7 +2909,7 @@ describe("关键用户流程", () => {
         task.id,
         pausedSegment.segment_key,
         "cancel",
-        { expected_revision: 4, note: "不再需要该 Listing" },
+        { expected_revision: 4, note: "" },
       ),
     );
   });
@@ -3003,7 +2998,7 @@ describe("关键用户流程", () => {
     expect(document.querySelector(".task-stage-rail")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "查看分类结果" })).toBeEnabled();
     await user.click(screen.getByRole("button", { name: "重新排队未完成" }));
-    await user.type(screen.getByLabelText("重新排队原因"), "补齐剩余 Listing");
+    expect(screen.queryByLabelText("重新排队原因")).not.toBeInTheDocument();
     const resumeButtons = screen.getAllByRole("button", {
       name: "重新排队未完成片段",
     });
@@ -3012,7 +3007,6 @@ describe("关键用户流程", () => {
     await waitFor(() =>
       expect(apiMock.resumeTask).toHaveBeenCalledWith("task-cancelled-partial", {
         expected_revision: 7,
-        note: "补齐剩余 Listing",
       }),
     );
   });
@@ -3165,13 +3159,13 @@ describe("关键用户流程", () => {
     expect((await screen.findAllByText("SK001")).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: "重试" })).toHaveLength(1);
     await user.click(screen.getByRole("button", { name: "重试" }));
-    await user.type(screen.getByLabelText("重试原因"), "确认上游恢复后重试");
+    expect(screen.queryByLabelText("重试原因")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "确认重试片段" }));
 
     await waitFor(() =>
       expect(apiMock.retryTaskSegment).toHaveBeenCalledWith("task-1", "footwear", {
         expected_revision: 4,
-        reason: "确认上游恢复后重试",
+        reason: "重试 Listing",
       }),
     );
     expect(
@@ -3286,7 +3280,7 @@ describe("关键用户流程", () => {
 
     await user.click(await screen.findByRole("button", { name: "导入产品信息" }));
     await user.type(screen.getByLabelText("产品信息名称"), "SEEKWAY 产品信息");
-    await user.type(screen.getByLabelText("修改说明"), "首次导入产品信息");
+    await user.type(screen.getByLabelText("备注（可选）"), "首次导入产品信息");
     const fileInput = container.querySelector('input[type="file"]');
     await user.upload(fileInput, new File(["products"], "products.xlsx"));
     await user.click(screen.getByRole("button", { name: "导入" }));

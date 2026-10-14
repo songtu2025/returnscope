@@ -64,12 +64,7 @@ class ClassificationStandardDraftsMixin(StandardDraftRecordsMixin):
         actor_id: str,
     ) -> dict[str, Any]:
         draft = self.get_draft(draft_id)
-        if (
-            content.get("import_sources")
-            and content["import_sources"] != draft["snapshot"].get("import_sources", [])
-            and not change_reason.strip()
-        ):
-            raise ValueError("导入标签框架必须填写修改原因")
+        change_reason = change_reason.strip() or "修改分类标准"
         candidate = self._snapshot_from_content(draft["snapshot"], content)
         validation = self._validate_candidate(
             str(draft["standard_id"]),
@@ -187,8 +182,7 @@ class ClassificationStandardDraftsMixin(StandardDraftRecordsMixin):
         reason: str,
         actor_id: str,
     ) -> dict[str, Any]:
-        if not reason.strip():
-            raise ValueError("变更说明不能为空")
+        reason = reason.strip() or "放弃暂存修改"
         draft = self.get_draft(draft_id)
         with self.database.transaction(immediate=True) as connection:
             if connection.execute(

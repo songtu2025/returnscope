@@ -186,8 +186,7 @@ class ClassificationStandardValidationLifecycleMixin:
                 "质量门槛未通过：" + "；".join(validation["quality_gate"]["blocking"])
             )
         approval_note = note.strip()
-        if not approval_note:
-            raise ValueError("请填写验证结论")
+        approval_note = approval_note or "确认样本验证通过"
         approved_at = utc_now()
         with self.database.transaction(immediate=True) as connection:
             connection.execute(

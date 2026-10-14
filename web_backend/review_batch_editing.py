@@ -42,8 +42,7 @@ class ReviewBatchEditingMixin(_ReviewBatchCreation, _ReviewRecordEditing):
         coverage_status: str | None = None,
     ) -> dict[str, Any]:
         clean_note = note.strip()
-        if not clean_note:
-            raise ValueError("请填写修改原因")
+        clean_note = clean_note or "更新复核记录"
         resolved_action = action or ("modify" if label_code else "confirm")
         now = utc_now()
         try:
@@ -129,8 +128,7 @@ class ReviewBatchEditingMixin(_ReviewBatchCreation, _ReviewRecordEditing):
         review_assessment: dict[str, str | None] | None = None,
     ) -> dict[str, Any]:
         clean_note = note.strip()
-        if not clean_note:
-            raise ValueError("请填写处理原因")
+        clean_note = clean_note or "批量更新复核记录"
         if not records:
             raise ValueError("请选择至少一条复核记录")
         review_ids = [str(record["id"]) for record in records]

@@ -52,7 +52,7 @@ test.each([false, true])("行编辑保持可选字段与修改原因原值：%s"
     optional,
   );
   await user.type(
-    within(dialog).getByRole("textbox", { name: "修改原因" }),
+    within(dialog).getByRole("textbox", { name: "备注（可选）" }),
     " 合成原因 ",
   );
   await user.click(within(dialog).getByRole("button", { name: "保存" }));
@@ -88,7 +88,7 @@ test.each([true, false])("仅Error对象的409刷新版本：%s", async (errorOb
     vi.fn(() => calls.push("版本更新")),
   );
   await user.type(
-    within(dialog).getByRole("textbox", { name: "修改原因" }),
+    within(dialog).getByRole("textbox", { name: "备注（可选）" }),
     "合成原因",
   );
   await user.click(within(dialog).getByRole("button", { name: "保存" }));
@@ -98,7 +98,7 @@ test.each([true, false])("仅Error对象的409刷新版本：%s", async (errorOb
     expect(onChanged).toHaveBeenCalledWith({ ...dataset, current_version: 4 });
     expect(calls).toEqual(["读取版本", "版本更新", "通知"]);
     expect(screen.getByRole("dialog")).toBeVisible();
-    expect(within(dialog).getByRole("textbox", { name: "修改原因" })).toHaveValue(
+    expect(within(dialog).getByRole("textbox", { name: "备注（可选）" })).toHaveValue(
       "合成原因",
     );
     expect(within(dialog).getByRole("button", { name: "保存" })).toBeDisabled();
@@ -110,7 +110,7 @@ test.each([true, false])("仅Error对象的409刷新版本：%s", async (errorOb
     expect(api.dataset).not.toHaveBeenCalled();
     expect(onChanged).not.toHaveBeenCalled();
     expect(notify).toHaveBeenCalledWith("请求失败", "error");
-    expect(within(dialog).getByRole("textbox", { name: "修改原因" })).toHaveValue(
+    expect(within(dialog).getByRole("textbox", { name: "备注（可选）" })).toHaveValue(
       "合成原因",
     );
     expect(within(dialog).getByRole("button", { name: "保存" })).toBeEnabled();
@@ -126,7 +126,7 @@ test("保存中阻止重复提交并保留原取消行为", async () => {
   );
   const { user, dialog, onChanged } = await openEditor();
   await user.type(
-    within(dialog).getByRole("textbox", { name: "修改原因" }),
+    within(dialog).getByRole("textbox", { name: "备注（可选）" }),
     "合成原因",
   );
   await user.click(within(dialog).getByRole("button", { name: "保存" }));

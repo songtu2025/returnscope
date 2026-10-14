@@ -19,8 +19,7 @@ class _ReviewBatchCreation(_ReviewEditingContext):
         reason: str,
     ) -> dict[str, Any]:
         clean_reason = reason.strip()
-        if not clean_reason:
-            raise ValueError("请填写创建复核批次原因")
+        clean_reason = clean_reason or "创建复核批次"
         now = utc_now()
         batch_id = new_id("review_batch")
         with self.database.transaction(immediate=True) as connection:

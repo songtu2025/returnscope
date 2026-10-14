@@ -1097,16 +1097,16 @@ def test_draft_api_supports_edit_validation_and_conflict(tmp_path: Path) -> None
 
         publish_response = client.post(
             f"/api/classification-standard-drafts/{draft['id']}/publish",
-            json={"expected_revision": updated["revision"], "reason": "   "},
+            json={"expected_revision": updated["revision"], "reason": "x" * 501},
         )
-        assert publish_response.status_code == 400
-        assert publish_response.json()["detail"] == "变更说明不能为空"
+        assert publish_response.status_code == 422
+        assert publish_response.json()["detail"][0]["loc"] == ["body", "reason"]
 
         direct_publish_response = client.post(
             f"/api/classification-standard-drafts/{draft['id']}/publish",
             json={
                 "expected_revision": updated["revision"],
-                "reason": "用户确认直接发布",
+                "reason": "",
                 "validation_run_id": None,
             },
         )

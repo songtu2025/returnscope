@@ -177,7 +177,7 @@ def test_auxiliary_routes_do_not_hide_unexpected_failures(
             ["body", "expected_revision"],
         ),
         ("resolve", {"json": {"expected_revision": 5, "note": ""}}, ["body", "note"]),
-        ("create_batch", {"json": {"reason": ""}}, ["body", "reason"]),
+        ("create_batch", {"json": {"reason": "x" * 501}}, ["body", "reason"]),
         ("list_batches", {"params": {"page": "0"}}, ["query", "page"]),
         ("list_batches", {"params": {"page_size": "201"}}, ["query", "page_size"]),
         ("batch_records", {"params": {"page": "0"}}, ["query", "page"]),
@@ -237,7 +237,7 @@ def test_auxiliary_routes_do_not_hide_unexpected_failures(
         ),
         (
             "publish_batch",
-            {"json": {"expected_revision": 5, "reason": ""}},
+            {"json": {"expected_revision": 5, "reason": "x" * 501}},
             ["body", "reason"],
         ),
     ],

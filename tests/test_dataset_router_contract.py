@@ -232,7 +232,7 @@ def test_invalid_dataset_queries_do_not_call_services(
         ("import_staged_returns", {"inspection_id": ""}),
         ("update_product_row", {"row_index": -1}),
         ("update_product_row", {"expected_version": 0}),
-        ("update_product_row", {"change_note": ""}),
+        ("update_product_row", {"change_note": "x" * 501}),
         ("complete_product_categories", {"items": []}),
         ("complete_product_categories", {"expected_version": 0}),
     ],

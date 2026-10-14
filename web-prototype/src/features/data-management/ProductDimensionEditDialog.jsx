@@ -93,14 +93,13 @@ function ProductAttributeFields({ editing, setEditing }) {
 function ProductChangeNote({ changeNote, setChangeNote }) {
   return (
     <label className="product-info-change-note">
-      修改原因
+      备注（可选）
       <textarea
         value={changeNote}
         onChange={(event) => setChangeNote(event.target.value)}
         rows={2}
         maxLength={500}
-        placeholder="必填：说明为什么修改这条产品信息"
-        required
+        placeholder="可补充本次修改的说明"
       />
     </label>
   );

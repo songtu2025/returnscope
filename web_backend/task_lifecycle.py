@@ -23,8 +23,7 @@ class TaskLifecycleMixin(TaskHistoryMixin, TaskExecutionControlMixin):
         expected_revision: int,
     ) -> dict[str, Any]:
         clean_note = note.strip()
-        if not clean_note:
-            raise ValueError("请填写取消原因")
+        clean_note = clean_note or "取消任务"
         with self.database.transaction(immediate=True) as connection:
             row = connection.execute(
                 "SELECT status, stage, revision FROM tasks WHERE id = ?",

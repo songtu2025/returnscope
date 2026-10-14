@@ -46,7 +46,7 @@ def test_retry_preserves_scope_history_and_transaction_budget(
             assert new["progress_current"] == 0
     statements = transaction_statements(queries)
     assert [sql.split()[0] for sql in statements] == (
-        ["SELECT"] * (3 if status == "not_started" else 2)
+        ["SELECT"] * (4 if status == "not_started" else 3)
         + ["UPDATE", "UPDATE", "INSERT", "INSERT"]
     )
     data = service.events(task["id"])[-1]["data"]
@@ -108,7 +108,7 @@ def test_retry_rejection_priority_has_no_writes(tmp_path, case):
             )
     before = service.get(task["id"])
     messages = {
-        "blank": "请填写片段重试原因",
+        "blank": "任务不存在",
         "missing": "任务不存在",
         "stale": "任务已被他人修改",
         "segment": "任务片段不存在",

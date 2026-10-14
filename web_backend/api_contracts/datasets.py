@@ -27,7 +27,7 @@ class DimensionRowUpdateRequest(BaseModel):
     row_index: int = Field(ge=0)
     expected_version: int = Field(ge=1)
     changes: dict[str, str]
-    change_note: str = Field(min_length=1, max_length=500)
+    change_note: str = Field(default="", max_length=500)
 
 
 class CategoryCompletionItem(BaseModel):
@@ -43,4 +43,4 @@ class CategoryCompletionRequest(BaseModel):
     expected_version: int = Field(ge=1)
     store: str = Field(default="", max_length=100)
     items: list[CategoryCompletionItem] = Field(min_length=1, max_length=500)
-    change_note: str = Field(min_length=1, max_length=500)
+    change_note: str = Field(default="", max_length=500)

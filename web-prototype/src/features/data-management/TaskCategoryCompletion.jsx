@@ -99,7 +99,7 @@ export function TaskCategoryCompletion({ dataset, focus, notify, onReturnToTask 
     setBulkCategory("");
   };
   const save = async () => {
-    if (!completedItems.length || !changeNote.trim()) return;
+    if (!completedItems.length) return;
     setSaving(true);
     try {
       const result = await api.completeProductCategories(dataset.id, {
@@ -204,7 +204,7 @@ export function TaskCategoryCompletion({ dataset, focus, notify, onReturnToTask 
       />
       <footer className="completion-footer">
         <label>
-          修改原因
+          备注（可选）
           <input
             value={changeNote}
             onChange={(event) => setChangeNote(event.target.value)}
@@ -213,7 +213,7 @@ export function TaskCategoryCompletion({ dataset, focus, notify, onReturnToTask 
         <button
           type="button"
           className="primary-button"
-          disabled={!completedItems.length || !changeNote.trim() || saving}
+          disabled={!completedItems.length || saving}
           onClick={save}
         >
           {saving ? "正在保存…" : `保存 ${completedItems.length} 个商品并重新预检`}

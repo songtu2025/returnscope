@@ -10,7 +10,7 @@ class ReviewResolveRequest(BaseModel):
 
 
 class ReviewBatchCreateRequest(BaseModel):
-    reason: str = Field(min_length=1, max_length=500)
+    reason: str = Field(default="", max_length=500)
 
 
 class SemanticItemReviewRequest(BaseModel):
@@ -44,7 +44,7 @@ class ReviewBatchRecordUpdateRequest(BaseModel):
     expected_revision: int = Field(ge=1)
     action: Literal["confirm", "modify", "exclude"] = "confirm"
     label_code: str | None = Field(default=None, max_length=100)
-    reason: str = Field(min_length=1, max_length=500)
+    reason: str = Field(default="", max_length=500)
     label_correctness: (
         Literal["correct", "partial", "incorrect", "not_applicable"] | None
     ) = None
@@ -72,7 +72,7 @@ class ReviewBatchRecordBulkUpdateRequest(BaseModel):
     records: list[ReviewBatchRecordRevision] = Field(min_length=1, max_length=100)
     action: Literal["confirm", "modify", "exclude"]
     label_code: str | None = Field(default=None, max_length=100)
-    reason: str = Field(min_length=1, max_length=500)
+    reason: str = Field(default="", max_length=500)
     label_correctness: (
         Literal["correct", "partial", "incorrect", "not_applicable"] | None
     ) = None
@@ -84,4 +84,4 @@ class ReviewBatchRecordBulkUpdateRequest(BaseModel):
 
 class ReviewBatchPublishRequest(BaseModel):
     expected_revision: int = Field(ge=1)
-    reason: str = Field(min_length=1, max_length=500)
+    reason: str = Field(default="", max_length=500)

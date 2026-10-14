@@ -35,8 +35,7 @@ class ReviewPublicationMixin(
         reason: str,
     ) -> dict[str, Any]:
         clean_reason = reason.strip()
-        if not clean_reason:
-            raise ValueError("请填写发布原因")
+        clean_reason = clean_reason or "发布复核结果"
         request = _BatchPublishRequest(
             batch_id=batch_id,
             expected_revision=expected_revision,

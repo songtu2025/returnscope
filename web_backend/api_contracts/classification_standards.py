@@ -71,7 +71,7 @@ class ClassificationStandardImportDocument(BaseModel):
 class ClassificationStandardDraftImportRequest(BaseModel):
     expected_revision: int = Field(ge=1)
     document: ClassificationStandardImportDocument
-    change_reason: str = Field(min_length=1, max_length=500)
+    change_reason: str = Field(default="", max_length=500)
 
 
 class ClassificationStandardDraftRevisionRequest(BaseModel):
@@ -80,7 +80,7 @@ class ClassificationStandardDraftRevisionRequest(BaseModel):
 
 class ClassificationStandardDraftActionRequest(BaseModel):
     expected_revision: int = Field(ge=1)
-    reason: str = Field(min_length=1, max_length=500)
+    reason: str = Field(default="", max_length=500)
 
 
 class ClassificationStandardDraftPublishRequest(
@@ -100,4 +100,4 @@ class ClassificationStandardSampleValidationRequest(BaseModel):
 
 class ClassificationStandardValidationApprovalRequest(BaseModel):
     expected_revision: int = Field(ge=1)
-    note: str = Field(min_length=1, max_length=500)
+    note: str = Field(default="", max_length=500)

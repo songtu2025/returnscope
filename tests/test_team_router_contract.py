@@ -24,7 +24,7 @@ def test_team_routes_require_admin(harness, method, path, payload) -> None:
     "target,payload,status,detail",
     [
         ("admin", STATUS_BODY, 400, "不能停用自己的账号"),
-        ("member", {**STATUS_BODY, "note": "  "}, 400, "请填写账号状态修改原因"),
+        ("member", {**STATUS_BODY, "note": "x" * 501}, 422, ""),
         ("missing", STATUS_BODY, 404, "团队账号不存在"),
         (
             "member",
@@ -42,7 +42,10 @@ def test_status_rejections_leave_user_session_and_audit_unchanged(
     member_session = harness.sessions.create("member").token
     response = harness.client.patch(f"/api/users/{target}", json=payload)
     assert response.status_code == status
-    assert response.json() == {"detail": detail}
+    if status == 422:
+        assert response.json()["detail"][0]["loc"] == ["body", "note"]
+    else:
+        assert response.json() == {"detail": detail}
     assert harness.sessions.resolve(member_session)["id"] == "member"
     with harness.database.connect() as connection:
         assert (

@@ -28,25 +28,25 @@ const forms = [
     Component: TaskCancelDialog,
     field: "取消原因",
     button: "确认取消任务",
-    payload: { note: "合成原因", expected_revision: 7 },
+    payload: { expected_revision: 7 },
   },
   {
     Component: TaskResumeDialog,
     field: "继续执行原因",
     button: "继续未完成片段",
-    payload: { note: "合成原因", expected_revision: 7 },
+    payload: { expected_revision: 7 },
   },
   {
     Component: SegmentCancelDialog,
     field: "取消原因",
     button: "确认取消 Listing",
-    payload: "合成原因",
+    payload: "",
   },
   {
     Component: SegmentRetryDialog,
     field: "重试原因",
     button: "确认重试片段",
-    payload: { reason: "合成原因", expected_revision: 7 },
+    payload: { reason: "重试 Listing", expected_revision: 7 },
   },
 ];
 
@@ -69,7 +69,7 @@ test.each(forms)(
         onClose={onClose}
       />,
     );
-    await user.type(screen.getByLabelText(field), "合成原因");
+    expect(screen.queryByLabelText(field)).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: button }));
     expect(onSave).toHaveBeenCalledExactlyOnceWith(payload);
     const savingButton = screen.getByRole("button", { name: /正在(提交|保存)…/ });
@@ -80,12 +80,12 @@ test.each(forms)(
     await waitFor(() =>
       expect(screen.getByRole("button", { name: button })).toBeEnabled(),
     );
-    expect(screen.getByLabelText(field)).toHaveValue("合成原因");
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
   },
 );
 
-test("已取消任务恢复时显示重新排队原因，仍使用当前任务修订号", async () => {
+test("已取消任务重新排队无需原因，仍使用当前任务修订号", async () => {
   const onSave = vi.fn().mockResolvedValue(false);
   render(
     <TaskResumeDialog
@@ -96,16 +96,15 @@ test("已取消任务恢复时显示重新排队原因，仍使用当前任务�
   );
   expect(screen.getByRole("dialog", { name: "重新排队“合成任务”" })).toBeVisible();
   const button = screen.getByRole("button", { name: "重新排队未完成片段" });
-  expect(button).toBeDisabled();
-  await userEvent.type(screen.getByLabelText("重新排队原因"), "合成恢复原因");
+  expect(button).toBeEnabled();
+  expect(screen.queryByLabelText("重新排队原因")).not.toBeInTheDocument();
   await userEvent.click(button);
   expect(onSave).toHaveBeenCalledExactlyOnceWith({
-    note: "合成恢复原因",
     expected_revision: 7,
   });
 });
 
-test("片段重试错误留在表单，空白原因不能提交，取消只关闭弹窗", async () => {
+test("片段重试保留错误反馈，不要求原因，取消不发起重试", async () => {
   const onSave = vi.fn();
   const onClose = vi.fn();
   render(
@@ -118,8 +117,8 @@ test("片段重试错误留在表单，空白原因不能提交，取消只关�
     />,
   );
   expect(screen.getByRole("alert")).toHaveTextContent("合成版本冲突");
-  await userEvent.type(screen.getByLabelText("重试原因"), "   ");
-  expect(screen.getByRole("button", { name: "确认重试片段" })).toBeDisabled();
+  expect(screen.queryByLabelText("重试原因")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "确认重试片段" })).toBeEnabled();
   await userEvent.click(screen.getByRole("button", { name: "取消" }));
   expect(onClose).toHaveBeenCalledOnce();
   expect(onSave).not.toHaveBeenCalled();

@@ -204,8 +204,7 @@ class TaskReplanMixin(TaskReplanSegmentsMixin):
         reason: str,
     ) -> tuple[str, dict[str, Any] | None, Any, str]:
         clean_reason = reason.strip()
-        if not clean_reason:
-            raise ValueError("请填写重新规划原因")
+        clean_reason = clean_reason or "重新预检并规划"
         validate_unresolved_policy(unresolved_policy)
         source = self.get(task_id)
         if source is None:

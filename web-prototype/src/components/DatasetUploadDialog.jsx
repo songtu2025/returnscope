@@ -123,13 +123,12 @@ export function DatasetUploadDialog({ dialog, onClose, onDone, onConflict }) {
         </label>
 
         <label>
-          修改说明
+          备注（可选）
           <input
             value={note}
             onChange={(event) => setNote(event.target.value)}
             maxLength={500}
-            placeholder="必填：例如补充产品名称和品类"
-            required
+            placeholder="可补充本次上传的说明"
           />
         </label>
         {error && (

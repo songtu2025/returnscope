@@ -109,8 +109,7 @@ def _register_user_status_route(
         if user_id == actor["id"] and not payload.active:
             raise HTTPException(status_code=400, detail="不能停用自己的账号")
         clean_note = payload.note.strip()
-        if not clean_note:
-            raise HTTPException(status_code=400, detail="请填写账号状态修改原因")
+        clean_note = clean_note or ("恢复账号" if payload.active else "停用账号")
         with database.transaction(immediate=True) as connection:
             target = connection.execute(
                 """

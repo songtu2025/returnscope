@@ -53,8 +53,8 @@ afterEach(() => cleanup());
 
 async function fillOne(user) {
   await user.selectOptions(screen.getByLabelText("A 品类"), "0");
-  await user.clear(screen.getByLabelText("修改原因"));
-  await user.type(screen.getByLabelText("修改原因"), "  合成修改原因  ");
+  await user.clear(screen.getByLabelText("备注（可选）"));
+  await user.type(screen.getByLabelText("备注（可选）"), "  合成修改原因  ");
 }
 
 test("筛选批量补品类仅修改可编辑已选商品，并保留隐藏选择", async () => {
@@ -123,6 +123,6 @@ test.each([
   await waitFor(() => expect(notify).toHaveBeenCalledWith(message, "error"));
   expect(onReturnToTask).not.toHaveBeenCalled();
   expect(screen.getByLabelText("A 品类")).toHaveValue("0");
-  expect(screen.getByLabelText("修改原因")).toHaveValue("  合成修改原因  ");
+  expect(screen.getByLabelText("备注（可选）")).toHaveValue("  合成修改原因  ");
   expect(screen.getByRole("button", { name: "保存 1 个商品并重新预检" })).toBeEnabled();
 });

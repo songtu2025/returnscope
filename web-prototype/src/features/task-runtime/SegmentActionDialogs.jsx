@@ -11,16 +11,17 @@ import { Modal } from "../../components/SharedUi";
  */
 
 export function SegmentRetryDialog({ task, segment, error, onClose, onSave }) {
-  const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   const isFailureRetry = segment.system_retry_available === true;
-  const retryReason = isFailureRetry ? "重试分析失败项" : reason;
   /** @param {import("react").FormEvent<HTMLFormElement>} event */
   const submit = async (event) => {
     event.preventDefault();
     setSaving(true);
     try {
-      await onSave({ expected_revision: task.revision, reason: retryReason });
+      await onSave({
+        expected_revision: task.revision,
+        reason: isFailureRetry ? "重试分析失败项" : "重试 Listing",
+      });
     } finally {
       setSaving(false);
     }
@@ -45,25 +46,11 @@ export function SegmentRetryDialog({ task, segment, error, onClose, onSave }) {
             {error}
           </p>
         )}
-        {!isFailureRetry && (
-          <label>
-            重试原因
-            <textarea
-              value={reason}
-              onChange={(event) => setReason(event.target.value)}
-              maxLength={500}
-              rows={3}
-              placeholder="必填，说明异常原因与重试依据"
-              required
-              autoFocus
-            />
-          </label>
-        )}
         <div className="modal-actions">
           <button type="button" className="secondary-button" onClick={onClose}>
             取消
           </button>
-          <button className="primary-button" disabled={saving || !retryReason.trim()}>
+          <button className="primary-button" disabled={saving}>
             {saving ? "正在提交…" : isFailureRetry ? "开始重试" : "确认重试片段"}
           </button>
         </div>
@@ -76,14 +63,13 @@ export function SegmentRetryDialog({ task, segment, error, onClose, onSave }) {
  * @param {{segment: TaskSegment, onClose: () => void, onSave: (note: string) => Promise<unknown>}} props
  */
 export function SegmentCancelDialog({ segment, onClose, onSave }) {
-  const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   /** @param {import("react").FormEvent<HTMLFormElement>} event */
   const submit = async (event) => {
     event.preventDefault();
     setSaving(true);
     try {
-      await onSave(note);
+      await onSave("");
     } finally {
       setSaving(false);
     }
@@ -98,23 +84,11 @@ export function SegmentCancelDialog({ segment, onClose, onSave }) {
           已完成的 Listing 不受影响；当前 Listing
           的处理中间数据只用于检查点恢复，不会进入正式结果。
         </p>
-        <label>
-          取消原因
-          <textarea
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            maxLength={500}
-            rows={3}
-            placeholder="必填，说明为什么取消这个 Listing"
-            required
-            autoFocus
-          />
-        </label>
         <div className="modal-actions">
           <button type="button" className="secondary-button" onClick={onClose}>
             返回
           </button>
-          <button className="danger-button" disabled={saving || !note.trim()}>
+          <button className="danger-button" disabled={saving}>
             {saving ? "正在提交…" : "确认取消 Listing"}
           </button>
         </div>

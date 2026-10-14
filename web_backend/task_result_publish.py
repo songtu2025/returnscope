@@ -99,8 +99,7 @@ class TaskResultPublishMixin:
         reason: str,
     ) -> tuple[str, Callable[[str, str], dict[str, Any]]]:
         clean_reason = reason.strip()
-        if not clean_reason:
-            raise ValueError("请填写结果发布重试原因")
+        clean_reason = clean_reason or "重新生成分类结果"
         publisher = self.result_publisher
         if publisher is None:
             raise TaskResultPublishConflict("结果发布重试服务未配置")

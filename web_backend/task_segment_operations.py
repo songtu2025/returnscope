@@ -162,8 +162,8 @@ class TaskSegmentOperationsMixin(
         if action not in _SEGMENT_ACTION_MESSAGES:
             raise ValueError("不支持的 Listing 操作")
         clean_note = note.strip()
-        if action == "cancel" and not clean_note:
-            raise ValueError("请填写取消原因")
+        if action == "cancel":
+            clean_note = clean_note or "取消 Listing"
         return clean_note
 
     def _segment_action_target(

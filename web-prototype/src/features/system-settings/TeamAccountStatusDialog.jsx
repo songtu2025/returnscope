@@ -29,14 +29,13 @@ export function TeamAccountStatusDialog({
             : "恢复后，该成员可以继续使用原邮箱和密码登录。"}
         </p>
         <label className="account-status-note">
-          操作原因
+          备注（可选）
           <textarea
             value={statusNote}
             onChange={(event) => setStatusNote(event.target.value)}
             maxLength={500}
             rows={3}
-            placeholder="必填，说明停用或恢复原因"
-            required
+            placeholder="可补充账号状态修改的说明"
             autoFocus
           />
         </label>
@@ -77,7 +76,7 @@ export function TeamAccountStatusDialog({
               "primary-button",
               statusTarget.active && "danger-button",
             )}
-            disabled={statusUpdating || !statusNote.trim()}
+            disabled={statusUpdating}
             onClick={updateStatus}
           >
             {statusUpdating ? "正在处理…" : "确认"}

@@ -76,14 +76,15 @@ def test_resume_requeues_only_unfinished_segments(tmp_path, monkeypatch, status)
             assert new["status"] == "queued" and new["progress_current"] == 9
         else:
             assert new == old
-    assert [sql.split()[0] for sql in transaction_statements(queries)] == [
-        "SELECT",
-        "SELECT",
-        "UPDATE",
-        "UPDATE",
-        "INSERT",
-        "INSERT",
-    ]
+    # 当前恢复逻辑逐条核对未删除结果，读取预算随候选片段线性增长。
+    candidate_count = sum(
+        segment["status"]
+        in {"paused", "cancelled", "not_started", "queued", "retry_pending"}
+        for segment in before["segments"]
+    )
+    assert [sql.split()[0] for sql in transaction_statements(queries)] == (
+        ["SELECT"] * (3 + candidate_count) + ["UPDATE", "UPDATE", "INSERT", "INSERT"]
+    )
     event = service.events(task["id"])[-1]
     assert event["event_type"] == "resumed"
     assert event["data"]["note"] == "合成继续"

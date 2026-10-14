@@ -37,12 +37,12 @@ class TaskReplanRequest(BaseModel):
     expected_revision: int = Field(ge=1)
     plan_hash: str = Field(min_length=64, max_length=64)
     unresolved_policy: Literal["block_all", "run_ready"]
-    reason: str = Field(min_length=1, max_length=500)
+    reason: str = Field(default="", max_length=500)
 
 
 class TaskSegmentRetryRequest(BaseModel):
     expected_revision: int = Field(ge=1)
-    reason: str = Field(min_length=1, max_length=500)
+    reason: str = Field(default="", max_length=500)
 
 
 class TaskSegmentActionRequest(BaseModel):
@@ -68,7 +68,7 @@ class TaskRenameRequest(BaseModel):
 
 class TaskActionRequest(BaseModel):
     expected_revision: int = Field(ge=1)
-    note: str = Field(min_length=1, max_length=500)
+    note: str = Field(default="", max_length=500)
 
 
 class TaskArchiveRequest(BaseModel):

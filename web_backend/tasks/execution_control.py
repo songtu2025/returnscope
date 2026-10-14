@@ -94,8 +94,7 @@ class TaskExecutionControlMixin:
         note: str,
     ) -> dict[str, Any]:
         clean_note = note.strip()
-        if not clean_note:
-            raise ValueError("请填写继续执行原因")
+        clean_note = clean_note or "继续未完成片段"
         now = utc_now()
         with self.database.transaction(immediate=True) as connection:
             task = connection.execute(

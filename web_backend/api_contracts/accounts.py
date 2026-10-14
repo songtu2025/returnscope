@@ -41,7 +41,7 @@ class UserCreateRequest(BaseModel):
 class UserStatusRequest(BaseModel):
     active: bool
     expected_active: bool
-    note: str = Field(min_length=1, max_length=500)
+    note: str = Field(default="", max_length=500)
 
 
 class PasswordChangeRequest(BaseModel):

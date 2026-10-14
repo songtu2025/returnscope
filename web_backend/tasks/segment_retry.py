@@ -45,8 +45,7 @@ class TaskSegmentRetryMixin:
         reason: str,
     ) -> dict[str, Any]:
         clean_reason = reason.strip()
-        if not clean_reason:
-            raise ValueError("请填写片段重试原因")
+        clean_reason = clean_reason or "重试 Listing"
         now = utc_now()
         with self.database.transaction(immediate=True) as connection:
             segment, system_failure_count = self._segment_retry_target(

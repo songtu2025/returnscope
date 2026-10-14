@@ -199,8 +199,8 @@ def _register_dataset_upload_routes(
         dataset_id: str,
         user: User,
         file: Annotated[UploadFile, File()],
-        change_note: Annotated[str, Form(min_length=1, max_length=500)],
         expected_version: Annotated[int, Form(ge=1)],
+        change_note: Annotated[str, Form(max_length=500)] = "",
     ) -> dict[str, Any]:
         dataset = dataset_service.get(dataset_id)
         if dataset and dataset["kind"] != "products":
