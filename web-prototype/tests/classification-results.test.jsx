@@ -977,6 +977,8 @@ test("刷新恢复产品名称下钻且切换产品不会混入其他订单", as
   await user.tab();
   expect(screen.getByRole("button", { name: "人工修正" })).toHaveFocus();
   await user.tab();
+  expect(screen.getByRole("button", { name: "查看修正历史" })).toHaveFocus();
+  await user.tab();
   expect(semanticSummary).toHaveFocus();
   closeButton.focus();
   await user.tab({ shift: true });
@@ -1532,6 +1534,7 @@ test.each(["", "review_required"])(
     );
     const correctedRecord = {
       ...record,
+      result_version_id: "classification-version-2",
       classification: {
         ...record.classification,
         human_review_assessment: {

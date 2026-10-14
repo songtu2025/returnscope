@@ -10,8 +10,13 @@ export function useClassificationResultDetailData({
   notify,
   protectedOperation = false,
 }) {
-  const overview = useClassificationResultOverview(route.version);
-  const records = useClassificationResultRecords({ route, notify });
+  // 连续复核切换到保存后的结果时，保留详情，避免抽屉被临时空数据卸载。
+  const overview = useClassificationResultOverview(route.version, protectedOperation);
+  const records = useClassificationResultRecords({
+    route,
+    notify,
+    keepPreviousData: protectedOperation,
+  });
   const snapshot = useMemo(
     () => ({
       result: overview.result,

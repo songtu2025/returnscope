@@ -101,7 +101,11 @@ export function ResultRecordRow({ group, analysisContext, onOpen }) {
       ]
     : problems;
   return (
-    <article className="result-record-row" role="row">
+    <article
+      className="result-record-row"
+      role="row"
+      data-feedback-source={record.source_record_id}
+    >
       <div>
         <b>{record.order_id || "未提供"}</b>
         <span>

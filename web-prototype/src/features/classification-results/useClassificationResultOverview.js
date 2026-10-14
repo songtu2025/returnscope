@@ -8,8 +8,8 @@ import { errorMessage } from "../../shared/api/requestErrors";
 import { serverStateKeys } from "../../shared/serverState";
 import { runResultRequest } from "../../shared/api/requestLifecycle";
 
-/** @param {string} version */
-export function useClassificationResultOverview(version) {
+/** @param {string} version @param {boolean} [keepPreviousData] */
+export function useClassificationResultOverview(version, keepPreviousData = false) {
   const controllerRef = useRef(/** @type {AbortController | null} */ (null));
   const loadOverview = useCallback(
     () =>
@@ -25,11 +25,10 @@ export function useClassificationResultOverview(version) {
     error,
     isLoading,
     mutate,
-  } = useSWR(
-    serverStateKeys.classificationResultOverview(version),
-    loadOverview,
-    MANAGED_REFRESH_OPTIONS,
-  );
+  } = useSWR(serverStateKeys.classificationResultOverview(version), loadOverview, {
+    ...MANAGED_REFRESH_OPTIONS,
+    keepPreviousData,
+  });
   useDataRefresh(() => mutate(), { loading: isLoading, identity: version });
   // 在新查询启动前清理旧读取，避免被动清理误取消新请求。
   useLayoutEffect(() => () => controllerRef.current?.abort(), [version]);

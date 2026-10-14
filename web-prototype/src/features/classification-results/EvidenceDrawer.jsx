@@ -1,5 +1,5 @@
 import { X } from "@phosphor-icons/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SemanticHistory } from "./SemanticHistory";
 
 import { useDialogFocus } from "../../hooks/useDialogFocus";
@@ -8,6 +8,7 @@ import { formatTime } from "../../lib/presentation";
 import { resultStateLabel } from "./resultActionPolicy";
 import { SemanticResultPanel } from "./SemanticResultPanel";
 import { ManualSemanticEditor } from "./ManualSemanticEditor";
+import { EvidenceRecordNavigation } from "./EvidenceRecordNavigation";
 
 /**
  * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultGroupResponse} ClassificationResultGroup
@@ -18,7 +19,8 @@ import { ManualSemanticEditor } from "./ManualSemanticEditor";
  *   group: ClassificationResultGroup,
  *   analysisContext: string,
  *   onClose: () => void,
- *   onSaved?: (versionId: string) => void,
+ *   onSaved?: (versionId: string, advance?: boolean) => void | Promise<void>,
+ *   navigation?: ReturnType<typeof import("./useEvidenceNavigation").useEvidenceNavigation>,
  *   disabled?: boolean,
  *   returnFocusRef: { current: HTMLElement | null }
  * }} props
@@ -30,19 +32,23 @@ export function EvidenceDrawer({
   onSaved,
   disabled,
   returnFocusRef,
+  navigation,
 }) {
   const [editing, setEditing] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [confirmClose, setConfirmClose] = useState(false);
-  const requestClose = () => {
-    if (saving) return;
+  const [pendingAction, setPendingAction] = useState(
+    /** @returns {(() => void) | null} */ () => null,
+  );
+  const requestAction = (/** @type {() => void} */ action) => {
+    if (saving || navigation?.busy) return;
     if (dirty) {
-      setConfirmClose(true);
+      setPendingAction(() => action);
       return;
     }
-    onClose();
+    action();
   };
+  const requestClose = () => requestAction(onClose);
   const record = group.record;
   const isUserFeedback = analysisContext === "user_feedback";
   const classification = record.classification ?? {};
@@ -51,6 +57,10 @@ export function EvidenceDrawer({
     onClose: requestClose,
     returnFocusRef,
   });
+  useEffect(() => {
+    const closeButton = dialogRef.current?.querySelector("[data-dialog-initial-focus]");
+    if (closeButton instanceof HTMLElement) closeButton.focus();
+  }, [record.source_record_id, dialogRef]);
 
   return (
     <div
@@ -81,6 +91,18 @@ export function EvidenceDrawer({
             <X size={19} />
           </button>
         </header>
+        {navigation && (
+          <EvidenceRecordNavigation
+            navigation={navigation}
+            saving={saving}
+            onMove={(direction) =>
+              requestAction(() => {
+                setEditing(false);
+                void navigation.move(direction);
+              })
+            }
+          />
+        )}
         <section className="drawer-section drawer-correction-heading">
           <div>
             <b>
@@ -97,7 +119,7 @@ export function EvidenceDrawer({
               </small>
             )}
           </div>
-          {onSaved && !disabled && !editing && (
+          {onSaved && !disabled && !editing && !navigation?.locked && (
             <button
               className="primary-button compact-button"
               onClick={() => setEditing(true)}
@@ -106,7 +128,7 @@ export function EvidenceDrawer({
             </button>
           )}
         </section>
-        {onSaved && !disabled && !editing && (
+        {onSaved && !disabled && !editing && !navigation?.locked && (
           <SemanticHistory
             versionId={record.result_version_id}
             recordId={record.id}
@@ -114,13 +136,21 @@ export function EvidenceDrawer({
             onBusyChange={setSaving}
           />
         )}
-        {confirmClose && (
+        {pendingAction && (
           <section className="drawer-section" role="alert">
             <p>有未保存的修改，是否放弃？</p>
-            <button className="secondary-button" onClick={() => setConfirmClose(false)}>
+            <button className="secondary-button" onClick={() => setPendingAction(null)}>
               继续编辑
             </button>
-            <button className="secondary-button" onClick={onClose}>
+            <button
+              className="secondary-button"
+              onClick={() => {
+                setDirty(false);
+                setEditing(false);
+                setPendingAction(null);
+                pendingAction();
+              }}
+            >
               放弃修改
             </button>
           </section>
@@ -138,16 +168,15 @@ export function EvidenceDrawer({
         </section>
 
         <section className="drawer-section">
-          {onSaved && editing ? (
+          {onSaved && editing && !navigation?.locked ? (
             <ManualSemanticEditor
+              key={`${record.source_record_id}:${record.result_version_id}`}
               group={group}
               onSaved={onSaved}
               onDirtyChange={setDirty}
               onSavingChange={setSaving}
-              onCancel={() => {
-                if (dirty) setConfirmClose(true);
-                else setEditing(false);
-              }}
+              canAdvance={Boolean(navigation)}
+              onCancel={() => requestAction(() => setEditing(false))}
             />
           ) : (
             <SemanticResultPanel record={record} />

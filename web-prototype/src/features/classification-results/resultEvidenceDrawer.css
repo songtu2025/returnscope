@@ -178,3 +178,22 @@
 .manual-semantic-editor [role="alert"] {
   color: var(--red, #b42318);
 }
+.evidence-record-navigation {
+  position: sticky;
+  top: 78px;
+  z-index: 1;
+  background: var(--panel);
+}
+.evidence-record-navigation > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--desktop-field-gap);
+}
+.evidence-record-navigation [role="status"] {
+  font-size: var(--font-assist);
+  color: var(--muted);
+}
+.manual-semantic-editor footer {
+  flex-wrap: wrap;
+}

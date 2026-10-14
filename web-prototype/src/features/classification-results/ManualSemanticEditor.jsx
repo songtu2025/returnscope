@@ -1,29 +1,28 @@
 import { useEffect, useRef, useState } from "react";
 import Button from "antd/es/button";
-import Input from "antd/es/input";
-import Select from "antd/es/select";
 import { api } from "../../api";
 import { AntdProvider } from "../../components/AntdProvider";
-import { labelText } from "../../lib/taxonomyPresentation";
 import {
   errorMessage,
   errorStatus,
 } from "../analysis-dashboards/dashboardRequestErrors";
 import { SemanticResultPanel } from "./SemanticResultPanel";
+import { ManualSemanticFields } from "./ManualSemanticFields";
+import { semanticItemErrors } from "./manualSemanticValidation";
 import { selectedSentiment } from "../review-batches/semanticReviewDrafts";
-import { SentimentField } from "../review-batches/SemanticSentimentField";
 
 /** @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultGroupResponse} Group */
 /** @typedef {import("../review-batches/semanticLedgerContracts").ReviewLabel} ReviewLabel */
 /** @typedef {{item_id: string, evidence_text: string, opinion: string, label_code: string, sentiment: string}} Draft */
 
-/** @param {{group: Group, onSaved: (versionId: string) => void, onCancel: () => void, onDirtyChange: (dirty: boolean) => void, onSavingChange: (saving: boolean) => void}} props */
+/** @param {{group: Group, onSaved: (versionId: string, advance?: boolean) => void | Promise<void>, canAdvance?: boolean, onCancel: () => void, onDirtyChange: (dirty: boolean) => void, onSavingChange: (saving: boolean) => void}} props */
 export function ManualSemanticEditor({
   group,
   onSaved,
   onCancel,
   onDirtyChange,
   onSavingChange,
+  canAdvance = false,
 }) {
   const [currentGroup, setCurrentGroup] = useState(group);
   const record = currentGroup.record;
@@ -42,6 +41,7 @@ export function ManualSemanticEditor({
   const [labels, setLabels] = useState(/** @type {ReviewLabel[]} */ ([]));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [saveNext, setSaveNext] = useState(false);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
   const editorRef = useRef(/** @type {HTMLDivElement | null} */ (null));
@@ -79,14 +79,12 @@ export function ManualSemanticEditor({
     );
     onDirtyChange(true);
   };
-  const valid = items.every(
-    (item) =>
-      item.opinion.trim() &&
-      item.evidence_text.trim() &&
-      labels.some((label) => label.code === item.label_code) &&
-      selectedSentiment(item.label_code, labels, item.sentiment),
+  const valid = items.every((item) =>
+    Object.values(semanticItemErrors(item, labels)).every((message) => !message),
   );
-  const save = async () => {
+  const save = async (advance = false) => {
+    if (saving || loading || recovering || conflict || !valid) return;
+    setSaveNext(advance);
     setSaving(true);
     onSavingChange(true);
     setError("");
@@ -104,7 +102,8 @@ export function ManualSemanticEditor({
         },
       );
       onDirtyChange(false);
-      onSaved(result.version_id);
+      if (advance) await onSaved(result.version_id, true);
+      else await onSaved(result.version_id);
     } catch (reason) {
       setError(errorMessage(reason));
       setConflict(errorStatus(reason) === 409);
@@ -116,6 +115,7 @@ export function ManualSemanticEditor({
 
   const loadLatest = async () => {
     setRecovering(true);
+    onSavingChange(true);
     try {
       const versions = await api.classificationResultVersions(record.result_version_id);
       const latest = versions[0];
@@ -137,6 +137,7 @@ export function ManualSemanticEditor({
       setError(errorMessage(reason));
     } finally {
       setRecovering(false);
+      onSavingChange(false);
     }
   };
 
@@ -168,65 +169,17 @@ export function ManualSemanticEditor({
           </section>
         )}
         <fieldset disabled={saving || loading || recovering}>
-          {items.map((item, index) => (
-            <div className="manual-semantic-item" key={item.item_id}>
-              <div className="manual-semantic-item-heading">
-                <b>观点 {index + 1}</b>
-                <Button
-                  disabled={saving}
-                  onClick={() => {
-                    setItems(items.filter((_, position) => position !== index));
-                    onDirtyChange(true);
-                  }}
-                >
-                  删除观点 {index + 1}
-                </Button>
-              </div>
-              <label>
-                原文证据
-                <Input
-                  aria-label={`观点 ${index + 1} 原文证据`}
-                  value={item.evidence_text}
-                  onChange={(event) =>
-                    edit(index, { evidence_text: event.target.value })
-                  }
-                />
-              </label>
-              <label>
-                用户观点
-                <Input
-                  aria-label={`观点 ${index + 1} 用户观点`}
-                  value={item.opinion}
-                  onChange={(event) => edit(index, { opinion: event.target.value })}
-                />
-              </label>
-              <label>
-                归类标签
-                <Select
-                  aria-label={`观点 ${index + 1} 归类标签`}
-                  disabled={saving}
-                  showSearch
-                  optionFilterProp="label"
-                  value={item.label_code || undefined}
-                  placeholder="请选择分类标签"
-                  onChange={(label_code) => edit(index, { label_code, sentiment: "" })}
-                  options={labels.map((label) => ({
-                    value: label.code,
-                    label: labelText(label),
-                  }))}
-                  getPopupContainer={(trigger) => trigger.parentElement}
-                />
-              </label>
-              <SentimentField
-                code={item.label_code}
-                labels={labels}
-                value={item.sentiment}
-                disabled={saving || loading}
-                name={`观点 ${index + 1} 评价方向`}
-                onChange={(sentiment) => edit(index, { sentiment })}
-              />
-            </div>
-          ))}
+          <ManualSemanticFields
+            items={items}
+            labels={labels}
+            disabled={saving || loading || recovering}
+            loading={loading}
+            onEdit={edit}
+            onRemove={(index) => {
+              setItems(items.filter((_, position) => position !== index));
+              onDirtyChange(true);
+            }}
+          />
           {!items.length && <p>当前没有语义观点；保存将标记为人工已处理。</p>}
           <Button
             disabled={saving || loading || items.length >= 100}
@@ -248,18 +201,32 @@ export function ManualSemanticEditor({
           </Button>
         </fieldset>
         <footer>
-          <Button disabled={saving} onClick={onCancel}>
+          <Button disabled={saving || recovering} onClick={onCancel}>
             取消
           </Button>
           <Button
             aria-label="保存修正"
-            type="primary"
-            loading={saving}
-            disabled={loading || recovering || conflict || !labels.length || !valid}
-            onClick={save}
+            type={canAdvance ? "default" : "primary"}
+            loading={saving && !saveNext}
+            disabled={
+              saving || loading || recovering || conflict || !labels.length || !valid
+            }
+            onClick={() => save()}
           >
             保存修正
           </Button>
+          {canAdvance && (
+            <Button
+              type="primary"
+              loading={saving && saveNext}
+              disabled={
+                saving || loading || recovering || conflict || !labels.length || !valid
+              }
+              onClick={() => save(true)}
+            >
+              保存并查看下一条
+            </Button>
+          )}
         </footer>
       </div>
     </AntdProvider>

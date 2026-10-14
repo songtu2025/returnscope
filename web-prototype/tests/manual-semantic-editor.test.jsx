@@ -175,3 +175,77 @@ test("并发冲突加载同一反馈组的最新结果，保留草稿并由用�
     ),
   );
 });
+
+test("保存并查看下一条只在保存成功后调用，保存中阻止切换和关闭", async () => {
+  let finish;
+  mocks.correctClassificationResult.mockReturnValue(
+    new Promise((resolve) => {
+      finish = resolve;
+    }),
+  );
+  const move = vi.fn();
+  const close = vi.fn();
+  const saved = vi.fn();
+  render(
+    <EvidenceDrawer
+      group={group}
+      analysisContext="user_feedback"
+      onClose={close}
+      onSaved={saved}
+      returnFocusRef={{ current: null }}
+      navigation={{
+        position: 0,
+        total: 2,
+        busy: false,
+        locked: false,
+        error: "",
+        move,
+        retry: vi.fn(),
+      }}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "人工修正" }));
+  const next = await screen.findByRole("button", { name: "保存并查看下一条" });
+  await waitFor(() => expect(next).toBeEnabled());
+  fireEvent.click(next);
+  expect(screen.getByRole("button", { name: "下一条", exact: true })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "关闭证据抽屉" }));
+  expect(close).not.toHaveBeenCalled();
+  expect(move).not.toHaveBeenCalled();
+  await finish({ version_id: "version-2" });
+  await waitFor(() => expect(saved).toHaveBeenCalledWith("version-2", true));
+});
+
+test("未保存时切换反馈先确认，继续编辑保留输入", async () => {
+  const move = vi.fn();
+  render(
+    <EvidenceDrawer
+      group={group}
+      analysisContext="user_feedback"
+      onClose={vi.fn()}
+      onSaved={vi.fn()}
+      returnFocusRef={{ current: null }}
+      navigation={{
+        position: 0,
+        total: 2,
+        busy: false,
+        locked: false,
+        error: "",
+        move,
+        retry: vi.fn(),
+      }}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "人工修正" }));
+  await screen.findByLabelText("观点 1 用户观点");
+  fireEvent.change(screen.getByLabelText("观点 1 用户观点"), {
+    target: { value: "未保存观点" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "下一条", exact: true }));
+  expect(move).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "继续编辑" }));
+  expect(screen.getByLabelText("观点 1 用户观点")).toHaveValue("未保存观点");
+  fireEvent.click(screen.getByRole("button", { name: "下一条", exact: true }));
+  fireEvent.click(screen.getByRole("button", { name: "放弃修改" }));
+  expect(move).toHaveBeenCalledWith(1);
+});

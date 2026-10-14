@@ -26,6 +26,7 @@ export function ClassificationResultDetailView(props) {
     result,
     selectedGroup,
     closeEvidence,
+    evidenceNavigation,
     evidenceTriggerRef,
     reviewRecords,
     policy,
@@ -106,22 +107,12 @@ export function ClassificationResultDetailView(props) {
           {selectedGroup && (
             <EvidenceDrawer
               group={selectedGroup}
+              navigation={evidenceNavigation}
               disabled={Boolean(result.deleted_at)}
               analysisContext={result.analysis_context}
               onClose={closeEvidence}
-              onSaved={(version) => {
-                closeEvidence();
-                const filtered =
-                  route.recordQualityStatus === "review_required" ||
-                  route.recordQualityStatus === "unusable" ||
-                  route.recordQualityStatus === "excluded" ||
-                  route.systemRerunRequired === "true";
-                notify(
-                  filtered
-                    ? "人工修正已保存，无需重跑；记录可能已移出当前筛选。"
-                    : "人工修正已保存，无需重跑",
-                );
-                updateRoute({ version });
+              onSaved={async (version, advance) => {
+                await evidenceNavigation.saved(version, advance);
                 void refreshServerState(mutate, [
                   "classification-results",
                   "analysis-dashboards",

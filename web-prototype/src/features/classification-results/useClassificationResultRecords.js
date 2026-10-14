@@ -11,8 +11,12 @@ import { runResultRequest } from "../../shared/api/requestLifecycle";
 const EMPTY_DRILLDOWNS = { problem: [], product_name: [], product_sku: [] };
 
 /** @typedef {import("./classificationResultRoute").ClassificationResultRoute} ClassificationResultRoute */
-/** @param {{ route: ClassificationResultRoute, notify: (message: string, type: "error") => void }} options */
-export function useClassificationResultRecords({ route, notify }) {
+/** @param {{ route: ClassificationResultRoute, notify: (message: string, type: "error") => void, keepPreviousData?: boolean }} options */
+export function useClassificationResultRecords({
+  route,
+  notify,
+  keepPreviousData = false,
+}) {
   const recordsControllerRef = useRef(/** @type {AbortController | null} */ (null));
   const detailQuery = resultRecordQuery(route);
 
@@ -36,7 +40,7 @@ export function useClassificationResultRecords({ route, notify }) {
       ? null
       : serverStateKeys.classificationResultRecords(route.version, detailQuery),
     loadRecords,
-    MANAGED_REFRESH_OPTIONS,
+    { ...MANAGED_REFRESH_OPTIONS, keepPreviousData },
   );
   useDataRefresh(() => mutate(), {
     enabled: route.tab !== "history",

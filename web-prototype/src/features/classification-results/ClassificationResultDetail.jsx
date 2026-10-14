@@ -1,5 +1,6 @@
 import { ClassificationResultDetailView } from "./ClassificationResultDetailView";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useEvidenceNavigation } from "./useEvidenceNavigation";
 import { ArrowLeft } from "@phosphor-icons/react";
 import { PageLoadingState } from "../../components/SharedUi";
 import { createResultDashboard } from "./resultSelectionActions";
@@ -18,7 +19,6 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
   const [orderInput, setOrderInput] = useState(route.orderId);
   const [refreshAttempt, setRefreshAttempt] = useState(0);
   const evidenceTriggerRef = useRef(/** @type {HTMLButtonElement | null} */ (null));
-  const closeEvidence = useCallback(() => setSelectedGroup(null), []);
 
   const createDashboardFromResult = () => {
     if (!result) return;
@@ -44,7 +44,6 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
       route.recordQualityStatus,
       route.commentStatus,
       route.systemRerunRequired,
-      route.version,
     ],
   );
 
@@ -64,6 +63,25 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
     notify,
     protectedOperation: Boolean(selectedGroup),
   });
+  const evidenceNavigation = useEvidenceNavigation({
+    route,
+    records,
+    group: selectedGroup,
+    setGroup: setSelectedGroup,
+    updateRoute,
+    notify,
+  });
+  const closeEvidence = () => {
+    const row = [...document.querySelectorAll(".result-record-row")].find(
+      (element) =>
+        element.getAttribute("data-feedback-source") ===
+        selectedGroup?.record.source_record_id,
+    );
+    const trigger =
+      row?.querySelector("button") ?? document.querySelector(".result-back-button");
+    if (trigger instanceof HTMLButtonElement) evidenceTriggerRef.current = trigger;
+    evidenceNavigation.close();
+  };
 
   useEffect(() => {
     if (!records || recordsLoading || recordsError) return;
@@ -122,7 +140,7 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
    */
   const openEvidence = (group) => (trigger) => {
     evidenceTriggerRef.current = trigger;
-    setSelectedGroup(group);
+    evidenceNavigation.open(group);
   };
 
   return (
@@ -141,6 +159,7 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
       orderInput={orderInput}
       setOrderInput={setOrderInput}
       selectedGroup={selectedGroup}
+      evidenceNavigation={evidenceNavigation}
       closeEvidence={closeEvidence}
       openEvidence={openEvidence}
       evidenceTriggerRef={evidenceTriggerRef}
