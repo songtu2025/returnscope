@@ -105,7 +105,7 @@ ROUTE_CASES = (
         method="POST",
         request={"json": VERSION_BODY},
         args=("dashboard-1",),
-        kwargs={**VERSION_BODY, "filters": {}, "actor_id": "42"},
+        kwargs={**VERSION_BODY, "filters": {}, "name": None, "actor_id": "42"},
         status=201,
     ),
     RouteCase(

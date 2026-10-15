@@ -38,7 +38,10 @@ def _serve_application(http_lifecycle: SimpleNamespace) -> Iterator[str]:
     port = listener.getsockname()[1]
     app = http_lifecycle.open_client().app
     server = uvicorn.Server(
-        uvicorn.Config(app, log_level="critical", access_log=False, ws="none")
+        # 保留 pytest 日志配置，避免真实 HTTP 烟测污染后续诊断捕获。
+        uvicorn.Config(
+            app, log_config=None, log_level=None, access_log=False, ws="none"
+        )
     )
     thread = threading.Thread(
         target=server.run, kwargs={"sockets": [listener]}, daemon=True

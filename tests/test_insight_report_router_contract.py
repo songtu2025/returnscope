@@ -46,6 +46,7 @@ ROUTE_CASES = (
         path="/api/analysis-dashboards/dashboard-1/ai-insight-reports",
         request={"params": {"version_id": "version-1"}},
         args=("dashboard-1", "version-1"),
+        kwargs={"include_deleted": False},
     ),
     RouteCase(
         service_method="get",

@@ -28,6 +28,7 @@ WORKER_TYPES = (
     "TaskWorker",
     "InsightReportWorker",
     "ClassificationStandardValidationWorker",
+    "ResultExportWorker",
 )
 
 
@@ -93,8 +94,16 @@ def test_workers_follow_application_lifespan(runtime, start_worker: bool) -> Non
         mail_sender_override=runtime.sender,
     )
     assert runtime.lifecycle.mock_calls == []
-    starts = [call.start_0(), call.start_1(), call.start_2()] if start_worker else []
-    stops = [call.stop_0(), call.stop_1(), call.stop_2()] if start_worker else []
+    starts = (
+        [call.start_0(), call.start_1(), call.start_2(), call.start_3()]
+        if start_worker
+        else []
+    )
+    stops = (
+        [call.stop_0(), call.stop_1(), call.stop_2(), call.stop_3()]
+        if start_worker
+        else []
+    )
     with TestClient(app):
         assert runtime.lifecycle.mock_calls == starts
     assert runtime.lifecycle.mock_calls == [
@@ -161,6 +170,7 @@ def test_state_and_routes_reuse_the_same_runtime_instances(app, runtime) -> None
         "auth_service": authentication["auth_service"],
         "mail_sender": runtime.sender,
         "worker": runtime.workers["TaskWorker"].return_value,
+        "export_worker": runtime.workers["ResultExportWorker"].return_value,
         "insight_report_service": reports["service"],
         "insight_report_worker": runtime.workers["InsightReportWorker"].return_value,
         "standard_validation_service": standards["validation_service"],
@@ -173,6 +183,7 @@ def test_state_and_routes_reuse_the_same_runtime_instances(app, runtime) -> None
     assert account["worker"] is app.state.worker
     assert account["insight_report_worker"] is app.state.insight_report_worker
     assert account["standard_validation_worker"] is app.state.standard_validation_worker
+    assert account["export_worker"] is app.state.export_worker
     runtime.workers["InsightReportWorker"].assert_called_once_with(reports["service"])
     runtime.workers["ClassificationStandardValidationWorker"].assert_called_once_with(
         standards["validation_service"]

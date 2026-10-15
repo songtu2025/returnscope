@@ -79,7 +79,7 @@ def test_result_list_filters_are_forwarded_without_loss(
     }
     response = harness.client.get(BASE_PATH, params=filters)
     assert response.status_code == 200, response.text
-    harness.result_mock.list.assert_called_once_with(**filters)
+    harness.result_mock.list.assert_called_once_with(**filters, lifecycle=None)
     assert response.json() == harness.service.list(**filters)
 
 
