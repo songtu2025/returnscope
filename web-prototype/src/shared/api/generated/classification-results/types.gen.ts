@@ -1919,6 +1919,10 @@ export type DownloadResultApiClassificationResultsVersionIdDownloadGetData = {
 
 export type DownloadResultApiClassificationResultsVersionIdDownloadGetErrors = {
   /**
+   * Synchronous download retired; use background export.
+   */
+  410: unknown;
+  /**
    * Validation Error
    */
   422: HttpValidationError;
@@ -1926,13 +1930,6 @@ export type DownloadResultApiClassificationResultsVersionIdDownloadGetErrors = {
 
 export type DownloadResultApiClassificationResultsVersionIdDownloadGetError =
   DownloadResultApiClassificationResultsVersionIdDownloadGetErrors[keyof DownloadResultApiClassificationResultsVersionIdDownloadGetErrors];
-
-export type DownloadResultApiClassificationResultsVersionIdDownloadGetResponses = {
-  /**
-   * Successful Response
-   */
-  200: unknown;
-};
 
 export type GetDrilldownApiClassificationResultsVersionIdDrilldownGetData = {
   body?: never;

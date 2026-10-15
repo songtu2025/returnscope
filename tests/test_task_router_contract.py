@@ -43,9 +43,12 @@ def test_task_router_registration_and_openapi_contract(
     rename = contract["components"]["schemas"]["TaskRenameRequest"]
     assert "note" not in rename["required"]
     assert rename["properties"]["note"]["default"] == ""
+    assert (
+        "410" in contract["paths"]["/api/tasks/{task_id}/download"]["get"]["responses"]
+    )
     schema = json.dumps(contract, ensure_ascii=False, sort_keys=True)
     assert hashlib.sha256(schema.encode()).hexdigest() == (
-        "563eaa569cee3d7679dbd5b76dad4e552a1f3a230f25152495686ba05ecde4d7"
+        "f7d4496b3d893b36a0ac173e01d92fdfc769b7af29cd34262286c11c48632e9a"
     )
 
 
@@ -200,3 +203,17 @@ def test_rename_endpoint_accepts_name_without_reason(harness: SimpleNamespace) -
     assert harness.task.rename.call_args.kwargs["title"] == "同名任务"
     assert harness.task.rename.call_args.kwargs["note"] == ""
     assert harness.task.rename.call_args.kwargs["expected_revision"] == 3
+
+
+@pytest.mark.parametrize("name", ["download_result", "download_segment_result"])
+def test_current_download_requires_background_export_and_legacy_file_stays_available(
+    harness: SimpleNamespace, name: str
+) -> None:
+    legacy = _request(harness, name)
+    assert legacy.status_code == 200
+    assert legacy.content == b"synthetic-result"
+    assert "attachment" in legacy.headers["Content-Disposition"]
+    harness.task.get.return_value["segments"][0]["result_version_id"] = "result-current"
+    response = _request(harness, name)
+    assert response.status_code == 410
+    assert "后台生成" in response.json()["detail"]

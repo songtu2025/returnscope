@@ -27,8 +27,6 @@ from web_backend.routers.classification_result_record_routes import (
 from web_backend.routers.delivery_lifecycle_routes import register_delivery_actions
 from web_backend.routers.result_export_routes import create_result_export_router
 
-XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-
 
 def create_classification_result_router(
     result_service: ClassificationResultService,
@@ -49,7 +47,5 @@ def create_classification_result_router(
     register_result_metadata_routes(router, result_service, current_user, standards)
     register_result_record_routes(router, result_service, current_user)
     register_result_correction_routes(router, result_service, current_user)
-    register_result_download_routes(
-        router, result_service, current_user, XLSX_MEDIA_TYPE
-    )
+    register_result_download_routes(router, result_service, current_user)
     return router

@@ -18,7 +18,12 @@ from web_backend.routers.classification_results import (
 )
 
 ROUTES = [
-    ("", "list_results", "list", "page,page_size,q,store_site,listing,quality_status"),
+    (
+        "",
+        "list_results",
+        "list",
+        "page,page_size,q,store_site,listing,quality_status,lifecycle",
+    ),
     ("/{version_id}", "get_result", "get", "version_id"),
     ("/{version_id}/versions", "get_result_versions", "history", "version_id"),
     (
@@ -46,7 +51,7 @@ ROUTES = [
         "drilldown",
         "version_id,group_by,page,page_size,problem,product_name,product_sku,order_id",
     ),
-    ("/{version_id}/download", "download_result", "download", "version_id"),
+    ("/{version_id}/download", "download_result", "get", "version_id"),
 ]
 
 

@@ -236,21 +236,25 @@ def test_result_pool_api_keeps_pagination_summary_and_download_consistent(
     )
 
     download = client.get(f"/api/classification-results/{version_id}/download")
-    assert download.status_code == 200
-    exported = pd.read_excel(BytesIO(download.content), dtype=str).fillna("")
+    assert download.status_code == 410
+    assert "后台生成" in download.json()["detail"]
+    content, _ = ClassificationResultService(context.database).download(version_id)
+    exported = pd.read_excel(BytesIO(content), sheet_name="源明细", dtype=str).fillna(
+        ""
+    )
     assert len(exported) == 205
-    assert exported["source_record_id"].tolist() == [
+    assert exported["源记录编号"].tolist() == [
         item["source_record_id"] for item in items
     ]
     assert set(
         [
-            "order_id",
-            "store_site",
-            "listing",
-            "product_name",
-            "source_sku",
-            "matched_msku",
-            "product_sku",
-            "classification_json",
+            "订单号",
+            "店铺/站点",
+            "Listing",
+            "产品名称",
+            "来源SKU（MSKU）",
+            "匹配MSKU",
+            "产品SKU",
+            "反馈正文",
         ]
     ).issubset(exported.columns)

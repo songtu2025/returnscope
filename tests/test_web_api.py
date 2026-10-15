@@ -910,7 +910,7 @@ def test_real_web_task_flow(tmp_path: Path) -> None:
             assert category_segment["status"] == "completed"
             assert current["segments"][0]["status"] == "completed"
             assert current["segments"][0]["model_calls"] == 2
-            assert client.get(f"/api/tasks/{task_id}/download").status_code == 200
+            assert client.get(f"/api/tasks/{task_id}/download").status_code == 410
             analysis = client.get(f"/api/tasks/{task_id}/analysis")
             assert analysis.status_code == 200, analysis.text
             analysis_payload = analysis.json()

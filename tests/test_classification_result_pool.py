@@ -1130,9 +1130,10 @@ def test_result_api_paginates_filters_drills_down_and_downloads(
     assert summary.json()["top_problems"][0]["record_count"] == 3
 
     download = client.get(f"/api/classification-results/{version_id}/download")
-    assert download.status_code == 200
-    assert download.content.startswith(b"PK")
-    assert "PRODUCT-SKU-1" in pd.read_excel(BytesIO(download.content)).to_string()
+    assert download.status_code == 410
+    assert "后台生成" in download.json()["detail"]
+    content, _ = ClassificationResultService(context.database).download(version_id)
+    assert "PRODUCT-SKU-1" in pd.read_excel(BytesIO(content)).to_string()
 
 
 def test_result_records_filter_product_name_before_pagination(

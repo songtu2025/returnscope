@@ -17,7 +17,6 @@ from web_backend.classification_standard_service import (
     ClassificationStandardNotFound,
 )
 from web_backend.routers.classification_results import (
-    XLSX_MEDIA_TYPE,
     create_classification_result_router,
 )
 
@@ -40,7 +39,11 @@ def test_result_router_preserves_registration_and_response_settings(
         if route.path == BASE_PATH + "/{version_id}"
     )
     routes = [
-        route for route in routes if route.methods == {"GET"} and route is not search
+        route
+        for route in routes
+        if route.methods == {"GET"}
+        and route is not search
+        and not route.path.endswith("/corrections")
     ]
     actual = [
         (
@@ -63,7 +66,9 @@ def test_result_router_preserves_registration_and_response_settings(
         for suffix, name, _, parameters in ROUTES
     ]
     assert all(route.methods == {"GET"} for route in routes)
-    assert all((route.status_code or 200) == 200 for route in routes)
+    assert all((route.status_code or 200) == 200 for route in routes[:-1])
+    assert routes[-1].status_code == 410
+    assert routes[-1].deprecated
     assert all(
         route.dependant.dependencies[0].call is harness.current_user for route in routes
     )
@@ -72,7 +77,9 @@ def test_result_router_preserves_registration_and_response_settings(
         route.response_model is not None and route.response_model_exclude_unset
         for route in routes[:-1]
     )
-    assert routes[-1].responses == {200: {"content": {XLSX_MEDIA_TYPE: {}}}}
+    assert (
+        "200" not in harness.app.openapi()["paths"][routes[-1].path]["get"]["responses"]
+    )
 
 
 @pytest.mark.parametrize(("suffix", "name", "method", "parameters"), ROUTES)
@@ -158,22 +165,14 @@ def test_response_preserves_extra_fields_null_and_unset_distinction(
     assert response.json() == payload
 
 
-def test_download_keeps_ordinary_access_bytes_and_headers(
+def test_download_retires_after_result_lookup_without_generating_bytes(
     harness: SimpleNamespace,
 ) -> None:
-    harness.result_mock.download.return_value = (
-        b"synthetic-export",
-        "analysis-v1.xlsx",
-    )
     response = harness.client.get(_path(harness, "/{version_id}/download"))
-    assert response.status_code == 200
-    assert response.content == b"synthetic-export"
-    assert response.headers["content-type"] == XLSX_MEDIA_TYPE
-    assert (
-        response.headers["content-disposition"]
-        == 'attachment; filename="analysis-v1.xlsx"'
-    )
-    harness.result_mock.download.assert_called_once_with(harness.version_id)
+    assert response.status_code == 410
+    assert "后台生成" in response.json()["detail"]
+    harness.result_mock.get.assert_called_once_with(harness.version_id)
+    harness.result_mock.download.assert_not_called()
 
 
 @pytest.mark.parametrize("mode", ["omitted", "none", "injected"])

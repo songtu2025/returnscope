@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from test_classification_result_pool import _publish, _seed_result_context
 
@@ -13,7 +13,6 @@ from web_backend.classification_result_service import ClassificationResultServic
 from web_backend.classification_standard_service import ClassificationStandardService
 from web_backend.routers.accounts import SESSION_COOKIE
 from web_backend.routers.classification_results import (
-    XLSX_MEDIA_TYPE,
     create_classification_result_router,
 )
 
@@ -66,6 +65,16 @@ def test_response_models_preserve_classification_result_json(tmp_path: Path) -> 
         )
     )
     client = TestClient(app)
+    download_path = f"/api/classification-results/{version_id}/download"
+    assert client.get(download_path).status_code == 410
+    assert client.get("/api/classification-results/missing/download").status_code == 404
+
+    def anonymous() -> None:
+        raise HTTPException(status_code=401, detail="请先登录")
+
+    app.dependency_overrides[current_user] = anonymous
+    assert client.get(download_path).status_code == 401
+    app.dependency_overrides.clear()
     cases = (
         ("/api/classification-results", result_service.list()),
         (
@@ -151,10 +160,16 @@ def test_schema_only_openapi_export_is_complete_and_deterministic(
     assert set(schema["paths"]) == expected_paths
 
     operation_ids = []
-    for path_item in schema["paths"].values():
+    retired_download = "/api/classification-results/{version_id}/download"
+    for path, path_item in schema["paths"].items():
         operation = next(iter(path_item.values()))
         operation_ids.append(operation["operationId"])
-        assert operation["responses"]["200"]["content"]
+        if path == retired_download:
+            assert operation["deprecated"] is True
+            assert "410" in operation["responses"]
+            assert "200" not in operation["responses"]
+        else:
+            assert operation["responses"]["200"]["content"]
     assert len(operation_ids) == len(set(operation_ids))
 
     for path_item in schema["paths"].values():
@@ -176,9 +191,3 @@ def test_schema_only_openapi_export_is_complete_and_deterministic(
             "schema"
         ]
         assert response_schema
-
-    download_content = schema["paths"][
-        "/api/classification-results/{version_id}/download"
-    ]["get"]["responses"]["200"]["content"]
-    assert XLSX_MEDIA_TYPE in download_content
-    assert "application/json" not in download_content

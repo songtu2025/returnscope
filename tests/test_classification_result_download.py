@@ -171,10 +171,10 @@ def test_download_keeps_three_reads_without_member_queries(context, monkeypatch)
     )
 
 
-def test_task_downloads_use_current_manual_result_instead_of_checkpoint(tmp_path):
+def test_task_sync_downloads_retire_without_losing_manual_export(tmp_path):
     context, version = _publish_review_required(tmp_path)
     service = ClassificationResultService(context.database)
-    correct_group(
+    corrected = correct_group(
         service, version["version_id"], _record(context, version), _items(), "user-2"
     )
     tasks = TaskService(context.database)
@@ -189,18 +189,20 @@ def test_task_downloads_use_current_manual_result_instead_of_checkpoint(tmp_path
         f"/api/tasks/{context.task_id}/segments/{segment['segment_key']}/download",
     ]:
         response = client.get(path)
-        assert response.status_code == 200
-        book = load_workbook(BytesIO(response.content))
-        for record in _rows(book["反馈汇总"]):
-            if record["订单号"] == "ORDER-DUP":
-                assert "整体尺寸偏小" in record["中文语义"]
-                assert record["结果状态"] == "可用"
-                assert record["人工修正情况"] == "人工已修正"
-                assert record["修正人"]
-                assert record["是否需重跑"] == "否"
-            else:
-                assert record["结果状态"] == "需复核"
-        book.close()
+        assert response.status_code == 410
+        assert "后台生成" in response.json()["detail"]
+    content, _ = service.download(corrected["version_id"])
+    book = load_workbook(BytesIO(content))
+    for record in _rows(book["反馈汇总"]):
+        if record["订单号"] == "ORDER-DUP":
+            assert "整体尺寸偏小" in record["中文语义"]
+            assert record["结果状态"] == "可用"
+            assert record["人工修正情况"] == "人工已修正"
+            assert record["修正人"]
+            assert record["是否需重跑"] == "否"
+        else:
+            assert record["结果状态"] == "需复核"
+    book.close()
 
 
 def test_combined_download_has_unique_feedback_numbers(context):
