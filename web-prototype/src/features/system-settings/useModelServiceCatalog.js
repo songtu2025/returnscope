@@ -176,7 +176,7 @@ export function useModelServiceCatalog({
   /** @param {CatalogModel} model */
   const validateCatalogModel = async (model) => {
     const ownerId = selectedConnectionId;
-    setBusy("validation-start");
+    setBusy(`model-validation-start-${model.id}`);
     try {
       const value = await modelServiceApi.startModelValidation(model.id);
       showValidationRun(value, ownerId);

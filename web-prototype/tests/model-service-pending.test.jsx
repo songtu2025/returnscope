@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -11,6 +11,7 @@ const { apiMock } = vi.hoisted(() => ({
     discardConfig: vi.fn(),
     discoverModels: vi.fn(),
     createModel: vi.fn(),
+    startModelValidation: vi.fn(),
   },
 }));
 
@@ -72,6 +73,53 @@ beforeEach(() => {
 });
 
 afterEach(() => cleanup());
+
+test.each(["passed", "failure"])("模型验证启动 %s 仅反馈当前行", async (outcome) => {
+  const user = userEvent.setup();
+  const pending = deferred();
+  const item = connection("A");
+  item.models = ["first", "second"].map((id) => ({
+    id,
+    model_key: id,
+    display_name: id,
+    active: true,
+    supported_efforts: ["medium"],
+    validation_status: "draft",
+  }));
+  apiMock.configs.mockResolvedValue([item]);
+  apiMock.startModelValidation.mockReturnValue(pending.promise);
+  render(<ModelServicePage notify={notify} />);
+  await user.click(await screen.findByRole("button", { name: "管理目录" }));
+  const rows = screen
+    .getAllByText("first")
+    .map((element) => element.closest(".model-catalog-row"));
+  const first = within(rows[0]);
+  const second = within(screen.getAllByText("second")[0].closest(".model-catalog-row"));
+  await user.click(first.getByRole("button", { name: "验证" }));
+  expect(apiMock.startModelValidation).toHaveBeenCalledExactlyOnceWith("first");
+  expect(first.getByRole("button", { name: "启动中…" })).toBeDisabled();
+  expect(second.getByRole("button", { name: "验证" })).toBeDisabled();
+  expect(screen.getAllByRole("button", { name: "启动中…" })).toHaveLength(1);
+  await act(async () => {
+    if (outcome === "failure") pending.reject(new Error("启动失败"));
+    else
+      pending.resolve({
+        id: "run",
+        kind: "model",
+        target_id: "first",
+        status: "passed",
+        items: [],
+        total_count: 1,
+        completed_count: 1,
+      });
+  });
+  await waitFor(() =>
+    expect(first.getByRole("button", { name: "验证" })).toBeEnabled(),
+  );
+  expect(second.getByRole("button", { name: "验证" })).toBeEnabled();
+  expect(screen.queryByRole("button", { name: "启动中…" })).not.toBeInTheDocument();
+  if (outcome === "failure") expect(notify).toHaveBeenCalledWith("启动失败", "error");
+});
 
 test.each(["success", "failure"])("保存草稿 %s 后恢复连接切换", async (outcome) => {
   const user = userEvent.setup();

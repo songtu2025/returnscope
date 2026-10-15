@@ -76,9 +76,11 @@ function ModelCatalogActions({
           onClick={() => onValidateModel(model)}
           disabled={Boolean(busy) || validationActive}
         >
-          {validationActive && validationRun?.target_id === model.id
+          {validationActive &&
+          validationRun?.kind === "model" &&
+          validationRun.target_id === model.id
             ? "验证中…"
-            : busy === "validation-start"
+            : busy === `model-validation-start-${model.id}`
               ? "启动中…"
               : "验证"}
         </button>
