@@ -31,6 +31,7 @@ export function GlobalSearch({ onClose, onSelect, notify }) {
   const [searching, setSearching] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const resultsRef = useRef(/** @type {HTMLDivElement | null} */ (null));
+  const composing = useRef(false);
   useLoadingHeight(loading || searching, resultsRef);
   const { dialogRef, constrainFocus } = useDialogFocus({ open: true, onClose });
 
@@ -114,7 +115,19 @@ export function GlobalSearch({ onClose, onSelect, notify }) {
             aria-label="全局搜索"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
+            onCompositionStart={() => {
+              composing.current = true;
+            }}
+            onCompositionEnd={() => {
+              composing.current = false;
+            }}
             onKeyDown={(event) => {
+              if (
+                composing.current ||
+                event.nativeEvent.isComposing ||
+                event.keyCode === 229
+              )
+                return;
               if (!loading && !loadError && event.key === "Enter" && matches[0])
                 onSelect(matches[0].page, matches[0].focus);
               if (event.key === "ArrowDown" || event.key === "ArrowUp") {
