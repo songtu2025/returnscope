@@ -6,9 +6,9 @@ from math import log
 import pandas as pd
 
 from return_analysis.calculations.common import (
-    REVIEW_STATUSES,
     explode_labels,
     label_codes,
+    review_mask,
     split_values,
 )
 from return_analysis.calculations.summaries import label_summary
@@ -119,7 +119,7 @@ def _priority_labels(frame: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     work["_listing_conflict"] = work["Listing承诺关系"].map(
         lambda value: "CONTRADICTS" in split_values(value)
     )
-    work["_needs_review"] = work["处理状态"].isin(REVIEW_STATUSES)
+    work["_needs_review"] = review_mask(work)
     labels = explode_labels(
         work,
         "问题标签",

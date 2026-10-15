@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from return_analysis.calculations.common import (
-    REVIEW_STATUSES,
     SIZE_DIRECTION_NAMES,
     SPECIFIC_PART_EXCLUSIONS,
     STATUS_NAMES,
     explode_labels,
     label_codes,
+    review_mask,
     split_values,
 )
 from return_analysis.calculations.diagnosis import (
@@ -42,7 +42,7 @@ from return_analysis.calculations.summaries import (
 )
 
 __all__ = [
-    "REVIEW_STATUSES",
+    "review_mask",
     "STATUS_NAMES",
     "SIZE_DIRECTION_NAMES",
     "SPECIFIC_PART_EXCLUSIONS",

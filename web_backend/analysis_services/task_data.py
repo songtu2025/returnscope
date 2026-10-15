@@ -49,7 +49,7 @@ WHERE task_id = ?
 ORDER BY execution_order, id
 """
 
-ANALYSIS_CACHE_VERSION = 1
+ANALYSIS_CACHE_VERSION = 2
 ANALYSIS_CACHE_LOCK = Lock()
 
 

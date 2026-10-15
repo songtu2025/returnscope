@@ -11,16 +11,20 @@ from return_analysis.metrics import (
     explode_labels,
     filter_details,
     label_summary,
+    listing_quality_summary,
     multi_value_summary,
     overview_metrics,
     pareto_problem_summary,
+    problem_priority_summary,
     product_label_matrix,
     product_summary,
+    review_mask,
     review_reason_summary,
     split_values,
     status_summary,
     trend_summary,
 )
+from web_backend.analysis_service import AnalysisService
 
 
 def test_overview_metrics_uses_return_record_grain() -> None:
@@ -31,6 +35,41 @@ def test_overview_metrics_uses_return_record_grain() -> None:
     assert result["unique_comments"] == 2
     assert result["review_records"] == 1
     assert result["text_coverage"] == 2 / 3
+
+
+def test_all_analysis_review_metrics_use_final_route_instead_of_processing_status():
+    frame = _details().assign(
+        处理状态="UNKNOWN_SEMANTIC",
+        has_text=True,
+        分类键=["ready", "failed", "business"],
+        复核路由=["READY", "SYSTEM_RERUN_REQUIRED", "BUSINESS_REVIEW_REQUIRED"],
+        问题标签="FIT_TOO_SMALL:偏小",
+        复核原因="合成待办",
+    )
+    assert review_mask(frame).tolist() == [False, False, True]
+    assert overview_metrics(frame)["review_records"] == 1
+    assert AnalysisService._quality_gate(frame)["review_records"] == 1
+    trend = trend_summary(frame)
+    assert trend.loc[trend["统计类型"].eq("需复核"), "退货记录数"].sum() == 1
+    assert product_summary(frame, "sku")["需复核数"].sum() == 1
+    listing = listing_quality_summary(frame).set_index("Listing")
+    assert listing.loc["SK001", "需复核率"] == 0
+    assert listing.loc["SK002", "需复核率"] == 1
+    assert problem_priority_summary(frame, _catalog())["需复核记录数"].sum() == 1
+    assert review_reason_summary(frame)["去重评论数"].sum() == 1
+
+
+@pytest.mark.parametrize("route", [None, "", "UNKNOWN_ROUTE"])
+def test_legacy_or_invalid_review_route_requires_regeneration(route):
+    frame = _details()
+    if route is None:
+        frame = frame.drop(columns="复核路由")
+    else:
+        frame["复核路由"] = route
+    with pytest.raises(
+        ValueError, match="旧结果缺少复核处置，请重新生成结果后查看分析"
+    ):
+        overview_metrics(frame)
 
 
 def test_filter_details_combines_date_and_label_filters() -> None:

@@ -10,6 +10,7 @@ from analysis_api_helpers import (
     analysis_app,
 )
 from fastapi.testclient import TestClient
+from openpyxl import load_workbook
 
 
 @pytest.fixture
@@ -30,6 +31,23 @@ def _login(client: TestClient) -> None:
 def test_analysis_requires_authentication(client: TestClient, suffix: str) -> None:
     response = client.get(f"/api/tasks/task-1/analysis{suffix}")
     assert response.status_code == 401
+
+
+def test_old_workbook_without_review_route_keeps_file_and_explains_regeneration(
+    client: TestClient, tmp_path: Path
+) -> None:
+    output = tmp_path / "synthetic-results.xlsx"
+    workbook = load_workbook(output)
+    detail = workbook["分类明细"]
+    headers = [cell.value for cell in detail[1]]
+    detail.delete_cols(headers.index("复核路由") + 1)
+    workbook.save(output)
+    workbook.close()
+    _login(client)
+    response = client.get("/api/tasks/task-1/analysis")
+    assert response.status_code == 409
+    assert response.json()["detail"] == "旧结果缺少复核处置，请重新生成结果后查看分析"
+    assert len(pd.read_excel(output, sheet_name="分类明细")) == 3
 
 
 @pytest.mark.parametrize(

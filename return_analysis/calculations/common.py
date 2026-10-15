@@ -5,12 +5,11 @@ from typing import Any
 
 import pandas as pd
 
-REVIEW_STATUSES = {
-    "SECONDARY_REVIEW",
-    "MANUAL_REVIEW",
-    "UNKNOWN_SEMANTIC",
-    "MODEL_ERROR",
-}
+from return_semantics.semantic_review import (
+    BUSINESS_REVIEW_REQUIRED,
+    READY,
+    SYSTEM_RERUN_REQUIRED,
+)
 
 STATUS_NAMES = {
     "AUTO_APPROVED": "自动通过",
@@ -32,6 +31,20 @@ SIZE_DIRECTION_NAMES = {
 }
 
 SPECIFIC_PART_EXCLUSIONS = {"WHOLE_SHOE", "UNSPECIFIED"}
+
+
+def review_mask(frame: pd.DataFrame) -> pd.Series:
+    """消费导出时固定的最终处置，不从旧处理状态推测业务待办。"""
+    if frame.empty:
+        return pd.Series(False, index=frame.index, dtype=bool)
+    if (
+        "复核路由" not in frame
+        or not frame["复核路由"]
+        .isin({READY, BUSINESS_REVIEW_REQUIRED, SYSTEM_RERUN_REQUIRED})
+        .all()
+    ):
+        raise ValueError("旧结果缺少复核处置，请重新生成结果后查看分析")
+    return frame["复核路由"].eq(BUSINESS_REVIEW_REQUIRED)
 
 
 def split_values(value: Any) -> list[str]:

@@ -1,11 +1,16 @@
 from pathlib import Path
 
 import pandas as pd
+import pytest
+from test_classification_result_pool import _seed_result_context
 
 from return_analysis.data import (
     load_analysis_data,
     load_product_dimensions,
 )
+from return_analysis.metrics import overview_metrics
+from return_semantics.exporter import export_results
+from return_semantics.schemas import UnknownSemantic
 
 
 def test_load_analysis_data_normalizes_fields(
@@ -165,3 +170,37 @@ def test_load_analysis_data_rejects_missing_columns(
         assert "分类明细 缺少字段" in str(exc)
     else:
         raise AssertionError("缺失字段时应拒绝加载")
+
+
+@pytest.mark.parametrize(
+    "disposition,diagnostics,expected_route,expected_count",
+    [
+        ("OUT_OF_SCOPE", [], "READY", 0),
+        ("MAPPING_UNCERTAIN", [], "BUSINESS_REVIEW_REQUIRED", 3),
+        ("OUT_OF_SCOPE", [{"code": "MODEL_RUN_TIMEOUT"}], "SYSTEM_RERUN_REQUIRED", 0),
+    ],
+)
+def test_exported_review_route_survives_analysis_loading(
+    tmp_path, disposition, diagnostics, expected_route, expected_count
+):
+    context = _seed_result_context(tmp_path)
+    payload = context.results[context.key].model_dump(mode="json")
+    payload.update(
+        status="UNKNOWN_SEMANTIC",
+        semantic_units=[],
+        unknown_semantics=[
+            UnknownSemantic(
+                opinion="合成观点",
+                evidence="Too small",
+                reason="合成处置",
+                disposition=disposition,
+            ).model_dump(mode="json")
+        ],
+        review_diagnostics=diagnostics,
+    )
+    result = type(context.results[context.key]).model_validate(payload)
+    output = tmp_path / "analysis-routes.xlsx"
+    export_results(output, context.dataset, {context.key: result}, context.taxonomy)
+    data = load_analysis_data(output)
+    assert set(data.details["复核路由"]) == {expected_route}
+    assert overview_metrics(data.details)["review_records"] == expected_count

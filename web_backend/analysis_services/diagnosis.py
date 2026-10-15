@@ -8,7 +8,6 @@ from return_analysis.data import (
     AnalysisData,
 )
 from return_analysis.metrics import (
-    REVIEW_STATUSES,
     category_summary,
     claim_relation_summary,
     dimension_problem_over_index,
@@ -16,6 +15,7 @@ from return_analysis.metrics import (
     problem_pair_summary,
     product_label_matrix,
     product_summary,
+    review_mask,
     review_reason_summary,
     status_summary,
 )
@@ -165,9 +165,9 @@ class _AnalysisDiagnosis(_AnalysisRecords):
             unknowns["重复记录数"], errors="coerce"
         ).fillna(0)
         unknowns = unknowns.sort_values("重复记录数", ascending=False, kind="stable")
-        review = frame.loc[
-            frame["处理状态"].isin(REVIEW_STATUSES) & frame["分类键"].ne("")
-        ].drop_duplicates(subset=["分类键"])
+        review = frame.loc[review_mask(frame) & frame["分类键"].ne("")].drop_duplicates(
+            subset=["分类键"]
+        )
         conflict_count = int(review["复核原因"].str.contains("冲突", na=False).sum())
         unknown_count = int(unknowns["重复记录数"].sum())
         return {

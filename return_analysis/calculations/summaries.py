@@ -5,9 +5,9 @@ from collections.abc import Iterable
 import pandas as pd
 
 from return_analysis.calculations.common import (
-    REVIEW_STATUSES,
     STATUS_NAMES,
     explode_labels,
+    review_mask,
     split_values,
 )
 
@@ -16,7 +16,7 @@ def overview_metrics(frame: pd.DataFrame) -> dict[str, int | float]:
     total = len(frame)
     text_records = int(frame["has_text"].sum())
     auto_approved = int(frame["处理状态"].eq("AUTO_APPROVED").sum())
-    review_records = int(frame["处理状态"].isin(REVIEW_STATUSES).sum())
+    review_records = int(review_mask(frame).sum())
     unique_comments = int(frame.loc[frame["分类键"].ne(""), "分类键"].nunique())
     return {
         "total_records": total,
@@ -139,7 +139,7 @@ def trend_summary(frame: pd.DataFrame, frequency: str = "week") -> pd.DataFrame:
     period_code = "W-SUN" if frequency == "week" else "M"
     work["周期"] = dates.dt.to_period(period_code).dt.start_time
     work["有评论"] = work["has_text"].astype(int)
-    work["需复核"] = work["处理状态"].isin(REVIEW_STATUSES).astype(int)
+    work["需复核"] = review_mask(work).astype(int)
     grouped = work.groupby("周期", as_index=False).agg(
         退货记录=("分类键", "size"),
         有评论=("有评论", "sum"),
@@ -159,7 +159,7 @@ def product_summary(frame: pd.DataFrame, dimension: str) -> pd.DataFrame:
         return pd.DataFrame()
 
     work["有评论数"] = work["has_text"].astype(int)
-    work["需复核数"] = work["处理状态"].isin(REVIEW_STATUSES).astype(int)
+    work["需复核数"] = review_mask(work).astype(int)
     result = work.groupby(dimension, as_index=False).agg(
         退货记录数=("分类键", "size"),
         有评论数=("有评论数", "sum"),
@@ -213,9 +213,9 @@ def product_label_matrix(
 
 
 def review_reason_summary(frame: pd.DataFrame, top_n: int = 12) -> pd.DataFrame:
-    review = frame.loc[
-        frame["处理状态"].isin(REVIEW_STATUSES) & frame["分类键"].ne("")
-    ].drop_duplicates(subset=["分类键"])
+    review = frame.loc[review_mask(frame) & frame["分类键"].ne("")].drop_duplicates(
+        subset=["分类键"]
+    )
     reasons = review["复核原因"].map(split_values).explode()
     reasons = reasons.loc[reasons.notna() & reasons.ne("")]
     result = (

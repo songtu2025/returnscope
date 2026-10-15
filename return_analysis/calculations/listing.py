@@ -3,10 +3,10 @@ from __future__ import annotations
 import pandas as pd
 
 from return_analysis.calculations.common import (
-    REVIEW_STATUSES,
     SIZE_DIRECTION_NAMES,
     SPECIFIC_PART_EXCLUSIONS,
     explode_labels,
+    review_mask,
     split_values,
 )
 
@@ -205,7 +205,7 @@ def listing_quality_summary(frame: pd.DataFrame) -> pd.DataFrame:
                 "标签覆盖率": float(group["问题标签"].ne("").mean()),
                 "无文本率": float(group["处理状态"].eq("NO_TEXT_EVIDENCE").mean()),
                 "未知语义率": float(group["处理状态"].eq("UNKNOWN_SEMANTIC").mean()),
-                "需复核率": float(group["处理状态"].isin(REVIEW_STATUSES).mean()),
+                "需复核率": float(review_mask(group).mean()),
             }
         )
     return (

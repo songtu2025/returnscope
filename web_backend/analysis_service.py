@@ -11,9 +11,9 @@ from return_analysis.data import (
     AnalysisData,
 )
 from return_analysis.metrics import (
-    REVIEW_STATUSES,
     filter_details,
     problem_priority_summary,
+    review_mask,
     review_reason_summary,
     split_values,
 )
@@ -202,10 +202,10 @@ class AnalysisService(_AnalysisTaskData, _AnalysisOverview, _AnalysisDiagnosis):
     def _quality_gate(frame: pd.DataFrame) -> dict[str, Any]:
         text_records = int(frame["has_text"].sum())
         labeled_records = int(frame["问题标签"].fillna("").str.strip().ne("").sum())
-        review_records = int(frame["处理状态"].isin(REVIEW_STATUSES).sum())
-        review = frame.loc[
-            frame["处理状态"].isin(REVIEW_STATUSES) & frame["分类键"].ne("")
-        ].drop_duplicates(subset=["分类键"])
+        review_records = int(review_mask(frame).sum())
+        review = frame.loc[review_mask(frame) & frame["分类键"].ne("")].drop_duplicates(
+            subset=["分类键"]
+        )
         reasons = AnalysisService._records(
             review_reason_summary(review).head(5),
             {"复核原因": "name", "去重评论数": "records"},

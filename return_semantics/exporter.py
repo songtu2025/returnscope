@@ -23,6 +23,7 @@ from return_semantics.schemas import (
 )
 from return_semantics.semantic_review import (
     BUSINESS_REVIEW_REQUIRED,
+    READY,
     SYSTEM_RERUN_REQUIRED,
     review_route,
 )
@@ -63,19 +64,27 @@ def export_results(
     semantic_review = pd.DataFrame(
         _build_semantic_review_rows(dataset, results, taxonomy)
     )
+    source_comments = dataset.unique_comments.set_index("classification_key")[
+        "comment_normalized"
+    ]
+    routes = {
+        _display_key(key): review_route(
+            result, str(source_comments.loc[key] or ""), taxonomy
+        )
+        for key, result in results.items()
+    }
+    detail["复核路由"] = (
+        detail["分类键"]
+        .map(routes)
+        .mask(
+            detail["处理状态"].isin({"EXCLUDED_MISSING_CATEGORY", "NO_TEXT_EVIDENCE"}),
+            READY,
+        )
+    )
     if semantic_review.empty:
         business_review = semantic_review.copy()
         system_rerun = semantic_review.copy()
     else:
-        source_comments = dataset.unique_comments.set_index("classification_key")[
-            "comment_normalized"
-        ]
-        routes = {
-            _display_key(key): review_route(
-                result, str(source_comments.loc[key] or ""), taxonomy
-            )
-            for key, result in results.items()
-        }
         # 以评论的最终处置分流，保留其完整语义上下文供阅读核对。
         review_routes = semantic_review["分类键"].map(routes)
         system_rerun = semantic_review.loc[
