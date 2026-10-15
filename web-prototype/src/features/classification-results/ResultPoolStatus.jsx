@@ -10,8 +10,7 @@ export function ResultPoolStatus({
   error,
   load,
   activeFilters,
-  updateRoute,
-  route,
+  clearFilters,
 }) {
   return (
     <>
@@ -19,18 +18,14 @@ export function ResultPoolStatus({
       {loading && !data && <InlineLoading scope="page" label="正在读取分类结果…" />}
       {error && <ResultError message={error} onRetry={load} hasData={Boolean(data)} />}
       {!loading && !error && data?.items?.length === 0 && (
-        <ResultPoolEmpty
-          activeFilters={activeFilters}
-          updateRoute={updateRoute}
-          route={route}
-        />
+        <ResultPoolEmpty activeFilters={activeFilters} clearFilters={clearFilters} />
       )}
     </>
   );
 }
 
-/** @param {Pick<import("./classificationResultListContracts").ResultPoolContext, "activeFilters" | "updateRoute" | "route">} props */
-function ResultPoolEmpty({ activeFilters, updateRoute, route }) {
+/** @param {Pick<import("./classificationResultListContracts").ResultPoolContext, "activeFilters" | "clearFilters">} props */
+function ResultPoolEmpty({ activeFilters, clearFilters }) {
   return (
     <EmptyState
       icon={Package}
@@ -43,18 +38,7 @@ function ResultPoolEmpty({ activeFilters, updateRoute, route }) {
       action={
         <button
           className="secondary-button"
-          onClick={() =>
-            activeFilters
-              ? updateRoute({
-                  q: "",
-                  storeSite: "",
-                  listing: "",
-                  qualityStatus: "",
-                  ...(route?.lifecycle ? { lifecycle: "" } : {}),
-                  page: 1,
-                })
-              : navigateHash("task-create")
-          }
+          onClick={() => (activeFilters ? clearFilters() : navigateHash("task-create"))}
         >
           {activeFilters ? "清除筛选" : "创建分析任务"}
         </button>

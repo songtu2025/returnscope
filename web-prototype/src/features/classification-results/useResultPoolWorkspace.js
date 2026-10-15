@@ -55,6 +55,11 @@ export function useResultPoolWorkspace({ route, updateRoute, userId }) {
     route.qualityStatus ||
     route.lifecycle,
   );
+  const clearFilters = () => {
+    const cleared = { q: "", storeSite: "", listing: "", qualityStatus: "" };
+    setFilters(cleared);
+    updateRoute({ ...cleared, ...(route.lifecycle ? { lifecycle: "" } : {}), page: 1 });
+  };
   const totalPages = Math.max(Math.ceil((data?.total ?? 0) / route.pageSize), 1);
 
   /** @param {number} page */
@@ -65,6 +70,7 @@ export function useResultPoolWorkspace({ route, updateRoute, userId }) {
   return {
     filters,
     setFilters,
+    clearFilters,
     ...selection,
     data,
     loading,

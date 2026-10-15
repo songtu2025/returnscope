@@ -505,7 +505,7 @@ test("结果池使用服务端筛选并展示多产品名称", async () => {
 
   expect(await screen.findByText("产品表权威名称")).toBeVisible();
   expect(screen.getByText("另有 1 个产品名称")).toBeVisible();
-  const filters = screen.getByRole("region", { name: "分类结果筛选" });
+  const filters = screen.getByRole("form", { name: "分类结果筛选" });
   for (const label of ["关键词", "店铺/站点", "Listing", "记录情况"]) {
     expect(within(filters).getByText(label, { selector: "span" })).toBeVisible();
   }
@@ -1486,7 +1486,7 @@ test("结果池更新失败保留已有版本和重试入口", async () => {
 test("结果池筛选为空时清除条件并返回第一页", async () => {
   const { ResultPoolStatus } =
     await import("../src/features/classification-results/ResultPoolStatus");
-  const updateRoute = vi.fn();
+  const clearFilters = vi.fn();
   render(
     <ResultPoolStatus
       loading={false}
@@ -1494,17 +1494,11 @@ test("结果池筛选为空时清除条件并返回第一页", async () => {
       error=""
       activeFilters
       load={vi.fn()}
-      updateRoute={updateRoute}
+      clearFilters={clearFilters}
     />,
   );
   await userEvent.click(screen.getByRole("button", { name: "清除筛选" }));
-  expect(updateRoute).toHaveBeenCalledWith({
-    q: "",
-    storeSite: "",
-    listing: "",
-    qualityStatus: "",
-    page: 1,
-  });
+  expect(clearFilters).toHaveBeenCalledOnce();
 });
 
 test.each(["", "review_required"])(

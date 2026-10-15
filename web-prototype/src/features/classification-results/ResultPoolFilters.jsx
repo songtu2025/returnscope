@@ -2,14 +2,51 @@ import Button from "antd/es/button";
 import Input from "antd/es/input";
 import Select from "antd/es/select";
 import { FunnelSimple, MagnifyingGlass } from "@phosphor-icons/react";
+import { useRef } from "react";
+
+const qualityOptions = [
+  { value: "", label: "全部记录情况" },
+  { value: "ready", label: "含可用记录" },
+  { value: "review_required", label: "含待复核记录" },
+  { value: "unusable", label: "含不可用记录" },
+];
 
 /** @typedef {import("./classificationResultListContracts").ResultPoolContext} ResultPoolContext */
 
 /** @param {ResultPoolContext} context */
 export function ResultPoolFilters(context) {
-  const { updateRoute, filters, setFilters } = context;
+  const { updateRoute, filters, setFilters, route, clearFilters } = context;
+  const composing = useRef(false);
+  const applied = [
+    route.q && `关键词：${route.q}`,
+    route.storeSite && `店铺/站点：${route.storeSite}`,
+    route.listing && `Listing：${route.listing}`,
+    route.qualityStatus &&
+      qualityOptions.find((item) => item.value === route.qualityStatus)?.label,
+    route.lifecycle === "deleted" && "已删除",
+  ].filter((value) => typeof value === "string" && value.length > 0);
   return (
-    <section className="result-pool-filters" aria-label="分类结果筛选">
+    <form
+      className="result-pool-filters"
+      aria-label="分类结果筛选"
+      onCompositionStart={() => {
+        composing.current = true;
+      }}
+      onCompositionEnd={() => {
+        composing.current = false;
+      }}
+      onKeyDownCapture={(event) => {
+        if (
+          event.key === "Enter" &&
+          (composing.current || event.nativeEvent.isComposing || event.keyCode === 229)
+        )
+          event.preventDefault();
+      }}
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!composing.current) updateRoute({ ...filters, page: 1 });
+      }}
+    >
       <label className="result-filter-field">
         <span>关键词</span>
         <Input
@@ -46,21 +83,23 @@ export function ResultPoolFilters(context) {
           aria-label="记录情况"
           value={filters.qualityStatus}
           onChange={(qualityStatus) => setFilters({ ...filters, qualityStatus })}
-          options={[
-            { value: "", label: "全部记录情况" },
-            { value: "ready", label: "含可用记录" },
-            { value: "review_required", label: "含待复核记录" },
-            { value: "unusable", label: "含不可用记录" },
-          ]}
+          options={qualityOptions}
         />
       </label>
-      <Button
-        type="primary"
-        icon={<FunnelSimple size={17} />}
-        onClick={() => updateRoute({ ...filters, page: 1 })}
-      >
-        筛选
-      </Button>
-    </section>
+      <div className="result-filter-actions">
+        <Button type="primary" icon={<FunnelSimple size={17} />} htmlType="submit">
+          筛选
+        </Button>
+        <Button onClick={clearFilters}>清除筛选</Button>
+      </div>
+      {applied.length > 0 && (
+        <div className="result-applied-filters" role="status" aria-label="已生效筛选">
+          <b>已生效</b>
+          {applied.map((label) => (
+            <span key={String(label)}>{label}</span>
+          ))}
+        </div>
+      )}
+    </form>
   );
 }
