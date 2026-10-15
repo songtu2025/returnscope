@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import Button from "antd/es/button";
 import { api } from "../../api";
 import { AntdProvider } from "../../components/AntdProvider";
@@ -8,7 +9,7 @@ import {
 } from "../analysis-dashboards/dashboardRequestErrors";
 import { SemanticResultPanel } from "./SemanticResultPanel";
 import { ManualSemanticFields } from "./ManualSemanticFields";
-import { semanticItemErrors } from "./manualSemanticValidation";
+import { semanticDraftChanged, semanticItemErrors } from "./manualSemanticValidation";
 import { selectedSentiment } from "../review-batches/semanticReviewDrafts";
 import { useUnsavedNavigation } from "../../hooks/useUnsavedNavigation";
 import { UnsavedChangesActions } from "../../components/UnsavedChangesActions";
@@ -47,21 +48,13 @@ export function ManualSemanticEditor({
   const [recovered, setRecovered] = useState(false);
   const [baseline, setBaseline] = useState(() => semanticDraft(record));
   const [items, setItems] = useState(baseline);
-  const dirty =
-    items.length !== baseline.length ||
-    items.some((item, index) =>
-      /** @type {Array<keyof Draft>} */ ([
-        "evidence_text",
-        "opinion",
-        "label_code",
-        "sentiment",
-      ]).some((field) => item[field] !== baseline[index]?.[field]),
-    );
+  const dirty = semanticDraftChanged(items, baseline);
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
   const [labels, setLabels] = useState(/** @type {ReviewLabel[]} */ ([]));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const saveLock = useRef(false);
+  const leavingRef = useRef(false);
   const [saveNext, setSaveNext] = useState(false);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
@@ -131,12 +124,17 @@ export function ManualSemanticEditor({
           })),
         },
       );
-      onDirtyChange(false);
-      setBaseline(items);
-      if (complete) {
+      const leaving = !complete || leavingRef.current;
+      if (leaving) await onSavedBeforeExit?.();
+      // 已提交的结果导航不应被上一轮渲染的未保存状态拦截。
+      flushSync(() => {
+        onDirtyChange(false);
+        setBaseline(items);
+      });
+      if (!leaving) {
         if (advance) await onSaved(result.version_id, true);
         else await onSaved(result.version_id);
-      } else await onSavedBeforeExit?.();
+      }
       return true;
     } catch (reason) {
       setError(errorMessage(reason));
@@ -150,11 +148,17 @@ export function ManualSemanticEditor({
   };
   const exit = useUnsavedNavigation({
     dirty,
-    busy: saving || recovering,
+    busy: dirty && (saving || recovering),
     save: () => save(false, false),
     canSave: !loading && !conflict && valid && Boolean(labels.length),
-    onRequest: onNavigationRequest,
+    onRequest: () => {
+      leavingRef.current = true;
+      onNavigationRequest?.();
+    },
   });
+  useEffect(() => {
+    if (!exit.pendingExit) leavingRef.current = false;
+  }, [exit.pendingExit]);
   useEffect(() => {
     onExitConfirmationChange?.(exit.pendingExit ? exit.continueEditing : null);
     return () => onExitConfirmationChange?.(null);

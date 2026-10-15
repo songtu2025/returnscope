@@ -63,6 +63,42 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+test("普通语义保存中请求离开，提交后优先原用户目标而非内部版本导航", async () => {
+  let finish;
+  api.correctClassificationResult.mockReturnValueOnce(
+    new Promise((resolve) => {
+      finish = resolve;
+    }),
+  );
+  const saved = vi.fn();
+  const refreshRelated = vi.fn().mockResolvedValue(undefined);
+  render(
+    <EvidenceDrawer
+      group={group}
+      onSaved={saved}
+      onSavedBeforeExit={refreshRelated}
+      onClose={vi.fn()}
+      returnFocusRef={{ current: null }}
+      analysisContext="user_feedback"
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "人工修正" }));
+  const opinion = await screen.findByLabelText("观点 1 用户观点");
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "保存修正" })).toBeEnabled(),
+  );
+  fireEvent.change(opinion, { target: { value: "待提交观点" } });
+  fireEvent.click(screen.getByRole("button", { name: "保存修正" }));
+  const proceed = vi.fn();
+  act(() => expect(requestNavigation(proceed)).toBe(false));
+  expect(proceed).not.toHaveBeenCalled();
+  await act(async () => finish({ version_id: "next" }));
+  await waitFor(() => expect(proceed).toHaveBeenCalledOnce());
+  expect(api.correctClassificationResult).toHaveBeenCalledOnce();
+  expect(refreshRelated).toHaveBeenCalledOnce();
+  expect(saved).not.toHaveBeenCalled();
+});
+
 test.each([false, true])(
   "退出保存刷新关联缓存一次，刷新失败=%s也不二次写入或跳转版本",
   async (failure) => {

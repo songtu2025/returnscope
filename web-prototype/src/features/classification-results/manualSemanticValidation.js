@@ -2,6 +2,20 @@ import { selectedSentiment } from "../review-batches/semanticReviewDrafts";
 
 /** @typedef {import("../review-batches/semanticLedgerContracts").ReviewLabel} ReviewLabel */
 /** @typedef {{item_id: string, evidence_text: string, opinion: string, label_code: string, sentiment: string}} Draft */
+/** @param {Draft[]} items @param {Draft[]} baseline */
+export function semanticDraftChanged(items, baseline) {
+  return (
+    items.length !== baseline.length ||
+    items.some((item, index) =>
+      /** @type {Array<keyof Draft>} */ ([
+        "evidence_text",
+        "opinion",
+        "label_code",
+        "sentiment",
+      ]).some((field) => item[field] !== baseline[index]?.[field]),
+    )
+  );
+}
 /** @param {Draft} item @param {ReviewLabel[]} labels */
 export function semanticItemErrors(item, labels) {
   return {
