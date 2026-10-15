@@ -90,15 +90,13 @@ export function NewTaskPage({
   const {
     changeDataEntryMode,
     dataEntryMode,
-    finishImport,
     invalidateMysql,
     mysqlDraft,
     selectedDataLabel,
     selectedReturns,
     setMysqlDraft,
-    setUploadOpen,
     updateForm,
-    uploadOpen,
+    upload,
   } = useTaskImport({
     draft,
     focusAfterPreparationRef: focusAfterPreparation,
@@ -287,12 +285,7 @@ export function NewTaskPage({
           submitError,
           submitting,
         }}
-        upload={{
-          open: uploadOpen,
-          onOpen: () => setUploadOpen(true),
-          onClose: () => setUploadOpen(false),
-          onDone: finishImport,
-        }}
+        upload={upload}
         taskActions={taskActions}
       />
     </AntdProvider>

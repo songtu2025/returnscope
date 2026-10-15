@@ -111,7 +111,7 @@
  * @property {boolean} [duplicate]
  * @property {"analyze_only"} [mode]
  * @property {{imported_row_count?: number, skipped_row_count?: number}} [summary]
- * @property {{id: string, name?: string}} [dataset]
+ * @property {{id: string, name?: string, kind: string, current_version: number, usage_scope?: string, source_name?: string, versions?: (Omit<DataVersion, "version_id" | "dataset_name" | "kind" | "current_version"> & {id: string})[]}} [dataset]
  *
  * @typedef {Object} ReturnImportInspection
  * @property {string} inspection_id

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../../api";
+import { errorMessage } from "../../shared/api/requestErrors";
 import {
   importNotification,
   importSelectionLabel,
@@ -34,6 +35,8 @@ export function useTaskImport({
   versions,
 }) {
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [refreshError, setRefreshError] = useState("");
+  const [refreshingVersions, setRefreshingVersions] = useState(false);
   const [mysqlDraft, setMysqlDraft] = useState(
     /** @type {Partial<MysqlReturnFormState> | undefined} */ (draft?.mysqlDraft),
   );
@@ -60,7 +63,13 @@ export function useTaskImport({
   }, [dataEntryMode, form, mysqlDraft, onDraftChange, selectedDataLabel, prepared]);
 
   useEffect(() => {
-    if (loadingSetup || setupError || !form.dataset_version_id || selectedReturns)
+    if (
+      loadingSetup ||
+      setupError ||
+      refreshingVersions ||
+      !form.dataset_version_id ||
+      selectedReturns
+    )
       return;
     setPrepared(false);
     invalidateUnavailableSource();
@@ -72,6 +81,7 @@ export function useTaskImport({
   }, [
     loadingSetup,
     setupError,
+    refreshingVersions,
     form.dataset_version_id,
     selectedReturns,
     invalidateUnavailableSource,
@@ -103,12 +113,42 @@ export function useTaskImport({
     setForm((current) => ({ ...current, dataset_version_id: "" }));
   };
 
+  const refreshVersions = async () => {
+    setRefreshingVersions(true);
+    try {
+      setVersions(await api.dataVersions());
+      setRefreshError("");
+    } catch (error) {
+      setRefreshError(errorMessage(error));
+    } finally {
+      setRefreshingVersions(false);
+    }
+  };
+
   /**
    * @param {ReturnImportResult} result
    * @param {"mysql" | "upload"} source
    */
   const finishImport = async (result, source) => {
-    setVersions(await api.dataVersions());
+    setRefreshError("");
+    const dataset = result.dataset;
+    const version = dataset?.versions?.find((item) => item.id === result.version_id);
+    if (dataset && version) {
+      // 导入已经写入成功，直接使用返回的来源，列表刷新不决定导入结果。
+      const imported = {
+        ...version,
+        version_id: result.version_id,
+        dataset_name: dataset.name ?? "用户反馈数据",
+        kind: dataset.kind,
+        current_version: dataset.current_version,
+        usage_scope: dataset.usage_scope,
+        source_name: dataset.source_name,
+      };
+      setVersions((current) => [
+        imported,
+        ...current.filter((item) => item.version_id !== result.version_id),
+      ]);
+    }
     invalidatePreflight();
     setDataEntryMode(source);
     setSelectedDataLabel(
@@ -130,19 +170,26 @@ export function useTaskImport({
     );
     focusAfterPreparationRef.current = true;
     setPrepared(true);
+    await refreshVersions();
   };
 
   return {
     changeDataEntryMode,
     dataEntryMode,
-    finishImport,
     invalidateMysql,
     mysqlDraft,
     selectedDataLabel,
     selectedReturns,
     setMysqlDraft,
-    setUploadOpen,
     updateForm,
-    uploadOpen,
+    upload: {
+      open: uploadOpen,
+      onOpen: () => setUploadOpen(true),
+      onClose: () => setUploadOpen(false),
+      onDone: finishImport,
+      refreshError,
+      refreshing: refreshingVersions,
+      onRefresh: refreshVersions,
+    },
   };
 }

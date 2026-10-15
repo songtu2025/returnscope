@@ -27,7 +27,7 @@ import { TaskDraftActions } from "./TaskDraftActions";
  * @property {{form: TaskForm, updateForm: (form: TaskForm) => void, selectedReturns?: DataVersion, dataEntryMode: "mysql" | "upload", selectedDataLabel: string, onDataEntryModeChange: (mode: "mysql" | "upload") => void, mysqlDraft?: Partial<MysqlReturnFormState>, setMysqlDraft: import("react").Dispatch<import("react").SetStateAction<Partial<MysqlReturnFormState> | undefined>>, setMysqlState: import("react").Dispatch<import("react").SetStateAction<MysqlFormState>>, mysqlState: MysqlFormState, prepared: boolean, scopeLabel: string, onInvalidateMysql: () => void}} data
  * @property {{preflight: TaskPreflightState, runPreflight: () => void | Promise<void>, state: TaskPlanViewState, counts: TaskPlanCounts, dataQuality: TaskDataQuality | null, unresolvedPolicy: string, onPolicyChange: (policy: string) => void, resolveCategories: () => void, segmentOrder: string[], setSegmentOrder: import("react").Dispatch<import("react").SetStateAction<string[]>>, scopeConfirmed: boolean, setScopeConfirmed: import("react").Dispatch<import("react").SetStateAction<boolean>>}} plan
  * @property {{confirmationRef: import("react").RefObject<HTMLHeadingElement | null>, selectedConfig?: PublishedConfig, availableModels: AvailableModel[], modelPolicy: TaskModelPolicy, selectConnection: (configId: string) => void, updateModelPolicy: (changes: Record<string, string | number>) => void, submitError: string, submitting: boolean}} configuration
- * @property {{open: boolean, onOpen: () => void, onClose: () => void, onDone: (result: ReturnImportResult, source: "mysql" | "upload") => void | Promise<void>}} upload
+ * @property {{open: boolean, onOpen: () => void, onClose: () => void, onDone: (result: ReturnImportResult, source: "mysql" | "upload") => void | Promise<void>, refreshError: string, refreshing: boolean, onRefresh: () => Promise<void>}} upload
  * @property {import("react").ReactNode} taskActions
  * @property {() => void} [onDiscard]
  */
@@ -138,6 +138,22 @@ export function NewTaskView({
           hasConfig={publishedConfigs.length > 0}
           canManageModels={canManageModels}
         />
+      )}
+      {upload.refreshError && (
+        <section className="plan-state error" role="alert">
+          <WarningCircle size={20} />
+          <div>
+            <b>数据已导入，列表暂未刷新</b>
+            <p>{upload.refreshError}</p>
+          </div>
+          <Button
+            className="secondary-button"
+            disabled={upload.refreshing}
+            onClick={upload.onRefresh}
+          >
+            {upload.refreshing ? "正在刷新…" : "重试刷新"}
+          </Button>
+        </section>
       )}
       {!loadingSetup && ready && (
         <TaskDataStep
