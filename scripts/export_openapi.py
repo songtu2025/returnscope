@@ -24,6 +24,7 @@ def build_openapi_schema() -> dict[str, object]:
     from web_backend.classification_result_service import (
         ClassificationResultService,
     )
+    from web_backend.classification_results.export_jobs import ResultExportService
     from web_backend.classification_standard_service import (
         ClassificationStandardService,
     )
@@ -31,6 +32,7 @@ def build_openapi_schema() -> dict[str, object]:
     from web_backend.routers.classification_results import (
         create_classification_result_router,
     )
+    from web_backend.routers.result_export_routes import create_result_export_router
 
     def current_user(
         session_token: Annotated[
@@ -62,6 +64,9 @@ def build_openapi_schema() -> dict[str, object]:
             current_user,
             standard_service,
         )
+    )
+    app.include_router(
+        create_result_export_router(cast(ResultExportService, object()), current_user)
     )
     return cast(dict[str, object], app.openapi())
 

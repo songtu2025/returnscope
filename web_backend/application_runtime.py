@@ -10,13 +10,9 @@ from fastapi import Cookie, FastAPI, HTTPException
 from web_backend.agent_runner import AgentRunner
 from web_backend.auth_service import AuthService
 from web_backend.classification_standard_service import ClassificationStandardService
-from web_backend.classification_standard_validation_worker import (
-    ClassificationStandardValidationWorker,
-)
 from web_backend.common import new_id
 from web_backend.dashboards.live_sources import refresh_related_dashboards
 from web_backend.database import Database
-from web_backend.insight_report_worker import InsightReportWorker
 from web_backend.mail_service import MailSender
 from web_backend.routers.auth_actions import AuthActionLimiters
 from web_backend.security import (
@@ -30,6 +26,7 @@ from web_backend.settings import Settings
 from web_backend.task_plan_service import TaskPlanService
 from web_backend.task_service import TaskService
 from web_backend.worker import TaskWorker
+from web_backend.worker_health import ServiceWorker
 
 
 @dataclass(frozen=True)
@@ -116,22 +113,18 @@ def _create_task_service(
 
 def _create_lifespan(
     start_worker: bool,
-    worker: TaskWorker,
-    insight_report_worker: InsightReportWorker,
-    standard_validation_worker: ClassificationStandardValidationWorker,
+    workers: tuple[TaskWorker | ServiceWorker, ...],
     validation_executor: ThreadPoolExecutor,
 ) -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         if start_worker:
-            worker.start()
-            insight_report_worker.start()
-            standard_validation_worker.start()
+            for worker in workers:
+                worker.start()
         yield
         if start_worker:
-            worker.stop()
-            insight_report_worker.stop()
-            standard_validation_worker.stop()
+            for worker in workers:
+                worker.stop()
         validation_executor.shutdown(wait=False, cancel_futures=True)
 
     return lifespan

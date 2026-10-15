@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Iterator
 from io import BytesIO
 from typing import Any
 from unicodedata import east_asian_width
 
 from openpyxl import Workbook
+from openpyxl.cell import WriteOnlyCell
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
@@ -37,15 +39,18 @@ def result_workbook(
     semantics: list[dict[str, Any]],
     sources: list[dict[str, Any]],
 ) -> bytes:
-    workbook = Workbook()
-    workbook.remove(workbook.worksheets[0])
+    workbook = Workbook(write_only=True)
+    font = Font(name="微软雅黑", size=11, color="153D34")
+    header_font = Font(name="微软雅黑", size=11, bold=True, color="FFFFFF")
+    alignment = Alignment(vertical="top", wrap_text=True)
+    header_fill = PatternFill("solid", fgColor="176C57")
+    stripe_fill = PatternFill("solid", fgColor="F0F7F4")
     for title, columns, rows in (
         ("反馈汇总", SUMMARY_COLUMNS, summaries),
         ("语义明细", SEMANTIC_COLUMNS, semantics),
         ("源明细", SOURCE_COLUMNS, sources),
     ):
         sheet = workbook.create_sheet(title)
-        sheet.append(columns)
         sheet.freeze_panes = "D2" if title == "反馈汇总" else "C2"
         sheet.sheet_view.showGridLines = False
         sheet.sheet_view.zoomScale = 85
@@ -54,33 +59,30 @@ def result_workbook(
             sheet.column_dimensions[get_column_letter(index)].width = _WIDTHS.get(
                 name, 20
             )
-        for row in rows:
-            sheet.append([row.get(name) for name in columns])
-        for row in sheet:
-            for cell in row:
-                # 反馈正文和标识均为数据，不能让以等号开头的内容变成公式。
-                if isinstance(cell.value, str):
+        for row_index, values in enumerate(_sheet_values(columns, rows), 1):
+            cells = []
+            for value in values:
+                cell = WriteOnlyCell(sheet, value=value)
+                # 所有原文和标识均按文本处理，不能被 Excel 当作公式。
+                if isinstance(value, str):
                     cell.data_type = "s"
-                cell.font = Font(name="微软雅黑", size=11, color="153D34")
-                cell.alignment = Alignment(vertical="top", wrap_text=True)
-                if cell.row == 1:
-                    cell.fill = PatternFill("solid", fgColor="176C57")
-                    cell.font = Font(
-                        name="微软雅黑", size=11, bold=True, color="FFFFFF"
-                    )
-                elif cell.row % 2 == 0:
-                    cell.fill = PatternFill("solid", fgColor="F0F7F4")
-            if row[0].row > 1:
+                cell.font = header_font if row_index == 1 else font
+                cell.alignment = alignment
+                if row_index == 1:
+                    cell.fill = header_fill
+                elif row_index % 2 == 0:
+                    cell.fill = stripe_fill
+                cells.append(cell)
+            if row_index > 1:
                 lines = max(
-                    _display_lines(
-                        cell.value, _WIDTHS.get(columns[cell.column - 1], 20)
-                    )
-                    for cell in row
+                    _display_lines(value, _WIDTHS.get(name, 20))
+                    for name, value in zip(columns, values, strict=True)
                 )
-                sheet.row_dimensions[row[0].row].height = min(
+                sheet.row_dimensions[row_index].height = min(
                     max(lines * 16 + 10, 42), 180
                 )
-        sheet.auto_filter.ref = sheet.dimensions
+            sheet.append(cells)
+        sheet.auto_filter.ref = f"A1:{get_column_letter(len(columns))}{len(rows) + 1}"
     output = BytesIO()
     workbook.save(output)
     workbook.close()
@@ -97,3 +99,11 @@ def _display_lines(value: Any, width: int) -> int:
         )
         for line in str(value or "").split("\n")
     )
+
+
+def _sheet_values(
+    columns: list[str], rows: list[dict[str, Any]]
+) -> Iterator[list[Any]]:
+    yield list(columns)
+    for row in rows:
+        yield [row.get(name) for name in columns]

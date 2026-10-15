@@ -142,6 +142,11 @@ def test_schema_only_openapi_export_is_complete_and_deterministic(
         "/api/classification-results/{version_id}/drilldown",
         "/api/classification-results/{version_id}/download",
         "/api/classification-results/{version_id}/records/{record_id}/semantics",
+        "/api/classification-results/{version_id}/records/{record_id}/corrections",
+        "/api/classification-results/{version_id}/records/{record_id}/restore-semantics",
+        "/api/result-exports",
+        "/api/result-exports/{job_id}",
+        "/api/result-exports/{job_id}/file",
     }
     assert set(schema["paths"]) == expected_paths
 
@@ -161,7 +166,10 @@ def test_schema_only_openapi_export_is_complete_and_deterministic(
             for parameter in parameters
         )
 
-    json_paths = expected_paths - {"/api/classification-results/{version_id}/download"}
+    json_paths = expected_paths - {
+        "/api/classification-results/{version_id}/download",
+        "/api/result-exports/{job_id}/file",
+    }
     for path in json_paths:
         operation = next(iter(schema["paths"][path].values()))
         response_schema = operation["responses"]["200"]["content"]["application/json"][

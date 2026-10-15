@@ -1,6 +1,6 @@
 import Button from "antd/es/button";
-import { ChartBar, DownloadSimple } from "@phosphor-icons/react";
-import { api } from "../../api";
+import { ChartBar } from "@phosphor-icons/react";
+import { ResultDownloadButton } from "./ResultDownloadButton";
 import { DeliveryLifecycleControls } from "../../components/DeliveryLifecycleControls";
 import { formatTime } from "../../lib/presentation";
 import { PUBLISH_LABELS } from "./classificationResultConstants";
@@ -53,13 +53,11 @@ function ResultDetailActions(context) {
       >
         {policy.primary.label}
       </Button>
-      <a
-        className="secondary-button"
-        href={api.classificationResultDownloadUrl(result.version_id)}
-      >
-        <DownloadSimple size={18} />
-        {route.tab === "history" ? "下载所选历史结果" : "下载当前版本"}
-      </a>
+      <ResultDownloadButton
+        key={result.version_id}
+        versionId={result.version_id}
+        label={route.tab === "history" ? "下载所选历史结果" : "下载当前版本"}
+      />
     </div>
   );
 }

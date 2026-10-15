@@ -207,3 +207,78 @@ def test_workbench_uses_current_failure_flags_instead_of_historical_execution_st
     with context.database.transaction() as connection:
         connection.execute("UPDATE classification_units SET system_rerun_required=0")
     assert service.summary(10)["actions"] == []
+
+
+@pytest.mark.parametrize(
+    "disposition", ["EXPECTED_ABSTENTION", "EVIDENCE_ONLY", "OUT_OF_SCOPE"]
+)
+def test_non_tag_feedback_is_consistent_across_pending_export_and_dashboard(
+    tmp_path, disposition
+):
+    from io import BytesIO
+
+    import pandas as pd
+    from test_classification_result_semantics_v3 import _client, _set_comment
+    from test_dashboard_versions import _create_dashboard
+
+    from return_semantics.schemas import ValidatedClassification
+    from web_backend.classification_result_service import ClassificationResultService
+    from web_backend.dashboard_service import DashboardService
+    from web_backend.task_service import TaskService
+
+    context = _seed_result_context(tmp_path)
+    _set_comment(context, "They should be warm")
+    payload = context.results[context.key].model_dump(mode="json")
+    payload.update(
+        semantic_units=[],
+        problem_label_codes=[],
+        positive_label_codes=[],
+        primary_label_codes=[],
+        status="UNKNOWN_SEMANTIC",
+        unknown_semantics=[
+            {
+                "opinion": "未来可能保暖",
+                "evidence": "They should be warm",
+                "reason": "当前没有确定性能结论",
+                "disposition": disposition,
+            }
+        ],
+    )
+    context.results[context.key] = ValidatedClassification.model_validate(payload)
+    version = _publish(context)
+    results = ClassificationResultService(context.database)
+    response = _client(results).get(
+        f"/api/classification-results/{version['version_id']}/records"
+    )
+    assert response.status_code == 200
+    assert all(
+        row["quality_status"] == "ready" and not row["system_rerun_required"]
+        for row in response.json()["items"]
+    )
+    assert (
+        results.records(version["version_id"], quality_status="review_required")[
+            "total"
+        ]
+        == 0
+    )
+    summary = WorkbenchService(context.database).summary(20)
+    assert summary["counts"]["review_required_results"] == 0
+    assert not any(row["type"] == "review_required" for row in summary["actions"])
+    assert (
+        TaskService(context.database).get(context.task_id)["segments"][0][
+            "pending_review_count"
+        ]
+        == 0
+    )
+    content, _ = results.download(version["version_id"])
+    exported = pd.read_excel(BytesIO(content), sheet_name="反馈汇总")
+    assert exported["结果状态"].eq("可用").all()
+    assert exported["是否需重跑"].eq("否").all()
+    dashboards = DashboardService(context.database)
+    plan, dashboard = _create_dashboard(dashboards, version["version_id"])
+    assert plan["ready"]
+    assert plan["summary"]["record_count"] == 2
+    records = dashboards.records(dashboard["id"], dashboard["version"]["version_id"])
+    # 看板汇总按反馈组计数，证据明细仍完整返回三条源记录。
+    assert records["total"] == 3
+    assert all(row["quality_status"] == "ready" for row in records["items"])

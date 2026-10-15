@@ -1,3 +1,4 @@
+import { resultExportApi } from "../src/shared/api/resultExportApi";
 import { afterEach, expect, test, vi } from "vitest";
 
 import { api } from "../src/api";
@@ -36,9 +37,16 @@ test("分类结果 API 迁移后保持既有路径和查询参数", async () => 
     "/api/classification-results/version/1/records?page=3&product_name=%E4%BA%A7%E5%93%81+A",
     "/api/classification-results/version/1/drilldown?group_by=problem&product_sku=SKU-1",
   ]);
-  expect(api.classificationResultDownloadUrl("version/1")).toBe(
-    "/api/classification-results/version/1/download",
-  );
+  await resultExportApi.create(["version/1"]);
+  expect(fetchMock.mock.calls.at(-1)).toEqual([
+    "/api/result-exports",
+    expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ version_ids: ["version/1"] }),
+    }),
+  ]);
+  await resultExportApi.get("job-1");
+  expect(fetchMock.mock.calls.at(-1)[0]).toBe("/api/result-exports/job-1");
 });
 
 test("结果发布重试使用约定的 POST 路径和并发控制参数", async () => {

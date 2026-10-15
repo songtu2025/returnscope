@@ -34,7 +34,6 @@ const { dashboardApiMock, resultApiMock } = vi.hoisted(() => ({
   },
   resultApiMock: {
     classificationResults: vi.fn(),
-    classificationResultDownloadUrl: vi.fn(),
     configs: vi.fn(),
     modelPreference: vi.fn(),
   },
@@ -671,7 +670,6 @@ beforeEach(() => {
   window.location.hash = "#analysis-dashboards";
   Object.values(dashboardApiMock).forEach((mock) => mock.mockReset());
   Object.values(resultApiMock).forEach((mock) => mock.mockReset());
-  resultApiMock.classificationResultDownloadUrl.mockReturnValue("/download");
   resultApiMock.configs.mockResolvedValue([
     {
       id: "connection-1",

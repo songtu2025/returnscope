@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from test_classification_result_pool import _publish, _seed_result_context
 
-from return_semantics.schemas import ProcessingStatus
+from return_semantics.schemas import ProcessingStatus, ValidatedClassification
 from web_backend.classification_result_payload import (
     classification_comment_status,
     prepare_semantic_record,
@@ -22,25 +21,9 @@ from web_backend.routers.classification_results import (
 )
 
 
-class ResultPayload:
-    def __init__(
-        self,
-        source: Any,
-        payload: dict[str, Any],
-        status: ProcessingStatus,
-    ) -> None:
-        self.status = status
-        self.problem_label_codes = payload.get("problem_label_codes", [])
-        self.positive_label_codes = payload.get("positive_label_codes", [])
-        self.primary_label_codes = payload.get("primary_label_codes", [])
-        self.model_name = source.model_name
-        self.prompt_version = source.prompt_version
-        self.taxonomy_version = source.taxonomy_version
-        self._payload = payload
-
-    def model_dump(self, *, mode: str) -> dict[str, Any]:
-        assert mode == "json"
-        return self._payload
+def _set_comment(context, text: str) -> None:
+    context.dataset.records["comment_raw"] = text
+    context.dataset.unique_comments["comment_normalized"] = text
 
 
 def test_legacy_scope_status_is_consistent_across_record_reads(tmp_path: Path) -> None:
@@ -129,6 +112,7 @@ def test_v3_facts_and_comment_topic_summary_are_persisted_and_returned(
     tmp_path: Path,
 ) -> None:
     context = _seed_result_context(tmp_path)
+    _set_comment(context, "Too small. Fits my wife.")
     source = context.results[context.key]
     payload = source.model_dump(mode="json")
     payload["extracted_facts"] = [
@@ -210,7 +194,9 @@ def test_v3_facts_and_comment_topic_summary_are_persisted_and_returned(
     payload["positive_label_codes"] = ["FUNCTION_PROTECTION_U1"]
     payload["primary_label_codes"] = ["FUNCTION_PROTECTION_U1"]
     context.results = {
-        context.key: ResultPayload(source, payload, ProcessingStatus.AUTO_APPROVED)
+        context.key: ValidatedClassification.model_validate(
+            {**payload, "status": ProcessingStatus.AUTO_APPROVED}
+        )
     }
 
     version = _publish(context)
@@ -278,6 +264,7 @@ def test_v3_facts_and_comment_topic_summary_are_persisted_and_returned(
 
 def test_expected_abstention_does_not_require_review(tmp_path: Path) -> None:
     context = _seed_result_context(tmp_path)
+    _set_comment(context, "They should be warm")
     source = context.results[context.key]
     payload = source.model_dump(mode="json")
     payload["semantic_units"] = []
@@ -293,7 +280,9 @@ def test_expected_abstention_does_not_require_review(tmp_path: Path) -> None:
         }
     ]
     context.results = {
-        context.key: ResultPayload(source, payload, ProcessingStatus.UNKNOWN_SEMANTIC)
+        context.key: ValidatedClassification.model_validate(
+            {**payload, "status": ProcessingStatus.UNKNOWN_SEMANTIC}
+        )
     }
 
     version = _publish(context)
@@ -316,6 +305,7 @@ def test_expected_abstention_does_not_require_review(tmp_path: Path) -> None:
 
 def test_evidence_only_does_not_require_review(tmp_path: Path) -> None:
     context = _seed_result_context(tmp_path)
+    _set_comment(context, "The liner explains the warmth")
     source = context.results[context.key]
     payload = source.model_dump(mode="json")
     payload["semantic_units"] = []
@@ -331,7 +321,9 @@ def test_evidence_only_does_not_require_review(tmp_path: Path) -> None:
         }
     ]
     context.results = {
-        context.key: ResultPayload(source, payload, ProcessingStatus.UNKNOWN_SEMANTIC)
+        context.key: ValidatedClassification.model_validate(
+            {**payload, "status": ProcessingStatus.UNKNOWN_SEMANTIC}
+        )
     }
 
     version = _publish(context)

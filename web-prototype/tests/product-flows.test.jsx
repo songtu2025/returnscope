@@ -2382,10 +2382,7 @@ describe("关键用户流程", () => {
       listing: "SR001",
     });
     await user.click(screen.getByRole("button", { name: /查看 .* 详情/ }));
-    expect(screen.getByRole("link", { name: "下载" })).toHaveAttribute(
-      "href",
-      "/classification-download",
-    );
+    expect(screen.getByRole("button", { name: "下载" })).toBeEnabled();
     expect(screen.getByText("任务配置")).toBeVisible();
     await user.click(screen.getByRole("tab", { name: "任务配置" }));
     expect(screen.getByText("生产线路 · #1 · 任务自定义")).toBeVisible();
@@ -2660,7 +2657,7 @@ describe("关键用户流程", () => {
       within(publishingRow).queryByRole("button", { name: "查看结果" }),
     ).not.toBeInTheDocument();
     expect(
-      within(publishingRow).queryByRole("link", { name: "下载" }),
+      within(publishingRow).queryByRole("button", { name: "下载" }),
     ).not.toBeInTheDocument();
 
     const failedRow = screen.getByRole("row", { name: /FAILED/ });
@@ -2690,7 +2687,7 @@ describe("关键用户流程", () => {
     await user.click(
       within(publishedRow).getByRole("button", { name: /查看 .* 详情/ }),
     );
-    expect(within(publishedRow).getByRole("link", { name: "下载" })).toBeVisible();
+    expect(within(publishedRow).getByRole("button", { name: "下载" })).toBeVisible();
 
     const reviewRow = screen.getByRole("row", { name: /REVIEW/ });
     expect(within(reviewRow).getByText("已发布")).toBeVisible();
@@ -2994,10 +2991,7 @@ describe("关键用户流程", () => {
 
     expect(await screen.findByRole("button", { name: "查看已有结果" })).toBeVisible();
     await user.click(screen.getByLabelText("更多任务操作"));
-    expect(screen.getByRole("link", { name: "下载部分结果" })).toHaveAttribute(
-      "href",
-      "/partial-download",
-    );
+    expect(screen.getByRole("button", { name: "下载部分结果" })).toBeEnabled();
     expect(screen.getAllByText("已取消").length).toBeGreaterThan(0);
     expect(document.querySelector(".task-stage-rail")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "查看结果" })).toBeEnabled();

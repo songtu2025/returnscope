@@ -1,9 +1,9 @@
-import { CaretRight, DownloadSimple } from "@phosphor-icons/react";
+import { CaretRight } from "@phosphor-icons/react";
 import Button from "antd/es/button";
 import Checkbox from "antd/es/checkbox";
 import { DeliveryLifecycleControls } from "../../components/DeliveryLifecycleControls";
 
-import { api } from "../../api";
+import { ResultDownloadButton } from "./ResultDownloadButton";
 import { formatTime } from "../../lib/presentation";
 import { PUBLISH_LABELS } from "./classificationResultConstants";
 import { resultActionPolicy } from "./resultActionPolicy";
@@ -80,13 +80,11 @@ export function ResultPoolRow({
         >
           {policy.primary.label}
         </Button>
-        <a
-          className="secondary-button compact-button"
-          href={api.classificationResultDownloadUrl(result.version_id)}
-        >
-          <DownloadSimple size={15} />
-          下载
-        </a>
+        <ResultDownloadButton
+          key={result.version_id}
+          versionId={result.version_id}
+          compact
+        />
       </div>
     </article>
   );

@@ -1434,6 +1434,42 @@ export type ManualResultAssessmentResponse = {
 };
 
 /**
+ * ResultExportRequest
+ */
+export type ResultExportRequest = {
+  /**
+   * Version Ids
+   */
+  version_ids: Array<string>;
+};
+
+/**
+ * ResultExportResponse
+ */
+export type ResultExportResponse = {
+  /**
+   * Error
+   */
+  error: string;
+  /**
+   * Expires At
+   */
+  expires_at: number;
+  /**
+   * Filename
+   */
+  filename: string;
+  /**
+   * Id
+   */
+  id: string;
+  /**
+   * Status
+   */
+  status: string;
+};
+
+/**
  * SemanticRestoreRequest
  */
 export type SemanticRestoreRequest = {
@@ -2360,3 +2396,91 @@ export type GetResultVersionsApiClassificationResultsVersionIdVersionsGetRespons
 
 export type GetResultVersionsApiClassificationResultsVersionIdVersionsGetResponse =
   GetResultVersionsApiClassificationResultsVersionIdVersionsGetResponses[keyof GetResultVersionsApiClassificationResultsVersionIdVersionsGetResponses];
+
+export type CreateCombinedExportApiResultExportsPostData = {
+  body: ResultExportRequest;
+  path?: never;
+  query?: never;
+  url: "/api/result-exports";
+};
+
+export type CreateCombinedExportApiResultExportsPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type CreateCombinedExportApiResultExportsPostError =
+  CreateCombinedExportApiResultExportsPostErrors[keyof CreateCombinedExportApiResultExportsPostErrors];
+
+export type CreateCombinedExportApiResultExportsPostResponses = {
+  /**
+   * Successful Response
+   */
+  200: ResultExportResponse;
+};
+
+export type CreateCombinedExportApiResultExportsPostResponse =
+  CreateCombinedExportApiResultExportsPostResponses[keyof CreateCombinedExportApiResultExportsPostResponses];
+
+export type GetExportApiResultExportsJobIdGetData = {
+  body?: never;
+  path: {
+    /**
+     * Job Id
+     */
+    job_id: string;
+  };
+  query?: never;
+  url: "/api/result-exports/{job_id}";
+};
+
+export type GetExportApiResultExportsJobIdGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetExportApiResultExportsJobIdGetError =
+  GetExportApiResultExportsJobIdGetErrors[keyof GetExportApiResultExportsJobIdGetErrors];
+
+export type GetExportApiResultExportsJobIdGetResponses = {
+  /**
+   * Successful Response
+   */
+  200: ResultExportResponse;
+};
+
+export type GetExportApiResultExportsJobIdGetResponse =
+  GetExportApiResultExportsJobIdGetResponses[keyof GetExportApiResultExportsJobIdGetResponses];
+
+export type DownloadExportApiResultExportsJobIdFileGetData = {
+  body?: never;
+  path: {
+    /**
+     * Job Id
+     */
+    job_id: string;
+  };
+  query?: never;
+  url: "/api/result-exports/{job_id}/file";
+};
+
+export type DownloadExportApiResultExportsJobIdFileGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type DownloadExportApiResultExportsJobIdFileGetError =
+  DownloadExportApiResultExportsJobIdFileGetErrors[keyof DownloadExportApiResultExportsJobIdFileGetErrors];
+
+export type DownloadExportApiResultExportsJobIdFileGetResponses = {
+  /**
+   * Successful Response
+   */
+  200: unknown;
+};

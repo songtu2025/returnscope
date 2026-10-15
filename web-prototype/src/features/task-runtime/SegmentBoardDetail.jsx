@@ -1,3 +1,4 @@
+import { ResultDownloadButton } from "../classification-results/ResultDownloadButton";
 import { ArrowLineUp, ArrowUp, ArrowDown, DownloadSimple } from "@phosphor-icons/react";
 import { api } from "../../api";
 import { formatTime } from "../../lib/presentation";
@@ -134,12 +135,11 @@ function SegmentSecondaryActions({ task, segment, canOrder, orderableIndex, queu
       )}
       {["completed", "completed_with_errors"].includes(segment.status) &&
         isPublishedResult(segment) && (
-          <a
-            className="secondary-button compact-button"
-            href={api.classificationResultDownloadUrl(segment.result_version_id)}
-          >
-            <DownloadSimple size={14} /> 下载
-          </a>
+          <ResultDownloadButton
+            key={segment.result_version_id}
+            versionId={segment.result_version_id}
+            compact
+          />
         )}
       {["completed", "completed_with_errors"].includes(segment.status) &&
         isLegacyResult(segment) && (

@@ -15,6 +15,7 @@ from web_backend.application_runtime import (
 )
 from web_backend.auth_service import AuthService
 from web_backend.classification_result_service import ClassificationResultService
+from web_backend.classification_results.export_jobs import ResultExportService
 from web_backend.classification_standard_service import ClassificationStandardService
 from web_backend.classification_standard_validation_service import (
     ClassificationStandardValidationService,
@@ -33,6 +34,7 @@ from web_backend.mail_service import MailSender, create_mail_sender
 from web_backend.model_preference_service import ModelPreferenceService
 from web_backend.operations_service import AuditLogService, WorkbenchService
 from web_backend.request_timing import RequestTimingMiddleware
+from web_backend.result_export_worker import ResultExportWorker
 from web_backend.review_service import ReviewService
 from web_backend.routers.accounts import create_account_router
 from web_backend.routers.auth_actions import (
@@ -127,13 +129,15 @@ def create_app(
     database = _create_database(settings)
     secret_box = SecretBox(settings.encryption_key)
     auth_runtime = _create_auth_runtime(database, settings, mail_sender_override)
-    dummy_password_hash = hash_password("invalid-password-only")
     dataset_service = DatasetService(database, settings)
     config_service = ConfigService(database, secret_box)
     model_preference_service = ModelPreferenceService(database)
     validation_executor = _create_validation_executor(config_service)
     analysis_service = AnalysisService(database)
     result_service = ClassificationResultService(database)
+    export_service = ResultExportService(
+        result_service, settings.data_dir / "result_exports"
+    )
     standard_service = ClassificationStandardService(database)
     dashboard_service = DashboardService(database)
     insight_report_service = InsightReportService(
@@ -166,9 +170,12 @@ def create_app(
 
     lifespan = _create_lifespan(
         start_worker,
-        worker,
-        insight_report_worker,
-        standard_validation_worker,
+        (
+            worker,
+            insight_report_worker,
+            standard_validation_worker,
+            ResultExportWorker(export_service),
+        ),
         validation_executor,
     )
     app = FastAPI(
@@ -188,7 +195,7 @@ def create_app(
             session_service=auth_runtime.session_service,
             account_login_limiter=auth_runtime.account_login_limiter,
             address_login_limiter=auth_runtime.address_login_limiter,
-            dummy_password_hash=dummy_password_hash,
+            dummy_password_hash=hash_password("invalid-password-only"),
             task_service=task_service,
             worker=worker,
             insight_report_worker=insight_report_worker,
@@ -244,6 +251,7 @@ def create_app(
             result_service=result_service,
             standard_service=standard_service,
             current_user=current_user,
+            export_service=export_service,
         )
     )
     app.include_router(

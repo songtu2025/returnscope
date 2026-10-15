@@ -99,10 +99,7 @@ test("已发布结果使用分类版本下载，旧结果使用原任务片段�
     "completed",
   );
   const view = render(<SegmentBoardRow {...props} />);
-  expect(screen.getByRole("link", { name: "下载" })).toHaveAttribute(
-    "href",
-    "/api/classification-results/synthetic-result/download",
-  );
+  expect(screen.getByRole("button", { name: "下载" })).toBeEnabled();
   expect(screen.queryByRole("link", { name: "下载旧结果" })).not.toBeInTheDocument();
   view.rerender(
     <SegmentBoardRow

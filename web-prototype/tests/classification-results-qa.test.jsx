@@ -5,7 +5,6 @@ import userEvent from "@testing-library/user-event";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     classificationResults: vi.fn(),
-    classificationResultDownloadUrl: vi.fn(),
   },
 }));
 
@@ -40,9 +39,6 @@ function resultPage(overrides = {}) {
 beforeEach(() => {
   window.location.hash = "classification-results";
   Object.values(apiMock).forEach((mock) => mock.mockReset());
-  apiMock.classificationResultDownloadUrl.mockImplementation(
-    (id) => `/api/classification-results/${id}/download`,
-  );
 });
 
 afterEach(() => cleanup());

@@ -1,3 +1,4 @@
+import { ResultDownloadButton } from "../classification-results/ResultDownloadButton";
 import { TaskNameEditor } from "./TaskNameEditor";
 import { useDismissibleDetails } from "../../hooks/useDismissibleDetails";
 import {
@@ -89,13 +90,23 @@ function TaskExecutionActions({ task, summary, onPause, onRetry, showListings })
 /** @param {Pick<TaskDetailHeaderProps, "task" | "onRetry" | "onArchive">} props */
 function TaskMoreActions({ task, onRetry, onArchive }) {
   const { detailsProps, summaryProps } = useDismissibleDetails({ menu: true });
+  const versionIds = (task.segments ?? [])
+    .filter((item) => !item.deleted_at && item.result_version_id)
+    .map((item) => String(item.result_version_id));
   return (
     <details {...detailsProps} className="task-more-actions">
       <summary {...summaryProps} aria-label="更多任务操作" title="更多任务操作">
         <DotsThreeVertical size={19} />
       </summary>
       <div>
-        {task.result_file_path && (
+        {versionIds.length > 0 && (
+          <ResultDownloadButton
+            key={versionIds.join(":")}
+            versionIds={versionIds}
+            label={task.status === "cancelled" ? "下载部分结果" : "下载结果"}
+          />
+        )}
+        {task.result_file_path && versionIds.length === 0 && (
           <a href={api.downloadUrl(task.id)}>
             <DownloadSimple size={16} />
             {task.status === "cancelled" ? "下载部分结果" : "下载结果"}

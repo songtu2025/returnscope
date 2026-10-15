@@ -17,7 +17,6 @@ const { apiMock, dashboardApiMock } = vi.hoisted(() => ({
     classificationResultSummary: vi.fn(),
     classificationResultRecordGroups: vi.fn(),
     classificationResultDrilldown: vi.fn(),
-    classificationResultDownloadUrl: vi.fn(),
     classificationResultVersions: vi.fn(),
     reviewBatches: vi.fn(),
     createReviewBatch: vi.fn(),
@@ -140,9 +139,6 @@ beforeEach(() => {
   window.location.hash = "classification-results";
   Object.values(apiMock).forEach((mock) => mock.mockReset());
   Object.values(dashboardApiMock).forEach((mock) => mock.mockReset());
-  apiMock.classificationResultDownloadUrl.mockImplementation(
-    (id) => `/classification-results/${id}/download`,
-  );
   apiMock.classificationResults.mockResolvedValue({
     items: [resultVersion],
     total: 1,

@@ -8,7 +8,6 @@ const { apiMock } = vi.hoisted(() => ({
     classificationResultSummary: vi.fn(),
     classificationResultRecordGroups: vi.fn(),
     classificationResultDrilldown: vi.fn(),
-    classificationResultDownloadUrl: vi.fn(),
     classificationResultVersions: vi.fn(),
     reviewBatches: vi.fn(),
   },
@@ -65,7 +64,6 @@ test("结果页保留全部层级节点并将父节点作为筛选编码", async
   apiMock.classificationResultDrilldown.mockResolvedValue({ items: [] });
   apiMock.classificationResultVersions.mockResolvedValue([version]);
   apiMock.reviewBatches.mockResolvedValue({ items: [] });
-  apiMock.classificationResultDownloadUrl.mockReturnValue("/download");
   render(
     <ClassificationResultsPage
       notify={vi.fn()}

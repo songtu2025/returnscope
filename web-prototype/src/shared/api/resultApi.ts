@@ -19,7 +19,7 @@ import type {
   ListResultsApiClassificationResultsGetData,
   ListResultsApiClassificationResultsGetResponse,
 } from "./generated/classification-results/types.gen";
-import { API_BASE, queryString, request } from "./request";
+import { queryString, request } from "./request";
 
 type ClassificationResultFilters = NonNullable<
   ListResultsApiClassificationResultsGetData["query"]
@@ -101,7 +101,4 @@ export const resultApi = {
       })}`,
       options,
     ),
-  classificationResultDownloadUrl: (
-    versionId: GetResultApiClassificationResultsVersionIdGetData["path"]["version_id"],
-  ): string => `${API_BASE}/api/classification-results/${versionId}/download`,
 };

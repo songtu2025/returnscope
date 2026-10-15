@@ -1,0 +1,157 @@
+from __future__ import annotations
+
+import json
+from concurrent.futures import ThreadPoolExecutor
+from io import BytesIO
+
+import pytest
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
+from openpyxl import load_workbook
+from test_classification_result_download import context as context
+
+from web_backend.classification_results.export_jobs import ResultExportService
+from web_backend.routers.result_export_routes import create_result_export_router
+
+
+@pytest.fixture
+def exports(context, tmp_path):
+    return ResultExportService(context.service, tmp_path / "exports")
+
+
+def test_concurrent_requests_reuse_one_job_and_completed_file(context, exports):
+    version_ids = [context.version["version_id"]]
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        jobs = list(executor.map(exports.create, [version_ids] * 3))
+    assert len({item["id"] for item in jobs}) == 1
+    assert all(item["status"] == "queued" for item in jobs)
+    job_id = jobs[0]["id"]
+    assert not exports._path(job_id, ".xlsx").exists()
+    assert exports.claim_next() == job_id
+    assert exports.claim_next() is None
+    exports.run(job_id)
+    path, filename = exports.file(job_id)
+    assert filename == "classification-L1-v1.xlsx"
+    assert exports.create(version_ids)["status"] == "ready"
+    book = load_workbook(path)
+    assert book.sheetnames == ["反馈汇总", "语义明细", "源明细"]
+    assert book["反馈汇总"].max_row == 3
+    assert book["源明细"].max_row == 4
+    book.close()
+
+
+def test_snapshot_survives_edits_and_new_click_exports_latest(context, exports):
+    version_ids = [context.version["version_id"]]
+    old = exports.create(version_ids)
+    with context.database.transaction() as connection:
+        connection.execute(
+            "UPDATE classification_result_records SET comment='修改后的反馈'"
+        )
+    new = exports.create(version_ids)
+    assert old["id"] != new["id"]
+    for job, expected in [(old, "Too small"), (new, "修改后的反馈")]:
+        exports.run(job["id"])
+        path, _ = exports.file(job["id"])
+        book = load_workbook(path)
+        for sheet_name in ["反馈汇总", "源明细"]:
+            values = list(book[sheet_name].values)
+            index = values[0].index("反馈正文")
+            assert all(row[index] == expected for row in values[1:])
+        book.close()
+
+
+def test_failed_generation_can_retry_and_running_job_recovers(
+    context, exports, monkeypatch
+):
+    versions = [context.version["version_id"]]
+    job = exports.create(versions)
+    original = exports.results.snapshot_workbook
+
+    def fail(_snapshot):
+        raise ValueError("不应泄露的原文")
+
+    monkeypatch.setattr(exports.results, "snapshot_workbook", fail)
+    exports.run(job["id"])
+    failed = exports.get(job["id"])
+    assert failed["status"] == "failed"
+    assert "不应泄露" not in json.dumps(failed, ensure_ascii=False)
+    assert exports.create(versions)["status"] == "queued"
+    assert exports.claim_next() == job["id"]
+    restarted = ResultExportService(context.service, exports.directory)
+    restarted.recover()
+    assert restarted.get(job["id"])["status"] == "queued"
+    monkeypatch.setattr(exports.results, "snapshot_workbook", original)
+    restarted.run(job["id"])
+    assert restarted.get(job["id"])["status"] == "ready"
+
+
+def test_expiration_cleans_only_export_files(context, exports):
+    job = exports.create([context.version["version_id"]])
+    exports.run(job["id"])
+    unrelated = exports.directory / "unrelated.txt"
+    unrelated.write_text("保留", encoding="utf-8")
+    manifest = exports._load(job["id"])
+    manifest["expires_at"] = 0
+    exports._save(manifest)
+    with pytest.raises(FileNotFoundError, match="过期"):
+        exports.file(job["id"])
+    exports.claim_next()
+    assert unrelated.exists()
+    assert not exports._path(job["id"]).exists()
+    assert not exports._path(job["id"], ".xlsx").exists()
+    assert not exports._path(job["id"], ".snapshot.gz").exists()
+
+
+def test_download_routes_auth_pending_failure_and_refresh(context, exports):
+    authenticated = True
+
+    def current_user():
+        if not authenticated:
+            raise HTTPException(status_code=401, detail="请登录")
+        return {"id": "user-1"}
+
+    app = FastAPI()
+    app.include_router(create_result_export_router(exports, current_user))
+    client = TestClient(app)
+    response = client.post(
+        "/api/result-exports", json={"version_ids": [context.version["version_id"]]}
+    )
+    assert response.status_code == 200
+    job_id = response.json()["id"]
+    base = f"/api/result-exports/{job_id}"
+    assert client.get(base + "/file").status_code == 409
+    exports.run(job_id)
+    assert client.get(base).json()["status"] == "ready"
+    response = client.get(base + "/file")
+    assert response.status_code == 200
+    book = load_workbook(BytesIO(response.content))
+    assert book["源明细"].max_row == 4
+    book.close()
+    authenticated = False
+    for path in [base, base + "/file"]:
+        assert client.get(path).status_code == 401
+    assert (
+        client.post(
+            "/api/result-exports", json={"version_ids": [context.version["version_id"]]}
+        ).status_code
+        == 401
+    )
+    authenticated = True
+    assert client.get("/api/result-exports/invalid").status_code == 404
+    assert (
+        client.post("/api/result-exports", json={"version_ids": []}).status_code == 422
+    )
+
+
+def test_permanent_result_deletion_blocks_cached_download(context, exports):
+    job = exports.create([context.version["version_id"]])
+    exports.run(job["id"])
+    with context.database.transaction() as connection:
+        connection.execute("DELETE FROM classification_result_records")
+        connection.execute("DELETE FROM classification_units")
+        connection.execute("UPDATE task_segments SET result_version_id=NULL")
+        connection.execute("DELETE FROM classification_result_versions")
+    from web_backend.classification_result_service import ClassificationResultNotFound
+
+    with pytest.raises(ClassificationResultNotFound):
+        exports.file(job["id"])

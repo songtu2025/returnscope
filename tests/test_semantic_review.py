@@ -609,3 +609,36 @@ def test_accepts_enriched_result_shape_with_ignored_semantics() -> None:
 
     assert view["coverage_summary"]["no_tag_needed"] == 1
     assert view["coverage_summary"]["complete"] is True
+
+
+@pytest.mark.parametrize(
+    "disposition", ["EXPECTED_ABSTENTION", "EVIDENCE_ONLY", "OUT_OF_SCOPE"]
+)
+@pytest.mark.parametrize(
+    "status,diagnostic,unexplained,expected",
+    [
+        ("UNKNOWN_SEMANTIC", None, False, READY),
+        ("UNKNOWN_SEMANTIC", None, True, BUSINESS_REVIEW_REQUIRED),
+        ("UNKNOWN_SEMANTIC", "MODEL_RESULT_MISMATCH", False, BUSINESS_REVIEW_REQUIRED),
+        ("UNKNOWN_SEMANTIC", "MODEL_RUN_TIMEOUT", False, SYSTEM_RERUN_REQUIRED),
+        ("MANUAL_REVIEW", None, False, BUSINESS_REVIEW_REQUIRED),
+        ("SECONDARY_REVIEW", None, False, BUSINESS_REVIEW_REQUIRED),
+    ],
+)
+def test_explicit_non_tag_outcome_respects_remaining_review_work(
+    disposition, status, diagnostic, unexplained, expected
+):
+    result = {
+        "status": status,
+        "unknown_semantics": [
+            {
+                "opinion": "未来可能保暖",
+                "evidence": "They should be warm",
+                "reason": "当前没有确定性能结论",
+                "disposition": disposition,
+            }
+        ],
+        "review_diagnostics": [{"code": diagnostic}] if diagnostic else [],
+    }
+    text = "They should be warm" + (". Delivery was delayed" if unexplained else "")
+    assert review_route(result, text) == expected

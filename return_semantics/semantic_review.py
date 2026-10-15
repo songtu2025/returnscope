@@ -212,7 +212,13 @@ def review_route(
     status = _enum_value(
         processing_status or _get(result, "processing_status") or _get(result, "status")
     )
-    if status in _BUSINESS_REVIEW_STATUSES:
+    needs_status_review = status in _BUSINESS_REVIEW_STATUSES
+    # 明确无需归类且没有待办时，旧处理状态不能重新制造人工复核需求。
+    if status == ProcessingStatus.UNKNOWN_SEMANTIC.value and items:
+        needs_status_review = any(
+            item.get("disposition") != NO_TAG_NEEDED for item in items
+        )
+    if needs_status_review:
         return BUSINESS_REVIEW_REQUIRED
     return READY
 
