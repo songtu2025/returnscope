@@ -78,7 +78,7 @@ test("列表直接改名刷新名称，取消不发请求", async () => {
   expect(onNavigate).not.toHaveBeenCalled();
 });
 
-test("保存失败和冲突保留名称输入，获取最新修订后可以再次提交", async () => {
+test("保存失败和冲突保留名称输入，核对最新名称并确认后可以再次提交", async () => {
   await openRename();
   await fillName();
   mocks.renameTask.mockRejectedValueOnce(new Error("合成保存失败"));
@@ -90,7 +90,9 @@ test("保存失败和冲突保留名称输入，获取最新修订后可以再�
   );
   mocks.task.mockResolvedValue({ ...original, revision: 2 });
   await userEvent.click(screen.getByRole("button", { name: "保存名称" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("合成修订冲突");
+  expect(await screen.findByRole("alert")).toHaveTextContent("请核对");
+  expect(screen.getByRole("button", { name: "保存名称" })).toBeDisabled();
+  await userEvent.click(screen.getByRole("button", { name: "采用我的名称" }));
   expect(screen.getByLabelText("任务名称")).toHaveValue("合成新任务");
   const updated = { ...original, title: "合成新任务", revision: 3 };
   mocks.renameTask.mockResolvedValue(updated);

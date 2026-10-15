@@ -1,0 +1,24 @@
+.task-name-conflict {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  background: var(--green-pale);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.task-name-conflict dl {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 8px;
+}
+.task-name-conflict dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.task-name-conflict dd {
+  margin: 0;
+}
+.task-name-conflict .text-button {
+  min-height: 32px;
+  margin-right: 12px;
+}
