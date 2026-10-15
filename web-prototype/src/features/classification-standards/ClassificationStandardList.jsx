@@ -1,6 +1,7 @@
 import {
   BookOpenText,
   CheckCircle,
+  DotsThreeVertical,
   MagnifyingGlass,
   Plus,
   Tag,
@@ -9,6 +10,7 @@ import {
 import Button from "antd/es/button";
 import Input from "antd/es/input";
 import { EmptyState, InlineLoading, PageHeading } from "../../components/SharedUi";
+import { useDismissibleDetails } from "../../hooks/useDismissibleDetails";
 import { formatDate } from "../../lib/presentation";
 
 /** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardSummary} ClassificationStandardSummary */
@@ -203,22 +205,11 @@ export function ClassificationStandardList({
                     </td>
                     <td>{formatDate(standard.updated_at)}</td>
                     <td>
-                      <div className="standard-row-actions">
-                        <button type="button" onClick={() => onView(standard)}>
-                          查看
-                        </button>
-                        {(standard.status === "active" ||
-                          standard.delete_mode === "delete") && (
-                          <button
-                            type="button"
-                            className="standard-deactivate-action"
-                            aria-label={`${standard.delete_mode === "delete" ? "删除标准" : "停用标准"}：${standard.name}`}
-                            onClick={() => onDelete(standard)}
-                          >
-                            {standard.delete_mode === "delete" ? "删除" : "停用"}
-                          </button>
-                        )}
-                      </div>
+                      <StandardRowActions
+                        standard={standard}
+                        onView={onView}
+                        onDelete={onDelete}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -228,5 +219,40 @@ export function ClassificationStandardList({
         )}
       </section>
     </>
+  );
+}
+
+/** @param {{standard: ClassificationStandardSummary, onView: (standard: ClassificationStandardSummary) => void, onDelete: (standard: ClassificationStandardSummary) => void}} props */
+function StandardRowActions({ standard, onView, onDelete }) {
+  const { detailsProps, summaryProps } = useDismissibleDetails({ menu: true });
+  const actionLabel = standard.delete_mode === "delete" ? "删除标准" : "停用标准";
+  return (
+    <div className="standard-row-actions">
+      <button type="button" onClick={() => onView(standard)}>
+        查看
+      </button>
+      {(standard.status === "active" || standard.delete_mode === "delete") && (
+        <details {...detailsProps} className="standard-more-menu">
+          <summary
+            {...summaryProps}
+            aria-label={`更多标准操作：${standard.name}`}
+            aria-haspopup="menu"
+            title="更多标准操作"
+          >
+            <DotsThreeVertical size={17} />
+          </summary>
+          <div className="standard-row-menu" role="menu" aria-label="标准操作">
+            <button
+              type="button"
+              role="menuitem"
+              aria-label={`${actionLabel}：${standard.name}`}
+              onClick={() => onDelete(standard)}
+            >
+              {actionLabel}
+            </button>
+          </div>
+        </details>
+      )}
+    </div>
   );
 }

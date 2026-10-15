@@ -1909,10 +1909,18 @@ test("删除已发布标准时明确执行停用", async () => {
 
   render(<ClassificationStandardsPage route={{ query: {} }} notify={vi.fn()} />);
 
-  const deactivate = await screen.findByRole("button", {
+  const more = await screen.findByLabelText(`更多标准操作：${standard.name}`);
+  expect(more).toHaveAttribute("aria-expanded", "false");
+  more.focus();
+  await userEvent.keyboard("{ArrowDown}");
+  const deactivate = screen.getByRole("menuitem", {
     name: `停用标准：${standard.name}`,
   });
-  expect(screen.queryByText("更多")).not.toBeInTheDocument();
+  expect(deactivate).toHaveFocus();
+  await userEvent.keyboard("{Escape}");
+  expect(more).toHaveFocus();
+  expect(more).toHaveAttribute("aria-expanded", "false");
+  await userEvent.keyboard("{Enter}");
   await userEvent.click(deactivate);
   expect(screen.getByText(`停用“${standard.name}”`)).toBeVisible();
   expect(screen.getByRole("dialog", { name: `停用“${standard.name}”` })).toBeVisible();
@@ -1920,8 +1928,11 @@ test("删除已发布标准时明确执行停用", async () => {
   expect(standardApiMock.deleteClassificationStandard).not.toHaveBeenCalled();
   await userEvent.click(screen.getByRole("button", { name: "取消" }));
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  expect(deactivate).toHaveFocus();
-  await userEvent.click(deactivate);
+  expect(more).toHaveFocus();
+  await userEvent.click(more);
+  await userEvent.click(
+    screen.getByRole("menuitem", { name: `停用标准：${standard.name}` }),
+  );
   await userEvent.click(screen.getByRole("button", { name: "确认停用" }));
 
   await waitFor(() =>
@@ -1945,8 +1956,11 @@ test("已停用标准不再显示停用入口，未发布标准使用删除文�
   ]);
   render(<ClassificationStandardsPage route={{ query: {} }} notify={vi.fn()} />);
   await screen.findByText("已停用");
-  expect(screen.queryByRole("button", { name: /^停用标准/ })).not.toBeInTheDocument();
-  await userEvent.click(screen.getByRole("button", { name: "删除标准：未发布标准" }));
+  expect(
+    screen.queryByLabelText(`更多标准操作：${standard.name}`),
+  ).not.toBeInTheDocument();
+  await userEvent.click(screen.getByLabelText("更多标准操作：未发布标准"));
+  await userEvent.click(screen.getByRole("menuitem", { name: "删除标准：未发布标准" }));
   expect(screen.getByText("永久删除“未发布标准”")).toBeVisible();
   expect(screen.getByRole("button", { name: "确认删除" })).toBeVisible();
   expect(screen.queryByText(/草稿及其样本验证记录/)).not.toBeInTheDocument();
