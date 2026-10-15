@@ -149,6 +149,7 @@
   align-items: flex-start;
   gap: 4px;
   min-width: 72px;
+  max-width: 100%;
 }
 
 .result-download-control > button {
@@ -169,7 +170,8 @@
 }
 
 .result-download-control > small {
-  max-width: 200px;
+  max-width: min(200px, 100%);
   color: var(--red);
   white-space: normal;
+  overflow-wrap: anywhere;
 }
