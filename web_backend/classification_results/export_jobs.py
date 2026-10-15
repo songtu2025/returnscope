@@ -54,12 +54,14 @@ class ResultExportService:
 
     def create(self, version_ids: list[str]) -> dict[str, Any]:
         # 快照包含全部导出字段，人工修正或产品信息变化都会形成不同缓存键。
+        snapshot = self.results.capture_export(list(dict.fromkeys(version_ids)))
+        content = json.dumps(snapshot, ensure_ascii=False, sort_keys=True).encode(
+            "utf-8"
+        )
+        job_id = hashlib.sha256(EXPORT_FORMAT.encode() + content).hexdigest()
+        compressed = gzip.compress(content)
+        # 读取、序列化和压缩不占状态锁；相同内容只在提交任务时合并。
         with self._lock:
-            snapshot = self.results.capture_export(list(dict.fromkeys(version_ids)))
-            content = json.dumps(snapshot, ensure_ascii=False, sort_keys=True).encode(
-                "utf-8"
-            )
-            job_id = hashlib.sha256(EXPORT_FORMAT.encode() + content).hexdigest()
             try:
                 existing = self._load(job_id)
             except FileNotFoundError:
@@ -82,8 +84,7 @@ class ResultExportService:
             }
             path = self._path(job_id, ".snapshot.gz")
             temporary = path.with_suffix(".gz.tmp")
-            with gzip.open(temporary, "wb") as stream:
-                stream.write(content)
+            temporary.write_bytes(compressed)
             temporary.replace(path)
             self._save(job)
             return self._public(job)

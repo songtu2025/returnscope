@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
+from threading import Barrier, Event
 
 import pytest
 from fastapi import FastAPI, HTTPException
@@ -19,12 +20,27 @@ def exports(context, tmp_path):
     return ResultExportService(context.service, tmp_path / "exports")
 
 
-def test_concurrent_requests_reuse_one_job_and_completed_file(context, exports):
+def test_concurrent_requests_reuse_one_job_and_completed_file(
+    context, exports, monkeypatch
+):
     version_ids = [context.version["version_id"]]
+    captured = Barrier(3)
+    original = exports.results.capture_export
+
+    def capture(ids):
+        snapshot = original(ids)
+        captured.wait(timeout=3)
+        return snapshot
+
+    monkeypatch.setattr(exports.results, "capture_export", capture)
     with ThreadPoolExecutor(max_workers=3) as executor:
         jobs = list(executor.map(exports.create, [version_ids] * 3))
+    monkeypatch.setattr(exports.results, "capture_export", original)
     assert len({item["id"] for item in jobs}) == 1
     assert all(item["status"] == "queued" for item in jobs)
+    assert len(list(exports.directory.glob("*.json"))) == 1
+    assert len(list(exports.directory.glob("*.snapshot.gz"))) == 1
+    assert not list(exports.directory.glob("*.tmp"))
     job_id = jobs[0]["id"]
     assert not exports._path(job_id, ".xlsx").exists()
     assert exports.claim_next() == job_id
@@ -38,6 +54,40 @@ def test_concurrent_requests_reuse_one_job_and_completed_file(context, exports):
     assert book["反馈汇总"].max_row == 3
     assert book["源明细"].max_row == 4
     book.close()
+
+
+@pytest.mark.parametrize("stage", ["capture", "compress"])
+def test_preparing_snapshot_does_not_block_existing_job_queries(
+    context, exports, monkeypatch, stage
+):
+    from web_backend.classification_results import export_jobs
+
+    versions = [context.version["version_id"]]
+    existing = exports.create(versions)
+    entered, release = Event(), Event()
+    target, name = (
+        (exports.results, "capture_export")
+        if stage == "capture"
+        else (export_jobs.gzip, "compress")
+    )
+    original = getattr(target, name)
+
+    def prepare(value):
+        entered.set()
+        if not release.wait(5):
+            raise RuntimeError("合成快照释放超时")
+        return original(value)
+
+    monkeypatch.setattr(target, name, prepare)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        creating = executor.submit(exports.create, versions)
+        try:
+            assert entered.wait(3)
+            querying = executor.submit(exports.get, existing["id"])
+            assert querying.result(timeout=1)["id"] == existing["id"]
+        finally:
+            release.set()
+        assert creating.result(timeout=3)["id"] == existing["id"]
 
 
 def test_snapshot_survives_edits_and_new_click_exports_latest(context, exports):
