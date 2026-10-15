@@ -1,9 +1,9 @@
-import { CheckCircle, WarningCircle } from "@phosphor-icons/react";
+import { CheckCircle, WarningCircle, X } from "@phosphor-icons/react";
 
 import { classNames } from "../lib/presentation";
 
-/** @param {{message: import("react").ReactNode, tone?: string}} props */
-export function Toast({ message, tone }) {
+/** @param {{message: import("react").ReactNode, tone?: string, onClose?: () => void}} props */
+export function Toast({ message, tone, onClose }) {
   return (
     <div
       className={classNames("toast", tone)}
@@ -15,7 +15,17 @@ export function Toast({ message, tone }) {
       ) : (
         <CheckCircle size={20} weight="fill" />
       )}
-      {message}
+      <span>{message}</span>
+      {tone === "error" && onClose && (
+        <button
+          type="button"
+          className="icon-button toast-close"
+          aria-label="关闭错误提示"
+          onClick={onClose}
+        >
+          <X size={16} />
+        </button>
+      )}
     </div>
   );
 }

@@ -165,3 +165,17 @@
   border-color: #e9c1bc;
   background: #fff5f4;
 }
+.toast > svg,
+.toast-close {
+  flex-shrink: 0;
+}
+.toast > span {
+  min-width: 0;
+  padding: 10px 0;
+  overflow-wrap: anywhere;
+}
+.toast .toast-close {
+  width: 32px;
+  height: 32px;
+  color: inherit;
+}

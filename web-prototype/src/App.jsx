@@ -37,10 +37,15 @@ function App() {
     /** @type {Notify} */
     (message, tone = "success") => {
       setToast({ message, tone });
-      window.setTimeout(() => setToast(null), 3200);
     },
     [],
   );
+
+  useEffect(() => {
+    if (!toast || toast.tone === "error") return;
+    const timer = window.setTimeout(() => setToast(null), 3200);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   useEffect(() => {
     const handleSessionExpired = () => {
@@ -158,7 +163,7 @@ function App() {
                 notify={notify}
               />
             )}
-            {toast && <Toast {...toast} />}
+            {toast && <Toast {...toast} onClose={() => setToast(null)} />}
           </>
         }
       >
