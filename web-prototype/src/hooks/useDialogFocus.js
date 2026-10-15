@@ -3,12 +3,18 @@ import { useEffect, useRef } from "react";
 const DIALOG_CONTROL_SELECTOR =
   'button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), summary, [tabindex="0"]';
 
+/** @type {HTMLElement[]} */
+const dialogs = [];
+const handledKeys = new WeakSet();
+const topDialog = () => dialogs.filter((dialog) => dialog.isConnected).at(-1);
+
 /** @param {HTMLElement | null} dialog @returns {HTMLElement[]} */
 function dialogControls(dialog) {
   if (!dialog) return [];
   return [...dialog.querySelectorAll("*")]
     .filter((element) => element instanceof HTMLElement)
     .filter((element) => element.matches(DIALOG_CONTROL_SELECTOR))
+    .filter((element) => element.closest('[role="dialog"]') === dialog)
     .filter((element) => {
       if (
         element.closest("[hidden]") ||
@@ -33,7 +39,16 @@ function dialogControls(dialog) {
 
 /** @param {KeyboardEvent | import("react").KeyboardEvent} event @param {HTMLElement | null} dialog */
 function constrainDialogFocus(event, dialog) {
-  if (event.key !== "Tab" || !dialog) return;
+  if (
+    event.key !== "Tab" ||
+    !dialog ||
+    topDialog() !== dialog ||
+    event.defaultPrevented
+  )
+    return;
+  const native = "nativeEvent" in event ? event.nativeEvent : event;
+  if (handledKeys.has(native)) return;
+  handledKeys.add(native);
   const controls = dialogControls(dialog);
   const first = controls[0];
   const last = controls.at(-1);
@@ -65,15 +80,29 @@ export function useDialogFocus({ open, onClose, returnFocusRef }) {
     if (!open) return undefined;
     const previousFocus = returnFocusRef?.current ?? document.activeElement;
     const dialog = dialogRef.current;
+    if (!dialog) return undefined;
+    // 同时挂载的嵌套弹窗先执行子层 effect，父层应插在子层前面。
+    const childIndex = dialogs.findIndex((item) => dialog.contains(item));
+    dialogs.splice(childIndex < 0 ? dialogs.length : childIndex, 0, dialog);
     const initialFocus =
       dialog?.querySelector("[data-dialog-initial-focus]") ??
       dialogControls(dialog)[0] ??
       dialog;
-    if (initialFocus instanceof HTMLElement) initialFocus.focus();
+    if (topDialog() === dialog && initialFocus instanceof HTMLElement)
+      initialFocus.focus();
 
     /** @param {KeyboardEvent} event */
     const handleKeyDown = (event) => {
+      if (
+        topDialog() !== dialog ||
+        event.defaultPrevented ||
+        event.isComposing ||
+        event.keyCode === 229
+      )
+        return;
       if (event.key === "Escape") {
+        if (handledKeys.has(event)) return;
+        handledKeys.add(event);
         event.preventDefault();
         closeRef.current();
         return;
@@ -83,8 +112,18 @@ export function useDialogFocus({ open, onClose, returnFocusRef }) {
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {
+      const wasTop = topDialog() === dialog || dialogs.at(-1) === dialog;
+      dialogs.splice(dialogs.indexOf(dialog), 1);
+      if (!wasTop) return;
+      const next = topDialog();
+      if (
+        previousFocus instanceof HTMLElement &&
+        previousFocus.isConnected &&
+        (!next || next.contains(previousFocus))
+      ) {
         previousFocus.focus();
+      } else if (next) {
+        (dialogControls(next)[0] ?? next).focus();
       }
     };
   }, [open, returnFocusRef]);
