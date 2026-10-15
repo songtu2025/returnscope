@@ -49,7 +49,13 @@ export function useModelPreference(notify) {
   const [policy, setPolicyState] = useState(
     /** @type {ModelPreference} */ (EMPTY_POLICY),
   );
-  const [dirty, setDirty] = useState(false);
+  const [savedPolicy, setSavedPolicy] = useState(EMPTY_POLICY);
+  const dirty = Object.keys(EMPTY_POLICY).some((field) => {
+    const key = /** @type {keyof ModelPreference} */ (field);
+    return (
+      (policy[key] ?? EMPTY_POLICY[key]) !== (savedPolicy[key] ?? EMPTY_POLICY[key])
+    );
+  });
   const [saving, setSaving] = useState(false);
   const {
     data,
@@ -79,7 +85,10 @@ export function useModelPreference(notify) {
   const displayed = useProtectedData(data, dirty || saving, "model-preference");
   const connections = displayed?.connections ?? EMPTY_CONNECTIONS;
   useEffect(() => {
-    if (displayed && !dirty && !saving) setPolicyState(displayed.policy);
+    if (displayed && !dirty && !saving) {
+      setPolicyState(displayed.policy);
+      setSavedPolicy(displayed.policy);
+    }
   }, [displayed, dirty, saving]);
   useDataRefresh(() => mutate(), { loading: isLoading || isValidating });
   const loading = isLoading && !data;
@@ -92,7 +101,6 @@ export function useModelPreference(notify) {
   const load = () => mutate();
   /** @type {SetPolicy} */
   const setPolicy = (value) => {
-    setDirty(true);
     setPolicyState(value);
   };
 
@@ -113,15 +121,16 @@ export function useModelPreference(notify) {
   };
   const save = async () => {
     const value = await savePreference(policy, notify, setPolicyState, setSaving);
-    if (!value) return;
+    if (!value) return false;
     await mutate(
       { connections: data?.connections ?? [], policy: value },
       { revalidate: false },
     );
-    setDirty(false);
+    setSavedPolicy(value);
     void refreshServerState(mutateCache, ["task-create"]).catch(() =>
       notify("偏好已保存，关联配置更新失败，可重试", "error"),
     );
+    return true;
   };
   return {
     connections,
@@ -138,7 +147,7 @@ export function useModelPreference(notify) {
     dirty,
     reset: () => {
       setPolicyState(displayed?.policy ?? EMPTY_POLICY);
-      setDirty(false);
+      setSavedPolicy(displayed?.policy ?? EMPTY_POLICY);
     },
   };
 }
