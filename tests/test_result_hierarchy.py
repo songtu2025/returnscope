@@ -74,7 +74,7 @@ def test_result_tree_filters_count_feedback_groups_and_exports_paths(
     assert root["record_count"] == 1
     assert root["unit_count"] == 1
     assert root["label_path"] == ["尺码"]
-    content, _ = service.download(version_id)
+    content = service.snapshot_workbook(service.capture_export([version_id]))
     exported = pd.read_excel(BytesIO(content), sheet_name="语义明细")
     assert len(exported) == 2
     assert exported["分类路径"].str.startswith("尺码 → 不合身 → ").all()

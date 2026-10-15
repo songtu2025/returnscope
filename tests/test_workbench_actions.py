@@ -270,7 +270,7 @@ def test_non_tag_feedback_is_consistent_across_pending_export_and_dashboard(
         ]
         == 0
     )
-    content, _ = results.download(version["version_id"])
+    content = results.snapshot_workbook(results.capture_export([version["version_id"]]))
     exported = pd.read_excel(BytesIO(content), sheet_name="反馈汇总")
     assert exported["结果状态"].eq("可用").all()
     assert exported["是否需重跑"].eq("否").all()

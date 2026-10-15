@@ -55,7 +55,9 @@ def test_workbook_groups_match_page_and_preserve_all_sources(context):
             "UPDATE classification_result_records SET fnsku='SECOND-FNSKU' WHERE source_row=3"
         )
     version_id = context.version["version_id"]
-    content, filename = context.service.download(version_id)
+    snapshot = context.service.capture_export([version_id])
+    content = context.service.snapshot_workbook(snapshot)
+    filename = snapshot[0]["filename"]
     book = load_workbook(BytesIO(content))
     assert filename == "classification-L1-v1.xlsx"
     assert book.sheetnames == SHEETS
@@ -104,7 +106,9 @@ def test_empty_workbook_keeps_headers_and_fallback_filename(context):
     with context.database.transaction() as connection:
         connection.execute("DELETE FROM classification_result_records")
         connection.execute("UPDATE classification_results SET listing = NULL")
-    content, filename = context.service.download(context.version["version_id"])
+    snapshot = context.service.capture_export([context.version["version_id"]])
+    content = context.service.snapshot_workbook(snapshot)
+    filename = snapshot[0]["filename"]
     assert filename == f"classification-{context.version['result_id']}-v1.xlsx"
     book = load_workbook(BytesIO(content))
     assert book.sheetnames == SHEETS
@@ -163,7 +167,8 @@ def test_download_keeps_three_reads_without_member_queries(context, monkeypatch)
         return connection
 
     monkeypatch.setattr(context.database, "connect", traced_connection)
-    content, _ = context.service.download(context.version["version_id"])
+    snapshot = context.service.capture_export([context.version["version_id"]])
+    content = context.service.snapshot_workbook(snapshot)
     assert content.startswith(b"PK")
     assert (
         len([sql for sql in statements if sql.lstrip().upper().startswith("SELECT")])
@@ -191,7 +196,8 @@ def test_task_sync_downloads_retire_without_losing_manual_export(tmp_path):
         response = client.get(path)
         assert response.status_code == 410
         assert "后台生成" in response.json()["detail"]
-    content, _ = service.download(corrected["version_id"])
+    snapshot = service.capture_export([corrected["version_id"]])
+    content = service.snapshot_workbook(snapshot)
     book = load_workbook(BytesIO(content))
     for record in _rows(book["反馈汇总"]):
         if record["订单号"] == "ORDER-DUP":
@@ -206,7 +212,8 @@ def test_task_sync_downloads_retire_without_losing_manual_export(tmp_path):
 
 
 def test_combined_download_has_unique_feedback_numbers(context):
-    content = context.service.download_versions([context.version["version_id"]] * 2)
+    snapshot = context.service.capture_export([context.version["version_id"]] * 2)
+    content = context.service.snapshot_workbook(snapshot)
     book = load_workbook(BytesIO(content))
     summaries = _rows(book["反馈汇总"])
     assert len(summaries) == len({row["反馈编号"] for row in summaries}) == 4
@@ -229,7 +236,8 @@ def test_feedback_without_semantics_or_with_failure_is_not_lost(
         connection.execute(
             "UPDATE classification_result_records SET quality_status=?", (quality,)
         )
-    content, _ = context.service.download(context.version["version_id"])
+    snapshot = context.service.capture_export([context.version["version_id"]])
+    content = context.service.snapshot_workbook(snapshot)
     book = load_workbook(BytesIO(content))
     assert len(_rows(book["反馈汇总"])) == 2
     assert len(_rows(book["源明细"])) == 3
@@ -255,7 +263,8 @@ def test_blank_orders_stay_separate_and_long_text_is_literal(context):
         connection.execute(
             "UPDATE classification_result_records SET order_id='', comment=?", (text,)
         )
-    content, _ = context.service.download(context.version["version_id"])
+    snapshot = context.service.capture_export([context.version["version_id"]])
+    content = context.service.snapshot_workbook(snapshot)
     book = load_workbook(BytesIO(content))
     assert len(_rows(book["反馈汇总"])) == 3
     for title in ["反馈汇总", "源明细"]:

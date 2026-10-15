@@ -238,7 +238,8 @@ def test_result_pool_api_keeps_pagination_summary_and_download_consistent(
     download = client.get(f"/api/classification-results/{version_id}/download")
     assert download.status_code == 410
     assert "后台生成" in download.json()["detail"]
-    content, _ = ClassificationResultService(context.database).download(version_id)
+    service = ClassificationResultService(context.database)
+    content = service.snapshot_workbook(service.capture_export([version_id]))
     exported = pd.read_excel(BytesIO(content), sheet_name="源明细", dtype=str).fillna(
         ""
     )

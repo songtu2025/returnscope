@@ -36,13 +36,6 @@ class _ClassificationResultDownload:
             taxonomy: TaxonomyConfig | None,
         ) -> dict[str, Any]: ...
 
-    def download(self, version_id: str) -> tuple[bytes, str]:
-        snapshot = self.capture_export([version_id])
-        return self.snapshot_workbook(snapshot), snapshot[0]["filename"]
-
-    def download_versions(self, version_ids: list[str]) -> bytes:
-        return self.snapshot_workbook(self.capture_export(version_ids))
-
     def capture_export(self, version_ids: list[str]) -> list[dict[str, Any]]:
         """在同一个读事务中固定原文、语义和产品资料，写文件时不占事务。"""
         snapshot = []
@@ -101,11 +94,8 @@ class _ClassificationResultDownload:
         return result_workbook(output, semantics, sources)
 
     def _export_records(
-        self, version_id: str, connection: sqlite3.Connection | None = None
+        self, version_id: str, connection: sqlite3.Connection
     ) -> list[Any]:
-        if connection is None:
-            with self.database.connect() as owned:
-                return self._export_records(version_id, owned)
         return connection.execute(
             f"""
                 SELECT item.*, {feedback_group_key_sql("item")} AS display_key,

@@ -172,7 +172,8 @@ def test_download_retires_after_result_lookup_without_generating_bytes(
     assert response.status_code == 410
     assert "后台生成" in response.json()["detail"]
     harness.result_mock.get.assert_called_once_with(harness.version_id)
-    harness.result_mock.download.assert_not_called()
+    harness.result_mock.capture_export.assert_not_called()
+    harness.result_mock.snapshot_workbook.assert_not_called()
 
 
 @pytest.mark.parametrize("mode", ["omitted", "none", "injected"])

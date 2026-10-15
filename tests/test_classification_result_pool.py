@@ -990,9 +990,10 @@ def test_download_keeps_filename_sheets_and_empty_data(tmp_path: Path) -> None:
             (version_id,),
         )
 
-    content, filename = ClassificationResultService(context.database).download(
-        version_id
-    )
+    service = ClassificationResultService(context.database)
+    snapshot = service.capture_export([version_id])
+    content = service.snapshot_workbook(snapshot)
+    filename = snapshot[0]["filename"]
     workbook = pd.ExcelFile(BytesIO(content))
 
     assert filename == "classification-L1-v1.xlsx"
@@ -1132,7 +1133,8 @@ def test_result_api_paginates_filters_drills_down_and_downloads(
     download = client.get(f"/api/classification-results/{version_id}/download")
     assert download.status_code == 410
     assert "后台生成" in download.json()["detail"]
-    content, _ = ClassificationResultService(context.database).download(version_id)
+    service = ClassificationResultService(context.database)
+    content = service.snapshot_workbook(service.capture_export([version_id]))
     assert "PRODUCT-SKU-1" in pd.read_excel(BytesIO(content)).to_string()
 
 
