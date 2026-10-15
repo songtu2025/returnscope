@@ -17,11 +17,11 @@ export function useSemanticLedger({ record, itemReviews, addedItems, coverageSta
     ...ledger.items.filter((item) => !item.manual || item.applied),
     ...manualItems,
   ];
-  const systemItems = items.filter(
-    (item) => dispositionTone(item.disposition) === "failure",
+  const systemItems = items.filter((item) =>
+    ["failure", "notice"].includes(dispositionTone(item.disposition)),
   );
   const businessItems = items.filter(
-    (item) => dispositionTone(item.disposition) !== "failure",
+    (item) => !["failure", "notice"].includes(dispositionTone(item.disposition)),
   );
   /** @param {SemanticReviewLedgerItem} item */
   const reviewFor = (item) =>
@@ -33,6 +33,7 @@ export function useSemanticLedger({ record, itemReviews, addedItems, coverageSta
       const review = reviewFor(item);
       const effective = effectiveReviewItem(item, review);
       const tone = dispositionTone(effective.disposition);
+      if (tone === "notice") return counts;
       if (tone === "failure") counts.failures += 1;
       else if (tone === "review") counts.needsReview += 1;
       else if (tone === "informational") counts.informational += 1;

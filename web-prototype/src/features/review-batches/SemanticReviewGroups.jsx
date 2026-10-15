@@ -6,10 +6,10 @@ export function SemanticReviewGroups(context) {
   return (
     <div className="semantic-review-groups">
       {systemItems.length > 0 && (
-        <section className="semantic-review-group is-system" aria-label="系统异常">
+        <section className="semantic-review-group is-system" aria-label="系统诊断">
           <header>
             <div>
-              <b>系统异常 · {systemItems.length} 项</b>
+              <b>系统诊断 · {systemItems.length} 项</b>
               <span>展示当时分析中记录的技术诊断。</span>
             </div>
             <span>历史记录</span>

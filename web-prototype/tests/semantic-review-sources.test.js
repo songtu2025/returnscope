@@ -198,3 +198,20 @@ test("已发布人工调整按结果编号关联并保持输入对象不变", ()
   expect(original.manual).toBe(false);
   expect(original).not.toHaveProperty("review");
 });
+
+test.each([
+  [true, "ANALYSIS_FAILURE", "UNKNOWN"],
+  [false, "ANALYSIS_FAILURE", "CONFIGURATION_NOTICE"],
+  [false, "MAPPED", "MAPPED"],
+])("配置领域标记%s、处置%s的投影为%s", (flag, disposition, expected) => {
+  expect(
+    normalizeItem(
+      {
+        disposition,
+        diagnostic_domain: "TECHNICAL_CONFIGURATION",
+        business_review_required: flag,
+      },
+      0,
+    ).disposition,
+  ).toBe(expected);
+});

@@ -93,7 +93,7 @@ test.each([
       ]}
     />,
   );
-  const group = screen.getByRole("region", { name: "系统异常" });
+  const group = screen.getByRole("region", { name: "系统诊断" });
   expect(within(group).getByText("历史记录")).toBeVisible();
   expect(within(group).queryByRole("button", { name: "调整" })).toBeNull();
   expect(within(group).getByText("系统处理失败")).toBeVisible();
@@ -176,4 +176,48 @@ test("发布后的补录只展示一次且保留原始人工调整关联", () =>
     within(screen.getByLabelText("语义核验清单")).getByText("人工补充观点"),
   ).toBeVisible();
   expect(screen.getByText("人工调整：修改标签")).toBeVisible();
+});
+
+test("后端明确的配置提示不计为异常或业务待办，也不建议重跑", () => {
+  const record = diagnosticRecord(false);
+  const item = record.classification.semantic_review.semantic_items[0];
+  Object.assign(item, {
+    diagnostic_domain: "TECHNICAL_CONFIGURATION",
+    diagnostic_code: "SECONDARY_MODEL_MISSING",
+    diagnostic_title: "风险复核模型未配置",
+    action: "",
+  });
+  expect(semanticReviewLedger(record).summary).toEqual({
+    mapped: 0,
+    informational: 0,
+    needsReview: 0,
+    failures: 0,
+  });
+  render(<SemanticReviewLedger {...ledgerProps(record)} />);
+  const group = screen.getByRole("region", { name: "系统诊断" });
+  expect(within(group).getByText("配置提示")).toBeVisible();
+  expect(screen.getByText("系统异常 0")).toBeVisible();
+  expect(screen.getByText("待判断 0")).toBeVisible();
+  expect(screen.getByText("无需归类 0")).toBeVisible();
+  expect(
+    within(group).getByText("请联系管理员检查配置；当前结果无需重跑。"),
+  ).toBeVisible();
+  expect(screen.queryByText("请联系管理员检查并重新运行。")).toBeNull();
+});
+
+test.each([
+  ["NO_TAG_NEEDED", "无需归类 1", "待判断 0"],
+  ["TRUE_AMBIGUITY", "无需归类 0", "待判断 1"],
+])("%s 保持后端语义处置且不进入系统异常", (disposition, informational, review) => {
+  const record = diagnosticRecord();
+  record.classification.semantic_review.semantic_items[0] = {
+    item_id: "semantic-1",
+    evidence_text: "鞋子非常舒服",
+    disposition,
+  };
+  render(<SemanticReviewLedger {...ledgerProps(record)} />);
+  expect(screen.getByText(informational)).toBeVisible();
+  expect(screen.getByText(review)).toBeVisible();
+  expect(screen.getByText("系统异常 0")).toBeVisible();
+  expect(screen.queryByRole("region", { name: "系统诊断" })).toBeNull();
 });

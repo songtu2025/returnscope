@@ -21,6 +21,13 @@ function normalizeDisposition(item, fallback = "") {
   ) {
     return "UNKNOWN";
   }
+  if (
+    dispositionTone(explicit) === "failure" &&
+    (item.diagnostic_domain || item.diagnosticDomain) === "TECHNICAL_CONFIGURATION" &&
+    (item.business_review_required ?? item.businessReviewRequired) === false
+  ) {
+    return "CONFIGURATION_NOTICE";
+  }
   if (explicit) return explicit;
   return item.label_code || item.labelCode ? "MAPPED" : "UNKNOWN";
 }

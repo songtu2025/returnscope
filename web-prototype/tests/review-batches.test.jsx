@@ -477,11 +477,11 @@ test("语义核验清单逐项展示并将系统异常置顶且锁定编辑", as
   expect(within(ledger).getByText("无需归类 1")).toBeVisible();
   expect(within(ledger).getByText("待判断 2")).toBeVisible();
   expect(within(ledger).getByText("系统异常 1")).toBeVisible();
-  const systemGroup = within(ledger).getByRole("region", { name: "系统异常" });
+  const systemGroup = within(ledger).getByRole("region", { name: "系统诊断" });
   const businessGroup = within(ledger).getByRole("region", {
     name: "待人工判断",
   });
-  expect(within(systemGroup).getByText("系统异常 · 1 项")).toBeVisible();
+  expect(within(systemGroup).getByText("系统诊断 · 1 项")).toBeVisible();
   expect(within(systemGroup).getByText("历史记录")).toBeVisible();
   expect(within(businessGroup).getByText("待人工判断 · 2 项")).toBeVisible();
   const items = within(ledger).getAllByRole("article");

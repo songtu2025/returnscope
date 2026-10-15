@@ -28,6 +28,7 @@ export const REVIEW_DISPOSITION_LABELS = {
   MAPPING_UNCERTAIN: "标签待判断",
   TRUE_AMBIGUITY: "原文含义不明确",
   ANALYSIS_FAILURE: "系统处理失败",
+  CONFIGURATION_NOTICE: "配置提示",
   MODEL_ERROR: "系统处理失败",
   UNKNOWN: "待判断",
   UNEXPLAINED: "未解释原文片段",
@@ -44,6 +45,7 @@ export function priority(item) {
 
 /** @param {string} disposition */
 export function dispositionTone(disposition) {
+  if (disposition === "CONFIGURATION_NOTICE") return "notice";
   if (["ANALYSIS_FAILURE", "MODEL_ERROR"].includes(disposition)) {
     return "failure";
   }
@@ -62,9 +64,11 @@ export function reviewDiagnosticPresentation(item, sourceText) {
         ? "诊断提示"
         : "提取观点",
     suggestedAction:
-      item.businessReviewRequired === true
-        ? "请根据原文确认业务观点和标签；缺少证据时从原文补录。"
-        : "请联系管理员检查并重新运行。",
+      dispositionTone(item.disposition) === "notice"
+        ? "请联系管理员检查配置；当前结果无需重跑。"
+        : item.businessReviewRequired === true
+          ? "请根据原文确认业务观点和标签；缺少证据时从原文补录。"
+          : "请联系管理员检查并重新运行。",
     missingEvidence:
       item.businessReviewRequired === true &&
       item.evidenceSource === "SYSTEM" &&
