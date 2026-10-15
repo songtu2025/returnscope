@@ -1,4 +1,4 @@
-import { cleanup, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 import {
@@ -165,4 +165,33 @@ test("失败项重试显示错误，取消确认不提交", async () => {
   await userEvent.click(screen.getByRole("button", { name: "取消" }));
   expect(onClose).toHaveBeenCalledOnce();
   expect(onSave).not.toHaveBeenCalled();
+});
+
+test("任务继续提交期间同步防重，并阻止关闭、Esc和返回", async () => {
+  let finish;
+  const onSave = vi.fn(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const onClose = vi.fn();
+  render(<TaskResumeDialog task={task} onSave={onSave} onClose={onClose} />);
+  const dialog = screen.getByRole("dialog");
+  const form = dialog.querySelector("form");
+  act(() => {
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+  });
+  expect(onSave).toHaveBeenCalledExactlyOnceWith({ expected_revision: 7 });
+  expect(screen.getByRole("button", { name: "返回" })).toBeDisabled();
+  await userEvent.click(screen.getByRole("button", { name: "关闭" }));
+  await userEvent.keyboard("{Escape}");
+  fireEvent.mouseDown(dialog.parentElement);
+  await userEvent.click(screen.getByRole("button", { name: "返回" }));
+  expect(onClose).not.toHaveBeenCalled();
+  await act(async () => finish(false));
+  expect(screen.getByRole("button", { name: "继续未完成片段" })).toBeEnabled();
+  await userEvent.click(screen.getByRole("button", { name: "返回" }));
+  expect(onClose).toHaveBeenCalledOnce();
 });

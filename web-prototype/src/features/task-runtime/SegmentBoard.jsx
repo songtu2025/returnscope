@@ -12,6 +12,7 @@ import { segmentNeedsAttention } from "./taskRegistryPolicy";
 /**
  * @typedef {Object} SegmentBoardProps
  * @property {AnalysisTask} task
+ * @property {boolean} [disabled]
  * @property {string | null} [focusSegmentId]
  * @property {string} [initialFilter]
  * @property {(segment: TaskSegment) => void} onRetry
@@ -49,6 +50,7 @@ function matchesStatusFilter(segment, filter) {
 /** @param {SegmentBoardProps} props */
 export function SegmentBoard({
   task,
+  disabled = false,
   focusSegmentId,
   initialFilter = "all",
   onRetry,
@@ -99,7 +101,8 @@ export function SegmentBoard({
   );
   const maxParallelSegments = task.max_parallel_segments ?? 3;
   const ownerRunningSegments = task.owner_running_segments ?? 0;
-  const canManageQueue = ["queued", "running", "paused"].includes(task.status);
+  const canManageQueue =
+    !disabled && ["queued", "running", "paused"].includes(task.status);
   const orderableKeys = queueSegments
     .filter((segment) => ORDERABLE_SEGMENT_STATUSES.includes(segment.status))
     .map((segment) => segment.segment_key);
@@ -207,6 +210,7 @@ export function SegmentBoard({
                 }}
                 queue={{ canManageQueue, orderableKeys, reordering, applyOrder }}
                 rowState={{
+                  disabled,
                   expandedSegmentKey,
                   setExpandedSegmentKey,
                   retryingPublishId,

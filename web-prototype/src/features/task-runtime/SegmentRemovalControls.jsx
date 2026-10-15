@@ -1,19 +1,29 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { DotsThreeVertical } from "@phosphor-icons/react";
 import { Modal } from "../../components/SharedUi";
 import { useDismissibleDetails } from "../../hooks/useDismissibleDetails";
 
-/** @param {Pick<import("./segmentBoardRowContracts").SegmentBoardRowProps, "segment" | "actions">} props */
-export function SegmentRemovalControls({ segment, actions }) {
+/** @param {Pick<import("./segmentBoardRowContracts").SegmentBoardRowProps, "segment" | "actions"> & {disabled?: boolean}} props */
+export function SegmentRemovalControls({ segment, actions, disabled = false }) {
   const [confirming, setConfirming] = useState(false);
   const [saving, setSaving] = useState(false);
-  const { detailsProps, summaryProps } = useDismissibleDetails({ menu: true });
+  const savingRef = useRef(false);
+  const { detailsProps, summaryProps } = useDismissibleDetails({
+    menu: true,
+    disabled,
+  });
   const name = segment.scope?.listing || segment.segment_key;
   const remove = async () => {
+    if (savingRef.current || disabled) return;
+    savingRef.current = true;
     setSaving(true);
-    const success = await actions.onAction(segment.segment_key, "delete");
-    setSaving(false);
-    if (success) setConfirming(false);
+    try {
+      const success = await actions.onAction(segment.segment_key, "delete");
+      if (success) setConfirming(false);
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
   };
   return (
     <>
@@ -22,7 +32,11 @@ export function SegmentRemovalControls({ segment, actions }) {
           <DotsThreeVertical size={18} />
         </summary>
         <div>
-          <button className="danger" onClick={() => setConfirming(true)}>
+          <button
+            className="danger"
+            disabled={disabled}
+            onClick={() => setConfirming(true)}
+          >
             移除 Listing
           </button>
         </div>
@@ -41,7 +55,11 @@ export function SegmentRemovalControls({ segment, actions }) {
             >
               返回
             </button>
-            <button className="primary-button" disabled={saving} onClick={remove}>
+            <button
+              className="primary-button"
+              disabled={saving || disabled}
+              onClick={remove}
+            >
               {saving ? "正在提交…" : "确认移除 Listing"}
             </button>
           </div>

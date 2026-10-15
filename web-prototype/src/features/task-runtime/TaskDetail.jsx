@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AntdProvider } from "../../components/AntdProvider";
 import { SegmentRetryDialog, TaskResumeDialog } from "./TaskActionDialogs";
 import { SegmentBoard } from "./SegmentBoard";
@@ -65,6 +65,29 @@ export function TaskDetail({
   onReplan,
 }) {
   const [resumeOpen, setResumeOpen] = useState(false);
+  const [taskAction, setTaskAction] = useState("");
+  const actionRef = useRef("");
+  const [taskActionError, setTaskActionError] = useState("");
+  const runTaskAction = async (
+    /** @type {string} */ action,
+    /** @type {() => unknown | Promise<unknown>} */ submit,
+  ) => {
+    if (actionRef.current) return false;
+    actionRef.current = action;
+    setTaskAction(action);
+    setTaskActionError("");
+    try {
+      return await submit();
+    } catch (failure) {
+      setTaskActionError(
+        failure instanceof Error ? failure.message : "任务操作失败，请重试",
+      );
+      return false;
+    } finally {
+      actionRef.current = "";
+      setTaskAction("");
+    }
+  };
   const [retrySegment, setRetrySegment] = useState(
     /** @type {TaskSegment | null} */ (null),
   );
@@ -113,22 +136,26 @@ export function TaskDetail({
           task={task}
           summary={summary}
           hasUnfinishedSegments={hasUnfinishedSegments}
+          taskAction={taskAction}
           onOpenReplan={() => setReplanOpen(true)}
           onOpenResume={() => setResumeOpen(true)}
           onTaskRenamed={onTaskRenamed}
-          onPause={onPause}
-          onRetry={onRetry}
-          onArchive={onArchive}
+          onPause={() => runTaskAction("pause", onPause)}
+          onRetry={() => runTaskAction("retry", onRetry)}
+          onArchive={() => runTaskAction("archive", onArchive)}
           showListings={showListings}
         />
 
         <TaskDetailAlerts
           task={task}
           summary={summary}
-          actionError={actionError}
+          actionError={taskActionError || actionError}
           retrySegment={retrySegment}
           modelServiceIssue={modelServiceIssue}
-          onClearActionError={onClearActionError}
+          onClearActionError={() => {
+            setTaskActionError("");
+            onClearActionError();
+          }}
         />
 
         <TaskDetailOverview task={task} summary={summary} showListings={showListings} />
@@ -163,15 +190,24 @@ export function TaskDetail({
               key={listingFilter}
               initialFilter={listingFilter}
               task={task}
+              disabled={Boolean(taskAction)}
               focusSegmentId={listingFilter === "all" ? focusSegmentId : null}
               onRetry={(segment) => {
                 onClearActionError();
                 setRetrySegment(segment);
               }}
-              onRetryPublish={onRetryResultPublish}
-              onAction={onSegmentAction}
-              onParallelism={onParallelism}
-              onReorder={onReorderSegments}
+              onRetryPublish={(id) =>
+                runTaskAction("publish", () => onRetryResultPublish(id))
+              }
+              onAction={(key, action, note) =>
+                runTaskAction("segment", () => onSegmentAction(key, action, note))
+              }
+              onParallelism={(value) =>
+                runTaskAction("parallelism", () => onParallelism(value))
+              }
+              onReorder={(keys) =>
+                runTaskAction("order", () => onReorderSegments(keys))
+              }
               onViewClassification={onViewClassification}
             />
           }
@@ -182,7 +218,7 @@ export function TaskDetail({
             task={task}
             onClose={() => setResumeOpen(false)}
             onSave={async (payload) => {
-              const saved = await onResume(payload);
+              const saved = await runTaskAction("resume", () => onResume(payload));
               if (saved) setResumeOpen(false);
             }}
           />
@@ -191,10 +227,14 @@ export function TaskDetail({
           <SegmentRetryDialog
             task={task}
             segment={retrySegment}
-            error={actionError}
-            onClose={() => setRetrySegment(null)}
+            error={taskActionError || actionError}
+            onClose={() => {
+              if (!actionRef.current) setRetrySegment(null);
+            }}
             onSave={async (payload) => {
-              const saved = await onRetrySegment(retrySegment.segment_key, payload);
+              const saved = await runTaskAction("retry-segment", () =>
+                onRetrySegment(retrySegment.segment_key, payload),
+              );
               if (saved) setRetrySegment(null);
             }}
           />
@@ -202,10 +242,12 @@ export function TaskDetail({
         {replanOpen && (
           <TaskReplanDialog
             task={task}
-            onClose={() => setReplanOpen(false)}
+            onClose={() => {
+              if (!actionRef.current) setReplanOpen(false);
+            }}
             onPreflight={onPreflightReplan}
             onSave={async (payload) => {
-              const saved = await onReplan(payload);
+              const saved = await runTaskAction("replan", () => onReplan(payload));
               if (saved) setReplanOpen(false);
             }}
           />

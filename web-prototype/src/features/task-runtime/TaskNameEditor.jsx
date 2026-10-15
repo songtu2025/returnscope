@@ -3,8 +3,14 @@ import { PencilSimple } from "@phosphor-icons/react";
 import { taskMonitorApi, errorMessage, errorStatus } from "./taskMonitorRequests";
 import "./taskNameEditor.css";
 /** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
-/** @param {{task: AnalysisTask, onSaved: (task: AnalysisTask) => Promise<unknown>, onOpen?: () => void, heading?: boolean}} props */
-export function TaskNameEditor({ task, onSaved, onOpen, heading = false }) {
+/** @param {{task: AnalysisTask, onSaved: (task: AnalysisTask) => Promise<unknown>, onOpen?: () => void, heading?: boolean, disabled?: boolean}} props */
+export function TaskNameEditor({
+  task,
+  onSaved,
+  onOpen,
+  heading = false,
+  disabled = false,
+}) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(task.title);
   const [revision, setRevision] = useState(task.revision);
@@ -51,6 +57,7 @@ export function TaskNameEditor({ task, onSaved, onOpen, heading = false }) {
   /** @param {import("react").FormEvent<HTMLFormElement>} event */
   const submit = async (event) => {
     event.preventDefault();
+    if (disabled) return;
     if (saving || conflict) return;
     const name = title.trim();
     if (!name) {
@@ -90,7 +97,7 @@ export function TaskNameEditor({ task, onSaved, onOpen, heading = false }) {
             value={title}
             maxLength={120}
             autoFocus
-            disabled={saving}
+            disabled={saving || disabled}
             aria-invalid={Boolean(error)}
             onChange={(event) => setTitle(event.target.value)}
             onKeyDown={(event) => {
@@ -104,7 +111,7 @@ export function TaskNameEditor({ task, onSaved, onOpen, heading = false }) {
             <button
               type="submit"
               className="text-button"
-              disabled={saving || conflict || !title.trim()}
+              disabled={saving || disabled || conflict || !title.trim()}
             >
               {saving ? "保存中…" : "保存名称"}
             </button>
@@ -133,7 +140,7 @@ export function TaskNameEditor({ task, onSaved, onOpen, heading = false }) {
                     <button
                       type="button"
                       className="text-button"
-                      disabled={saving || !title.trim()}
+                      disabled={saving || disabled || !title.trim()}
                       onClick={() => {
                         setRevision(latest.revision);
                         setBaseTitle(latest.title);
@@ -148,7 +155,7 @@ export function TaskNameEditor({ task, onSaved, onOpen, heading = false }) {
                   <button
                     type="button"
                     className="text-button"
-                    disabled={saving}
+                    disabled={saving || disabled}
                     onClick={() => finish(latest)}
                   >
                     采用最新名称
@@ -187,6 +194,7 @@ export function TaskNameEditor({ task, onSaved, onOpen, heading = false }) {
             className="task-rename-action"
             aria-label={`修改任务名称：${task.title}`}
             title="修改名称"
+            disabled={disabled}
             onClick={() => {
               setTitle(task.title);
               setRevision(task.revision);

@@ -6,14 +6,15 @@ import { SegmentRemovalControls } from "./SegmentRemovalControls";
 /** @typedef {import("./segmentBoardRowContracts").SegmentBoardRowProps} SegmentBoardRowProps */
 /** @typedef {Pick<SegmentBoardRowProps, "task" | "segment" | "rowState" | "actions"> & {publishStatus: string}} PrimaryActionsProps */
 
-/** @param {Pick<PrimaryActionsProps, "segment" | "actions">} props */
-function SegmentExecutionControls({ segment, actions }) {
+/** @param {Pick<PrimaryActionsProps, "segment" | "actions"> & {disabled?: boolean}} props */
+function SegmentExecutionControls({ segment, actions, disabled }) {
   const { onAction } = actions;
   return (
     <>
       {segment.status === "cancelled" && (
         <Button
           className="secondary-button compact-button listing-resume-button"
+          disabled={disabled}
           onClick={() => onAction(segment.segment_key, "resume")}
         >
           <ArrowClockwise size={14} /> 重新排队
@@ -22,6 +23,7 @@ function SegmentExecutionControls({ segment, actions }) {
       {["queued", "retry_pending"].includes(segment.status) && (
         <Button
           className="secondary-button compact-button"
+          disabled={disabled}
           onClick={() => onAction(segment.segment_key, "pause")}
         >
           <Pause size={14} /> 暂停
@@ -30,6 +32,7 @@ function SegmentExecutionControls({ segment, actions }) {
       {segment.status === "running" && !segment.requested_action && (
         <Button
           className="secondary-button compact-button"
+          disabled={disabled}
           onClick={() => onAction(segment.segment_key, "pause")}
         >
           <Pause size={14} /> 暂停
@@ -38,6 +41,7 @@ function SegmentExecutionControls({ segment, actions }) {
       {segment.status === "paused" && (
         <Button
           className="secondary-button compact-button"
+          disabled={disabled}
           onClick={() => onAction(segment.segment_key, "resume")}
         >
           <Play size={14} /> 继续
@@ -47,8 +51,8 @@ function SegmentExecutionControls({ segment, actions }) {
   );
 }
 
-/** @param {Pick<PrimaryActionsProps, "task" | "segment" | "actions">} props */
-function SegmentRetryControls({ task, segment, actions }) {
+/** @param {Pick<PrimaryActionsProps, "task" | "segment" | "actions"> & {disabled?: boolean}} props */
+function SegmentRetryControls({ task, segment, actions, disabled }) {
   const { onRetry } = actions;
   const canRetrySystemAnomalies =
     segment.system_retry_available === true &&
@@ -58,6 +62,7 @@ function SegmentRetryControls({ task, segment, actions }) {
       {canRetrySystemAnomalies && (
         <Button
           className="secondary-button compact-button"
+          disabled={disabled}
           title={
             segment.system_failure_count
               ? `重新分析 ${segment.system_failure_count} 个失败项`
@@ -72,6 +77,7 @@ function SegmentRetryControls({ task, segment, actions }) {
       {!canRetrySystemAnomalies && canRetrySegment(task, segment) && (
         <Button
           className="secondary-button compact-button"
+          disabled={disabled}
           onClick={() => onRetry(segment)}
         >
           <ArrowClockwise size={15} />
@@ -108,18 +114,29 @@ export function SegmentPrimaryActions({
         ) : (
           <>
             {!unavailable && !segment.result_deleted_at && (
-              <SegmentExecutionControls segment={segment} actions={actions} />
+              <SegmentExecutionControls
+                segment={segment}
+                actions={actions}
+                disabled={rowState.disabled}
+              />
             )}
             {!unavailable &&
               !hasExecutionAction &&
               !segment.result_deleted_at &&
               publishStatus !== "failed" && (
-                <SegmentRetryControls task={task} segment={segment} actions={actions} />
+                <SegmentRetryControls
+                  task={task}
+                  segment={segment}
+                  actions={actions}
+                  disabled={rowState.disabled}
+                />
               )}
             {!unavailable && !hasExecutionAction && publishStatus === "failed" && (
               <Button
                 className="secondary-button compact-button"
-                disabled={rowState.retryingPublishId === segment.id}
+                disabled={
+                  rowState.disabled || rowState.retryingPublishId === segment.id
+                }
                 onClick={async () => {
                   rowState.setRetryingPublishId(segment.id);
                   try {
@@ -135,7 +152,11 @@ export function SegmentPrimaryActions({
               </Button>
             )}
             {!unavailable && (
-              <SegmentRemovalControls segment={segment} actions={actions} />
+              <SegmentRemovalControls
+                segment={segment}
+                actions={actions}
+                disabled={rowState.disabled}
+              />
             )}
             {segment.requested_action && !segment.removal_requested_at && (
               <span role="status">正在暂停…</span>
