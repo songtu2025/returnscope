@@ -1,5 +1,4 @@
 import { useDismissibleDetails } from "../../hooks/useDismissibleDetails";
-import { InlineLoading } from "../../components/SharedUi";
 import { MagnifyingGlass, SlidersHorizontal, X } from "@phosphor-icons/react";
 
 /** @typedef {import("./taskMonitorContracts").TaskListState} TaskListState */
@@ -10,7 +9,6 @@ import { MagnifyingGlass, SlidersHorizontal, X } from "@phosphor-icons/react";
  * @property {string[]} owners
  * @property {Record<string, number>} counts
  * @property {import("react").RefObject<HTMLInputElement | null>} searchInputRef
- * @property {boolean} updating
  */
 const FILTERS = [
   ["all", "全部"],
@@ -62,13 +60,7 @@ function RegistrySortMenu({ viewState, onViewStateChange, owners }) {
 }
 
 /** @param {Omit<TaskRegistryFiltersProps, "counts">} props */
-function RegistrySearch({
-  viewState,
-  onViewStateChange,
-  owners,
-  searchInputRef,
-  updating,
-}) {
+function RegistrySearch({ viewState, onViewStateChange, owners, searchInputRef }) {
   const { query } = viewState;
   return (
     <div className="task-registry-toolbar">
@@ -94,7 +86,6 @@ function RegistrySearch({
           </button>
         )}
       </label>
-      <InlineLoading label="更新中…" compact active={updating} />
       <RegistrySortMenu
         viewState={viewState}
         onViewStateChange={onViewStateChange}
@@ -144,7 +135,6 @@ export function TaskRegistryFilters(props) {
         onViewStateChange={props.onViewStateChange}
         owners={props.owners}
         searchInputRef={props.searchInputRef}
-        updating={props.updating}
       />
       <RegistryTabs
         viewState={props.viewState}

@@ -257,6 +257,11 @@ test("加载、首次错误、过期数据和空列表保持原反馈及重试�
   const { props, rerender } = setup({ loading: true, hasData: false });
   expect(await screen.findByText("读取任务…")).toBeVisible();
   expect(screen.queryByRole("table")).toBeNull();
+  rerender(<TaskRegistry {...props} hasData />);
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  expect(screen.queryByText("更新中…")).not.toBeInTheDocument();
+  expect(screen.queryByText("读取任务…")).not.toBeInTheDocument();
+  expect(screen.getByRole("table", { name: "任务管理表" })).toBeVisible();
   rerender(
     <TaskRegistry {...props} loading={false} error="合成失败" hasData={false} />,
   );

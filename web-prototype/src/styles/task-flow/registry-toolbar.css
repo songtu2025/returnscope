@@ -16,7 +16,7 @@
 }
 .task-registry-toolbar {
   display: grid;
-  grid-template-columns: minmax(200px, 1fr) 88px auto;
+  grid-template-columns: minmax(200px, 1fr) auto;
   gap: 12px;
   padding: 16px 16px 10px;
 }

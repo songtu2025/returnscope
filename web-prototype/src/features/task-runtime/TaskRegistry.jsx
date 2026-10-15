@@ -156,7 +156,6 @@ export function TaskRegistry({
         owners={owners}
         counts={counts}
         searchInputRef={searchInputRef}
-        updating={loading && hasData}
       />
 
       <TaskRegistryStates
