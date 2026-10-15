@@ -4,10 +4,11 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithServerState as render } from "./renderWithServerState";
 import { App } from "../src/App";
+import { ApiError } from "../src/api";
 
 test("用户登录后进入任务工作台", async () => {
   const user = userEvent.setup();
-  apiMock.me.mockRejectedValue(new Error("未登录"));
+  apiMock.me.mockRejectedValue(Object.assign(new ApiError("未登录"), { status: 401 }));
   apiMock.login.mockResolvedValue({
     id: "user-1",
     email: "admin@example.com",
@@ -38,7 +39,7 @@ test("用户登录后进入任务工作台", async () => {
 
 test("登录页可申请密码重置且不泄露账号是否存在", async () => {
   const user = userEvent.setup();
-  apiMock.me.mockRejectedValue(new Error("未登录"));
+  apiMock.me.mockRejectedValue(Object.assign(new ApiError("未登录"), { status: 401 }));
   apiMock.requestPasswordReset.mockResolvedValue(null);
 
   render(<App />);
@@ -56,7 +57,7 @@ test("登录页可申请密码重置且不泄露账号是否存在", async () =>
 test("受邀成员验证链接后设置账号并进入工作台", async () => {
   const user = userEvent.setup();
   window.location.hash = "#register?token=invitation-token-value";
-  apiMock.me.mockRejectedValue(new Error("未登录"));
+  apiMock.me.mockRejectedValue(Object.assign(new ApiError("未登录"), { status: 401 }));
   apiMock.validateInvitation.mockResolvedValue({ email: "member@example.com" });
   apiMock.register.mockResolvedValue({
     id: "user-2",
@@ -86,7 +87,7 @@ test("受邀成员验证链接后设置账号并进入工作台", async () => {
 test("密码重置成功后返回登录页并显示确认信息", async () => {
   const user = userEvent.setup();
   window.location.hash = "#reset-password?token=reset-token-value";
-  apiMock.me.mockRejectedValue(new Error("未登录"));
+  apiMock.me.mockRejectedValue(Object.assign(new ApiError("未登录"), { status: 401 }));
   apiMock.validatePasswordReset.mockResolvedValue({ valid: true });
   apiMock.completePasswordReset.mockResolvedValue(null);
 
