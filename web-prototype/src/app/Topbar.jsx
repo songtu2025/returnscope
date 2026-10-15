@@ -6,6 +6,7 @@ import { MagnifyingGlass, SignOut } from "@phosphor-icons/react";
 
 /** @param {{user: CurrentUser, system: SystemStatus | null, onRefresh: () => Promise<void>, onNavigate: Navigate, onSearch: () => void, onLogout: () => void | Promise<void>}} props */
 export function Topbar({ user, system, onRefresh, onNavigate, onSearch, onLogout }) {
+  const running = system?.my_running_segments ?? system?.my_running_tasks;
   return (
     <header className="topbar">
       <button
@@ -26,12 +27,14 @@ export function Topbar({ user, system, onRefresh, onNavigate, onSearch, onLogout
             onNavigate("analysis-tasks");
           }}
           title="查看进行中的分析任务"
-          aria-label={`我的运行 Listing ${system?.my_running_segments ?? system?.my_running_tasks ?? 0}/3，查看进行中的分析任务`}
+          aria-label={
+            running == null
+              ? "我的运行 Listing 数量暂不可用，查看进行中的分析任务"
+              : `我的运行 Listing ${running}/3，查看进行中的分析任务`
+          }
         >
           <span>我的运行 Listing</span>
-          <strong>
-            {system?.my_running_segments ?? system?.my_running_tasks ?? 0}/3
-          </strong>
+          <strong>{running ?? "—"}/3</strong>
         </button>
         <div className="user-block" title={`${user.display_name} · ${user.email}`}>
           <span>{user.display_name?.slice(0, 1)}</span>
