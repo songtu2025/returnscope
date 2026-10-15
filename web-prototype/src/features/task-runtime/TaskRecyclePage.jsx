@@ -20,19 +20,32 @@ export function TaskRecyclePage({ notify }) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [busy, setBusy] = useState("");
+  const [restored, setRestored] = useState(
+    /** @type {RecycledListing | null} */ (null),
+  );
+  const [refreshError, setRefreshError] = useState(false);
   const [purging, setPurging] = useState(/** @type {RecycledListing | null} */ (null));
+  const readRecycle = async () =>
+    /** @type {{items: RecycledListing[], total: number}} */ (
+      await request(`/api/tasks/recycle?q=${encodeURIComponent(search)}&page=${page}`)
+    );
   const { data, error, mutate } = useSWR(
     ["task-recycle", search, page],
-    async () =>
-      /** @type {{items: RecycledListing[], total: number}} */ (
-        await request(`/api/tasks/recycle?q=${encodeURIComponent(search)}&page=${page}`)
-      ),
+    readRecycle,
     MANAGED_REFRESH_OPTIONS,
   );
   const refresh = async () => {
-    const next = await mutate();
+    const next = await mutate(readRecycle, { revalidate: false });
     if (next && page > Math.max(1, Math.ceil(next.total / 20)))
       setPage(Math.max(1, Math.ceil(next.total / 20)));
+  };
+  const refreshAfterAction = async () => {
+    setRefreshError(false);
+    const results = await Promise.allSettled([
+      refreshServerState(mutateCache, ["analysis-tasks", "workbench", "data-assets"]),
+      refresh(),
+    ]);
+    setRefreshError(results.some((result) => result.status === "rejected"));
   };
   useDataRefresh(refresh, {
     domains: ["task-recycle"],
@@ -43,24 +56,33 @@ export function TaskRecyclePage({ notify }) {
   const act = async (item, action) => {
     setBusy(item.id);
     try {
-      await taskApi.controlTaskSegment(item.task_id, item.segment_key, action, {
-        expected_revision: item.task_revision,
-      });
+      try {
+        await taskApi.controlTaskSegment(item.task_id, item.segment_key, action, {
+          expected_revision: item.task_revision,
+        });
+      } catch (failure) {
+        notify(errorMessage(failure), "error");
+        await refreshAfterAction();
+        return;
+      }
       setPurging(null);
-      await refreshServerState(mutateCache, [
-        "analysis-tasks",
-        "workbench",
-        "data-assets",
-      ]);
+      if (action === "restore") setRestored(item);
       notify(
         action === "restore"
           ? "Listing 已恢复，不会自动执行"
           : "Listing 已永久删除，已有产出保留",
       );
-    } catch (failure) {
-      notify(errorMessage(failure), "error");
+      await mutate(
+        (current) =>
+          current && {
+            ...current,
+            items: current.items.filter((row) => row.id !== item.id),
+            total: Math.max(0, current.total - 1),
+          },
+        { revalidate: false },
+      );
+      await refreshAfterAction();
     } finally {
-      await refresh();
       setBusy("");
     }
   };
@@ -74,6 +96,34 @@ export function TaskRecyclePage({ notify }) {
         全部任务
       </button>
       <PageHeading title="Listing 回收站" />
+      {restored && (
+        <div className="recycle-restore-result" role="status">
+          <span>{restored.scope.listing || "Listing"} 已恢复，不会自动执行</span>
+          <button
+            className="text-button"
+            onClick={() =>
+              navigateHash("analysis-tasks", {
+                task_id: restored.task_id,
+                segment_id: restored.id,
+              })
+            }
+          >
+            查看所属任务
+          </button>
+        </div>
+      )}
+      {refreshError && (
+        <div role="alert">
+          列表刷新失败，已确认的操作结果保留。
+          <button
+            className="text-button"
+            disabled={Boolean(busy)}
+            onClick={refreshAfterAction}
+          >
+            重试刷新
+          </button>
+        </div>
+      )}
       <form
         className="listing-queue-toolbar recycle-search-form"
         onSubmit={(event) => {
@@ -92,16 +142,17 @@ export function TaskRecyclePage({ notify }) {
         </label>
         <button className="secondary-button">搜索</button>
       </form>
-      {error ? (
+      {error && !refreshError && !busy && (
         <div role="alert">
           回收站读取失败{" "}
-          <button className="text-button" onClick={() => mutate()}>
+          <button className="text-button" onClick={refreshAfterAction}>
             重试
           </button>
         </div>
-      ) : !data ? (
+      )}
+      {!data && !error ? (
         <PageLoadingState title="Listing 回收站" label="正在读取回收站…" />
-      ) : (
+      ) : data ? (
         <>
           <div className="recycle-table-wrap">
             <table className="recycle-table">
@@ -181,7 +232,7 @@ export function TaskRecyclePage({ notify }) {
             </button>
           </div>
         </>
-      )}
+      ) : null}
       {purging && (
         <Modal
           title={`永久删除 ${purging.scope.listing || "Listing"}`}
