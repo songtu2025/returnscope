@@ -1,183 +1,94 @@
-from copy import deepcopy
-from typing import Any
-from unittest.mock import Mock
+"""退役批次写入口必须同时阻断 HTTP 和服务调用，且不改变历史数据。"""
 
 import pytest
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
-from review_router_helpers import (
-    BULK_BODY,
-    CASES_BY_METHOD,
-    RECORD_BODY,
-    RECORD_DEFAULTS,
+from historical_review_fixtures import historical_batch
+from test_manual_correction import _items, _record
+from test_result_version_reviews import _publish_review_required
+
+from web_backend.classification_result_service import ClassificationResultService
+from web_backend.classification_results.manual_correction import correct_group
+from web_backend.review_contracts import (
+    LEGACY_REVIEW_BATCH_MESSAGE,
+    LegacyReviewBatchClosed,
 )
-from review_router_helpers import harness as harness
+from web_backend.review_service import ReviewService
+from web_backend.routers.reviews import create_review_router
+
+WRITES = [
+    ("POST", "/api/classification-results/base/review-batches"),
+    ("PATCH", "/api/review-batches/historical-batch/records/historical-review"),
+    ("PATCH", "/api/review-batches/historical-batch/records"),
+    ("POST", "/api/review-batches/historical-batch/publish"),
+]
+
+
+@pytest.mark.parametrize("method,path", WRITES)
+@pytest.mark.parametrize(
+    "payload", [None, {}, {"expected_revision": 1, "reason": "合成旧请求"}]
+)
+def test_retired_batch_http_rejects_authenticated_writes_without_changes(
+    tmp_path, method, path, payload
+):
+    context, base = _publish_review_required(tmp_path)
+    historical_batch(context, base)
+    service = ReviewService(context.database)
+    authenticated = False
+
+    def user():
+        if not authenticated:
+            raise HTTPException(status_code=401, detail="请登录")
+        return {"id": "user-1"}
+
+    app = FastAPI()
+    app.include_router(create_review_router(service, context.database, user))
+    client = TestClient(app)
+    with context.database.connect() as connection:
+        before = list(connection.iterdump())
+    assert client.request(method, path, json=payload).status_code == 401
+    authenticated = True
+    response = client.request(method, path, json=payload)
+    assert response.status_code == 410
+    assert response.json() == {"detail": LEGACY_REVIEW_BATCH_MESSAGE}
+    assert (
+        client.get("/api/review-batches/historical-batch").json()["record_count"] == 1
+    )
+    assert (
+        client.get("/api/review-batches/historical-batch/records").json()["total"] == 1
+    )
+    with context.database.connect() as connection:
+        assert list(connection.iterdump()) == before
 
 
 @pytest.mark.parametrize(
-    "semantic_input,semantic_expected",
+    "method,args",
     [
-        (None, None),
-        ([], []),
-        (
-            [
-                {
-                    "semantic_item_id": " item-1 ",
-                    "action": "no_tag_needed",
-                    "label_code": None,
-                    "note": None,
-                }
-            ],
-            [{"semantic_item_id": "item-1", "action": "no_tag_needed"}],
-        ),
+        ("create_batch", ("base", "user-1", "")),
+        ("update_batch_record", ("batch", "review", 1, "user-1", None, "")),
+        ("update_batch_records", ("batch", [], "user-1", "confirm", None, "")),
+        ("publish_batch", ("batch", 1, "user-1", "")),
     ],
 )
-@pytest.mark.parametrize(
-    "added_input,added_expected",
-    [
-        (None, None),
-        ([], []),
-        (
-            [
-                {
-                    "item_id": None,
-                    "evidence_text": " 合成证据 ",
-                    "opinion": " 合成观点 ",
-                    "label_code": " FIT_TOO_SMALL_U1 ",
-                    "note": None,
-                }
-            ],
-            [
-                {
-                    "evidence_text": "合成证据",
-                    "opinion": "合成观点",
-                    "label_code": "FIT_TOO_SMALL_U1",
-                }
-            ],
-        ),
-    ],
-)
-def test_single_record_preserves_optional_semantic_details_and_assessment(
-    harness: tuple[TestClient, Mock, Mock, Mock],
-    semantic_input: Any,
-    semantic_expected: Any,
-    added_input: Any,
-    added_expected: Any,
-) -> None:
-    client, service, _, _ = harness
-    service.update_batch_record.return_value = {"revision": 6}
-    assessment = {
-        "label_correctness": "partial",
-        "evidence_completeness": "missing",
-        "review_routing": "correct",
-    }
-    body = {
-        **RECORD_BODY,
-        **assessment,
-        "action": "modify",
-        "label_code": "FIT_TOO_SMALL_U1",
-        "semantic_item_reviews": semantic_input,
-        "added_semantic_items": added_input,
-        "coverage_status": "has_omission",
-    }
-    before = deepcopy(body)
-    response = client.patch(CASES_BY_METHOD["update_batch_record"].path, json=body)
-    assert response.status_code == 200
-    service.update_batch_record.assert_called_once_with(
-        **{
-            **RECORD_DEFAULTS,
-            "action": "modify",
-            "label_code": "FIT_TOO_SMALL_U1",
-            "review_assessment": assessment,
-            "semantic_item_reviews": semantic_expected,
-            "added_semantic_items": added_expected,
-            "coverage_status": "has_omission",
-        }
+def test_retired_batch_service_cannot_bypass_http(method, args):
+    # 不提供数据库，证明旧入口在任何持久化访问前拒绝执行。
+    service = object.__new__(ReviewService)
+    with pytest.raises(LegacyReviewBatchClosed, match="已停用"):
+        getattr(service, method)(*args)
+
+
+def test_direct_manual_correction_remains_available_with_historical_batches(tmp_path):
+    context, base = _publish_review_required(tmp_path)
+    batch = historical_batch(context, base)
+    service = ClassificationResultService(context.database)
+    changed = correct_group(
+        service, base["version_id"], _record(context, base), _items(), "user-2"
     )
-    assert body == before
-
-
-@pytest.mark.parametrize("action", ["confirm", "modify", "exclude"])
-def test_bulk_records_preserve_revisions_action_and_assessment(
-    harness: tuple[TestClient, Mock, Mock, Mock],
-    action: str,
-) -> None:
-    client, service, _, _ = harness
-    service.update_batch_records.return_value = {"revision": 6}
-    records = [
-        {"id": "review-1", "expected_revision": 5},
-        {"id": "review-2", "expected_revision": 8},
-    ]
-    assessment = {
-        "label_correctness": "correct",
-        "evidence_completeness": "complete",
-        "review_routing": "should_manual_review",
-    }
-    body = {
-        **BULK_BODY,
-        **assessment,
-        "records": records,
-        "action": action,
-        "label_code": "FIT_TOO_SMALL_U1",
-    }
-    response = client.patch(CASES_BY_METHOD["update_batch_records"].path, json=body)
-    assert response.status_code == 200
-    service.update_batch_records.assert_called_once_with(
-        batch_id="batch-1",
-        records=records,
-        actor_id="42",
-        action=action,
-        label_code="FIT_TOO_SMALL_U1",
-        note="验证批量复核",
-        review_assessment=assessment,
-    )
-
-
-@pytest.mark.parametrize("field", ["semantic_item_reviews", "added_semantic_items"])
-@pytest.mark.parametrize("sentiment", ["POSITIVE", "NEGATIVE", "NEUTRAL", None])
-def test_optional_sentiment_is_forwarded_without_changing_legacy_payload(
-    harness: tuple[TestClient, Mock, Mock, Mock],
-    field: str,
-    sentiment: str | None,
-) -> None:
-    client, service, _, _ = harness
-    service.update_batch_record.return_value = {"revision": 6}
-    item = _sentiment_item(field)
-    response = client.patch(
-        CASES_BY_METHOD["update_batch_record"].path,
-        json={**RECORD_BODY, field: [{**item, "sentiment": sentiment}]},
-    )
-    assert response.status_code == 200
-    expected = {**item, **({"sentiment": sentiment} if sentiment is not None else {})}
-    assert service.update_batch_record.call_args.kwargs[field] == [expected]
-
-
-@pytest.mark.parametrize("field", ["semantic_item_reviews", "added_semantic_items"])
-@pytest.mark.parametrize("sentiment", ["positive", "", 123])
-def test_invalid_sentiment_is_rejected_before_service_or_database(
-    harness: tuple[TestClient, Mock, Mock, Mock], field: str, sentiment: Any
-) -> None:
-    client, service, database, audit = harness
-    response = client.patch(
-        CASES_BY_METHOD["update_batch_record"].path,
-        json={
-            **RECORD_BODY,
-            field: [{**_sentiment_item(field), "sentiment": sentiment}],
-        },
-    )
-    assert response.status_code == 422
-    assert response.json()["detail"][0]["loc"] == ["body", field, 0, "sentiment"]
-    assert service.mock_calls == database.mock_calls == audit.mock_calls == []
-
-
-def _sentiment_item(field: str) -> dict[str, Any]:
-    if field == "semantic_item_reviews":
-        return {
-            "semantic_item_id": "item-1",
-            "action": "change_label",
-            "label_code": "FIT_TOO_SMALL_U1",
-        }
-    return {
-        "evidence_text": "合成证据",
-        "opinion": "合成观点",
-        "label_code": "FIT_TOO_SMALL_U1",
-    }
+    assert changed["version_id"] != base["version_id"]
+    history = ReviewService(context.database).get_batch(batch["id"])
+    assert history["record_count"] == 1
+    assert history["revision"] == batch["revision"]
+    with context.database.connect() as connection:
+        assert (
+            connection.execute("SELECT COUNT(*) FROM review_batches").fetchone()[0] == 1
+        )

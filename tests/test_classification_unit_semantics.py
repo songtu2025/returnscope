@@ -6,15 +6,16 @@ from pathlib import Path
 import pytest
 from database_migration_helpers import build_migration_settings as _settings
 from test_classification_result_pool import _publish, _seed_result_context
+from test_manual_correction import _items, _record
 from test_result_version_reviews import _publish_review_required
 
 from web_backend.backup import restore_backup
 from web_backend.classification_result_service import ClassificationResultService
+from web_backend.classification_results.manual_correction import correct_group
 from web_backend.classification_unit_semantics import (
     SEMANTIC_MIGRATION,
     SEMANTIC_MIGRATION_CHECKSUM,
 )
-from web_backend.review_service import ReviewService
 from web_backend.upgrade_database import upgrade_database
 
 
@@ -55,22 +56,10 @@ def test_publication_and_review_keep_independent_semantic_versions(
     tmp_path: Path,
 ) -> None:
     context, base = _publish_review_required(tmp_path)
-    service = ReviewService(context.database)
-    batch = service.create_batch(base["version_id"], "user-1", "核对语义投影")
-    review = service.batch_records(batch["id"])["items"][0]
-    service.update_batch_record(
-        batch["id"],
-        review["id"],
-        review["revision"],
-        "user-1",
-        "FIT_TOO_LARGE_U1",
-        "人工确认偏大",
-    )
-    derived = service.publish_batch(
-        batch["id"],
-        service.get_batch(batch["id"])["revision"],
-        "user-1",
-        "发布修正语义",
+    service = ClassificationResultService(context.database)
+    items = [{**_items()[0], "label_code": "FIT_TOO_LARGE_U1"}]
+    derived = correct_group(
+        service, base["version_id"], _record(context, base), items, "user-1"
     )
     with context.database.connect() as connection:
         for version in (base, derived):
@@ -80,7 +69,13 @@ def test_publication_and_review_keep_independent_semantic_versions(
             for row in connection.execute("SELECT * FROM classification_unit_semantics")
         }
         assert codes[base["version_id"]] == "FIT_TOO_SMALL_U1"
-        assert codes[derived["version_id"]] == "FIT_TOO_LARGE_U1"
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM classification_unit_semantics WHERE result_version_id=? AND label_code=?",
+                (derived["version_id"], "FIT_TOO_LARGE_U1"),
+            ).fetchone()[0]
+            > 0
+        )
 
 
 def test_failed_review_publication_rolls_back_semantics(
@@ -89,28 +84,14 @@ def test_failed_review_publication_rolls_back_semantics(
 ) -> None:
     context, base = _publish_review_required(tmp_path)
     results = ClassificationResultService(context.database)
-    service = ReviewService(context.database, results)
-    batch = service.create_batch(base["version_id"], "user-1", "核对回滚")
-    review = service.batch_records(batch["id"])["items"][0]
-    service.update_batch_record(
-        batch["id"],
-        review["id"],
-        review["revision"],
-        "user-1",
-        "FIT_TOO_LARGE_U1",
-        "核对发布失败",
-    )
 
     def fail_records(*args: object, **kwargs: object) -> None:
         raise RuntimeError("模拟明细写入后失败")
 
     monkeypatch.setattr(results, "_insert_records", fail_records)
     with pytest.raises(RuntimeError, match="模拟明细写入后失败"):
-        service.publish_batch(
-            batch["id"],
-            service.get_batch(batch["id"])["revision"],
-            "user-1",
-            "核对事务",
+        correct_group(
+            results, base["version_id"], _record(context, base), _items(), "user-1"
         )
     with context.database.connect() as connection:
         _assert_projection(connection, base["version_id"])
@@ -120,7 +101,6 @@ def test_failed_review_publication_rolls_back_semantics(
                 "SELECT DISTINCT result_version_id FROM classification_unit_semantics"
             )
         } == {base["version_id"]}
-    assert service.get_batch(batch["id"])["status"] == "draft"
 
 
 def test_upgrade_backfills_once_and_backup_restores_old_schema(tmp_path: Path) -> None:

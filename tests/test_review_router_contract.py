@@ -17,10 +17,18 @@ from review_router_helpers import (
 from review_router_helpers import harness as harness
 from router_contract_helpers import RouteCase
 
+from web_backend.review_contracts import LEGACY_REVIEW_BATCH_MESSAGE
 from web_backend.review_service import (
     ReviewBatchConflict,
     RevisionConflict,
 )
+
+RETIRED_METHODS = {
+    "create_batch",
+    "update_batch_record",
+    "update_batch_records",
+    "publish_batch",
+}
 
 
 @pytest.mark.parametrize(
@@ -35,6 +43,11 @@ def test_review_routes_preserve_responses_and_service_arguments(
     expected = [payload] if case.service_method == "list" else payload
     getattr(service, case.service_method).return_value = expected
     response = client.request(case.method, case.path, **case.request)
+    if case.service_method in RETIRED_METHODS:
+        assert response.status_code == 410
+        assert response.json() == {"detail": LEGACY_REVIEW_BATCH_MESSAGE}
+        assert service.mock_calls == audit.mock_calls == []
+        return
     assert response.status_code == case.status
     assert response.json() == expected
     assert service.mock_calls == [
@@ -75,6 +88,7 @@ def test_all_review_routes_require_login_before_reading_or_writing(
             case, error_type, status, id=f"{case.service_method}-{error_type.__name__}"
         )
         for case in ROUTE_CASES
+        if case.service_method not in RETIRED_METHODS
         for error_type, status in zip(
             (ValueError, RevisionConflict, ReviewBatchConflict, RuntimeError),
             ERROR_STATUSES[case.service_method],
@@ -253,6 +267,10 @@ def test_invalid_review_requests_do_not_reach_service_or_database(
     request = deepcopy(case.request)
     request.update(override)
     response = client.request(case.method, case.path, **request)
-    assert response.status_code == 422
-    assert response.json()["detail"][0]["loc"] == location
+    if service_method in RETIRED_METHODS:
+        assert response.status_code == 410
+        assert response.json() == {"detail": LEGACY_REVIEW_BATCH_MESSAGE}
+    else:
+        assert response.status_code == 422
+        assert response.json()["detail"][0]["loc"] == location
     assert service.mock_calls == database.mock_calls == audit.mock_calls == []

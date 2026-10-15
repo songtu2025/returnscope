@@ -6,14 +6,13 @@ from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
+from historical_review_fixtures import historical_batch
 from test_insight_reports import _complete_report
-from test_review_dashboard_report_lifecycle import (
-    _advance_dashboard,
-    _publish_correction,
-)
+from test_manual_correction import _items, _record
 from test_review_dashboard_report_lifecycle import lifecycle as lifecycle
 from test_web_backup import _settings
 
+from web_backend.classification_results.manual_correction import correct_group
 from web_backend.common import insert_audit
 
 
@@ -27,8 +26,24 @@ def _copy_row(connection, table, row, changes):
 
 @pytest.fixture
 def cleanup_context(lifecycle, tmp_path):
-    derived = _publish_correction(lifecycle)
-    dashboard = _advance_dashboard(lifecycle, derived)
+    batch = historical_batch(lifecycle.context, lifecycle.base)
+    # 清理仍需覆盖历史复核留痕，直接构造既有记录，不调用退役写入口。
+    with lifecycle.database.transaction() as connection:
+        connection.execute(
+            """INSERT INTO review_revisions(id,review_record_id,revision,before_json,
+               after_json,note,actor_id,created_at)
+               SELECT 'historical-revision',id,2,classification_json,classification_json,
+                      '合成历史修改','user-1',updated_at FROM review_records WHERE batch_id=?""",
+            (batch["id"],),
+        )
+    correct_group(
+        lifecycle.results,
+        lifecycle.base["version_id"],
+        _record(lifecycle.context, lifecycle.base),
+        _items(),
+        "user-1",
+    )
+    dashboard = lifecycle.dashboards.get(lifecycle.dashboard["id"])
     report = _complete_report(dashboard, lifecycle.reports)
     folder = tmp_path / "results" / "task-1"
     folder.mkdir(parents=True)

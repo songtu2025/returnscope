@@ -14,7 +14,7 @@ from types import SimpleNamespace
 
 import pytest
 import uvicorn
-from test_review_http_lifecycle import (
+from manual_smoke_fixtures import (
     SYNTHETIC_PASSWORD,
     _create_dashboard_report,
     _login,
@@ -69,6 +69,8 @@ def _run_cli(base_url: str, scope: BusinessScope) -> subprocess.CompletedProcess
         "--allow-http",
     ]
     for name, value in asdict(scope).items():
+        if not value:
+            continue
         arguments.extend(["--" + name.replace("_", "-"), value])
     return subprocess.run(
         arguments,
@@ -89,7 +91,7 @@ def _assert_cli_success(result: subprocess.CompletedProcess[str]) -> None:
     assert result.stdout.splitlines() == [
         "[通过] 登录与安全会话",
         "[通过] 分类结果版本、分页与统计",
-        "[通过] 人工复核批次与派生版本",
+        "[通过] 人工修正审计与父版本",
         "[通过] 驾驶舱版本、来源与统计",
         "[通过] 报告状态与证据版本",
         "[通过] 退出登录",
@@ -109,7 +111,7 @@ def test_business_cli_preserves_published_data_across_application_restart(
         snapshot = _published_snapshot(client, ids)
     scope = BusinessScope(
         result_version_id=ids["result_id"],
-        review_batch_id=state.batch["id"],
+        review_batch_id="",
         dashboard_id=ids["dashboard_id"],
         dashboard_version_id=ids["dashboard_version_id"],
         report_id=ids["report_id"],
@@ -128,7 +130,7 @@ def test_business_cli_preserves_published_data_across_application_restart(
         assert failed.stdout.splitlines() == [
             "[通过] 登录与安全会话",
             "[通过] 分类结果版本、分页与统计",
-            "[通过] 人工复核批次与派生版本",
+            "[通过] 人工修正审计与父版本",
         ]
         anonymous = SmokeClient(base_url)
         with pytest.raises(RuntimeError, match="返回 401"):
@@ -156,12 +158,5 @@ def _assert_restarted_business(
         _login(restarted)
         assert _published_snapshot(restarted, ids) == snapshot
         assert _request(restarted, "GET", base_path) == base_snapshot
-        batch_path = f"/api/review-batches/{state.batch['id']}"
-        batch = _request(restarted, "GET", batch_path)
-        _request(
-            restarted,
-            "POST",
-            f"{batch_path}/publish",
-            409,
-            json={"expected_revision": batch["revision"], "reason": "合成重复发布"},
-        )
+        assert _request(restarted, "GET", "/api/review-batches")["total"] == 0
+        _request(restarted, "POST", "/api/review-batches/retired/publish", 410, json={})

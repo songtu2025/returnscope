@@ -2,26 +2,14 @@ from typing import Annotated, Any, Callable
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from web_backend.api_contracts.reviews import (
-    ReviewBatchCreateRequest,
-    ReviewBatchPublishRequest,
-    ReviewBatchRecordBulkUpdateRequest,
-    ReviewBatchRecordUpdateRequest,
-    ReviewResolveRequest,
-)
+from web_backend.api_contracts.reviews import ReviewResolveRequest
 from web_backend.common import list_audit
 from web_backend.database import Database
+from web_backend.review_contracts import LEGACY_REVIEW_BATCH_MESSAGE
 from web_backend.review_service import (
-    ReviewBatchConflict,
     ReviewService,
     RevisionConflict,
 )
-
-_REVIEW_ASSESSMENT_FIELDS = {
-    "label_correctness",
-    "evidence_completeness",
-    "review_routing",
-}
 
 
 def create_review_router(
@@ -86,23 +74,11 @@ def _register_review_batches(
 
     @router.post(
         "/api/classification-results/{version_id}/review-batches",
-        status_code=201,
+        status_code=410,
+        deprecated=True,
     )
-    def create_review_batch(
-        version_id: str,
-        payload: ReviewBatchCreateRequest,
-        user: User,
-    ) -> dict[str, Any]:
-        try:
-            return review_service.create_batch(
-                version_id,
-                str(user["id"]),
-                payload.reason,
-            )
-        except ReviewBatchConflict as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    def create_review_batch(version_id: str, user: User) -> None:
+        raise HTTPException(status_code=410, detail=LEGACY_REVIEW_BATCH_MESSAGE)
 
     @router.get("/api/review-batches")
     def list_review_batches(
@@ -167,84 +143,25 @@ def _register_review_batch_changes(
 ) -> None:
     User = Annotated[dict[str, Any], Depends(current_user)]
 
-    @router.patch("/api/review-batches/{batch_id}/records/{review_id}")
-    def update_review_batch_record(
-        batch_id: str,
-        review_id: str,
-        payload: ReviewBatchRecordUpdateRequest,
-        user: User,
-    ) -> dict[str, Any]:
-        try:
-            return review_service.update_batch_record(
-                batch_id=batch_id,
-                review_id=review_id,
-                expected_revision=payload.expected_revision,
-                actor_id=str(user["id"]),
-                label_code=payload.label_code,
-                note=payload.reason,
-                action=payload.action,
-                review_assessment=payload.model_dump(include=_REVIEW_ASSESSMENT_FIELDS),
-                semantic_item_reviews=(
-                    [
-                        item.model_dump(exclude_none=True)
-                        for item in payload.semantic_item_reviews
-                    ]
-                    if payload.semantic_item_reviews is not None
-                    else None
-                ),
-                added_semantic_items=(
-                    [
-                        item.model_dump(exclude_none=True)
-                        for item in payload.added_semantic_items
-                    ]
-                    if payload.added_semantic_items is not None
-                    else None
-                ),
-                coverage_status=payload.coverage_status,
-            )
-        except (ReviewBatchConflict, RevisionConflict) as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    @router.patch(
+        "/api/review-batches/{batch_id}/records/{review_id}",
+        status_code=410,
+        deprecated=True,
+    )
+    def update_review_batch_record(batch_id: str, review_id: str, user: User) -> None:
+        raise HTTPException(status_code=410, detail=LEGACY_REVIEW_BATCH_MESSAGE)
 
-    @router.patch("/api/review-batches/{batch_id}/records")
-    def update_review_batch_records(
-        batch_id: str,
-        payload: ReviewBatchRecordBulkUpdateRequest,
-        user: User,
-    ) -> dict[str, Any]:
-        try:
-            return review_service.update_batch_records(
-                batch_id=batch_id,
-                records=[record.model_dump() for record in payload.records],
-                actor_id=str(user["id"]),
-                action=payload.action,
-                label_code=payload.label_code,
-                note=payload.reason,
-                review_assessment=payload.model_dump(include=_REVIEW_ASSESSMENT_FIELDS),
-            )
-        except (ReviewBatchConflict, RevisionConflict) as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    @router.patch(
+        "/api/review-batches/{batch_id}/records", status_code=410, deprecated=True
+    )
+    def update_review_batch_records(batch_id: str, user: User) -> None:
+        raise HTTPException(status_code=410, detail=LEGACY_REVIEW_BATCH_MESSAGE)
 
-    @router.post("/api/review-batches/{batch_id}/publish")
-    def publish_review_batch(
-        batch_id: str,
-        payload: ReviewBatchPublishRequest,
-        user: User,
-    ) -> dict[str, Any]:
-        try:
-            return review_service.publish_batch(
-                batch_id=batch_id,
-                expected_revision=payload.expected_revision,
-                actor_id=str(user["id"]),
-                reason=payload.reason,
-            )
-        except (ReviewBatchConflict, RevisionConflict) as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    @router.post(
+        "/api/review-batches/{batch_id}/publish", status_code=410, deprecated=True
+    )
+    def publish_review_batch(batch_id: str, user: User) -> None:
+        raise HTTPException(status_code=410, detail=LEGACY_REVIEW_BATCH_MESSAGE)
 
 
 def _register_review_reference_routes(

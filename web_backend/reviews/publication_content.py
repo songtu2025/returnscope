@@ -1,12 +1,10 @@
-"""校验人工复核分类并组装派生结果内容。"""
+"""当前人工修正与历史记录共用的语义校验、标签投影。"""
 
 from __future__ import annotations
 
 from typing import Any
 
 from return_semantics.schemas import ValidatedClassification
-from web_backend.common import json_value
-from web_backend.review_contracts import _CompletedReviewChanges, _DerivedResultContent
 
 HUMAN_REVIEW_CLASSIFICATION_FIELDS = (
     "human_review_assessment",
@@ -39,114 +37,6 @@ class ReviewPublicationContentMixin:
         return ValidatedClassification.model_validate(core), human_fields
 
     @staticmethod
-    def _build_derived_result_content(
-        connection: Any,
-        batch: Any,
-        changes: _CompletedReviewChanges,
-        label_map: dict[str, Any],
-    ) -> _DerivedResultContent:
-        base_units = connection.execute(
-            """
-            SELECT * FROM classification_units
-            WHERE result_version_id = ? ORDER BY classification_key
-            """,
-            (batch["base_result_version_id"],),
-        ).fetchall()
-        base_labels = ReviewPublicationContentMixin._load_base_labels(connection, batch)
-        units, labels, unit_quality = ReviewPublicationContentMixin._derive_units(
-            base_units, base_labels, changes, label_map
-        )
-        records = ReviewPublicationContentMixin._derive_records(
-            connection, batch, unit_quality
-        )
-        return _DerivedResultContent(units=units, labels=labels, records=records)
-
-    @staticmethod
-    def _load_base_labels(
-        connection: Any, batch: Any
-    ) -> dict[str, list[dict[str, Any]]]:
-        base_labels: dict[str, list[dict[str, Any]]] = {}
-        for label_row in connection.execute(
-            """
-            SELECT classification_key, label_kind, label_code,
-                   label_name, label_group
-            FROM classification_unit_labels
-            WHERE result_version_id = ?
-            ORDER BY classification_key, label_kind, label_code
-            """,
-            (batch["base_result_version_id"],),
-        ).fetchall():
-            base_labels.setdefault(
-                str(label_row["classification_key"]),
-                [],
-            ).append(dict(label_row))
-        return base_labels
-
-    @staticmethod
-    def _derive_units(
-        base_units: list[Any],
-        base_labels: dict[str, list[dict[str, Any]]],
-        changes: _CompletedReviewChanges,
-        label_map: dict[str, Any],
-    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, str]]:
-        units: list[dict[str, Any]] = []
-        labels: list[dict[str, Any]] = []
-        unit_quality: dict[str, str] = {}
-        for row in base_units:
-            key = str(row["classification_key"])
-            unit, validated = ReviewPublicationContentMixin._derive_unit(
-                row, key, changes
-            )
-            unit_quality[key] = unit["quality_status"]
-            units.append(unit)
-            if key in changes.excluded_keys:
-                continue
-            if key not in changes.revisions:
-                labels.extend(base_labels.get(key, []))
-                continue
-            labels.extend(
-                ReviewPublicationContentMixin._derive_unit_labels(
-                    key, validated, label_map
-                )
-            )
-        return units, labels, unit_quality
-
-    @staticmethod
-    def _derive_unit(
-        row: Any, key: str, changes: _CompletedReviewChanges
-    ) -> tuple[dict[str, Any], ValidatedClassification]:
-        classification = changes.revisions.get(
-            key, json_value(row["classification_json"], {})
-        )
-        validated, human_fields = (
-            ReviewPublicationContentMixin._validate_reviewed_classification(
-                classification
-            )
-        )
-        serialized = validated.model_dump(mode="json")
-        serialized.update(human_fields)
-        quality_status = (
-            "excluded"
-            if key in changes.excluded_keys
-            else "ready"
-            if key in changes.revisions
-            else str(row["quality_status"])
-        )
-        return {
-            "classification_key": key,
-            "reason": row["reason"],
-            "comment": row["comment"],
-            "classification": serialized,
-            "problem_labels": list(validated.problem_label_codes),
-            "processing_status": validated.status.value,
-            "quality_status": quality_status,
-            "record_count": int(row["record_count"]),
-            "model_name": validated.model_name,
-            "prompt_version": validated.prompt_version,
-            "taxonomy_version": validated.taxonomy_version,
-        }, validated
-
-    @staticmethod
     def _derive_unit_labels(
         key: str, validated: ValidatedClassification, label_map: dict[str, Any]
     ) -> list[dict[str, Any]]:
@@ -168,40 +58,3 @@ class ReviewPublicationContentMixin:
                     }
                 )
         return labels
-
-    @staticmethod
-    def _derive_records(
-        connection: Any, batch: Any, unit_quality: dict[str, str]
-    ) -> list[dict[str, Any]]:
-        base_records = connection.execute(
-            """
-            SELECT * FROM classification_result_records
-            WHERE result_version_id = ? ORDER BY source_row, id
-            """,
-            (batch["base_result_version_id"],),
-        ).fetchall()
-        records = [
-            {
-                "classification_key": str(row["classification_key"]),
-                "source_row": int(row["source_row"]),
-                "source_origin_id": row["source_origin_id"],
-                "return_date": row["return_date"],
-                "order_id": row["order_id"],
-                "store_site": row["store_site"],
-                "listing": row["listing"],
-                "product_name": row["product_name"],
-                "source_sku": row["source_sku"],
-                "matched_msku": row["matched_msku"],
-                "product_sku": row["product_sku"],
-                "asin": row["asin"],
-                "fnsku": row["fnsku"],
-                "category_a": row["category_a"],
-                "category_b": row["category_b"],
-                "reason": row["reason"],
-                "comment": row["comment"],
-                "product_match_status": row["product_match_status"],
-                "quality_status": unit_quality[str(row["classification_key"])],
-            }
-            for row in base_records
-        ]
-        return records

@@ -77,7 +77,7 @@ test("结果发布重试使用约定的 POST 路径和并发控制参数", async
   );
 });
 
-test("复核批次 API 使用冻结路径、服务端筛选和 revision", async () => {
+test("历史复核 API 保留读取筛选并移除旧写方法", async () => {
   const fetchMock = vi.fn().mockResolvedValue({
     ok: true,
     status: 200,
@@ -102,15 +102,6 @@ test("复核批次 API 使用冻结路径、服务端筛选和 revision", async 
     product_sku: "SKU-1",
     order_id: "ORDER-1",
   });
-  await api.updateReviewBatchRecord("batch/1", "record/1", {
-    expected_revision: 3,
-    label_code: "FIT_TOO_SMALL",
-    reason: "证据充分",
-  });
-  await api.publishReviewBatch("batch/1", {
-    expected_revision: 4,
-    reason: "复核完成",
-  });
 
   expect(fetchMock.mock.calls[0][0]).toBe(
     "/api/review-batches?page=2&page_size=50&status=draft&base_result_version_id=version%2F1&q=SR001",
@@ -118,24 +109,9 @@ test("复核批次 API 使用冻结路径、服务端筛选和 revision", async 
   expect(fetchMock.mock.calls[1][0]).toBe(
     "/api/review-batches/batch/1/records?page=1&page_size=20&workflow_status=pending&listing=SR001&product_name=%E4%BA%A7%E5%93%81%E5%90%8D%E7%A7%B0&product_sku=SKU-1&order_id=ORDER-1",
   );
-  expect(fetchMock.mock.calls[2]).toEqual([
-    "/api/review-batches/batch/1/records/record/1",
-    expect.objectContaining({
-      method: "PATCH",
-      body: JSON.stringify({
-        expected_revision: 3,
-        label_code: "FIT_TOO_SMALL",
-        reason: "证据充分",
-      }),
-    }),
-  ]);
-  expect(fetchMock.mock.calls[3]).toEqual([
-    "/api/review-batches/batch/1/publish",
-    expect.objectContaining({
-      method: "POST",
-      body: JSON.stringify({ expected_revision: 4, reason: "复核完成" }),
-    }),
-  ]);
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(api.updateReviewBatchRecord).toBeUndefined();
+  expect(api.publishReviewBatch).toBeUndefined();
 });
 
 test("分析看板 API 使用冻结路径、计划哈希和服务端下钻", async () => {

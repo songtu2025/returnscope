@@ -455,7 +455,6 @@ def _verify_persistence_after_restart(
     *,
     task_id: str,
     result_version_id: str,
-    review_batch_id: str,
     dashboard_ids: tuple[str, str],
 ) -> None:
     dashboard_id, dashboard_version_id = dashboard_ids
@@ -475,10 +474,9 @@ def _verify_persistence_after_restart(
         result = client.get(f"/api/classification-results/{result_version_id}")
         assert result.status_code == 200, result.text
         assert result.json()["version"] == 2
-        batch = client.get(f"/api/review-batches/{review_batch_id}")
-        assert batch.status_code == 200, batch.text
-        assert batch.json()["status"] == "published"
-        assert batch.json()["published_version_id"] == result_version_id
+        batches = client.get("/api/review-batches")
+        assert batches.status_code == 200, batches.text
+        assert batches.json()["total"] == 0
         dashboard = client.get(
             f"/api/analysis-dashboards/{dashboard_id}",
             params={"version_id": dashboard_version_id},
@@ -1009,74 +1007,42 @@ def test_real_web_task_flow(tmp_path: Path) -> None:
             member_current = _wait_for_completed_task(client, member_task_id)
             assert member_current["owner_name"] == "协作者"
             base_version_id = member_current["segments"][0]["result_version_id"]
-            with app.state.database.transaction() as connection:
-                unit = connection.execute(
-                    """
-                    SELECT classification_json FROM classification_units
-                    WHERE result_version_id = ?
-                    """,
+            # 当前流程直接修正已发布结果，不再写旧复核批次或为测试修改质量状态。
+            with app.state.database.connect() as connection:
+                record = connection.execute(
+                    "SELECT id,comment FROM classification_result_records WHERE result_version_id=? ORDER BY source_row LIMIT 1",
                     (base_version_id,),
                 ).fetchone()
-                classification = json.loads(unit["classification_json"])
-                classification["status"] = "MANUAL_REVIEW"
-                classification["review_reasons"] = ["测试人工复核"]
-                classification["review_diagnostics"] = []
-                connection.execute(
-                    """
-                    UPDATE classification_units
-                    SET classification_json = ?, processing_status = 'MANUAL_REVIEW',
-                        quality_status = 'review_required'
-                    WHERE result_version_id = ?
-                    """,
-                    (
-                        json.dumps(classification, ensure_ascii=False),
-                        base_version_id,
-                    ),
-                )
             batch_response = client.post(
                 f"/api/classification-results/{base_version_id}/review-batches",
-                json={"reason": "创建复核批次"},
+                json={"reason": "旧客户端创建复核批次"},
             )
-            assert batch_response.status_code == 201, batch_response.text
-            batch = batch_response.json()
-            batch_records = client.get(
-                f"/api/review-batches/{batch['id']}/records"
-            ).json()
-            assert batch_records["total"] == 1
-            review = batch_records["items"][0]
+            assert batch_response.status_code == 410, batch_response.text
             resolved = client.patch(
-                f"/api/review-batches/{batch['id']}/records/{review['id']}",
+                f"/api/classification-results/{base_version_id}/records/{record['id']}/semantics",
                 json={
-                    "expected_revision": review["revision"],
-                    "label_code": "FIT_TOO_SMALL_U1",
-                    "reason": "人工确认标签",
+                    "semantic_items": [
+                        {
+                            "evidence_text": record["comment"],
+                            "opinion": "人工确认标签",
+                            "label_code": "FIT_TOO_SMALL_U1",
+                            "sentiment": "NEGATIVE",
+                        }
+                    ]
                 },
             )
             assert resolved.status_code == 200, resolved.text
-            assert resolved.json()["classification"]["status"] == "MANUAL_RESOLVED"
+            derived_version_id = resolved.json()["version_id"]
             stale = client.patch(
-                f"/api/review-batches/{batch['id']}/records/{review['id']}",
-                json={
-                    "expected_revision": review["revision"],
-                    "label_code": "FIT_TOO_LARGE_U1",
-                    "reason": "重复提交",
-                },
+                f"/api/classification-results/{base_version_id}/records/{record['id']}/semantics",
+                json={"semantic_items": []},
             )
             assert stale.status_code == 409
-            current_batch = client.get(f"/api/review-batches/{batch['id']}").json()
-            published = client.post(
-                f"/api/review-batches/{batch['id']}/publish",
-                json={
-                    "expected_revision": current_batch["revision"],
-                    "reason": "发布复核结果",
-                },
-            )
-            assert published.status_code == 200, published.text
             history = client.get(
                 f"/api/classification-results/{base_version_id}/versions"
             ).json()
             assert [item["version"] for item in history] == [2, 1]
-            derived_version_id = published.json()["version_id"]
+            assert client.get("/api/review-batches").json()["total"] == 0
             dashboard_id, dashboard_version_id = _create_and_verify_dashboard(
                 client,
                 derived_version_id,
@@ -1265,7 +1231,6 @@ def test_real_web_task_flow(tmp_path: Path) -> None:
             settings,
             task_id=task_id,
             result_version_id=derived_version_id,
-            review_batch_id=batch["id"],
             dashboard_ids=(dashboard_id, dashboard_version_id),
         )
     finally:

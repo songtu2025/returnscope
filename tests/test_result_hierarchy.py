@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+from historical_review_fixtures import historical_batch
 from test_classification_result_pool import _publish, _seed_result_context
 from test_result_version_reviews import _publish_review_required
 
@@ -35,12 +36,28 @@ def test_result_tree_filters_count_feedback_groups_and_exports_paths(
     taxonomy = TaxonomyConfig.model_validate(payload)
     version = _publish(context)
     service = ClassificationResultService(context.database)
-    monkeypatch.setattr(service, "taxonomy", lambda _: taxonomy)
+    standard = next(
+        item
+        for item in ClassificationStandardService(context.database).list()
+        if item["standard_key"] == "footwear"
+    )
     version_id = str(version["version_id"])
     sibling = next(
         label for label in taxonomy.labels if label.code != "FIT_TOO_SMALL_U1"
     )
     with context.database.transaction() as connection:
+        # 导出和页面共用实际绑定的标准快照，不能只替换页面查询方法。
+        connection.execute(
+            "UPDATE classification_standard_versions SET snapshot_json=json_set(snapshot_json,'$.taxonomy',json(?)) WHERE id=?",
+            (
+                json_text(taxonomy.model_dump(mode="json")),
+                standard["standard_version_id"],
+            ),
+        )
+        connection.execute(
+            "UPDATE classification_results SET standard_version_id=? WHERE id=?",
+            (standard["standard_version_id"], version["result_id"]),
+        )
         connection.execute(
             """INSERT INTO classification_unit_labels
             (result_version_id, classification_key, label_kind, label_code, label_name, label_group)
@@ -180,7 +197,7 @@ def test_result_paths_use_bound_snapshot_and_missing_binding_stays_unknown(
 def test_unbound_review_stays_readable_and_rejects_new_labels(tmp_path: Path) -> None:
     context, version = _publish_review_required(tmp_path)
     service = ReviewService(context.database)
-    batch = service.create_batch(str(version["version_id"]), "user-1", "验证历史绑定")
+    batch = historical_batch(context, version)
     with context.database.transaction() as connection:
         connection.execute(
             "UPDATE classification_results SET standard_version_id = NULL"
@@ -189,7 +206,7 @@ def test_unbound_review_stays_readable_and_rejects_new_labels(tmp_path: Path) ->
     assert rows["taxonomy"] is None
     assert "problem_label_paths" not in rows["items"][0]
     review = rows["items"][0]
-    with pytest.raises(ValueError, match="缺少标准版本绑定"):
+    with pytest.raises(ValueError, match="已停用"):
         service.update_batch_record(
             batch["id"],
             review["id"],

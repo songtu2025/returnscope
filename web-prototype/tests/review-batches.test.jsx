@@ -15,9 +15,6 @@ const { reviewBatchApiMock } = vi.hoisted(() => ({
     reviewBatches: vi.fn(),
     reviewBatch: vi.fn(),
     reviewBatchRecords: vi.fn(),
-    updateReviewBatchRecord: vi.fn(),
-    updateReviewBatchRecords: vi.fn(),
-    publishReviewBatch: vi.fn(),
     reviewTaxonomy: vi.fn(),
   },
 }));
@@ -354,7 +351,6 @@ test("待处理批次展示真实业务字段并阻止提前发布", async () =>
   expect(
     screen.queryByRole("button", { name: "发布派生版本" }),
   ).not.toBeInTheDocument();
-  expect(reviewBatchApiMock.updateReviewBatchRecord).not.toHaveBeenCalled();
 
   await userEvent.click(screen.getByRole("button", { name: "查看" }));
   const drawer = screen.getByRole("dialog", { name: "ORDER-001、ORDER-002" });

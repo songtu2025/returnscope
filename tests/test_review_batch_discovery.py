@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from historical_review_fixtures import historical_batch
 from test_result_version_reviews import _publish_review_required
 
 from web_backend.review_service import ReviewService
@@ -21,127 +22,27 @@ def _client(context, service: ReviewService) -> TestClient:
     return TestClient(app)
 
 
-def test_review_batch_list_discovery_conflict_and_derived_summary(
-    tmp_path: Path,
+@pytest.mark.parametrize("status", ["draft", "published"])
+def test_historical_batch_list_and_detail_remain_readable(
+    tmp_path: Path, status: str
 ) -> None:
     context, base = _publish_review_required(tmp_path)
-    base_id = str(base["version_id"])
-    service = ReviewService(context.database)
-    client = _client(context, service)
-
-    created = client.post(
-        f"/api/classification-results/{base_id}/review-batches",
-        json={"reason": "创建复核草稿"},
-    )
-    assert created.status_code == 201
-    batch = created.json()
-    with context.database.connect() as connection:
-        records_before = connection.execute(
-            "SELECT COUNT(*) FROM review_records WHERE batch_id = ?",
-            (batch["id"],),
-        ).fetchone()[0]
-
-    duplicate = client.post(
-        f"/api/classification-results/{base_id}/review-batches",
-        json={"reason": "重复创建"},
-    )
-    assert duplicate.status_code == 409
-    with context.database.connect() as connection:
-        assert (
+    batch = historical_batch(context, base)
+    if status == "published":
+        with context.database.transaction() as connection:
             connection.execute(
-                "SELECT COUNT(*) FROM review_batches WHERE base_result_version_id = ?",
-                (base_id,),
-            ).fetchone()[0]
-            == 1
-        )
-        assert (
-            connection.execute(
-                "SELECT COUNT(*) FROM review_records WHERE batch_id = ?",
-                (batch["id"],),
-            ).fetchone()[0]
-            == records_before
-        )
-        result_id = connection.execute(
-            "SELECT result_id FROM classification_result_versions WHERE id = ?",
-            (base_id,),
-        ).fetchone()[0]
-        connection.execute(
-            """
-            INSERT INTO review_batches(
-                id, base_result_version_id, result_id, status, revision,
-                created_by, created_at, updated_at,
-                published_version_id, published_at
-            ) VALUES ('batch-published', ?, ?, 'published', 2, 'user-2',
-                      '2026-08-12T00:05:00+00:00',
-                      '2026-08-12T00:05:00+00:00', ?,
-                      '2026-08-12T00:05:00+00:00')
-            """,
-            (base_id, result_id, base_id),
-        )
-
-    discovered = client.get(
+                "UPDATE review_batches SET status='published',published_version_id=? WHERE id=?",
+                (base["version_id"], batch["id"]),
+            )
+    client = _client(context, ReviewService(context.database))
+    response = client.get(
         "/api/review-batches",
-        params={
-            "base_result_version_id": base_id,
-            "status": "draft",
-        },
+        params={"base_result_version_id": base["version_id"], "status": status},
     )
-    assert discovered.status_code == 200
-    assert discovered.json()["total"] == 1
-    item = discovered.json()["items"][0]
-    assert item["id"] == batch["id"]
-    assert item["base_version_no"] == 1
-    assert item["store_site"] == "SEEKWAY:US"
-    assert item["listing"] == "L1"
-    assert item["base_quality_status"] == "review_required"
-    assert item["base_unit_count"] == 1
-    assert item["base_record_count"] == 3
-    assert item["record_count"] == 1
-    assert item["resolved_count"] == 0
-    assert item["remaining_count"] == 1
-    assert item["creator"]["id"] == "user-1"
-
-    paged = client.get(
-        "/api/review-batches",
-        params={"page": 2, "page_size": 1, "base_result_version_id": base_id},
-    )
-    assert paged.status_code == 200
-    assert paged.json()["total"] == 2
-    assert len(paged.json()["items"]) == 1
-    assert (
-        client.get("/api/review-batches", params={"q": "batch-published"}).json()[
-            "total"
-        ]
-        == 1
-    )
-    assert (
-        client.get("/api/review-batches", params={"q": "user-2"}).json()["total"] == 1
-    )
-    assert client.get("/api/review-batches", params={"q": "L1"}).json()["total"] == 2
-
-    review = service.batch_records(batch["id"])["items"][0]
-    service.update_batch_record(
-        batch["id"],
-        review["id"],
-        review["revision"],
-        "user-1",
-        "FIT_TOO_SMALL_U1",
-        "确认尺码偏小",
-    )
-    current = service.get_batch(batch["id"])
-    derived = service.publish_batch(
-        batch["id"],
-        current["revision"],
-        "user-1",
-        "发布复核结果",
-    )
-    detail = client.get(f"/api/review-batches/{batch['id']}")
-    assert detail.status_code == 200
-    assert detail.json()["status"] == "published"
-    assert detail.json()["derived_result_version_id"] == derived["version_id"]
-    assert detail.json()["derived_version_no"] == 2
-    assert detail.json()["resolved_count"] == 1
-    assert detail.json()["remaining_count"] == 0
+    assert response.status_code == 200
+    assert response.json()["total"] == 1
+    assert response.json()["items"][0]["id"] == batch["id"]
+    assert client.get(f"/api/review-batches/{batch['id']}").json()["record_count"] == 1
 
 
 def test_review_batch_records_aggregate_business_fields_and_filter_without_n_plus_one(
@@ -168,7 +69,7 @@ def test_review_batch_records_aggregate_business_fields_and_filter_without_n_plu
             (base_id,),
         )
     service = ReviewService(context.database)
-    batch = service.create_batch(base_id, "user-1", "聚合业务字段")
+    batch = historical_batch(context, base)
     client = _client(context, service)
 
     response = client.get(f"/api/review-batches/{batch['id']}/records")

@@ -41,9 +41,13 @@ def _check_result(client: SmokeClient, scope: BusinessScope) -> dict[str, Any]:
     _require(
         result.get("version_id") == scope.result_version_id
         and result.get("publish_status") == "published"
-        and result.get("source_review_batch_id") == scope.review_batch_id
+        and (
+            result.get("source_review_batch_id") == scope.review_batch_id
+            if scope.review_batch_id
+            else not result.get("source_review_batch_id")
+        )
         and bool(result.get("parent_version_id")),
-        "分类结果不是指定复核批次发布的派生版本",
+        "分类结果不是指定的已发布人工修正派生版本",
     )
     count = result.get("record_count")
     _require(
@@ -69,6 +73,9 @@ def _check_result(client: SmokeClient, scope: BusinessScope) -> dict[str, Any]:
 def _check_review(
     client: SmokeClient, scope: BusinessScope, result: dict[str, Any]
 ) -> None:
+    if not scope.review_batch_id:
+        _check_direct_correction(client, scope, result)
+        return
     batch = _get(client, f"/api/review-batches/{quote(scope.review_batch_id, safe='')}")
     _require(
         batch.get("id") == scope.review_batch_id
@@ -79,6 +86,37 @@ def _check_review(
         "复核批次状态或基础、派生版本关联不一致",
     )
     print("[通过] 人工复核批次与派生版本")
+
+
+def _check_direct_correction(
+    client: SmokeClient, scope: BusinessScope, result: dict[str, Any]
+) -> None:
+    parent_id = result["parent_version_id"]
+    parent = _get(client, f"/api/classification-results/{quote(parent_id, safe='')}")
+    _require(
+        parent.get("version_id") == parent_id
+        and parent.get("publish_status") == "published"
+        and parent.get("result_id") == result.get("result_id")
+        and parent["version"] < result["version"],
+        "人工修正父版本或所属分类结果不一致",
+    )
+    status, _headers, audits = client.json(
+        f"/api/audit/classification_result/{quote(result['result_id'], safe='')}"
+    )
+    _require(
+        status == 200
+        and isinstance(audits, list)
+        and any(
+            item.get("action") in {"manual_correction", "semantic_restore"}
+            and item.get("before", {}).get("version_id") == parent_id
+            and item.get("after", {}).get("version_id") == scope.result_version_id
+            and bool(item.get("actor_name"))
+            and bool(item.get("created_at"))
+            for item in audits
+        ),
+        "人工修正缺少对应父版本、结果版本和操作者的审计记录",
+    )
+    print("[通过] 人工修正审计与父版本")
 
 
 def _check_dashboard(
@@ -193,7 +231,11 @@ def main() -> None:
         "report_id",
     )
     for name in names:
-        parser.add_argument("--" + name.replace("_", "-"), required=True)
+        parser.add_argument(
+            "--" + name.replace("_", "-"),
+            required=name != "review_batch_id",
+            default="",
+        )
     args = parser.parse_args()
     try:
         base_url = validate_base_url(args.base_url, args.allow_http)

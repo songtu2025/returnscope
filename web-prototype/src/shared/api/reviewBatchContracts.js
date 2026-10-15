@@ -206,7 +206,6 @@
  *
  * @typedef {{items: ReviewBatch[], total: number, page: number, page_size: number}} ReviewBatchPage
  * @typedef {{items: ReviewRecord[], total: number, page: number, page_size: number, taxonomy?: ReviewTaxonomy | null}} ReviewRecordPage
- * @typedef {{version: number, version_id: string}} PublishedReviewVersion
  * @typedef {{message: string, serverRecord?: ReviewRecord}} ReviewConflict
  * @typedef {Error & {status?: number}} ReviewRequestError
  * @typedef {{id: string, revision: number, actor_name?: string, before: ReviewClassification, after: ReviewClassification, note?: string, created_at: string}} LegacyReviewRevision

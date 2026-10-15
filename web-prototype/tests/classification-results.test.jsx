@@ -19,7 +19,6 @@ const { apiMock, dashboardApiMock } = vi.hoisted(() => ({
     classificationResultDrilldown: vi.fn(),
     classificationResultVersions: vi.fn(),
     reviewBatches: vi.fn(),
-    createReviewBatch: vi.fn(),
     configs: vi.fn(),
     resultTaxonomy: vi.fn(),
     correctClassificationResult: vi.fn(),
