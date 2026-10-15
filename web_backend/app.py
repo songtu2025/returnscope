@@ -167,15 +167,11 @@ def create_app(
     standard_validation_worker = ClassificationStandardValidationWorker(
         standard_validation_service
     )
+    export_worker = ResultExportWorker(export_service)
 
     lifespan = _create_lifespan(
         start_worker,
-        (
-            worker,
-            insight_report_worker,
-            standard_validation_worker,
-            ResultExportWorker(export_service),
-        ),
+        (worker, insight_report_worker, standard_validation_worker, export_worker),
         validation_executor,
     )
     app = FastAPI(
@@ -200,6 +196,7 @@ def create_app(
             worker=worker,
             insight_report_worker=insight_report_worker,
             standard_validation_worker=standard_validation_worker,
+            export_worker=export_worker,
             start_worker=start_worker,
             current_user=current_user,
         )
@@ -293,6 +290,7 @@ def create_app(
     app.state.insight_report_worker = insight_report_worker
     app.state.standard_validation_service = standard_validation_service
     app.state.standard_validation_worker = standard_validation_worker
+    app.state.export_worker = export_worker
     return app
 
 

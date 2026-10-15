@@ -106,7 +106,12 @@ def harness(
             is_alive=True,
             health={"last_error_type": None, "last_error_at": None},
         )
-        for name in ("listing", "insight_report", "classification_standard_validation")
+        for name in (
+            "listing",
+            "insight_report",
+            "classification_standard_validation",
+            "result_export",
+        )
     }
 
     def current_user(
@@ -129,6 +134,7 @@ def harness(
         worker=workers["listing"],
         insight_report_worker=workers["insight_report"],
         standard_validation_worker=workers["classification_standard_validation"],
+        export_worker=workers["result_export"],
         start_worker=start_worker,
         current_user=current_user,
     )

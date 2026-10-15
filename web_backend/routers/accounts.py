@@ -13,6 +13,7 @@ from web_backend.classification_standard_validation_worker import (
 from web_backend.common import add_audit
 from web_backend.database import Database
 from web_backend.insight_report_worker import InsightReportWorker
+from web_backend.result_export_worker import ResultExportWorker
 from web_backend.routers.account_directory_routes import (
     _email,
     _register_team_routes,
@@ -54,6 +55,7 @@ def create_account_router(
     worker: TaskWorker,
     insight_report_worker: InsightReportWorker,
     standard_validation_worker: ClassificationStandardValidationWorker,
+    export_worker: ResultExportWorker,
     start_worker: bool,
     current_user: Callable[..., dict[str, Any]],
 ) -> APIRouter:
@@ -68,6 +70,7 @@ def create_account_router(
         worker=worker,
         insight_report_worker=insight_report_worker,
         standard_validation_worker=standard_validation_worker,
+        export_worker=export_worker,
         start_worker=start_worker,
     )
     _register_health_route(router, database, monitoring)

@@ -1313,6 +1313,7 @@ def test_login_is_rate_limited(tmp_path: Path) -> None:
     ("state_name", "worker_name"),
     [
         ("worker", "listing"),
+        ("export_worker", "result_export"),
         ("insight_report_worker", "insight_report"),
         (
             "standard_validation_worker",
@@ -1348,7 +1349,13 @@ def test_health_fails_when_worker_stops(
         )
 
 
-def test_health_reports_recent_worker_error(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("state_name", "worker_name"),
+    [("insight_report_worker", "insight_report"), ("export_worker", "result_export")],
+)
+def test_health_reports_recent_worker_error(
+    tmp_path: Path, state_name: str, worker_name: str
+) -> None:
     settings = Settings(
         data_dir=tmp_path / "runtime",
         database_path=tmp_path / "runtime" / "app.db",
@@ -1363,14 +1370,14 @@ def test_health_reports_recent_worker_error(tmp_path: Path) -> None:
     app = create_app(start_worker=True, settings_override=settings)
 
     with TestClient(app) as client:
-        app.state.insight_report_worker._health.record_error(
+        getattr(app.state, state_name)._health.record_error(
             RuntimeError("报告监督异常")
         )
         response = client.get("/api/health")
 
     assert response.status_code == 200
     payload = response.json()
-    worker_health = payload["workers"]["insight_report"]
+    worker_health = payload["workers"][worker_name]
     assert payload["status"] == "degraded"
     assert payload["worker"] == "degraded"
     assert worker_health["status"] == "degraded"

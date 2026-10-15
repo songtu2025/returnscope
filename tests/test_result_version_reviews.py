@@ -263,6 +263,10 @@ def test_system_status_excludes_legacy_review_records(tmp_path: Path) -> None:
                 is_alive=True,
                 health={"last_error_type": None, "last_error_at": None},
             ),
+            export_worker=SimpleNamespace(
+                is_alive=True,
+                health={"last_error_type": None, "last_error_at": None},
+            ),
             start_worker=False,
             current_user=lambda: {"id": "user-1"},
         )

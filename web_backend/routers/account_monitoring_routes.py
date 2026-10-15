@@ -8,6 +8,7 @@ from web_backend.classification_standard_validation_worker import (
 )
 from web_backend.database import Database
 from web_backend.insight_report_worker import InsightReportWorker
+from web_backend.result_export_worker import ResultExportWorker
 from web_backend.security import utc_now
 from web_backend.settings import Settings
 from web_backend.task_service import TaskService
@@ -39,6 +40,7 @@ class _MonitoringDependencies:
     worker: TaskWorker
     insight_report_worker: InsightReportWorker
     standard_validation_worker: ClassificationStandardValidationWorker
+    export_worker: ResultExportWorker
     start_worker: bool
 
 
@@ -63,6 +65,7 @@ def _register_health_route(
                 standard_validation_worker,
                 start_worker,
             ),
+            "result_export": _worker_health(monitoring.export_worker, start_worker),
         }
         worker_statuses = {item["status"] for item in workers.values()}
         worker_status = (

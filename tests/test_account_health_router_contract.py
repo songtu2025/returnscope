@@ -11,7 +11,13 @@ from web_backend.security import (
     "harness", [{"start_worker": False}, {"start_worker": True}], indirect=True
 )
 @pytest.mark.parametrize(
-    "worker_name", ["listing", "insight_report", "classification_standard_validation"]
+    "worker_name",
+    [
+        "listing",
+        "insight_report",
+        "classification_standard_validation",
+        "result_export",
+    ],
 )
 @pytest.mark.parametrize("issue", ["stopped", "error"])
 def test_health_tracks_each_worker_and_disabled_mode(
@@ -50,6 +56,7 @@ def test_health_tracks_each_worker_and_disabled_mode(
         "listing",
         "insight_report",
         "classification_standard_validation",
+        "result_export",
     }
 
 
