@@ -31,6 +31,17 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+test("长任务名保留完整悬停提示和键盘可访问名称", async () => {
+  const title = "合成长任务名称用于核对列表截断后仍可阅读完整任务范围".repeat(3);
+  mocks.tasks.mockResolvedValue([{ ...original, title }]);
+  render(<TaskMonitor notify={vi.fn()} onNavigate={vi.fn()} />);
+  const taskName = await screen.findByRole("button", { name: title, exact: true });
+  expect(taskName).toHaveAttribute("title", title);
+  expect(taskName).toHaveAccessibleName(title);
+  taskName.focus();
+  expect(taskName).toHaveFocus();
+});
+
 async function openRename() {
   const onNavigate = vi.fn();
   const notify = vi.fn();

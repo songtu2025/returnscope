@@ -99,7 +99,12 @@ export function TaskNameEditor({ task, onSaved, onOpen, heading = false }) {
           {heading ? (
             <h2>{task.title}</h2>
           ) : (
-            <button type="button" className="task-name-open" onClick={onOpen}>
+            <button
+              type="button"
+              className="task-name-open"
+              title={task.title}
+              onClick={onOpen}
+            >
               <b>{task.title}</b>
             </button>
           )}
