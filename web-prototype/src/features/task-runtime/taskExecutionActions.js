@@ -16,6 +16,25 @@ export function taskExecutionActions({
   loadSelected,
   mutateCache,
 }) {
+  /** @param {string[]} domains @param {string} message */
+  const refreshAfterSuccess = async (domains, message) => {
+    const results = await Promise.allSettled([
+      loadTasks(true),
+      refreshServerState(mutateCache, domains),
+    ]);
+    if (
+      results.some((result) => result.status === "rejected" || result.value === false)
+    ) {
+      notify(message, "error");
+    }
+  };
+  const refreshConflict = async () => {
+    try {
+      await loadSelected();
+    } catch {
+      notify("任务资料刷新失败，操作未提交，请刷新后重试", "error");
+    }
+  };
   return {
     onRetrySegment: async (
       /** @type {string} */ segmentKey,
@@ -29,16 +48,16 @@ export function taskExecutionActions({
         );
         setSelected(updated);
         setActionError("");
-        await loadTasks();
-        void refreshServerState(mutateCache, ["workbench"]).catch(() =>
-          notify("重试已提交，关联数据刷新失败，可重试", "error"),
-        );
         notify("任务片段已重新排队");
+        await refreshAfterSuccess(
+          ["workbench"],
+          "重试已提交，任务列表或关联数据刷新失败，请刷新后查看",
+        );
         return true;
       } catch (error) {
         if (errorStatus(error) === 409) {
           setActionError("任务已更新，请查看刷新后的 Listing 状态再操作。");
-          await loadSelected();
+          await refreshConflict();
         } else {
           setActionError(errorMessage(error));
         }
@@ -58,16 +77,14 @@ export function taskExecutionActions({
         );
         setSelected(updated);
         setActionError("");
-        await loadTasks();
-        void refreshServerState(mutateCache, [
-          "classification-results",
-          "analysis-dashboards",
-          "workbench",
-        ]).catch(() => notify("结果已重新生成，关联数据刷新失败，可重试", "error"));
         notify("分类结果已重新生成");
+        await refreshAfterSuccess(
+          ["classification-results", "analysis-dashboards", "workbench"],
+          "结果已重新生成，任务列表或关联数据刷新失败，请刷新后查看",
+        );
         return true;
       } catch (error) {
-        if (errorStatus(error) === 409) await loadSelected();
+        if (errorStatus(error) === 409) await refreshConflict();
         notify(errorMessage(error), "error");
         return false;
       }
@@ -89,7 +106,6 @@ export function taskExecutionActions({
         );
         setSelected(updated);
         setActionError("");
-        await loadTasks();
         notify(
           {
             pause: "Listing 暂停请求已提交",
@@ -99,14 +115,13 @@ export function taskExecutionActions({
             restore: "Listing 已恢复，不会自动执行",
           }[action],
         );
-        await refreshServerState(mutateCache, [
-          "workbench",
-          "data-assets",
-          "task-recycle",
-        ]);
+        await refreshAfterSuccess(
+          ["workbench", "data-assets", "task-recycle"],
+          "Listing 操作已提交，任务列表或关联数据刷新失败，请刷新后查看",
+        );
         return true;
       } catch (error) {
-        if (errorStatus(error) === 409) await loadSelected();
+        if (errorStatus(error) === 409) await refreshConflict();
         notify(errorMessage(error), "error");
         return false;
       }
@@ -122,7 +137,7 @@ export function taskExecutionActions({
         notify(`Listing 并行数已调整为 ${maxParallelSegments}`);
         return true;
       } catch (error) {
-        if (errorStatus(error) === 409) await loadSelected();
+        if (errorStatus(error) === 409) await refreshConflict();
         notify(errorMessage(error), "error");
         return false;
       }
@@ -140,7 +155,7 @@ export function taskExecutionActions({
       } catch (error) {
         if (errorStatus(error) === 409) {
           setActionError("等待片段已经变化，请刷新后重新排序。");
-          await loadSelected();
+          await refreshConflict();
         }
         notify(errorMessage(error), "error");
         return false;

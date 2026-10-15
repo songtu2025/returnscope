@@ -25,6 +25,7 @@ const DEFAULT_LIST_STATE = {
   attentionOnly: false,
 };
 const EMPTY_TASKS = /** @type {AnalysisTask[]} */ ([]);
+const fetchTaskList = () => taskMonitorApi.tasks({ include_archived: true });
 
 /** @param {import("./taskMonitorContracts").TaskMonitorProps} props */
 export function useTaskMonitorState({
@@ -49,19 +50,18 @@ export function useTaskMonitorState({
   const previousFocusId = useRef(/** @type {string | null | undefined} */ (focusId));
   const notifiedListError = useRef("");
   const [detailError, setDetailError] = useState("");
+  const [listRefreshError, setListRefreshError] = useState("");
+  const [refreshingList, setRefreshingList] = useState(false);
 
   const {
     data: taskData,
     error: taskListError,
     isValidating,
     mutate: refreshTasks,
-  } = useSWR(
-    serverStateKeys.taskList,
-    () => taskMonitorApi.tasks({ include_archived: true }),
-    MANAGED_REFRESH_OPTIONS,
-  );
+  } = useSWR(serverStateKeys.taskList, fetchTaskList, MANAGED_REFRESH_OPTIONS);
   const tasks = /** @type {AnalysisTask[]} */ (taskData ?? EMPTY_TASKS);
-  const listError = taskListError ? errorMessage(taskListError) : "";
+  const listError =
+    listRefreshError || (taskListError ? errorMessage(taskListError) : "");
   const loading = isValidating;
 
   useEffect(() => {
@@ -88,10 +88,17 @@ export function useTaskMonitorState({
   const loadTasks = useCallback(
     /** @param {boolean} [silent] */
     async (silent = false) => {
+      setRefreshingList(true);
       try {
-        await refreshTasks();
+        await refreshTasks(fetchTaskList, { revalidate: false });
+        setListRefreshError("");
+        return true;
       } catch (error) {
+        setListRefreshError(errorMessage(error));
         if (!silent) notify(errorMessage(error), "error");
+        return false;
+      } finally {
+        setRefreshingList(false);
       }
     },
     [notify, refreshTasks],
@@ -269,6 +276,8 @@ export function useTaskMonitorState({
     taskData,
     tasks,
     listError,
+    listRefreshError,
+    refreshingList,
     loading,
     updateListState,
     loadTasks,

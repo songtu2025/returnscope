@@ -26,6 +26,8 @@ export function TaskMonitor(props) {
     taskData,
     tasks,
     listError,
+    listRefreshError,
+    refreshingList,
     loading,
     loadTasks,
     loadSelected,
@@ -93,6 +95,18 @@ export function TaskMonitor(props) {
           >
             <ArrowLeft size={17} /> 全部任务
           </button>
+          {listRefreshError && (
+            <div className="task-action-error" role="alert">
+              <span>操作结果已保留，任务列表刷新失败 · {listRefreshError}</span>
+              <button
+                className="secondary-button"
+                disabled={refreshingList}
+                onClick={() => loadTasks(true)}
+              >
+                {refreshingList ? "刷新中…" : "刷新任务列表"}
+              </button>
+            </div>
+          )}
           {!visibleSelected && !detailError && (
             <PageLoadingState title="分析任务" label="正在读取任务…" />
           )}
