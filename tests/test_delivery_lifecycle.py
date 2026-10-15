@@ -18,11 +18,19 @@ from web_backend.routers.delivery_lifecycle_routes import (
 from web_backend.task_service import TaskService
 
 
-def test_referenced_result_deletion_and_dashboard_restore_are_guarded(tmp_path):
+@pytest.mark.parametrize("source_removed", [False, True])
+def test_referenced_result_deletion_and_dashboard_restore_are_guarded(
+    tmp_path, source_removed
+):
     context, version, dashboards = _ready_result(tmp_path)
     _, dashboard = _create_dashboard(dashboards, version["version_id"])
     lifecycle = DeliveryLifecycleService(context.database)
     results = ClassificationResultService(context.database)
+    if source_removed:
+        with context.database.transaction() as connection:
+            connection.execute(
+                "UPDATE task_segments SET status='paused',deleted_at='2026-10-15T00:00:00Z'"
+            )
     with pytest.raises(DeliveryLifecycleConflict, match="关联看板"):
         lifecycle.result(
             version["version_id"], revision=1, deleted=True, actor="user-1"
@@ -206,3 +214,67 @@ def test_removed_result_requires_restore_before_resuming_source_task(tmp_path):
         )
     with pytest.raises(ValueError, match="恢复分类结果"):
         service.resume(task["id"], "user-1", task["revision"], "合成继续")
+
+
+@pytest.mark.parametrize(
+    "status,removed,removing,message",
+    [
+        ("running", False, False, "等待执行停止"),
+        ("running", True, False, "等待执行停止"),
+        ("paused", False, True, "等待执行停止"),
+        ("completed", False, True, "等待执行停止"),
+        ("paused", False, False, "移除来源 Listing"),
+        ("queued", False, False, "移除来源 Listing"),
+        ("retry_pending", False, False, "移除来源 Listing"),
+        ("not_started", False, False, "移除来源 Listing"),
+        ("paused", True, False, None),
+        ("completed", False, False, None),
+    ],
+)
+def test_result_deletion_respects_execution_and_removal_state(
+    tmp_path, status, removed, removing, message
+):
+    context, version, _ = _ready_result(tmp_path)
+    now = "2026-10-15T00:00:00Z"
+    with context.database.transaction() as connection:
+        connection.execute(
+            "UPDATE task_segments SET status=?,deleted_at=?,removal_requested_at=?",
+            (status, now if removed else None, now if removing else None),
+        )
+    router = APIRouter()
+    register_delivery_actions(
+        router, lambda: context.database, lambda: {"id": "user-1"}, kind="result"
+    )
+    app = FastAPI()
+    app.include_router(router)
+    response = TestClient(app).post(
+        f"/api/classification-results/{version['version_id']}/lifecycle",
+        json={"action": "delete", "expected_revision": 1},
+    )
+    assert response.status_code == (409 if message else 200)
+    if message:
+        assert message in response.json()["detail"]
+    result = ClassificationResultService(context.database).get(version["version_id"])
+    assert bool(result["deleted_at"]) is (message is None)
+    assert result["revision"] == (1 if message else 2)
+
+
+def test_paused_listing_removal_enables_deletion_and_restore_reinstates_guard(tmp_path):
+    context, version, _ = _ready_result(tmp_path)
+    with context.database.transaction() as connection:
+        connection.execute("UPDATE task_segments SET status='paused'")
+    tasks = TaskService(context.database)
+    task = tasks.get(context.task_id)
+    key = task["segments"][0]["segment_key"]
+    removed = tasks.segment_action(
+        task["id"], key, "delete", "user-1", task["revision"]
+    )
+    lifecycle = DeliveryLifecycleService(context.database)
+    lifecycle.result(version["version_id"], revision=1, deleted=True, actor="user-1")
+    lifecycle.result(version["version_id"], revision=2, deleted=False, actor="user-1")
+    task = tasks.get(removed["id"])
+    tasks.segment_action(task["id"], key, "restore", "user-1", task["revision"])
+    with pytest.raises(DeliveryLifecycleConflict, match="移除来源 Listing"):
+        lifecycle.result(
+            version["version_id"], revision=3, deleted=True, actor="user-1"
+        )

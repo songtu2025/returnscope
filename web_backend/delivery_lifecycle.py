@@ -96,18 +96,28 @@ class DeliveryLifecycleService:
                         + "、".join(d["name"] for d in dashboards)
                     )
                 segment = connection.execute(
-                    "SELECT status FROM task_segments WHERE id=?",
+                    "SELECT status, deleted_at, removal_requested_at FROM task_segments WHERE id=?",
                     (row["source_segment_id"],),
                 ).fetchone()
-                if segment and segment["status"] in {
-                    "running",
-                    "queued",
-                    "retry_pending",
-                    "paused",
-                    "not_started",
-                }:
+                if segment and (
+                    segment["status"] == "running" or segment["removal_requested_at"]
+                ):
                     raise DeliveryLifecycleConflict(
-                        "请先取消来源 Listing 的分析，再删除分类结果"
+                        "来源 Listing 正在执行或移除中，请等待执行停止后再删除分类结果"
+                    )
+                if (
+                    segment
+                    and not segment["deleted_at"]
+                    and segment["status"]
+                    in {
+                        "queued",
+                        "retry_pending",
+                        "paused",
+                        "not_started",
+                    }
+                ):
+                    raise DeliveryLifecycleConflict(
+                        "请先在分析任务中移除来源 Listing，再删除分类结果"
                     )
             now = utc_now()
             connection.execute(
