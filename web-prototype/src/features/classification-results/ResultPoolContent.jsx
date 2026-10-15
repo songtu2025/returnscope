@@ -33,7 +33,7 @@ export function ResultPoolContent(context) {
       {data && data.items.length > 0 && (
         <>
           <div
-            className="result-pool-table is-selecting"
+            className={`result-pool-table is-selecting${route.lifecycle === "deleted" ? "" : " is-current"}`}
             role="table"
             aria-label="分类结果"
             aria-busy={loading}

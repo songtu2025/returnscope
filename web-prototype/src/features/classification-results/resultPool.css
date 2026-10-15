@@ -173,6 +173,18 @@
   flex: none;
   white-space: nowrap;
 }
+.result-row-actions.is-current {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 90px 32px;
+  align-items: start;
+}
+.result-row-actions.is-current .result-open-button {
+  min-height: 36px;
+}
+.result-row-actions.is-current .task-more-actions > summary {
+  width: 32px;
+  min-height: 36px;
+}
 .result-error-state {
   margin: 14px;
   border-color: #e9b6b1;

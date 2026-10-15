@@ -30,8 +30,15 @@
 
 .result-pool-table.is-selecting .result-pool-head,
 .result-pool-table.is-selecting .result-pool-row {
-  grid-template-columns: 92px 96px 132px minmax(132px, 1.2fr) 110px 118px 186px;
+  grid-template-columns: 92px 96px 132px minmax(132px, 1.2fr) 110px 118px var(
+      --result-actions-width,
+      186px
+    );
   gap: 10px;
+}
+
+.result-pool-table.is-current {
+  --result-actions-width: 232px;
 }
 
 .result-selection-cell {
@@ -80,7 +87,10 @@
 @media (max-width: 1320px) {
   .result-pool-table.is-selecting .result-pool-head,
   .result-pool-table.is-selecting .result-pool-row {
-    grid-template-columns: 72px 86px 124px minmax(124px, 1fr) 100px 186px;
+    grid-template-columns: 72px 86px 124px minmax(124px, 1fr) 100px var(
+        --result-actions-width,
+        186px
+      );
   }
 
   .result-pool-table.is-selecting .result-pool-head > span:nth-child(6),

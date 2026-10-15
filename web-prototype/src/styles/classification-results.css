@@ -25,7 +25,10 @@
   }
   .result-pool-table.is-selecting .result-pool-head,
   .result-pool-table.is-selecting .result-pool-row {
-    grid-template-columns: 72px 86px 124px minmax(124px, 1fr) 186px;
+    grid-template-columns: 72px 86px 124px minmax(124px, 1fr) var(
+        --result-actions-width,
+        186px
+      );
   }
   .result-pool-table.is-selecting .result-pool-head > span:nth-child(6),
   .result-pool-table.is-selecting .result-pool-row > div:nth-child(6) {

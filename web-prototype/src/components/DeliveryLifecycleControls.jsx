@@ -7,7 +7,7 @@ import { changeDeliveryLifecycle } from "../shared/api/deliveryApi";
 import { refreshServerState } from "../shared/serverState";
 import { errorMessage } from "../shared/api/requestErrors";
 
-/** @param {{kind:"result"|"dashboard"|"report",id:string,name:string,revision:number,deleted?:boolean,onChanged?:()=>void|Promise<void>}} props */
+/** @param {{kind:"result"|"dashboard"|"report",id:string,name:string,revision:number,deleted?:boolean,onChanged?:()=>void|Promise<void>,children?:import("react").ReactNode}} props */
 export function DeliveryLifecycleControls({
   kind,
   id,
@@ -15,12 +15,15 @@ export function DeliveryLifecycleControls({
   revision,
   deleted,
   onChanged,
+  children,
 }) {
   const [confirming, setConfirming] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const { mutate } = useSWRConfig();
-  const { detailsProps, summaryProps } = useDismissibleDetails();
+  const { detailsProps, summaryProps } = useDismissibleDetails({
+    menu: Boolean(children),
+  });
   const label = { result: "分类结果", dashboard: "分析看板", report: "报告" }[kind];
   const submit = async () => {
     setSaving(true);
@@ -62,6 +65,7 @@ export function DeliveryLifecycleControls({
             <DotsThreeVertical size={18} />
           </summary>
           <div>
+            {children}
             <button
               className="danger"
               type="button"

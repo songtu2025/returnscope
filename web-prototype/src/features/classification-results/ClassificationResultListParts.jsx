@@ -1,9 +1,6 @@
-import { CaretRight } from "@phosphor-icons/react";
 import Button from "antd/es/button";
 import Checkbox from "antd/es/checkbox";
-import { DeliveryLifecycleControls } from "../../components/DeliveryLifecycleControls";
-
-import { ResultDownloadButton } from "./ResultDownloadButton";
+import { ResultPoolActions } from "./ResultPoolActions";
 import { formatTime } from "../../lib/presentation";
 import { resultActionPolicy } from "./resultActionPolicy";
 
@@ -60,31 +57,12 @@ export function ResultPoolRow({
         onToggle={onToggle}
       />
       <ResultPoolMetadata result={result} onOpen={onOpen} />
-      <div className="result-row-actions" role="cell">
-        <DeliveryLifecycleControls
-          kind="result"
-          id={result.version_id}
-          name={result.listing || "分类结果"}
-          revision={result.revision || 1}
-          deleted={Boolean(result.deleted_at)}
-          onChanged={onChanged}
-        />
-        <Button
-          size="small"
-          disabled={policy.primary.disabled}
-          title={policy.primary.disabled ? policy.blockingReason : ""}
-          icon={<CaretRight size={15} />}
-          iconPlacement="end"
-          onClick={onPrimary}
-        >
-          {policy.primary.label}
-        </Button>
-        <ResultDownloadButton
-          key={result.version_id}
-          versionId={result.version_id}
-          compact
-        />
-      </div>
+      <ResultPoolActions
+        result={result}
+        onOpen={onOpen}
+        onPrimary={onPrimary}
+        onChanged={onChanged}
+      />
     </article>
   );
 }
