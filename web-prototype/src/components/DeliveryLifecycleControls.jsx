@@ -21,9 +21,7 @@ export function DeliveryLifecycleControls({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const { mutate } = useSWRConfig();
-  const { detailsProps, summaryProps } = useDismissibleDetails({
-    menu: Boolean(children),
-  });
+  const { detailsProps, summaryProps } = useDismissibleDetails({ menu: true });
   const label = { result: "分类结果", dashboard: "分析看板", report: "报告" }[kind];
   const submit = async () => {
     setSaving(true);

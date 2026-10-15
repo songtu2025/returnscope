@@ -13,6 +13,51 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 
+test.each([
+  ["result", "分类结果"],
+  ["dashboard", "分析看板"],
+  ["report", "报告"],
+])("%s单项菜单支持键盘打开、关闭、确认及外部点击", async (kind, label) => {
+  const user = userEvent.setup();
+  render(
+    <>
+      <DeliveryLifecycleControls
+        kind={kind}
+        id={`${kind}-synthetic`}
+        revision={2}
+        name="合成对象"
+      />
+      <button type="button">外部操作</button>
+    </>,
+  );
+  const trigger = screen.getByLabelText(`更多${label}操作：合成对象`);
+  const action = screen.getByRole("button", { name: `删除${label}`, exact: true });
+  trigger.focus();
+  await user.keyboard("{ArrowDown}");
+  expect(action).toHaveFocus();
+  await user.keyboard("{ArrowDown}{ArrowUp}");
+  expect(action).toHaveFocus();
+  await user.keyboard("{Escape}");
+  expect(trigger).toHaveAttribute("aria-expanded", "false");
+  expect(trigger).toHaveFocus();
+  await user.keyboard("{ArrowUp}");
+  expect(action).toHaveFocus();
+  await user.keyboard("{Escape}{Enter}");
+  expect(action).toHaveFocus();
+  await user.keyboard("{Enter}");
+  expect(trigger).toHaveAttribute("aria-expanded", "false");
+  expect(screen.getByRole("dialog")).toHaveAccessibleName(`删除${label}：合成对象`);
+  expect(changeDeliveryLifecycle).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "返回" }));
+  await user.click(trigger);
+  expect(trigger).toHaveAttribute("aria-expanded", "true");
+  const outside = screen.getByRole("button", { name: "外部操作" });
+  await user.click(outside);
+  expect(trigger).toHaveAttribute("aria-expanded", "false");
+  expect(outside).toHaveFocus();
+  expect(changeDeliveryLifecycle).not.toHaveBeenCalled();
+});
+
 test("删除前确认，引用冲突保留弹窗和错误，解除引用后可重试", async () => {
   const user = userEvent.setup();
   const changed = vi.fn();
