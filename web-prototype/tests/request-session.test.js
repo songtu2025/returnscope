@@ -7,6 +7,7 @@ import {
   resetSessionExpiration,
   SESSION_EXPIRED_EVENT,
 } from "../src/shared/api/request";
+import { resultExportApi } from "../src/shared/api/resultExportApi";
 
 beforeEach(() => {
   resetSessionExpiration();
@@ -216,4 +217,78 @@ test("查询参数、凭据覆盖和 FormData 请求头保持原约定", async (
     credentials: "omit",
     headers: { "X-Synthetic": "yes" },
   });
+});
+
+test("文件下载与普通请求共用一次登录失效通知", async () => {
+  const listener = vi.fn();
+  window.addEventListener(SESSION_EXPIRED_EVENT, listener);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ detail: "登录已失效" }), {
+          status: 401,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    ),
+  );
+  try {
+    await expect(resultExportApi.save({ id: "job-1" })).rejects.toMatchObject({
+      status: 401,
+      message: "登录已失效",
+    });
+    await expect(request("/api/tasks")).rejects.toMatchObject({ status: 401 });
+    expect(listener).toHaveBeenCalledTimes(1);
+  } finally {
+    window.removeEventListener(SESSION_EXPIRED_EVENT, listener);
+  }
+});
+
+test.each([
+  [403, "无权下载此文件"],
+  [404, "导出已过期，请重新生成"],
+  [409, "导出尚未完成"],
+  [500, "导出服务暂时不可用"],
+])("文件下载失败 %s 保留业务文案和状态", async (status, message) => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ detail: message }), {
+        status,
+        headers: { "content-type": "application/json" },
+      }),
+    ),
+  );
+  await expect(resultExportApi.save({ id: "job-1" })).rejects.toMatchObject({
+    status,
+    message,
+  });
+});
+
+test("正常文件按二进制下载并携带登录凭据", async () => {
+  vi.useFakeTimers();
+  const blob = new Blob(["合成导出内容"]);
+  const fetch = vi
+    .fn()
+    .mockResolvedValue({ status: 200, ok: true, blob: async () => blob });
+  vi.stubGlobal("fetch", fetch);
+  const create = vi.fn().mockReturnValue("blob:synthetic-export");
+  vi.stubGlobal("URL", { createObjectURL: create, revokeObjectURL: vi.fn() });
+  const click = vi
+    .spyOn(HTMLAnchorElement.prototype, "click")
+    .mockImplementation(() => {});
+  try {
+    await resultExportApi.save({ id: "job-1", filename: "合成结果.xlsx" });
+    expect(create).toHaveBeenCalledWith(blob);
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/result-exports/job-1/file",
+      expect.objectContaining({ credentials: "include" }),
+    );
+    expect(click.mock.instances[0].download).toBe("合成结果.xlsx");
+    vi.runAllTimers();
+  } finally {
+    click.mockRestore();
+    vi.useRealTimers();
+  }
 });

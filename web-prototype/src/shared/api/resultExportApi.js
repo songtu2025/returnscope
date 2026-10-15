@@ -1,4 +1,4 @@
-import { API_BASE, request } from "./request";
+import { request } from "./request";
 
 /** @typedef {import("./generated/classification-results/types.gen").ResultExportResponse} ResultExport */
 
@@ -13,11 +13,8 @@ export const resultExportApi = {
   get: (id) => request(`/api/result-exports/${id}`),
   /** @param {ResultExport} job */
   async save(job) {
-    const response = await fetch(`${API_BASE}/api/result-exports/${job.id}/file`, {
-      credentials: "include",
-    });
-    if (!response.ok) throw new Error("下载失败，请重试；文件过期时请重新生成");
-    const url = URL.createObjectURL(await response.blob());
+    const file = await request(`/api/result-exports/${job.id}/file`, {}, "blob");
+    const url = URL.createObjectURL(file);
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.download = job.filename;

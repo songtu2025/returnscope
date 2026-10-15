@@ -57,8 +57,9 @@ function responseErrorMessage(payload) {
 /**
  * @param {string} path
  * @param {RequestInit} [options]
+ * @param {"auto" | "blob"} [responseType]
  */
-export async function request(path, options = {}) {
+export async function request(path, options = {}, responseType = "auto") {
   const response = await fetch(`${API_BASE}${path}`, {
     credentials: "include",
     ...options,
@@ -70,7 +71,10 @@ export async function request(path, options = {}) {
     },
   });
   if (response.status === 204) return null;
-  const payload = await responsePayload(response);
+  const payload =
+    response.ok && responseType === "blob"
+      ? await response.blob()
+      : await responsePayload(response);
   if (!response.ok) {
     if (
       response.status === 401 &&
