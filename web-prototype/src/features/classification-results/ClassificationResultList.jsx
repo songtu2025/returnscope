@@ -80,6 +80,11 @@ export function ClassificationResultList(props) {
       {selectedResults.length > 0 && (
         <DashboardSelectionBar
           selected={selectedResults}
+          currentPageIds={
+            new Set((context.data?.items ?? []).map((item) => item.version_id))
+          }
+          loading={context.loading}
+          onRemove={context.removeSelection}
           onClear={() => clearSelection()}
         />
       )}

@@ -4443,7 +4443,9 @@ describe("关键用户流程", () => {
     await user.click(screen.getByRole("checkbox", { name: "选择任务：已结束任务 B" }));
     const batchActions = screen.getByRole("region", { name: "批量任务操作" });
     expect(within(batchActions).getByText("已选择 2 个任务")).toBeVisible();
-    await user.click(within(batchActions).getByRole("button", { name: "归档" }));
+    await user.click(
+      within(batchActions).getByRole("button", { name: "归档当前列表 2 项" }),
+    );
 
     await waitFor(() =>
       expect(apiMock.archiveTasks).toHaveBeenCalledWith(

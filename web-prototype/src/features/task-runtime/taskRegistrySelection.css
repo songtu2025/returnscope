@@ -1,0 +1,40 @@
+.task-registry-batch {
+  flex-wrap: wrap;
+}
+.task-registry-batch > .task-selection-summary {
+  display: grid;
+  gap: 4px;
+}
+.task-selection-summary span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.task-selection-details {
+  flex-basis: 100%;
+  min-width: 0;
+}
+.task-selection-details summary {
+  cursor: pointer;
+  min-height: 32px;
+  align-content: center;
+}
+.task-selection-details ul {
+  margin: 0;
+  padding: 0;
+  max-height: 240px;
+  overflow: auto;
+  list-style: none;
+}
+.task-selection-details li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding-block: 8px;
+  border-top: 1px solid var(--line);
+}
+.task-selection-details li > div {
+  display: grid;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}

@@ -127,22 +127,62 @@ function ResultPoolMetadata({ result, onOpen }) {
 /**
  * @param {{
  *   selected: SelectedResult[],
+ *   currentPageIds: Set<string>,
+ *   loading: boolean,
+ *   onRemove: (id: string) => void,
  *   onClear: () => void
  * }} props
  */
-export function DashboardSelectionBar({ selected, onClear }) {
+export function DashboardSelectionBar({
+  selected,
+  currentPageIds,
+  loading,
+  onRemove,
+  onClear,
+}) {
   const listingCount = new Set(
     selected.map((item) => `${item.store_site}::${item.listing}`),
   ).size;
+  const currentCount = selected.filter((item) =>
+    currentPageIds.has(item.result_version_id),
+  ).length;
   return (
     <aside className="dashboard-selection-bar" aria-label="看板数据选择">
       <div>
         <b>已选 {selected.length} 个结果版本</b>
         <span>覆盖 {listingCount} 个 Listing</span>
+        <span>
+          {loading
+            ? "当前页统计更新中"
+            : `当前页 ${currentCount} 个 · 其他页或筛选外 ${selected.length - currentCount} 个`}
+        </span>
+        <span>创建时包含全部已选结果</span>
       </div>
       <Button type="text" disabled={!selected.length} onClick={onClear}>
         清空
       </Button>
+      <details className="result-selection-details">
+        <summary>查看已选结果</summary>
+        <ul>
+          {selected.map((item) => (
+            <li key={item.result_version_id}>
+              <div>
+                <b>
+                  {item.listing || "未提供 Listing"} · {item.store_site || "未提供店铺"}
+                </b>
+                <code>{item.result_version_id}</code>
+              </div>
+              <Button
+                type="text"
+                onClick={() => onRemove(item.result_version_id)}
+                aria-label={`取消选择结果 ${item.result_version_id}`}
+              >
+                取消选择
+              </Button>
+            </li>
+          ))}
+        </ul>
+      </details>
     </aside>
   );
 }

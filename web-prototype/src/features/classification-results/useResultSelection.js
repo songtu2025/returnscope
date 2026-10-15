@@ -30,6 +30,16 @@ export function useResultSelection({ route, updateRoute, userId }) {
     [selectedResults],
   );
 
+  /** @param {(selected: DashboardSelection["selected"]) => DashboardSelection["selected"]} updater */
+  const updateSelectedResults = (updater) => {
+    const next = updateDashboardSelection(userId, route.selectionToken, (current) => ({
+      ...current,
+      selected: updater(current.selected),
+      resolved_result_version_ids: [],
+    }));
+    setSelection(next);
+  };
+
   /** @param {ClassificationResultVersion} result */
   const toggleSelection = (result) => {
     if (!isDashboardSelectable(result)) return;
@@ -42,36 +52,22 @@ export function useResultSelection({ route, updateRoute, userId }) {
       return;
     }
     const id = resultVersionId(result);
-    /** @param {DashboardSelection} current */
-    const updateSelection = (current) => {
-      const selected = current.selected.some((item) => item.result_version_id === id)
-        ? current.selected.filter((item) => item.result_version_id !== id)
-        : [...current.selected, selectionItem(result)];
-      return { ...current, selected, resolved_result_version_ids: [] };
-    };
-    const next = updateDashboardSelection(
-      userId,
-      route.selectionToken,
-      updateSelection,
+    updateSelectedResults((selected) =>
+      selected.some((item) => item.result_version_id === id)
+        ? selected.filter((item) => item.result_version_id !== id)
+        : [...selected, selectionItem(result)],
     );
-    setSelection(next);
   };
 
   const clearSelection = (exit = false) => {
-    /** @param {DashboardSelection} current */
-    const updateSelection = (current) => ({
-      ...current,
-      selected: [],
-      resolved_result_version_ids: [],
-    });
-    const next = updateDashboardSelection(
-      userId,
-      route.selectionToken,
-      updateSelection,
-    );
-    setSelection(next);
+    updateSelectedResults(() => []);
     if (exit) updateRoute({ selectionToken: "" });
   };
+  /** @param {string} id */
+  const removeSelection = (id) =>
+    updateSelectedResults((selected) =>
+      selected.filter((item) => item.result_version_id !== id),
+    );
 
   /** @param {"dashboard" | "insight"} intent */
   const continueToCreation = (intent) => {
@@ -97,6 +93,7 @@ export function useResultSelection({ route, updateRoute, userId }) {
     selectedIds,
     toggleSelection,
     clearSelection,
+    removeSelection,
     continueToDashboard: () => continueToCreation("dashboard"),
     continueToInsight: () => continueToCreation("insight"),
     runPrimaryAction,

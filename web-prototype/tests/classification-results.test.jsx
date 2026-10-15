@@ -1677,3 +1677,35 @@ test("人工修改历史显示来源、变更数量和修正前后语义", async
     ).length,
   ).toBeGreaterThan(0);
 });
+
+test("完整结果池筛选外逐项取消同步计数、创建入口和选择会话", async () => {
+  const user = userEvent.setup();
+  apiMock.classificationResults.mockImplementation(async (query) => ({
+    items: query.q ? [] : [resultVersion],
+    total: query.q ? 0 : 1,
+    page: 1,
+    page_size: 20,
+  }));
+  render(<ResultCreationHarness />);
+  await user.click(await screen.findByRole("checkbox", { name: "选择 SR001 结果 v1" }));
+  const token = new URLSearchParams(window.location.hash.split("?")[1]).get(
+    "selection_token",
+  );
+  await user.type(screen.getByRole("textbox", { name: "搜索分类结果" }), "无匹配");
+  await user.click(screen.getByRole("button", { name: "筛选", exact: true }));
+  await screen.findByText("没有符合条件的结果");
+  const bar = screen.getByRole("complementary", { name: "看板数据选择" });
+  expect(bar).toHaveTextContent("当前页 0 个 · 其他页或筛选外 1 个");
+  await user.click(within(bar).getByText("查看已选结果"));
+  await user.click(
+    within(bar).getByRole("button", { name: "取消选择结果 classification-version-1" }),
+  );
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("complementary", { name: "看板数据选择" }),
+    ).not.toBeInTheDocument(),
+  );
+  expect(screen.getByRole("button", { name: "新建分析看板" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "生成 AI 洞察" })).toBeDisabled();
+  expect(readDashboardSelection("user-1", token).selected).toEqual([]);
+});

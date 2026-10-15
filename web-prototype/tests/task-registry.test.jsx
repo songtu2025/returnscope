@@ -181,7 +181,9 @@ test("全选只包含可管理任务，保存中禁用操作，成功后清空�
   await user.click(selectAll);
   expect(selectAll).toBeChecked();
   const batch = screen.getByRole("region", { name: "批量任务操作" });
-  await user.click(within(batch).getByRole("button", { name: "归档", exact: true }));
+  await user.click(
+    within(batch).getByRole("button", { name: "归档当前列表 2 项", exact: true }),
+  );
   expect(onArchive).toHaveBeenCalledExactlyOnceWith(["a", "b"], true);
   expect(within(batch).getByRole("button", { name: "取消选择" })).toBeDisabled();
   expect(
@@ -201,7 +203,7 @@ test("归档返回失败时保留选择，数据删除修剪选择，切换分�
   );
   await user.click(
     within(screen.getByRole("region", { name: "批量任务操作" })).getByRole("button", {
-      name: "归档",
+      name: "归档当前列表 2 项",
       exact: true,
     }),
   );

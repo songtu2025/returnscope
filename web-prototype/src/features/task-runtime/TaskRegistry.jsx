@@ -1,4 +1,3 @@
-import { Archive, ArrowCounterClockwise } from "@phosphor-icons/react";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   canArchiveTask,
@@ -7,6 +6,7 @@ import {
   taskFilterGroup,
   taskSummary,
 } from "./taskRegistryPolicy";
+import { TaskRegistrySelection } from "./TaskRegistrySelection";
 import { TaskRegistryFilters } from "./TaskRegistryFilters";
 import { TaskRegistryRow } from "./TaskRegistryRow";
 import { TaskRegistryStates } from "./TaskRegistryStates";
@@ -212,31 +212,17 @@ export function TaskRegistry({
         </div>
       )}
 
-      {selectedVisibleIds.length > 0 && (
-        <div className="task-registry-batch" role="region" aria-label="批量任务操作">
-          <b>已选择 {selectedVisibleIds.length} 个任务</b>
-          <div>
-            <button
-              className="secondary-button"
-              disabled={saving}
-              onClick={() => applyArchive(selectedVisibleIds, filter !== "archived")}
-            >
-              {filter === "archived" ? (
-                <ArrowCounterClockwise size={17} />
-              ) : (
-                <Archive size={17} />
-              )}
-              {filter === "archived" ? "恢复" : "归档"}
-            </button>
-            <button
-              className="secondary-button"
-              disabled={saving}
-              onClick={() => setSelectedIds(new Set())}
-            >
-              取消选择
-            </button>
-          </div>
-        </div>
+      {selectedIds.size > 0 && (
+        <TaskRegistrySelection
+          selected={tasks.filter((task) => selectedIds.has(task.id))}
+          visibleIds={visibleTasks.map((task) => task.id)}
+          executableIds={selectedVisibleIds}
+          archived={filter === "archived"}
+          saving={saving}
+          onApply={() => applyArchive(selectedVisibleIds, filter !== "archived")}
+          onRemove={toggleTask}
+          onClear={() => setSelectedIds(new Set())}
+        />
       )}
     </section>
   );
