@@ -13,17 +13,20 @@ import { serverStateKeys } from "../../shared/serverState";
 import { createDashboardSelection } from "./dashboardSelectionStorage";
 import { DashboardRow } from "./DashboardRow";
 import { DashboardListFilters } from "./DashboardListFilters";
+import { useListReturnPosition } from "../../hooks/useListReturnPosition";
 
 /** @typedef {import("./analysisDashboardContracts").DashboardListItem} DashboardListItem */
 /** @typedef {import("./analysisDashboardContracts").DashboardListPage} DashboardListPage */
 /** @typedef {import("./analysisDashboardContracts").DashboardRoute} DashboardRoute */
 /** @typedef {import("./analysisDashboardContracts").UpdateDashboardRoute} UpdateDashboardRoute */
-/** @typedef {{route: DashboardRoute, updateRoute: UpdateDashboardRoute, userId: string}} DashboardListProps */
-/** @typedef {Pick<DashboardListProps, "route" | "updateRoute"> & ReturnType<typeof useDashboardList> & {clearFilters: () => void}} DashboardListContext */
+/** @typedef {{route: DashboardRoute, updateRoute: UpdateDashboardRoute, userId: string, returnPosition?: import("react").MutableRefObject<import("../../hooks/useListReturnPosition").ListReturnPosition | null>}} DashboardListProps */
+/** @typedef {Pick<DashboardListProps, "route" | "updateRoute"> & ReturnType<typeof useDashboardList> & {clearFilters: () => void, rememberPosition: (id: string) => void}} DashboardListContext */
 
-/** @param {Pick<DashboardListProps, "route">} props */
-function useDashboardList({ route }) {
+/** @param {Pick<DashboardListProps, "route" | "returnPosition">} props */
+function useDashboardList({ route, returnPosition }) {
   const [filters, setFilters] = useState({ q: route.q, status: route.status });
+  const [returning] = useState(() => Boolean(returnPosition?.current));
+  const [returnRefreshing, setReturnRefreshing] = useState(returning);
 
   useEffect(
     () => setFilters({ q: route.q, status: route.status }),
@@ -43,8 +46,30 @@ function useDashboardList({ route }) {
   const { data, error, isLoading, isValidating, mutate } = useSWR(
     serverStateKeys.dashboardList(query),
     () => dashboardApi.analysisDashboards(query, {}),
-    { ...MANAGED_REFRESH_OPTIONS, keepPreviousData: true },
+    {
+      ...MANAGED_REFRESH_OPTIONS,
+      keepPreviousData: true,
+      ...(returnRefreshing ? { revalidateOnMount: false } : {}),
+    },
   );
+  useEffect(() => {
+    if (!returning) return undefined;
+    let active = true;
+    // 返回先刷新当前范围，避免先聚焦缓存中随后被移除的旧行。
+    const refresh = async () => {
+      try {
+        await mutate();
+      } catch {
+        // 请求错误沿用下方列表错误状态，仍允许完成定位。
+      } finally {
+        if (active) setReturnRefreshing(false);
+      }
+    };
+    void refresh();
+    return () => {
+      active = false;
+    };
+  }, [mutate, returning]);
   useDataRefresh(() => mutate(), {
     loading: isLoading || isValidating,
     identity: JSON.stringify(query),
@@ -66,6 +91,7 @@ function useDashboardList({ route }) {
     setFilters,
     isLoading,
     isValidating,
+    returnRefreshing,
     message,
     load,
     dashboardData,
@@ -74,8 +100,21 @@ function useDashboardList({ route }) {
 }
 
 /** @param {DashboardListProps} props */
-export function DashboardList({ route, updateRoute, userId }) {
-  const state = useDashboardList({ route });
+export function DashboardList({ route, updateRoute, userId, returnPosition }) {
+  const state = useDashboardList({ route, returnPosition });
+  const { containerRef, titleRef, remember } = useListReturnPosition({
+    identity: JSON.stringify({
+      q: route.q,
+      status: route.status,
+      page: route.page,
+      pageSize: route.pageSize,
+    }),
+    ready:
+      !state.returnRefreshing &&
+      !state.isValidating &&
+      Boolean(state.dashboardData || state.message),
+    snapshotRef: returnPosition,
+  });
   const chooseResults = () => {
     const token = createDashboardSelection(userId);
     navigateHash("classification-results", { selection_token: token });
@@ -85,11 +124,18 @@ export function DashboardList({ route, updateRoute, userId }) {
     state.setFilters({ q: "", status: "" });
     updateRoute({ q: "", status: "", page: 1 });
   };
-  const context = { route, updateRoute, ...state, clearFilters };
+  const context = {
+    route,
+    updateRoute,
+    ...state,
+    clearFilters,
+    rememberPosition: remember,
+  };
   return (
-    <div className="standard-page analysis-dashboard-page">
+    <div className="standard-page analysis-dashboard-page" ref={containerRef}>
       <PageHeading
         title="分析看板"
+        titleRef={titleRef}
         action={
           <button className="primary-button" onClick={chooseResults}>
             <ChartBar size={18} /> 选择分类结果
@@ -156,6 +202,7 @@ function DashboardListTable({
   route,
   updateRoute,
   totalPages,
+  rememberPosition,
 }) {
   return (
     <>
@@ -179,16 +226,17 @@ function DashboardListTable({
           <DashboardRow
             key={dashboard.id || dashboard.dashboard_id}
             dashboard={dashboard}
-            onOpen={() =>
+            onOpen={() => {
+              rememberPosition(dashboard.id || dashboard.dashboard_id || "");
+              window.scrollTo({ top: 0, left: 0, behavior: "auto" });
               updateRoute({
                 dashboardId: dashboard.id || dashboard.dashboard_id,
                 versionId: dashboard.current_version_id || "",
                 tab: "overview",
-                page: 1,
                 reasonPage: 0,
                 subject: "",
-              })
-            }
+              });
+            }}
           />
         ))}
       </div>

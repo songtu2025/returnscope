@@ -35,7 +35,11 @@ export function DashboardRow({ dashboard, onOpen }) {
       </span>
       <span role="cell">{dashboard.created_by_name || "未提供"}</span>
       <div role="cell" className="dashboard-row-actions">
-        <button className="secondary-button compact-button" onClick={onOpen}>
+        <button
+          className="secondary-button compact-button"
+          data-list-return-id={dashboard.id || dashboard.dashboard_id}
+          onClick={onOpen}
+        >
           查看 <CaretRight size={15} />
         </button>
         <DeliveryLifecycleControls

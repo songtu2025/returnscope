@@ -92,6 +92,11 @@ function writeRoute(route, options) {
 
 /** @param {{route?: AppRoute | null, notify: DashboardNotify, userId: string}} props */
 export function AnalysisDashboardPage({ route: appRoute, notify, userId }) {
+  const returnPosition = useRef(
+    /** @type {import("../../hooks/useListReturnPosition").ListReturnPosition | null} */ (
+      null
+    ),
+  );
   const route = routeState(appRoute?.query ?? {});
   const routeRef = useRef(route);
   useEffect(() => {
@@ -130,7 +135,12 @@ export function AnalysisDashboardPage({ route: appRoute, notify, userId }) {
   }
   return (
     <AntdProvider>
-      <DashboardList route={route} updateRoute={updateRoute} userId={userId} />
+      <DashboardList
+        route={route}
+        updateRoute={updateRoute}
+        userId={userId}
+        returnPosition={returnPosition}
+      />
     </AntdProvider>
   );
 }
