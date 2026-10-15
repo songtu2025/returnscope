@@ -106,15 +106,15 @@
 .result-record-row > div {
   min-width: 0;
 }
-.result-pool-row b,
-.result-pool-row span,
-.result-pool-row small,
+.result-pool-row > div > b,
+.result-pool-row > div:not(.result-row-actions) > span,
+.result-pool-row > div > small,
 .result-record-row b,
 .result-record-row span {
   display: block;
   min-width: 0;
 }
-.result-pool-row b,
+.result-pool-row > div > b,
 .result-record-row b {
   overflow: hidden;
   color: var(--ink);
@@ -122,8 +122,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.result-pool-row span,
-.result-pool-row small,
+.result-pool-row > div:not(.result-row-actions) > span,
+.result-pool-row > div > small,
 .result-record-row span {
   margin-top: 4px;
   overflow: hidden;
@@ -160,6 +160,7 @@
 }
 .result-row-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
