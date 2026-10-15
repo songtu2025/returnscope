@@ -93,7 +93,8 @@ export function TaskMonitor(props) {
             className="task-back-button page-loading-navigation"
             onClick={returnToList}
           >
-            <ArrowLeft size={17} /> 全部任务
+            <ArrowLeft size={17} />{" "}
+            {listState.ownerId === undefined ? "全部任务" : "返回我的任务"}
           </button>
           {listRefreshError && (
             <div className="task-action-error" role="alert">

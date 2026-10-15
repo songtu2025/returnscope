@@ -23,6 +23,28 @@ afterEach(() => {
   window.sessionStorage.clear();
 });
 
+test("我的任务范围从当前身份ID解析，清除范围和详情返回都保留其他筛选", () => {
+  const query = { scope: "mine", status: "active", task_id: "task", q: "鞋" };
+  render(
+    <TaskRuntimePage
+      route={{ query }}
+      userId="current-id"
+      notify={vi.fn()}
+      onNavigate={vi.fn()}
+      onChanged={vi.fn()}
+    />,
+  );
+  const props = taskMonitorProbe.mock.calls.at(-1)[0];
+  expect(props.listState).toMatchObject({ ownerId: "current-id", filter: "active" });
+  props.onTaskFocus(null);
+  expect(window.location.hash).toContain("scope=mine");
+  expect(window.location.hash).not.toContain("task_id");
+  props.onListStateChange({ ownerId: undefined, owner: "all" });
+  expect(window.location.hash).not.toContain("scope=");
+  expect(window.location.hash).toContain("status=active");
+  expect(window.location.hash).toContain("q=");
+});
+
 test("任务运行页把任务和 Listing 焦点传给监控器", () => {
   render(
     <TaskRuntimePage

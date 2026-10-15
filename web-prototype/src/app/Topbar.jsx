@@ -24,13 +24,17 @@ export function Topbar({ user, system, onRefresh, onNavigate, onSearch, onLogout
           className="capacity-chip"
           onClick={async () => {
             await onRefresh();
-            onNavigate("analysis-tasks");
+            onNavigate("analysis-tasks", {
+              kind: "task-list",
+              scope: "mine",
+              status: "active",
+            });
           }}
-          title="查看进行中的分析任务"
+          title="查看我创建的未结束任务"
           aria-label={
             running == null
-              ? "我的运行 Listing 数量暂不可用，查看进行中的分析任务"
-              : `我的运行 Listing ${running}/3，查看进行中的分析任务`
+              ? "我的运行 Listing 数量暂不可用，查看我创建的未结束任务"
+              : `我的运行 Listing ${running}/3，查看我创建的未结束任务`
           }
         >
           <span>我的运行 Listing</span>

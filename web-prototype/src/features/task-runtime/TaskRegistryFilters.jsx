@@ -130,6 +130,20 @@ function RegistryTabs({ viewState, onViewStateChange, counts }) {
 export function TaskRegistryFilters(props) {
   return (
     <>
+      {props.viewState.ownerId !== undefined && (
+        <div className="task-registry-scope" role="status">
+          <span>范围：我创建的任务</span>
+          <button
+            type="button"
+            className="text-button"
+            onClick={() =>
+              props.onViewStateChange({ ownerId: undefined, owner: "all" })
+            }
+          >
+            清除范围
+          </button>
+        </div>
+      )}
       <RegistrySearch
         viewState={props.viewState}
         onViewStateChange={props.onViewStateChange}

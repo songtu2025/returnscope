@@ -51,6 +51,7 @@ export function AppPages({ route, user, notify, navigate, refreshSystem }) {
           )}
           {page === "analysis-tasks" && (
             <TaskRuntimePage
+              userId={user.id}
               route={route}
               notify={notify}
               onNavigate={navigate}

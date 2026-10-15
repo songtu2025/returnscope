@@ -3,7 +3,7 @@ import { EmptyState, InlineLoading } from "../../components/SharedUi";
 
 /** @typedef {import("./TaskRegistry").TaskRegistryProps} TaskRegistryProps */
 /**
- * @typedef {Pick<TaskRegistryProps, "tasks" | "loading" | "error" | "hasData" | "onReload" | "onCreate"> & {deferredQuery: string, owner: string, filter: string, visibleCount: number, attentionOnly: boolean, onClear: () => void}} TaskRegistryStatesProps
+ * @typedef {Pick<TaskRegistryProps, "tasks" | "loading" | "error" | "hasData" | "onReload" | "onCreate"> & {deferredQuery: string, owner: string, filter: string, visibleCount: number, attentionOnly: boolean, scoped?: boolean, onClear: () => void}} TaskRegistryStatesProps
  */
 
 /** @param {Pick<TaskRegistryStatesProps, "error" | "hasData" | "onReload">} props */
@@ -24,7 +24,7 @@ function RegistryError({ error, hasData, onReload }) {
   );
 }
 
-/** @param {Pick<TaskRegistryStatesProps, "tasks" | "deferredQuery" | "owner" | "filter" | "onCreate" | "attentionOnly" | "onClear">} props */
+/** @param {Pick<TaskRegistryStatesProps, "tasks" | "deferredQuery" | "owner" | "filter" | "onCreate" | "attentionOnly" | "scoped" | "onClear">} props */
 function RegistryEmpty({
   tasks,
   deferredQuery,
@@ -32,9 +32,10 @@ function RegistryEmpty({
   filter,
   onCreate,
   attentionOnly,
+  scoped,
   onClear,
 }) {
-  const filtered = Boolean(deferredQuery || owner !== "all" || attentionOnly);
+  const filtered = Boolean(deferredQuery || owner !== "all" || attentionOnly || scoped);
   return (
     <EmptyState
       icon={PlayCircle}
@@ -77,6 +78,7 @@ export function TaskRegistryStates(props) {
           owner={props.owner}
           filter={props.filter}
           attentionOnly={props.attentionOnly}
+          scoped={props.scoped}
           onClear={props.onClear}
           onCreate={props.onCreate}
         />

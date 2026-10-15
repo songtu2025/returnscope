@@ -67,7 +67,11 @@ describe("应用壳层与路由", () => {
     const onNavigate = vi.fn((...args) => calls.push(["navigate", ...args]));
     render(
       <Topbar
-        user={{ display_name: "管理员", email: "admin@example.com" }}
+        user={{
+          id: "current-user",
+          display_name: "管理员",
+          email: "admin@example.com",
+        }}
         system={{ my_running_segments: 0 }}
         onRefresh={onRefresh}
         onNavigate={onNavigate}
@@ -77,8 +81,15 @@ describe("应用壳层与路由", () => {
     );
 
     await userEvent.click(screen.getByRole("button", { name: /我的运行 Listing/ }));
-    await waitFor(() => expect(onNavigate).toHaveBeenCalledWith("analysis-tasks"));
-    expect(calls).toEqual(["refresh", ["navigate", "analysis-tasks"]]);
+    const focus = { kind: "task-list", scope: "mine", status: "active" };
+    await waitFor(() =>
+      expect(onNavigate).toHaveBeenCalledWith("analysis-tasks", focus),
+    );
+    expect(calls).toEqual(["refresh", ["navigate", "analysis-tasks", focus]]);
+    expect(routeForDestination("analysis-tasks", focus)).toEqual({
+      page: "analysis-tasks",
+      query: { scope: "mine", status: "active" },
+    });
   });
 
   test("普通一级导航继续只高亮其业务入口", () => {

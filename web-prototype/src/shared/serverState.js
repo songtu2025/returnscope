@@ -34,6 +34,16 @@ export function refreshServerState(mutate, domains) {
 export async function refreshTaskNameState(mutate, task, previousTitle) {
   await Promise.all([
     mutate(
+      (key) => Array.isArray(key) && key[0] === "analysis-tasks" && key[1] === "list",
+      (
+        /** @type {import("../features/task-runtime/taskRuntimeContracts").AnalysisTask[] | undefined} */ current,
+      ) =>
+        current?.map((item) =>
+          item.id === task.id ? { ...item, title: task.title } : item,
+        ),
+      { revalidate: false },
+    ),
+    mutate(
       (key) => Array.isArray(key) && key[0] === "workbench",
       (
         /** @type {import("./api/workbenchContracts").WorkbenchSummary | undefined} */ current,
@@ -77,7 +87,12 @@ export async function refreshTaskNameState(mutate, task, previousTitle) {
 export const serverStateKeys = {
   /** @param {number} limit */
   workbenchSummary: (limit) => ["workbench", "summary", limit],
-  taskList: ["analysis-tasks", "list", { include_archived: true }],
+  /** @param {string} [ownerId] @returns {[string, string, Record<string, string | boolean>]} */
+  taskList: (ownerId) => [
+    "analysis-tasks",
+    "list",
+    { include_archived: true, ...(ownerId === undefined ? {} : { owner_id: ownerId }) },
+  ],
   productDatasets: ["data-assets", "products", "list"],
   /** @param {string} datasetId @param {string} include */
   productDataset: (datasetId, include) => [

@@ -8,6 +8,15 @@ import {
 /** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
 /** @typedef {import("./taskRuntimeContracts").TaskSegment} TaskSegment */
 
+/** @type {import("./taskMonitorContracts").TaskListState} */
+export const DEFAULT_TASK_LIST_STATE = {
+  filter: "all",
+  query: "",
+  owner: "all",
+  sort: "updated_desc",
+  attentionOnly: false,
+};
+
 const ACTIVE_TASK_STATUSES = ["queued", "running", "paused"];
 export const FINAL_TASK_STATUSES = [
   "empty",

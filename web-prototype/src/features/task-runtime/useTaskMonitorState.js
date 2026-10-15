@@ -4,28 +4,21 @@ import {
   REFRESH_INTERVALS,
   notifyDataChanged,
 } from "../../shared/refreshPolicy";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import {
   refreshServerState,
   refreshTaskNameState,
   serverStateKeys,
 } from "../../shared/serverState";
-import { taskMonitorApi, errorMessage } from "./taskMonitorRequests";
+import { fetchTaskList, taskMonitorApi, errorMessage } from "./taskMonitorRequests";
+import { DEFAULT_TASK_LIST_STATE } from "./taskRegistryPolicy";
 
 /** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
 /** @typedef {import("./taskRuntimeContracts").TaskEvent} TaskEvent */
 /** @typedef {import("./taskMonitorContracts").TaskListState} TaskListState */
 
-const DEFAULT_LIST_STATE = {
-  filter: "all",
-  query: "",
-  owner: "all",
-  sort: "updated_desc",
-  attentionOnly: false,
-};
 const EMPTY_TASKS = /** @type {AnalysisTask[]} */ ([]);
-const fetchTaskList = () => taskMonitorApi.tasks({ include_archived: true });
 
 /** @param {import("./taskMonitorContracts").TaskMonitorProps} props */
 export function useTaskMonitorState({
@@ -38,8 +31,12 @@ export function useTaskMonitorState({
   onTaskFocus,
 }) {
   const { mutate: mutateCache } = useSWRConfig();
-  const [localListState, setLocalListState] = useState(DEFAULT_LIST_STATE);
+  const [localListState, setLocalListState] = useState(DEFAULT_TASK_LIST_STATE);
   const listState = controlledListState ?? localListState;
+  const taskListKey = useMemo(
+    () => serverStateKeys.taskList(listState.ownerId),
+    [listState.ownerId],
+  );
   const [selectedId, setSelectedId] = useState(/** @type {string | null} */ (null));
   const [selected, setSelected] = useState(/** @type {AnalysisTask | null} */ (null));
   const [events, setEvents] = useState(/** @type {TaskEvent[]} */ ([]));
@@ -50,15 +47,23 @@ export function useTaskMonitorState({
   const previousFocusId = useRef(/** @type {string | null | undefined} */ (focusId));
   const notifiedListError = useRef("");
   const [detailError, setDetailError] = useState("");
-  const [listRefreshError, setListRefreshError] = useState("");
+  const [refreshFailure, setRefreshFailure] = useState({
+    ownerId: /** @type {string | undefined} */ (undefined),
+    message: "",
+  });
+  const listRefreshError =
+    refreshFailure.ownerId === listState.ownerId ? refreshFailure.message : "";
   const [refreshingList, setRefreshingList] = useState(false);
+  useEffect(() => {
+    setRefreshFailure({ ownerId: listState.ownerId, message: "" });
+  }, [listState.ownerId]);
 
   const {
     data: taskData,
     error: taskListError,
     isValidating,
     mutate: refreshTasks,
-  } = useSWR(serverStateKeys.taskList, fetchTaskList, MANAGED_REFRESH_OPTIONS);
+  } = useSWR(taskListKey, fetchTaskList, MANAGED_REFRESH_OPTIONS);
   const tasks = /** @type {AnalysisTask[]} */ (taskData ?? EMPTY_TASKS);
   const listError =
     listRefreshError || (taskListError ? errorMessage(taskListError) : "");
@@ -90,18 +95,20 @@ export function useTaskMonitorState({
     async (silent = false) => {
       setRefreshingList(true);
       try {
-        await refreshTasks(fetchTaskList, { revalidate: false });
-        setListRefreshError("");
+        await refreshTasks(() => fetchTaskList(taskListKey), {
+          revalidate: false,
+        });
+        setRefreshFailure({ ownerId: listState.ownerId, message: "" });
         return true;
       } catch (error) {
-        setListRefreshError(errorMessage(error));
+        setRefreshFailure({ ownerId: listState.ownerId, message: errorMessage(error) });
         if (!silent) notify(errorMessage(error), "error");
         return false;
       } finally {
         setRefreshingList(false);
       }
     },
-    [notify, refreshTasks],
+    [notify, refreshTasks, taskListKey, listState.ownerId],
   );
 
   const loadSelected = useCallback(
@@ -190,15 +197,7 @@ export function useTaskMonitorState({
       source.close();
       if (refreshTimer !== null) window.clearTimeout(refreshTimer);
     };
-  }, [
-    selectedId,
-    eventStreamVersion,
-    loadSelected,
-    loadTasks,
-    notify,
-    onChanged,
-    mutateCache,
-  ]);
+  }, [selectedId, eventStreamVersion, notify, mutateCache]);
 
   const hasActiveTasks = tasks.some((task) =>
     ["queued", "running"].includes(task.status),

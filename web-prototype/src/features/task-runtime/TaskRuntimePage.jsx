@@ -7,10 +7,10 @@ import "../../styles/task-flow.css";
 /** @typedef {import("../../app/navigation").Navigate} Navigate */
 
 /**
- * @param {{route: AppRoute, notify: (message: string, type?: "success" | "error") => void, onNavigate: Navigate, onChanged: () => void | Promise<unknown>}} props
+ * @param {{route: AppRoute, userId?: string, notify: (message: string, type?: "success" | "error") => void, onNavigate: Navigate, onChanged: () => void | Promise<unknown>}} props
  */
 
-export function TaskRuntimePage({ route, notify, onNavigate, onChanged }) {
+export function TaskRuntimePage({ route, userId, notify, onNavigate, onChanged }) {
   if (route.query.view === "recycle") return <TaskRecyclePage notify={notify} />;
   const query = route.query;
   const filter =
@@ -27,6 +27,7 @@ export function TaskRuntimePage({ route, notify, onNavigate, onChanged }) {
     filter,
     query: query.q || "",
     owner: query.owner || "all",
+    ...(query.scope === "mine" ? { ownerId: userId || "" } : {}),
     sort,
     attentionOnly: query.attention === "1",
   };
@@ -41,6 +42,7 @@ export function TaskRuntimePage({ route, notify, onNavigate, onChanged }) {
         status: next.filter === "all" ? "" : next.filter,
         q: next.query,
         owner: next.owner === "all" ? "" : next.owner,
+        scope: next.ownerId === undefined ? "" : "mine",
         sort: next.sort === "updated_desc" ? "" : next.sort,
         attention: next.attentionOnly ? "1" : "",
       },

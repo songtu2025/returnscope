@@ -12,7 +12,7 @@ import {
 /** @typedef {{page: string, query: RouteQuery}} AppRoute */
 /** @typedef {import("../features/task-create/taskCreateContracts").UnresolvedProduct} UnresolvedProduct */
 /** @typedef {import("../features/task-create/taskCreateContracts").CategoryOption} CategoryOption */
-/** @typedef {{kind: "task" | "task-template", id: string} | {kind: "result", id: string, listing?: string} | {kind: "classification-result", id: string, taskId?: string, segmentId?: string, listing?: string, reviewBatchId?: string, recordQualityStatus?: string, orderId?: string} | {kind: "data-view", view: string} | {kind: "review", id: string, status?: string} | {kind: "review-batch", id: string, resultVersionId?: string} | {kind: "dataset", id?: string, datasetKind: string, returnToTask?: boolean, taskTitle?: string, store?: string, unresolvedProducts?: UnresolvedProduct[], categoryOptions?: CategoryOption[], blockedCommentCount?: number}} NavigationFocus */
+/** @typedef {{kind: "task" | "task-template", id: string} | {kind: "task-list", scope: "mine", status: "active"} | {kind: "result", id: string, listing?: string} | {kind: "classification-result", id: string, taskId?: string, segmentId?: string, listing?: string, reviewBatchId?: string, recordQualityStatus?: string, orderId?: string} | {kind: "data-view", view: string} | {kind: "review", id: string, status?: string} | {kind: "review-batch", id: string, resultVersionId?: string} | {kind: "dataset", id?: string, datasetKind: string, returnToTask?: boolean, taskTitle?: string, store?: string, unresolvedProducts?: UnresolvedProduct[], categoryOptions?: CategoryOption[], blockedCommentCount?: number}} NavigationFocus */
 /** @typedef {{route?: string, task_id?: string, segment_id?: string, result_version_id?: string, action?: string, dashboard_id?: string, version_id?: string, report_id?: string, batch_id?: string, review_id?: string, workflow_status?: string, dataset_id?: string, view?: string, tab?: string, connection_id?: string, config_version_id?: string, model_id?: string, entity_id?: string, user_id?: string}} NavigationTarget */
 /** @typedef {{id: string, label: string, icon: import("react").ElementType}} NavigationItem */
 /** @typedef {(destination: string, focus?: NavigationFocus | null) => void} Navigate */
@@ -88,6 +88,8 @@ function focusQuery(focus) {
   switch (focus.kind) {
     case "task":
       return { task_id: focus.id };
+    case "task-list":
+      return { scope: focus.scope, status: focus.status };
     case "task-template":
       return { template_task: focus.id };
     case "result":

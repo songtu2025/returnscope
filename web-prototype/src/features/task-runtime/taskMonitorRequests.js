@@ -26,4 +26,6 @@ import { api } from "../../api";
  * }}
  */
 export const taskMonitorApi = api;
+/** @param {ReturnType<typeof import("../../shared/serverState").serverStateKeys.taskList>} key */
+export const fetchTaskList = ([, , filters]) => taskMonitorApi.tasks(filters);
 export { errorMessage, errorStatus } from "../../shared/api/requestErrors";

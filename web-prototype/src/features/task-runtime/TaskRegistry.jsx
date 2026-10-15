@@ -16,7 +16,7 @@ import { TaskRegistryStates } from "./TaskRegistryStates";
  * @typedef {Object} TaskRegistryProps
  * @property {AnalysisTask[]} tasks
  * @property {string | null} selectedId
- * @property {{filter: string, query: string, owner: string, sort: string, attentionOnly: boolean}} viewState
+ * @property {import("./taskMonitorContracts").TaskListState} viewState
  * @property {(changes: Partial<TaskRegistryProps["viewState"]>) => void} onViewStateChange
  * @property {boolean} loading
  * @property {string} error
@@ -44,7 +44,7 @@ export function TaskRegistry({
   onArchive,
   onCreateSimilar,
 }) {
-  const { filter, query, owner, sort, attentionOnly } = viewState;
+  const { filter, query, owner, ownerId, sort, attentionOnly } = viewState;
   const deferredQuery = useDeferredValue(query.trim().toLocaleLowerCase());
   const [selectedIds, setSelectedIds] = useState(
     () => new Set(/** @type {string[]} */ ([])),
@@ -166,10 +166,16 @@ export function TaskRegistry({
         visibleCount={visibleTasks.length}
         deferredQuery={deferredQuery}
         owner={owner}
+        scoped={ownerId !== undefined}
         filter={filter}
         attentionOnly={attentionOnly}
         onClear={() =>
-          onViewStateChange({ query: "", owner: "all", attentionOnly: false })
+          onViewStateChange({
+            query: "",
+            owner: "all",
+            attentionOnly: false,
+            ...(ownerId !== undefined ? { ownerId: undefined } : {}),
+          })
         }
         onReload={onReload}
         onCreate={onCreate}

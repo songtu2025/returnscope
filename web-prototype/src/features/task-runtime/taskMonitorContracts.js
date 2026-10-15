@@ -10,6 +10,6 @@
  * @property {(taskId: string | null) => void} [onTaskFocus]
  */
 
-/** @typedef {{filter: string, query: string, owner: string, sort: string, attentionOnly: boolean}} TaskListState */
+/** @typedef {{filter: string, query: string, owner: string, ownerId?: string, sort: string, attentionOnly: boolean}} TaskListState */
 
 export {};
