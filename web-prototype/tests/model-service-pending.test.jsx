@@ -84,7 +84,7 @@ test.each(["passed", "failure"])("模型验证启动 %s 仅反馈当前行", asy
     display_name: id,
     active: true,
     supported_efforts: ["medium"],
-    validation_status: "draft",
+    validation_status: "validated",
   }));
   apiMock.configs.mockResolvedValue([item]);
   apiMock.startModelValidation.mockReturnValue(pending.promise);
@@ -95,10 +95,11 @@ test.each(["passed", "failure"])("模型验证启动 %s 仅反馈当前行", asy
     .map((element) => element.closest(".model-catalog-row"));
   const first = within(rows[0]);
   const second = within(screen.getAllByText("second")[0].closest(".model-catalog-row"));
+  await user.click(first.getByLabelText("更多模型操作：first"));
   await user.click(first.getByRole("button", { name: "验证" }));
   expect(apiMock.startModelValidation).toHaveBeenCalledExactlyOnceWith("first");
   expect(first.getByRole("button", { name: "启动中…" })).toBeDisabled();
-  expect(second.getByRole("button", { name: "验证" })).toBeDisabled();
+  expect(second.getByRole("button", { name: "编辑" })).toBeDisabled();
   expect(screen.getAllByRole("button", { name: "启动中…" })).toHaveLength(1);
   await act(async () => {
     if (outcome === "failure") pending.reject(new Error("启动失败"));
@@ -114,9 +115,9 @@ test.each(["passed", "failure"])("模型验证启动 %s 仅反馈当前行", asy
       });
   });
   await waitFor(() =>
-    expect(first.getByRole("button", { name: "验证" })).toBeEnabled(),
+    expect(first.getByRole("button", { name: "编辑" })).toBeEnabled(),
   );
-  expect(second.getByRole("button", { name: "验证" })).toBeEnabled();
+  expect(second.getByRole("button", { name: "编辑" })).toBeEnabled();
   expect(screen.queryByRole("button", { name: "启动中…" })).not.toBeInTheDocument();
   if (outcome === "failure") expect(notify).toHaveBeenCalledWith("启动失败", "error");
 });

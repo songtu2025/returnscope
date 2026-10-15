@@ -1,5 +1,7 @@
 import { EFFORT_LABELS, MODEL_STATUS_LABELS } from "../../constants";
 import { classNames, formatTime } from "../../lib/presentation";
+import { DotsThreeVertical } from "@phosphor-icons/react";
+import { useDismissibleDetails } from "../../hooks/useDismissibleDetails";
 
 /** @typedef {import("./modelServiceViewContracts").ModelServiceEditorProps} EditorProps */
 /** @typedef {import("../../shared/api/systemSettingsContracts").CatalogModel} CatalogModel */
@@ -68,37 +70,51 @@ function ModelCatalogActions({
   validationActive,
   validationRun,
 }) {
+  const disabled = Boolean(busy) || validationActive;
+  const { detailsProps, summaryProps } = useDismissibleDetails({
+    menu: true,
+    disabled,
+  });
+  const canValidate = Boolean(selectedConnection && model.active);
+  const validationPending = busy === `model-validation-start-${model.id}`;
+  const validationRunning =
+    validationActive &&
+    validationRun?.kind === "model" &&
+    validationRun.target_id === model.id;
+  const validationPrimary =
+    canValidate &&
+    (model.validation_status !== "validated" || validationPending || validationRunning);
+  const validateButton = (
+    <button type="button" onClick={() => onValidateModel(model)} disabled={disabled}>
+      {validationRunning ? "验证中…" : validationPending ? "启动中…" : "验证"}
+    </button>
+  );
+  const editButton = (
+    <button type="button" onClick={() => onOpenModelEditor(model)} disabled={disabled}>
+      编辑
+    </button>
+  );
   return (
     <div className="model-catalog-actions">
-      {selectedConnection && model.active && (
-        <button
-          type="button"
-          onClick={() => onValidateModel(model)}
-          disabled={Boolean(busy) || validationActive}
-        >
-          {validationActive &&
-          validationRun?.kind === "model" &&
-          validationRun.target_id === model.id
-            ? "验证中…"
-            : busy === `model-validation-start-${model.id}`
-              ? "启动中…"
-              : "验证"}
-        </button>
-      )}
-      <button
-        type="button"
-        onClick={() => onOpenModelEditor(model)}
-        disabled={Boolean(busy) || validationActive}
-      >
-        编辑
-      </button>
-      <button
-        type="button"
-        onClick={() => onToggleModel(model)}
-        disabled={Boolean(busy) || validationActive}
-      >
-        {model.active ? "停用" : "启用"}
-      </button>
+      {validationPrimary ? validateButton : editButton}
+      <details className="model-catalog-menu" {...detailsProps}>
+        <summary aria-label={`更多模型操作：${model.display_name}`} {...summaryProps}>
+          <DotsThreeVertical size={18} />
+        </summary>
+        {detailsProps.open && (
+          <div>
+            {validationPrimary ? editButton : canValidate && validateButton}
+            <button
+              type="button"
+              className={model.active ? "danger" : ""}
+              onClick={() => onToggleModel(model)}
+              disabled={disabled}
+            >
+              {model.active ? "停用" : "启用"}
+            </button>
+          </div>
+        )}
+      </details>
     </div>
   );
 }

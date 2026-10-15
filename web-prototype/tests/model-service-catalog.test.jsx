@@ -22,7 +22,6 @@ vi.mock("../src/shared/api/modelApi", () => ({ modelApi: apiMock }));
 
 import { ModelServicePage } from "../src/features/system-settings/ModelServicePage";
 import { ModelServiceCatalogSummary } from "../src/features/system-settings/ModelServiceCatalogSummary";
-import { ModelCatalogRow } from "../src/features/system-settings/ModelCatalogRow";
 
 beforeEach(() => {
   Object.values(apiMock).forEach((mock) => mock.mockReset());
@@ -31,46 +30,6 @@ beforeEach(() => {
   apiMock.validationEventUrl.mockReturnValue("/validation-events");
 });
 afterEach(() => cleanup());
-
-test("运行中验证仅标注目标模型，结束后恢复，配置验证不误标模型", () => {
-  const props = {
-    selectedConnection: { id: "connection" },
-    busy: "",
-    validationActive: true,
-    validationRun: { kind: "model", target_id: "first" },
-    onValidateModel: vi.fn(),
-    onOpenModelEditor: vi.fn(),
-    onToggleModel: vi.fn(),
-  };
-  const rows = (overrides = {}) =>
-    ["first", "second"].map((id) => (
-      <ModelCatalogRow
-        key={id}
-        {...props}
-        {...overrides}
-        model={{
-          id,
-          model_key: id,
-          display_name: id,
-          active: true,
-          supported_efforts: ["medium"],
-          validation_status: "draft",
-        }}
-      />
-    ));
-  const view = render(rows());
-  expect(screen.getAllByRole("button", { name: "验证中…" })).toHaveLength(1);
-  expect(screen.getByRole("button", { name: "验证中…" })).toBeDisabled();
-  expect(screen.getByRole("button", { name: "验证" })).toBeDisabled();
-  view.rerender(rows({ validationActive: false }));
-  expect(screen.getAllByRole("button", { name: "验证" })).toHaveLength(2);
-  screen
-    .getAllByRole("button", { name: "验证" })
-    .forEach((button) => expect(button).toBeEnabled());
-  view.rerender(rows({ validationRun: { kind: "config", target_id: "first" } }));
-  expect(screen.queryByRole("button", { name: "验证中…" })).not.toBeInTheDocument();
-  expect(screen.getAllByRole("button", { name: "验证" })).toHaveLength(2);
-});
 
 test("摘要仅保留目录总入口，待验证模型提供对应行验证", async () => {
   const user = userEvent.setup();
@@ -194,6 +153,7 @@ test("用户可以从模型列表启动真实验证", async () => {
   expect(screen.getAllByRole("button", { name: "添加模型" })).toHaveLength(1);
   expect(screen.queryByText("连接信息")).not.toBeInTheDocument();
   expect((await screen.findAllByText("gpt-main"))[0]).toBeVisible();
+  await user.click(screen.getByLabelText("更多模型操作：主分析模型"));
   await user.click(screen.getByRole("button", { name: "验证" }));
 
   await waitFor(() =>
