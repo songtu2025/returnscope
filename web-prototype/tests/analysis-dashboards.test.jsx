@@ -1326,7 +1326,7 @@ test("空态只保留一个选择分类结果入口", async () => {
   );
 
   expect(await screen.findByText("还没有分析看板")).toBeVisible();
-  const filters = screen.getByRole("region", { name: "分析看板筛选" });
+  const filters = screen.getByRole("form", { name: "分析看板筛选" });
   for (const label of ["关键词", "看板状态"]) {
     expect(within(filters).getByText(label, { selector: "span" })).toBeVisible();
   }
