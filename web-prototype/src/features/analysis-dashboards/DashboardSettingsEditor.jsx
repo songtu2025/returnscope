@@ -1,9 +1,23 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
+import { UnsavedChangesDialog } from "../../components/UnsavedChangesActions";
+import { useUnsavedNavigation } from "../../hooks/useUnsavedNavigation";
 import { dashboardApi } from "../../shared/api/dashboardApi";
 import { useClassificationResultListData } from "../classification-results/useClassificationResultListData";
 import { DashboardQualityScope } from "./DashboardQualityScope";
 import { errorMessage } from "./dashboardRequestErrors";
 import "../../styles/dashboard-settings.css";
+
+/** @param {string} name @param {string[]} ids @param {string[]} statuses @param {Record<string, string | string[] | null>} filters */
+function settingsKey(name, ids, statuses, filters) {
+  return JSON.stringify([
+    name.trim(),
+    [...ids].sort(),
+    [...statuses].sort(),
+    filters.date_from || "",
+    filters.date_to || "",
+  ]);
+}
 
 /** @param {{dashboard: import("./analysisDashboardContracts").Dashboard, onClose: () => void, onSaved: (id: string) => void | Promise<void>}} props */
 export function DashboardSettingsEditor({ dashboard, onClose, onSaved }) {
@@ -21,27 +35,44 @@ export function DashboardSettingsEditor({ dashboard, onClose, onSaved }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const formRef = useRef(/** @type {HTMLFormElement | null} */ (null));
+  const leavingRef = useRef(false);
+  const [baseline, setBaseline] = useState(() =>
+    settingsKey(dashboard.name ?? "", [], ["ready"], {}),
+  );
+  const draftKey = settingsKey(name, ids, statuses, filters);
+  const dirty = draftKey !== baseline;
   const resultQuery = useMemo(() => ({ page, page_size: 20, q: query }), [page, query]);
   const resultState = useClassificationResultListData(resultQuery);
   useEffect(() => {
     let active = true;
     dashboardApi
       .analysisDashboardSources(dashboard.id, dashboard.current_version_id ?? "")
-      .then((sources) => {
-        if (!active) return;
-        setSources(sources);
-        setIds(
-          sources.map(
-            (/** @type {{result_version_id: string}} */ source) =>
-              source.result_version_id,
-          ),
-        );
-        const currentFilters = dashboard.version?.filters ?? {};
-        setFilters(currentFilters);
-        const quality = currentFilters.quality_status;
-        setStatuses(Array.isArray(quality) ? quality : ["ready"]);
-        setLoading(false);
-      })
+      .then(
+        (
+          /** @type {import("./analysisDashboardContracts").DashboardSource[]} */ sources,
+        ) => {
+          if (!active) return;
+          setSources(sources);
+          const sourceIds = sources
+            .map((source) => source.result_version_id)
+            .filter((id) => typeof id === "string");
+          setIds(sourceIds);
+          const currentFilters = dashboard.version?.filters ?? {};
+          setFilters(currentFilters);
+          const quality = currentFilters.quality_status;
+          setStatuses(Array.isArray(quality) ? quality : ["ready"]);
+          setBaseline(
+            settingsKey(
+              dashboard.name ?? "",
+              sourceIds,
+              Array.isArray(quality) ? quality : ["ready"],
+              currentFilters,
+            ),
+          );
+          setLoading(false);
+        },
+      )
       .catch((failure) => {
         if (active) {
           setError(errorMessage(failure));
@@ -52,8 +83,9 @@ export function DashboardSettingsEditor({ dashboard, onClose, onSaved }) {
       active = false;
     };
   }, [dashboard]);
-  const save = async (/** @type {import("react").FormEvent} */ event) => {
-    event.preventDefault();
+  const save = async (complete = true) => {
+    if (loading || saving || !ids.length || !formRef.current?.reportValidity())
+      return false;
     setSaving(true);
     setError("");
     try {
@@ -72,17 +104,46 @@ export function DashboardSettingsEditor({ dashboard, onClose, onSaved }) {
         plan_hash: plan.plan_hash,
         reason: "修改看板设置",
       });
-      await onSaved(updated.current_version_id);
+      const leaving = !complete || leavingRef.current;
+      // 已保存的内容不再拦截成功跳转，也不覆盖用户已确认的离页目标。
+      flushSync(() => {
+        setBaseline(draftKey);
+        setSaving(false);
+      });
+      if (leaving) onClose();
+      else await onSaved(updated.current_version_id);
+      return true;
     } catch (failure) {
       setError(errorMessage(failure));
+      return false;
     } finally {
       setSaving(false);
     }
   };
+  const exit = useUnsavedNavigation({
+    dirty,
+    busy: dirty && saving,
+    canSave: !loading && Boolean(ids.length),
+    save: () => save(false),
+    discard: onClose,
+    onRequest: () => {
+      leavingRef.current = true;
+    },
+  });
+  useEffect(() => {
+    if (!exit.pendingExit) leavingRef.current = false;
+  }, [exit.pendingExit]);
   return (
     <section className="content-card dashboard-settings-editor">
       <h2>编辑看板</h2>
-      <form className="dashboard-settings-form" onSubmit={save}>
+      <form
+        ref={formRef}
+        className="dashboard-settings-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void save();
+        }}
+      >
         <fieldset className="dashboard-settings-fields" disabled={loading || saving}>
           <label>
             看板名称
@@ -208,6 +269,7 @@ export function DashboardSettingsEditor({ dashboard, onClose, onSaved }) {
           </button>
         </div>
       </form>
+      <UnsavedChangesDialog guard={exit} title="看板修改尚未保存" />
     </section>
   );
 }
