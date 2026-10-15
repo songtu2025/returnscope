@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -21,6 +21,7 @@ const { apiMock } = vi.hoisted(() => ({
 vi.mock("../src/shared/api/modelApi", () => ({ modelApi: apiMock }));
 
 import { ModelServicePage } from "../src/features/system-settings/ModelServicePage";
+import { ModelServiceCatalogSummary } from "../src/features/system-settings/ModelServiceCatalogSummary";
 
 beforeEach(() => {
   Object.values(apiMock).forEach((mock) => mock.mockReset());
@@ -29,6 +30,43 @@ beforeEach(() => {
   apiMock.validationEventUrl.mockReturnValue("/validation-events");
 });
 afterEach(() => cleanup());
+
+test("摘要仅保留目录总入口，待验证模型提供对应行验证", async () => {
+  const user = userEvent.setup();
+  const models = [
+    { id: "ready", active: true, validation_status: "validated" },
+    { id: "pending", active: true, validation_status: "draft" },
+    { id: "inactive", active: false, validation_status: "draft" },
+  ].map((model) => ({
+    ...model,
+    model_key: model.id,
+    supported_efforts: ["medium"],
+  }));
+  const onOpenModelCatalog = vi.fn();
+  const onValidateCatalogModel = vi.fn();
+  render(
+    <ModelServiceCatalogSummary
+      selectedConnection={{ id: "connection" }}
+      visibleCatalogModels={models}
+      busy=""
+      validationActive={false}
+      onDiscoverModels={vi.fn()}
+      onOpenModelCatalog={onOpenModelCatalog}
+      onValidateCatalogModel={onValidateCatalogModel}
+    />,
+  );
+
+  expect(screen.queryByRole("button", { name: "管理" })).not.toBeInTheDocument();
+  expect(screen.getAllByRole("button", { name: "管理目录" })).toHaveLength(1);
+  const rows = screen.getAllByRole("row");
+  expect(within(rows[1]).queryByRole("button")).not.toBeInTheDocument();
+  expect(within(rows[3]).queryByRole("button")).not.toBeInTheDocument();
+  await user.click(within(rows[2]).getByRole("button", { name: "验证" }));
+  expect(onValidateCatalogModel).toHaveBeenCalledExactlyOnceWith(models[1]);
+  expect(onOpenModelCatalog).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "管理目录" }));
+  expect(onOpenModelCatalog).toHaveBeenCalledTimes(1);
+});
 
 test("用户可以从模型列表启动真实验证", async () => {
   const user = userEvent.setup();

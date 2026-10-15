@@ -83,13 +83,7 @@ export function ModelServiceCatalogSummary({
                   验证
                 </button>
               ) : (
-                <button
-                  className="text-button"
-                  onClick={onOpenModelCatalog}
-                  disabled={Boolean(busy)}
-                >
-                  管理
-                </button>
+                <span>--</span>
               )}
             </div>
           ))
