@@ -152,13 +152,19 @@ test("原生控件规则不进入组件库内部，不再依赖逐页重置补�
 
 test("分类结果选择表在目标桌面宽度保留完整操作区", () => {
   expect(styles).toMatch(
-    /\.result-pool-table\.is-selecting \.result-pool-head,[\s\S]*?grid-template-columns:\s*92px 96px 132px minmax\(132px, 1\.2fr\) 110px 118px 186px;/,
+    /\.result-pool-table\.is-selecting \.result-pool-head,[\s\S]*?grid-template-columns:\s*92px 96px 132px minmax\(132px, 1\.2fr\) 110px 118px var\(\s*--result-actions-width,\s*186px\s*\);/,
   );
   expect(styles).toMatch(
-    /@media \(max-width:\s*1320px\)[\s\S]*?grid-template-columns:\s*72px 86px 124px minmax\(124px, 1fr\) 100px 186px;/,
+    /@media \(max-width:\s*1320px\)[\s\S]*?grid-template-columns:\s*72px 86px 124px minmax\(124px, 1fr\) 100px var\(\s*--result-actions-width,\s*186px\s*\);/,
   );
   expect(styles).toMatch(
-    /@media \(max-width:\s*1120px\)[\s\S]*?grid-template-columns:\s*72px 86px 124px minmax\(124px, 1fr\) 186px;/,
+    /@media \(max-width:\s*1120px\)[\s\S]*?grid-template-columns:\s*72px 86px 124px minmax\(124px, 1fr\) var\(\s*--result-actions-width,\s*186px\s*\);/,
+  );
+  expect(styles).toMatch(
+    /\.result-pool-table\.is-current\s*{[^}]*--result-actions-width:\s*232px;/s,
+  );
+  expect(styles).toMatch(
+    /\.result-pool-table\.is-deleted\s*{[^}]*--result-actions-width:\s*280px;/s,
   );
   expect(styles).toMatch(
     /\.classification-results-page \.result-row-actions\s*{[^}]*min-width:\s*0;/s,

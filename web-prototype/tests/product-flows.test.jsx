@@ -4367,8 +4367,12 @@ describe("关键用户流程", () => {
         rejectRefresh = reject;
       }),
     );
+    const callsBeforeRefresh = apiMock.tasks.mock.calls.length;
     fireEvent(document, new Event("visibilitychange"));
-    expect(await screen.findByText("更新中…")).toBeVisible();
+    await waitFor(() =>
+      expect(apiMock.tasks).toHaveBeenCalledTimes(callsBeforeRefresh + 1),
+    );
+    expect(screen.queryByText("更新中…")).not.toBeInTheDocument();
     expect(screen.getByRole("table", { name: "任务管理表" })).toBe(table);
     expect(search).toHaveValue("合成");
     expect(document.activeElement).toBe(search);
