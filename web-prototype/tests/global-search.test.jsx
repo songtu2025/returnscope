@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { renderWithServerState as render } from "./renderWithServerState";
 import userEvent from "@testing-library/user-event";
 import { api } from "../src/api";
 import { GlobalSearch } from "../src/app/GlobalSearch";
@@ -13,6 +14,7 @@ vi.mock("../src/api", () => ({
 }));
 
 beforeEach(() => {
+  vi.clearAllMocks();
   vi.mocked(api.tasks).mockResolvedValue([
     { id: "synthetic-a", title: "合成任务甲", status: "done", owner_name: "合成用户" },
     { id: "synthetic-b", title: "合成任务乙", status: "done", owner_name: "合成用户" },
@@ -25,7 +27,7 @@ afterEach(cleanup);
 async function ready() {
   const onSelect = vi.fn();
   const onClose = vi.fn();
-  render(<GlobalSearch onSelect={onSelect} onClose={onClose} notify={vi.fn()} />);
+  render(<GlobalSearch onSelect={onSelect} onClose={onClose} />);
   const first = await screen.findByRole("button", { name: /合成任务甲/ });
   return {
     onSelect,
@@ -78,5 +80,147 @@ describe("全局搜索输入法与键盘", () => {
     expect(screen.getByRole("button", { name: /合成任务乙/ })).toHaveFocus();
     await userEvent.keyboard("{Escape}");
     expect(onClose).toHaveBeenCalledOnce();
+  });
+});
+
+describe("全局搜索分类加载", () => {
+  test("产品失败不影响已返回任务，独立重试不重拉任务", async () => {
+    vi.mocked(api.datasets).mockRejectedValueOnce(new Error("合成产品失败"));
+    const { input, onSelect } = await ready();
+    await screen.findByText("产品信息读取失败");
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onSelect).toHaveBeenCalledWith("analysis-tasks", {
+      kind: "task",
+      id: "synthetic-a",
+    });
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    expect(screen.getByRole("button", { name: /合成任务甲/ })).toHaveFocus();
+    await userEvent.click(screen.getByRole("button", { name: "重试产品信息" }));
+    await waitFor(() => expect(screen.queryByText("产品信息读取失败")).toBeNull());
+    expect(api.tasks).toHaveBeenCalledOnce();
+    expect(api.datasets).toHaveBeenCalledTimes(2);
+    expect(api.searchClassificationFeedback).not.toHaveBeenCalled();
+  });
+
+  test("任务仍在等待时产品已可使用", async () => {
+    vi.mocked(api.tasks).mockImplementation(() => new Promise(() => {}));
+    vi.mocked(api.datasets).mockResolvedValue([
+      {
+        id: "synthetic-products",
+        kind: "products",
+        name: "合成产品",
+        row_count: 1,
+      },
+    ]);
+    const onSelect = vi.fn();
+    render(<GlobalSearch onSelect={onSelect} onClose={vi.fn()} />);
+    await screen.findByRole("button", { name: /合成产品/ });
+    fireEvent.keyDown(screen.getByRole("textbox"), { key: "Enter" });
+    expect(onSelect).toHaveBeenCalledWith("data-assets", {
+      kind: "dataset",
+      id: "synthetic-products",
+      datasetKind: "products",
+    });
+  });
+
+  test("任务失败仍展示产品，重试任务只请求任务", async () => {
+    vi.mocked(api.tasks).mockRejectedValueOnce(new Error("合成任务失败"));
+    vi.mocked(api.datasets).mockResolvedValue([
+      {
+        id: "synthetic-products",
+        kind: "products",
+        name: "合成产品",
+        row_count: 1,
+      },
+    ]);
+    render(<GlobalSearch onSelect={vi.fn()} onClose={vi.fn()} />);
+    await screen.findByRole("button", { name: /合成产品/ });
+    await screen.findByText("任务读取失败");
+    await userEvent.click(screen.getByRole("button", { name: "重试任务" }));
+    await screen.findByRole("button", { name: /合成任务甲/ });
+    expect(api.tasks).toHaveBeenCalledTimes(2);
+    expect(api.datasets).toHaveBeenCalledOnce();
+  });
+
+  test("工作区全部失败仍能搜索反馈，失败类别各自可重试", async () => {
+    vi.mocked(api.tasks).mockRejectedValue(new Error("合成任务失败"));
+    vi.mocked(api.datasets).mockRejectedValue(new Error("合成产品失败"));
+    vi.mocked(api.searchClassificationFeedback).mockResolvedValue({
+      items: [
+        {
+          record: {
+            id: "synthetic-record",
+            comment: "合成反馈",
+            result_version_id: "synthetic-result",
+          },
+        },
+      ],
+    });
+    const onSelect = vi.fn();
+    render(<GlobalSearch onSelect={onSelect} onClose={vi.fn()} />);
+    await screen.findByText("任务读取失败");
+    await screen.findByText("产品信息读取失败");
+    expect(screen.queryByText("没有找到匹配内容")).not.toBeInTheDocument();
+    const input = screen.getByRole("textbox");
+    fireEvent.change(input, { target: { value: "合成反馈" } });
+    await screen.findByRole("button", { name: /合成反馈/ });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onSelect).toHaveBeenCalledWith("classification-results", {
+      kind: "classification-result",
+      id: "synthetic-result",
+      listing: undefined,
+      orderId: undefined,
+    });
+  });
+
+  test("反馈失败只重试反馈，保留任务和输入", async () => {
+    vi.mocked(api.searchClassificationFeedback).mockRejectedValueOnce(
+      new Error("合成反馈失败"),
+    );
+    const { input } = await ready();
+    fireEvent.change(input, { target: { value: "合成" } });
+    await screen.findByText("反馈搜索失败");
+    expect(screen.getByText("合成任务甲")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "重试反馈搜索" }));
+    await waitFor(() => expect(screen.queryByText("反馈搜索失败")).toBeNull());
+    expect(input).toHaveValue("合成");
+    expect(api.tasks).toHaveBeenCalledOnce();
+    expect(api.datasets).toHaveBeenCalledOnce();
+    await waitFor(() =>
+      expect(api.searchClassificationFeedback).toHaveBeenCalledTimes(2),
+    );
+  });
+
+  test("查询更换后迟到反馈不覆盖新反馈，卸载终止当前搜索", async () => {
+    let resolveOld;
+    vi.mocked(api.searchClassificationFeedback).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveOld = resolve;
+        }),
+    );
+    const view = render(<GlobalSearch onSelect={vi.fn()} onClose={vi.fn()} />);
+    const input = screen.getByRole("textbox");
+    fireEvent.change(input, { target: { value: "旧查询" } });
+    await waitFor(() =>
+      expect(api.searchClassificationFeedback).toHaveBeenCalledOnce(),
+    );
+    const oldSignal = vi.mocked(api.searchClassificationFeedback).mock.calls[0][1]
+      .signal;
+    fireEvent.change(input, { target: { value: "新查询" } });
+    await waitFor(() =>
+      expect(api.searchClassificationFeedback).toHaveBeenCalledTimes(2),
+    );
+    const newSignal = vi.mocked(api.searchClassificationFeedback).mock.calls[1][1]
+      .signal;
+    expect(oldSignal.aborted).toBe(true);
+    await act(async () =>
+      resolveOld({
+        items: [{ record: { id: "late", comment: "旧查询新查询迟到反馈" } }],
+      }),
+    );
+    expect(screen.queryByText("旧查询新查询迟到反馈")).not.toBeInTheDocument();
+    view.unmount();
+    expect(newSignal.aborted).toBe(true);
   });
 });

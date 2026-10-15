@@ -160,7 +160,6 @@ function App() {
                   setSearchOpen(false);
                   navigate(destination, focus);
                 }}
-                notify={notify}
               />
             )}
             {toast && <Toast {...toast} onClose={() => setToast(null)} />}

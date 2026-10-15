@@ -746,7 +746,7 @@ describe("关键用户流程", () => {
         },
       ],
     });
-    render(<GlobalSearch onClose={vi.fn()} onSelect={onSelect} notify={vi.fn()} />);
+    render(<GlobalSearch onClose={vi.fn()} onSelect={onSelect} />);
     const dialog = screen.getByRole("dialog", { name: "全局搜索" });
     await within(dialog).findByRole("button", { name: /上限任务0/ });
     expect(within(dialog).getAllByRole("button")).toHaveLength(12);
@@ -784,14 +784,13 @@ describe("关键用户流程", () => {
   test.each([
     [new Error("合成搜索失败"), "合成搜索失败"],
     ["合成非Error拒绝", "请求失败"],
-  ])("全局搜索失败后展示错误并提供重试：%s", async (error, message) => {
-    const notify = vi.fn();
+  ])("全局搜索任务失败后就地展示错误并独立重试：%s", async (error, message) => {
     apiMock.tasks.mockRejectedValue(error);
-    render(<GlobalSearch onClose={vi.fn()} onSelect={vi.fn()} notify={notify} />);
-    await waitFor(() => expect(notify).toHaveBeenCalledWith(message, "error"));
-    expect(await screen.findByText("工作区读取失败")).toBeVisible();
+    render(<GlobalSearch onClose={vi.fn()} onSelect={vi.fn()} />);
+    expect(await screen.findByText("任务读取失败")).toBeVisible();
+    expect(screen.getByText(message)).toBeVisible();
     expect(screen.queryByText("没有找到匹配内容")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "重新加载" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "重试任务" })).toBeVisible();
     expect(screen.queryByText("正在读取工作区…")).not.toBeInTheDocument();
     for (const request of [apiMock.tasks, apiMock.datasets])
       expect(request).toHaveBeenCalledOnce();
@@ -810,7 +809,7 @@ describe("关键用户流程", () => {
         }),
     );
     const onSelect = vi.fn();
-    render(<GlobalSearch onClose={vi.fn()} onSelect={onSelect} notify={vi.fn()} />);
+    render(<GlobalSearch onClose={vi.fn()} onSelect={onSelect} />);
     await screen.findByRole("button", { name: /本地分析任务/ });
     fireEvent.change(screen.getByRole("textbox", { name: "全局搜索" }), {
       target: { value: "本地" },
@@ -4566,9 +4565,9 @@ test("全局搜索失败可重试，箭头选择第二个结果后回车打开",
   apiMock.datasets.mockResolvedValue([]);
   apiMock.reviews.mockResolvedValue([]);
   const onSelect = vi.fn();
-  render(<GlobalSearch onClose={vi.fn()} onSelect={onSelect} notify={vi.fn()} />);
-  await screen.findByText("工作区读取失败");
-  await userEvent.click(screen.getByRole("button", { name: "重新加载" }));
+  render(<GlobalSearch onClose={vi.fn()} onSelect={onSelect} />);
+  await screen.findByText("任务读取失败");
+  await userEvent.click(screen.getByRole("button", { name: "重试任务" }));
   const first = await screen.findByRole("button", { name: /合成任务甲/ });
   const second = screen.getByRole("button", { name: /合成任务乙/ });
   const input = screen.getByRole("textbox", { name: "全局搜索" });

@@ -106,6 +106,29 @@
   color: var(--muted);
   font-size: 13px;
 }
+.command-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 10px;
+  color: var(--red);
+}
+.command-error > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.command-error b,
+.command-error span {
+  display: block;
+}
+.command-error span {
+  margin-top: 4px;
+  font-size: 12px;
+}
+.command-error > button {
+  flex-shrink: 0;
+}
 .command-dialog > footer {
   display: flex;
   justify-content: space-between;

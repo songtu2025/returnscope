@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import useSWR from "swr";
 import { CaretRight, MagnifyingGlass } from "@phosphor-icons/react";
 import { api } from "../api";
 import { errorMessage } from "../shared/api/requestErrors";
@@ -6,28 +7,38 @@ import { matchingSearchItems } from "./globalSearchItems";
 import { useDialogFocus } from "../hooks/useDialogFocus";
 import { useLoadingHeight } from "../hooks/useLoadingHeight";
 import { InlineLoading } from "../components/SharedUi";
+import { serverStateKeys } from "../shared/serverState";
+
+const searchResourceOptions = {
+  shouldRetryOnError: false,
+  revalidateOnFocus: false,
+  revalidateOnReconnect: false,
+};
 
 /** @typedef {import("./navigation").NavigationFocus} NavigationFocus */
-/** @typedef {(message: string, tone?: string) => void} Notify */
 /** @typedef {(destination: string, focus?: NavigationFocus | null) => void} Navigate */
 /** @typedef {import("./globalSearchItems").SearchResources} SearchResources */
 
-/** @param {{onClose: () => void, onSelect: Navigate, notify: Notify}} props */
-export function GlobalSearch({ onClose, onSelect, notify }) {
+/** @param {{onClose: () => void, onSelect: Navigate}} props */
+export function GlobalSearch({ onClose, onSelect }) {
   const [query, setQuery] = useState("");
-  const [resources, setResources] = useState(
-    /** @type {SearchResources} */ ({
-      tasks: [],
-      datasets: [],
-      feedback: [],
-    }),
+  const tasks = useSWR(
+    ["analysis-tasks", "search"],
+    () => api.tasks(),
+    searchResourceOptions,
   );
-  const [loading, setLoading] = useState(true);
-  const [hasData, setHasData] = useState(false);
+  const products = useSWR(
+    serverStateKeys.productDatasets,
+    () => api.datasets("products"),
+    searchResourceOptions,
+  );
+  const [feedback, setFeedback] = useState(
+    /** @type {SearchResources["feedback"]} */ ([]),
+  );
+  const loading = tasks.isValidating || products.isValidating;
+  const hasData = tasks.data !== undefined || products.data !== undefined;
   const [feedbackQuery, setFeedbackQuery] = useState("");
-  const [loadError, setLoadError] = useState("");
   const [searchError, setSearchError] = useState("");
-  const error = loadError || searchError;
   const [searching, setSearching] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const resultsRef = useRef(/** @type {HTMLDivElement | null} */ (null));
@@ -35,31 +46,10 @@ export function GlobalSearch({ onClose, onSelect, notify }) {
   useLoadingHeight(loading || searching, resultsRef);
   const { dialogRef, constrainFocus } = useDialogFocus({ open: true, onClose });
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setLoadError("");
-    try {
-      const [tasks, datasets] = await Promise.all([
-        api.tasks(),
-        api.datasets("products"),
-      ]);
-      setResources((current) => ({ ...current, tasks, datasets }));
-      setHasData(true);
-    } catch (failure) {
-      const message = errorMessage(failure);
-      setLoadError(message);
-      notify(message, "error");
-    } finally {
-      setLoading(false);
-    }
-  }, [notify]);
-  useEffect(() => {
-    load();
-  }, [load]);
   useEffect(() => {
     const controller = new AbortController();
     if (!query.trim()) {
-      setResources((current) => ({ ...current, feedback: [] }));
+      setFeedback([]);
       setSearching(false);
       setSearchError("");
       return undefined;
@@ -72,7 +62,7 @@ export function GlobalSearch({ onClose, onSelect, notify }) {
           signal: controller.signal,
         });
         if (!controller.signal.aborted) {
-          setResources((current) => ({ ...current, feedback: result.items }));
+          setFeedback(result.items);
           setFeedbackQuery(query.trim());
         }
       } catch (failure) {
@@ -89,11 +79,32 @@ export function GlobalSearch({ onClose, onSelect, notify }) {
 
   const matches = matchingSearchItems(
     {
-      ...resources,
-      feedback: feedbackQuery === query.trim() ? resources.feedback : [],
+      tasks: tasks.data ?? [],
+      datasets: products.data ?? [],
+      feedback: feedbackQuery === query.trim() ? feedback : [],
     },
     query,
   );
+  const failures = [
+    {
+      name: "任务",
+      error: tasks.error ? errorMessage(tasks.error) : "",
+      retry: () => tasks.mutate(),
+      busy: tasks.isValidating,
+    },
+    {
+      name: "产品信息",
+      error: products.error ? errorMessage(products.error) : "",
+      retry: () => products.mutate(),
+      busy: products.isValidating,
+    },
+    {
+      name: "反馈搜索",
+      error: searchError,
+      retry: () => setAttempt((value) => value + 1),
+      busy: searching,
+    },
+  ].filter((item) => item.error);
 
   return (
     <div
@@ -128,14 +139,15 @@ export function GlobalSearch({ onClose, onSelect, notify }) {
                 event.keyCode === 229
               )
                 return;
-              if (!loading && !loadError && event.key === "Enter" && matches[0])
+              if (event.key === "Enter" && matches[0])
                 onSelect(matches[0].page, matches[0].focus);
               if (event.key === "ArrowDown" || event.key === "ArrowUp") {
                 event.preventDefault();
-                const buttons = resultsRef.current?.querySelectorAll("button");
-                const index =
-                  event.key === "ArrowDown" ? 0 : (buttons?.length ?? 0) - 1;
-                buttons?.[index]?.focus();
+                const buttons = [
+                  ...(resultsRef.current?.querySelectorAll("button") ?? []),
+                ].filter((button) => button.hasAttribute("data-search-result"));
+                const index = event.key === "ArrowDown" ? 0 : buttons.length - 1;
+                buttons[index]?.focus();
               }
             }}
             placeholder="输入任务名、产品信息或评论…"
@@ -153,8 +165,15 @@ export function GlobalSearch({ onClose, onSelect, notify }) {
           ref={resultsRef}
           onKeyDown={(event) => {
             if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+            if (
+              !(event.target instanceof Element) ||
+              !event.target.closest("[data-search-result]")
+            )
+              return;
             event.preventDefault();
-            const buttons = [...event.currentTarget.querySelectorAll("button")];
+            const buttons = [...event.currentTarget.querySelectorAll("button")].filter(
+              (button) => button.hasAttribute("data-search-result"),
+            );
             const index = buttons.indexOf(
               /** @type {HTMLButtonElement} */ (event.target),
             );
@@ -164,47 +183,50 @@ export function GlobalSearch({ onClose, onSelect, notify }) {
           }}
         >
           {loading && !hasData && <InlineLoading label="正在读取工作区…" />}
-          {!loading && !searching && error && (
-            <div className="command-empty" role="alert">
-              <b>{loadError ? "工作区读取失败" : "反馈搜索失败"}</b>
-              <span>{error}</span>
+          {failures.map((failure) => (
+            <div className="command-error" role="alert" key={failure.name}>
+              <div>
+                <b>
+                  {failure.name}
+                  {failure.name === "反馈搜索" ? "失败" : "读取失败"}
+                </b>
+                <span>{failure.error}</span>
+              </div>
               <button
-                className="secondary-button"
-                onClick={() => {
-                  load();
-                  setAttempt((value) => value + 1);
-                }}
+                className="secondary-button compact-button"
+                disabled={failure.busy}
+                onClick={failure.retry}
               >
-                重新加载
+                重试{failure.name}
               </button>
             </div>
-          )}
-          {!loading && !searching && !error && matches.length === 0 && (
+          ))}
+          {!loading && !searching && !failures.length && matches.length === 0 && (
             <div className="command-empty">
               <MagnifyingGlass size={22} />
               没有找到匹配内容
             </div>
           )}
-          {hasData &&
-            matches.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={`${item.type}-${item.id}`}
-                  onClick={() => onSelect(item.page, item.focus)}
-                >
-                  <span>
-                    <Icon size={19} />
-                  </span>
-                  <div>
-                    <b>{item.title}</b>
-                    <small>{item.meta}</small>
-                  </div>
-                  <em>{item.type}</em>
-                  <CaretRight size={16} />
-                </button>
-              );
-            })}
+          {matches.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={`${item.type}-${item.id}`}
+                data-search-result
+                onClick={() => onSelect(item.page, item.focus)}
+              >
+                <span>
+                  <Icon size={19} />
+                </span>
+                <div>
+                  <b>{item.title}</b>
+                  <small>{item.meta}</small>
+                </div>
+                <em>{item.type}</em>
+                <CaretRight size={16} />
+              </button>
+            );
+          })}
         </div>
         <footer>
           <span>输入关键词筛选</span>
