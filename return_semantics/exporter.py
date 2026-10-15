@@ -8,6 +8,7 @@ from openpyxl.utils import get_column_letter
 
 from return_semantics.data import ReturnDataset
 from return_semantics.export_detail import _build_detail_rows
+from return_semantics.export_formatting import _display_key
 from return_semantics.export_review import _build_semantic_review_rows
 from return_semantics.export_semantics import (
     _build_dimension_decision_rows,
@@ -19,6 +20,11 @@ from return_semantics.schemas import (
     ProcessingStatus,
     TaxonomyConfig,
     ValidatedClassification,
+)
+from return_semantics.semantic_review import (
+    BUSINESS_REVIEW_REQUIRED,
+    SYSTEM_RERUN_REQUIRED,
+    review_route,
 )
 
 REVIEW_STATUSES = {
@@ -61,14 +67,22 @@ def export_results(
         business_review = semantic_review.copy()
         system_rerun = semantic_review.copy()
     else:
+        source_comments = dataset.unique_comments.set_index("classification_key")[
+            "comment_normalized"
+        ]
+        routes = {
+            _display_key(key): review_route(
+                result, str(source_comments.loc[key] or ""), taxonomy
+            )
+            for key, result in results.items()
+        }
+        # 以评论的最终处置分流，保留其完整语义上下文供阅读核对。
+        review_routes = semantic_review["分类键"].map(routes)
         system_rerun = semantic_review.loc[
-            semantic_review["处置状态"].isin(["ANALYSIS_FAILURE", "MODEL_ERROR"])
-            & semantic_review["是否需要业务判断"].eq("否")
+            review_routes.eq(SYSTEM_RERUN_REQUIRED)
         ].copy()
-        system_rerun_keys = set(system_rerun["分类键"])
         business_review = semantic_review.loc[
-            semantic_review["是否需要业务判断"].eq("是")
-            & ~semantic_review["分类键"].isin(system_rerun_keys)
+            review_routes.eq(BUSINESS_REVIEW_REQUIRED)
         ].copy()
     decisions = pd.DataFrame(_build_dimension_decision_rows(results))
     statistics = pd.DataFrame(_build_statistics(dataset, results, taxonomy))

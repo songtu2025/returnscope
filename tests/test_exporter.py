@@ -141,7 +141,6 @@ def test_exporter_creates_expected_sheets(tmp_path: Path, taxonomy) -> None:
     )
     business_result = ValidatedClassification.model_validate(business_result_payload)
     output_path = tmp_path / "result.xlsx"
-
     export_results(
         output_path,
         dataset,
@@ -151,7 +150,6 @@ def test_exporter_creates_expected_sheets(tmp_path: Path, taxonomy) -> None:
         },
         taxonomy,
     )
-
     workbook = load_workbook(output_path, read_only=True)
     assert workbook.sheetnames == [
         "分类明细",
@@ -165,21 +163,22 @@ def test_exporter_creates_expected_sheets(tmp_path: Path, taxonomy) -> None:
     ]
     assert workbook["分类明细"].max_row == 3
     assert workbook["维度裁决"].max_row == 3
-
     business_review = pd.read_excel(output_path, sheet_name="人工复核", dtype=str)
     system_rerun = pd.read_excel(output_path, sheet_name="系统待重跑", dtype=str)
     semantic_review = pd.read_excel(output_path, sheet_name="语义核验", dtype=str)
     statistics = pd.read_excel(output_path, sheet_name="标签统计")
-
-    assert business_review["诊断编码"].tolist() == ["MODEL_RESULT_MISMATCH"]
+    assert business_review["诊断编码"].dropna().tolist() == ["MODEL_RESULT_MISMATCH"]
     assert statistics.loc[
         statistics["统计类型"] == "问题标签", ["标签编码", "退货记录数"]
     ].to_dict("records") == [{"标签编码": "FIT_TOO_SMALL", "退货记录数": 2}]
-    assert business_review["是否需要业务判断"].tolist() == ["是"]
-    assert business_review["分类键"].tolist() == ["APPAREL_TOO_SMALL too narrow"]
-    assert system_rerun["诊断编码"].tolist() == ["SECONDARY_MODEL_TIMEOUT"]
-    assert system_rerun["是否需要业务判断"].tolist() == ["否"]
-    assert system_rerun["分类键"].tolist() == ["APPAREL_TOO_SMALL too small"]
+    assert "是" in business_review["是否需要业务判断"].tolist()
+    assert set(business_review["分类键"]) == {"APPAREL_TOO_SMALL too narrow"}
+    assert set(business_review["处置状态"]) == {"MAPPED", "ANALYSIS_FAILURE"}
+    assert set(system_rerun["诊断编码"].dropna()) == {
+        "MODEL_RESULT_MISMATCH",
+        "SECONDARY_MODEL_TIMEOUT",
+    }
+    assert set(system_rerun["分类键"]) == {"APPAREL_TOO_SMALL too small"}
     assert {
         "MODEL_RESULT_MISMATCH",
         "SECONDARY_MODEL_TIMEOUT",
@@ -222,8 +221,79 @@ def test_exporter_marks_missing_category_as_excluded(tmp_path: Path, taxonomy) -
         mskus=frozenset({"SKU-2"}),
     )
     output_path = tmp_path / "excluded.xlsx"
-
     export_results(output_path, dataset, {}, taxonomy)
 
     detail = pd.read_excel(output_path, sheet_name="分类明细", dtype=str)
     assert detail.loc[0, "处理状态"] == "EXCLUDED_MISSING_CATEGORY"
+
+
+def test_exporter_routes_ambiguity_failure_and_nonblocking_results(
+    tmp_path: Path, taxonomy
+) -> None:
+    cases = {
+        "ambiguous": ("MAPPING_UNCERTAIN", []),
+        "no_tag": ("EXPECTED_ABSTENTION", []),
+        "configuration": ("EXPECTED_ABSTENTION", [{"code": "SECONDARY_MODEL_MISSING"}]),
+        "failed": ("EXPECTED_ABSTENTION", [{"code": "MODEL_RUN_TIMEOUT"}]),
+    }
+    results = {
+        key: ValidatedClassification.model_validate(
+            {
+                "classification_key": key,
+                "semantic_units": [],
+                "unknown_semantics": [
+                    {
+                        "opinion": "合成观点",
+                        "evidence": "Synthetic feedback",
+                        "reason": "合成验收",
+                        "disposition": disposition,
+                    }
+                ],
+                "problem_label_codes": [],
+                "positive_label_codes": [],
+                "primary_label_codes": [],
+                "status": "UNKNOWN_SEMANTIC",
+                "review_reasons": [],
+                "review_diagnostics": diagnostics,
+                "model_name": "synthetic",
+                "prompt_version": "test",
+                "taxonomy_version": taxonomy.version,
+            }
+        )
+        for key, (disposition, diagnostics) in cases.items()
+    }
+    records = pd.DataFrame(
+        [
+            {
+                "classification_key": key,
+                "source_row": index,
+                "return-date": "2026-01-01",
+                "order-id": f"SYNTHETIC-{index}",
+                "sku": "SYNTHETIC",
+                "asin": "SYNTHETIC",
+                "reason": "UNKNOWN",
+                "comment_raw": "Synthetic feedback",
+                "comment_normalized": "Synthetic feedback",
+                "has_text_evidence": True,
+                "category_a": "水鞋",
+                "category_b": "薄底水鞋",
+            }
+            for index, key in enumerate(cases, start=2)
+        ]
+    )
+    unique = records[["classification_key", "reason", "comment_normalized"]].assign(
+        record_count=1
+    )
+    dataset = ReturnDataset(
+        records=records, unique_comments=unique, mskus=frozenset({"SYNTHETIC"})
+    )
+    output = tmp_path / "review-routes.xlsx"
+    export_results(output, dataset, results, taxonomy)
+    business = pd.read_excel(output, sheet_name="人工复核")
+    rerun = pd.read_excel(output, sheet_name="系统待重跑")
+    semantic_review = pd.read_excel(output, sheet_name="语义核验")
+    assert set(business["分类键"]) == {"ambiguous"}
+    assert business["处置状态"].tolist() == ["TRUE_AMBIGUITY"]
+    assert set(rerun["分类键"]) == {"failed"}
+    assert "MODEL_RUN_TIMEOUT" in set(rerun["诊断编码"].dropna())
+    assert set(semantic_review["分类键"]) == set(cases)
