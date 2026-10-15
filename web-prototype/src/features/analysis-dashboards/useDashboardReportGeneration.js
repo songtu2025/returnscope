@@ -1,11 +1,6 @@
-import { useState } from "react";
-import { api } from "../../api";
+import { useRef, useState } from "react";
 import { dashboardApi } from "../../shared/api/dashboardApi";
-import {
-  insightModels,
-  preferredInsightEffort,
-  preferredInsightModel,
-} from "./insightModelOptions";
+import { loadInsightModelOptions, insightFormForOptions } from "./insightModelOptions";
 import { errorMessage } from "./dashboardRequestErrors";
 
 /** @typedef {import("./dashboardDetailContracts").InsightReport} InsightReport */
@@ -21,10 +16,11 @@ export function useDashboardReportGeneration({
 }) {
   const [generationOpen, setGenerationOpen] = useState(false);
   const [generationState, setGenerationState] = useState(
-    /** @returns {{loading: boolean, submitting: boolean, error: string, models: InsightModel[]}} */ () => ({
+    /** @returns {{loading: boolean, submitting: boolean, error: string, modelError: string, models: InsightModel[]}} */ () => ({
       loading: false,
       submitting: false,
       error: "",
+      modelError: "",
       models: [],
     }),
   );
@@ -32,36 +28,43 @@ export function useDashboardReportGeneration({
     modelId: "",
     effort: "high",
   });
+  const modelRequest = useRef(0);
+  const reloadGenerationModels = async () => {
+    const requestId = ++modelRequest.current;
+    setGenerationState((current) => ({ ...current, loading: true, modelError: "" }));
+    try {
+      const options = await loadInsightModelOptions();
+      if (requestId !== modelRequest.current) return;
+      setGenerationForm((current) => insightFormForOptions(current, options));
+      setGenerationState((current) => ({
+        ...current,
+        loading: false,
+        models: options.models,
+        modelError: "",
+      }));
+    } catch (error) {
+      if (requestId !== modelRequest.current) return;
+      setGenerationState((current) => ({
+        ...current,
+        loading: false,
+        modelError: errorMessage(error) || "无法读取可用模型",
+      }));
+    }
+  };
   const openReportGeneration = async () => {
+    setGenerationState((current) => ({ ...current, submitting: false, error: "" }));
     setGenerationOpen(true);
-    setGenerationState({ loading: true, submitting: false, error: "", models: [] });
-    const [configResult, preferenceResult] = await Promise.allSettled([
-      typeof api.configs === "function" ? api.configs() : Promise.resolve([]),
-      typeof api.modelPreference === "function"
-        ? api.modelPreference()
-        : Promise.resolve(null),
-    ]);
-    const configs = configResult.status === "fulfilled" ? configResult.value : [];
-    const preference =
-      preferenceResult.status === "fulfilled" ? preferenceResult.value : null;
-    /** @type {InsightModel[]} */
-    const models = insightModels(configs);
-    const modelId = preferredInsightModel(configs, models, preference);
-    const model = models.find((item) => item.id === modelId);
-    setGenerationForm({ modelId, effort: preferredInsightEffort(model) });
-    setGenerationState({
-      loading: false,
-      submitting: false,
-      error:
-        configResult.status === "rejected"
-          ? errorMessage(configResult.reason) || "无法读取可用模型"
-          : "",
-      models,
-    });
+    await reloadGenerationModels();
   };
   /** @param {import("react").FormEvent<HTMLFormElement>} event @param {{filters: Record<string, unknown>, plan_hash: string}} scope */
   const submitReportGeneration = async (event, scope) => {
     event.preventDefault();
+    if (
+      generationState.loading ||
+      generationState.modelError ||
+      !generationState.models.some((model) => model.id === generationForm.modelId)
+    )
+      return;
     setGenerationState((current) => ({ ...current, submitting: true, error: "" }));
     try {
       /** @type {InsightReport} */
@@ -97,6 +100,7 @@ export function useDashboardReportGeneration({
     generationForm,
     setGenerationForm,
     openReportGeneration,
+    reloadGenerationModels,
     submitReportGeneration,
   };
 }

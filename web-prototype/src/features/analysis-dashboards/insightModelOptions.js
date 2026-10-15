@@ -1,9 +1,11 @@
+import { api } from "../../api";
+
 /** @typedef {import("../../shared/api/systemSettingsContracts").ModelConnection} ModelConnection */
 /** @typedef {import("../../shared/api/systemSettingsContracts").ModelPreference} ModelPreference */
 /** @typedef {import("./analysisDashboardContracts").InsightModel} InsightModel */
 
 /** @param {ModelConnection[]} configs @returns {InsightModel[]} */
-export function insightModels(configs) {
+function insightModels(configs) {
   const output = /** @type {InsightModel[]} */ ([]);
   for (const connection of configs ?? []) {
     for (const model of connection.models ?? []) {
@@ -18,7 +20,7 @@ export function insightModels(configs) {
 }
 
 /** @param {ModelConnection[]} configs @param {InsightModel[]} models @param {ModelPreference | null} preference */
-export function preferredInsightModel(configs, models, preference) {
+function preferredInsightModel(configs, models, preference) {
   const preferred = models.find(
     (model) =>
       model.connection_id === preference?.connection_id &&
@@ -42,4 +44,37 @@ export function preferredInsightEffort(model) {
   if (efforts.includes("high")) return "high";
   if (efforts.includes("medium")) return "medium";
   return efforts[0] || "high";
+}
+
+/** 两个报告入口复用同一模型目录读取，偏好失败仍按已发布配置选择。 */
+export async function loadInsightModelOptions() {
+  const [configs, preference] = await Promise.allSettled([
+    api.configs(),
+    typeof api.modelPreference === "function"
+      ? api.modelPreference()
+      : Promise.resolve(null),
+  ]);
+  if (configs.status === "rejected") throw configs.reason;
+  const models = insightModels(configs.value);
+  return {
+    models,
+    preferredModelId: preferredInsightModel(
+      configs.value,
+      models,
+      preference.status === "fulfilled" ? preference.value : null,
+    ),
+  };
+}
+
+/** @param {import("./analysisDashboardContracts").InsightGenerationForm} current @param {{models: InsightModel[], preferredModelId: string}} options */
+export function insightFormForOptions(current, options) {
+  const model =
+    options.models.find((item) => item.id === current.modelId) ??
+    options.models.find((item) => item.id === options.preferredModelId);
+  return {
+    modelId: model?.id || "",
+    effort: model?.supported_efforts?.includes(current.effort)
+      ? current.effort
+      : preferredInsightEffort(model),
+  };
 }

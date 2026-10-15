@@ -16,6 +16,8 @@ import { analysisContextTerms } from "./analysisContextPresentation";
  * @property {boolean} loading
  * @property {boolean} submitting
  * @property {string} error
+ * @property {string} [modelError]
+ * @property {() => void | Promise<void>} [onRetryModels]
  * @property {boolean} ready
  * @property {string} scopeLabel
  * @property {number} includedRecords
@@ -37,6 +39,8 @@ export function InsightGenerationModal({
   loading,
   submitting,
   error,
+  modelError = "",
+  onRetryModels,
   ready,
   scopeLabel,
   includedRecords,
@@ -51,7 +55,12 @@ export function InsightGenerationModal({
   const selectedModel = models.find((model) => model.id === form.modelId);
   const supportedEfforts = selectedModel?.supported_efforts ?? [];
   const canSubmit =
-    !loading && !submitting && ready && includedRecords > 0 && Boolean(form.modelId);
+    !loading &&
+    !submitting &&
+    !modelError &&
+    ready &&
+    includedRecords > 0 &&
+    Boolean(selectedModel);
 
   /** @param {string} modelId */
   const changeModel = (modelId) => {
@@ -72,124 +81,153 @@ export function InsightGenerationModal({
         if (!submitting) onClose();
       }}
     >
-      {loading ? (
-        <InlineLoading label="正在核对数据范围与可用模型…" />
-      ) : (
-        <form className="insight-generation-form" onSubmit={onSubmit}>
-          {scopeControl}
-          <div className="insight-generation-fields">
-            <span className="insight-field-label">数据范围</span>
-            <div className="insight-field-value">
-              <b>{scopeLabel}</b>
-              <small>
-                已纳入 {includedRecords.toLocaleString()} 条{terms.includedRecordLabel}
-                {unitCount ? ` · ${unitCount.toLocaleString()} 个分类单元` : ""}
-              </small>
-            </div>
+      <form className="insight-generation-form" onSubmit={onSubmit}>
+        {scopeControl}
+        <div className="insight-generation-fields">
+          <span className="insight-field-label">数据范围</span>
+          <div className="insight-field-value">
+            <b>{scopeLabel}</b>
+            <small>
+              已纳入 {includedRecords.toLocaleString()} 条{terms.includedRecordLabel}
+              {unitCount ? ` · ${unitCount.toLocaleString()} 个分类单元` : ""}
+            </small>
+          </div>
 
-            <span className="insight-field-label">记录状态</span>
-            <div className="insight-field-value">
-              <b>
-                待处理 {pendingRecords.toLocaleString()} 条（含待复核和不可用）、已忽略{" "}
-                {excludedRecords.toLocaleString()} 条
-              </b>
-              <small>
-                {scopeStatuses.length === 1 && scopeStatuses[0] === "ready"
-                  ? "本次仅纳入可用记录"
-                  : "按你选择的记录状态纳入；记录状态保持原样"}
-              </small>
-            </div>
+          <span className="insight-field-label">记录状态</span>
+          <div className="insight-field-value">
+            <b>
+              待处理 {pendingRecords.toLocaleString()} 条（含待复核和不可用）、已忽略{" "}
+              {excludedRecords.toLocaleString()} 条
+            </b>
+            <small>
+              {scopeStatuses.length === 1 && scopeStatuses[0] === "ready"
+                ? "本次仅纳入可用记录"
+                : "按你选择的记录状态纳入；记录状态保持原样"}
+            </small>
+          </div>
 
-            <label className="insight-field-label" htmlFor="insight-model">
-              模型
-            </label>
-            <div className="insight-field-value insight-model-field">
-              <select
-                id="insight-model"
-                value={form.modelId}
-                onChange={(event) => changeModel(event.target.value)}
-              >
-                {!models.length && <option value="">暂无可用模型</option>}
-                {models.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.display_name || model.model_key}
-                    {model.connection_name ? ` · ${model.connection_name}` : ""}
-                  </option>
-                ))}
-              </select>
-              <small>
-                {models.length
-                  ? "只展示已启用并验证通过的模型"
-                  : "请联系管理员配置并验证模型"}
-              </small>
-            </div>
-
-            <span className="insight-field-label">推理强度</span>
-            <div className="insight-field-value">
-              <div className="insight-effort-control" aria-label="推理强度">
-                {[
-                  ["low", "低"],
-                  ["medium", "中"],
-                  ["high", "高"],
-                ].map(([value, label]) => (
+          <label className="insight-field-label" htmlFor="insight-model">
+            模型
+          </label>
+          <div className="insight-field-value insight-model-field">
+            <select
+              id="insight-model"
+              value={form.modelId}
+              disabled={loading || submitting || Boolean(modelError)}
+              onChange={(event) => changeModel(event.target.value)}
+            >
+              {!models.length && (
+                <option value="">
+                  {loading
+                    ? "正在读取模型…"
+                    : modelError
+                      ? "模型读取失败"
+                      : "暂无可用模型"}
+                </option>
+              )}
+              {models.map((model) => (
+                <option key={model.id} value={model.id}>
+                  {model.display_name || model.model_key}
+                  {model.connection_name ? ` · ${model.connection_name}` : ""}
+                </option>
+              ))}
+            </select>
+            {loading && <InlineLoading label="正在读取可用模型…" compact />}
+            {modelError ? (
+              <div className="insight-generation-error" role="alert">
+                <span>模型读取失败 · {modelError}</span>
+                {onRetryModels && (
                   <button
-                    key={value}
                     type="button"
-                    aria-pressed={form.effort === value}
-                    disabled={!supportedEfforts.includes(value)}
-                    onClick={() => onChange({ ...form, effort: value })}
+                    className="text-button"
+                    disabled={loading || submitting}
+                    onClick={onRetryModels}
                   >
-                    {label}
+                    重新读取模型
                   </button>
-                ))}
+                )}
               </div>
-              <small>报告默认使用高强度；实际模型和用量会随报告版本保存</small>
-            </div>
-
-            <span className="insight-field-label">运行方式</span>
-            <div className="insight-field-value insight-inline-value">
-              <b>后台生成，可离开当前页面</b>
-              <small>返回报告页即可查看最新状态</small>
-            </div>
+            ) : (
+              !loading && (
+                <small>
+                  {models.length
+                    ? "只展示已启用并验证通过的模型"
+                    : "请联系管理员配置并验证模型"}
+                </small>
+              )
+            )}
           </div>
 
-          {error && (
-            <div className="insight-generation-error" role="alert">
-              <WarningCircle size={17} />
-              <span>{error}</span>
+          <span className="insight-field-label">推理强度</span>
+          <div className="insight-field-value">
+            <div className="insight-effort-control" aria-label="推理强度">
+              {[
+                ["low", "低"],
+                ["medium", "中"],
+                ["high", "高"],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={form.effort === value}
+                  disabled={
+                    loading ||
+                    submitting ||
+                    Boolean(modelError) ||
+                    !supportedEfforts.includes(value)
+                  }
+                  onClick={() => onChange({ ...form, effort: value })}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
-          )}
+            <small>报告默认使用高强度；实际模型和用量会随报告版本保存</small>
+          </div>
 
-          {!error && includedRecords <= 0 && (
-            <div className="insight-generation-error" role="alert">
-              <WarningCircle size={17} />
-              <span>当前所选范围没有记录，请调整统计范围。</span>
-            </div>
-          )}
+          <span className="insight-field-label">运行方式</span>
+          <div className="insight-field-value insight-inline-value">
+            <b>后台生成，可离开当前页面</b>
+            <small>返回报告页即可查看最新状态</small>
+          </div>
+        </div>
 
-          <div className="insight-generation-note" role="status">
+        {error && (
+          <div className="insight-generation-error" role="alert">
             <WarningCircle size={17} />
-            <span>报告绑定当前数据版本；后续数据变化不会改写历史报告。</span>
+            <span>{error}</span>
           </div>
+        )}
 
-          <footer className="insight-generation-actions">
-            <div />
-            <div>
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={submitting}
-                onClick={onClose}
-              >
-                取消
-              </button>
-              <button type="submit" className="primary-button" disabled={!canSubmit}>
-                {submitting ? "正在提交…" : "开始生成"}
-              </button>
-            </div>
-          </footer>
-        </form>
-      )}
+        {!error && includedRecords <= 0 && (
+          <div className="insight-generation-error" role="alert">
+            <WarningCircle size={17} />
+            <span>当前所选范围没有记录，请调整统计范围。</span>
+          </div>
+        )}
+
+        <div className="insight-generation-note" role="status">
+          <WarningCircle size={17} />
+          <span>报告绑定当前数据版本；后续数据变化不会改写历史报告。</span>
+        </div>
+
+        <footer className="insight-generation-actions">
+          <div />
+          <div>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={submitting}
+              onClick={onClose}
+            >
+              取消
+            </button>
+            <button type="submit" className="primary-button" disabled={!canSubmit}>
+              {submitting ? "正在提交…" : "开始生成"}
+            </button>
+          </div>
+        </footer>
+      </form>
     </Modal>
   );
 }

@@ -5,7 +5,7 @@ import { dashboardApi } from "../../shared/api/dashboardApi";
 import { DashboardQualityScope } from "./DashboardQualityScope";
 import { errorMessage } from "./dashboardRequestErrors";
 
-/** @param {Pick<ReturnType<typeof import("./useDashboardReportActions").useDashboardReportActions>, "generationForm" | "setGenerationForm" | "setGenerationOpen" | "submitReportGeneration" | "generationState"> & {dashboard:import("./analysisDashboardContracts").Dashboard,selectedVersion:import("./analysisDashboardContracts").DashboardVersion|null,analysisContext:ReturnType<typeof import("./analysisContextPresentation").dashboardAnalysisContext>}} props */
+/** @param {Pick<ReturnType<typeof import("./useDashboardReportActions").useDashboardReportActions>, "generationForm" | "setGenerationForm" | "setGenerationOpen" | "submitReportGeneration" | "generationState" | "reloadGenerationModels"> & {dashboard:import("./analysisDashboardContracts").Dashboard,selectedVersion:import("./analysisDashboardContracts").DashboardVersion|null,analysisContext:ReturnType<typeof import("./analysisContextPresentation").dashboardAnalysisContext>}} props */
 export function DashboardReportGeneration({
   dashboard,
   selectedVersion,
@@ -14,6 +14,7 @@ export function DashboardReportGeneration({
   setGenerationOpen,
   submitReportGeneration,
   generationState,
+  reloadGenerationModels,
   analysisContext,
 }) {
   const [statuses, setStatuses] = useState(["ready"]);
@@ -66,6 +67,8 @@ export function DashboardReportGeneration({
           });
       }}
       models={generationState.models}
+      modelError={generationState.modelError}
+      onRetryModels={reloadGenerationModels}
       loading={generationState.loading}
       submitting={generationState.submitting}
       error={

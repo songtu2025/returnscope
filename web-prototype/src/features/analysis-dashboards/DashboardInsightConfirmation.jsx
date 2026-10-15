@@ -10,6 +10,7 @@ export function DashboardInsightConfirmation(context) {
     setInsightForm,
     submitInsight,
     insightState,
+    reloadInsightModels,
     state,
     currentSources,
     summary,
@@ -32,6 +33,8 @@ export function DashboardInsightConfirmation(context) {
       }}
       onSubmit={submitInsight}
       models={insightState.models}
+      modelError={insightState.modelError}
+      onRetryModels={reloadInsightModels}
       loading={insightState.loading}
       submitting={insightState.submitting}
       error={blockers[0]?.message || insightState.error}

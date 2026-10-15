@@ -245,3 +245,11 @@
 .dashboard-confirm-main .dashboard-source-mapping .dashboard-source-head {
   font-size: 12px;
 }
+.insight-model-field > .insight-generation-error {
+  flex-wrap: wrap;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.insight-model-field > .insight-generation-error .text-button {
+  min-height: 32px;
+}

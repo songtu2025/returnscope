@@ -48,6 +48,7 @@ export function DashboardDetail(props) {
     generationForm,
     setGenerationForm,
     openReportGeneration,
+    reloadGenerationModels,
     submitReportGeneration,
     retryReport,
     cancelReport,
@@ -228,6 +229,7 @@ export function DashboardDetail(props) {
           setGenerationOpen={setGenerationOpen}
           submitReportGeneration={submitReportGeneration}
           generationState={generationState}
+          reloadGenerationModels={reloadGenerationModels}
           analysisContext={analysisContext}
         />
       )}

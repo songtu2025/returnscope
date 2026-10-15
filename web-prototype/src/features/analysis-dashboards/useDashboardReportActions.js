@@ -46,6 +46,7 @@ export function useDashboardReportActions({
     generationForm,
     setGenerationForm,
     openReportGeneration,
+    reloadGenerationModels,
     submitReportGeneration,
   } = useDashboardReportGeneration({ route, updateRoute, notify, setReports });
   const retryReport = async () => {
@@ -71,6 +72,7 @@ export function useDashboardReportActions({
     generationForm,
     setGenerationForm,
     openReportGeneration,
+    reloadGenerationModels,
     submitReportGeneration,
     retryReport,
     cancelReport,

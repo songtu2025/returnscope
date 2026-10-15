@@ -1,16 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { api } from "../../api";
 import { navigateHash } from "../../app/hashRouter";
 import { dashboardApi } from "../../shared/api/dashboardApi";
 import {
   clearDashboardSelection,
+  readDashboardSelection,
   updateDashboardSelection,
 } from "./dashboardSelectionStorage";
-import {
-  insightModels,
-  preferredInsightEffort,
-  preferredInsightModel,
-} from "./insightModelOptions";
+import { loadInsightModelOptions, insightFormForOptions } from "./insightModelOptions";
 import { errorMessage, errorStatus } from "./dashboardRequestErrors";
 
 /** @typedef {import("./dashboardCreateContracts").DashboardCreateContext} DashboardCreateContext */
@@ -33,55 +29,58 @@ export function useDashboardInsightCreation(context) {
     () => selection?.insight_form ?? { modelId: "", effort: "high" },
   );
   const [insightState, setInsightState] = useState(
-    /** @returns {{loading: boolean, submitting: boolean, error: string, models: InsightModel[]}} */ () => ({
+    /** @returns {{loading: boolean, submitting: boolean, error: string, modelError: string, models: InsightModel[]}} */ () => ({
       loading: true,
       submitting: false,
       error: "",
+      modelError: "",
       models: [],
     }),
   );
+  const [modelAttempt, setModelAttempt] = useState(0);
   const submissionRef = useRef(false);
-  const savedForm = selection?.insight_form;
+  const formTokenRef = useRef(route.selectionToken);
 
   useEffect(() => {
     if (!isInsightCreation) return undefined;
+    const restoredForm =
+      formTokenRef.current !== route.selectionToken
+        ? (readDashboardSelection(userId, route.selectionToken)?.insight_form ?? {
+            modelId: "",
+            effort: "high",
+          })
+        : null;
+    formTokenRef.current = route.selectionToken;
+    if (restoredForm) setFormState(restoredForm);
     let cancelled = false;
     const loadModels = async () => {
-      const [configResult, preferenceResult] = await Promise.allSettled([
-        api.configs(),
-        typeof api.modelPreference === "function"
-          ? api.modelPreference()
-          : Promise.resolve(null),
-      ]);
-      if (cancelled) return;
-      const configs = configResult.status === "fulfilled" ? configResult.value : [];
-      const preference =
-        preferenceResult.status === "fulfilled" ? preferenceResult.value : null;
-      const models = insightModels(configs);
-      const savedModel = models.find((model) => model.id === savedForm?.modelId);
-      const modelId =
-        savedModel?.id || preferredInsightModel(configs, models, preference);
-      const model = models.find((item) => item.id === modelId);
-      setFormState({
-        modelId,
-        effort:
-          savedForm && model?.supported_efforts?.includes(savedForm.effort)
-            ? savedForm.effort
-            : preferredInsightEffort(model),
-      });
-      setInsightState({
-        loading: false,
-        submitting: false,
-        models,
-        error:
-          configResult.status === "rejected" ? errorMessage(configResult.reason) : "",
-      });
+      setInsightState((current) => ({ ...current, loading: true, modelError: "" }));
+      try {
+        const options = await loadInsightModelOptions();
+        if (cancelled) return;
+        setFormState((current) =>
+          insightFormForOptions(restoredForm ?? current, options),
+        );
+        setInsightState((current) => ({
+          ...current,
+          loading: false,
+          models: options.models,
+          modelError: "",
+        }));
+      } catch (error) {
+        if (!cancelled)
+          setInsightState((current) => ({
+            ...current,
+            loading: false,
+            modelError: errorMessage(error),
+          }));
+      }
     };
     loadModels();
     return () => {
       cancelled = true;
     };
-  }, [isInsightCreation, savedForm]);
+  }, [isInsightCreation, modelAttempt, route.selectionToken, userId]);
 
   /** @param {InsightGenerationForm} next */
   const setInsightForm = (next) => {
@@ -97,7 +96,9 @@ export function useDashboardInsightCreation(context) {
     event.preventDefault();
     if (
       submissionRef.current ||
-      !insightForm.modelId ||
+      insightState.loading ||
+      Boolean(insightState.modelError) ||
+      !insightState.models.some((model) => model.id === insightForm.modelId) ||
       state.loading ||
       state.error ||
       state.plan?.ready !== true
@@ -137,5 +138,11 @@ export function useDashboardInsightCreation(context) {
       submissionRef.current = false;
     }
   };
-  return { insightForm, setInsightForm, insightState, submitInsight };
+  return {
+    insightForm,
+    setInsightForm,
+    insightState,
+    submitInsight,
+    reloadInsightModels: () => setModelAttempt((value) => value + 1),
+  };
 }
