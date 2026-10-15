@@ -106,6 +106,18 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.dashboard-list-row .dashboard-record-count {
+  display: grid;
+  gap: 4px;
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.dashboard-list-row .dashboard-record-count > small {
+  overflow: visible;
+  white-space: normal;
+}
 .dashboard-list-row .dashboard-status.active,
 .dashboard-status {
   display: inline-flex;

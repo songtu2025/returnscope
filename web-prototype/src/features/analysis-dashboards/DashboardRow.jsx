@@ -24,9 +24,11 @@ export function DashboardRow({ dashboard, onOpen }) {
       <span role="cell">
         {Number(summary.listing_count || 0).toLocaleString()} 个 Listing
       </span>
-      <span role="cell">
-        {Number(summary.comment_count ?? summary.record_count ?? 0).toLocaleString()}{" "}
-        {summary.counting_basis === "feedback_group" ? "个反馈组" : "条"}
+      <span role="cell" className="dashboard-record-count">
+        <b>
+          {Number(summary.comment_count ?? summary.record_count ?? 0).toLocaleString()}
+        </b>{" "}
+        <small>{summary.counting_basis === "feedback_group" ? "个反馈组" : "条"}</small>
       </span>
       <span role="cell">
         {formatTime(dashboard.updated_at || dashboard.created_at)}

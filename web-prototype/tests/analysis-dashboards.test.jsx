@@ -3495,3 +3495,22 @@ test("已有看板的报告范围默认可用，变更后使用重新核对的�
   });
   expect(dashboardApiMock.createAnalysisDashboardVersion).not.toHaveBeenCalled();
 });
+
+test.each([
+  [{ counting_basis: "feedback_group", comment_count: 13719 }, "13,719", "个反馈组"],
+  [{ counting_basis: "source_record", record_count: 13886 }, "13,886", "条"],
+  [{ record_count: 13886 }, "13,886", "条"],
+])("看板列表数量与单位分行并保留实际统计粒度 %j", async (summary, count, unit) => {
+  const { DashboardRow } =
+    await import("../src/features/analysis-dashboards/DashboardRow");
+  render(
+    <DashboardRow
+      dashboard={{ id: "synthetic", name: "合成看板", summary }}
+      onOpen={vi.fn()}
+    />,
+  );
+  const cell = screen.getAllByRole("cell")[4];
+  expect(within(cell).getByText(count).tagName).toBe("B");
+  expect(within(cell).getByText(unit).tagName).toBe("SMALL");
+  expect(cell).toHaveAccessibleName(`${count} ${unit}`);
+});
