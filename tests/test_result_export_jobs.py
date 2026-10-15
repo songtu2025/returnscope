@@ -155,3 +155,37 @@ def test_permanent_result_deletion_blocks_cached_download(context, exports):
 
     with pytest.raises(ClassificationResultNotFound):
         exports.file(job["id"])
+
+
+@pytest.mark.parametrize("generation_fails", [False, True])
+def test_generation_crossing_expiration_finishes_and_can_retry(
+    context, exports, monkeypatch, generation_fails
+):
+    from web_backend.classification_results import export_jobs
+
+    clock = [2_000_000_000.0]
+    monkeypatch.setattr(export_jobs.time, "time", lambda: clock[0])
+    versions = [context.version["version_id"]]
+    job = exports.create(versions)
+    assert exports.claim_next() == job["id"]
+    original = exports.results.snapshot_workbook
+
+    def generate(snapshot):
+        clock[0] = job["expires_at"] + 1
+        if generation_fails:
+            raise ValueError("合成生成失败")
+        return original(snapshot)
+
+    monkeypatch.setattr(exports.results, "snapshot_workbook", generate)
+    exports.run(job["id"])
+    with pytest.raises(FileNotFoundError, match="过期"):
+        exports.file(job["id"])
+    for suffix in (".json", ".snapshot.gz", ".xlsx", ".xlsx.tmp"):
+        assert not exports._path(job["id"], suffix).exists()
+    monkeypatch.setattr(exports.results, "snapshot_workbook", original)
+    retry = exports.create(versions)
+    assert retry["status"] == "queued"
+    assert retry["expires_at"] > clock[0]
+    assert exports.claim_next() == retry["id"]
+    exports.run(retry["id"])
+    assert exports.get(retry["id"])["status"] == "ready"

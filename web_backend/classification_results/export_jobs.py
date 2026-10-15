@@ -37,12 +37,12 @@ class ResultExportService:
         temporary.write_text(json.dumps(job, ensure_ascii=False), encoding="utf-8")
         temporary.replace(path)
 
-    def _load(self, job_id: str) -> dict[str, Any]:
+    def _load(self, job_id: str, *, allow_expired: bool = False) -> dict[str, Any]:
         path = self._path(job_id)
         if not path.is_file():
             raise FileNotFoundError("导出任务不存在或已过期，请重新下载")
         job = json.loads(path.read_text(encoding="utf-8"))
-        if job["expires_at"] <= time.time():
+        if not allow_expired and job["expires_at"] <= time.time():
             raise FileNotFoundError("导出文件已过期，请重新下载")
         return job
 
@@ -153,6 +153,8 @@ class ResultExportService:
 
     def _finish(self, job_id: str, status: str, error: str) -> None:
         with self._lock:
-            job = self._load(job_id)
+            # 过期只限制下载；正在执行的任务仍须结束，随后清除过期产物。
+            job = self._load(job_id, allow_expired=True)
             job.update(status=status, error=error)
             self._save(job)
+            self._cleanup()
