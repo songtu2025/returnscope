@@ -206,7 +206,7 @@ function DashboardListTable({
   return (
     <>
       <div
-        className="dashboard-list-table"
+        className={`dashboard-list-table${dashboardData.items.some((dashboard) => dashboard.deleted_at) ? " has-deleted" : ""}`}
         role="table"
         aria-label="分析看板列表"
         aria-busy={isValidating}

@@ -1,8 +1,9 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { cleanup, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithServerState as render } from "./renderWithServerState";
 import { DeliveryLifecycleControls } from "../src/components/DeliveryLifecycleControls";
+import { DashboardRow } from "../src/features/analysis-dashboards/DashboardRow";
 import { ReportStatus } from "../src/features/analysis-dashboards/AiInsightReportCommon";
 import { changeDeliveryLifecycle } from "../src/shared/api/deliveryApi";
 
@@ -86,4 +87,67 @@ test("运行中报告提供取消入口，取消后显示终态而非失败", as
     screen.queryByRole("button", { name: "取消本次生成" }),
   ).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument();
+});
+
+test("当前看板操作保留查看和更多，查看只打开当前对象", async () => {
+  const open = vi.fn();
+  render(
+    <DashboardRow
+      dashboard={{ id: "dashboard-synthetic", name: "合成看板" }}
+      onOpen={open}
+    />,
+  );
+  const actions = screen.getAllByRole("cell").at(-1);
+  expect(within(actions).getByRole("button", { name: "查看" })).toBeVisible();
+  expect(within(actions).getByLabelText("更多分析看板操作：合成看板")).toBeVisible();
+  expect(
+    within(actions).queryByRole("button", { name: "恢复分析看板" }),
+  ).not.toBeInTheDocument();
+  await userEvent.click(within(actions).getByRole("button", { name: "查看" }));
+  expect(open).toHaveBeenCalledOnce();
+  expect(changeDeliveryLifecycle).not.toHaveBeenCalled();
+});
+
+test("已删除看板查看与恢复独立，恢复中防止重复，失败后可重试", async () => {
+  let rejectRestore;
+  changeDeliveryLifecycle.mockReturnValueOnce(
+    new Promise((_resolve, reject) => {
+      rejectRestore = reject;
+    }),
+  );
+  const open = vi.fn();
+  render(
+    <DashboardRow
+      dashboard={{
+        id: "dashboard-synthetic",
+        name: "合成看板",
+        deleted_at: "2026-10-15",
+        revision: 4,
+      }}
+      onOpen={open}
+    />,
+  );
+  const actions = screen.getAllByRole("cell").at(-1);
+  expect(
+    within(actions).queryByLabelText("更多分析看板操作：合成看板"),
+  ).not.toBeInTheDocument();
+  await userEvent.click(within(actions).getByRole("button", { name: "恢复分析看板" }));
+  expect(within(actions).getByRole("button", { name: "正在恢复…" })).toBeDisabled();
+  await userEvent.click(within(actions).getByRole("button", { name: "查看" }));
+  expect(open).toHaveBeenCalledOnce();
+  await act(async () => rejectRestore(new Error("合成恢复失败，请重试")));
+  expect(within(actions).getByRole("alert")).toHaveTextContent("合成恢复失败，请重试");
+  expect(within(actions).getByRole("button", { name: "恢复分析看板" })).toBeEnabled();
+  changeDeliveryLifecycle.mockResolvedValueOnce({ ok: true });
+  await userEvent.click(within(actions).getByRole("button", { name: "恢复分析看板" }));
+  await waitFor(() =>
+    expect(within(actions).queryByRole("alert")).not.toBeInTheDocument(),
+  );
+  expect(changeDeliveryLifecycle).toHaveBeenCalledTimes(2);
+  expect(changeDeliveryLifecycle).toHaveBeenLastCalledWith(
+    "dashboard",
+    "dashboard-synthetic",
+    "restore",
+    4,
+  );
 });

@@ -70,7 +70,10 @@
 .dashboard-list-head,
 .dashboard-list-row {
   display: grid;
-  grid-template-columns: 72px minmax(160px, 1.35fr) 72px 104px 88px 120px 94px 140px;
+  grid-template-columns: 72px minmax(160px, 1.35fr) 72px 104px 88px 120px 94px var(
+      --dashboard-action-width,
+      140px
+    );
   align-items: center;
   gap: 10px;
   min-width: 0;
@@ -223,13 +226,32 @@
   min-height: 260px;
 }
 
+.dashboard-list-table.has-deleted {
+  --dashboard-action-width: 200px;
+}
+
 .dashboard-list-row .dashboard-row-actions {
-  display: flex;
-  justify-content: flex-end;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  justify-content: end;
   align-items: center;
-  flex-wrap: wrap;
   gap: 8px;
 }
-.dashboard-row-actions button {
+.dashboard-row-actions > button,
+.dashboard-row-actions .task-more-actions > summary {
+  height: 36px;
+  min-height: 36px;
+  justify-self: end;
   white-space: nowrap;
+}
+.dashboard-row-actions .task-more-actions > summary {
+  width: 36px;
+}
+.dashboard-row-actions > p[role="alert"] {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin: 0;
+  color: var(--red);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
