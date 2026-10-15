@@ -59,9 +59,8 @@ export function useResultSelection({ route, updateRoute, userId }) {
     );
   };
 
-  const clearSelection = (exit = false) => {
+  const clearSelection = () => {
     updateSelectedResults(() => []);
-    if (exit) updateRoute({ selectionToken: "" });
   };
   /** @param {string} id */
   const removeSelection = (id) =>

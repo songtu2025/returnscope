@@ -37,7 +37,10 @@ vi.mock("../src/shared/api/dashboardApi", () => ({
 import { ClassificationResultsPage } from "../src/pages/ClassificationResultsPage";
 import { AnalysisDashboardPage } from "../src/features/analysis-dashboards/AnalysisDashboardPage";
 import { useHashRoute } from "../src/app/hashRouter";
-import { readDashboardSelection } from "../src/features/analysis-dashboards/dashboardSelectionStorage";
+import {
+  createDashboardSelection,
+  readDashboardSelection,
+} from "../src/features/analysis-dashboards/dashboardSelectionStorage";
 import { ResultVersionReviewPanel } from "../src/features/review-batches/ResultVersionReviewPanel";
 import { ResultVersionHistory } from "../src/features/review-batches/ResultVersionHistory";
 import { renderWithServerState as render } from "./renderWithServerState";
@@ -622,7 +625,7 @@ test("看板选择允许需复核版本并明确按可用范围统计", async ()
     page: 1,
     page_size: 20,
   });
-  render(<ClassificationResultsPage notify={vi.fn()} userId="user-1" />);
+  render(<ResultCreationHarness />);
 
   expect(await screen.findByRole("button", { name: "新建分析看板" })).toBeDisabled();
   await userEvent.click(
@@ -635,7 +638,14 @@ test("看板选择允许需复核版本并明确按可用范围统计", async ()
   });
   expect(blockedCheckbox).toBeEnabled();
   expect(screen.queryByText("分类结果不可用于看板")).not.toBeInTheDocument();
-  expect(screen.getByText(/统计范围可在确认时调整/)).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "新建分析看板" }));
+  const scope = await screen.findByRole("group", { name: "统计记录范围" });
+  expect(within(scope).getByRole("checkbox", { name: "可用" })).toBeChecked();
+  expect(
+    within(scope)
+      .getAllByRole("checkbox")
+      .filter((item) => item.checked),
+  ).toHaveLength(1);
 });
 
 test("从分类结果快速确认并创建 AI 洞察报告任务", async () => {
@@ -830,9 +840,88 @@ test("AI 洞察处理版本冲突后仅提交选定版本，失败可重试", as
   );
 });
 
+test.each(["empty", "missing"])(
+  "仅保留%s选择令牌时不展示当前选择摘要",
+  async (kind) => {
+    const token =
+      kind === "empty"
+        ? createDashboardSelection("user-1", { dashboard_form: { name: "保留草稿" } })
+        : "missing-token";
+    window.location.hash = `#classification-results?selection_token=${token}`;
+    render(<ResultCreationHarness />);
+    await screen.findByRole("checkbox", { name: "选择 SR001 结果 v1" });
+    expect(
+      screen.queryByRole("complementary", { name: "看板数据选择" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("当前勾选结果可用于分析看板或 AI 洞察"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "取消选择", exact: true }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "新建分析看板" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "生成 AI 洞察" })).toBeDisabled();
+    expect(window.location.hash).toContain(`selection_token=${token}`);
+  },
+);
+
+test.each(["checkbox", "remove", "clear"])(
+  "通过%s取消最后一项后无摘要残留且保留创建草稿",
+  async (method) => {
+    const user = userEvent.setup();
+    const token = createDashboardSelection("user-1", {
+      dashboard_form: { name: "每周复盘草稿" },
+      insight_form: { modelId: "model-1", effort: "medium" },
+    });
+    window.location.hash = `#classification-results?selection_token=${token}`;
+    render(<ResultCreationHarness />);
+    const checkbox = await screen.findByRole("checkbox", {
+      name: "选择 SR001 结果 v1",
+    });
+    await user.click(checkbox);
+    expect(screen.getAllByRole("complementary", { name: "看板数据选择" })).toHaveLength(
+      1,
+    );
+    expect(
+      screen.queryByText("当前勾选结果可用于分析看板或 AI 洞察"),
+    ).not.toBeInTheDocument();
+    if (method === "checkbox") await user.click(checkbox);
+    else if (method === "clear")
+      await user.click(screen.getByRole("button", { name: "清空" }));
+    else {
+      await user.click(screen.getByText("查看已选结果"));
+      await user.click(
+        screen.getByRole("button", { name: "取消选择结果 classification-version-1" }),
+      );
+    }
+    expect(
+      screen.queryByRole("complementary", { name: "看板数据选择" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("当前勾选结果可用于分析看板或 AI 洞察"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "新建分析看板" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "生成 AI 洞察" })).toBeDisabled();
+    expect(readDashboardSelection("user-1", token)).toMatchObject({
+      selected: [],
+      dashboard_form: { name: "每周复盘草稿" },
+      insight_form: { modelId: "model-1", effort: "medium" },
+    });
+    await user.click(checkbox);
+    expect(screen.getByText("已选 1 个结果版本")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "新建分析看板" }));
+    expect(await screen.findByLabelText("看板名称")).toHaveValue("每周复盘草稿");
+    await user.click(screen.getByRole("button", { name: /返回选择分类结果/ }));
+    await user.click(await screen.findByRole("button", { name: "生成 AI 洞察" }));
+    const dialog = await screen.findByRole("dialog", { name: "生成 AI 洞察报告" });
+    expect(await within(dialog).findByRole("button", { name: "中" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  },
+);
+
 test("旧看板选择会话恢复为当前创建流程，清空后禁用创建", async () => {
-  const { createDashboardSelection } =
-    await import("../src/features/analysis-dashboards/dashboardSelectionStorage");
   const token = createDashboardSelection("user-1", {
     target_dashboard_id: "existing-dashboard",
     expected_revision: 3,

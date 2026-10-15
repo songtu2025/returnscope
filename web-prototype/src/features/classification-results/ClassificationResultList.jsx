@@ -50,18 +50,6 @@ export function ClassificationResultList(props) {
         }
       />
 
-      {route.selectionToken && (
-        <div className="dashboard-selection-notice" role="status">
-          <div>
-            <b>当前勾选结果可用于分析看板或 AI 洞察</b>
-            <span>默认仅纳入可用记录，统计范围可在确认时调整。</span>
-          </div>
-          <button className="text-button" onClick={() => clearSelection(true)}>
-            取消选择
-          </button>
-        </div>
-      )}
-
       <ResultPoolFilters {...context} />
       <div className="result-detail-tabs" role="group" aria-label="分类结果状态">
         <button
