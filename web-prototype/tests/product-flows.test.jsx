@@ -497,10 +497,9 @@ describe("商品页面和旧任务草稿的恢复", () => {
         fireEvent.click(within(dialog).getByRole("button", { name: "读取最新资料" })),
       );
       expect(within(dialog).getByText("最新产品名称")).toBeVisible();
+      fireEvent.click(within(dialog).getByRole("radio", { name: "我的输入" }));
       await act(async () =>
-        fireEvent.click(
-          within(dialog).getByRole("button", { name: "已核对，保留我的修改" }),
-        ),
+        fireEvent.click(within(dialog).getByRole("button", { name: "应用核对结果" })),
       );
       expect(name).toHaveValue("我的产品输入");
       expect(

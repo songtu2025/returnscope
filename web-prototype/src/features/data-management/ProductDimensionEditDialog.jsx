@@ -142,6 +142,11 @@ export function ProductDimensionEditDialog({
   discard,
   loadLatest,
   acceptLatest,
+  original,
+  conflictFields,
+  unresolved,
+  resolutions,
+  resolveField,
 }) {
   return (
     <Modal title={`编辑产品信息 · ${editing.MSKU}`} onClose={onClose}>
@@ -169,8 +174,10 @@ export function ProductDimensionEditDialog({
               <thead>
                 <tr>
                   <th>字段</th>
+                  <th>原始资料</th>
                   <th>最新资料</th>
                   <th>我的输入</th>
+                  <th>采用值</th>
                 </tr>
               </thead>
               <tbody>
@@ -179,14 +186,51 @@ export function ProductDimensionEditDialog({
                 ).map((key) => (
                   <tr key={key}>
                     <th>{key}</th>
+                    <td>{String(original?.[key] ?? "--")}</td>
                     <td>{String(latest.row[key] ?? "--")}</td>
                     <td>{String(editing[key] ?? "--")}</td>
+                    <td>
+                      {conflictFields.includes(key) ? (
+                        <fieldset className="product-conflict-choice" disabled={saving}>
+                          <legend>{key}冲突</legend>
+                          {[
+                            { value: "mine", label: "我的输入" },
+                            { value: "latest", label: "最新资料" },
+                          ].map(({ value, label }) => (
+                            <label key={value}>
+                              <input
+                                type="radio"
+                                name={`resolve-${key}`}
+                                checked={
+                                  resolutions[key]?.choice === value &&
+                                  resolutions[key]?.value === editing[key]
+                                }
+                                onChange={() =>
+                                  resolveField(
+                                    key,
+                                    /** @type {"mine" | "latest"} */ (value),
+                                  )
+                                }
+                              />
+                              {label}
+                            </label>
+                          ))}
+                        </fieldset>
+                      ) : (
+                        "自动合并"
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <Button disabled={saving} onClick={acceptLatest}>
-              已核对，保留我的修改
+            <p role="status">
+              {unresolved.length
+                ? `${unresolved.length} 个字段待选择`
+                : "字段已核对，可应用结果后保存"}
+            </p>
+            <Button disabled={saving || unresolved.length > 0} onClick={acceptLatest}>
+              应用核对结果
             </Button>
           </section>
         )}

@@ -24,6 +24,21 @@ export function useProductRowEditing({ dataset, notify, onChanged }) {
     /** @type {{row: DatasetRow, dataset: DatasetRecord} | null} */ (null),
   );
   const [error, setError] = useState("");
+  const [resolutions, setResolutions] = useState(
+    /** @type {Record<string, {choice: "mine" | "latest", value: unknown}>} */ ({}),
+  );
+  const conflictFields =
+    latest && original && editing
+      ? PRODUCT_EDIT_FIELDS.filter(
+          (key) =>
+            editing[key] !== original[key] &&
+            latest.row[key] !== original[key] &&
+            editing[key] !== latest.row[key],
+        )
+      : [];
+  const unresolved = conflictFields.filter(
+    (key) => !resolutions[key] || resolutions[key].value !== editing?.[key],
+  );
   const [confirmClose, setConfirmClose] = useState(false);
   const dirty = Boolean(
     changeNote || PRODUCT_EDIT_FIELDS.some((key) => editing?.[key] !== original?.[key]),
@@ -35,6 +50,8 @@ export function useProductRowEditing({ dataset, notify, onChanged }) {
   };
   const loadLatest = async () => {
     if (!original) return;
+    setLatest(null);
+    setResolutions({});
     setSaving(true);
     setError("");
     try {
@@ -57,11 +74,15 @@ export function useProductRowEditing({ dataset, notify, onChanged }) {
     }
   };
   const acceptLatest = () => {
-    if (!latest || !editing || !original) return;
+    if (!latest || !editing || !original || unresolved.length) return;
     const merged = { ...latest.row };
-    // 只叠加用户修改过的字段，保留其他人更新的字段。
+    // 单方改动自动合并，双方修改同一字段时必须使用用户明确选择的值。
     PRODUCT_EDIT_FIELDS.forEach((key) => {
-      if (editing[key] !== original[key]) merged[key] = editing[key];
+      if (
+        editing[key] !== original[key] &&
+        (!conflictFields.includes(key) || resolutions[key].choice === "mine")
+      )
+        merged[key] = editing[key];
     });
     setEditing(merged);
     setOriginal(latest.row);
@@ -116,6 +137,19 @@ export function useProductRowEditing({ dataset, notify, onChanged }) {
     saving,
     conflict,
     latest,
+    original,
+    conflictFields,
+    unresolved,
+    resolutions,
+    resolveField: (
+      /** @type {string} */ key,
+      /** @type {"mine" | "latest"} */ choice,
+    ) => {
+      setResolutions((current) => ({
+        ...current,
+        [key]: { choice, value: editing?.[key] },
+      }));
+    },
     error,
     confirmClose,
     close,
@@ -130,6 +164,7 @@ export function useProductRowEditing({ dataset, notify, onChanged }) {
       }
     },
     open: (/** @type {DatasetRow} */ row) => {
+      setResolutions({});
       setOriginal(row);
       setEditing(row);
       setVersion(dataset.current_version);

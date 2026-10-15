@@ -130,9 +130,12 @@ test("冲突后核对最新值并保留用户改动及其他人的字段", async
   expect(
     within(dialog).getByRole("button", { name: "保存", exact: true }),
   ).toBeDisabled();
-  await user.click(
-    within(dialog).getByRole("button", { name: "已核对，保留我的修改" }),
-  );
+  expect(within(dialog).getByRole("columnheader", { name: "原始资料" })).toBeVisible();
+  expect(within(dialog).getByRole("button", { name: "应用核对结果" })).toBeDisabled();
+  expect(within(dialog).getByRole("status")).toHaveTextContent("1 个字段待选择");
+  await user.click(within(dialog).getByRole("radio", { name: "我的输入" }));
+  expect(within(dialog).getByRole("button", { name: "应用核对结果" })).toBeEnabled();
+  await user.click(within(dialog).getByRole("button", { name: "应用核对结果" }));
   expect(within(dialog).getByLabelText("品类A")).toHaveValue("别人品类");
   await user.click(within(dialog).getByRole("button", { name: "保存", exact: true }));
   expect(api.updateDatasetRow).toHaveBeenLastCalledWith(
