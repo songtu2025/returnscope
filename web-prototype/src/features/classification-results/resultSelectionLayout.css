@@ -41,6 +41,10 @@
   --result-actions-width: 232px;
 }
 
+.result-pool-table.is-deleted {
+  --result-actions-width: 280px;
+}
+
 .result-selection-cell {
   display: grid;
   justify-items: start;

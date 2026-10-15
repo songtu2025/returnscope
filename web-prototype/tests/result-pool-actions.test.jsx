@@ -109,10 +109,14 @@ test.each([
   expect(resultExportApi.create).not.toHaveBeenCalled();
 });
 
-test("已删除结果保留原恢复、禁用创建和下载入口", async () => {
-  setup({ result: { ...result, deleted_at: "2026-10-15T00:00:00Z" } });
-  expect(screen.queryByRole("button", { name: "查看结果" })).toBeNull();
-  expect(screen.getByRole("button", { name: "创建分析看板" })).toBeDisabled();
+test("已删除结果提供查看、恢复及后端允许的下载，移除无效创建", async () => {
+  const { props } = setup({
+    result: { ...result, deleted_at: "2026-10-15T00:00:00Z" },
+  });
+  expect(screen.queryByRole("button", { name: "创建分析看板" })).toBeNull();
+  await userEvent.click(screen.getByRole("button", { name: "查看结果" }));
+  expect(props.onOpen).toHaveBeenCalledOnce();
+  expect(props.onPrimary).not.toHaveBeenCalled();
   expect(screen.getByRole("button", { name: "下载" })).toBeEnabled();
   await userEvent.click(screen.getByRole("button", { name: "恢复分类结果" }));
   await waitFor(() =>
@@ -123,4 +127,28 @@ test("已删除结果保留原恢复、禁用创建和下载入口", async () =>
       3,
     ),
   );
+});
+
+test("已删除结果仍能下载，恢复失败保留当前记录并提示错误", async () => {
+  const job = {
+    id: "export-deleted-synthetic",
+    status: "ready",
+  };
+  resultExportApi.create.mockResolvedValue(job);
+  resultExportApi.get.mockResolvedValue(job);
+  resultExportApi.save.mockResolvedValue(undefined);
+  changeDeliveryLifecycle.mockRejectedValue(
+    new Error("来源结果仍有冲突，请刷新后重试"),
+  );
+  const { props } = setup({
+    result: { ...result, deleted_at: "2026-10-15T00:00:00Z" },
+  });
+  await userEvent.click(screen.getByRole("button", { name: "下载" }));
+  await waitFor(() => expect(resultExportApi.save).toHaveBeenCalledWith(job));
+  expect(resultExportApi.create).toHaveBeenCalledWith([result.version_id]);
+  await userEvent.click(screen.getByRole("button", { name: "恢复分类结果" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("来源结果仍有冲突");
+  expect(screen.getByRole("button", { name: "恢复分类结果" })).toBeEnabled();
+  expect(props.onChanged).not.toHaveBeenCalled();
+  expect(screen.getByRole("button", { name: "查看结果" })).toBeEnabled();
 });

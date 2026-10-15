@@ -1,5 +1,3 @@
-import { CaretRight } from "@phosphor-icons/react";
-import Button from "antd/es/button";
 import { DeliveryLifecycleControls } from "../../components/DeliveryLifecycleControls";
 import { ResultDownloadButton } from "./ResultDownloadButton";
 import { resultActionPolicy } from "./resultActionPolicy";
@@ -42,35 +40,19 @@ export function ResultPoolActions({ result, onOpen, onPrimary, onChanged }) {
     />
   );
   return (
-    <div className={`result-row-actions${deleted ? "" : " is-current"}`} role="cell">
-      {deleted ? (
-        <>
-          {lifecycle}
-          <Button
-            size="small"
-            disabled={policy.primary.disabled}
-            title={policy.blockingReason}
-            icon={<CaretRight size={15} />}
-            iconPlacement="end"
-            onClick={onPrimary}
-          >
-            {policy.primary.label}
-          </Button>
-          {download}
-        </>
-      ) : (
-        <>
-          <button
-            type="button"
-            className="text-button compact-button result-open-button"
-            onClick={onOpen}
-          >
-            查看结果
-          </button>
-          {download}
-          {lifecycle}
-        </>
-      )}
+    <div
+      className={`result-row-actions ${deleted ? "is-deleted" : "is-current"}`}
+      role="cell"
+    >
+      <button
+        type="button"
+        className="text-button compact-button result-open-button"
+        onClick={onOpen}
+      >
+        查看结果
+      </button>
+      {deleted ? lifecycle : download}
+      {deleted ? download : lifecycle}
     </div>
   );
 }

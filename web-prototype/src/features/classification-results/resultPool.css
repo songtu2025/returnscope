@@ -185,6 +185,14 @@
   width: 32px;
   min-height: 36px;
 }
+.result-row-actions.is-deleted {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 90px;
+  align-items: start;
+}
+.result-row-actions.is-deleted > button {
+  min-height: 36px;
+}
 .result-error-state {
   margin: 14px;
   border-color: #e9b6b1;
