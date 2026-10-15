@@ -134,6 +134,7 @@ const groupOf = (value) => ({
 });
 
 beforeEach(() => {
+  vi.spyOn(window, "scrollTo").mockImplementation(() => {});
   sessionStorage.clear();
   window.location.hash = "classification-results";
   Object.values(apiMock).forEach((mock) => mock.mockReset());
@@ -223,6 +224,43 @@ beforeEach(() => {
       page_size: 100,
     });
   });
+});
+
+test("分页筛选结果返回列表后恢复原行焦点及滚动，保留查询范围", async () => {
+  window.location.hash =
+    "classification-results?page=2&page_size=50&q=合成&store_site=STORE&quality_status=review_required";
+  apiMock.classificationResults.mockResolvedValue({
+    items: [resultVersion],
+    total: 125,
+    page: 2,
+    page_size: 50,
+  });
+  render(<ClassificationResultsPage notify={vi.fn()} userId="user-1" />);
+  const listing = await screen.findByRole("button", { name: "SR001", exact: true });
+  Object.defineProperty(window, "scrollY", { configurable: true, value: 420 });
+  await userEvent.click(listing);
+  expect(await screen.findByRole("heading", { name: "SR001 分类结果" })).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "返回分类结果池" }));
+  const returned = await screen.findByRole("button", { name: "SR001", exact: true });
+  await waitFor(() => expect(returned).toHaveFocus());
+  expect(window.scrollTo).toHaveBeenLastCalledWith({
+    top: 420,
+    left: 0,
+    behavior: "auto",
+  });
+  expect(apiMock.classificationResults).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      page: 2,
+      page_size: 50,
+      q: "合成",
+      store_site: "STORE",
+      quality_status: "review_required",
+    }),
+    expect.objectContaining({ signal: expect.any(AbortSignal) }),
+  );
+  expect(window.location.hash).toContain("page=2");
+  expect(window.location.hash).not.toContain("result_version_id=");
+  Object.defineProperty(window, "scrollY", { configurable: true, value: 0 });
 });
 
 test("分类结果使用统一列表，进入详情携带记录情况筛选", async () => {
@@ -495,7 +533,11 @@ test("业务下钻按反馈组显示数量", async () => {
   expect(screen.getByText("共 1 条")).toBeVisible();
 });
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  Object.defineProperty(window, "scrollY", { configurable: true, value: 0 });
+});
 
 test("结果池使用服务端筛选并展示多产品名称", async () => {
   const user = userEvent.setup();

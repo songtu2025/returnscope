@@ -7,6 +7,7 @@
  * @property {(changes: Partial<ClassificationResultRoute>) => void} updateRoute
  * @property {(message: string, tone?: string) => void} notify
  * @property {string} userId
+ * @property {import("react").MutableRefObject<import("../../hooks/useListReturnPosition").ListReturnPosition | null>} [returnPosition]
  */
 
 /** @typedef { ClassificationResultListProps & ReturnType<typeof import("./useResultPoolWorkspace").useResultPoolWorkspace>} ResultPoolContext */

@@ -99,7 +99,11 @@ function ResultPoolMetadata({ result, onOpen }) {
   return (
     <>
       <div className="result-listing-cell" role="cell">
-        <button className="text-button result-listing-link" onClick={onOpen}>
+        <button
+          className="text-button result-listing-link"
+          data-list-return-id={result.version_id}
+          onClick={onOpen}
+        >
           {result.listing || "未提供 Listing"}
         </button>
         <span>{result.store_site || "未提供店铺/站点"}</span>

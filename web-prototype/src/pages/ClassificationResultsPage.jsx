@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import "../styles/classification-results.css";
 
 import { AntdProvider } from "../components/AntdProvider";
@@ -40,6 +40,11 @@ function StandaloneClassificationResultsPage({ notify, userId }) {
 
 /** @param {{notify: ClassificationResultsPageProps["notify"], appRoute: AppRoute, userId: string}} props */
 function ClassificationResultsContent({ notify, appRoute, userId }) {
+  const returnPosition = useRef(
+    /** @type {import("../hooks/useListReturnPosition").ListReturnPosition | null} */ (
+      null
+    ),
+  );
   const route = classificationResultRouteState(appRoute.query);
   const updateRoute = useCallback(
     /** @param {Partial<ClassificationResultRoute>} changes */
@@ -62,6 +67,7 @@ function ClassificationResultsContent({ notify, appRoute, userId }) {
         />
       ) : (
         <ClassificationResultList
+          returnPosition={returnPosition}
           route={route}
           updateRoute={updateRoute}
           notify={notify}

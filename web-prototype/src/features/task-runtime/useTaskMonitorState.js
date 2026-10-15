@@ -47,7 +47,6 @@ export function useTaskMonitorState({
   const selectedRequestGeneration = useRef(0);
   const selectedControllerRef = useRef(/** @type {AbortController | null} */ (null));
   const previousFocusId = useRef(/** @type {string | null | undefined} */ (focusId));
-  const listScroll = useRef(0);
   const notifiedListError = useRef("");
   const [detailError, setDetailError] = useState("");
 
@@ -214,12 +213,6 @@ export function useTaskMonitorState({
       loading: loading && !taskData,
     },
   );
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(
-      () => !selectedId && window.scrollTo(0, listScroll.current),
-    );
-    return () => window.cancelAnimationFrame(frame);
-  }, [selectedId]);
 
   const showTaskDetail = Boolean(selectedId);
   const visibleSelected = selected?.id === selectedId ? selected : null;
@@ -258,7 +251,6 @@ export function useTaskMonitorState({
 
   /** @param {AnalysisTask} task */
   const openTask = (task) => {
-    listScroll.current = window.scrollY;
     window.scrollTo(0, 0);
     setSelectedId(task.id);
     if (onTaskFocus) onTaskFocus(task.id);

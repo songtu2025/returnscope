@@ -6,6 +6,7 @@ import { TaskRegistry } from "./TaskRegistry";
 import { useTaskMonitorState } from "./useTaskMonitorState";
 import { taskLifecycleActions } from "./taskLifecycleActions";
 import { taskExecutionActions } from "./taskExecutionActions";
+import { useListReturnPosition } from "../../hooks/useListReturnPosition";
 
 /** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
 /** @typedef {import("./taskRuntimeContracts").TaskSegment} TaskSegment */
@@ -37,11 +38,17 @@ export function TaskMonitor(props) {
     updateListState,
     onTaskRenamed,
   } = state;
+  const { containerRef, titleRef, remember } = useListReturnPosition({
+    identity: JSON.stringify(listState),
+    active: !showTaskDetail && !props.focusId,
+    ready: !loading && (taskData !== undefined || Boolean(listError)),
+  });
   return (
     <div className="standard-page task-page task-runtime-workspace">
-      <div hidden={showTaskDetail}>
+      <div hidden={showTaskDetail} ref={containerRef}>
         <PageHeading
           title="分析任务"
+          titleRef={titleRef}
           action={
             <div className="recycle-actions">
               <button
@@ -67,7 +74,10 @@ export function TaskMonitor(props) {
           hasData={taskData !== undefined}
           onReload={loadTasks}
           onCreate={() => onNavigate("new")}
-          onOpen={openTask}
+          onOpen={(task) => {
+            remember(task.id);
+            openTask(task);
+          }}
           onTaskRenamed={onTaskRenamed}
           onCreateSimilar={(/** @type {AnalysisTask} */ task) =>
             onNavigate("new", { kind: "task-template", id: task.id })

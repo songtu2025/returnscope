@@ -7,7 +7,7 @@ import { useLoadingHeight } from "../../hooks/useLoadingHeight";
 
 /** @typedef {import("./classificationResultListContracts").ResultPoolContext} ResultPoolContext */
 
-/** @param {ResultPoolContext} context */
+/** @param {ResultPoolContext & {rememberPosition?: (id: string) => void}} context */
 export function ResultPoolContent(context) {
   const {
     route,
@@ -56,7 +56,9 @@ export function ResultPoolContent(context) {
                 selected={selectedIds.has(resultVersionId(result))}
                 onToggle={() => toggleSelection(result)}
                 onPrimary={() => runPrimaryAction(result)}
-                onOpen={() =>
+                onOpen={() => {
+                  context.rememberPosition?.(result.version_id);
+                  window.scrollTo({ top: 0, left: 0, behavior: "auto" });
                   updateRoute({
                     version: result.version_id,
                     tab: "records",
@@ -68,8 +70,8 @@ export function ResultPoolContent(context) {
                     productName: "",
                     productSku: "",
                     orderId: "",
-                  })
-                }
+                  });
+                }}
               />
             ))}
           </div>

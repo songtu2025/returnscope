@@ -142,7 +142,12 @@ function RegistryActions({
   const { detailsProps, summaryProps } = useDismissibleDetails({ menu: true });
   return (
     <span role="cell" className="task-registry-actions">
-      <button type="button" className="task-open-action" onClick={onOpen}>
+      <button
+        type="button"
+        className="task-open-action"
+        data-list-return-id={task.id}
+        onClick={onOpen}
+      >
         查看
       </button>
       <details {...detailsProps}>

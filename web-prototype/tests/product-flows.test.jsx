@@ -4109,7 +4109,14 @@ describe("关键用户流程", () => {
       "true",
     );
     expect(screen.queryByRole("heading", { name: "暂停任务" })).not.toBeInTheDocument();
-    await waitFor(() => expect(window.scrollTo).toHaveBeenLastCalledWith(0, 240));
+    await waitFor(() =>
+      expect(window.scrollTo).toHaveBeenLastCalledWith({
+        top: 240,
+        left: 0,
+        behavior: "auto",
+      }),
+    );
+    expect(screen.getByRole("button", { name: "查看", exact: true })).toHaveFocus();
     Object.defineProperty(window, "scrollY", { configurable: true, value: 0 });
   });
 

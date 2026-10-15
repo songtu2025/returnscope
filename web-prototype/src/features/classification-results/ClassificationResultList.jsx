@@ -4,11 +4,18 @@ import { DashboardSelectionBar } from "./ClassificationResultListParts";
 import { useResultPoolWorkspace } from "./useResultPoolWorkspace";
 import { ResultPoolFilters } from "./ResultPoolFilters";
 import { ResultPoolContent } from "./ResultPoolContent";
+import { useListReturnPosition } from "../../hooks/useListReturnPosition";
+import { classificationResultPoolQuery } from "./classificationResultRoute";
 
 /** @param {import("./classificationResultListContracts").ClassificationResultListProps} props */
 export function ClassificationResultList(props) {
   const state = useResultPoolWorkspace(props);
-  const context = { ...props, ...state };
+  const { containerRef, titleRef, remember } = useListReturnPosition({
+    identity: JSON.stringify(classificationResultPoolQuery(props.route)),
+    ready: !state.loading && Boolean(state.data || state.error),
+    snapshotRef: props.returnPosition,
+  });
+  const context = { ...props, ...state, rememberPosition: remember };
   const {
     route,
     selectedResults,
@@ -17,9 +24,10 @@ export function ClassificationResultList(props) {
     continueToInsight,
   } = context;
   return (
-    <div className="standard-page classification-results-page">
+    <div className="standard-page classification-results-page" ref={containerRef}>
       <PageHeading
         title="分类结果池"
+        titleRef={titleRef}
         action={
           <div className="result-creation-actions">
             <button
