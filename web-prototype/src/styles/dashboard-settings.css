@@ -43,3 +43,55 @@
 .dashboard-settings-source-list input {
   width: auto;
 }
+
+.dashboard-settings-conflict,
+.dashboard-settings-comparison {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.dashboard-settings-conflict > button,
+.dashboard-settings-comparison > button {
+  justify-self: start;
+}
+
+.dashboard-settings-comparison-table {
+  overflow-x: auto;
+}
+
+.dashboard-settings-comparison table {
+  width: 100%;
+  min-width: 620px;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.dashboard-settings-comparison th,
+.dashboard-settings-comparison td {
+  padding: 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-settings-comparison fieldset {
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.dashboard-settings-comparison fieldset label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.dashboard-settings-comparison input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--green);
+}

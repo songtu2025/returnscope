@@ -5,19 +5,14 @@ import { useUnsavedNavigation } from "../../hooks/useUnsavedNavigation";
 import { dashboardApi } from "../../shared/api/dashboardApi";
 import { DashboardQualityScope } from "./DashboardQualityScope";
 import { DashboardSourceSelector } from "./DashboardSourceSelector";
-import { errorMessage } from "./dashboardRequestErrors";
+import { DashboardSettingsConflict } from "./DashboardSettingsConflict";
+import {
+  dashboardSettings,
+  settingsKey,
+  useDashboardSettingsConflict,
+} from "./useDashboardSettingsConflict";
+import { errorMessage, errorStatus } from "./dashboardRequestErrors";
 import "../../styles/dashboard-settings.css";
-
-/** @param {string} name @param {string[]} ids @param {string[]} statuses @param {Record<string, string | string[] | null>} filters */
-function settingsKey(name, ids, statuses, filters) {
-  return JSON.stringify([
-    name.trim(),
-    [...ids].sort(),
-    [...statuses].sort(),
-    filters.date_from || "",
-    filters.date_to || "",
-  ]);
-}
 
 /** @param {{dashboard: import("./analysisDashboardContracts").Dashboard, onClose: () => void, onSaved: (id: string) => void | Promise<void>}} props */
 export function DashboardSettingsEditor({ dashboard, onClose, onSaved }) {
@@ -36,15 +31,19 @@ export function DashboardSettingsEditor({ dashboard, onClose, onSaved }) {
   const [sourceAttempt, setSourceAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const conflict = useDashboardSettingsConflict(dashboard);
+  const { setOriginal } = conflict;
+  const busy = saving || conflict.loading;
   const formRef = useRef(/** @type {HTMLFormElement | null} */ (null));
   const leavingRef = useRef(false);
   const [baseline, setBaseline] = useState(() =>
-    settingsKey(dashboard.name ?? "", [], originalStatuses, originalFilters),
+    settingsKey(dashboardSettings(dashboard, [])),
   );
   const ids = sources
     .map((source) => source.result_version_id)
     .filter((id) => typeof id === "string");
-  const draftKey = settingsKey(name, ids, statuses, filters);
+  const draft = { name, sources, statuses, filters };
+  const draftKey = settingsKey(draft);
   const dirty = draftKey !== baseline;
   useEffect(() => {
     let active = true;
@@ -56,19 +55,9 @@ export function DashboardSettingsEditor({ dashboard, onClose, onSaved }) {
         ) => {
           if (!active) return;
           setSources(sources);
-          const sourceIds = sources
-            .map((source) => source.result_version_id)
-            .filter((id) => typeof id === "string");
-          const currentFilters = dashboard.version?.filters ?? {};
-          const quality = currentFilters.quality_status;
-          setBaseline(
-            settingsKey(
-              dashboard.name ?? "",
-              sourceIds,
-              Array.isArray(quality) ? quality : ["ready"],
-              currentFilters,
-            ),
-          );
+          const original = dashboardSettings(dashboard, sources);
+          setOriginal(original);
+          setBaseline(settingsKey(original));
           setSourcesLoaded(true);
           setLoading(false);
         },
@@ -82,12 +71,13 @@ export function DashboardSettingsEditor({ dashboard, onClose, onSaved }) {
     return () => {
       active = false;
     };
-  }, [dashboard, sourceAttempt]);
+  }, [dashboard, sourceAttempt, setOriginal]);
   const save = async (complete = true) => {
     if (
       !sourcesLoaded ||
       loading ||
-      saving ||
+      busy ||
+      conflict.conflict ||
       !ids.length ||
       !formRef.current?.reportValidity()
     )
@@ -104,7 +94,7 @@ export function DashboardSettingsEditor({ dashboard, onClose, onSaved }) {
         throw new Error("同一 Listing 存在多个来源结果，请只保留一个");
       const updated = await dashboardApi.updateAnalysisDashboard(dashboard.id, {
         name: name.trim(),
-        expected_revision: dashboard.revision,
+        expected_revision: conflict.revision,
         result_version_ids: ids,
         filters: selectedFilters,
         plan_hash: plan.plan_hash,
@@ -121,6 +111,7 @@ export function DashboardSettingsEditor({ dashboard, onClose, onSaved }) {
       return true;
     } catch (failure) {
       setError(errorMessage(failure));
+      if (errorStatus(failure) === 409) conflict.requireReview();
       return false;
     } finally {
       setSaving(false);
@@ -128,8 +119,8 @@ export function DashboardSettingsEditor({ dashboard, onClose, onSaved }) {
   };
   const exit = useUnsavedNavigation({
     dirty,
-    busy: dirty && saving,
-    canSave: sourcesLoaded && !loading && Boolean(ids.length),
+    busy: dirty && busy,
+    canSave: sourcesLoaded && !loading && !conflict.conflict && Boolean(ids.length),
     save: () => save(false),
     discard: onClose,
     onRequest: () => {
@@ -150,7 +141,7 @@ export function DashboardSettingsEditor({ dashboard, onClose, onSaved }) {
           void save();
         }}
       >
-        <fieldset className="dashboard-settings-fields" disabled={saving}>
+        <fieldset className="dashboard-settings-fields" disabled={busy}>
           <label>
             看板名称
             <input
@@ -205,18 +196,34 @@ export function DashboardSettingsEditor({ dashboard, onClose, onSaved }) {
           </label>
         </fieldset>
         {error && <p role="alert">{error}</p>}
+        <DashboardSettingsConflict
+          state={conflict}
+          draft={draft}
+          onApply={(merged) => {
+            if (!conflict.latest) return;
+            setName(merged.name);
+            setSources(merged.sources);
+            setStatuses(merged.statuses);
+            setFilters(merged.filters);
+            setBaseline(settingsKey(conflict.latest.settings));
+            setError("");
+            conflict.acceptLatest();
+          }}
+        />
         <div className="modal-actions">
           <button
             type="button"
             className="secondary-button"
-            disabled={saving}
+            disabled={busy}
             onClick={onClose}
           >
             取消编辑
           </button>
           <button
             className="primary-button"
-            disabled={!sourcesLoaded || loading || saving || !ids.length}
+            disabled={
+              !sourcesLoaded || loading || busy || conflict.conflict || !ids.length
+            }
           >
             {saving ? "保存中…" : "保存修改"}
           </button>
