@@ -2634,7 +2634,7 @@ test("看板详情聚焦退货原因洞察并保留证据与版本入口", async
   const replaceState = vi.spyOn(window.history, "replaceState");
   await user.click(screen.getByRole("button", { name: /偏小.*55/ }));
   expect(replaceState).toHaveBeenCalledWith(
-    null,
+    expect.objectContaining({ seekwayNavigationIndex: expect.any(Number) }),
     "",
     expect.stringContaining("problem=FIT_TOO_SMALL"),
   );
