@@ -198,3 +198,34 @@ def test_cli_requires_stop_and_verified_backup_can_restore_old_marks(
             ).fetchone()[0]
             == 0
         )
+
+
+@pytest.mark.parametrize("checksum_matches", [True, False])
+def test_existing_execution_does_not_hide_preview_or_allow_reapplication(
+    tmp_path: Path, checksum_matches: bool
+):
+    context, version, _original = _legacy_state(tmp_path)
+    database = context.database
+    assert repair.repair_states(database, apply=True) == {"units": 1, "versions": 1}
+    with database.transaction() as connection:
+        # 模拟执行完成后出现新的历史差异，不能借预览重新执行旧修复。
+        connection.execute(
+            "UPDATE classification_units SET quality_status='unusable', system_rerun_required=1 WHERE result_version_id=?",
+            (version["version_id"],),
+        )
+        if not checksum_matches:
+            connection.execute(
+                "UPDATE app_migrations SET checksum='synthetic-previous-checksum' WHERE migration_id=?",
+                (repair.MIGRATION_ID,),
+            )
+    with database.connect() as connection:
+        before = list(connection.iterdump())
+    assert repair.repair_states(database) == {"units": 1, "versions": 1}
+    assert repair.repair_states(database) == {"units": 1, "versions": 1}
+    if checksum_matches:
+        assert repair.repair_states(database, apply=True) == {"units": 0, "versions": 0}
+    else:
+        with pytest.raises(ValueError, match="校验不一致"):
+            repair.repair_states(database, apply=True)
+    with database.connect() as connection:
+        assert list(connection.iterdump()) == before

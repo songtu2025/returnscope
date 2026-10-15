@@ -73,7 +73,8 @@ def repair_states(database: Database, *, apply: bool = False) -> dict[str, int]:
             "SELECT checksum FROM app_migrations WHERE migration_id = ?",
             (MIGRATION_ID,),
         ).fetchone()
-        if migration:
+        # 预览始终反映当前差异，执行记录只约束修复写入。
+        if apply and migration:
             if migration["checksum"] != MIGRATION_CHECKSUM:
                 raise ValueError("重跑状态修复校验不一致")
             return {"units": 0, "versions": 0}
