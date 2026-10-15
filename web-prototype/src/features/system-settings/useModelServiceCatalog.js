@@ -88,11 +88,11 @@ export function useModelServiceCatalog({
   };
 
   const saveModel = async () => {
-    if (!modelDraft) return;
+    if (!modelDraft) return false;
     const error = getModelDraftError(modelDraft, modelEditor, catalogModels);
     if (error) {
       notify(error, "error");
-      return;
+      return false;
     }
     const modelKey = modelDraft.model_key.trim();
     const modelId = modelDraft.id;
@@ -125,7 +125,7 @@ export function useModelServiceCatalog({
         const value = await modelServiceApi.createModel(selectedConnection.id, payload);
         mergeModel(value, true);
       } else {
-        if (!modelId) return;
+        if (!modelId) return false;
         const value = await modelServiceApi.updateModel(modelId, {
           display_name: payload.display_name,
           supported_efforts: payload.supported_efforts,
@@ -136,8 +136,10 @@ export function useModelServiceCatalog({
       setModelEditor(null);
       setModelDraft(null);
       notify(modelEditor === "create" ? "模型已添加" : "模型已更新");
+      return true;
     } catch (error) {
       notify(errorMessage(error), "error");
+      return false;
     } finally {
       setBusy("");
     }
@@ -209,6 +211,7 @@ export function useModelServiceCatalog({
   return {
     catalogModels,
     modelEditor,
+    modelDirty: Boolean(modelEditor) && modelEditState.isDirty(modelDraft),
     modelDraft,
     setModelDraft,
     openModelEditor,

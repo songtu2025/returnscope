@@ -1,5 +1,4 @@
 import { StandardWorkspaceHeader } from "./StandardWorkspaceHeader";
-import { StandardWorkspaceConfirmations } from "./StandardWorkspaceConfirmations";
 import { ClassificationExcelImport } from "./ClassificationExcelImport";
 import { ClassificationStandardEditor } from "./ClassificationStandardDraftEditor";
 import { useStandardWorkspace } from "./useStandardWorkspace";
@@ -94,8 +93,6 @@ export function ClassificationStandardWorkspace(props) {
 
       <StandardWorkspaceReview {...context} />
       {editable && <StandardWorkspaceFooter {...context} />}
-
-      <StandardWorkspaceConfirmations {...context} />
     </>
   );
 }

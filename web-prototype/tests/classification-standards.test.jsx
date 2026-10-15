@@ -53,6 +53,7 @@ import {
   sameLabel,
 } from "../src/features/classification-standards/labelDraftPolicy";
 import { formatDate } from "../src/lib/presentation";
+import { requestNavigation } from "../src/app/navigationGuard";
 
 const content = {
   name: "眼镜分类标准",
@@ -252,6 +253,28 @@ function renderEditPage(notify = vi.fn()) {
   );
   return notify;
 }
+
+test("标准离页保存只暂存，失败留在编辑页，重试成功执行原目标", async () => {
+  mockEditableDraft();
+  standardApiMock.updateClassificationStandardDraft
+    .mockRejectedValueOnce(new Error("暂存失败"))
+    .mockResolvedValue(validDraft);
+  const user = userEvent.setup();
+  const notify = renderEditPage();
+  await user.type(await screen.findByLabelText("搜索标签"), "pressure");
+  await user.click(screen.getByText(/搜索别名（可选）/));
+  await user.type(screen.getByRole("textbox", { name: "搜索别名 1" }), "soft{Enter}");
+  const proceed = vi.fn();
+  act(() => requestNavigation(proceed));
+  await user.click(screen.getByRole("button", { name: "保存后离开" }));
+  await waitFor(() => expect(notify).toHaveBeenCalledWith("暂存失败", "error"));
+  expect(proceed).not.toHaveBeenCalled();
+  expect(screen.getByText("soft")).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "保存后离开" }));
+  await waitFor(() => expect(proceed).toHaveBeenCalledOnce());
+  expect(standardApiMock.validateClassificationStandardDraft).toHaveBeenCalled();
+  expect(standardApiMock.publishClassificationStandardDraft).not.toHaveBeenCalled();
+});
 
 function deferred() {
   let resolve;
@@ -905,8 +928,13 @@ test("查看与编辑原位切换，保留搜索、选中标签和未保存内�
   expect(screen.getByText("soft")).toBeVisible();
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(window.location.hash).toBe("");
+  window.history.replaceState(
+    null,
+    "",
+    `#classification-standards?standard=${standard.id}`,
+  );
   await user.click(screen.getByRole("button", { name: "返回" }));
-  expect(screen.getByRole("dialog", { name: "离开编辑页？" })).toBeVisible();
+  expect(screen.getByRole("dialog", { name: "修改尚未保存" })).toBeVisible();
   await user.click(screen.getByRole("button", { name: "继续编辑" }));
   expect(screen.getByText("soft")).toBeVisible();
   expect(standardApiMock.publishClassificationStandardDraft).not.toHaveBeenCalled();

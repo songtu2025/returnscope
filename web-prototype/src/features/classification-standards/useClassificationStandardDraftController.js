@@ -149,16 +149,6 @@ export function useClassificationStandardDraftController({
       : EMPTY_CLASSIFICATION_STANDARD_CONTENT);
   const dirty = JSON.stringify(content) !== JSON.stringify(savedContent);
 
-  useEffect(() => {
-    if (!dirty || !["edit", "new"].includes(mode)) return;
-    const warnBeforeClose = (/** @type {BeforeUnloadEvent} */ event) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", warnBeforeClose);
-    return () => window.removeEventListener("beforeunload", warnBeforeClose);
-  }, [dirty, mode]);
-
   /** @returns {Promise<ClassificationStandardDraft>} */
   async function persistDraft() {
     return await persistStandardDraft({
@@ -171,7 +161,7 @@ export function useClassificationStandardDraftController({
     });
   }
 
-  const saveDraft = async () => {
+  const saveDraft = async (navigateAfterSave = true) => {
     setBusy("save");
     try {
       const saved = await persistDraft();
@@ -183,7 +173,7 @@ export function useClassificationStandardDraftController({
       setDraft(checked);
       await loadStandards();
       await loadValidation(saved.id);
-      if (mode === "new") {
+      if (mode === "new" && navigateAfterSave) {
         navigateHash(
           "classification-standards",
           { standard: saved.standard_id, view: "edit" },
@@ -191,8 +181,10 @@ export function useClassificationStandardDraftController({
         );
       }
       notify("修改已暂存，尚未启用");
+      return true;
     } catch (error) {
       notify(errorMessage(error), "error");
+      return false;
     } finally {
       setBusy("");
     }

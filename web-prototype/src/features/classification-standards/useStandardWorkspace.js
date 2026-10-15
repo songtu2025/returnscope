@@ -21,7 +21,6 @@ export function useStandardWorkspace({
   validationAttempt,
 }) {
   const [section, setSection] = useState(isNew ? "settings" : "labels");
-  const [confirmBack, setConfirmBack] = useState(false);
   const [fixRequest, setFixRequest] = useState(
     /** @type {ClassificationStandardValidationIssue | null} */ (null),
   );
@@ -67,8 +66,6 @@ export function useStandardWorkspace({
   return {
     section,
     setSection,
-    confirmBack,
-    setConfirmBack,
     fixRequest,
     fixIssue,
     editable,

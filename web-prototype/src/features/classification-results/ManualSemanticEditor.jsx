@@ -10,18 +10,34 @@ import { SemanticResultPanel } from "./SemanticResultPanel";
 import { ManualSemanticFields } from "./ManualSemanticFields";
 import { semanticItemErrors } from "./manualSemanticValidation";
 import { selectedSentiment } from "../review-batches/semanticReviewDrafts";
+import { useUnsavedNavigation } from "../../hooks/useUnsavedNavigation";
+import { UnsavedChangesActions } from "../../components/UnsavedChangesActions";
 
 /** @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultGroupResponse} Group */
 /** @typedef {import("../review-batches/semanticLedgerContracts").ReviewLabel} ReviewLabel */
 /** @typedef {{item_id: string, evidence_text: string, opinion: string, label_code: string, sentiment: string}} Draft */
 
-/** @param {{group: Group, onSaved: (versionId: string, advance?: boolean) => void | Promise<void>, canAdvance?: boolean, onCancel: () => void, onDirtyChange: (dirty: boolean) => void, onSavingChange: (saving: boolean) => void}} props */
+/** @param {Group["record"]} record @returns {Draft[]} */
+function semanticDraft(record) {
+  return (record.classification.semantic_units ?? []).map((unit, index) => ({
+    item_id: `unit:${index}`,
+    evidence_text: unit.evidence || "",
+    opinion: unit.opinion || "",
+    label_code: unit.label_code,
+    sentiment: unit.sentiment || "",
+  }));
+}
+
+/** @param {{group: Group, onSaved: (versionId: string, advance?: boolean) => void | Promise<void>, onSavedBeforeExit?: () => void | Promise<void>, canAdvance?: boolean, onCancel: () => void, onDirtyChange: (dirty: boolean) => void, onSavingChange: (saving: boolean) => void, onNavigationRequest?: () => void, onExitConfirmationChange?: (close: (() => void) | null) => void}} props */
 export function ManualSemanticEditor({
   group,
   onSaved,
+  onSavedBeforeExit,
   onCancel,
   onDirtyChange,
   onSavingChange,
+  onNavigationRequest,
+  onExitConfirmationChange,
   canAdvance = false,
 }) {
   const [currentGroup, setCurrentGroup] = useState(group);
@@ -29,18 +45,23 @@ export function ManualSemanticEditor({
   const [conflict, setConflict] = useState(false);
   const [recovering, setRecovering] = useState(false);
   const [recovered, setRecovered] = useState(false);
-  const [items, setItems] = useState(() =>
-    (record.classification.semantic_units ?? []).map((unit, index) => ({
-      item_id: `unit:${index}`,
-      evidence_text: unit.evidence || "",
-      opinion: unit.opinion || "",
-      label_code: unit.label_code,
-      sentiment: unit.sentiment || "",
-    })),
-  );
+  const [baseline, setBaseline] = useState(() => semanticDraft(record));
+  const [items, setItems] = useState(baseline);
+  const dirty =
+    items.length !== baseline.length ||
+    items.some((item, index) =>
+      /** @type {Array<keyof Draft>} */ ([
+        "evidence_text",
+        "opinion",
+        "label_code",
+        "sentiment",
+      ]).some((field) => item[field] !== baseline[index]?.[field]),
+    );
+  useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
   const [labels, setLabels] = useState(/** @type {ReviewLabel[]} */ ([]));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const saveLock = useRef(false);
   const [saveNext, setSaveNext] = useState(false);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
@@ -77,13 +98,22 @@ export function ManualSemanticEditor({
         position === index ? { ...item, ...change } : item,
       ),
     );
-    onDirtyChange(true);
   };
   const valid = items.every((item) =>
     Object.values(semanticItemErrors(item, labels)).every((message) => !message),
   );
-  const save = async (advance = false) => {
-    if (saving || loading || recovering || conflict || !valid) return;
+  const save = async (advance = false, complete = true) => {
+    if (
+      saving ||
+      saveLock.current ||
+      loading ||
+      recovering ||
+      conflict ||
+      !labels.length ||
+      !valid
+    )
+      return false;
+    saveLock.current = true;
     setSaveNext(advance);
     setSaving(true);
     onSavingChange(true);
@@ -102,16 +132,33 @@ export function ManualSemanticEditor({
         },
       );
       onDirtyChange(false);
-      if (advance) await onSaved(result.version_id, true);
-      else await onSaved(result.version_id);
+      setBaseline(items);
+      if (complete) {
+        if (advance) await onSaved(result.version_id, true);
+        else await onSaved(result.version_id);
+      } else await onSavedBeforeExit?.();
+      return true;
     } catch (reason) {
       setError(errorMessage(reason));
       setConflict(errorStatus(reason) === 409);
+      return false;
     } finally {
+      saveLock.current = false;
       setSaving(false);
       onSavingChange(false);
     }
   };
+  const exit = useUnsavedNavigation({
+    dirty,
+    busy: saving || recovering,
+    save: () => save(false, false),
+    canSave: !loading && !conflict && valid && Boolean(labels.length),
+    onRequest: onNavigationRequest,
+  });
+  useEffect(() => {
+    onExitConfirmationChange?.(exit.pendingExit ? exit.continueEditing : null);
+    return () => onExitConfirmationChange?.(null);
+  }, [exit.pendingExit, exit.continueEditing, onExitConfirmationChange]);
 
   const loadLatest = async () => {
     setRecovering(true);
@@ -130,6 +177,7 @@ export function ManualSemanticEditor({
       const latestGroup = groups.items[0];
       if (!latestGroup) throw new Error("最新结果中未找到这条反馈，输入已保留。");
       setCurrentGroup(latestGroup);
+      setBaseline(semanticDraft(latestGroup.record));
       setRecovered(true);
       setConflict(false);
       setError("");
@@ -149,6 +197,7 @@ export function ManualSemanticEditor({
           <span>保存影响当前反馈组及其 {currentGroup.member_count} 条源明细</span>
         </header>
         {loading && <p role="status">正在读取分类标准…</p>}
+        {exit.pendingExit && <UnsavedChangesActions guard={exit} />}
         {error && (
           <p role="alert">
             {error}
@@ -177,7 +226,6 @@ export function ManualSemanticEditor({
             onEdit={edit}
             onRemove={(index) => {
               setItems(items.filter((_, position) => position !== index));
-              onDirtyChange(true);
             }}
           />
           {!items.length && <p>当前没有语义观点；保存将标记为人工已处理。</p>}
@@ -194,7 +242,6 @@ export function ManualSemanticEditor({
                   sentiment: "",
                 },
               ]);
-              onDirtyChange(true);
             }}
           >
             补充观点
@@ -209,7 +256,13 @@ export function ManualSemanticEditor({
             type={canAdvance ? "default" : "primary"}
             loading={saving && !saveNext}
             disabled={
-              saving || loading || recovering || conflict || !labels.length || !valid
+              saving ||
+              Boolean(exit.pendingExit) ||
+              loading ||
+              recovering ||
+              conflict ||
+              !labels.length ||
+              !valid
             }
             onClick={() => save()}
           >
@@ -220,7 +273,13 @@ export function ManualSemanticEditor({
               type="primary"
               loading={saving && saveNext}
               disabled={
-                saving || loading || recovering || conflict || !labels.length || !valid
+                saving ||
+                Boolean(exit.pendingExit) ||
+                loading ||
+                recovering ||
+                conflict ||
+                !labels.length ||
+                !valid
               }
               onClick={() => save(true)}
             >

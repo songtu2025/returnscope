@@ -43,8 +43,10 @@ export function useModelServiceOperations({
       onSaved(value);
       await refresh(value.connection_id);
       notify(`配置 #${value.version} 草稿已保存，请验证连接与选定模型`);
+      return true;
     } catch (error) {
       notify(errorMessage(error), "error");
+      return false;
     } finally {
       setBusy("");
     }

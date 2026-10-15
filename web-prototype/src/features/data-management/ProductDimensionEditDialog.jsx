@@ -1,5 +1,6 @@
 import Button from "antd/es/button";
 import { Modal } from "../../components/SharedUi";
+import { UnsavedChangesActions } from "../../components/UnsavedChangesActions";
 import { PRODUCT_EDIT_FIELDS } from "./useProductRowEditing";
 
 /** @typedef {import("../../shared/api/dataManagementContracts").DatasetRowsPage} DatasetRowsPage */
@@ -106,17 +107,21 @@ function ProductChangeNote({ changeNote, setChangeNote }) {
   );
 }
 
-/** @param {{saving: boolean, conflict?: boolean, onClose: () => void}} props */
-function ProductEditActions({ saving, conflict, onClose }) {
+/** @param {{saving: boolean, pendingExit: boolean, conflict?: boolean, onClose: () => void}} props */
+function ProductEditActions({ saving, pendingExit, conflict, onClose }) {
   return (
     <div className="modal-actions">
-      <Button autoInsertSpace={false} disabled={saving} onClick={onClose}>
+      <Button
+        autoInsertSpace={false}
+        disabled={saving || pendingExit}
+        onClick={onClose}
+      >
         取消
       </Button>
       <Button
         type="primary"
         htmlType="submit"
-        disabled={saving || conflict}
+        disabled={saving || pendingExit || conflict}
         autoInsertSpace={false}
       >
         {saving ? "正在保存…" : "保存"}
@@ -125,13 +130,15 @@ function ProductEditActions({ saving, conflict, onClose }) {
   );
 }
 
-/** @param {ReturnType<typeof import("./useProductRowEditing").useProductRowEditing> & {editing: DatasetRow, onSave: (event: import("react").FormEvent<HTMLFormElement>) => void | Promise<void>, onClose: () => void}} props */
+/** @param {ReturnType<typeof import("./useProductRowEditing").useProductRowEditing> & {editing: DatasetRow, onSave: (event?: import("react").FormEvent<HTMLFormElement>) => Promise<boolean>, onClose: () => void}} props */
 export function ProductDimensionEditDialog({
   editing,
   setEditing,
   changeNote,
   setChangeNote,
   saving,
+  formRef,
+  navigationExit: exit,
   conflict = false,
   onSave,
   onClose,
@@ -148,15 +155,21 @@ export function ProductDimensionEditDialog({
   resolutions,
   resolveField,
 }) {
+  const close = exit.pendingExit ? exit.continueEditing : onClose;
   return (
-    <Modal title={`编辑产品信息 · ${editing.MSKU}`} onClose={onClose}>
-      <form className="modal-form product-info-edit-form" onSubmit={onSave}>
+    <Modal title={`编辑产品信息 · ${editing.MSKU}`} onClose={close}>
+      <form
+        ref={formRef}
+        className="modal-form product-info-edit-form"
+        onSubmit={onSave}
+      >
         {error && (
           <p className="form-error" role="alert">
             {error}
           </p>
         )}
-        {confirmClose && (
+        {exit.pendingExit && <UnsavedChangesActions guard={exit} />}
+        {confirmClose && !exit.pendingExit && (
           <section role="alert" className="product-edit-confirm">
             <p>有未保存的修改，是否放弃？</p>
             <Button onClick={continueEditing}>继续编辑</Button>
@@ -239,7 +252,12 @@ export function ProductDimensionEditDialog({
           <ProductAttributeFields editing={editing} setEditing={setEditing} />
           <ProductChangeNote changeNote={changeNote} setChangeNote={setChangeNote} />
         </fieldset>
-        <ProductEditActions saving={saving} conflict={conflict} onClose={onClose} />
+        <ProductEditActions
+          saving={saving}
+          pendingExit={Boolean(exit.pendingExit)}
+          conflict={conflict}
+          onClose={close}
+        />
       </form>
     </Modal>
   );

@@ -1,5 +1,5 @@
 import { X } from "@phosphor-icons/react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { SemanticHistory } from "./SemanticHistory";
 
 import { useDialogFocus } from "../../hooks/useDialogFocus";
@@ -20,6 +20,7 @@ import { EvidenceRecordNavigation } from "./EvidenceRecordNavigation";
  *   analysisContext: string,
  *   onClose: () => void,
  *   onSaved?: (versionId: string, advance?: boolean) => void | Promise<void>,
+ *   onSavedBeforeExit?: () => void | Promise<void>,
  *   navigation?: ReturnType<typeof import("./useEvidenceNavigation").useEvidenceNavigation>,
  *   disabled?: boolean,
  *   returnFocusRef: { current: HTMLElement | null }
@@ -30,6 +31,7 @@ export function EvidenceDrawer({
   analysisContext,
   onClose,
   onSaved,
+  onSavedBeforeExit,
   disabled,
   returnFocusRef,
   navigation,
@@ -37,10 +39,18 @@ export function EvidenceDrawer({
   const [editing, setEditing] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const routeExitRef = useRef(/** @type {(() => void) | null} */ (null));
+  const setRouteExit = useCallback((/** @type {(() => void) | null} */ close) => {
+    routeExitRef.current = close;
+  }, []);
   const [pendingAction, setPendingAction] = useState(
     /** @returns {(() => void) | null} */ () => null,
   );
   const requestAction = (/** @type {() => void} */ action) => {
+    if (routeExitRef.current) {
+      routeExitRef.current();
+      return;
+    }
     if (saving || navigation?.busy) return;
     if (dirty) {
       setPendingAction(() => action);
@@ -174,7 +184,10 @@ export function EvidenceDrawer({
               group={group}
               onSaved={onSaved}
               onDirtyChange={setDirty}
+              onSavedBeforeExit={onSavedBeforeExit}
               onSavingChange={setSaving}
+              onNavigationRequest={() => setPendingAction(null)}
+              onExitConfirmationChange={setRouteExit}
               canAdvance={Boolean(navigation)}
               onCancel={() => requestAction(() => setEditing(false))}
             />

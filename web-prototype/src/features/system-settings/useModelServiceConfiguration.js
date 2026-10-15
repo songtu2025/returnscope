@@ -211,6 +211,7 @@ export function useModelServiceConfiguration({
     form,
     setForm,
     editing,
+    dirty,
     activePanel,
     setActivePanel,
     selectedVersion,

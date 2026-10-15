@@ -33,6 +33,14 @@ export function ClassificationResultDetailView(props) {
     allNeedReviewWithoutProblems,
     selectVersion,
   } = context;
+  const refreshRelated = async () => {
+    await refreshServerState(mutate, [
+      "classification-results",
+      "analysis-dashboards",
+      "analysis-tasks",
+      "workbench",
+    ]).catch(() => notify("人工修正已保存，部分关联数据更新失败，可重试", "error"));
+  };
   return (
     <div className="standard-page classification-results-page result-detail-page">
       <button
@@ -111,16 +119,10 @@ export function ClassificationResultDetailView(props) {
               disabled={Boolean(result.deleted_at)}
               analysisContext={result.analysis_context}
               onClose={closeEvidence}
+              onSavedBeforeExit={refreshRelated}
               onSaved={async (version, advance) => {
                 await evidenceNavigation.saved(version, advance);
-                void refreshServerState(mutate, [
-                  "classification-results",
-                  "analysis-dashboards",
-                  "analysis-tasks",
-                  "workbench",
-                ]).catch(() =>
-                  notify("人工修正已保存，部分关联数据更新失败，可重试", "error"),
-                );
+                void refreshRelated();
               }}
               returnFocusRef={evidenceTriggerRef}
             />

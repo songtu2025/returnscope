@@ -6,8 +6,6 @@ import { InlineLoading } from "../../components/SharedUi";
 
 /** @param {StandardWorkspaceContext} context */
 export function StandardWorkspaceHeader({
-  dirty,
-  setConfirmBack,
   onBack,
   isNew,
   detail,
@@ -20,12 +18,7 @@ export function StandardWorkspaceHeader({
   const { detailsProps, summaryProps } = useDismissibleDetails({ menu: true });
   return (
     <div className="standard-subpage-heading editor-heading">
-      <button
-        type="button"
-        className="icon-button"
-        aria-label="返回"
-        onClick={() => (dirty ? setConfirmBack(true) : onBack())}
-      >
+      <button type="button" className="icon-button" aria-label="返回" onClick={onBack}>
         <ArrowLeft size={18} />
       </button>
       <div>

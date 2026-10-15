@@ -11,6 +11,7 @@ import { ModelEditorDialog } from "./ModelEditorDialog";
 import { ModelServiceEditor } from "./ModelServiceEditor";
 import { ModelServiceSummary } from "./ModelServiceSummary";
 import { errorMessage } from "./modelServiceConfig";
+import { UnsavedChangesDialog } from "../../components/UnsavedChangesActions";
 
 /**
  * @param {object} props
@@ -23,6 +24,7 @@ import { errorMessage } from "./modelServiceConfig";
  * @param {string | null} props.focusModelId
  * @param {import("react").RefObject<HTMLDivElement | null>} props.focusedModelRef
  * @param {(message: string, type?: "success" | "error") => void} props.notify
+ * @param {ReturnType<typeof import("../../hooks/useUnsavedNavigation").useUnsavedNavigation>} props.navigationExit
  */
 export function ModelServiceView({
   connectionState,
@@ -34,6 +36,7 @@ export function ModelServiceView({
   focusModelId,
   focusedModelRef,
   notify,
+  navigationExit,
 }) {
   const {
     connections,
@@ -218,7 +221,7 @@ export function ModelServiceView({
           />
         )}
       </div>
-      {!modelEditState.pendingExit && (
+      {!modelEditState.pendingExit && !navigationExit.pendingExit && (
         <ModelEditorDialog
           busy={busy}
           editorMode={modelEditor}
@@ -228,7 +231,7 @@ export function ModelServiceView({
           onSave={saveModel}
         />
       )}
-      {exitState.pendingExit && (
+      {exitState.pendingExit && !navigationExit.pendingExit && (
         <Modal title="放弃未保存的修改？" onClose={exitState.continueEditing}>
           <p>尚未保存的内容会丢失。</p>
           <div className="modal-actions">
@@ -239,6 +242,10 @@ export function ModelServiceView({
           </div>
         </Modal>
       )}
+      <UnsavedChangesDialog
+        guard={navigationExit}
+        message="离开前是否保存本次修改？连接只保存草稿，不会验证或发布。"
+      />
       {syncConfirmation && (
         <Modal title="同步模型目录？" onClose={cancelDiscoverModels}>
           <p>

@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { api } from "../../api";
+import { useUnsavedNavigation } from "../../hooks/useUnsavedNavigation";
 
 /** @typedef {import("../../shared/api/dataManagementContracts").DatasetRow} DatasetRow */
 /** @typedef {import("../../shared/api/dataManagementContracts").DatasetRecord} DatasetRecord */
@@ -18,6 +19,8 @@ export function useProductRowEditing({ dataset, notify, onChanged }) {
   const [original, setOriginal] = useState(/** @type {DatasetRow | null} */ (null));
   const [version, setVersion] = useState(dataset.current_version);
   const [saving, setSaving] = useState(false);
+  const saveLock = useRef(false);
+  const formRef = useRef(/** @type {HTMLFormElement | null} */ (null));
   const [changeNote, setChangeNote] = useState("");
   const [conflict, setConflict] = useState(false);
   const [latest, setLatest] = useState(
@@ -41,7 +44,8 @@ export function useProductRowEditing({ dataset, notify, onChanged }) {
   );
   const [confirmClose, setConfirmClose] = useState(false);
   const dirty = Boolean(
-    changeNote || PRODUCT_EDIT_FIELDS.some((key) => editing?.[key] !== original?.[key]),
+    editing &&
+    (changeNote || PRODUCT_EDIT_FIELDS.some((key) => editing[key] !== original?.[key])),
   );
   const close = () => {
     if (saving) return;
@@ -93,10 +97,11 @@ export function useProductRowEditing({ dataset, notify, onChanged }) {
     setError("");
   };
   const save = async (
-    /** @type {import("react").FormEvent<HTMLFormElement>} */ event,
+    /** @type {import("react").FormEvent<HTMLFormElement> | undefined} */ event,
   ) => {
-    event.preventDefault();
-    if (!editing || saving || conflict) return;
+    event?.preventDefault();
+    if (!editing || saving || saveLock.current || conflict) return false;
+    saveLock.current = true;
     setSaving(true);
     setError("");
     try {
@@ -115,6 +120,7 @@ export function useProductRowEditing({ dataset, notify, onChanged }) {
       setEditing(null);
       onChanged(updated);
       notify("产品信息已更新");
+      return true;
     } catch (failure) {
       const message = failure instanceof Error ? failure.message : "请求失败";
       if (failure instanceof Error && "status" in failure && failure.status === 409) {
@@ -125,16 +131,35 @@ export function useProductRowEditing({ dataset, notify, onChanged }) {
         setError(message);
         notify(message, "error");
       }
+      return false;
     } finally {
+      saveLock.current = false;
       setSaving(false);
     }
   };
+  const discard = () => {
+    if (!saving) {
+      setConfirmClose(false);
+      setEditing(null);
+    }
+  };
+  const navigationExit = useUnsavedNavigation({
+    dirty,
+    busy: saving,
+    discard,
+    canSave: !conflict,
+    onRequest: () => setConfirmClose(false),
+    save: async () => (formRef.current?.reportValidity() ? save(undefined) : false),
+  });
   return {
+    formRef,
+    navigationExit,
     editing,
     setEditing,
     changeNote,
     setChangeNote,
     saving,
+    dirty,
     conflict,
     latest,
     original,
@@ -157,12 +182,7 @@ export function useProductRowEditing({ dataset, notify, onChanged }) {
     loadLatest,
     acceptLatest,
     continueEditing: () => setConfirmClose(false),
-    discard: () => {
-      if (!saving) {
-        setConfirmClose(false);
-        setEditing(null);
-      }
-    },
+    discard,
     open: (/** @type {DatasetRow} */ row) => {
       setResolutions({});
       setOriginal(row);

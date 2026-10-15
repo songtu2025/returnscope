@@ -15,6 +15,8 @@ import {
 import { ClassificationStandardList } from "./ClassificationStandardList";
 import { ClassificationStandardWorkspace } from "./ClassificationStandardWorkspace";
 import { useClassificationStandardDraftController } from "./useClassificationStandardDraftController";
+import { useUnsavedNavigation } from "../../hooks/useUnsavedNavigation";
+import { UnsavedChangesDialog } from "../../components/UnsavedChangesActions";
 
 /** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardSummary} ClassificationStandardSummary */
 /** @typedef {import("../../shared/api/classificationStandardContracts").ClassificationStandardVersion} ClassificationStandardVersion */
@@ -125,6 +127,11 @@ export function ClassificationStandardsPage({ route, notify }) {
     loadStandards,
     loadSelected,
     notify,
+  });
+  const exit = useUnsavedNavigation({
+    dirty: showWorkspace && dirty,
+    busy: showWorkspace && dirty && Boolean(busy),
+    save: () => saveDraft(false),
   });
 
   const deleteStandard = async () => {
@@ -247,7 +254,9 @@ export function ClassificationStandardsPage({ route, notify }) {
               validationAttempt={validationAttempt}
               onContentChange={changeContent}
               onReasonChange={setChangeReason}
-              onSave={saveDraft}
+              onSave={() => {
+                void saveDraft();
+              }}
               onPublish={publish}
               onBack={() => navigateHash("classification-standards")}
               onValidationSourceChange={setValidationSourceId}
@@ -272,6 +281,10 @@ export function ClassificationStandardsPage({ route, notify }) {
           busy={busy}
           onClose={() => setRestoreTarget(null)}
           onConfirm={restoreVersion}
+        />
+        <UnsavedChangesDialog
+          guard={exit}
+          message="离开前是否暂存本次分类标准修改？暂存不会启用或发布。"
         />
       </div>
     </AntdProvider>

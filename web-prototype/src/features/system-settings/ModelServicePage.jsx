@@ -6,6 +6,7 @@ import { useModelServiceCatalog } from "./useModelServiceCatalog";
 import { useModelValidationRun } from "./useModelValidationRun";
 import { modelApi as modelServiceApi } from "../../shared/api/modelApi";
 import { errorMessage } from "./modelServiceConfig";
+import { useUnsavedNavigation } from "../../hooks/useUnsavedNavigation";
 
 /** @typedef {import("./modelServiceViewContracts").CatalogModel} CatalogModel */
 /** @typedef {import("./modelServiceViewContracts").ConfigVersion} ConfigVersion */
@@ -85,6 +86,26 @@ export function ModelServicePage({
     showValidationRun,
   });
   const { catalogModels } = catalog;
+  const dirty = configuration.dirty || catalog.modelDirty;
+  const navigationExit = useUnsavedNavigation({
+    dirty,
+    busy: dirty && Boolean(busy),
+    canSave: catalog.modelDirty || !configuration.saveDisabled,
+    onRequest: () => {
+      configuration.editState.continueEditing();
+      catalog.modelEditState.continueEditing();
+    },
+    save: async () => {
+      if (
+        catalog.modelDirty &&
+        (!connectionState.selectedConnection || configuration.dirty)
+      ) {
+        notify("请先完成模型编辑，再保存连接草稿后离开；当前输入已保留。", "error");
+        return false;
+      }
+      return catalog.modelDirty ? catalog.saveModel() : configuration.save();
+    },
+  });
   const { setProtectedOperation } = connectionState;
   useEffect(() => {
     setProtectedOperation(
@@ -106,6 +127,7 @@ export function ModelServicePage({
       focusModelId={focusModelId}
       focusedModelRef={focusedModelRef}
       notify={notify}
+      navigationExit={navigationExit}
     />
   );
 }
