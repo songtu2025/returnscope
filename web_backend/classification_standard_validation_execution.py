@@ -4,9 +4,9 @@ from collections.abc import Callable
 from copy import deepcopy
 from typing import TYPE_CHECKING, Any
 
-from return_semantics.exporter import REVIEW_STATUSES
 from return_semantics.pipeline import PipelineRun
 from return_semantics.schemas import ProcessingStatus, TaxonomyConfig
+from return_semantics.semantic_review import requires_business_review
 from web_backend.classification_standard_service import ClassificationStandardService
 from web_backend.classification_standards.validation_execution_store import (
     ClassificationStandardValidationStoreMixin,
@@ -43,17 +43,9 @@ def _draft_comparison(
         "primary_label_codes": draft_labels,
         "status": result["status"],
         "unknown_semantics": result.get("unknown_semantics", []),
-        "semantic_units": [
-            {
-                "label_code": unit["label_code"],
-                "opinion": unit["opinion"],
-                "evidence": unit["evidence"],
-                "sentiment": unit["sentiment"],
-                "part": unit["part"],
-            }
-            for unit in result.get("semantic_units", [])
-        ],
+        "semantic_units": result.get("semantic_units", []),
         "review_reasons": result.get("review_reasons", []),
+        "review_diagnostics": result.get("review_diagnostics", []),
         "model_name": result.get("model_name"),
     }
 
@@ -94,7 +86,11 @@ class ClassificationStandardValidationExecutionMixin(
                 run_id, validation, samples, source, taxonomy_data
             )
             items, summary, model_names = self._comparison_results(
-                samples, source, pipeline, baseline_pipeline
+                samples,
+                source,
+                pipeline,
+                baseline_pipeline,
+                TaxonomyConfig.model_validate(taxonomy_data),
             )
             self._store_validation_result(
                 run_id,
@@ -145,7 +141,9 @@ class ClassificationStandardValidationExecutionMixin(
         return output
 
     @staticmethod
-    def _summary(items: list[dict[str, Any]]) -> dict[str, Any]:
+    def _summary(
+        items: list[dict[str, Any]], taxonomy: TaxonomyConfig | None = None
+    ) -> dict[str, Any]:
         total = len(items)
         changed_count = sum((bool(item["changed"]) for item in items))
         semantic_changed_count = sum(
@@ -158,7 +156,8 @@ class ClassificationStandardValidationExecutionMixin(
             (bool(item["draft"]["unknown_semantics"]) for item in items)
         )
         review_count = sum(
-            (str(item["draft"]["status"]) in REVIEW_STATUSES for item in items)
+            requires_business_review(item["draft"], item["comment"], taxonomy)
+            for item in items
         )
         error_count = sum(
             (
@@ -272,9 +271,10 @@ class ClassificationStandardValidationExecutionMixin(
         source: dict[str, Any],
         pipeline: PipelineRun,
         baseline_pipeline: PipelineRun | None,
+        taxonomy: TaxonomyConfig,
     ) -> tuple[list[dict[str, Any]], dict[str, Any], list[str]]:
         items = self._comparison_items(samples, pipeline.classifications)
-        summary = self._summary(items)
+        summary = self._summary(items, taxonomy)
         summary["reference_evaluation"] = self._evaluate_references(items)
         if source.get("comparison_type", "standard_version") == "standard_version":
             summary["reference_evaluation"]["sides"].pop("baseline", None)

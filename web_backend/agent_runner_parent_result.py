@@ -5,8 +5,9 @@ from typing import Any, Callable
 
 from return_semantics.analysis_context import analysis_context_from_snapshot
 from return_semantics.data import ReturnDataset
-from return_semantics.exporter import REVIEW_STATUSES
 from return_semantics.label_statistics import top_problem_labels
+from return_semantics.schemas import TaxonomyConfig
+from return_semantics.semantic_review import requires_business_review
 from web_backend.common import json_text, json_value
 from web_backend.database import Database
 from web_backend.dataset_cache import load_cached_dataset
@@ -174,9 +175,17 @@ class ParentResultMixin:
         return "等待运行", "任务仍有片段等待执行"
 
     @staticmethod
-    def _review_count(results: dict[str, dict[str, Any]]) -> int:
+    def _review_count(
+        results: dict[str, dict[str, Any]],
+        dataset: ReturnDataset,
+        taxonomy: TaxonomyConfig,
+    ) -> int:
+        comments = dataset.unique_comments.set_index("classification_key")[
+            "comment_normalized"
+        ].to_dict()
         return sum(
-            1 for value in results.values() if value["status"] in REVIEW_STATUSES
+            requires_business_review(value, str(comments[key]), taxonomy)
+            for key, value in results.items()
         )
 
     @staticmethod

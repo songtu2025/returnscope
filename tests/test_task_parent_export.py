@@ -3,9 +3,16 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import pandas as pd
 import pytest
 from test_agent_runner_segment_outcomes import runtime as runtime
 
+from return_semantics.data import ReturnDataset
+from return_semantics.schemas import ValidatedClassification
+from web_backend.agent_runner_parent_result import ParentResultMixin
+from web_backend.classification_standard_validation_service import (
+    ClassificationStandardValidationService,
+)
 from web_backend.common import json_text, json_value
 
 
@@ -185,3 +192,100 @@ def test_parent_file_failure_preserves_database_and_written_checkpoint(
         / "classifications-v1.json"
     )
     assert runtime.runner._load_checkpoint(checkpoint) == runtime.seed.results
+
+
+@pytest.mark.parametrize(
+    "status,disposition,diagnostic,comment,expected_review,expected_error",
+    [
+        ("UNKNOWN_SEMANTIC", "OUT_OF_SCOPE", None, "They should be warm", 0, 0),
+        ("UNKNOWN_SEMANTIC", "EXPECTED_ABSTENTION", None, "They should be warm", 0, 0),
+        ("UNKNOWN_SEMANTIC", "MAPPING_UNCERTAIN", None, "They should be warm", 1, 0),
+        ("UNKNOWN_SEMANTIC", "TAXONOMY_GAP", None, "They should be warm", 1, 0),
+        ("MODEL_ERROR", None, "MODEL_RUN_TIMEOUT", "They should be warm", 0, 1),
+        (
+            "SECONDARY_REVIEW",
+            "OUT_OF_SCOPE",
+            "MODEL_RESULT_MISMATCH",
+            "They should be warm",
+            1,
+            0,
+        ),
+        (
+            "SECONDARY_REVIEW",
+            "OUT_OF_SCOPE",
+            "SECONDARY_MODEL_MISSING",
+            "They should be warm",
+            0,
+            0,
+        ),
+        ("NO_TEXT_EVIDENCE", None, None, "", 0, 0),
+        ("AUTO_APPROVED", None, None, "Uncovered source text", 1, 0),
+    ],
+)
+def test_parent_and_validation_review_counts_follow_semantic_disposition(
+    taxonomy, status, disposition, diagnostic, comment, expected_review, expected_error
+):
+    result = ValidatedClassification.model_validate(
+        {
+            "classification_key": "synthetic",
+            "semantic_units": [],
+            "unknown_semantics": [
+                {
+                    "opinion": comment,
+                    "evidence": comment,
+                    "reason": "合成分类依据",
+                    "disposition": disposition,
+                }
+            ]
+            if disposition
+            else [],
+            "problem_label_codes": [],
+            "positive_label_codes": [],
+            "primary_label_codes": [],
+            "status": status,
+            "review_reasons": [],
+            "review_diagnostics": [{"code": diagnostic}] if diagnostic else [],
+            "model_name": "synthetic",
+            "prompt_version": "test",
+            "taxonomy_version": taxonomy.version,
+        }
+    )
+    samples = [
+        {
+            "classification_key": "synthetic",
+            "comment": comment,
+            "category_a": "合成品类",
+            "category_b": "合成子类",
+            "baseline": {},
+        }
+    ]
+    dataset = ReturnDataset(
+        records=pd.DataFrame(),
+        unique_comments=pd.DataFrame(
+            [{"classification_key": "synthetic", "comment_normalized": comment}]
+        ),
+        mskus=frozenset(),
+    )
+    assert (
+        ParentResultMixin._review_count(
+            {"synthetic": result.model_dump(mode="json")}, dataset, taxonomy
+        )
+        == expected_review
+    )
+    items = ClassificationStandardValidationService._comparison_items(
+        samples, {"synthetic": result}
+    )
+    summary = ClassificationStandardValidationService._summary(items, taxonomy)
+    assert summary["review_count"] == expected_review
+    assert summary["error_count"] == expected_error
+
+
+def test_parent_review_count_keeps_manually_resolved_feedback_out_of_pending(runtime):
+    seed = runtime.seed
+    key = next(iter(seed.results))
+    payload = seed.results[key].model_dump(mode="json")
+    payload.update(status="MANUAL_REVIEW", human_review_assessment={"resolved": True})
+    assert (
+        ParentResultMixin._review_count({key: payload}, seed.dataset, seed.taxonomy)
+        == 0
+    )

@@ -207,7 +207,7 @@ class LegacyResultExportMixin:
         serialized = {
             key: value.model_dump(mode="json") for key, value in data.results.items()
         }
-        review_count = self._review_count(serialized)
+        review_count = self._review_count(serialized, data.dataset, data.taxonomy)
         persisted_segments = [
             segment
             for segment in self._load_segments(data.task_id)

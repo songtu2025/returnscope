@@ -126,7 +126,7 @@ def test_validation_service_preserves_method_contract() -> None:
         "_source_context|(self, result_version_id: 'str', base_version_id: 'str') -> 'dict[str, Any]'|function",
         "_sample|(self, result_version_id: 'str', sample_size: 'int') -> 'list[dict[str, Any]]'|function",
         "_comparison_items|(samples: 'list[dict[str, Any]]', classifications: 'dict[str, Any]') -> 'list[dict[str, Any]]'|staticmethod",
-        "_summary|(items: 'list[dict[str, Any]]') -> 'dict[str, Any]'|staticmethod",
+        "_summary|(items: 'list[dict[str, Any]]', taxonomy: 'TaxonomyConfig | None' = None) -> 'dict[str, Any]'|staticmethod",
         "_serialize|(self, value: 'dict[str, Any]', include_items: 'bool' = False) -> 'dict[str, Any]'|function",
     ]
 
