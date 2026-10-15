@@ -18,6 +18,7 @@ export function SemanticHistory({ versionId, recordId, onSaved, onBusyChange }) 
   const load = async () => {
     try {
       setEntries(await semanticChanges(versionId, recordId));
+      setError("");
     } catch (failure) {
       setError(errorMessage(failure));
     }

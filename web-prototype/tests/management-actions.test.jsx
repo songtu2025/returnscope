@@ -78,3 +78,63 @@ test("语义历史还原指定反馈组并切换到保存后的结果", async ()
   expect(saved).toHaveBeenCalledWith("current-result");
   expect(busy.mock.calls).toEqual([[true], [false]]);
 });
+
+test.each([
+  ["空列表", [], "暂无人工修正记录"],
+  [
+    "历史记录",
+    [
+      {
+        id: "retry-edit",
+        actor_name: "合成用户",
+        created_at: "2026-10-16T00:00:00Z",
+        before: { semantic_units: [{ label_code: "FIT", opinion: "重试读取的观点" }] },
+      },
+    ],
+    /重试读取的观点/,
+  ],
+])("语义历史首次失败后重试返回%s，清除旧错误", async (_label, entries, expected) => {
+  const user = userEvent.setup();
+  vi.mocked(semanticChanges)
+    .mockRejectedValueOnce(new Error("首次历史读取失败"))
+    .mockResolvedValueOnce(entries);
+  render(
+    <SemanticHistory
+      versionId="result-1"
+      recordId="record-1"
+      onSaved={vi.fn()}
+      onBusyChange={vi.fn()}
+    />,
+  );
+  await user.click(screen.getByRole("button", { name: "查看修正历史" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("首次历史读取失败");
+  await user.click(screen.getByRole("button", { name: "查看修正历史" }));
+  expect(await screen.findByText(expected)).toBeInTheDocument();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "收起修正历史" })).toBeEnabled();
+});
+
+test("语义历史连续读取失败显示最新错误并仍可重试", async () => {
+  const user = userEvent.setup();
+  vi.mocked(semanticChanges)
+    .mockRejectedValueOnce(new Error("首次历史读取失败"))
+    .mockRejectedValueOnce(new Error("第二次历史读取失败"))
+    .mockResolvedValueOnce([]);
+  render(
+    <SemanticHistory
+      versionId="result-1"
+      recordId="record-1"
+      onSaved={vi.fn()}
+      onBusyChange={vi.fn()}
+    />,
+  );
+  await user.click(screen.getByRole("button", { name: "查看修正历史" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("首次历史读取失败");
+  await user.click(screen.getByRole("button", { name: "查看修正历史" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("第二次历史读取失败");
+  expect(screen.queryByText("首次历史读取失败")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "查看修正历史" })).toBeEnabled();
+  await user.click(screen.getByRole("button", { name: "查看修正历史" }));
+  expect(await screen.findByText("暂无人工修正记录")).toBeInTheDocument();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
