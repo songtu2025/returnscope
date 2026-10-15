@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from web_backend.analysis_cleanup_files import remove_cleanup_files
+from web_backend.analysis_cleanup_files import TEMPORARY_PREFIXES, remove_cleanup_files
 from web_backend.analysis_cleanup_plan import CleanupPlan, build_cleanup_plan
 from web_backend.backup import verify_backup
 from web_backend.common import insert_audit, new_id
@@ -106,22 +106,26 @@ def apply_cleanup(
 def _validate_backup(backup_path: Path, data_dir: Path, plan: CleanupPlan) -> None:
     verify_backup(backup_path)
     with zipfile.ZipFile(backup_path) as archive:
-        # tmp 仅存放临时文件检查产物，不属于现有业务备份的恢复范围。
+        # 临时检查和可重建导出缓存不属于现有业务备份的恢复范围。
         required = {
             item["path"]
             for item in plan.files
-            if item["size"] is not None and not item["path"].startswith("tmp/")
+            if item["size"] is not None
+            and not item["path"].startswith(TEMPORARY_PREFIXES)
         }
         if not required.issubset(archive.namelist()):
             raise ValueError("备份未包含全部待清理文件")
         if any(
             archive.getinfo(item["path"]).file_size != item["size"]
             for item in plan.files
-            if item["size"] is not None and not item["path"].startswith("tmp/")
+            if item["size"] is not None
+            and not item["path"].startswith(TEMPORARY_PREFIXES)
         ):
             raise ValueError("备份产物与当前文件不一致")
         for item in plan.files:
-            if item["size"] is not None and not item["path"].startswith("tmp/"):
+            if item["size"] is not None and not item["path"].startswith(
+                TEMPORARY_PREFIXES
+            ):
                 with archive.open(item["path"]) as source:
                     digest = hashlib.sha256()
                     for chunk in iter(lambda: source.read(1024 * 1024), b""):

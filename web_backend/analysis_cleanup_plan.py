@@ -8,7 +8,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from web_backend.analysis_cleanup_files import inventory_files
+from web_backend.analysis_cleanup_files import (
+    TEMPORARY_PREFIXES,
+    inventory_files,
+    require_idle_exports,
+)
 from web_backend.common import json_text
 from web_backend.task_contracts import FINAL_STATUSES
 
@@ -81,13 +85,13 @@ class CleanupPlan:
             "file_count": len(self.files),
             "file_bytes": sum(item["size"] or 0 for item in self.files),
             "temporary_file_count": sum(
-                item["path"].startswith("tmp/") for item in self.files
+                item["path"].startswith(TEMPORARY_PREFIXES) for item in self.files
             ),
             "preview_hash": self.preview_hash,
         }
 
 
-def _check_idle(connection: sqlite3.Connection) -> None:
+def _check_idle(connection: sqlite3.Connection, data_dir: Path) -> None:
     if any(
         row[0] not in FINAL_STATUSES
         for row in connection.execute("SELECT status FROM tasks")
@@ -95,8 +99,14 @@ def _check_idle(connection: sqlite3.Connection) -> None:
         raise ValueError("任务尚未结束，请先通过正常流程结束执行")
     allowed = {"completed", "completed_with_errors", "cancelled", "failed"}
     if any(
-        row[0] not in allowed
-        for row in connection.execute("SELECT status FROM task_segments")
+        row["removal_requested_at"]
+        or (
+            row["status"] not in allowed
+            and not (row["deleted_at"] and row["status"] != "running")
+        )
+        for row in connection.execute(
+            "SELECT status,deleted_at,removal_requested_at FROM task_segments"
+        )
     ):
         raise ValueError("任务片段尚未结束")
     for table, label in (
@@ -109,10 +119,11 @@ def _check_idle(connection: sqlite3.Connection) -> None:
             raise ValueError(f"{label}尚未结束")
     if list(connection.execute("PRAGMA foreign_key_check")):
         raise ValueError("数据库存在外键异常，拒绝清理")
+    require_idle_exports(data_dir)
 
 
 def build_cleanup_plan(connection: sqlite3.Connection, data_dir: Path) -> CleanupPlan:
-    _check_idle(connection)
+    _check_idle(connection, data_dir)
     rows = {
         table: [
             row[0]

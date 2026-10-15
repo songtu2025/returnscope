@@ -2,11 +2,33 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 from typing import Any
 
 from web_backend.dataset_files import _sha256_file
+
+TEMPORARY_PREFIXES = ("tmp/", "result_exports/")
+
+
+def require_idle_exports(data_dir: Path) -> None:
+    root = data_dir.resolve()
+    for path in (root / "result_exports").glob("*.json"):
+        _file_entry(path, root, set())
+        try:
+            job = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            raise ValueError("导出任务状态文件损坏，请先检查导出状态再清理") from error
+        if not isinstance(job, dict) or job.get("status") not in (
+            "queued",
+            "running",
+            "ready",
+            "failed",
+        ):
+            raise ValueError("导出任务状态文件损坏，请先检查导出状态再清理")
+        if job["status"] in {"queued", "running"}:
+            raise ValueError("导出任务尚未结束，请先等待导出完成，再停止应用后清理")
 
 
 def inventory_files(
@@ -14,7 +36,7 @@ def inventory_files(
 ) -> list[dict[str, Any]]:
     root = data_dir.resolve()
     files: set[Path] = set()
-    for folder in (root / "results", root / "tmp"):
+    for folder in (root / "results", root / "tmp", root / "result_exports"):
         if folder.exists():
             files.update(path for path in folder.rglob("*") if not path.is_dir())
     files.update((root / "cache").glob("*.jsonl"))
@@ -50,7 +72,7 @@ def _file_entry(
     resolved = path.resolve()
     allowed = any(
         resolved.is_relative_to(root / directory)
-        for directory in ("results", "uploads", "imports", "tmp")
+        for directory in ("results", "uploads", "imports", "tmp", "result_exports")
     ) or (resolved.parent == root / "cache" and resolved.suffix == ".jsonl")
     if not allowed or resolved in retained:
         raise ValueError("产物文件越界或仍被保留的数据引用，拒绝清理")
