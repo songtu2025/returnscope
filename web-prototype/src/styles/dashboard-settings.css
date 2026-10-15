@@ -20,6 +20,7 @@
 
 .dashboard-settings-fields > p,
 .dashboard-settings-fields > div,
+.dashboard-settings-fields > section,
 .dashboard-settings-fields > fieldset {
   grid-column: 1 / -1;
 }

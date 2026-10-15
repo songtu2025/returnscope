@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { UnsavedChangesDialog } from "../../components/UnsavedChangesActions";
 import { useUnsavedNavigation } from "../../hooks/useUnsavedNavigation";
 import { dashboardApi } from "../../shared/api/dashboardApi";
-import { useClassificationResultListData } from "../classification-results/useClassificationResultListData";
 import { DashboardQualityScope } from "./DashboardQualityScope";
+import { DashboardSourceSelector } from "./DashboardSourceSelector";
 import { errorMessage } from "./dashboardRequestErrors";
 import "../../styles/dashboard-settings.css";
 
@@ -22,28 +22,30 @@ function settingsKey(name, ids, statuses, filters) {
 /** @param {{dashboard: import("./analysisDashboardContracts").Dashboard, onClose: () => void, onSaved: (id: string) => void | Promise<void>}} props */
 export function DashboardSettingsEditor({ dashboard, onClose, onSaved }) {
   const [name, setName] = useState(dashboard.name ?? "");
-  const [query, setQuery] = useState("");
-  const [page, setPage] = useState(1);
-  const [ids, setIds] = useState(/** @type {string[]} */ ([]));
   const [sources, setSources] = useState(
     /** @type {import("./analysisDashboardContracts").DashboardSource[]} */ ([]),
   );
-  const [statuses, setStatuses] = useState(/** @type {string[]} */ (["ready"]));
-  const [filters, setFilters] = useState(
-    /** @type {Record<string, string | string[] | null>} */ ({}),
-  );
+  const originalFilters = dashboard.version?.filters ?? {};
+  const originalQuality = originalFilters.quality_status;
+  const originalStatuses = Array.isArray(originalQuality) ? originalQuality : ["ready"];
+  const [statuses, setStatuses] = useState(originalStatuses);
+  const [filters, setFilters] = useState(originalFilters);
   const [loading, setLoading] = useState(true);
+  const [sourcesLoaded, setSourcesLoaded] = useState(false);
+  const [sourceError, setSourceError] = useState("");
+  const [sourceAttempt, setSourceAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const formRef = useRef(/** @type {HTMLFormElement | null} */ (null));
   const leavingRef = useRef(false);
   const [baseline, setBaseline] = useState(() =>
-    settingsKey(dashboard.name ?? "", [], ["ready"], {}),
+    settingsKey(dashboard.name ?? "", [], originalStatuses, originalFilters),
   );
+  const ids = sources
+    .map((source) => source.result_version_id)
+    .filter((id) => typeof id === "string");
   const draftKey = settingsKey(name, ids, statuses, filters);
   const dirty = draftKey !== baseline;
-  const resultQuery = useMemo(() => ({ page, page_size: 20, q: query }), [page, query]);
-  const resultState = useClassificationResultListData(resultQuery);
   useEffect(() => {
     let active = true;
     dashboardApi
@@ -57,11 +59,8 @@ export function DashboardSettingsEditor({ dashboard, onClose, onSaved }) {
           const sourceIds = sources
             .map((source) => source.result_version_id)
             .filter((id) => typeof id === "string");
-          setIds(sourceIds);
           const currentFilters = dashboard.version?.filters ?? {};
-          setFilters(currentFilters);
           const quality = currentFilters.quality_status;
-          setStatuses(Array.isArray(quality) ? quality : ["ready"]);
           setBaseline(
             settingsKey(
               dashboard.name ?? "",
@@ -70,21 +69,28 @@ export function DashboardSettingsEditor({ dashboard, onClose, onSaved }) {
               currentFilters,
             ),
           );
+          setSourcesLoaded(true);
           setLoading(false);
         },
       )
       .catch((failure) => {
         if (active) {
-          setError(errorMessage(failure));
+          setSourceError(errorMessage(failure));
           setLoading(false);
         }
       });
     return () => {
       active = false;
     };
-  }, [dashboard]);
+  }, [dashboard, sourceAttempt]);
   const save = async (complete = true) => {
-    if (loading || saving || !ids.length || !formRef.current?.reportValidity())
+    if (
+      !sourcesLoaded ||
+      loading ||
+      saving ||
+      !ids.length ||
+      !formRef.current?.reportValidity()
+    )
       return false;
     setSaving(true);
     setError("");
@@ -123,7 +129,7 @@ export function DashboardSettingsEditor({ dashboard, onClose, onSaved }) {
   const exit = useUnsavedNavigation({
     dirty,
     busy: dirty && saving,
-    canSave: !loading && Boolean(ids.length),
+    canSave: sourcesLoaded && !loading && Boolean(ids.length),
     save: () => save(false),
     discard: onClose,
     onRequest: () => {
@@ -144,7 +150,7 @@ export function DashboardSettingsEditor({ dashboard, onClose, onSaved }) {
           void save();
         }}
       >
-        <fieldset className="dashboard-settings-fields" disabled={loading || saving}>
+        <fieldset className="dashboard-settings-fields" disabled={saving}>
           <label>
             看板名称
             <input
@@ -154,73 +160,28 @@ export function DashboardSettingsEditor({ dashboard, onClose, onSaved }) {
               maxLength={120}
             />
           </label>
-          <label>
-            搜索来源结果
-            <input
-              value={query}
-              onChange={(event) => {
-                setQuery(event.target.value);
-                setPage(1);
-              }}
-            />
-          </label>
-          <p>已选择 {ids.length} 个来源</p>
-          {sources
-            .filter(
-              (source) =>
-                source.result_version_id && ids.includes(source.result_version_id),
-            )
-            .map((source) => (
-              <div key={source.result_version_id}>
-                {source.store_site} · {source.listing}
-                <button
-                  className="text-button"
-                  type="button"
-                  onClick={() =>
-                    setIds(ids.filter((id) => id !== source.result_version_id))
-                  }
-                >
-                  移除此来源
-                </button>
-              </div>
-            ))}
-          <div className="dashboard-settings-source-list">
-            {resultState.data?.items.map((item) => (
-              <label key={item.version_id}>
-                <input
-                  type="checkbox"
-                  checked={ids.includes(item.version_id)}
-                  onChange={(event) =>
-                    setIds(
-                      event.target.checked
-                        ? [...ids, item.version_id]
-                        : ids.filter((id) => id !== item.version_id),
-                    )
-                  }
-                />
-                {item.store_site} · {item.listing} · v
-                {String(item.version_no ?? item.version ?? "")}
-              </label>
-            ))}
-          </div>
-          <div className="modal-actions">
-            <button
-              className="secondary-button"
-              type="button"
-              disabled={page === 1}
-              onClick={() => setPage(page - 1)}
-            >
-              上一页
-            </button>
-            <button
-              className="secondary-button"
-              type="button"
-              disabled={page * 20 >= (resultState.data?.total ?? 0)}
-              onClick={() => setPage(page + 1)}
-            >
-              下一页
-            </button>
-          </div>
+          {sourceError && (
+            <p role="alert">
+              已绑定来源读取失败：{sourceError}
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => {
+                  setLoading(true);
+                  setSourceError("");
+                  setSourceAttempt((attempt) => attempt + 1);
+                }}
+              >
+                重试已绑定来源
+              </button>
+            </p>
+          )}
+          {loading && <p role="status">正在读取已绑定来源…</p>}
+          <DashboardSourceSelector
+            sources={sources}
+            onChange={setSources}
+            disabled={!sourcesLoaded || loading}
+          />
           <DashboardQualityScope statuses={statuses} onChange={setStatuses} />
           <label>
             反馈开始日期
@@ -244,14 +205,6 @@ export function DashboardSettingsEditor({ dashboard, onClose, onSaved }) {
           </label>
         </fieldset>
         {error && <p role="alert">{error}</p>}
-        {resultState.error && (
-          <p role="alert">
-            来源结果读取失败：{resultState.error}
-            <button type="button" onClick={() => void resultState.load()}>
-              重试
-            </button>
-          </p>
-        )}
         <div className="modal-actions">
           <button
             type="button"
@@ -263,7 +216,7 @@ export function DashboardSettingsEditor({ dashboard, onClose, onSaved }) {
           </button>
           <button
             className="primary-button"
-            disabled={loading || saving || !ids.length}
+            disabled={!sourcesLoaded || loading || saving || !ids.length}
           >
             {saving ? "保存中…" : "保存修改"}
           </button>
