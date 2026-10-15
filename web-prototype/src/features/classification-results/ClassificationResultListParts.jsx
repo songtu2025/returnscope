@@ -5,7 +5,6 @@ import { DeliveryLifecycleControls } from "../../components/DeliveryLifecycleCon
 
 import { ResultDownloadButton } from "./ResultDownloadButton";
 import { formatTime } from "../../lib/presentation";
-import { PUBLISH_LABELS } from "./classificationResultConstants";
 import { resultActionPolicy } from "./resultActionPolicy";
 
 /**
@@ -111,11 +110,6 @@ function ResultPoolStatus({ result, policy, selectable, selected, onToggle }) {
       )}
       <div className="result-state-cell" role="cell">
         <span className={`result-quality-badge ${policy.state}`}>{policy.label}</span>
-        {!result.deleted_at && (
-          <small>
-            {`版本发布：${PUBLISH_LABELS[result.publish_status] ?? result.publish_status ?? "未提供"}`}
-          </small>
-        )}
       </div>
     </>
   );

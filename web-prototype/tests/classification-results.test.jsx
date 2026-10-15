@@ -236,7 +236,11 @@ test("分类结果使用统一列表，进入详情携带记录情况筛选", as
   expect(screen.queryByRole("button", { name: "结果版本" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "待复核" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "复核记录" })).not.toBeInTheDocument();
-  await userEvent.click(await screen.findByRole("button", { name: "SR001" }));
+  const listing = await screen.findByRole("button", { name: "SR001" });
+  const row = listing.closest('[role="row"]');
+  expect(within(row).getAllByText("已发布")).toHaveLength(1);
+  expect(within(row).queryByText(/版本发布：/)).not.toBeInTheDocument();
+  await userEvent.click(listing);
   expect(window.location.hash).toContain("record_quality_status=review_required");
   expect(window.location.hash).not.toContain("view=reviews");
 });
