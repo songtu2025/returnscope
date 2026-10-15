@@ -1,4 +1,11 @@
-import { cleanup, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { renderWithServerState as render } from "./renderWithServerState";
@@ -207,4 +214,42 @@ test("关联模块刷新失败不误报恢复失败，也不阻断回收站刷�
   expect(mocks.request).toHaveBeenCalledTimes(2);
   expect(notify).toHaveBeenCalledWith("Listing 已恢复，不会自动执行");
   expect(notify).not.toHaveBeenCalledWith("关联模块刷新失败", "error");
+});
+
+test("恢复期间保留搜索输入但锁定提交和分页，结束后可以操作", async () => {
+  let finish;
+  mocks.control.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  mocks.request.mockResolvedValue({ items: [item], total: 41 });
+  render(<TaskRecyclePage notify={vi.fn()} />);
+  await screen.findByText("SYNTHETIC");
+  await userEvent.click(screen.getByRole("button", { name: "下一页" }));
+  await screen.findByText("共 41 条 · 第 2 页");
+  await userEvent.click(screen.getByRole("button", { name: "恢复", exact: true }));
+  const input = screen.getByRole("textbox", { name: "搜索回收站" });
+  await userEvent.type(input, "新范围{Enter}");
+  fireEvent.submit(input.closest("form"));
+  expect(input).toHaveValue("新范围");
+  for (const name of ["搜索", "上一页", "下一页"])
+    expect(screen.getByRole("button", { name, exact: true })).toBeDisabled();
+  expect(screen.getByText("共 41 条 · 第 2 页")).toBeVisible();
+  expect(mocks.request).toHaveBeenCalledTimes(2);
+  await act(async () => finish({}));
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "搜索", exact: true })).toBeEnabled(),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "上一页" }));
+  await screen.findByText("共 41 条 · 第 1 页");
+  await userEvent.click(screen.getByRole("button", { name: "下一页" }));
+  await screen.findByText("共 41 条 · 第 2 页");
+  await userEvent.click(screen.getByRole("button", { name: "搜索", exact: true }));
+  await waitFor(() =>
+    expect(mocks.request).toHaveBeenCalledWith(
+      `/api/tasks/recycle?q=${encodeURIComponent("新范围")}&page=1`,
+    ),
+  );
 });

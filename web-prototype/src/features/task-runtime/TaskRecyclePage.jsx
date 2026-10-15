@@ -128,6 +128,7 @@ export function TaskRecyclePage({ notify }) {
         className="listing-queue-toolbar recycle-search-form"
         onSubmit={(event) => {
           event.preventDefault();
+          if (busy) return;
           setSearch(query.trim());
           setPage(1);
         }}
@@ -140,7 +141,9 @@ export function TaskRecyclePage({ notify }) {
             onChange={(event) => setQuery(event.target.value)}
           />
         </label>
-        <button className="secondary-button">搜索</button>
+        <button className="secondary-button" disabled={Boolean(busy)}>
+          搜索
+        </button>
       </form>
       {error && !refreshError && !busy && (
         <div role="alert">
@@ -218,14 +221,14 @@ export function TaskRecyclePage({ notify }) {
             </span>
             <button
               className="secondary-button compact-button"
-              disabled={page <= 1}
+              disabled={Boolean(busy) || page <= 1}
               onClick={() => setPage(page - 1)}
             >
               上一页
             </button>
             <button
               className="secondary-button compact-button"
-              disabled={page * 20 >= data.total}
+              disabled={Boolean(busy) || page * 20 >= data.total}
               onClick={() => setPage(page + 1)}
             >
               下一页
