@@ -11,7 +11,6 @@ from return_import_helpers import (
 )
 from test_classification_result_pool import _seed_result_context
 
-import web_backend.datasets.preview as dataset_preview_module
 from return_semantics.data import (
     PRODUCT_COLUMNS,
 )
@@ -75,7 +74,7 @@ def test_product_preview_uses_database_without_excel(
     assert service.preview_rows(str(created["id"]), query="MSKU-1")["total"] == 1
 
 
-def test_return_preview_reads_only_requested_prefix(
+def test_return_preview_reads_database_without_parsing_file(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -87,19 +86,18 @@ def test_return_preview_reads_only_requested_prefix(
         [_return_row(f"O-{index}", "偏小") for index in range(20)],
     )
     created = _create_task_input(service, source)
-    original = dataset_preview_module.read_return_file
-    observed: list[int | None] = []
 
-    def tracking_read(path, usecols=None, nrows=None):
-        observed.append(nrows)
-        return original(path, usecols=usecols, nrows=nrows)
+    def no_file(*args, **kwargs):
+        raise AssertionError("反馈预览不应解析文件")
 
-    monkeypatch.setattr(dataset_preview_module, "read_return_file", tracking_read)
+    monkeypatch.setattr(pd, "read_csv", no_file)
+    monkeypatch.setattr(pd, "read_excel", no_file)
     preview = service.preview_rows(str(created["id"]), offset=5, limit=2)
 
-    assert observed == [7]
     assert preview["source_total"] == 20
     assert [record["_row_index"] for record in preview["records"]] == [5, 6]
+    assert service.preview_rows(str(created["id"]), query="O-19")["total"] == 1
+    assert service.preview_rows(str(created["id"]), store="SENWAYZON:US")["total"] == 20
 
 
 def test_retained_product_history_is_not_used_as_current_input(tmp_path: Path) -> None:

@@ -58,6 +58,7 @@ from web_backend.database_schema import SCHEMA
 from web_backend.database_table_rebuilds import DatabaseTableRebuilds
 from web_backend.datasets.product_aliases import migrate_product_aliases
 from web_backend.datasets.product_store import migrate_product_store
+from web_backend.datasets.return_store import migrate_return_store
 from web_backend.tasks.recycle_migration import migrate_segment_recycle
 
 CLASSIFICATION_UNIT_RERUN_MIGRATION = "20260919_classification_unit_rerun_state"
@@ -143,6 +144,7 @@ class DatabaseMigrations(DatabaseTableRebuilds):
         connection.executescript("BEGIN IMMEDIATE;\n" + SCHEMA)
         migrate_product_aliases(connection)
         migrate_product_store(connection)
+        migrate_return_store(connection)
         self._migrate_auth_action_tokens(connection)
         self._migrate_email_change_tokens(connection)
         self._migrate_user_columns(connection)

@@ -10,6 +10,7 @@ from web_backend.datasets.product_backfill import (
     backfill_product_store,
     verify_product_artifacts,
 )
+from web_backend.datasets.return_backfill import backfill_return_store
 from web_backend.settings import Settings
 
 
@@ -30,6 +31,7 @@ def upgrade_database(settings: Settings, *, app_stopped: bool) -> Path:
     try:
         database.upgrade_schema()
         backfill_product_store(database)
+        backfill_return_store(database)
         database.validate_production_schema()
         with database.connect() as connection:
             if connection.execute("PRAGMA integrity_check").fetchone()[0] != "ok":

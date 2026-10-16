@@ -6,13 +6,12 @@ from typing import Any
 
 import pandas as pd
 
-from return_semantics.data import read_return_file
-from web_backend.common import json_value
 from web_backend.database import Database
 from web_backend.datasets.product_store import load_product_frame
+from web_backend.datasets.return_store import return_preview
 
 PREVIEW_VERSION_QUERY = """
-SELECT d.kind, d.current_version, v.version AS selected_version,
+SELECT v.id, d.kind, d.current_version, v.version AS selected_version,
        v.file_path, v.sha256, v.row_count, v.quality_json
 FROM datasets d
 JOIN dataset_versions v
@@ -30,30 +29,6 @@ def _preview_records(
     for row_index, record in zip(selected.index, records, strict=True):
         record["_row_index"] = int(row_index)
     return records
-
-
-def _unfiltered_return_preview(
-    row: Any, offset: int, limit: int, query: str
-) -> dict[str, Any]:
-    frame = read_return_file(
-        Path(str(row["file_path"])),
-        nrows=offset + limit,
-    ).fillna("")
-    records = _preview_records(frame, offset, limit)
-    quality = json_value(row["quality_json"], {}) or {}
-    return {
-        "records": records,
-        "offset": offset,
-        "limit": limit,
-        "total": int(row["row_count"]),
-        "source_total": int(row["row_count"]),
-        "query": query,
-        "version": int(row["selected_version"]),
-        "facets": {
-            "stores": quality.get("stores", []),
-            "categories": [],
-        },
-    }
 
 
 def _preview_stores(frame: pd.DataFrame) -> list[str]:
@@ -135,9 +110,13 @@ class _DatasetPreview:
         if row["kind"] == "products":
             frame = load_product_frame(self.database, Path(str(row["file_path"])))
         else:
-            if not query.strip() and not store.strip() and not category.strip():
-                return _unfiltered_return_preview(row, offset, limit, query)
-            frame = read_return_file(Path(str(row["file_path"]))).fillna("")
+            with self.database.connect() as connection:
+                return return_preview(
+                    connection,
+                    row,
+                    (offset, limit),
+                    {"query": query, "store": store, "category": category},
+                )
         source_total = len(frame)
         stores = _preview_stores(frame)
         category_labels, categories = _preview_categories(frame)

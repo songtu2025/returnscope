@@ -6,11 +6,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from return_semantics.data import read_return_file
 from web_backend.common import insert_audit, json_text, new_id
 from web_backend.database import Database
 from web_backend.dataset_files import (
     DatasetRevisionConflict,
 )
+from web_backend.datasets.return_store import save_return_frame
 from web_backend.security import utc_now
 
 logger = logging.getLogger(__name__)
@@ -60,7 +62,7 @@ class DatasetReturnVersionMixin:
         dataset_id = write.dataset_id
         prepared = write.prepared
         current = connection.execute(
-            "SELECT current_version FROM datasets WHERE id = ?",
+            "SELECT current_version, kind FROM datasets WHERE id = ?",
             (dataset_id,),
         ).fetchone()
         if current is None:
@@ -97,6 +99,12 @@ class DatasetReturnVersionMixin:
                 now,
             ),
         )
+        if current["kind"] == "returns":
+            save_return_frame(
+                connection,
+                prepared["id"],
+                read_return_file(Path(prepared["file_path"])),
+            )
         connection.execute(
             """
             UPDATE datasets
