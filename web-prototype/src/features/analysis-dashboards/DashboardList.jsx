@@ -3,7 +3,7 @@ import { MANAGED_REFRESH_OPTIONS } from "../../shared/refreshPolicy";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLoadingHeight } from "../../hooks/useLoadingHeight";
 import { ChartBar } from "@phosphor-icons/react";
-import useSWR from "swr";
+import useSWR, { unstable_serialize } from "swr";
 import { navigateHash } from "../../app/hashRouter";
 import { Pagination } from "../../components/Pagination";
 import { EmptyState, InlineLoading, PageHeading } from "../../components/SharedUi";
@@ -22,8 +22,8 @@ import { useListReturnPosition } from "../../hooks/useListReturnPosition";
 /** @typedef {{route: DashboardRoute, updateRoute: UpdateDashboardRoute, userId: string, returnPosition?: import("react").MutableRefObject<import("../../hooks/useListReturnPosition").ListReturnPosition | null>}} DashboardListProps */
 /** @typedef {Pick<DashboardListProps, "route" | "updateRoute"> & ReturnType<typeof useDashboardList> & {clearFilters: () => void, rememberPosition: (id: string) => void}} DashboardListContext */
 
-/** @param {Pick<DashboardListProps, "route" | "returnPosition">} props */
-function useDashboardList({ route, returnPosition }) {
+/** @param {Pick<DashboardListProps, "route" | "updateRoute" | "returnPosition">} props */
+function useDashboardList({ route, updateRoute, returnPosition }) {
   const [filters, setFilters] = useState({ q: route.q, status: route.status });
   const [returning] = useState(() => Boolean(returnPosition?.current));
   const [returnRefreshing, setReturnRefreshing] = useState(returning);
@@ -49,6 +49,12 @@ function useDashboardList({ route, returnPosition }) {
     {
       ...MANAGED_REFRESH_OPTIONS,
       keepPreviousData: true,
+      onSuccess: (response, key) => {
+        // 只按当前查询成功返回的总数校正，不使用上一查询保留的缓存。
+        if (key !== unstable_serialize(serverStateKeys.dashboardList(query))) return;
+        const lastPage = Math.max(Math.ceil(response.total / route.pageSize), 1);
+        if (route.page > lastPage) updateRoute({ page: lastPage }, { replace: true });
+      },
       ...(returnRefreshing ? { revalidateOnMount: false } : {}),
     },
   );
@@ -101,7 +107,7 @@ function useDashboardList({ route, returnPosition }) {
 
 /** @param {DashboardListProps} props */
 export function DashboardList({ route, updateRoute, userId, returnPosition }) {
-  const state = useDashboardList({ route, returnPosition });
+  const state = useDashboardList({ route, updateRoute, returnPosition });
   const { containerRef, titleRef, remember } = useListReturnPosition({
     identity: JSON.stringify({
       q: route.q,

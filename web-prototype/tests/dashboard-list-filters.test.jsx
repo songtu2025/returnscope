@@ -1,5 +1,5 @@
 import { beforeEach, afterEach, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithServerState as render } from "./renderWithServerState";
 import { useHashRoute } from "../src/app/hashRouter";
@@ -110,4 +110,68 @@ test("输入法组合Enter不提交，结束后正常提交", async () => {
   }
   await userEvent.type(input, "已组词{Enter}");
   await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+});
+
+test.each([false, true])("新查询等待或失败(%s)不依据前一查询缓存跳页", async (fail) => {
+  window.history.replaceState(null, "", "#analysis-dashboards?q=旧条件");
+  read.mockResolvedValueOnce({
+    items: [{ id: "previous", name: "上次查询看板", status: "active" }],
+    total: 1,
+  });
+  let resolveRead;
+  let rejectRead;
+  read.mockImplementationOnce(
+    () =>
+      new Promise((resolve, reject) => {
+        resolveRead = resolve;
+        rejectRead = reject;
+      }),
+  );
+  render(<Harness />);
+  await screen.findByText("上次查询看板");
+  act(() => {
+    window.history.replaceState(
+      null,
+      "",
+      "#analysis-dashboards?q=新条件&page=3&page_size=50",
+    );
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  });
+  await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+  expect(new URLSearchParams(window.location.hash.split("?")[1]).get("page")).toBe("3");
+  expect(screen.getByText("上次查询看板")).toBeInTheDocument();
+  await act(async () => {
+    if (fail) rejectRead(new Error("合成查询失败"));
+    else resolveRead({ items: [], total: 120 });
+  });
+  if (fail) await screen.findByText("合成查询失败");
+  expect(new URLSearchParams(window.location.hash.split("?")[1]).get("page")).toBe("3");
+  expect(read).toHaveBeenCalledTimes(2);
+});
+
+test("切换查询后迟到的旧响应不校正当前页码", async () => {
+  let resolveOld;
+  read.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolveOld = resolve;
+      }),
+  );
+  render(<Harness />);
+  await waitFor(() => expect(read).toHaveBeenCalledOnce());
+  act(() => {
+    window.history.replaceState(
+      null,
+      "",
+      "#analysis-dashboards?q=新条件&page=3&page_size=50",
+    );
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  });
+  await screen.findByText("合成看板");
+  await act(async () => resolveOld({ items: [], total: 0 }));
+  const query = new URLSearchParams(window.location.hash.split("?")[1]);
+  expect(query.get("q")).toBe("新条件");
+  expect(query.get("page")).toBe("3");
+  expect(screen.getByText("合成看板")).toBeInTheDocument();
+  expect(read).toHaveBeenCalledTimes(2);
 });

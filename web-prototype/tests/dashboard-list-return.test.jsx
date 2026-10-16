@@ -170,6 +170,40 @@ test("独立详情入口返回列表不复用其他会话的位置", async () =>
   expect(window.scrollY).toBe(0);
 });
 
+test.each([21, 1])("恢复末项后按总数 %s 校正页码且保留筛选", async (total) => {
+  const page = total === 21 ? 2 : 1;
+  window.history.replaceState(
+    null,
+    "",
+    `#analysis-dashboards?q=合成&status=deleted&page=${page}`,
+  );
+  let restored = false;
+  read.mockImplementation(async ({ page: requestedPage }) => ({
+    items: restored
+      ? total === 21 && requestedPage === 1
+        ? [{ id: "remaining", name: "剩余合成看板", deleted_at: "2026-10-15" }]
+        : []
+      : [{ id: "last", name: "末项合成看板", deleted_at: "2026-10-15", revision: 1 }],
+    total: restored ? total - 1 : total,
+  }));
+  changeDeliveryLifecycle.mockImplementation(async () => {
+    restored = true;
+    return { ok: true };
+  });
+  render(<Harness />);
+  await userEvent.click(await screen.findByRole("button", { name: "恢复分析看板" }));
+  await screen.findByText(total === 21 ? "剩余合成看板" : "没有符合条件的看板");
+  expect(read).toHaveBeenLastCalledWith(
+    { page: 1, page_size: 20, q: "合成", status: "deleted" },
+    {},
+  );
+  const query = new URLSearchParams(window.location.hash.split("?")[1]);
+  expect(query.get("q")).toBe("合成");
+  expect(query.get("status")).toBe("deleted");
+  expect(Number(query.get("page") || 1)).toBe(1);
+  expect(changeDeliveryLifecycle).toHaveBeenCalledOnce();
+});
+
 test("返回刷新失败仍显示原缓存与错误，并恢复原行焦点", async () => {
   await openSecondPage();
   read.mockRejectedValue(new Error("合成连接错误"));
