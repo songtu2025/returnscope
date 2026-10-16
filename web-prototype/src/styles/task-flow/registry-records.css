@@ -237,7 +237,7 @@
   min-width: 0;
 }
 .task-registry-identity .task-name-open {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   width: auto;
 }

@@ -193,7 +193,7 @@ export function TaskNameEditor({
             type="button"
             className="task-rename-action"
             aria-label={`修改任务名称：${task.title}`}
-            title="修改名称"
+            title="修改任务名称"
             disabled={disabled}
             onClick={() => {
               setTitle(task.title);

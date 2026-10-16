@@ -22,3 +22,16 @@
   min-height: 32px;
   margin-right: 12px;
 }
+
+.task-registry-identity .task-name-editor .task-rename-action {
+  color: var(--muted);
+}
+.task-registry-row:hover .task-rename-action,
+.task-registry-identity:focus-within .task-rename-action {
+  color: var(--green);
+  background: var(--green-pale);
+}
+.task-name-editor .task-rename-action:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
