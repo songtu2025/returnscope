@@ -2023,6 +2023,14 @@ test("迟到的报告列表不能把已完成报告退回运行中", async () =>
 
 test("搜索条件只在点击筛选后提交并重置到第一页", async () => {
   const user = userEvent.setup();
+  dashboardApiMock.analysisDashboards.mockImplementation(
+    async ({ page, page_size }) => ({
+      items: [{ id: "synthetic-page-item", name: "合成分页看板", status: "active" }],
+      total: 41,
+      page,
+      page_size,
+    }),
+  );
   window.location.hash = "#analysis-dashboards?q=旧关键词&page=3";
   render(<DashboardHarness />);
 
