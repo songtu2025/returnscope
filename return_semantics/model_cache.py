@@ -16,11 +16,12 @@ class JsonlCache:
         self._lock = threading.Lock()
         self._key_locks: dict[str, threading.Lock] = {}
         if path.exists():
-            for line in path.read_text(encoding="utf-8").splitlines():
-                if not line.strip():
-                    continue
-                item = json.loads(line)
-                self._items[item["cache_key"]] = item
+            with path.open(encoding="utf-8") as cache_file:
+                for line in cache_file:
+                    if not line.strip():
+                        continue
+                    item = json.loads(line)
+                    self._items[item["cache_key"]] = item
 
     def lock_for(self, cache_key: str) -> threading.Lock:
         with self._lock:
