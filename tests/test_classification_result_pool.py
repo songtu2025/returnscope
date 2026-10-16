@@ -30,6 +30,7 @@ from web_backend.classification_result_service import (
 from web_backend.common import json_text, json_value
 from web_backend.database import Database
 from web_backend.datasets.product_store import save_product_workbook
+from web_backend.datasets.return_store import save_return_frame
 from web_backend.routers.classification_results import (
     create_classification_result_router,
 )
@@ -252,6 +253,9 @@ def _seed_result_context(tmp_path: Path) -> SimpleNamespace:
         }
     )
     with database.transaction() as connection:
+        save_return_frame(
+            connection, "version-returns", pd.read_csv(returns_path, dtype=str)
+        )
         save_product_workbook(
             connection,
             "products-sha",

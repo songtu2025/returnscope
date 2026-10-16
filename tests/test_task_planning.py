@@ -32,6 +32,7 @@ from web_backend.common import list_audit
 from web_backend.database import Database
 from web_backend.dataset_service import DatasetService, inspect_file
 from web_backend.datasets.product_store import save_product_workbook
+from web_backend.datasets.return_store import save_return_frame
 from web_backend.routers.tasks import create_task_router
 from web_backend.settings import PROJECT_ROOT, Settings
 from web_backend.task_plan_service import TaskPlanService
@@ -177,6 +178,9 @@ def _database_with_inputs(tmp_path: Path) -> tuple[Database, Path, Path]:
             """
         )
     with database.transaction() as connection:
+        save_return_frame(
+            connection, "version-returns", pd.read_csv(returns_path, dtype=str)
+        )
         save_product_workbook(
             connection,
             "hash-products",

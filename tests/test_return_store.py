@@ -60,6 +60,7 @@ def test_store_preserves_values_and_filters_like_dataframe(connection):
     assert preview(query="%")["total"] == 1
     assert preview(query="_")["total"] == 1
     assert preview(query="sku")["total"] == 0
+    assert preview(query="001\0 A")["total"] == 0
     assert preview(store="A", category="鞋 > 水鞋")["total"] == 1
     assert preview(category="儿童")["records"][0]["sku"] == "003"
     assert preview(store="B")["total"] == 2

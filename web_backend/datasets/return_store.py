@@ -18,7 +18,8 @@ RETURN_STORE_SQL = """
 CREATE TABLE return_rowsets (
     version_id TEXT PRIMARY KEY REFERENCES dataset_versions(id) ON DELETE CASCADE,
     columns_json TEXT NOT NULL,
-    row_count INTEGER NOT NULL
+    row_count INTEGER NOT NULL,
+    facets_json TEXT NOT NULL
 );
 CREATE TABLE return_rows (
     version_id TEXT NOT NULL REFERENCES return_rowsets(version_id) ON DELETE CASCADE,
@@ -26,7 +27,7 @@ CREATE TABLE return_rows (
     store_site TEXT NOT NULL,
     category TEXT NOT NULL,
     values_json TEXT NOT NULL,
-    search_values_json TEXT NOT NULL,
+    search_text TEXT NOT NULL,
     PRIMARY KEY (version_id, row_index)
 );
 CREATE INDEX idx_return_rows_store ON return_rows(version_id, store_site, row_index);
@@ -57,9 +58,11 @@ def save_return_frame(
     frame = frame.fillna("").astype(str)
     columns = list(frame.columns)
     connection.execute(
-        "INSERT INTO return_rowsets VALUES (?, ?, ?)",
+        "INSERT INTO return_rowsets VALUES (?, ?, ?, '{}')",
         (version_id, json.dumps(columns, ensure_ascii=False), len(frame)),
     )
+    stores: set[str] = set()
+    categories: set[str] = set()
 
     def records():
         for index, values in enumerate(frame.itertuples(index=False, name=None)):
@@ -71,18 +74,33 @@ def save_return_frame(
                     for key in ("品类A", "品类B")
                     if (value := record[key].strip())
                 )
+            store = record.get("店铺/站点", "").strip()
+            if store:
+                stores.add(store)
+            if category:
+                categories.add(category)
             yield (
                 version_id,
                 index,
-                record.get("店铺/站点", "").strip(),
+                store,
                 category,
                 json.dumps(values, ensure_ascii=False),
-                # 预先转小写，复用 JSON 查询避免每次逐字段执行 Python 文本转换。
-                json.dumps([value.lower() for value in values], ensure_ascii=False),
+                # 空字符隔开字段，使普通子串搜索不会跨字段匹配。
+                "\0".join(value.lower() for value in values),
             )
 
     connection.executemany(
         "INSERT INTO return_rows VALUES (?, ?, ?, ?, ?, ?)", records()
+    )
+    connection.execute(
+        "UPDATE return_rowsets SET facets_json=? WHERE version_id=?",
+        (
+            json.dumps(
+                {"stores": sorted(stores), "categories": sorted(categories)},
+                ensure_ascii=False,
+            ),
+            version_id,
+        ),
     )
 
 
@@ -93,7 +111,7 @@ def return_preview(
     filters: dict[str, str],
 ) -> dict[str, Any]:
     source = connection.execute(
-        "SELECT columns_json, row_count FROM return_rowsets WHERE version_id=?",
+        "SELECT columns_json, row_count, facets_json FROM return_rowsets WHERE version_id=?",
         (version["id"],),
     ).fetchone()
     if source is None:
@@ -106,32 +124,34 @@ def return_preview(
             where.append(f"r.{column}=?")
             parameters.append(filters[key].strip())
     if filters["query"].strip():
-        where.append(
-            "EXISTS (SELECT 1 FROM json_each(r.search_values_json) "
-            "WHERE instr(value, ?) > 0)"
-        )
-        parameters.append(filters["query"].strip().lower())
+        query = filters["query"].strip().lower()
+        where.append("instr(r.search_text, ?) > 0")
+        parameters.append(query)
+        if "\0" in query:
+            connection.create_function(
+                "feedback_contains",
+                2,
+                lambda values, text: any(
+                    text in value.lower() for value in json.loads(values)
+                ),
+            )
+            where.append("feedback_contains(r.values_json, ?)")
+            parameters.append(query)
     condition = " AND ".join(where)
-    total = connection.execute(
-        f"SELECT count(*) FROM return_rows r WHERE {condition}", parameters
-    ).fetchone()[0]
+    total = (
+        source[1]
+        if len(where) == 1
+        else connection.execute(
+            f"SELECT count(*) FROM return_rows r WHERE {condition}", parameters
+        ).fetchone()[0]
+    )
     offset, limit = pagination
     rows = connection.execute(
         f"SELECT row_index, values_json FROM return_rows r WHERE {condition} "
         "ORDER BY row_index LIMIT ? OFFSET ?",
         (*parameters, limit, offset),
     ).fetchall()
-    facets = {
-        key: [
-            row[0]
-            for row in connection.execute(
-                f"SELECT DISTINCT {column} FROM return_rows "
-                f"WHERE version_id=? AND {column}<>'' ORDER BY {column}",
-                (version["id"],),
-            )
-        ]
-        for key, column in (("stores", "store_site"), ("categories", "category"))
-    }
+    facets = json.loads(source[2])
     if not any(value.strip() for value in filters.values()):
         facets["categories"] = []
     return {
