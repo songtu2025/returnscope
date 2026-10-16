@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Query
 from web_backend.api_contracts.tasks import (
     TaskArchiveRequest,
     TaskCreateRequest,
+    TaskPlanPreviewRequest,
     TaskPreflightRequest,
     TaskReplanPreflightRequest,
     TaskReplanRequest,
@@ -49,6 +50,13 @@ def register_task_collection_routes(
     def create_task(payload: TaskCreateRequest, user: User) -> dict[str, Any]:
         with task_request_errors(TaskPlanConflict):
             return task_service.create(actor_id=str(user["id"]), **payload.model_dump())
+
+    @router.post("/api/tasks/preflight/segment-data")
+    def preview_task_segment(
+        payload: TaskPlanPreviewRequest, _user: User
+    ) -> dict[str, Any]:
+        with task_request_errors(TaskPlanConflict):
+            return task_service.plan_service.preview_segment(payload)
 
     @router.post("/api/tasks/archive")
     def archive_tasks(

@@ -12,6 +12,7 @@ const { apiMock } = vi.hoisted(() => ({
     task: vi.fn(),
     archiveTasks: vi.fn(),
     preflightTask: vi.fn(),
+    previewTaskSegment: vi.fn(),
     preflightTaskReplan: vi.fn(),
     replanTask: vi.fn(),
     resumeTask: vi.fn(),
@@ -88,7 +89,7 @@ vi.mock("../src/api", () => ({
 vi.mock("../src/shared/api/modelApi", () => ({ modelApi: apiMock }));
 
 vi.mock("../src/shared/api/taskApi", () => ({
-  taskApi: { tasks: apiMock.tasks },
+  taskApi: { tasks: apiMock.tasks, previewTaskSegment: apiMock.previewTaskSegment },
 }));
 
 vi.mock("../src/shared/api/resultApi", () => ({

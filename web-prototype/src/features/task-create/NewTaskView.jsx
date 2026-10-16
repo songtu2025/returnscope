@@ -189,6 +189,18 @@ export function NewTaskView({
                 onResolveCategories={resolveCategories}
                 segmentOrder={segmentOrder}
                 segmentSelection={segmentSelection}
+                previewInput={
+                  preflight.data
+                    ? {
+                        dataset_version_id: form.dataset_version_id,
+                        product_version_id: form.product_version_id,
+                        config_version_id: form.config_version_id,
+                        plan_hash: preflight.data.plan_hash,
+                        store: null,
+                        listing: null,
+                      }
+                    : undefined
+                }
                 onSegmentOrderChange={setSegmentOrder}
                 requiresScopeConfirmation={planState.requiresScopeConfirmation}
                 scopeConfirmed={scopeConfirmed}

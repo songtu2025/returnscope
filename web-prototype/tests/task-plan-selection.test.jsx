@@ -1,6 +1,6 @@
 import { apiMock, executionPlan } from "./product-flow-mocks";
 import { expect, test, vi } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NewTaskPage } from "../src/features/task-create/NewTaskPage";
 import { renderWithServerState as render } from "./renderWithServerState";
@@ -145,4 +145,49 @@ test("同一Listing不同品类作为整体选择；创建失败保留已选范�
   await user.click(screen.getByRole("button", { name: "开始分析" }));
   await screen.findByText("合成失败");
   expect(screen.getByRole("checkbox", { name: "选择全部 Listing" })).toBeChecked();
+});
+
+test("明细计划失效可重新检查，保留有效选择和顺序，不自动勾选新增Listing", async () => {
+  const user = userEvent.setup();
+  setup();
+  await screen.findByText("已选 2 / 2 个 Listing · 8 组待分析评论");
+  await user.click(screen.getByRole("checkbox", { name: "选择 Listing：SK001" }));
+  await user.click(screen.getByRole("button", { name: "置顶 SK002" }));
+  const original = await apiMock.preflightTask.mock.results[0].value;
+  apiMock.preflightTask.mockResolvedValue({
+    ...original,
+    plan_hash: "b".repeat(64),
+    record_count: 14,
+    unique_comment_count: 10,
+    executable_count: 10,
+    segments: [
+      ...original.segments,
+      {
+        ...original.segments[1],
+        segment_key: "new",
+        scope: { store: "SEEKWAY:US", listing: "SK003" },
+        unique_comments: 2,
+        record_count: 2,
+      },
+    ],
+  });
+  apiMock.previewTaskSegment.mockRejectedValue(
+    Object.assign(new Error("执行计划已变化"), { status: 409 }),
+  );
+  const row = screen.getByRole("heading", { name: "SK002" }).closest("tr");
+  await user.click(within(row).getByRole("button", { name: "查看数据" }));
+  await screen.findByText("执行计划已变化");
+  await user.click(screen.getByRole("button", { name: "重新检查数据" }));
+  expect(
+    await screen.findByText("已选 1 / 3 个 Listing · 5 组待分析评论"),
+  ).toBeVisible();
+  expect(
+    screen.getByRole("checkbox", { name: "选择 Listing：SK001" }),
+  ).not.toBeChecked();
+  expect(
+    screen.getByRole("checkbox", { name: "选择 Listing：SK003" }),
+  ).not.toBeChecked();
+  expect(document.querySelector(".plan-segments tbody h4")).toHaveTextContent("SK002");
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(apiMock.createTask).not.toHaveBeenCalled();
 });

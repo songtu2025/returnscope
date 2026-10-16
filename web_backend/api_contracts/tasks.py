@@ -33,6 +33,15 @@ class TaskReplanPreflightRequest(BaseModel):
     product_version_id: str = Field(min_length=1, max_length=100)
 
 
+class TaskPlanPreviewRequest(TaskPreflightRequest):
+    plan_hash: str = Field(min_length=64, max_length=64)
+    segment_key: str = Field(min_length=1, max_length=500)
+    view: Literal["groups", "records"] = "groups"
+    group_no: int | None = Field(default=None, ge=1)
+    page: int = Field(default=1, ge=1)
+    page_size: int = Field(default=20, ge=1, le=50)
+
+
 class TaskReplanRequest(BaseModel):
     product_version_id: str = Field(min_length=1, max_length=100)
     expected_revision: int = Field(ge=1)

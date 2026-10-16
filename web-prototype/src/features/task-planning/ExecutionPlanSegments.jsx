@@ -1,22 +1,43 @@
-import { ArrowDown, ArrowLineUp, ArrowUp } from "@phosphor-icons/react";
+import { useState } from "react";
+import { TaskPlanOrderActions } from "./TaskPlanOrderActions";
+import { TaskPlanTableToolbar } from "./TaskPlanTableToolbar";
+import { PlanSegmentDataDialog } from "./PlanSegmentDataDialog";
+import {
+  filterPlanSegments,
+  applyVisibleOrder,
+  listingKey,
+} from "./taskPlanTablePolicy";
 import { classNames } from "../../lib/presentation";
 import { moveSegmentKey } from "../task-runtime/taskSegmentPolicy";
 
 /** @typedef {import("./taskPlanContracts").TaskPlanSegment} TaskPlanSegment */
 /** @typedef {{segment: TaskPlanSegment, executableKeys: string[], executableIndex: number, applyExecutableOrder: (keys: string[]) => void}} SegmentOrderProps */
 
-/** @param {TaskPlanSegment} item */
-const listingKey = (item) =>
-  JSON.stringify(
-    item.scope ? [item.scope.store, item.scope.listing] : item.segment_key,
-  );
-
-/** @param {{orderedSegments: TaskPlanSegment[], onSegmentOrderChange?: (keys: string[]) => void, segmentSelection?: import("./taskPlanContracts").TaskSegmentSelection}} props */
+/** @param {{orderedSegments: TaskPlanSegment[], onSegmentOrderChange?: (keys: string[]) => void, segmentSelection?: import("./taskPlanContracts").TaskSegmentSelection, onRecheck?: () => void | Promise<unknown>, defaultOrder?: string[], previewInput?: import("./taskPlanContracts").TaskPlanPreviewInput}} props */
 export function ExecutionPlanSegments({
   orderedSegments,
   onSegmentOrderChange,
   segmentSelection,
+  defaultOrder,
+  previewInput,
+  onRecheck,
 }) {
+  const [filters, setFilters] = useState({ query: "", category: "", status: "" });
+  const [previewSegment, setPreviewSegment] = useState(
+    /** @type {TaskPlanSegment | null} */ (null),
+  );
+  const visible = filterPlanSegments(orderedSegments, filters);
+  const visibleKeys = visible
+    .filter((item) => item.status !== "blocked")
+    .map((item) => item.segment_key);
+  const visibleListingKeys = new Set(visible.map(listingKey));
+  const selectable = orderedSegments.filter((item) =>
+    visibleListingKeys.has(listingKey(item)),
+  );
+  const visibleSelected = selectable.filter((item) =>
+    segmentSelection?.keys.includes(item.segment_key),
+  );
+  const filtered = Boolean(filters.query || filters.category || filters.status);
   const executableKeys = orderedSegments
     .filter((item) => item.status !== "blocked")
     .map((item) => item.segment_key);
@@ -39,6 +60,19 @@ export function ExecutionPlanSegments({
           {chosenCount.toLocaleString()} 组待分析评论
         </p>
       )}
+      <TaskPlanTableToolbar
+        segments={orderedSegments}
+        filters={filters}
+        onFilter={setFilters}
+        onResetOrder={
+          defaultOrder && onSegmentOrderChange
+            ? () => onSegmentOrderChange(defaultOrder)
+            : undefined
+        }
+      />
+      <p className="plan-visible-count">
+        当前显示 {visible.length} / {orderedSegments.length} 个分组
+      </p>
       <div
         className="plan-segments-scroll"
         tabIndex={0}
@@ -51,21 +85,34 @@ export function ExecutionPlanSegments({
                 <th>
                   <label className="plan-selection-cell">
                     <input
+                      disabled={!selectable.length}
                       type="checkbox"
-                      aria-label="选择全部 Listing"
+                      aria-label={
+                        filtered ? "选择当前筛选 Listing" : "选择全部 Listing"
+                      }
                       checked={
-                        chosen.length === orderedSegments.length && chosen.length > 0
+                        visibleSelected.length === selectable.length &&
+                        selectable.length > 0
                       }
                       ref={(node) => {
                         if (node)
                           node.indeterminate =
-                            chosen.length > 0 && chosen.length < orderedSegments.length;
+                            visibleSelected.length > 0 &&
+                            visibleSelected.length < selectable.length;
                       }}
                       onChange={() =>
                         segmentSelection.onChange(
-                          chosen.length === orderedSegments.length
-                            ? []
-                            : orderedSegments.map((item) => item.segment_key),
+                          visibleSelected.length === selectable.length
+                            ? segmentSelection.keys.filter(
+                                (key) =>
+                                  !selectable.some((item) => item.segment_key === key),
+                              )
+                            : [
+                                ...new Set([
+                                  ...segmentSelection.keys,
+                                  ...selectable.map((item) => item.segment_key),
+                                ]),
+                              ],
                         )
                       }
                     />
@@ -78,20 +125,37 @@ export function ExecutionPlanSegments({
               <th>分类标准</th>
               <th className="number">源记录</th>
               <th className="number">评论组</th>
-              <th>顺序调整</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody>
-            {orderedSegments.map((segment) => (
+            {visible.length === 0 && (
+              <tr>
+                <td colSpan={segmentSelection ? 8 : 7}>
+                  未找到匹配分组，请调整筛选条件。
+                </td>
+              </tr>
+            )}
+            {visible.map((segment) => (
               <TaskPlanSegmentRow
                 key={segment.segment_key}
                 segment={segment}
-                executableKeys={executableKeys}
+                executableKeys={visibleKeys}
                 executableIndex={executableKeys.indexOf(segment.segment_key)}
                 applyExecutableOrder={(keys) =>
-                  onSegmentOrderChange?.([...keys, ...blockedKeys])
+                  onSegmentOrderChange?.(
+                    filtered
+                      ? applyVisibleOrder(
+                          orderedSegments.map((item) => item.segment_key),
+                          visibleKeys,
+                          keys,
+                        )
+                      : [...keys, ...blockedKeys],
+                  )
                 }
                 onSegmentOrderChange={onSegmentOrderChange}
+                orderIndex={visibleKeys.indexOf(segment.segment_key)}
+                onPreview={previewInput ? () => setPreviewSegment(segment) : undefined}
                 selection={
                   segmentSelection && {
                     selected: segmentSelection.keys.includes(segment.segment_key),
@@ -114,11 +178,19 @@ export function ExecutionPlanSegments({
           </tbody>
         </table>
       </div>
+      {previewSegment && previewInput && (
+        <PlanSegmentDataDialog
+          input={previewInput}
+          onRecheck={onRecheck}
+          segment={previewSegment}
+          onClose={() => setPreviewSegment(null)}
+        />
+      )}
     </div>
   );
 }
 
-/** @param {SegmentOrderProps & {onSegmentOrderChange?: (keys: string[]) => void, selection?: {selected: boolean, toggle: () => void}}} props */
+/** @param {SegmentOrderProps & {onSegmentOrderChange?: (keys: string[]) => void, selection?: {selected: boolean, toggle: () => void}, orderIndex: number, onPreview?: () => void}} props */
 function TaskPlanSegmentRow({
   segment,
   executableKeys,
@@ -126,6 +198,8 @@ function TaskPlanSegmentRow({
   applyExecutableOrder,
   onSegmentOrderChange,
   selection,
+  orderIndex,
+  onPreview,
 }) {
   const canOrder = Boolean(onSegmentOrderChange) && executableIndex >= 0;
   return (
@@ -146,7 +220,7 @@ function TaskPlanSegmentRow({
           moveSegmentKey(
             executableKeys,
             event.dataTransfer.getData("text/plain"),
-            executableIndex,
+            orderIndex,
           ),
         );
       }}
@@ -168,11 +242,16 @@ function TaskPlanSegmentRow({
       </td>
       <TaskPlanSegmentInfo segment={segment} />
       <td>
+        {onPreview && (
+          <button type="button" className="text-button" onClick={onPreview}>
+            查看数据
+          </button>
+        )}
         {canOrder && executableKeys.length > 1 && (
           <TaskPlanOrderActions
             segment={segment}
             executableKeys={executableKeys}
-            executableIndex={executableIndex}
+            executableIndex={orderIndex}
             applyExecutableOrder={applyExecutableOrder}
           />
         )}
@@ -213,46 +292,5 @@ function TaskPlanSegmentInfo({ segment }) {
       <td className="number">{segment.record_count.toLocaleString()} 条</td>
       <td className="number">{segment.unique_comments.toLocaleString()} 组</td>
     </>
-  );
-}
-
-/** @param {SegmentOrderProps} props */
-function TaskPlanOrderActions({
-  segment,
-  executableKeys,
-  executableIndex,
-  applyExecutableOrder,
-}) {
-  const segmentLabel = segment.scope?.listing || segment.agent_family;
-  /** @type {readonly (readonly [string, import("react").ElementType, number, boolean])[]} */
-  const actions = [
-    ["置顶", ArrowLineUp, 0, executableIndex === 0],
-    ["上移", ArrowUp, executableIndex - 1, executableIndex === 0],
-    [
-      "下移",
-      ArrowDown,
-      executableIndex + 1,
-      executableIndex === executableKeys.length - 1,
-    ],
-  ];
-  return (
-    <div className="segment-order-actions">
-      {actions.map(([label, Icon, targetIndex, disabled]) => (
-        <button
-          key={label}
-          type="button"
-          aria-label={`${label} ${segmentLabel}`}
-          title={label}
-          disabled={disabled}
-          onClick={() =>
-            applyExecutableOrder(
-              moveSegmentKey(executableKeys, segment.segment_key, targetIndex),
-            )
-          }
-        >
-          <Icon size={15} />
-        </button>
-      ))}
-    </div>
   );
 }

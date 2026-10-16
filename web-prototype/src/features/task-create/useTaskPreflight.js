@@ -35,8 +35,10 @@ export function useTaskPreflight({
   const [scopeConfirmed, setScopeConfirmed] = useState(false);
   const [segmentOrder, setSegmentOrder] = useState(/** @type {string[]} */ ([]));
   const [selectedKeys, setSelectedKeys] = useState(/** @type {string[]} */ ([]));
+  const selectionInitialized = useRef(false);
 
   const invalidatePreflight = useCallback(() => {
+    selectionInitialized.current = false;
     requestRef.current += 1;
     setPreflight({ status: "idle", data: null, error: "" });
     setScopeConfirmed(false);
@@ -50,7 +52,6 @@ export function useTaskPreflight({
     setDataQuality(null);
     setUnresolvedPolicy("");
     setScopeConfirmed(false);
-    setSegmentOrder([]);
     try {
       const [data, quality] = /** @type {[TaskExecutionPlan, TaskDataQuality]} */ (
         await Promise.all([
@@ -68,8 +69,20 @@ export function useTaskPreflight({
       if (requestId !== requestRef.current) return;
       setDataQuality(quality);
       setPreflight({ status: "ready", data, error: "" });
-      setSegmentOrder(data.segments.map((segment) => segment.segment_key));
-      setSelectedKeys(data.segments.map((segment) => segment.segment_key));
+      const keys = data.segments.map((segment) => segment.segment_key);
+      const preserve = selectionInitialized.current;
+      setSegmentOrder((previous) =>
+        preserve
+          ? [
+              ...previous.filter((key) => keys.includes(key)),
+              ...keys.filter((key) => !previous.includes(key)),
+            ]
+          : keys,
+      );
+      setSelectedKeys((previous) =>
+        preserve ? previous.filter((key) => keys.includes(key)) : keys,
+      );
+      selectionInitialized.current = true;
       setUnresolvedPolicy(data.blocked_count > 0 ? "" : "block_all");
     } catch (error) {
       if (requestId !== requestRef.current) return;

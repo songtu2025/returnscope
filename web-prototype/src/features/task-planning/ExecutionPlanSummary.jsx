@@ -17,6 +17,8 @@ import { ExecutionPlanIssues } from "./ExecutionPlanIssues";
  * @property {(segmentOrder: string[]) => void} [onSegmentOrderChange]
  * @property {import("./taskPlanContracts").TaskSegmentSelection} [segmentSelection]
  * @property {boolean} [compact]
+ * @property {import("./taskPlanContracts").TaskPlanPreviewInput} [previewInput]
+ * @property {() => void | Promise<unknown>} [onRecheck]
  */
 
 /** @param {ExecutionPlanSummaryProps} props */
@@ -30,6 +32,8 @@ export function ExecutionPlanSummary({
   onSegmentOrderChange,
   segmentSelection,
   compact = false,
+  previewInput,
+  onRecheck,
 }) {
   const counts = taskPlanCounts(plan, segmentSelection?.keys);
   const segmentByKey = new Map(
@@ -49,7 +53,11 @@ export function ExecutionPlanSummary({
   );
   const segmentsView = (
     <ExecutionPlanSegments
+      key={plan.plan_hash}
       orderedSegments={orderedSegments}
+      defaultOrder={plan.segments.map((item) => item.segment_key)}
+      previewInput={previewInput}
+      onRecheck={onRecheck}
       onSegmentOrderChange={onSegmentOrderChange}
       segmentSelection={segmentSelection}
     />

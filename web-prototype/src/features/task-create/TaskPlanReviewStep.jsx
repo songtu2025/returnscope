@@ -10,7 +10,7 @@ import { classNames } from "../../lib/presentation";
 /** @typedef {import("../task-planning/taskPlanContracts").TaskDataQuality} TaskDataQuality */
 /** @typedef {import("../task-planning/taskPlanContracts").TaskPlanCounts} TaskPlanCounts */
 /**
- * @param {{preflight: TaskPreflightState, onRetryPreflight: () => void | Promise<unknown>, categoryCompletionRequired: boolean, blocked: boolean, countMismatch: boolean, noExecutable: boolean, partialPlan: boolean, planCounts: TaskPlanCounts, dataQuality: TaskDataQuality | null, unresolvedPolicy: string, onPolicyChange: (policy: string) => void, onResolveCategories: () => void, segmentSelection?: import("../task-planning/taskPlanContracts").TaskSegmentSelection, segmentOrder: string[], onSegmentOrderChange: (order: string[]) => void, requiresScopeConfirmation: boolean, scopeConfirmed: boolean, onScopeConfirmationChange: (confirmed: boolean) => void}} props
+ * @param {{preflight: TaskPreflightState, onRetryPreflight: () => void | Promise<unknown>, categoryCompletionRequired: boolean, blocked: boolean, countMismatch: boolean, noExecutable: boolean, partialPlan: boolean, planCounts: TaskPlanCounts, dataQuality: TaskDataQuality | null, unresolvedPolicy: string, onPolicyChange: (policy: string) => void, onResolveCategories: () => void, segmentSelection?: import("../task-planning/taskPlanContracts").TaskSegmentSelection, previewInput?: import("../task-planning/taskPlanContracts").TaskPlanPreviewInput, segmentOrder: string[], onSegmentOrderChange: (order: string[]) => void, requiresScopeConfirmation: boolean, scopeConfirmed: boolean, onScopeConfirmationChange: (confirmed: boolean) => void}} props
  */
 
 export function TaskPlanReviewStep({
@@ -29,6 +29,7 @@ export function TaskPlanReviewStep({
   segmentOrder,
   onSegmentOrderChange,
   segmentSelection,
+  previewInput,
   requiresScopeConfirmation,
   scopeConfirmed,
   onScopeConfirmationChange,
@@ -88,6 +89,8 @@ export function TaskPlanReviewStep({
                 segmentOrder={segmentOrder}
                 onSegmentOrderChange={onSegmentOrderChange}
                 segmentSelection={segmentSelection}
+                previewInput={previewInput}
+                onRecheck={onRetryPreflight}
               />
               {requiresScopeConfirmation && (
                 <label className="task-scope-confirmation">

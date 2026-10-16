@@ -17,6 +17,7 @@ from web_backend.database import Database
 from web_backend.dataset_cache import load_cached_dataset
 from web_backend.settings import PROJECT_ROOT
 from web_backend.tasks.plan_inputs import TaskPlanInputsMixin
+from web_backend.tasks.plan_preview import TaskPlanPreviewMixin
 from web_backend.tasks.plan_response import (
     bind_standard_versions,
     category_options,
@@ -39,7 +40,9 @@ class PreparedTaskPlan:
     response: dict[str, Any]
 
 
-class TaskPlanService(TaskPlanInputsMixin, TaskProductResolutionMixin):
+class TaskPlanService(
+    TaskPlanInputsMixin, TaskProductResolutionMixin, TaskPlanPreviewMixin
+):
     def __init__(
         self,
         database: Database,

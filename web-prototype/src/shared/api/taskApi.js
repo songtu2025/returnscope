@@ -12,6 +12,7 @@ import { API_BASE, queryString, request } from "./request";
  *   tasks: (filters?: TaskQuery, options?: RequestInit) => TaskRequest,
  *   task: (id: string, options?: RequestInit) => TaskRequest,
  *   preflightTask: (payload: TaskPayload) => TaskRequest,
+ *   previewTaskSegment: (payload: TaskPayload) => TaskRequest,
  *   preflightTaskReplan: (id: string, payload: TaskPayload) => TaskRequest,
  *   replanTask: (id: string, payload: TaskPayload) => TaskRequest,
  *   retryTaskSegment: (id: string, segmentKey: string, payload: TaskPayload) => TaskRequest,
@@ -34,6 +35,11 @@ import { API_BASE, queryString, request } from "./request";
  * }}
  */
 export const taskApi = {
+  previewTaskSegment: (payload) =>
+    request("/api/tasks/preflight/segment-data", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   tasks: (filters = {}, options = {}) =>
     request(`/api/tasks${queryString(filters)}`, options),
   task: (id, options = {}) => request(`/api/tasks/${id}`, options),

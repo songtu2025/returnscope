@@ -1,0 +1,77 @@
+.plan-table-toolbar {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 12px 0;
+}
+.plan-table-toolbar label {
+  display: grid;
+  gap: 5px;
+  min-width: 150px;
+  flex: 1;
+}
+.plan-visible-count {
+  margin: 8px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.plan-position-control {
+  flex-basis: 100%;
+}
+.plan-position-control label {
+  display: grid;
+  gap: 4px;
+}
+.plan-position-control button {
+  display: inline-flex;
+  width: auto;
+  min-width: 40px;
+  margin-top: 6px;
+}
+.modal.plan-data-dialog {
+  width: min(900px, calc(100vw - 48px));
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+}
+.plan-data-dialog .modal-form > p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.plan-data-tabs {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 0;
+}
+.plan-data-tabs [aria-pressed="true"] {
+  color: var(--green-dark);
+  background: var(--green-pale);
+  border-color: var(--green);
+}
+.plan-data-body {
+  min-height: 240px;
+  max-height: 55vh;
+  overflow: auto;
+}
+.plan-preview-row {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.plan-preview-row header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.plan-preview-row header span,
+.plan-preview-row p {
+  font-size: 12px;
+}
+.plan-preview-comment {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.65;
+}

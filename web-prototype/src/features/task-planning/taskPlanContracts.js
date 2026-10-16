@@ -1,5 +1,8 @@
 /**
  * @typedef {{keys: string[], onChange: (keys: string[]) => void}} TaskSegmentSelection
+ * @typedef {{dataset_version_id: string, product_version_id: string, config_version_id: string, plan_hash: string, store: null, listing: null}} TaskPlanPreviewInput
+ * @typedef {{group_no: number, title: string, comment: string, record_count: number, source_row?: number, date?: string, sku?: string, product_name?: string}} TaskPlanPreviewRow
+ * @typedef {{items: TaskPlanPreviewRow[], total: number, record_total: number, group_total: number, page: number, page_size: number}} TaskPlanPreviewResponse
  *
  * @typedef {Object} TaskPlanVariant
  * @property {string} category_a
