@@ -207,3 +207,13 @@
   height: 24px;
   cursor: pointer;
 }
+.plan-segments th .plan-selection-cell {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  height: auto;
+  min-height: 24px;
+  white-space: nowrap;
+}
