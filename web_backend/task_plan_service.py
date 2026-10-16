@@ -30,7 +30,10 @@ from web_backend.tasks.plan_response import (
     unresolved_product_counts,
 )
 from web_backend.tasks.plan_selection import restrict_plan_listings
-from web_backend.tasks.product_resolution import TaskProductResolutionMixin
+from web_backend.tasks.product_resolution import (
+    TaskProductResolutionMixin,
+    _resolution_keys,
+)
 
 performance_logger = logging.getLogger("uvicorn.error.performance")
 
@@ -123,12 +126,16 @@ class TaskPlanService(
         standards = self.standard_service.current_version_by_agent()
         execution_plan = bind_standard_versions(execution_plan, standards)
         plan_done = perf_counter()
-        unresolved_products = self._unresolved_products(
-            dataset,
-            execution_plan,
-            load_product_frame(self.database, Path(str(products["file_path"]))),
-            clean_store,
-            clean_listing,
+        unresolved_products = (
+            self._unresolved_products(
+                dataset,
+                execution_plan,
+                load_product_frame(self.database, Path(str(products["file_path"]))),
+                clean_store,
+                clean_listing,
+            )
+            if _resolution_keys(dataset, execution_plan)
+            else []
         )
         resolution_done = perf_counter()
         missing_category_products = [

@@ -14,6 +14,13 @@ def test_plan_stage_timings_keep_results_and_log_only_metrics(
 ) -> None:
     service = _service(tmp_path)
     monkeypatch.setattr(dataset_cache, "_cache", OrderedDict())
+
+    def reject_unused_catalog_read(*args, **kwargs):
+        raise AssertionError("没有待处理商品时不应再次读取完整产品资料")
+
+    monkeypatch.setattr(
+        "web_backend.task_plan_service.load_product_frame", reject_unused_catalog_read
+    )
     with caplog.at_level(logging.INFO, logger="uvicorn.error.performance"):
         cold = service.preflight(
             "version-returns", "version-products", None, None, "config-1"
