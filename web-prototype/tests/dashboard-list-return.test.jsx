@@ -4,6 +4,9 @@ import userEvent from "@testing-library/user-event";
 import { renderWithServerState as render } from "./renderWithServerState";
 import { useHashRoute } from "../src/app/hashRouter";
 import { AnalysisDashboardPage } from "../src/features/analysis-dashboards/AnalysisDashboardPage";
+import { changeDeliveryLifecycle } from "../src/shared/api/deliveryApi";
+
+vi.mock("../src/shared/api/deliveryApi", () => ({ changeDeliveryLifecycle: vi.fn() }));
 
 const { read, backChanges } = vi.hoisted(() => ({
   read: vi.fn(),
@@ -34,6 +37,7 @@ function setScroll(top) {
   Object.defineProperty(window, "scrollY", { configurable: true, value: top });
 }
 beforeEach(() => {
+  changeDeliveryLifecycle.mockReset();
   read.mockReset().mockImplementation(async ({ page }) => ({
     items: [{ id: `dashboard-${page}`, name: `看板第${page}页`, status: "active" }],
     total: 45,
@@ -42,6 +46,37 @@ beforeEach(() => {
   setScroll(0);
   vi.spyOn(window, "scrollTo").mockImplementation(({ top }) => setScroll(top));
   window.history.replaceState(null, "", "#analysis-dashboards?q=鞋&status=active");
+});
+
+test("恢复成功后真实缓存刷新失败保留成功反馈，重新加载不重复恢复", async () => {
+  window.history.replaceState(null, "", "#analysis-dashboards?status=deleted");
+  const item = {
+    id: "synthetic-deleted",
+    name: "合成已删除看板",
+    deleted_at: "2026-10-15",
+    revision: 4,
+  };
+  read.mockReset().mockResolvedValue({ items: [item], total: 1 });
+  changeDeliveryLifecycle.mockImplementation(async () => {
+    read.mockRejectedValue(new Error("合成列表读取失败503"));
+    return { ok: true };
+  });
+  render(<Harness />);
+  await userEvent.click(await screen.findByRole("button", { name: "恢复分析看板" }));
+  await screen.findByText("分析看板更新失败，当前显示上一次数据");
+  expect(screen.getByText("已恢复分析看板")).toBeVisible();
+  expect(
+    screen.queryByRole("button", { name: "恢复分析看板" }),
+  ).not.toBeInTheDocument();
+  const previousReads = read.mock.calls.length;
+  await userEvent.click(screen.getByRole("button", { name: "刷新数据" }));
+  await waitFor(() => expect(read.mock.calls.length).toBeGreaterThan(previousReads));
+  expect(changeDeliveryLifecycle).toHaveBeenCalledOnce();
+  read.mockResolvedValue({ items: [], total: 0 });
+  await userEvent.click(screen.getByRole("button", { name: "重新加载" }));
+  await screen.findByText("没有符合条件的看板");
+  expect(screen.queryByText("合成已删除看板")).not.toBeInTheDocument();
+  expect(changeDeliveryLifecycle).toHaveBeenCalledOnce();
 });
 afterEach(() => {
   cleanup();

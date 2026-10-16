@@ -196,3 +196,57 @@ test("已删除看板查看与恢复独立，恢复中防止重复，失败后�
     4,
   );
 });
+
+test.each([
+  ["result", "分类结果", false],
+  ["result", "分类结果", true],
+  ["dashboard", "分析看板", false],
+  ["dashboard", "分析看板", true],
+  ["report", "报告", false],
+  ["report", "报告", true],
+])("%s删除状态%s成功后刷新失败，只能重试读取", async (kind, label, deleted) => {
+  const user = userEvent.setup();
+  const changed = vi.fn().mockRejectedValueOnce(new Error("合成读取失败"));
+  changeDeliveryLifecycle.mockResolvedValue({ ok: true });
+  const props = {
+    kind,
+    id: `${kind}-synthetic`,
+    name: "合成对象",
+    revision: 4,
+    deleted,
+    onChanged: changed,
+  };
+  const view = render(<DeliveryLifecycleControls {...props} />);
+  if (deleted) await user.click(screen.getByRole("button", { name: `恢复${label}` }));
+  else {
+    await user.click(screen.getByLabelText(`更多${label}操作：合成对象`));
+    await user.click(screen.getByRole("button", { name: `删除${label}`, exact: true }));
+    await user.click(screen.getByRole("button", { name: "确认删除" }));
+  }
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    `已${deleted ? "恢复" : "删除"}${label}，数据刷新失败`,
+  );
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  view.rerender(<DeliveryLifecycleControls {...props} name="刷新后的合成名称" />);
+  expect(screen.getByRole("status")).toHaveTextContent(
+    `已${deleted ? "恢复" : "删除"}${label}`,
+  );
+  let finishRefresh;
+  changed.mockImplementationOnce(
+    () => new Promise((resolve) => (finishRefresh = resolve)),
+  );
+  await user.click(screen.getByRole("button", { name: "刷新数据" }));
+  expect(screen.getByRole("button", { name: "正在刷新…" })).toBeDisabled();
+  await user.click(screen.getByRole("button", { name: "正在刷新…" }));
+  expect(changed).toHaveBeenCalledTimes(2);
+  await act(async () => finishRefresh());
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(changeDeliveryLifecycle).toHaveBeenCalledOnce();
+  view.rerender(
+    <DeliveryLifecycleControls {...props} revision={5} deleted={!deleted} />,
+  );
+  expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  if (deleted)
+    expect(screen.getByLabelText(`更多${label}操作：合成对象`)).toBeVisible();
+  else expect(screen.getByRole("button", { name: `恢复${label}` })).toBeEnabled();
+});

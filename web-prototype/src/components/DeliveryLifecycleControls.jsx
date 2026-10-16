@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useSWRConfig } from "swr";
 import { DotsThreeVertical } from "@phosphor-icons/react";
 import { Modal } from "./SharedUi";
@@ -20,32 +20,70 @@ export function DeliveryLifecycleControls({
   const [confirming, setConfirming] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [completedIdentity, setCompletedIdentity] = useState("");
+  const busyRef = useRef(false);
   const { mutate } = useSWRConfig();
   const { detailsProps, summaryProps } = useDismissibleDetails({ menu: true });
   const label = { result: "分类结果", dashboard: "分析看板", report: "报告" }[kind];
+  const identity = `${kind}:${id}:${revision}:${Boolean(deleted)}`;
+  const completed = completedIdentity === identity;
+  const successLabel = `已${deleted ? "恢复" : "删除"}${label}`;
+  const refresh = async () => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setSaving(true);
+    setError("");
+    try {
+      await Promise.all([
+        refreshServerState(mutate, [
+          "classification-results",
+          "analysis-dashboards",
+          "analysis-tasks",
+          "workbench",
+          "data-assets",
+        ]),
+        onChanged?.(),
+      ]);
+    } catch (failure) {
+      setError(`${successLabel}，数据刷新失败：${errorMessage(failure)}`);
+    } finally {
+      busyRef.current = false;
+      setSaving(false);
+    }
+  };
   const submit = async () => {
+    if (busyRef.current || completed) return;
+    busyRef.current = true;
     setSaving(true);
     setError("");
     try {
       await changeDeliveryLifecycle(kind, id, deleted ? "restore" : "delete", revision);
-      setConfirming(false);
-      await refreshServerState(mutate, [
-        "classification-results",
-        "analysis-dashboards",
-        "analysis-tasks",
-        "workbench",
-        "data-assets",
-      ]);
-      await onChanged?.();
     } catch (failure) {
       setError(errorMessage(failure));
-    } finally {
+      busyRef.current = false;
       setSaving(false);
+      return;
     }
+    // 写入成功后保留确认结果，旧缓存未刷新时也不能重复执行同一操作。
+    setCompletedIdentity(identity);
+    setConfirming(false);
+    busyRef.current = false;
+    await refresh();
   };
   return (
     <>
-      {deleted ? (
+      {completed ? (
+        <>
+          <span role="status">{successLabel}</span>
+          <button
+            className="secondary-button compact-button"
+            disabled={saving}
+            onClick={refresh}
+          >
+            {saving ? "正在刷新…" : "刷新数据"}
+          </button>
+        </>
+      ) : deleted ? (
         <button
           className="secondary-button compact-button"
           disabled={saving}
