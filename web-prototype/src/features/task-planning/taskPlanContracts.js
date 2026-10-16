@@ -1,4 +1,6 @@
 /**
+ * @typedef {{keys: string[], onChange: (keys: string[]) => void}} TaskSegmentSelection
+ *
  * @typedef {Object} TaskPlanVariant
  * @property {string} category_a
  * @property {string} category_b

@@ -1310,9 +1310,10 @@ describe("关键用户流程", () => {
         },
       ],
       segments: [
-        executionPlan.segments[0],
+        { ...executionPlan.segments[0], unique_comments: 4 },
         {
           ...executionPlan.segments[0],
+          unique_comments: 4,
           segment_key: "eyewear",
           agent_key: "eyewear",
           agent_family: "眼镜智能体",
@@ -1389,7 +1390,7 @@ describe("关键用户流程", () => {
     expect(screen.getByLabelText(/我确认本次仅分析 8 组评论/)).toBeChecked();
     expect(apiMock.preflightTask).toHaveBeenCalledOnce();
     expect(apiMock.qualityPreflight).toHaveBeenCalledOnce();
-    await user.click(screen.getByText("查看 2 个执行分组及顺序"));
+    expect(screen.getByText("选择分析范围及顺序")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "置顶 SK002" }));
     expect(screen.getByLabelText(/我确认本次仅分析 8 组评论/)).toBeChecked();
     expect(apiMock.preflightTask).toHaveBeenCalledOnce();

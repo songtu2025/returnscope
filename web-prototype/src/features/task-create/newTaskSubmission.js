@@ -7,7 +7,7 @@ import { refreshServerState } from "../../shared/serverState";
 /** @typedef {import("./taskCreateContracts").TaskPlanViewState} TaskPlanViewState */
 /** @typedef {import("../task-planning/taskPlanContracts").TaskExecutionPlan} TaskExecutionPlan */
 /**
- * @typedef {{submitting: boolean, preflight: TaskPreflightState, unresolvedPolicy: string, planState: TaskPlanViewState, scopeConfirmed: boolean, form: TaskForm, segmentOrder: string[], mutateServerState: ReturnType<typeof import("swr").useSWRConfig>["mutate"], setSubmitting: (value: boolean) => void, setSubmitError: (value: string) => void, setPrepared: (value: boolean) => void, setPreflight: (value: TaskPreflightState) => void, setUnresolvedPolicy: (value: string) => void, notify: (message: string, type?: "success" | "error") => void, onDraftComplete?: () => void, onChanged: () => void | Promise<unknown>, onNavigate: import("../../app/navigation").Navigate}} TaskSubmission
+ * @typedef {{submitting: boolean, preflight: TaskPreflightState, unresolvedPolicy: string, planState: TaskPlanViewState, scopeConfirmed: boolean, form: TaskForm, segmentOrder: string[], selectedSegmentKeys?: string[], mutateServerState: ReturnType<typeof import("swr").useSWRConfig>["mutate"], setSubmitting: (value: boolean) => void, setSubmitError: (value: string) => void, setPrepared: (value: boolean) => void, setPreflight: (value: TaskPreflightState) => void, setUnresolvedPolicy: (value: string) => void, notify: (message: string, type?: "success" | "error") => void, onDraftComplete?: () => void, onChanged: () => void | Promise<unknown>, onNavigate: import("../../app/navigation").Navigate}} TaskSubmission
  */
 /** @typedef {TaskSubmission & {preflight: TaskPreflightState & {data: TaskExecutionPlan}}} ReadyTaskSubmission */
 
@@ -46,6 +46,7 @@ function canSubmitTask(submission) {
     preflight.status !== "ready" ||
     !preflight.data ||
     !unresolvedPolicy ||
+    submission.selectedSegmentKeys?.length === 0 ||
     planState.categoryCompletionRequired ||
     planState.countMismatch ||
     planState.noExecutable ||
@@ -59,6 +60,7 @@ async function createPreparedTask({
   preflight,
   unresolvedPolicy,
   segmentOrder,
+  selectedSegmentKeys,
   mutateServerState,
   notify,
 }) {
@@ -70,6 +72,7 @@ async function createPreparedTask({
     plan_hash: preflight.data.plan_hash,
     unresolved_policy: unresolvedPolicy,
     segment_order: segmentOrder,
+    ...(selectedSegmentKeys ? { selected_segment_keys: selectedSegmentKeys } : {}),
   });
   try {
     await refreshServerState(mutateServerState, ["analysis-tasks", "workbench"]);

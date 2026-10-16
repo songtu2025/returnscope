@@ -5,45 +5,131 @@ import { moveSegmentKey } from "../task-runtime/taskSegmentPolicy";
 /** @typedef {import("./taskPlanContracts").TaskPlanSegment} TaskPlanSegment */
 /** @typedef {{segment: TaskPlanSegment, executableKeys: string[], executableIndex: number, applyExecutableOrder: (keys: string[]) => void}} SegmentOrderProps */
 
-/** @param {{orderedSegments: TaskPlanSegment[], onSegmentOrderChange?: (keys: string[]) => void}} props */
-export function ExecutionPlanSegments({ orderedSegments, onSegmentOrderChange }) {
+/** @param {TaskPlanSegment} item */
+const listingKey = (item) =>
+  JSON.stringify(
+    item.scope ? [item.scope.store, item.scope.listing] : item.segment_key,
+  );
+
+/** @param {{orderedSegments: TaskPlanSegment[], onSegmentOrderChange?: (keys: string[]) => void, segmentSelection?: import("./taskPlanContracts").TaskSegmentSelection}} props */
+export function ExecutionPlanSegments({
+  orderedSegments,
+  onSegmentOrderChange,
+  segmentSelection,
+}) {
   const executableKeys = orderedSegments
-    .filter((segment) => segment.status !== "blocked")
-    .map((segment) => segment.segment_key);
+    .filter((item) => item.status !== "blocked")
+    .map((item) => item.segment_key);
   const blockedKeys = orderedSegments
-    .filter((segment) => segment.status === "blocked")
-    .map((segment) => segment.segment_key);
-  /** @param {string[]} keys */
-  const applyExecutableOrder = (keys) => {
-    onSegmentOrderChange?.([...keys, ...blockedKeys]);
-  };
+    .filter((item) => item.status === "blocked")
+    .map((item) => item.segment_key);
+  const chosen = orderedSegments.filter(
+    (item) => !segmentSelection || segmentSelection.keys.includes(item.segment_key),
+  );
+  const listingCount = (/** @type {TaskPlanSegment[]} */ items) =>
+    new Set(items.map(listingKey)).size;
+  const chosenCount = chosen
+    .filter((item) => item.status !== "blocked")
+    .reduce((total, item) => total + item.unique_comments, 0);
   return (
     <div className="plan-segments">
-      {orderedSegments.map((segment) => (
-        <TaskPlanSegmentCard
-          key={segment.segment_key}
-          segment={segment}
-          executableKeys={executableKeys}
-          executableIndex={executableKeys.indexOf(segment.segment_key)}
-          applyExecutableOrder={applyExecutableOrder}
-          onSegmentOrderChange={onSegmentOrderChange}
-        />
-      ))}
+      {segmentSelection && (
+        <p className="plan-selection-summary" role="status">
+          已选 {listingCount(chosen)} / {listingCount(orderedSegments)} 个 Listing ·{" "}
+          {chosenCount.toLocaleString()} 组待分析评论
+        </p>
+      )}
+      <div
+        className="plan-segments-scroll"
+        tabIndex={0}
+        aria-label="执行分组表格，可横向滚动"
+      >
+        <table aria-label="分析范围及执行顺序">
+          <thead>
+            <tr>
+              {segmentSelection && (
+                <th>
+                  <label className="plan-selection-cell">
+                    <input
+                      type="checkbox"
+                      aria-label="选择全部 Listing"
+                      checked={
+                        chosen.length === orderedSegments.length && chosen.length > 0
+                      }
+                      ref={(node) => {
+                        if (node)
+                          node.indeterminate =
+                            chosen.length > 0 && chosen.length < orderedSegments.length;
+                      }}
+                      onChange={() =>
+                        segmentSelection.onChange(
+                          chosen.length === orderedSegments.length
+                            ? []
+                            : orderedSegments.map((item) => item.segment_key),
+                        )
+                      }
+                    />
+                  </label>
+                </th>
+              )}
+              <th>顺序</th>
+              <th>Listing / 店铺</th>
+              <th>品类</th>
+              <th>分类标准</th>
+              <th className="number">源记录</th>
+              <th className="number">评论组</th>
+              <th>顺序调整</th>
+            </tr>
+          </thead>
+          <tbody>
+            {orderedSegments.map((segment) => (
+              <TaskPlanSegmentRow
+                key={segment.segment_key}
+                segment={segment}
+                executableKeys={executableKeys}
+                executableIndex={executableKeys.indexOf(segment.segment_key)}
+                applyExecutableOrder={(keys) =>
+                  onSegmentOrderChange?.([...keys, ...blockedKeys])
+                }
+                onSegmentOrderChange={onSegmentOrderChange}
+                selection={
+                  segmentSelection && {
+                    selected: segmentSelection.keys.includes(segment.segment_key),
+                    toggle: () => {
+                      const sameListing = orderedSegments
+                        .filter((item) => listingKey(item) === listingKey(segment))
+                        .map((item) => item.segment_key);
+                      segmentSelection.onChange(
+                        segmentSelection.keys.includes(segment.segment_key)
+                          ? segmentSelection.keys.filter(
+                              (key) => !sameListing.includes(key),
+                            )
+                          : [...new Set([...segmentSelection.keys, ...sameListing])],
+                      );
+                    },
+                  }
+                }
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
-/** @param {SegmentOrderProps & {onSegmentOrderChange?: (keys: string[]) => void}} props */
-function TaskPlanSegmentCard({
+/** @param {SegmentOrderProps & {onSegmentOrderChange?: (keys: string[]) => void, selection?: {selected: boolean, toggle: () => void}}} props */
+function TaskPlanSegmentRow({
   segment,
   executableKeys,
   executableIndex,
   applyExecutableOrder,
   onSegmentOrderChange,
+  selection,
 }) {
   const canOrder = Boolean(onSegmentOrderChange) && executableIndex >= 0;
   return (
-    <article
+    <tr
       className={classNames(segment.status, canOrder && "is-orderable")}
       draggable={canOrder}
       onDragStart={(event) => {
@@ -56,58 +142,76 @@ function TaskPlanSegmentCard({
       onDrop={(event) => {
         if (!canOrder) return;
         event.preventDefault();
-        const sourceKey = event.dataTransfer.getData("text/plain");
         applyExecutableOrder(
-          moveSegmentKey(executableKeys, sourceKey, executableIndex),
+          moveSegmentKey(
+            executableKeys,
+            event.dataTransfer.getData("text/plain"),
+            executableIndex,
+          ),
         );
       }}
     >
-      <TaskPlanSegmentInfo segment={segment} executableIndex={executableIndex} />
-      {canOrder && executableKeys.length > 1 && (
-        <TaskPlanOrderActions
-          segment={segment}
-          executableKeys={executableKeys}
-          executableIndex={executableIndex}
-          applyExecutableOrder={applyExecutableOrder}
-        />
+      {selection && (
+        <td>
+          <label className="plan-selection-cell">
+            <input
+              type="checkbox"
+              aria-label={`选择 Listing：${segment.scope?.listing || segment.agent_family}`}
+              checked={selection.selected}
+              onChange={selection.toggle}
+            />
+          </label>
+        </td>
       )}
-    </article>
+      <td>
+        {executableIndex >= 0 ? String(executableIndex + 1).padStart(2, "0") : "—"}
+      </td>
+      <TaskPlanSegmentInfo segment={segment} />
+      <td>
+        {canOrder && executableKeys.length > 1 && (
+          <TaskPlanOrderActions
+            segment={segment}
+            executableKeys={executableKeys}
+            executableIndex={executableIndex}
+            applyExecutableOrder={applyExecutableOrder}
+          />
+        )}
+      </td>
+    </tr>
   );
 }
 
-/** @param {{segment: TaskPlanSegment, executableIndex: number}} props */
-function TaskPlanSegmentInfo({ segment, executableIndex }) {
+/** @param {{segment: TaskPlanSegment}} props */
+function TaskPlanSegmentInfo({ segment }) {
   return (
     <>
-      <div>
-        <span>{segment.status === "blocked" ? "阻断" : "可执行"}</span>
-        <h4>
-          {executableIndex >= 0
-            ? `${String(executableIndex + 1).padStart(2, "0")} · `
-            : ""}
-          {segment.scope?.listing
-            ? `${segment.scope.listing} · ${segment.standard_name || segment.agent_family}`
-            : segment.standard_name || segment.agent_family}
-        </h4>
-        <p>
-          {segment.scope?.store
-            ? `${segment.scope.store} / ${segment.scope.listing || "未识别 Listing"} · `
-            : ""}
-          {segment.standard_version ? `标准 V${segment.standard_version} · ` : ""}
-          logic {segment.logic_version || "—"} · taxonomy {segment.taxonomy_version}
-        </p>
-      </div>
-      <strong>
-        {segment.record_count.toLocaleString()} 条 /{" "}
-        {segment.unique_comments.toLocaleString()} 评论
-      </strong>
-      <ul>
+      <td>
+        <h4>{segment.scope?.listing || segment.agent_family}</h4>
+        <p>{segment.scope?.store || "—"}</p>
+      </td>
+      <td>
         {segment.variants.map((variant) => (
-          <li key={`${variant.category_a}-${variant.category_b}`}>
+          <p key={`${variant.category_a}-${variant.category_b}`}>
             {variant.category_a || "缺失品类A"} / {variant.category_b || "缺失品类B"}
-          </li>
+          </p>
         ))}
-      </ul>
+      </td>
+      <td>
+        <b>{segment.standard_name || segment.agent_family}</b>
+        <p>
+          <span className={`segment-status ${segment.status}`}>
+            {segment.status === "blocked" ? "阻断" : "可执行"}
+          </span>
+          {segment.standard_version ? ` · V${segment.standard_version}` : ""}
+        </p>
+        <details>
+          <summary>版本信息</summary>
+          <p>logic {segment.logic_version || "—"}</p>
+          <p>taxonomy {segment.taxonomy_version}</p>
+        </details>
+      </td>
+      <td className="number">{segment.record_count.toLocaleString()} 条</td>
+      <td className="number">{segment.unique_comments.toLocaleString()} 组</td>
     </>
   );
 }
@@ -149,7 +253,6 @@ function TaskPlanOrderActions({
           <Icon size={15} />
         </button>
       ))}
-      <span>拖拽或使用按钮调整</span>
     </div>
   );
 }

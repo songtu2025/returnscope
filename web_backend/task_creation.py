@@ -16,6 +16,7 @@ from web_backend.tasks.creation_plan import (
     validate_creation_options,
     validate_creation_plan,
 )
+from web_backend.tasks.plan_selection import selected_plan
 from web_backend.tasks.snapshots import TaskSnapshotsMixin
 
 
@@ -47,6 +48,8 @@ class TaskCreationMixin(TaskSnapshotsMixin):
         unresolved_policy: str | None = None,
         segment_order: list[str] | None = None,
         max_parallel_segments: int = 3,
+        selected_segment_keys: list[str] | None = None,
+        selected_listings: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
         policy = unresolved_policy or "block_all"
         validate_creation_options(policy, max_parallel_segments)
@@ -57,8 +60,10 @@ class TaskCreationMixin(TaskSnapshotsMixin):
             listing=listing,
             config_version_id=config_version_id,
             model_policy=model_policy,
+            selected_listings=selected_listings,
         )
         current_hash = validate_creation_plan(prepared.response, plan_hash)
+        response = selected_plan(prepared.response, selected_segment_keys)
         returns = prepared.returns
         products = prepared.products
         product_version_id = str(products["id"])
@@ -68,16 +73,21 @@ class TaskCreationMixin(TaskSnapshotsMixin):
         keys_by_segment = prepared.execution_plan.classification_keys_by_segment(
             prepared.dataset
         )
-        planned_segments = list(prepared.response["segments"])
-        has_blocked = int(prepared.response["blocked_count"]) > 0
+        planned_segments = list(response["segments"])
+        has_blocked = int(response["blocked_count"]) > 0
         block_all = policy == "block_all" and has_blocked
         initial_status, initial_stage, initial_message = initial_creation_state(
             planned_segments, block_all
         )
         ordered_segment_keys = self._validated_segment_order(
-            planned_segments,
+            list(prepared.response["segments"]),
             segment_order,
         )
+        ordered_segment_keys = [
+            key
+            for key in ordered_segment_keys
+            if any(item["segment_key"] == key for item in planned_segments)
+        ]
         order_by_key = {
             segment_key: position
             for position, segment_key in enumerate(ordered_segment_keys, start=1)
@@ -101,12 +111,22 @@ class TaskCreationMixin(TaskSnapshotsMixin):
                 "config": self._model_config_snapshot(config, model_policy),
                 "scope": prepared.response["inputs"]["scope"],
                 "execution_plan": self._execution_plan_snapshot(
-                    prepared.response,
+                    response,
                     current_hash,
                     policy,
                     ordered_segment_keys,
                 ),
             }
+            if selected_segment_keys is not None:
+                snapshot["scope"]["selected_listings"] = [
+                    dict(scope)
+                    for scope in sorted(
+                        {
+                            tuple(sorted(item.get("scope", {}).items()))
+                            for item in planned_segments
+                        }
+                    )
+                ]
             connection.execute(
                 """
                 INSERT INTO tasks(

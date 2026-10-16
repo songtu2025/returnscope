@@ -235,6 +235,7 @@ class TaskReplanMixin(TaskReplanSegmentsMixin):
             "config_version_id": str(task["config_version_id"]),
             "model_policy": model_policy,
             "analysis_context": analysis_context_from_snapshot(task_snapshot),
+            "selected_listings": snapshot_scope.get("selected_listings"),
         }
 
     def _replan_task_row(

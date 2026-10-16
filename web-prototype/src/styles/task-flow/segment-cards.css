@@ -1,10 +1,8 @@
-.plan-segments,
 .segment-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
   gap: 10px;
 }
-.plan-segments article,
 .segment-item {
   min-width: 0;
   padding: 13px;
@@ -12,21 +10,17 @@
   border-radius: 9px;
   background: #fff;
 }
-.plan-segments article.is-orderable,
 .segment-item.is-orderable {
   cursor: grab;
 }
-.plan-segments article.is-orderable:active,
 .segment-item.is-orderable:active {
   cursor: grabbing;
 }
-.plan-segments article.blocked,
 .segment-item.is-blocked,
 .segment-item.has-error {
   border-color: #e5c79a;
   background: #fffbf3;
 }
-.plan-segments article > div:first-child > span,
 .segment-status {
   display: inline-flex;
   min-height: 20px;
@@ -38,7 +32,6 @@
   font-size: 12px;
   font-weight: 800;
 }
-.plan-segments article.blocked > div:first-child > span,
 .segment-status.blocked,
 .segment-status.failed,
 .segment-status.completed_with_errors {
@@ -58,36 +51,19 @@
   color: var(--green-dark);
   background: var(--green-pale);
 }
-.plan-segments h4,
 .segment-item h4 {
   margin: 8px 0 3px;
   font-size: 13px;
 }
-.plan-segments p,
 .segment-item header p {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
 }
-.plan-segments article > strong {
-  display: block;
-  margin-top: 10px;
-  font-size: 12px;
-}
-.plan-segments ul {
-  margin: 8px 0 0;
-  padding-left: 17px;
-  color: #5b6862;
-  font-size: 12px;
-  line-height: 1.55;
-}
 .segment-order-actions {
   display: flex;
   align-items: center;
   gap: 5px;
-  margin-top: 10px;
-  padding-top: 9px;
-  border-top: 1px solid var(--line-soft);
 }
 .segment-order-actions button {
   display: grid;
@@ -104,11 +80,6 @@
 .segment-order-actions button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-}
-.segment-order-actions span {
-  margin-left: 3px;
-  color: var(--muted);
-  font-size: 12px;
 }
 .unresolved-plan {
   display: grid;
@@ -140,4 +111,98 @@
 .excluded-plan p {
   margin: 4px 0 0;
   font-size: 12px;
+}
+
+.plan-selection-summary {
+  margin: 0 0 12px;
+  font-weight: 700;
+  color: var(--green-dark);
+}
+.plan-segments-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+.plan-segments table {
+  width: 100%;
+  min-width: 820px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.plan-segments th {
+  height: 40px;
+  color: var(--muted);
+  background: var(--canvas);
+  text-align: left;
+}
+.plan-segments td,
+.plan-segments th {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  overflow-wrap: anywhere;
+  vertical-align: middle;
+}
+.plan-segments tr:last-child td {
+  border-bottom: 0;
+}
+.plan-segments th:first-child:has(input) {
+  width: 40px;
+}
+.plan-segments th:nth-last-child(7) {
+  width: 48px;
+}
+.plan-segments th:nth-last-child(6) {
+  width: 140px;
+}
+.plan-segments th:nth-last-child(3),
+.plan-segments th:nth-last-child(2) {
+  width: 80px;
+}
+.plan-segments th:last-child {
+  width: 116px;
+}
+.plan-segments .number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.plan-segments h4 {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+.plan-segments td p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.plan-segments details {
+  margin-top: 6px;
+  color: var(--muted);
+}
+.plan-segments summary {
+  cursor: pointer;
+}
+.plan-segments input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--green);
+  cursor: pointer;
+}
+.plan-segments tr.is-orderable {
+  cursor: grab;
+}
+.plan-segments tr.is-orderable:active {
+  cursor: grabbing;
+}
+.plan-segments tr.blocked {
+  background: var(--amber-pale);
+}
+.plan-selection-cell {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
 }

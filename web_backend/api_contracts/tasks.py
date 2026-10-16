@@ -16,6 +16,7 @@ class TaskCreateRequest(BaseModel):
     plan_hash: str | None = Field(default=None, min_length=64, max_length=64)
     unresolved_policy: Literal["block_all", "run_ready"] | None = None
     segment_order: list[str] | None = Field(default=None, max_length=500)
+    selected_segment_keys: list[str] | None = Field(default=None, max_length=500)
     max_parallel_segments: int = Field(default=3, ge=1, le=3)
 
 

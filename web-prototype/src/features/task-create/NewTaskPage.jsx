@@ -69,6 +69,7 @@ export function NewTaskPage({
     runPreflight,
     scopeConfirmed,
     segmentOrder,
+    segmentSelection,
     setPreflight,
     setScopeConfirmed,
     setSegmentOrder,
@@ -146,7 +147,7 @@ export function NewTaskPage({
       setVersions,
     });
   const ready = products.length > 0 && publishedConfigs.length > 0;
-  const planCounts = taskPlanCounts(preflight.data);
+  const planCounts = taskPlanCounts(preflight.data, segmentSelection.keys);
   const planState = taskPlanViewState(
     { ...preflight, counts: planCounts },
     unresolvedPolicy,
@@ -162,6 +163,7 @@ export function NewTaskPage({
       scopeConfirmed,
       form,
       segmentOrder,
+      selectedSegmentKeys: segmentSelection.keys,
       mutateServerState,
       setSubmitting,
       setSubmitError,
@@ -271,6 +273,7 @@ export function NewTaskPage({
           },
           resolveCategories,
           segmentOrder,
+          segmentSelection,
           setSegmentOrder,
           scopeConfirmed,
           setScopeConfirmed,

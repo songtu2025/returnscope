@@ -34,6 +34,7 @@ export function useTaskPreflight({
   const [unresolvedPolicy, setUnresolvedPolicy] = useState("");
   const [scopeConfirmed, setScopeConfirmed] = useState(false);
   const [segmentOrder, setSegmentOrder] = useState(/** @type {string[]} */ ([]));
+  const [selectedKeys, setSelectedKeys] = useState(/** @type {string[]} */ ([]));
 
   const invalidatePreflight = useCallback(() => {
     requestRef.current += 1;
@@ -68,6 +69,7 @@ export function useTaskPreflight({
       setDataQuality(quality);
       setPreflight({ status: "ready", data, error: "" });
       setSegmentOrder(data.segments.map((segment) => segment.segment_key));
+      setSelectedKeys(data.segments.map((segment) => segment.segment_key));
       setUnresolvedPolicy(data.blocked_count > 0 ? "" : "block_all");
     } catch (error) {
       if (requestId !== requestRef.current) return;
@@ -111,6 +113,13 @@ export function useTaskPreflight({
     runPreflight,
     scopeConfirmed,
     segmentOrder,
+    segmentSelection: {
+      keys: selectedKeys,
+      onChange: (/** @type {string[]} */ keys) => {
+        setSelectedKeys(keys);
+        setScopeConfirmed(false);
+      },
+    },
     setPreflight,
     setScopeConfirmed,
     setSegmentOrder,

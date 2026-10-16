@@ -34,7 +34,7 @@ function plan(changes = {}) {
 }
 
 function cards() {
-  return [...document.querySelectorAll(".plan-segments article")];
+  return [...document.querySelectorAll(".plan-segments tbody tr")];
 }
 
 test("已保存顺序过滤失效键并补全分组，移动就绪分组后将阻断分组附在末尾", async () => {
@@ -47,10 +47,15 @@ test("已保存顺序过滤失效键并补全分组，移动就绪分组后将�
       onSegmentOrderChange={onSegmentOrderChange}
     />,
   );
-  expect(cards().map((item) => item.querySelector("h4").textContent)).toEqual([
-    "01 · 合成B",
-    "合成阻断",
-    "02 · 合成A",
+  expect(
+    cards().map((item) => [
+      item.cells[0].textContent,
+      item.querySelector("h4").textContent,
+    ]),
+  ).toEqual([
+    ["01", "合成B"],
+    ["—", "合成阻断"],
+    ["02", "合成A"],
   ]);
   expect(screen.getByRole("button", { name: "置顶 合成B" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "上移 合成B" })).toBeDisabled();
@@ -144,12 +149,11 @@ test("紧凑模式在原生折叠中保留分组、标准、范围和品类显�
   render(<ExecutionPlanSummary plan={value} compact onSegmentOrderChange={vi.fn()} />);
   expect(screen.getByText("查看 3 个执行分组及顺序")).toBeVisible();
   await user.click(screen.getByText("查看 3 个执行分组及顺序"));
-  expect(
-    screen.getByRole("heading", { name: "01 · 合成Listing · 合成标准" }),
-  ).toBeVisible();
-  expect(
-    screen.getByText(/合成店铺 \/ 合成Listing · 标准 V7 · logic 合成逻辑/),
-  ).toBeVisible();
+  expect(screen.getByRole("heading", { name: "合成Listing" })).toBeVisible();
+  expect(screen.getByText("合成店铺")).toBeVisible();
+  expect(screen.getByText("合成标准")).toBeVisible();
+  await user.click(cards()[1].querySelector("details summary"));
+  expect(screen.getByText("logic 合成逻辑")).toBeVisible();
   expect(screen.getByRole("button", { name: "下移 合成Listing" })).toBeEnabled();
 });
 

@@ -156,7 +156,11 @@ class TaskHistoryMixin:
             dataset_version_id=str(source["dataset_version_id"]),
             product_version_id=str(source["product_version_id"]),
             config_version_id=str(source["config_version_id"]),
-            store=str(source["store"]),
+            store=(
+                None
+                if source["snapshot"].get("scope", {}).get("mode") == "auto"
+                else str(source["store"])
+            ),
             listing=source["listing"],
             unresolved_policy=(
                 source["snapshot"]
@@ -169,6 +173,9 @@ class TaskHistoryMixin:
                 else None
             ),
             max_parallel_segments=int(source.get("max_parallel_segments", 3)),
+            selected_listings=source["snapshot"]
+            .get("scope", {})
+            .get("selected_listings"),
         )
         add_audit(
             self.database,

@@ -15,6 +15,7 @@ import { ExecutionPlanIssues } from "./ExecutionPlanIssues";
  * @property {() => void} [onResolveCategories]
  * @property {string[]} [segmentOrder]
  * @property {(segmentOrder: string[]) => void} [onSegmentOrderChange]
+ * @property {import("./taskPlanContracts").TaskSegmentSelection} [segmentSelection]
  * @property {boolean} [compact]
  */
 
@@ -27,9 +28,10 @@ export function ExecutionPlanSummary({
   onResolveCategories,
   segmentOrder,
   onSegmentOrderChange,
+  segmentSelection,
   compact = false,
 }) {
-  const counts = taskPlanCounts(plan);
+  const counts = taskPlanCounts(plan, segmentSelection?.keys);
   const segmentByKey = new Map(
     plan.segments.map((segment) => [segment.segment_key, segment]),
   );
@@ -49,6 +51,7 @@ export function ExecutionPlanSummary({
     <ExecutionPlanSegments
       orderedSegments={orderedSegments}
       onSegmentOrderChange={onSegmentOrderChange}
+      segmentSelection={segmentSelection}
     />
   );
   return (
@@ -62,14 +65,18 @@ export function ExecutionPlanSummary({
       {!compact && segmentsView}
       <ExecutionPlanIssues
         plan={plan}
-        counts={counts}
+        counts={taskPlanCounts(plan)}
         policy={policy}
         onPolicyChange={onPolicyChange}
         onResolveCategories={onResolveCategories}
       />
       {compact && (
-        <details className="task-advanced-settings">
-          <summary>查看 {orderedSegments.length} 个执行分组及顺序</summary>
+        <details className="task-advanced-settings" open={Boolean(segmentSelection)}>
+          <summary>
+            {segmentSelection
+              ? "选择分析范围及顺序"
+              : `查看 ${orderedSegments.length} 个执行分组及顺序`}
+          </summary>
           <div className="task-advanced-body">{segmentsView}</div>
         </details>
       )}

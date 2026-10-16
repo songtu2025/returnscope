@@ -25,6 +25,7 @@ from web_backend.tasks.plan_response import (
     model_configuration,
     unresolved_product_counts,
 )
+from web_backend.tasks.plan_selection import restrict_plan_listings
 from web_backend.tasks.product_resolution import TaskProductResolutionMixin
 
 
@@ -63,6 +64,7 @@ class TaskPlanService(TaskPlanInputsMixin, TaskProductResolutionMixin):
         config_version_id: str | None = None,
         model_policy: dict[str, Any] | None = None,
         analysis_context: AnalysisContext = USER_FEEDBACK_CONTEXT,
+        selected_listings: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
         return self.prepare(
             dataset_version_id=dataset_version_id,
@@ -72,6 +74,7 @@ class TaskPlanService(TaskPlanInputsMixin, TaskProductResolutionMixin):
             config_version_id=config_version_id,
             model_policy=model_policy,
             analysis_context=analysis_context,
+            selected_listings=selected_listings,
         ).response
 
     def prepare(
@@ -83,6 +86,7 @@ class TaskPlanService(TaskPlanInputsMixin, TaskProductResolutionMixin):
         config_version_id: str | None = None,
         model_policy: dict[str, Any] | None = None,
         analysis_context: AnalysisContext = USER_FEEDBACK_CONTEXT,
+        selected_listings: list[dict[str, str]] | None = None,
     ) -> PreparedTaskPlan:
         clean_store = (store or "").strip()
         clean_listing = (listing or "").strip() or None
@@ -127,6 +131,8 @@ class TaskPlanService(TaskPlanInputsMixin, TaskProductResolutionMixin):
                 "detected_scopes": list(dataset.scopes),
             },
         }
+        if selected_listings is not None:
+            inputs["scope"]["selected_listings"] = selected_listings
         response = {
             **execution_plan.summary,
             "plan_hash": data_plan_hash(execution_plan, inputs),
@@ -134,6 +140,7 @@ class TaskPlanService(TaskPlanInputsMixin, TaskProductResolutionMixin):
             **unresolved_product_counts(unresolved_products, missing_category_products),
             "category_options": category_options(registry, standards),
         }
+        response = restrict_plan_listings(response, selected_listings)
         return PreparedTaskPlan(
             returns=returns,
             products=products,
