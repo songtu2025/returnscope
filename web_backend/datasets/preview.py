@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Hashable
+from collections.abc import Hashable
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +9,7 @@ import pandas as pd
 from return_semantics.data import read_return_file
 from web_backend.common import json_value
 from web_backend.database import Database
+from web_backend.datasets.product_store import load_product_frame
 
 PREVIEW_VERSION_QUERY = """
 SELECT d.kind, d.current_version, v.version AS selected_version,
@@ -113,7 +114,6 @@ def _filter_preview(
 
 class _DatasetPreview:
     database: Database
-    _ensure_product_preview: Callable[..., Path]
 
     def preview_rows(
         self,
@@ -133,11 +133,7 @@ class _DatasetPreview:
         if row is None:
             raise ValueError("数据集或数据版本不存在")
         if row["kind"] == "products":
-            preview_path = self._ensure_product_preview(
-                Path(str(row["file_path"])),
-                str(row["sha256"]),
-            )
-            frame = pd.read_csv(preview_path, dtype=str).fillna("")
+            frame = load_product_frame(self.database, Path(str(row["file_path"])))
         else:
             if not query.strip() and not store.strip() and not category.strip():
                 return _unfiltered_return_preview(row, offset, limit, query)

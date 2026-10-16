@@ -51,7 +51,6 @@ def persist_return_inspection(
 
 class DatasetFilePreparationMixin:
     _ensure_blob: Callable[..., Path]
-    _ensure_product_preview: Callable[..., Path]
     _prepared_version: Callable[..., dict[str, Any]]
 
     def _prepare_dataset_file(
@@ -60,8 +59,8 @@ class DatasetFilePreparationMixin:
         kind: str,
         inspection: dict[str, Any] | None,
         metadata: dict[str, str],
+        product_workbook: dict[str, pd.DataFrame] | None = None,
     ) -> dict[str, Any]:
-        inspected_frame: pd.DataFrame | None = None
         # 仅复用同次导入在服务端产生的检查结果，修改文件后必须重新检查。
         if inspection is not None:
             row_count = inspection["row_count"]
@@ -71,16 +70,20 @@ class DatasetFilePreparationMixin:
             digest = inspection["raw_sha256"]
         else:
             (
-                inspected_frame,
+                _,
                 row_count,
                 column_count,
                 schema,
                 quality,
-            ) = _inspect_file_with_frame(source_path, kind)
+            ) = _inspect_file_with_frame(
+                source_path,
+                kind,
+                product_workbook["产品信息汇总表"]
+                if product_workbook is not None
+                else None,
+            )
             digest = _sha256_file(source_path)
         destination = self._ensure_blob(source_path, digest)
-        if kind == "products":
-            self._ensure_product_preview(destination, digest, inspected_frame)
         return self._prepared_version(
             destination,
             {**metadata, "change_note": metadata["change_note"].strip()},

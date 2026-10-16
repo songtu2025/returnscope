@@ -28,7 +28,9 @@ def _read_cached_data(
     return None
 
 
-def _load_product_data(result: Path, product: Path, store: str) -> AnalysisData:
+def _load_product_data(
+    result: Path, product: Path | pd.DataFrame, store: str
+) -> AnalysisData:
     data = load_analysis_data(result)
     try:
         products = load_product_dimensions(

@@ -29,7 +29,7 @@ def _resolution_keys(
 
 def _product_context(
     scope_store: str,
-    product_path: Path,
+    product_path: Path | DataFrame,
     scope_listing: str | None,
     context_by_store: dict[str, _ProductContext],
 ) -> _ProductContext:
@@ -125,7 +125,7 @@ class TaskProductResolutionMixin:
         self,
         dataset: ReturnDataset,
         execution_plan: CategoryExecutionPlan,
-        product_path: Path,
+        product_path: Path | DataFrame,
         store: str,
         listing: str | None,
     ) -> list[dict[str, Any]]:

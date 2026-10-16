@@ -30,7 +30,8 @@ from web_backend.analysis_service import AnalysisFilters, AnalysisService
 from web_backend.classification_result_service import ResultPublicationError
 from web_backend.common import list_audit
 from web_backend.database import Database
-from web_backend.dataset_service import inspect_file
+from web_backend.dataset_service import DatasetService, inspect_file
+from web_backend.datasets.product_store import save_product_workbook
 from web_backend.routers.tasks import create_task_router
 from web_backend.settings import PROJECT_ROOT, Settings
 from web_backend.task_plan_service import TaskPlanService
@@ -175,6 +176,12 @@ def _database_with_inputs(tmp_path: Path) -> tuple[Database, Path, Path]:
             )
             """
         )
+    with database.transaction() as connection:
+        save_product_workbook(
+            connection,
+            "hash-products",
+            pd.read_excel(products_path, sheet_name=None, dtype=str),
+        )
     return database, returns_path, products_path
 
 
@@ -262,6 +269,12 @@ def _add_product_version(
             WHERE id = 'dataset-products'
             """,
             (version,),
+        )
+    with database.transaction() as connection:
+        save_product_workbook(
+            connection,
+            f"hash-products-{version}",
+            pd.read_excel(resolved_path, sheet_name=None, dtype=str),
         )
     return version_id
 
@@ -453,6 +466,14 @@ def test_preflight_normalizes_html_escaped_sku(
     }
     with pd.ExcelWriter(products_path, engine="openpyxl") as writer:
         products.to_excel(writer, sheet_name="产品信息汇总表", index=False)
+    DatasetService(database, SimpleNamespace(data_dir=tmp_path)).add_version(
+        "dataset-products",
+        products_path,
+        products_path.name,
+        "application/xlsx",
+        "测试更新",
+        "user-1",
+    )
 
     plan = TaskPlanService(database).preflight(
         "version-returns",
@@ -607,6 +628,14 @@ def test_stale_plan_is_rejected_and_segments_are_persisted(tmp_path: Path) -> No
     ]
     with pd.ExcelWriter(products_path, engine="openpyxl") as writer:
         products.to_excel(writer, sheet_name="产品信息汇总表", index=False)
+    DatasetService(database, SimpleNamespace(data_dir=tmp_path)).add_version(
+        "dataset-products",
+        products_path,
+        products_path.name,
+        "application/xlsx",
+        "测试更新",
+        "user-1",
+    )
     with pytest.raises(TaskPlanConflict):
         service.create(
             actor_id="user-1",
@@ -1007,6 +1036,14 @@ def test_missing_category_is_excluded_without_model_call(
     products.loc[products["MSKU"].eq("SKU-2"), ["品类A", "品类B"]] = ["", ""]
     with pd.ExcelWriter(products_path, engine="openpyxl") as writer:
         products.to_excel(writer, sheet_name="产品信息汇总表", index=False)
+    DatasetService(database, SimpleNamespace(data_dir=tmp_path)).add_version(
+        "dataset-products",
+        products_path,
+        products_path.name,
+        "application/xlsx",
+        "测试更新",
+        "user-1",
+    )
 
     preflight = TaskService(database).preflight(
         "version-returns",
@@ -1041,6 +1078,14 @@ def test_all_missing_categories_complete_without_model_call(
     products[["品类A", "品类B"]] = ""
     with pd.ExcelWriter(products_path, engine="openpyxl") as writer:
         products.to_excel(writer, sheet_name="产品信息汇总表", index=False)
+    DatasetService(database, SimpleNamespace(data_dir=tmp_path)).add_version(
+        "dataset-products",
+        products_path,
+        products_path.name,
+        "application/xlsx",
+        "测试更新",
+        "user-1",
+    )
 
     preflight = TaskService(database).preflight(
         "version-returns",
@@ -2530,6 +2575,11 @@ def test_data_confirmation_survives_model_change_and_saves_final_policy(tmp_path
     with planner.database.transaction() as connection:
         connection.execute(
             "UPDATE dataset_versions SET sha256='changed' WHERE id='version-products'"
+        )
+        save_product_workbook(
+            connection,
+            "changed",
+            pd.read_excel(tmp_path / "products.xlsx", sheet_name=None, dtype=str),
         )
     with pytest.raises(TaskPlanConflict):
         TaskService(planner.database).create(

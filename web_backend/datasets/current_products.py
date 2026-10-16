@@ -11,8 +11,9 @@ import pandas as pd
 from web_backend.common import insert_audit, json_text, json_value
 from web_backend.dashboards.product_scope import capture_dashboard_product_scopes
 from web_backend.database import Database
-from web_backend.dataset_files import PRODUCT_WORKSHEET, DatasetRevisionConflict
+from web_backend.dataset_files import DatasetRevisionConflict
 from web_backend.datasets.product_aliases import product_aliases, save_product_aliases
+from web_backend.datasets.product_store import load_product_frame, product_frame
 
 
 def product_identities(frame: pd.DataFrame) -> list[tuple[str, str]]:
@@ -146,18 +147,19 @@ def load_product_display(
         ).fetchone()
     if source is None:
         return None
-    frame = _product_display_frame(source["dataset_id"], source)
+    frame = load_product_frame(database, Path(source["file_path"]))
     return ProductDisplaySnapshot(**dict(source), frame=frame)
 
 
 def _product_display_frame(
-    dataset_id: str, source: Any, snapshot: ProductDisplaySnapshot | None = None
+    connection: Any,
+    dataset_id: str,
+    source: Any,
+    snapshot: ProductDisplaySnapshot | None = None,
 ) -> pd.DataFrame:
     if snapshot is not None:
         return snapshot.current_frame(dataset_id, source)
-    return pd.read_excel(
-        Path(source["file_path"]), sheet_name=PRODUCT_WORKSHEET, dtype=str
-    ).fillna("")
+    return product_frame(connection, Path(source["file_path"]))
 
 
 def sync_product_display(
@@ -170,12 +172,12 @@ def sync_product_display(
     """只同步商品展示字段，不改写已计算的品类、Listing 或分类语义。"""
     source = connection.execute(
         """SELECT v.file_path, v.sha256 FROM datasets d JOIN dataset_versions v
-        ON v.dataset_id = d.id AND v.version = d.current_version WHERE d.id = ?""",
+        ON v.dataset_id = d.id AND v.version = d.current_version WHERE d.id = ? AND d.kind = 'products'""",
         (dataset_id,),
     ).fetchone()
     if source is None:
         return
-    frame = _product_display_frame(dataset_id, source, snapshot)
+    frame = _product_display_frame(connection, dataset_id, source, snapshot)
     grouped: dict[tuple[str, str], list[dict[Any, Any]]] = {}
     identities = product_identities(frame)
     if previous_identities is not None:

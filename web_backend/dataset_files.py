@@ -15,6 +15,7 @@ from return_semantics.data import (
     RETURN_STORE_COLUMN,
     read_return_file,
 )
+from return_semantics.product_identity import validate_product_identities
 
 ALLOWED_EXTENSIONS = {
     "returns": {".csv", ".xlsx"},
@@ -97,9 +98,14 @@ def _inspect_products(path: Path) -> tuple[pd.DataFrame, dict[str, Any]]:
         frame = pd.read_excel(path, sheet_name=PRODUCT_WORKSHEET, dtype=str)
     except ValueError as exc:
         raise ValueError("产品信息缺少“产品信息汇总表”工作表") from exc
+    return inspect_product_frame(frame)
+
+
+def inspect_product_frame(frame: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
     missing = [column for column in PRODUCT_COLUMNS if column not in frame.columns]
     if missing:
         raise ValueError(f"产品信息缺少字段：{', '.join(missing)}")
+    validate_product_identities(frame)
     complete = int(
         frame[PRODUCT_COLUMNS]
         .fillna("")
@@ -162,6 +168,7 @@ def _sha256_file(path: Path) -> str:
 def _inspect_file_with_frame(
     path: Path,
     kind: str,
+    product_frame: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, int, int, list[dict[str, str]], dict[str, Any]]:
     if path.suffix.lower() not in ALLOWED_EXTENSIONS.get(kind, set()):
         allowed = "、".join(sorted(ALLOWED_EXTENSIONS.get(kind, set())))
@@ -169,7 +176,11 @@ def _inspect_file_with_frame(
     if kind == "returns":
         frame, quality = _inspect_returns(path)
     elif kind == "products":
-        frame, quality = _inspect_products(path)
+        frame, quality = (
+            _inspect_products(path)
+            if product_frame is None
+            else inspect_product_frame(product_frame)
+        )
     else:
         raise ValueError("未知数据类型")
     schema = [

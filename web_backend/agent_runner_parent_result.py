@@ -188,8 +188,7 @@ class ParentResultMixin:
             for key, value in results.items()
         )
 
-    @staticmethod
-    def _load_parent_dataset(task: dict[str, Any]) -> ReturnDataset:
+    def _load_parent_dataset(self, task: dict[str, Any]) -> ReturnDataset:
         snapshot = json_value(task.get("snapshot_json"), {})
         dataset = load_cached_dataset(
             str(task["return_file_path"]),
@@ -200,6 +199,7 @@ class ParentResultMixin:
             str(task["return_sha256"]),
             str(task["product_sha256"]),
             analysis_context_from_snapshot(snapshot),
+            database=self.database,
         )
         return dataset
 

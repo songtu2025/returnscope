@@ -95,6 +95,7 @@ class SegmentExecutionMixin(SegmentStateMixin, SegmentConfigurationMixin):
             str(task["return_sha256"]),
             str(task["product_sha256"]),
             analysis_context_from_snapshot(snapshot),
+            database=self.database,
         )
         data_ms = (time.perf_counter() - data_started) * 1000
         setup_started = time.perf_counter()

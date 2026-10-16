@@ -79,7 +79,7 @@ def read_return_file(
 
 
 def load_mskus(
-    product_path: Path,
+    product_path: Path | pd.DataFrame,
     store: str,
     listing: str | None = None,
 ) -> frozenset[str]:
@@ -93,7 +93,7 @@ def load_mskus(
 
 
 def load_product_dimensions(
-    product_path: Path,
+    product_path: Path | pd.DataFrame,
     store: str,
     listing: str | None = None,
 ) -> pd.DataFrame:
@@ -168,7 +168,7 @@ def _finalize_return_dataset(
 
 def load_return_dataset(
     return_path: Path,
-    product_path: Path,
+    product_path: Path | pd.DataFrame,
     store: str,
     listing: str | None = None,
     analysis_context: AnalysisContext = RETURNS_CONTEXT,
@@ -212,7 +212,7 @@ def load_return_dataset(
 
 def load_return_dataset_auto(
     return_path: Path,
-    product_path: Path,
+    product_path: Path | pd.DataFrame,
     analysis_context: AnalysisContext = RETURNS_CONTEXT,
 ) -> ReturnDataset:
     started = perf_counter()

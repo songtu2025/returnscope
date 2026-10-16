@@ -21,6 +21,7 @@ from web_backend.datasets.current_products import (
     refresh_product_dependents,
 )
 from web_backend.datasets.product_aliases import save_product_aliases
+from web_backend.datasets.product_store import save_product_workbook
 from web_backend.security import utc_now
 
 
@@ -169,7 +170,7 @@ def recover_product_links(
 ) -> dict[str, int]:
     counts = {"recovered": 0, "unresolved": 0}
     datasets = connection.execute(
-        """SELECT d.id, v.file_path FROM datasets d JOIN dataset_versions v
+        """SELECT d.id, v.file_path, v.sha256 FROM datasets d JOIN dataset_versions v
         ON v.dataset_id = d.id AND v.version = d.current_version
         WHERE d.kind = 'products' AND d.archived_at IS NULL"""
     ).fetchall()
@@ -178,7 +179,9 @@ def recover_product_links(
         if not path.is_file():
             counts["unresolved"] += 1
             continue
-        frame = pd.read_excel(path, sheet_name=PRODUCT_WORKSHEET, dtype=str).fillna("")
+        workbook = pd.read_excel(path, sheet_name=None, dtype=str)
+        frame = workbook[PRODUCT_WORKSHEET].fillna("")
+        save_product_workbook(connection, dataset["sha256"], workbook)
         connection.execute("SAVEPOINT recover_product_links")
         try:
             changes, snapshots, boundary = _recorded_changes(

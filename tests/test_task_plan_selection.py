@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
@@ -6,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from test_task_planning import NoopRunner, _database_with_inputs
 
+from web_backend.dataset_service import DatasetService
 from web_backend.routers.task_planning_routes import register_task_collection_routes
 from web_backend.task_service import TaskService
 from web_backend.tasks.plan_selection import selected_plan
@@ -17,6 +19,14 @@ def _service(tmp_path: Path) -> TaskService:
     products = pd.read_excel(products_path)
     products.loc[1, ["Listing", "品类A", "品类B"]] = ["L2", "水鞋", "薄底水鞋"]
     products.to_excel(products_path, sheet_name="产品信息汇总表", index=False)
+    DatasetService(database, SimpleNamespace(data_dir=tmp_path)).add_version(
+        "dataset-products",
+        products_path,
+        products_path.name,
+        "application/xlsx",
+        "测试输入",
+        "user-1",
+    )
     returns_path = tmp_path / "returns.csv"
     returns = pd.read_csv(returns_path)
     returns["店铺/站点"] = "SEEKWAY:US"

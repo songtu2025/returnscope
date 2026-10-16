@@ -11,12 +11,16 @@ PRODUCT_CATEGORY_COLUMNS = ["品类A", "品类B"]
 PRODUCT_DETAIL_COLUMNS = ["产品名称", "SKU"]
 
 
-def _read_product_dimensions(product_path: Path) -> pd.DataFrame:
-    products = pd.read_excel(
-        product_path,
-        sheet_name="产品信息汇总表",
-        dtype=str,
-    ).fillna("")
+def _read_product_dimensions(product_path: Path | pd.DataFrame) -> pd.DataFrame:
+    products = (
+        product_path.copy()
+        if isinstance(product_path, pd.DataFrame)
+        else pd.read_excel(
+            product_path,
+            sheet_name="产品信息汇总表",
+            dtype=str,
+        ).fillna("")
+    )
     missing = [column for column in PRODUCT_COLUMNS if column not in products.columns]
     if missing:
         raise ValueError(f"商品维度缺少字段: {', '.join(missing)}")

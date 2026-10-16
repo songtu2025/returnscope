@@ -57,6 +57,7 @@ from web_backend.database_registered_migrations import (
 from web_backend.database_schema import SCHEMA
 from web_backend.database_table_rebuilds import DatabaseTableRebuilds
 from web_backend.datasets.product_aliases import migrate_product_aliases
+from web_backend.datasets.product_store import migrate_product_store
 from web_backend.tasks.recycle_migration import migrate_segment_recycle
 
 CLASSIFICATION_UNIT_RERUN_MIGRATION = "20260919_classification_unit_rerun_state"
@@ -141,6 +142,7 @@ class DatabaseMigrations(DatabaseTableRebuilds):
         """开启事务，按既有顺序更新结构和历史数据，由调用方结束事务。"""
         connection.executescript("BEGIN IMMEDIATE;\n" + SCHEMA)
         migrate_product_aliases(connection)
+        migrate_product_store(connection)
         self._migrate_auth_action_tokens(connection)
         self._migrate_email_change_tokens(connection)
         self._migrate_user_columns(connection)

@@ -14,6 +14,8 @@ from return_semantics.data import (
     load_return_dataset,
     load_return_dataset_auto,
 )
+from web_backend.database import Database
+from web_backend.datasets.product_store import load_product_frame
 
 _DATASET_CACHE_CAPACITY = 8
 
@@ -31,10 +33,13 @@ def load_cached_dataset(
     return_sha256: str,
     product_sha256: str,
     analysis_context: AnalysisContext = RETURNS_CONTEXT,
+    *,
+    database: Database | None = None,
 ) -> ReturnDataset:
     """调用方只读共享结果；需要修改数据时先复制对应的 DataFrame。"""
     automatic = scope_mode == "auto"
     key = (
+        str(database.path.resolve()) if database else "",
         return_file_path,
         product_file_path,
         return_sha256,
@@ -57,16 +62,21 @@ def load_cached_dataset(
         dataset = _cache.get(key)
         cache_hit = dataset is not None
         if dataset is None:
+            product_source = (
+                load_product_frame(database, Path(product_file_path))
+                if database
+                else Path(product_file_path)
+            )
             if automatic:
                 dataset = load_return_dataset_auto(
                     Path(return_file_path),
-                    Path(product_file_path),
+                    product_source,
                     analysis_context=analysis_context,
                 )
             else:
                 dataset = load_return_dataset(
                     Path(return_file_path),
-                    Path(product_file_path),
+                    product_source,
                     store=store,
                     listing=listing,
                     analysis_context=analysis_context,

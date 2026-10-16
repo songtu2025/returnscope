@@ -16,6 +16,8 @@ from web_backend.classification_unit_semantics import (
     SEMANTIC_MIGRATION,
     SEMANTIC_MIGRATION_CHECKSUM,
 )
+from web_backend.dataset_files import _sha256_file
+from web_backend.datasets.product_backfill import backfill_product_store
 from web_backend.upgrade_database import upgrade_database
 
 
@@ -105,6 +107,17 @@ def test_failed_review_publication_rolls_back_semantics(
 
 def test_upgrade_backfills_once_and_backup_restores_old_schema(tmp_path: Path) -> None:
     context = _seed_result_context(tmp_path)
+    with context.database.transaction() as connection:
+        path = Path(
+            connection.execute(
+                "SELECT file_path FROM dataset_versions WHERE id='version-products'"
+            ).fetchone()[0]
+        )
+        connection.execute(
+            "UPDATE dataset_versions SET sha256=? WHERE id='version-products'",
+            (_sha256_file(path),),
+        )
+    backfill_product_store(context.database)
     version = _publish(context)
     settings = _settings(tmp_path)
     settings.ensure_directories()

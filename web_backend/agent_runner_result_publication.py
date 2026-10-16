@@ -14,6 +14,7 @@ from web_backend.classification_result_service import (
     ResultPublicationError,
 )
 from web_backend.common import json_value
+from web_backend.database import Database
 from web_backend.dataset_cache import load_cached_dataset
 from web_backend.task_execution.failure_diagnostics import log_segment_failure
 
@@ -23,6 +24,7 @@ class IncompleteResultCheckpoint(ValueError):
 
 
 class ResultPublicationMixin:
+    database: Database
     result_service: ClassificationResultService
     _capability_for_segment: Callable[..., Any]
     _load_segment: Callable[..., dict[str, Any] | None]
@@ -125,6 +127,7 @@ class ResultPublicationMixin:
             str(task["return_sha256"]),
             str(task["product_sha256"]),
             analysis_context_from_snapshot(snapshot),
+            database=self.database,
         )
         segment_dataset = self._subset_dataset(dataset, all_keys)
         dataset_keys = {

@@ -25,6 +25,7 @@ from web_backend.dataset_service import (
     PRODUCT_WORKSHEET,
     DatasetService,
 )
+from web_backend.datasets.product_store import save_product_workbook
 from web_backend.import_rule_service import list_import_rules
 from web_backend.operations_service import AuditLogService, WorkbenchService
 from web_backend.routers.datasets import create_dataset_router
@@ -171,6 +172,12 @@ def _insert_quality_versions(context, tmp_path: Path) -> tuple[str, str, str]:
         connection.execute(
             "UPDATE datasets SET current_version = 2 WHERE id = 'dataset-products'"
         )
+    with context.database.transaction() as connection:
+        save_product_workbook(
+            connection,
+            products_sha,
+            pd.read_excel(products_path, sheet_name=None, dtype=str),
+        )
     return "quality-returns", "quality-products", "quality-products-v3"
 
 
@@ -268,7 +275,7 @@ def test_quality_category_requires_both_levels_missing(
     monkeypatch.setattr(
         data_quality_module,
         "load_cached_dataset",
-        lambda *_args: SimpleNamespace(records=records),
+        lambda *_args, **_kwargs: SimpleNamespace(records=records),
     )
     service = DataQualityService(context.database)
     preflight = service.preflight("version-returns", "version-products")
@@ -326,6 +333,13 @@ def test_data_quality_cache_is_bounded_invalidates_and_isolation_safe(
         connection.execute(
             "UPDATE dataset_versions SET sha256 = 'corrected-sha' WHERE id = ?",
             (products_v3,),
+        )
+        save_product_workbook(
+            connection,
+            "corrected-sha",
+            pd.read_excel(
+                tmp_path / "quality-products.xlsx", sheet_name=None, dtype=str
+            ),
         )
     service.preflight(returns_id, products_id)
     assert calls == 3

@@ -11,6 +11,7 @@ from web_backend.database_recovery import (
     recover_interrupted_result_publishing,
     sync_api_models,
 )
+from web_backend.datasets.product_backfill import require_product_store
 
 
 class ClosingConnection(sqlite3.Connection):
@@ -152,6 +153,7 @@ class Database(DatabaseMigrations):
                         f"生产数据库迁移记录 {migration_id} 缺失或校验失败，"
                         "请停服执行数据库升级"
                     )
+            require_product_store(connection)
 
     def upgrade_schema(self) -> None:
         """供停服升级命令复用既有迁移和历史模型同步。"""

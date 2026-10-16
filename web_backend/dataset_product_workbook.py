@@ -16,6 +16,7 @@ from web_backend.datasets.product_category_rows import (
     append_category_row,
     update_category_rows,
 )
+from web_backend.datasets.product_store import load_product_workbook
 from web_backend.settings import Settings
 
 
@@ -59,17 +60,13 @@ class DatasetProductWorkbookMixin:
             raise DatasetRevisionConflict("产品信息已被其他用户修改，请刷新后重试")
         return dict(row)
 
-    @staticmethod
     def _load_product_workbook(
+        self,
         dataset_id: str,
         expected_version: int,
         source: dict[str, Any],
     ) -> _ProductWorkbookEdit:
-        workbook: dict[str, pd.DataFrame] = pd.read_excel(
-            Path(str(source["file_path"])),
-            sheet_name=None,
-            dtype=str,
-        )
+        workbook = load_product_workbook(self.database, Path(str(source["file_path"])))
         frame = workbook.get(PRODUCT_WORKSHEET)
         if frame is None:
             raise ValueError("产品信息缺少“产品信息汇总表”工作表")
@@ -107,6 +104,7 @@ class DatasetProductWorkbookMixin:
                 expected_current_version=edit.expected_version,
                 _product_previous_identities=edit.previous_identities,
                 _product_audit=audit,
+                _product_workbook=edit.workbook,
             )
         finally:
             temp_path.unlink(missing_ok=True)

@@ -4,14 +4,10 @@ import builtins
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
-
 from return_semantics.data import PRODUCT_COLUMNS
 from web_backend.common import json_value
 from web_backend.database import Database
-from web_backend.dataset_files import (
-    PRODUCT_WORKSHEET,
-)
+from web_backend.datasets.product_store import load_product_frame
 
 
 class _DatasetReferences:
@@ -111,12 +107,9 @@ class _DatasetReferences:
             ).fetchone()
         if row is None or row["kind"] != "products":
             raise ValueError("产品资料不存在或已归档")
-        frame = pd.read_excel(
-            Path(str(row["file_path"])),
-            sheet_name=PRODUCT_WORKSHEET,
-            dtype=str,
-            usecols=PRODUCT_COLUMNS,
-        ).fillna("")
+        frame = load_product_frame(self.database, Path(str(row["file_path"])))[
+            PRODUCT_COLUMNS
+        ]
         frame["店铺/站点"] = frame["店铺/站点"].str.strip()
         frame["Listing"] = frame["Listing"].str.strip()
         output = []

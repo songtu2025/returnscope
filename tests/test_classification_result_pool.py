@@ -29,6 +29,7 @@ from web_backend.classification_result_service import (
 )
 from web_backend.common import json_text, json_value
 from web_backend.database import Database
+from web_backend.datasets.product_store import save_product_workbook
 from web_backend.routers.classification_results import (
     create_classification_result_router,
 )
@@ -250,6 +251,12 @@ def _seed_result_context(tmp_path: Path) -> SimpleNamespace:
             "taxonomy_version": taxonomy.version,
         }
     )
+    with database.transaction() as connection:
+        save_product_workbook(
+            connection,
+            "products-sha",
+            pd.read_excel(products_path, sheet_name=None, dtype=str),
+        )
     return SimpleNamespace(
         database=database,
         dataset=dataset,
@@ -1529,6 +1536,16 @@ def test_new_unknown_category_task_completes_without_execution_segment(
             }
         ]
     ).to_excel(products_path, sheet_name="产品信息汇总表", index=False)
+    from web_backend.dataset_service import DatasetService
+
+    DatasetService(context.database, SimpleNamespace(data_dir=tmp_path)).add_version(
+        "dataset-products",
+        products_path,
+        products_path.name,
+        "application/xlsx",
+        "测试更新",
+        "user-1",
+    )
     service = TaskService(context.database)
     preflight = service.preflight(
         "version-returns",

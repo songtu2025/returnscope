@@ -6,6 +6,10 @@ from pathlib import Path
 
 from web_backend.backup import create_backup, verify_backup
 from web_backend.database import Database
+from web_backend.datasets.product_backfill import (
+    backfill_product_store,
+    verify_product_artifacts,
+)
 from web_backend.settings import Settings
 
 
@@ -25,11 +29,12 @@ def upgrade_database(settings: Settings, *, app_stopped: bool) -> Path:
 
     try:
         database.upgrade_schema()
+        backfill_product_store(database)
         database.validate_production_schema()
         with database.connect() as connection:
             if connection.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                 raise ValueError("升级后数据库完整性检查失败")
-    except (RuntimeError, ValueError, sqlite3.Error) as exc:
+    except (RuntimeError, ValueError, sqlite3.Error, OSError, AssertionError) as exc:
         raise RuntimeError(
             f"数据库升级失败；保持停服，使用备份恢复：{backup_path}"
         ) from exc
@@ -62,7 +67,16 @@ def main() -> None:
     mode.add_argument(
         "--initialize-empty", action="store_true", help="仅供全新部署初始化空数据库"
     )
+    mode.add_argument(
+        "--verify-products",
+        action="store_true",
+        help="回退前只读核对数据库产品资料与导出产物",
+    )
     args = parser.parse_args()
+    if args.verify_products:
+        count = verify_product_artifacts(Database(Settings.from_env().database_path))
+        print(f"产品资料与导出产物对账通过：{count} 份")
+        return
     if args.check_only:
         Database(Settings.from_env().database_path).validate_production_schema()
         print("数据库结构检查通过")

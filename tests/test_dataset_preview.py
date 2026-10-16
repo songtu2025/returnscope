@@ -43,7 +43,9 @@ def _write_products(path: Path) -> None:
     pd.DataFrame(rows).to_excel(path, sheet_name="产品信息汇总表", index=False)
 
 
-def test_product_preview_uses_rebuildable_derived_csv(tmp_path: Path) -> None:
+def test_product_preview_uses_database_without_excel(
+    tmp_path: Path, monkeypatch
+) -> None:
     context = _seed_result_context(tmp_path)
     service = DatasetService(context.database, SimpleNamespace(data_dir=tmp_path))
     source = tmp_path / "products.xlsx"
@@ -61,18 +63,16 @@ def test_product_preview_uses_rebuildable_derived_csv(tmp_path: Path) -> None:
         change_note="首次导入",
         actor_id="user-1",
     )
-    digest = created["versions"][0]["sha256"]
-    preview_path = tmp_path / "cache" / "dataset-previews" / f"{digest}.csv"
 
-    assert preview_path.exists()
+    def fail_excel(*args, **kwargs):
+        raise AssertionError("产品预览不应解析 Excel")
+
+    monkeypatch.setattr(pd, "read_excel", fail_excel)
     assert service.preview_rows(str(created["id"]))["facets"]["categories"] == [
         "手套",
         "眼镜 > 太阳镜",
     ]
-    preview_path.unlink()
-    rebuilt = service.preview_rows(str(created["id"]), query="MSKU-1")
-    assert rebuilt["total"] == 1
-    assert preview_path.exists()
+    assert service.preview_rows(str(created["id"]), query="MSKU-1")["total"] == 1
 
 
 def test_return_preview_reads_only_requested_prefix(

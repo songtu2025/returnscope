@@ -19,6 +19,7 @@ from web_backend.analysis_services.cache import (
 )
 from web_backend.analysis_services.filters import AnalysisFilters
 from web_backend.database import Database
+from web_backend.datasets.product_store import load_product_frame
 
 TASK_SOURCE_QUERY = """
 SELECT t.id, t.title, t.status, t.store, t.listing,
@@ -118,6 +119,7 @@ class _AnalysisTaskData:
             str(product_path),
             product_path.stat().st_mtime_ns,
             str(task["store"]),
+            str(self.database.path),
         )
 
     @staticmethod
@@ -128,12 +130,14 @@ class _AnalysisTaskData:
         product_path: str,
         product_mtime: int,
         store: str,
+        database_path: str | None = None,
     ) -> AnalysisData:
         result = Path(result_path)
         product = Path(product_path)
         cache_path = result.with_suffix(".web-cache.pkl")
         cache_key = (
             ANALYSIS_CACHE_VERSION,
+            *((database_path,) if database_path else ()),
             result_mtime,
             str(product.resolve()),
             product_mtime,
@@ -143,7 +147,12 @@ class _AnalysisTaskData:
             cached = _read_cached_data(cache_path, cache_key)
             if cached is not None:
                 return cached
-            data = _load_product_data(result, product, store)
+            product_source = (
+                load_product_frame(Database(Path(database_path)), product)
+                if database_path
+                else product
+            )
+            data = _load_product_data(result, product_source, store)
             _write_cached_data(cache_path, cache_key, data)
             return data
 

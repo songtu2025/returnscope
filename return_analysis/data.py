@@ -129,18 +129,22 @@ def _parse_standard_sku(value: Any) -> tuple[str, str, str]:
 
 
 def load_product_dimensions(
-    workbook_path: Path,
+    workbook_path: Path | pd.DataFrame,
     skus: Iterable[str] = (),
     store: str | None = None,
 ) -> pd.DataFrame:
-    if not workbook_path.exists():
+    if isinstance(workbook_path, Path) and not workbook_path.exists():
         raise FileNotFoundError(f"产品信息不存在: {workbook_path}")
 
-    products = pd.read_excel(
-        workbook_path,
-        sheet_name=PRODUCT_SHEET,
-        dtype=str,
-    ).fillna("")
+    products = (
+        workbook_path.copy()
+        if isinstance(workbook_path, pd.DataFrame)
+        else pd.read_excel(
+            workbook_path,
+            sheet_name=PRODUCT_SHEET,
+            dtype=str,
+        ).fillna("")
+    )
     _validate_columns(products, set(PRODUCT_REQUIRED_COLUMNS), PRODUCT_SHEET)
     for column in PRODUCT_SOURCE_COLUMNS:
         if column not in products:

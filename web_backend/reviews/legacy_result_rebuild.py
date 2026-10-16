@@ -13,6 +13,7 @@ from return_semantics.schemas import TaxonomyConfig, ValidatedClassification
 from web_backend.classification_standard_service import ClassificationStandardService
 from web_backend.common import json_text, json_value
 from web_backend.database import Database
+from web_backend.datasets.product_store import load_product_frame
 from web_backend.review_contracts import _task_lock
 from web_backend.security import utc_now
 
@@ -107,7 +108,7 @@ class ReviewLegacyResultRebuildMixin:
         }
         dataset = load_return_dataset(
             Path(str(task["return_file_path"])),
-            Path(str(task["product_file_path"])),
+            load_product_frame(self.database, Path(str(task["product_file_path"]))),
             store=str(task["store"]),
             listing=task["listing"],
         )

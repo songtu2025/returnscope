@@ -17,6 +17,7 @@ from return_semantics.task_plan import (
 from web_backend.classification_standard_service import ClassificationStandardService
 from web_backend.database import Database
 from web_backend.dataset_cache import load_cached_dataset
+from web_backend.datasets.product_store import load_product_frame
 from web_backend.settings import PROJECT_ROOT
 from web_backend.tasks.plan_inputs import TaskPlanInputsMixin
 from web_backend.tasks.plan_preview import TaskPlanPreviewMixin
@@ -125,7 +126,7 @@ class TaskPlanService(
         unresolved_products = self._unresolved_products(
             dataset,
             execution_plan,
-            Path(str(products["file_path"])),
+            load_product_frame(self.database, Path(str(products["file_path"]))),
             clean_store,
             clean_listing,
         )
@@ -192,6 +193,7 @@ class TaskPlanService(
             str(returns["sha256"]),
             str(products["sha256"]),
             analysis_context,
+            database=self.database,
         )
         if automatic_scope:
             clean_store = dataset.primary_store or "AUTO"

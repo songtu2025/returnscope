@@ -34,6 +34,7 @@ from web_backend.datasets.current_products import (
     update_current_products,
 )
 from web_backend.datasets.preview import _DatasetPreview
+from web_backend.datasets.product_store import save_product_workbook
 from web_backend.datasets.references import _DatasetReferences
 from web_backend.datasets.return_inspection import (
     DatasetFilePreparationMixin,
@@ -173,6 +174,7 @@ class DatasetService(
         _inspection: dict[str, Any] | None = None,
         _product_previous_identities: list[tuple[str, str]] | None = None,
         _product_audit: dict[str, Any] | None = None,
+        _product_workbook: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         with self.database.connect() as connection:
             dataset = connection.execute(
@@ -182,6 +184,12 @@ class DatasetService(
         if dataset is None:
             raise ValueError("数据集不存在")
         kind = str(dataset["kind"])
+        if kind == "products" and _product_workbook is None:
+            import pandas as pd
+
+            _product_workbook = pd.read_excel(source_path, sheet_name=None, dtype=str)
+        if _product_workbook is not None and PRODUCT_WORKSHEET not in _product_workbook:
+            raise ValueError("产品信息缺少“产品信息汇总表”工作表")
         if kind == "products" and dataset["current_version"]:
             expected_current_version = (
                 int(dataset["current_version"])
@@ -208,12 +216,15 @@ class DatasetService(
                 "content_type": content_type,
                 "change_note": change_note,
             },
+            _product_workbook,
         )
         version_id = str(prepared["id"])
         prepared["product_audit"] = _product_audit
 
         with self.database.transaction(immediate=True) as connection:
             now = utc_now()
+            if _product_workbook is not None:
+                save_product_workbook(connection, prepared["sha256"], _product_workbook)
             write = DatasetVersionWrite(
                 dataset_id=dataset_id,
                 prepared=prepared,

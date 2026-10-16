@@ -22,6 +22,7 @@ from web_backend.classification_standard_validation_service import (
     ClassificationStandardValidationService,
 )
 from web_backend.database import Database
+from web_backend.datasets.product_store import save_product_workbook
 
 
 class FakeRunner:
@@ -300,6 +301,14 @@ def _seed_result(
                         else "file.xlsx"
                     ),
                 ),
+            )
+        if product_path is not None:
+            import pandas as pd
+
+            save_product_workbook(
+                connection,
+                "hash",
+                pd.read_excel(product_path, sheet_name=None, dtype=str),
             )
         connection.execute(
             """

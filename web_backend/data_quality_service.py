@@ -163,6 +163,7 @@ class DataQualityService:
                 "auto",
                 str(returns["sha256"]),
                 str(products["sha256"]),
+                database=self.database,
             )
             records = dataset.records.copy(deep=True)
             entry = _QualityCacheEntry(

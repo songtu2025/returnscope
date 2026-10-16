@@ -10,18 +10,19 @@ from test_task_detail_queries import _add_segment
 from web_backend.agent_runner import AgentRunner
 from web_backend.classification_result_service import ResultPublicationError
 from web_backend.datasets.current_products import sync_product_display
+from web_backend.datasets.product_store import load_product_frame, save_product_workbook
 
 
-def test_publication_excel_parsing_does_not_block_other_writers(tmp_path, monkeypatch):
+def test_publication_product_read_does_not_block_other_writers(tmp_path, monkeypatch):
     seed = _seed_result_context(tmp_path)
     _add_segment(seed.database, seed.segment_id, "background", "running")
     parsing, release = Event(), Event()
-    read_excel = pd.read_excel
+    read_frame = load_product_frame
 
     def parse(*args, **kwargs):
         parsing.set()
         assert release.wait(5)
-        return read_excel(*args, **kwargs)
+        return read_frame(*args, **kwargs)
 
     def update_progress():
         with seed.database.transaction() as connection:
@@ -30,7 +31,9 @@ def test_publication_excel_parsing_does_not_block_other_writers(tmp_path, monkey
                 ("background",),
             )
 
-    monkeypatch.setattr("web_backend.datasets.current_products.pd.read_excel", parse)
+    monkeypatch.setattr(
+        "web_backend.datasets.current_products.load_product_frame", parse
+    )
     with ThreadPoolExecutor(max_workers=2) as executor:
         publication = executor.submit(_publish, seed)
         try:
@@ -60,22 +63,27 @@ def test_product_change_during_parsing_rolls_back_and_can_be_republished(
             "UPDATE task_segments SET result_json_path=? WHERE id=?",
             (str(checkpoint), seed.segment_id),
         )
-    read_excel = pd.read_excel
+    read_frame = load_product_frame
 
     def parse(*args, **kwargs):
-        frame = read_excel(*args, **kwargs)
+        frame = read_frame(*args, **kwargs)
         updated = frame.copy()
         updated["产品名称"] = "更新后的商品"
         updated_path = tmp_path / "updated-products.xlsx"
         updated.to_excel(updated_path, sheet_name="产品信息汇总表", index=False)
         with seed.database.transaction(immediate=True) as connection:
+            save_product_workbook(
+                connection, "new-products-sha", {"产品信息汇总表": updated}
+            )
             connection.execute(
                 "UPDATE dataset_versions SET sha256='new-products-sha', file_path=? WHERE id='version-products'",
                 (str(updated_path),),
             )
         return frame
 
-    monkeypatch.setattr("web_backend.datasets.current_products.pd.read_excel", parse)
+    monkeypatch.setattr(
+        "web_backend.datasets.current_products.load_product_frame", parse
+    )
     with pytest.raises(ResultPublicationError, match="产品信息已更新"):
         _publish(seed)
     with seed.database.connect() as connection:
@@ -99,7 +107,7 @@ def test_product_change_during_parsing_rolls_back_and_can_be_republished(
             == 0
         )
     monkeypatch.setattr(
-        "web_backend.datasets.current_products.pd.read_excel", read_excel
+        "web_backend.datasets.current_products.load_product_frame", read_frame
     )
     published = _publish(seed)
     assert published["publish_status"] == "published"
@@ -147,7 +155,7 @@ def test_product_sync_updates_only_referenced_identities(
         ]
     )
     monkeypatch.setattr(
-        "web_backend.datasets.current_products.pd.read_excel", lambda *a, **k: frame
+        "web_backend.datasets.current_products.product_frame", lambda *a, **k: frame
     )
     with seed.database.transaction(immediate=True) as connection:
         if use_alias:
@@ -211,7 +219,7 @@ def test_product_sync_keeps_ambiguous_fields_and_other_datasets(
         ]
     )
     monkeypatch.setattr(
-        "web_backend.datasets.current_products.pd.read_excel", lambda *a, **k: frame
+        "web_backend.datasets.current_products.product_frame", lambda *a, **k: frame
     )
     with seed.database.transaction(immediate=True) as connection:
         sync_product_display(connection, "dataset-returns")
