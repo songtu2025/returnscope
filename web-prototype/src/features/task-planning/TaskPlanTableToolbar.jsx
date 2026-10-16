@@ -1,5 +1,12 @@
-/** @param {{segments: import("./taskPlanContracts").TaskPlanSegment[], filters: {query: string, category: string, status: string}, onFilter: (filters: {query: string, category: string, status: string}) => void, onResetOrder?: () => void}} props */
-export function TaskPlanTableToolbar({ segments, filters, onFilter, onResetOrder }) {
+/** @param {{segments: import("./taskPlanContracts").TaskPlanSegment[], filters: {query: string, category: string, status: string}, onFilter: (filters: {query: string, category: string, status: string}) => void, ordering: boolean, onToggleOrder?: () => void, onResetOrder?: () => void}} props */
+export function TaskPlanTableToolbar({
+  segments,
+  filters,
+  onFilter,
+  ordering,
+  onToggleOrder,
+  onResetOrder,
+}) {
   const categories = [
     ...new Set(
       segments.flatMap((item) =>
@@ -51,6 +58,16 @@ export function TaskPlanTableToolbar({ segments, filters, onFilter, onResetOrder
       >
         清除筛选
       </button>
+      {onToggleOrder && (
+        <button
+          type="button"
+          className="text-button"
+          aria-pressed={ordering}
+          onClick={onToggleOrder}
+        >
+          {ordering ? "完成顺序调整" : "调整执行顺序"}
+        </button>
+      )}
       {onResetOrder && (
         <button
           type="button"

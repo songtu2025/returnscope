@@ -148,7 +148,7 @@ test("名称、接入、数字比例与标题焦点引用保留各自回调", as
   await user.clear(title);
   expect(props.onFormChange).toHaveBeenLastCalledWith({ ...props.form, title: "" });
   expect(props.headingRef.current).toBe(
-    screen.getByRole("heading", { name: "确认并开始分析" }),
+    screen.getByRole("heading", { name: "配置本次任务" }),
   );
   expect(props.headingRef.current).toHaveAttribute("tabindex", "-1");
   expect(screen.getByRole("button", { name: "合成子操作" })).toBeVisible();

@@ -183,7 +183,7 @@ export function NewTaskPage({
     // 只在用户主动准备成功后引导一次，恢复草稿和修改模型不移动焦点。
     if (prepared && canContinue && focusAfterPreparation.current && !matchingOpen) {
       focusAfterPreparation.current = false;
-      confirmationRef.current?.focus();
+      headingRef.current?.focus();
     }
   }, [prepared, canContinue, matchingOpen]);
 
@@ -201,6 +201,7 @@ export function NewTaskPage({
   const taskActions = (
     <TaskLaunchActions
       prepared={prepared}
+      planCounts={preflight.data ? planCounts : undefined}
       dataEntryMode={dataEntryMode}
       mysqlState={mysqlState}
       selectedReturns={selectedReturns}

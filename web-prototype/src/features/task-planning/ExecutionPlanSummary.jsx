@@ -78,13 +78,15 @@ export function ExecutionPlanSummary({
         onPolicyChange={onPolicyChange}
         onResolveCategories={onResolveCategories}
       />
-      {compact && (
-        <details className="task-advanced-settings" open={Boolean(segmentSelection)}>
-          <summary>
-            {segmentSelection
-              ? "选择分析范围及顺序"
-              : `查看 ${orderedSegments.length} 个执行分组及顺序`}
-          </summary>
+      {compact && segmentSelection && (
+        <section className="task-analysis-scope" aria-label="选择分析范围">
+          <h3>选择分析范围</h3>
+          {segmentsView}
+        </section>
+      )}
+      {compact && !segmentSelection && (
+        <details className="task-advanced-settings">
+          <summary>{`查看 ${orderedSegments.length} 个执行分组及顺序`}</summary>
           <div className="task-advanced-body">{segmentsView}</div>
         </details>
       )}

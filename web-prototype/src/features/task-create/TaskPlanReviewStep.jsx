@@ -10,7 +10,7 @@ import { classNames } from "../../lib/presentation";
 /** @typedef {import("../task-planning/taskPlanContracts").TaskDataQuality} TaskDataQuality */
 /** @typedef {import("../task-planning/taskPlanContracts").TaskPlanCounts} TaskPlanCounts */
 /**
- * @param {{preflight: TaskPreflightState, onRetryPreflight: () => void | Promise<unknown>, categoryCompletionRequired: boolean, blocked: boolean, countMismatch: boolean, noExecutable: boolean, partialPlan: boolean, planCounts: TaskPlanCounts, dataQuality: TaskDataQuality | null, unresolvedPolicy: string, onPolicyChange: (policy: string) => void, onResolveCategories: () => void, segmentSelection?: import("../task-planning/taskPlanContracts").TaskSegmentSelection, previewInput?: import("../task-planning/taskPlanContracts").TaskPlanPreviewInput, segmentOrder: string[], onSegmentOrderChange: (order: string[]) => void, requiresScopeConfirmation: boolean, scopeConfirmed: boolean, onScopeConfirmationChange: (confirmed: boolean) => void}} props
+ * @param {{preflight: TaskPreflightState, onRetryPreflight: () => void | Promise<unknown>, categoryCompletionRequired: boolean, blocked: boolean, countMismatch: boolean, noExecutable: boolean, planCounts: TaskPlanCounts, dataQuality: TaskDataQuality | null, unresolvedPolicy: string, onPolicyChange: (policy: string) => void, onResolveCategories: () => void, segmentSelection?: import("../task-planning/taskPlanContracts").TaskSegmentSelection, previewInput?: import("../task-planning/taskPlanContracts").TaskPlanPreviewInput, segmentOrder: string[], onSegmentOrderChange: (order: string[]) => void, requiresScopeConfirmation: boolean, scopeConfirmed: boolean, onScopeConfirmationChange: (confirmed: boolean) => void}} props
  */
 
 export function TaskPlanReviewStep({
@@ -20,7 +20,6 @@ export function TaskPlanReviewStep({
   blocked,
   countMismatch,
   noExecutable,
-  partialPlan,
   planCounts,
   dataQuality,
   unresolvedPolicy,
@@ -75,7 +74,7 @@ export function TaskPlanReviewStep({
                   blocked,
                   countMismatch,
                   noExecutable,
-                  partialPlan,
+                  partialPlan: requiresScopeConfirmation,
                 }}
                 planCounts={planCounts}
               />
@@ -103,7 +102,11 @@ export function TaskPlanReviewStep({
                   />
                   <span>
                     我确认本次仅分析 {planCounts.executable.toLocaleString()} 组评论，
-                    {planCounts.notAnalyzed.toLocaleString()} 组不进入模型。
+                    系统排除的{" "}
+                    {(
+                      planCounts.unique - preflight.data.executable_count
+                    ).toLocaleString()}{" "}
+                    组不进入模型。
                   </span>
                 </label>
               )}

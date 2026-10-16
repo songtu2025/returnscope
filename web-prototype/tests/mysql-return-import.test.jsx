@@ -453,9 +453,11 @@ test("数据库准备后在原页预检，修改范围会退出准备状态", as
   );
   expect(screen.getByLabelText("任务名称")).toBeVisible();
   expect(screen.queryByRole("group", { name: "数据来源" })).not.toBeInTheDocument();
-  const confirmation = screen.getByRole("region", { name: "确认并开始分析" });
+  const confirmation = screen.getByRole("region", { name: "配置本次任务" });
   expect(within(confirmation).getByLabelText("任务名称")).toBeVisible();
-  expect(within(confirmation).getByRole("button", { name: "开始分析" })).toBeDisabled();
+  expect(
+    within(confirmation).getByRole("button", { name: "创建并启动" }),
+  ).toBeDisabled();
   await user.click(screen.getByRole("button", { name: "查看或修改数据" }));
   expect(screen.getByRole("group", { name: "数据来源" })).toBeVisible();
   expect(apiMock.preflightTask).toHaveBeenCalledOnce();

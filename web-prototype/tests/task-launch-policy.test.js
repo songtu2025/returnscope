@@ -1,5 +1,8 @@
 import { expect, test } from "vitest";
-import { taskLaunchCopy } from "../src/features/task-create/newTaskPolicy";
+import {
+  taskLaunchCopy,
+  taskPlanViewState,
+} from "../src/features/task-create/newTaskPolicy";
 
 const ready = {
   blocked: false,
@@ -18,8 +21,26 @@ const ready = {
   unresolvedPolicy: "run_ready",
 };
 
+test("主动缩小分析范围无需重复确认，系统排除项仍需确认", () => {
+  const preflight = {
+    status: "ready",
+    data: { executable_count: 8, blocked_count: 0 },
+    counts: { unique: 8, executable: 5, notAnalyzed: 3, reconciled: true },
+  };
+  expect(taskPlanViewState(preflight, "block_all", false)).toMatchObject({
+    canContinue: true,
+    requiresScopeConfirmation: false,
+  });
+  const excluded = { ...preflight, data: { ...preflight.data, executable_count: 7 } };
+  expect(taskPlanViewState(excluded, "block_all", false)).toMatchObject({
+    canContinue: false,
+    requiresScopeConfirmation: true,
+  });
+  expect(taskPlanViewState(excluded, "block_all", true).canContinue).toBe(true);
+});
+
 test.each([
-  [{}, "开始分析", "确认任务名称与模型后，即可开始分析。"],
+  [{}, "创建并启动", "确认任务名称与模型后，即可开始分析。"],
   [
     { submitting: true, submitError: "合成错误", categoryCompletionRequired: true },
     "请先补齐产品品类",
@@ -35,10 +56,10 @@ test.each([
     "没有可执行评论",
     "正在检查数据，不会调用模型…",
   ],
-  [{ preflightStatus: "idle" }, "开始分析", "正在检查数据，不会调用模型…"],
+  [{ preflightStatus: "idle" }, "创建并启动", "正在检查数据，不会调用模型…"],
   [
     { preflightStatus: "error", blocked: true },
-    "启动 7 组已就绪评论",
+    "创建并启动",
     "检查未完成，请在上方重新检查数据。",
   ],
   [
@@ -68,12 +89,12 @@ test.each([
   ],
   [
     { blocked: true, unresolvedPolicy: "run_ready" },
-    "启动 7 组已就绪评论",
+    "创建并启动",
     "确认任务名称与模型后，即可开始分析。",
   ],
   [
     { partialPlan: true, requiresScopeConfirmation: true },
-    "启动 7 组可执行评论",
+    "创建并启动",
     "请先确认上方的分析范围与排除项。",
   ],
   [
@@ -83,7 +104,7 @@ test.each([
       scopeConfirmed: true,
       system: { my_running_tasks: 3 },
     },
-    "启动 7 组可执行评论",
+    "创建并启动",
     "并行名额已满，启动后将进入队列。",
   ],
 ])("启动提示保留阻断与异步状态的优先级：%s", (changes, submitLabel, launchStatus) => {

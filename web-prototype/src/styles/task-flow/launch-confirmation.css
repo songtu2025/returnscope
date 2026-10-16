@@ -149,11 +149,20 @@
 }
 .task-launch-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
   padding: 22px 28px;
   background: #f7faf8;
+}
+.task-launch-scope {
+  flex-basis: 100%;
+  font-size: 14px;
+}
+.task-analysis-scope > h3 {
+  margin: 24px 0 12px;
+  font-size: 16px;
 }
 .task-launch-actions > span {
   color: var(--muted);

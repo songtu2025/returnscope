@@ -40,7 +40,7 @@ export function TaskConfigurationStep({
       <div className="task-config-section">
         <header className="task-launch-heading">
           <h2 id="task-launch-title" ref={headingRef} tabIndex={-1}>
-            确认并开始分析
+            配置本次任务
           </h2>
         </header>
         <label className="task-config-choice task-title-input">

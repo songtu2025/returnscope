@@ -46,22 +46,21 @@ const rowOrder = () =>
 test("搜索、品类筛选和清除只改变显示，表头选择只作用于可见Listing", async () => {
   const user = userEvent.setup();
   render(<Harness />);
+  expect(screen.queryByRole("button", { name: "置顶 DEMO-0" })).not.toBeInTheDocument();
   await user.selectOptions(
     screen.getByLabelText("按分组品类筛选"),
     "合成品类 / 可见类",
   );
   expect(rowOrder()).toEqual(["DEMO-0", "DEMO-2"]);
   expect(screen.getByText("已选 4 / 4 个 Listing · 4 组待分析评论")).toBeVisible();
-  await user.click(screen.getByRole("checkbox", { name: "选择当前筛选 Listing" }));
+  await user.click(screen.getByRole("checkbox", { name: "全选当前筛选范围" }));
   expect(screen.getByText("已选 2 / 4 个 Listing · 2 组待分析评论")).toBeVisible();
   await user.click(screen.getByRole("button", { name: "清除筛选" }));
-  expect(screen.getByRole("checkbox", { name: "选择 Listing：DEMO-1" })).toBeChecked();
-  expect(
-    screen.getByRole("checkbox", { name: "选择 Listing：DEMO-0" }),
-  ).not.toBeChecked();
+  expect(screen.getByRole("checkbox", { name: "参与分析：DEMO-1" })).toBeChecked();
+  expect(screen.getByRole("checkbox", { name: "参与分析：DEMO-0" })).not.toBeChecked();
   await user.type(screen.getByLabelText("搜索执行分组"), "NOT-FOUND");
   expect(screen.getByText("未找到匹配分组，请调整筛选条件。")).toBeVisible();
-  expect(screen.getByRole("checkbox", { name: "选择当前筛选 Listing" })).toBeDisabled();
+  expect(screen.getByRole("checkbox", { name: "全选当前筛选范围" })).toBeDisabled();
   await user.clear(screen.getByLabelText("搜索执行分组"));
   await user.type(screen.getByLabelText("搜索执行分组"), "demo-2");
   expect(rowOrder()).toEqual(["DEMO-2"]);
@@ -70,6 +69,7 @@ test("搜索、品类筛选和清除只改变显示，表头选择只作用于�
 test("筛选后上移只替换可见槽位，隐藏项相对顺序和选择不变；可恢复完整默认顺序", async () => {
   const user = userEvent.setup();
   render(<Harness />);
+  await user.click(screen.getByRole("button", { name: "调整执行顺序" }));
   await user.selectOptions(
     screen.getByLabelText("按分组品类筛选"),
     "合成品类 / 可见类",
@@ -80,12 +80,13 @@ test("筛选后上移只替换可见槽位，隐藏项相对顺序和选择不�
   expect(rowOrder()).toEqual(["DEMO-2", "DEMO-1", "DEMO-0", "DEMO-3"]);
   await user.click(screen.getByRole("button", { name: "恢复全部默认顺序" }));
   expect(rowOrder()).toEqual(["DEMO-0", "DEMO-1", "DEMO-2", "DEMO-3"]);
-  expect(screen.getByRole("checkbox", { name: "选择全部 Listing" })).toBeChecked();
+  expect(screen.getByRole("checkbox", { name: "全部参与分析" })).toBeChecked();
 });
 
 test("指定位置校验整数与范围，移动后编号和顺序一致", async () => {
   const user = userEvent.setup();
   render(<Harness />);
+  await user.click(screen.getByRole("button", { name: "调整执行顺序" }));
   const row = screen.getByRole("heading", { name: "DEMO-0" }).closest("tr");
   await user.click(within(row).getByText("移至位置"));
   await user.type(screen.getByLabelText("移动 DEMO-0 到位置"), "99");
@@ -128,6 +129,7 @@ test("筛选排序保留隐藏阻断项和隐藏可执行项之间的相对顺�
       }}
     />,
   );
+  await user.click(screen.getByRole("button", { name: "调整执行顺序" }));
   await user.selectOptions(
     screen.getByLabelText("按分组品类筛选"),
     "合成品类 / 可见类",

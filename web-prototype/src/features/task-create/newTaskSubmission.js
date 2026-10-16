@@ -25,11 +25,11 @@ export async function submitNewTask(submission) {
   setSubmitting(true);
   setSubmitError("");
   try {
-    await createPreparedTask(submission);
+    const task = await createPreparedTask(submission);
     notify("任务已创建，后台执行器会自动领取");
     onDraftComplete?.();
     onChanged();
-    onNavigate("tasks");
+    onNavigate("tasks", { kind: "task", id: task.id });
   } catch (error) {
     handleTaskCreationFailure(error, submission);
   } finally {
@@ -64,7 +64,7 @@ async function createPreparedTask({
   mutateServerState,
   notify,
 }) {
-  await api.createTask({
+  const task = await api.createTask({
     ...form,
     store: null,
     listing: null,
@@ -79,6 +79,7 @@ async function createPreparedTask({
   } catch {
     notify("任务已创建，关联数据更新失败，可返回任务页重试", "error");
   }
+  return task;
 }
 
 /** @param {unknown} error @param {TaskSubmission} submission */

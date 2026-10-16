@@ -181,7 +181,6 @@ export function NewTaskView({
                 blocked={planState.blocked}
                 countMismatch={planState.countMismatch}
                 noExecutable={planState.noExecutable}
-                partialPlan={planState.partialPlan}
                 planCounts={planCounts}
                 dataQuality={dataQuality}
                 unresolvedPolicy={unresolvedPolicy}

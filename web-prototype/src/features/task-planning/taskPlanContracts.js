@@ -78,6 +78,7 @@
  * @property {Record<string, number>} [counts]
  *
  * @typedef {Object} TaskPlanCounts
+ * @property {number} listingCount
  * @property {number} unique
  * @property {number} executable
  * @property {number} notAnalyzed

@@ -141,6 +141,7 @@ export function taskPlanViewState(preflight, unresolvedPolicy, scopeConfirmed) {
   const partialPlan = planCounts.notAnalyzed > 0 && planCounts.executable > 0;
   const requiresScopeConfirmation = Boolean(
     partialPlan &&
+    (preflight.data?.executable_count ?? 0) < planCounts.unique &&
     !categoryCompletionRequired &&
     (!blocked || unresolvedPolicy === "run_ready"),
   );

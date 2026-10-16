@@ -52,15 +52,13 @@ function taskSubmitLabel(state) {
   if (state.noExecutable) return "没有可执行评论";
   if (state.blocked) {
     if (state.unresolvedPolicy === "run_ready") {
-      return `启动 ${state.planCounts.executable.toLocaleString()} 组已就绪评论`;
+      return "创建并启动";
     }
     return state.unresolvedPolicy === "block_all"
       ? "保存任务，等待问题处理"
       : "选择处理方式后继续";
   }
-  return state.partialPlan
-    ? `启动 ${state.planCounts.executable.toLocaleString()} 组可执行评论`
-    : "开始分析";
+  return "创建并启动";
 }
 
 /** @param {Pick<TaskLaunchState, "submitting" | "submitError" | "preflightStatus">} state */

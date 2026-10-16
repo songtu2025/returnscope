@@ -104,7 +104,7 @@ test("评论组翻页、源记录下钻和返回保留选择、筛选，关闭�
   await user.keyboard("{Escape}");
   expect(trigger).toHaveFocus();
   expect(screen.getByLabelText("搜索执行分组")).toHaveValue("DEMO");
-  expect(screen.getByRole("checkbox", { name: "选择 Listing：DEMO" })).toBeChecked();
+  expect(screen.getByRole("checkbox", { name: "参与分析：DEMO" })).toBeChecked();
 });
 
 test("读取失败可重试，关闭后迟到响应不覆盖新窗口", async () => {

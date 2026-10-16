@@ -1,3 +1,5 @@
+import { listingKey } from "./taskPlanTablePolicy";
+
 /** @typedef {import("./taskPlanContracts").TaskExecutionPlan} TaskExecutionPlan */
 
 /** @param {TaskExecutionPlan | null | undefined} plan @param {string[]} [selectedKeys] */
@@ -24,6 +26,11 @@ export function taskPlanCounts(plan, selectedKeys) {
   const notAnalyzed = originalExcluded + originalExecutable - executable;
   const coverage = unique > 0 ? (executable / unique) * 100 : 0;
   return {
+    listingCount: new Set(
+      (plan?.segments ?? [])
+        .filter((item) => !selectedKeys || selectedKeys.includes(item.segment_key))
+        .map(listingKey),
+    ).size,
     unique,
     executable,
     notAnalyzed,

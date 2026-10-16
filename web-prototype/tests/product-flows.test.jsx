@@ -1353,15 +1353,15 @@ describe("关键用户流程", () => {
     expect(screen.getByText("2 组评论不进入语义分析")).toBeVisible();
     expect(screen.getByText(/12 条用户反馈 · 10 条有文本/)).toBeVisible();
     expect(screen.queryByText("选择未解决品类处理方式")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /启动 8 组可执行评论/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /创建并启动/ })).toBeDisabled();
     await user.click(screen.getByLabelText(/我确认本次仅分析 8 组评论/));
     expect(screen.getByLabelText("任务名称")).toHaveValue("8月退货数据 · 用户语义分析");
-    const confirmation = screen.getByRole("region", { name: "确认并开始分析" });
-    expect(within(confirmation).getByRole("heading")).toHaveFocus();
+    const confirmation = screen.getByRole("region", { name: "配置本次任务" });
+    expect(screen.getByRole("heading", { name: "创建分析任务" })).toHaveFocus();
     expect(within(confirmation).getByText(/低成本初筛：gpt-cheap/)).toBeVisible();
     expect(within(confirmation).getByText(/风险复核：gpt-review/)).toBeVisible();
     expect(
-      within(confirmation).getByRole("button", { name: /启动 8 组可执行评论/ }),
+      within(confirmation).getByRole("button", { name: /创建并启动/ }),
     ).toBeEnabled();
     expect(screen.queryByRole("group", { name: "数据来源" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "查看或修改数据" }));
@@ -1385,16 +1385,17 @@ describe("关键用户流程", () => {
     expect(apiMock.preflightTask).toHaveBeenCalledOnce();
     await user.clear(screen.getByLabelText(/^本次初筛抽检比例/));
     await user.type(screen.getByLabelText(/^本次初筛抽检比例/), "12");
-    expect(screen.getByRole("button", { name: /启动 8 组可执行评论/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /创建并启动/ })).toBeEnabled();
     expect(screen.getByLabelText(/^本次初筛抽检比例/)).toHaveFocus();
     expect(screen.getByLabelText(/我确认本次仅分析 8 组评论/)).toBeChecked();
     expect(apiMock.preflightTask).toHaveBeenCalledOnce();
     expect(apiMock.qualityPreflight).toHaveBeenCalledOnce();
-    expect(screen.getByText("选择分析范围及顺序")).toBeVisible();
+    expect(screen.getByText("选择分析范围")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "调整执行顺序" }));
     await user.click(screen.getByRole("button", { name: "置顶 SK002" }));
     expect(screen.getByLabelText(/我确认本次仅分析 8 组评论/)).toBeChecked();
     expect(apiMock.preflightTask).toHaveBeenCalledOnce();
-    await user.click(screen.getByRole("button", { name: /启动 8 组可执行评论/ }));
+    await user.click(screen.getByRole("button", { name: /创建并启动/ }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("创建服务暂时不可用");
     expect(screen.getByLabelText("任务名称")).toHaveValue("");
@@ -1426,7 +1427,7 @@ describe("关键用户流程", () => {
       ),
     );
     expect(onChanged).toHaveBeenCalled();
-    expect(onNavigate).toHaveBeenCalledWith("tasks");
+    expect(onNavigate).toHaveBeenCalledWith("tasks", { kind: "task", id: "task-1" });
   });
 
   test("新建任务时导入新的退货数据集并自动选中", async () => {
@@ -1662,11 +1663,11 @@ describe("关键用户流程", () => {
     expect(screen.getByText("仅保存任务，处理完数据问题后再开始分析。")).toBeVisible();
     await user.click(screen.getByLabelText(/先运行已就绪/));
     const runReadyButton = screen.getByRole("button", {
-      name: /启动 8 组已就绪评论/,
+      name: /创建并启动/,
     });
     expect(runReadyButton).toBeDisabled();
     await user.click(screen.getByLabelText(/我确认本次仅分析 8 组评论/));
-    await user.click(screen.getByRole("button", { name: /启动 8 组已就绪评论/ }));
+    await user.click(screen.getByRole("button", { name: /创建并启动/ }));
 
     await waitFor(() =>
       expect(apiMock.createTask).toHaveBeenCalledWith(

@@ -7,11 +7,12 @@ import { useRef } from "react";
 /** @typedef {readonly [boolean, string, string, (() => void) | null]} SetupRow */
 
 /**
- * @param {{prepared: boolean, dataEntryMode: "mysql" | "upload", mysqlState: MysqlFormState, selectedReturns?: DataVersion, submitting: boolean, canContinue: boolean, launchStatus: string, submitError: string, submitLabel: string, onSubmit: () => void | Promise<void>}} props
+ * @param {{prepared: boolean, planCounts?: import("../task-planning/taskPlanContracts").TaskPlanCounts, dataEntryMode: "mysql" | "upload", mysqlState: MysqlFormState, selectedReturns?: DataVersion, submitting: boolean, canContinue: boolean, launchStatus: string, submitError: string, submitLabel: string, onSubmit: () => void | Promise<void>}} props
  */
 
 export function TaskLaunchActions({
   prepared,
+  planCounts,
   dataEntryMode,
   mysqlState,
   selectedReturns,
@@ -25,6 +26,12 @@ export function TaskLaunchActions({
   const statusRef = useRef(/** @type {HTMLSpanElement | null} */ (null));
   return (
     <footer className={prepared ? "task-launch-actions" : "task-step-actions"}>
+      {prepared && planCounts && (
+        <b className="task-launch-scope">
+          本次分析 {planCounts.listingCount} 个 Listing ·{" "}
+          {planCounts.executable.toLocaleString()} 组评论
+        </b>
+      )}
       <span ref={statusRef} role="status" id="task-action-status" tabIndex={-1}>
         {launchStatusText({
           prepared,

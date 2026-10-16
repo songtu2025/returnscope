@@ -130,7 +130,10 @@ test("关联刷新失败保留缓存并继续已创建任务的成功路径", as
     "任务已创建，关联数据更新失败，可返回任务页重试",
     "error",
   );
-  expect(props.onNavigate).toHaveBeenCalledExactlyOnceWith("tasks");
+  expect(props.onNavigate).toHaveBeenCalledExactlyOnceWith("tasks", {
+    kind: "task",
+    id: "synthetic-task",
+  });
   expect(props.setSubmitError).toHaveBeenCalledExactlyOnceWith("");
 });
 
@@ -141,7 +144,10 @@ test("刷新缓存失败不会误报创建失败或保留可重复提交的草�
   expect(apiMock.createTask).toHaveBeenCalledOnce();
   expect(props.setSubmitError).toHaveBeenCalledExactlyOnceWith("");
   expect(props.onDraftComplete).toHaveBeenCalledOnce();
-  expect(props.onNavigate).toHaveBeenCalledExactlyOnceWith("tasks");
+  expect(props.onNavigate).toHaveBeenCalledExactlyOnceWith("tasks", {
+    kind: "task",
+    id: "synthetic-task",
+  });
   expect(props.setSubmitting).toHaveBeenLastCalledWith(false);
 });
 
@@ -179,7 +185,10 @@ test.each([new Error("合成创建失败"), "合成未知错误"])(
     await submitNewTask(props);
     expect(apiMock.createTask).toHaveBeenCalledTimes(2);
     expect(apiMock.createTask.mock.calls[0]).toEqual(apiMock.createTask.mock.calls[1]);
-    expect(props.onNavigate).toHaveBeenCalledExactlyOnceWith("tasks");
+    expect(props.onNavigate).toHaveBeenCalledExactlyOnceWith("tasks", {
+      kind: "task",
+      id: "synthetic-task",
+    });
   },
 );
 
@@ -196,5 +205,8 @@ test("成功回调异常仍走原错误反馈，onChanged 的返回 Promise 不�
   expect(props.onNavigate).not.toHaveBeenCalled();
   props.onChanged.mockReturnValue(new Promise(() => {}));
   await submitNewTask(props);
-  expect(props.onNavigate).toHaveBeenCalledExactlyOnceWith("tasks");
+  expect(props.onNavigate).toHaveBeenCalledExactlyOnceWith("tasks", {
+    kind: "task",
+    id: "synthetic-task",
+  });
 });
