@@ -18,14 +18,13 @@ import { TaskDraftActions } from "./TaskDraftActions";
 /** @typedef {import("./taskCreateContracts").TaskPlanViewState} TaskPlanViewState */
 /** @typedef {import("./taskCreateContracts").TaskPreflightState} TaskPreflightState */
 /** @typedef {import("./mysqlReturnContracts").MysqlReturnFormState} MysqlReturnFormState */
-/** @typedef {import("../task-planning/taskPlanContracts").TaskDataQuality} TaskDataQuality */
 /** @typedef {import("../task-planning/taskPlanContracts").TaskPlanCounts} TaskPlanCounts */
 /**
  * @typedef {Object} NewTaskViewProps
  * @property {import("react").RefObject<HTMLHeadingElement | null>} headingRef
  * @property {{loading: boolean, error: string, ready: boolean, onRetry: () => void, onNavigate: import("../../app/navigation").Navigate, products: DataVersion[], publishedConfigs: PublishedConfig[], canManageModels: boolean}} setup
  * @property {{form: TaskForm, updateForm: (form: TaskForm) => void, selectedReturns?: DataVersion, dataEntryMode: "mysql" | "upload", selectedDataLabel: string, onDataEntryModeChange: (mode: "mysql" | "upload") => void, mysqlDraft?: Partial<MysqlReturnFormState>, setMysqlDraft: import("react").Dispatch<import("react").SetStateAction<Partial<MysqlReturnFormState> | undefined>>, setMysqlState: import("react").Dispatch<import("react").SetStateAction<MysqlFormState>>, mysqlState: MysqlFormState, prepared: boolean, scopeLabel: string, onInvalidateMysql: () => void}} data
- * @property {{preflight: TaskPreflightState, runPreflight: () => void | Promise<void>, state: TaskPlanViewState, counts: TaskPlanCounts, dataQuality: TaskDataQuality | null, unresolvedPolicy: string, onPolicyChange: (policy: string) => void, resolveCategories: () => void, segmentSelection?: import("../task-planning/taskPlanContracts").TaskSegmentSelection, segmentOrder: string[], setSegmentOrder: import("react").Dispatch<import("react").SetStateAction<string[]>>, scopeConfirmed: boolean, setScopeConfirmed: import("react").Dispatch<import("react").SetStateAction<boolean>>}} plan
+ * @property {{preflight: TaskPreflightState, runPreflight: () => void | Promise<void>, state: TaskPlanViewState, counts: TaskPlanCounts, unresolvedPolicy: string, onPolicyChange: (policy: string) => void, resolveCategories: () => void, segmentSelection?: import("../task-planning/taskPlanContracts").TaskSegmentSelection, segmentOrder: string[], setSegmentOrder: import("react").Dispatch<import("react").SetStateAction<string[]>>, scopeConfirmed: boolean, setScopeConfirmed: import("react").Dispatch<import("react").SetStateAction<boolean>>}} plan
  * @property {{confirmationRef: import("react").RefObject<HTMLHeadingElement | null>, selectedConfig?: PublishedConfig, availableModels: AvailableModel[], modelPolicy: TaskModelPolicy, selectConnection: (configId: string) => void, updateModelPolicy: (changes: Record<string, string | number>) => void, submitError: string, submitting: boolean}} configuration
  * @property {{open: boolean, onOpen: () => void, onClose: () => void, onDone: (result: ReturnImportResult, source: "mysql" | "upload") => void | Promise<void>, refreshError: string, refreshing: boolean, onRefresh: () => Promise<void>}} upload
  * @property {import("react").ReactNode} taskActions
@@ -73,7 +72,6 @@ export function NewTaskView({
     runPreflight,
     state: planState,
     counts: planCounts,
-    dataQuality,
     unresolvedPolicy,
     onPolicyChange,
     resolveCategories,
@@ -182,7 +180,6 @@ export function NewTaskView({
                 countMismatch={planState.countMismatch}
                 noExecutable={planState.noExecutable}
                 planCounts={planCounts}
-                dataQuality={dataQuality}
                 unresolvedPolicy={unresolvedPolicy}
                 onPolicyChange={onPolicyChange}
                 onResolveCategories={resolveCategories}

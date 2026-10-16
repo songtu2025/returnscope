@@ -12,7 +12,6 @@ const { apiMock } = vi.hoisted(() => ({
     configs: vi.fn(),
     status: vi.fn(),
     preflightTask: vi.fn(),
-    qualityPreflight: vi.fn(),
   },
 }));
 
@@ -439,7 +438,6 @@ test("数据库准备后在原页预检，修改范围会退出准备状态", as
     },
   ]);
   apiMock.preflightTask.mockRejectedValue(new Error("计划验证检查点"));
-  apiMock.qualityPreflight.mockResolvedValue({});
   render(<NewTaskPage notify={vi.fn()} onChanged={vi.fn()} onNavigate={vi.fn()} />);
   await screen.findByText("尺码偏小");
   expect(await screen.findByText("已选 1 条用户反馈")).toBeVisible();

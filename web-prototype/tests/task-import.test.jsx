@@ -8,7 +8,6 @@ const { apiMock } = vi.hoisted(() => ({
     configs: vi.fn(),
     status: vi.fn(),
     preflightTask: vi.fn(),
-    qualityPreflight: vi.fn(),
     inspectReturnImport: vi.fn(),
     importReturns: vi.fn(),
     mysqlReturnSchema: vi.fn(),
@@ -67,7 +66,6 @@ beforeEach(() => {
   ]);
   apiMock.status.mockResolvedValue({});
   apiMock.preflightTask.mockRejectedValue(new Error("合成预检检查点"));
-  apiMock.qualityPreflight.mockResolvedValue({});
   apiMock.inspectReturnImport.mockResolvedValue({
     inspection_id: "synthetic-inspection",
     original_name: "SYNTHETIC.csv",

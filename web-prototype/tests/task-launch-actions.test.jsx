@@ -20,7 +20,6 @@ test("重新检查时焦点留在计划区域，完成后不会落回页面根�
     noExecutable: false,
     partialPlan: false,
     planCounts: { executable: 0, notAnalyzed: 0 },
-    dataQuality: null,
     unresolvedPolicy: "block_all",
     onPolicyChange: vi.fn(),
     onResolveCategories: vi.fn(),

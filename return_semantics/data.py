@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import html
+import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 import pandas as pd
@@ -41,6 +43,8 @@ from return_semantics.product_matching import (
     _read_product_dimensions as _read_product_dimensions,
 )
 from return_semantics.product_matching import resolve_sku_aliases as resolve_sku_aliases
+
+performance_logger = logging.getLogger("uvicorn.error.performance")
 
 
 @dataclass(frozen=True)
@@ -211,11 +215,14 @@ def load_return_dataset_auto(
     product_path: Path,
     analysis_context: AnalysisContext = RETURNS_CONTEXT,
 ) -> ReturnDataset:
+    started = perf_counter()
     products = _read_product_dimensions(product_path)
     products = products.loc[products["MSKU"].ne("")].copy()
     if products.empty:
         raise ValueError("商品目录中没有可用于自动匹配的 MSKU")
+    products_done = perf_counter()
     records = _prepare_return_records(return_path)
+    records_done = perf_counter()
 
     primary_store = _primary_store(records)
 
@@ -235,13 +242,26 @@ def load_return_dataset_auto(
     records["product_match_status"] = (
         records["matched_msku"].notna().map({True: "matched", False: "unmatched"})
     )
-    return _finalize_return_dataset(
+    matching_done = perf_counter()
+    dataset = _finalize_return_dataset(
         records,
         frozenset(products["MSKU"]),
         primary_store=primary_store,
         scope_mode="auto",
         analysis_context=analysis_context,
     )
+    performance_logger.info(
+        "dataset_auto products=%s records=%s groups=%s products_ms=%.2f feedback_ms=%.2f matching_ms=%.2f grouping_ms=%.2f total_ms=%.2f",
+        len(products),
+        len(dataset.records),
+        len(dataset.unique_comments),
+        (products_done - started) * 1000,
+        (records_done - products_done) * 1000,
+        (matching_done - records_done) * 1000,
+        (perf_counter() - matching_done) * 1000,
+        (perf_counter() - started) * 1000,
+    )
+    return dataset
 
 
 _looks_like_gb18030.__module__ = __name__

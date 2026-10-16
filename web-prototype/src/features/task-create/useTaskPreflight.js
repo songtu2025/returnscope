@@ -6,7 +6,6 @@ import { resolveTaskModelPolicy } from "./newTaskPolicy";
 /** @typedef {import("./taskCreateContracts").ApiConnection} ApiConnection */
 /** @typedef {import("./taskCreateContracts").TaskForm} TaskForm */
 /** @typedef {import("./taskCreateContracts").TaskPreflightState} TaskPreflightState */
-/** @typedef {import("../task-planning/taskPlanContracts").TaskDataQuality} TaskDataQuality */
 /** @typedef {import("../task-planning/taskPlanContracts").TaskExecutionPlan} TaskExecutionPlan */
 
 /**
@@ -28,9 +27,6 @@ export function useTaskPreflight({
       error: "",
     }),
   );
-  const [dataQuality, setDataQuality] = useState(
-    /** @type {TaskDataQuality | null} */ (null),
-  );
   const [unresolvedPolicy, setUnresolvedPolicy] = useState("");
   const [scopeConfirmed, setScopeConfirmed] = useState(false);
   const [segmentOrder, setSegmentOrder] = useState(/** @type {string[]} */ ([]));
@@ -49,25 +45,20 @@ export function useTaskPreflight({
     const requestId = ++requestRef.current;
     setSubmitError("");
     setPreflight({ status: "loading", data: null, error: "" });
-    setDataQuality(null);
     setUnresolvedPolicy("");
     setScopeConfirmed(false);
     try {
-      const [data, quality] = /** @type {[TaskExecutionPlan, TaskDataQuality]} */ (
-        await Promise.all([
-          api.preflightTask({
-            dataset_version_id: form.dataset_version_id,
-            product_version_id: form.product_version_id,
-            config_version_id: form.config_version_id,
-            model_policy: resolveTaskModelPolicy(configs, form),
-            store: null,
-            listing: null,
-          }),
-          api.qualityPreflight(form.dataset_version_id, form.product_version_id),
-        ])
+      const data = /** @type {TaskExecutionPlan} */ (
+        await api.preflightTask({
+          dataset_version_id: form.dataset_version_id,
+          product_version_id: form.product_version_id,
+          config_version_id: form.config_version_id,
+          model_policy: resolveTaskModelPolicy(configs, form),
+          store: null,
+          listing: null,
+        })
       );
       if (requestId !== requestRef.current) return;
-      setDataQuality(quality);
       setPreflight({ status: "ready", data, error: "" });
       const keys = data.segments.map((segment) => segment.segment_key);
       const preserve = selectionInitialized.current;
@@ -120,7 +111,6 @@ export function useTaskPreflight({
   );
 
   return {
-    dataQuality,
     invalidatePreflight,
     preflight,
     runPreflight,

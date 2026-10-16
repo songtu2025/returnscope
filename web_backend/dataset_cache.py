@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 from collections import OrderedDict
 from pathlib import Path
+from time import perf_counter
 
 from return_semantics.analysis_context import RETURNS_CONTEXT, AnalysisContext
 from return_semantics.data import (
@@ -17,6 +19,7 @@ _DATASET_CACHE_CAPACITY = 8
 
 _cache: OrderedDict[tuple[str, ...], ReturnDataset] = OrderedDict()
 _lock = threading.RLock()
+performance_logger = logging.getLogger("uvicorn.error.performance")
 
 
 def load_cached_dataset(
@@ -48,8 +51,11 @@ def load_cached_dataset(
             )
         ),
     )
+    waiting = perf_counter()
     with _lock:
+        acquired = perf_counter()
         dataset = _cache.get(key)
+        cache_hit = dataset is not None
         if dataset is None:
             if automatic:
                 dataset = load_return_dataset_auto(
@@ -69,4 +75,12 @@ def load_cached_dataset(
         _cache.move_to_end(key)
         while len(_cache) > _DATASET_CACHE_CAPACITY:
             _cache.popitem(last=False)
-        return dataset
+    performance_logger.info(
+        "dataset_cache hit=%s wait_ms=%.2f load_ms=%.2f records=%s groups=%s",
+        cache_hit,
+        (acquired - waiting) * 1000,
+        (perf_counter() - acquired) * 1000,
+        len(dataset.records),
+        len(dataset.unique_comments),
+    )
+    return dataset

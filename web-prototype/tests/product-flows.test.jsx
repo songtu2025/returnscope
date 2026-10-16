@@ -1389,7 +1389,7 @@ describe("关键用户流程", () => {
     expect(screen.getByLabelText(/^本次初筛抽检比例/)).toHaveFocus();
     expect(screen.getByLabelText(/我确认本次仅分析 8 组评论/)).toBeChecked();
     expect(apiMock.preflightTask).toHaveBeenCalledOnce();
-    expect(apiMock.qualityPreflight).toHaveBeenCalledOnce();
+    expect(apiMock.qualityPreflight).not.toHaveBeenCalled();
     expect(screen.getByText("选择分析范围")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "调整执行顺序" }));
     await user.click(screen.getByRole("button", { name: "置顶 SK002" }));

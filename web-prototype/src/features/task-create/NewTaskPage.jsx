@@ -63,7 +63,6 @@ export function NewTaskPage({
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const {
-    dataQuality,
     invalidatePreflight,
     preflight,
     runPreflight,
@@ -266,7 +265,6 @@ export function NewTaskPage({
           runPreflight,
           state: planState,
           counts: planCounts,
-          dataQuality,
           unresolvedPolicy,
           onPolicyChange: (/** @type {string} */ nextPolicy) => {
             setUnresolvedPolicy(nextPolicy);

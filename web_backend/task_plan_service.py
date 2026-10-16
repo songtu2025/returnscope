@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 from return_semantics.analysis_context import USER_FEEDBACK_CONTEXT, AnalysisContext
@@ -28,6 +30,8 @@ from web_backend.tasks.plan_response import (
 )
 from web_backend.tasks.plan_selection import restrict_plan_listings
 from web_backend.tasks.product_resolution import TaskProductResolutionMixin
+
+performance_logger = logging.getLogger("uvicorn.error.performance")
 
 
 @dataclass(frozen=True)
@@ -91,6 +95,7 @@ class TaskPlanService(
         analysis_context: AnalysisContext = USER_FEEDBACK_CONTEXT,
         selected_listings: list[dict[str, str]] | None = None,
     ) -> PreparedTaskPlan:
+        started = perf_counter()
         clean_store = (store or "").strip()
         clean_listing = (listing or "").strip() or None
         returns, products, config = self._load_inputs(
@@ -98,10 +103,12 @@ class TaskPlanService(
         )
         if model_policy is not None:
             config = self._apply_model_policy(config, model_policy)
+        inputs_done = perf_counter()
         automatic_scope = not clean_store
         dataset, clean_store, clean_listing = self._dataset_scope(
             returns, products, (clean_store, clean_listing), analysis_context
         )
+        dataset_done = perf_counter()
         model_config = model_configuration(config)
         registry = self.registry or self.standard_service.active_registry()
         execution_plan = build_category_execution_plan(
@@ -114,6 +121,7 @@ class TaskPlanService(
         )
         standards = self.standard_service.current_version_by_agent()
         execution_plan = bind_standard_versions(execution_plan, standards)
+        plan_done = perf_counter()
         unresolved_products = self._unresolved_products(
             dataset,
             execution_plan,
@@ -121,6 +129,7 @@ class TaskPlanService(
             clean_store,
             clean_listing,
         )
+        resolution_done = perf_counter()
         missing_category_products = [
             item for item in unresolved_products if item["issue"] == "missing_category"
         ]
@@ -144,6 +153,18 @@ class TaskPlanService(
             "category_options": category_options(registry, standards),
         }
         response = restrict_plan_listings(response, selected_listings)
+        performance_logger.info(
+            "plan_prepare records=%s groups=%s segments=%s inputs_ms=%.2f dataset_ms=%.2f plan_ms=%.2f resolution_ms=%.2f response_ms=%.2f total_ms=%.2f",
+            len(dataset.records),
+            len(dataset.unique_comments),
+            len(response["segments"]),
+            (inputs_done - started) * 1000,
+            (dataset_done - inputs_done) * 1000,
+            (plan_done - dataset_done) * 1000,
+            (resolution_done - plan_done) * 1000,
+            (perf_counter() - resolution_done) * 1000,
+            (perf_counter() - started) * 1000,
+        )
         return PreparedTaskPlan(
             returns=returns,
             products=products,
