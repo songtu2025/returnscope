@@ -933,9 +933,12 @@ def test_real_web_task_flow(tmp_path: Path) -> None:
             assert "top_problems" in overview_only["overview"]
             assert "diagnosis" not in overview_only
             assert "products" not in overview_only
+            result_directory = settings.data_dir / "results" / task_id
+            assert not list(result_directory.rglob("*.web-cache.pkl"))
+            assert not list(result_directory.rglob("*.xlsx"))
             assert (
-                settings.data_dir / "results" / task_id / "analysis-v1.web-cache.pkl"
-            ).exists()
+                len(list(result_directory.glob("segments/*-classifications.json"))) == 1
+            )
             filtered_download = client.get(
                 f"/api/tasks/{task_id}/analysis/download",
                 params={
