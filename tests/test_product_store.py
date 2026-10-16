@@ -48,6 +48,7 @@ def _import(service, rows=None):
             writer, sheet_name="说明", index=False
         )
         pd.DataFrame(rows).to_excel(writer, sheet_name="产品信息汇总表", index=False)
+        pd.DataFrame().to_excel(writer, sheet_name="空白工作表", index=False)
     return service.create(
         "产品", "products", "", path, path.name, "application/xlsx", "", "user"
     )
@@ -59,7 +60,7 @@ def test_workbook_roundtrip_and_database_unique_constraint(product_service):
     version = created["versions"][0]
     path = Path(service.version_file(created["id"])["file_path"])
     workbook = load_product_workbook(service.database, path)
-    assert list(workbook) == ["说明", "产品信息汇总表"]
+    assert list(workbook) == ["说明", "产品信息汇总表", "空白工作表"]
     assert workbook["产品信息汇总表"]["扩展字段"].tolist() == ["001", "002"]
     assert workbook["产品信息汇总表"]["店铺/站点"].tolist() == [" S:US ", "S:UK"]
     with service.database.transaction() as connection:

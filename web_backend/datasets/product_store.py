@@ -136,6 +136,8 @@ def product_workbook(
         (_source_digest(connection, path),),
     ).fetchone()
     return {
-        name: frame if sheet is None else pd.DataFrame(**sheet)
+        name: frame
+        if sheet is None
+        else pd.DataFrame(sheet["data"], columns=sheet["columns"] or None)
         for name, sheet in json.loads(row[0]).items()
     }
