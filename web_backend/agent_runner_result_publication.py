@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any, Callable
 
@@ -16,6 +15,7 @@ from web_backend.classification_result_service import (
 from web_backend.common import json_value
 from web_backend.database import Database
 from web_backend.dataset_cache import load_cached_dataset
+from web_backend.task_execution.checkpoints import load_checkpoint, write_checkpoint
 from web_backend.task_execution.failure_diagnostics import log_segment_failure
 
 
@@ -153,32 +153,8 @@ class ResultPublicationMixin:
     ) -> bool:
         return any(requires_system_rerun(value, "") for value in results.values())
 
-    @staticmethod
-    def _load_checkpoint(
-        path: Path,
-    ) -> dict[str, ValidatedClassification]:
-        if not path.exists():
-            return {}
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return {
-            str(key): ValidatedClassification.model_validate(value)
-            for key, value in data.items()
-        }
-
-    @staticmethod
-    def _write_checkpoint(
-        path: Path,
-        results: dict[str, ValidatedClassification],
-    ) -> None:
-        serialized = {
-            key: value.model_dump(mode="json") for key, value in results.items()
-        }
-        temporary = path.with_suffix(f"{path.suffix}.tmp")
-        temporary.write_text(
-            json.dumps(serialized, ensure_ascii=False),
-            encoding="utf-8",
-        )
-        temporary.replace(path)
+    _load_checkpoint = staticmethod(load_checkpoint)
+    _write_checkpoint = staticmethod(write_checkpoint)
 
     @staticmethod
     def _subset_dataset(

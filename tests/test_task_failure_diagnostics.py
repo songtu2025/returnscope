@@ -1,7 +1,7 @@
 import json
 import logging
 import sqlite3
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 from test_agent_runner_segment_outcomes import _latest_run
@@ -63,16 +63,19 @@ def test_corrupt_checkpoint_finishes_as_failed_without_losing_progress(runtime, 
 
 def test_checkpoint_save_error_is_diagnosed_before_failure_recovery(runtime, caplog):
     runner = runtime.runner
-    runner._write_checkpoint = Mock(
-        side_effect=PermissionError("synthetic-private-path")
-    )
     runner._finish_failed_segment = Mock()
     runner._execute_segment = Mock(
         side_effect=lambda context: runner._save_segment_checkpoint(
             context, _latest_run(runtime.seed.results)
         )
     )
-    with caplog.at_level(logging.ERROR):
+    with (
+        patch(
+            "web_backend.agent_runner_segment_execution.append_checkpoint",
+            side_effect=PermissionError("synthetic-private-path"),
+        ),
+        caplog.at_level(logging.ERROR),
+    ):
         runner.run_segment(runtime.seed.task_id, runtime.seed.segment_id)
     assert runtime.context.phase == "checkpoint_save"
     runner._finish_failed_segment.assert_called_once()

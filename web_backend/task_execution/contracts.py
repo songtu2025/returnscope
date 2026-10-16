@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +27,7 @@ class _SegmentRunContext:
     base_model_failures: int
     latest_run: PipelineRun | None = None
     phase: str = "preparing"
+    checkpointed_keys: set[str] = field(default_factory=set)
 
     def runtime_totals(self) -> tuple[int, int, int]:
         run = self.latest_run

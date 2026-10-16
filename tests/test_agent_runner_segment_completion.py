@@ -11,6 +11,26 @@ from return_semantics.schemas import ProcessingStatus
 from web_backend.common import json_value
 
 
+def test_periodic_checkpoint_only_appends_new_keys(runtime):
+    context = runtime.context
+    runner = runtime.runner
+    runner._update_segment_runtime_metrics = Mock()
+    runner._write_checkpoint(context.checkpoint_path, context.existing_results)
+    result = runtime.seed.results[runtime.seed.key]
+    run = _latest_run({"new": result})
+    runner._save_segment_checkpoint(context, run)
+    first_size = context.checkpoint_path.stat().st_size
+    runner._save_segment_checkpoint(context, run)
+    assert context.checkpoint_path.stat().st_size == first_size
+    run = replace(run, classifications={"new": result, "another": result})
+    runner._save_segment_checkpoint(context, run)
+    assert runner._load_checkpoint(context.checkpoint_path) == {
+        **context.existing_results,
+        "new": result,
+        "another": result,
+    }
+
+
 def _complete(runtime: SimpleNamespace) -> None:
     runtime.runner._complete_segment_run(
         runtime.context,

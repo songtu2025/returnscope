@@ -18,6 +18,7 @@ from return_semantics.semantic_review import requires_system_rerun
 from web_backend.common import json_value
 from web_backend.dataset_cache import load_cached_dataset
 from web_backend.settings import Settings
+from web_backend.task_execution.checkpoints import append_checkpoint
 from web_backend.task_execution.contracts import _SegmentRunContext
 from web_backend.task_execution.effective_results import current_inherited_results
 from web_backend.task_execution.segment_configuration import SegmentConfigurationMixin
@@ -134,10 +135,15 @@ class SegmentExecutionMixin(SegmentStateMixin, SegmentConfigurationMixin):
         run: PipelineRun,
     ) -> None:
         context.latest_run = run
-        combined = {**context.existing_results, **run.classifications}
+        delta = {
+            key: value
+            for key, value in run.classifications.items()
+            if key not in context.checkpointed_keys
+        }
         previous_phase = context.phase
         context.phase = "checkpoint_save"
-        self._write_checkpoint(context.checkpoint_path, combined)
+        append_checkpoint(context.checkpoint_path, delta)
+        context.checkpointed_keys.update(delta)
         context.phase = "runtime_metrics"
         self._update_segment_runtime_metrics(
             context.segment_id,
@@ -205,6 +211,11 @@ class SegmentExecutionMixin(SegmentStateMixin, SegmentConfigurationMixin):
             for key, value in context.existing_results.items()
             if key in all_keys
         }
+        # 合并旧日志及截断尾部；重试时保留当前版本继承的有效结果。
+        previous_phase = context.phase
+        context.phase = "checkpoint_save"
+        self._write_checkpoint(context.checkpoint_path, context.existing_results)
+        context.phase = previous_phase
         remaining_keys = all_keys - set(context.existing_results)
         selected = dataset.unique_comments.loc[
             dataset.unique_comments["classification_key"]
