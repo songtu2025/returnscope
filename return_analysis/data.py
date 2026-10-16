@@ -178,16 +178,19 @@ def load_product_dimensions(
 
 
 def load_analysis_data(
-    workbook_path: Path,
+    workbook_path: Path | dict[str, pd.DataFrame],
     product_path: Path | None = None,
     store: str | None = None,
 ) -> AnalysisData:
-    if not workbook_path.exists():
+    if isinstance(workbook_path, Path) and not workbook_path.exists():
         raise FileNotFoundError(f"分类结果不存在: {workbook_path}")
 
-    sheets = pd.read_excel(
-        workbook_path,
-        sheet_name=[DETAIL_SHEET, SEMANTIC_SHEET, UNKNOWN_SHEET],
+    sheets = (
+        workbook_path
+        if isinstance(workbook_path, dict)
+        else pd.read_excel(
+            workbook_path, sheet_name=[DETAIL_SHEET, SEMANTIC_SHEET, UNKNOWN_SHEET]
+        )
     )
     details = sheets[DETAIL_SHEET].copy()
     semantics = sheets[SEMANTIC_SHEET].copy()

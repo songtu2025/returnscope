@@ -221,7 +221,7 @@ def test_parent_export_cannot_restore_stale_file_after_deletion(tmp_path, monkey
     )
     loader = ParentResultMixin()
     loader.database = database
-    data = SimpleNamespace(results={}, dataset=None, taxonomy=None)
+    data = SimpleNamespace(results={}, dataset=None, taxonomy=None, segments=[{}])
 
     def delete_during_export(*_args):
         service.segment_action(

@@ -16,8 +16,13 @@ from web_backend.analysis_services.cache import (
     _load_product_data,
     _read_cached_data,
     _write_cached_data,
+    enrich_product_data,
 )
 from web_backend.analysis_services.filters import AnalysisFilters
+from web_backend.analysis_services.result_data import (
+    analysis_version_ids,
+    published_analysis_data,
+)
 from web_backend.database import Database
 from web_backend.datasets.product_store import load_product_frame
 
@@ -42,12 +47,13 @@ WHERE t.id = ?
 """
 
 COMPLETED_SEGMENTS_QUERY = """
-SELECT id, status, result_version, result_file_path,
-       completed_at, scope_json
-FROM active_task_segments
-WHERE task_id = ?
-  AND status IN ('completed', 'completed_with_errors')
-ORDER BY execution_order, id
+SELECT s.id, s.status, s.result_version, s.result_file_path, s.result_version_id,
+       s.standard_version_id, s.completed_at, s.scope_json, r.deleted_at AS result_deleted_at
+FROM active_task_segments s
+LEFT JOIN classification_results r ON r.source_segment_id=s.id
+WHERE s.task_id = ?
+  AND s.status IN ('completed', 'completed_with_errors')
+ORDER BY s.execution_order, s.id
 """
 
 ANALYSIS_CACHE_VERSION = 2
@@ -74,6 +80,13 @@ class _AnalysisTaskData:
         if row is None:
             raise ValueError("任务不存在")
         task = dict(row)
+        versions = analysis_version_ids(segment_rows, listing)
+        if versions and (task["status"] in {"completed", "cancelled"} or listing):
+            task["analysis_version_ids"] = versions
+            if listing:
+                task["listing"] = listing
+                task["delivery_scope"] = "segment"
+            return task
         result_path = task.get("result_file_path")
         if task["status"] not in {"completed", "cancelled"} or not result_path:
             segment = self._completed_listing_segment(segment_rows, listing)
@@ -113,13 +126,15 @@ class _AnalysisTaskData:
     def _load_task_data(self, task: dict[str, Any]) -> AnalysisData:
         result_path = Path(str(task["result_file_path"]))
         product_path = Path(str(task["product_file_path"]))
+        versions = task.get("analysis_version_ids", ())
         return self._cached_load(
             str(result_path),
-            result_path.stat().st_mtime_ns,
+            0 if versions else result_path.stat().st_mtime_ns,
             str(product_path),
             product_path.stat().st_mtime_ns,
             str(task["store"]),
             str(self.database.path),
+            versions,
         )
 
     @staticmethod
@@ -131,7 +146,15 @@ class _AnalysisTaskData:
         product_mtime: int,
         store: str,
         database_path: str | None = None,
+        version_ids: tuple[str, ...] = (),
     ) -> AnalysisData:
+        if version_ids and database_path:
+            database = Database(Path(database_path))
+            return enrich_product_data(
+                published_analysis_data(database, version_ids),
+                load_product_frame(database, Path(product_path)),
+                store,
+            )
         result = Path(result_path)
         product = Path(product_path)
         cache_path = result.with_suffix(".web-cache.pkl")

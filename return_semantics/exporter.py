@@ -52,18 +52,14 @@ def _style_workbook(writer: pd.ExcelWriter) -> None:
             sheet.column_dimensions[get_column_letter(column_index)].width = width
 
 
-def export_results(
-    output_path: Path,
+def build_analysis_frames(
     dataset: ReturnDataset,
     results: dict[str, ValidatedClassification],
     taxonomy: TaxonomyConfig,
-) -> None:
+) -> tuple[dict[str, pd.DataFrame], dict[str, str]]:
     detail = pd.DataFrame(_build_detail_rows(dataset, results, taxonomy))
     semantics = pd.DataFrame(_build_semantic_rows(dataset, results, taxonomy))
     unknown = pd.DataFrame(_build_unknown_rows(dataset, results))
-    semantic_review = pd.DataFrame(
-        _build_semantic_review_rows(dataset, results, taxonomy)
-    )
     source_comments = dataset.unique_comments.set_index("classification_key")[
         "comment_normalized"
     ]
@@ -80,6 +76,22 @@ def export_results(
             detail["处理状态"].isin({"EXCLUDED_MISSING_CATEGORY", "NO_TEXT_EVIDENCE"}),
             READY,
         )
+    )
+    return {"分类明细": detail, "语义单元": semantics, "未知语义": unknown}, routes
+
+
+def export_results(
+    output_path: Path,
+    dataset: ReturnDataset,
+    results: dict[str, ValidatedClassification],
+    taxonomy: TaxonomyConfig,
+) -> None:
+    frames, routes = build_analysis_frames(dataset, results, taxonomy)
+    detail, semantics, unknown = (
+        frames[name] for name in ("分类明细", "语义单元", "未知语义")
+    )
+    semantic_review = pd.DataFrame(
+        _build_semantic_review_rows(dataset, results, taxonomy)
     )
     if semantic_review.empty:
         business_review = semantic_review.copy()

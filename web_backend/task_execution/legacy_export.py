@@ -78,6 +78,10 @@ class LegacyResultExportMixin:
         results: dict[str, ValidatedClassification],
         taxonomy: TaxonomyConfig,
     ) -> None:
+        if context.segment.get("standard_version_id") and not context.task.get(
+            "result_file_path"
+        ):
+            return
         try:
             export_results(
                 output_path=output_path,
@@ -112,13 +116,18 @@ class LegacyResultExportMixin:
         suffix = "analysis" if parent_status == "completed" else "analysis-partial"
         output_path = result_dir / f"{suffix}-v{result_version}.xlsx"
         results_path = result_dir / "classifications-v1.json"
-        self._write_checkpoint(results_path, data.results)
-        export_results(
-            output_path=output_path,
-            dataset=data.dataset,
-            results=data.results,
-            taxonomy=data.taxonomy,
+        structured = not task.get("result_file_path") and all(
+            segment.get("result_version_id") and segment.get("standard_version_id")
+            for segment in data.segments
         )
+        if not structured:
+            self._write_checkpoint(results_path, data.results)
+            export_results(
+                output_path=output_path,
+                dataset=data.dataset,
+                results=data.results,
+                taxonomy=data.taxonomy,
+            )
         metrics = self._parent_export_metrics(task, dataset, parent_status, data)
         now = utc_now()
         with self.database.transaction(immediate=True) as connection:
@@ -131,8 +140,8 @@ class LegacyResultExportMixin:
                 """,
                 (
                     json_text(metrics),
-                    str(output_path),
-                    str(results_path),
+                    None if structured else str(output_path),
+                    None if structured else str(results_path),
                     result_version,
                     now,
                     task_id,

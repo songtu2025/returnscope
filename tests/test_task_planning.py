@@ -1810,9 +1810,12 @@ def test_replan_rebuilds_failed_segment_when_its_scope_changes(
         "eyewear-unified-2026-09-06-v1-semantic1",
         "footwear-unified-2026-09-06-v1-semantic1",
     }
-    checkpoint = json.loads(
-        Path(str(completed["results_json_path"])).read_text(encoding="utf-8")
-    )
+    assert completed["results_json_path"] is None
+    checkpoint = {}
+    for segment in completed["segments"]:
+        checkpoint.update(
+            json.loads(Path(segment["result_json_path"]).read_text(encoding="utf-8"))
+        )
     expected_result_keys = set().union(*actual_keys.values())
     assert set(checkpoint) == expected_result_keys
     assert len(checkpoint) == 2
@@ -1964,7 +1967,15 @@ def test_cancelled_task_delivers_completed_listing_and_resumes_remaining(
     assert cancelled["status"] == "cancelled"
     assert cancelled["stage"] == "已取消"
     assert cancelled["metrics"]["partial_result"] is True
-    assert Path(str(cancelled["result_file_path"])).exists()
+    assert cancelled["result_file_path"] is None
+    published = cancelled_segments["footwear"]["result_version_id"]
+    assert published
+    assert (
+        AnalysisService(database).get(str(task["id"]), AnalysisFilters())["scope"][
+            "total_records"
+        ]
+        == 1
+    )
     assert cancelled_segments["footwear"]["status"] == "completed"
     assert cancelled_segments["eyewear"]["status"] == "cancelled"
     assert cancelled["metrics"]["delivered_records"] == 1

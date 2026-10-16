@@ -32,6 +32,12 @@ def _load_product_data(
     result: Path, product: Path | pd.DataFrame, store: str
 ) -> AnalysisData:
     data = load_analysis_data(result)
+    return enrich_product_data(data, product, store)
+
+
+def enrich_product_data(
+    data: AnalysisData, product: Path | pd.DataFrame, store: str
+) -> AnalysisData:
     try:
         products = load_product_dimensions(
             product,

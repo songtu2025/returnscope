@@ -38,7 +38,9 @@ class AnalysisService(_AnalysisTaskData, _AnalysisOverview, _AnalysisDiagnosis):
         return self._cached_response(
             task_id,
             int(task["revision"]),
-            result_path.stat().st_mtime_ns,
+            hash(task["analysis_version_ids"])
+            if task.get("analysis_version_ids")
+            else result_path.stat().st_mtime_ns,
             product_path.stat().st_mtime_ns,
             filters,
         )
