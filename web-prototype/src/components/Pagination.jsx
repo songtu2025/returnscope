@@ -16,6 +16,7 @@ import { AntdProvider } from "./AntdProvider";
  *   showTotal?: boolean,
  *   showQuickJumper?: boolean,
  *   simple?: boolean,
+ *   unit?: string,
  * }} props
  */
 export function Pagination({
@@ -29,6 +30,7 @@ export function Pagination({
   showTotal = true,
   showQuickJumper = false,
   simple = false,
+  unit = "条",
 }) {
   return (
     <AntdProvider>
@@ -41,6 +43,7 @@ export function Pagination({
         total={total}
         disabled={disabled}
         pageSizeOptions={PAGE_SIZES}
+        locale={{ items_per_page: `${unit}/页` }}
         showLessItems
         showQuickJumper={showQuickJumper}
         simple={simple}
@@ -49,7 +52,7 @@ export function Pagination({
         }
         showTotal={
           showTotal
-            ? (value) => `共 ${Number(value || 0).toLocaleString()} 条`
+            ? (value) => `共 ${Number(value || 0).toLocaleString()} ${unit}`
             : undefined
         }
         itemRender={(_itemPage, type, element) => {

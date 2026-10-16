@@ -54,6 +54,7 @@ export function ResultDetailRecords(context) {
               pageSize={route.pageSize}
               total={records.total}
               totalPages={totalPages}
+              unit={isUserFeedback ? "个反馈组" : "个记录组"}
               onPage={changeRecordPage}
               onPageSize={changePageSize}
             />
@@ -77,7 +78,7 @@ function ResultRecordEmpty({ isUserFeedback }) {
 
 /** @param {import("./classificationResultDetailContracts").ResultDetailContext} context */
 function ResultRecordHeading(context) {
-  const { updateRoute, orderInput, setOrderInput, isUserFeedback } = context;
+  const { updateRoute, orderInput, setOrderInput, isUserFeedback, records } = context;
   const orderInputId = useId();
   return (
     <header>
@@ -89,6 +90,14 @@ function ResultRecordHeading(context) {
           active={context.recordsLoading && Boolean(context.records)}
         />
       </div>
+      {records && (
+        <span>
+          当前筛选：{records.total.toLocaleString()} 个
+          {isUserFeedback ? "反馈组" : "记录组"}
+          {records.source_total != null &&
+            ` · 关联 ${records.source_total.toLocaleString()} 条源记录`}
+        </span>
+      )}
       <div className="result-record-tools">
         <ResultRecordFilters {...context}>
           <div className="record-order-search">

@@ -58,6 +58,21 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+test.each([
+  [4422, 4455, "当前筛选：4,422 个反馈组 · 关联 4,455 条源记录"],
+  [0, 0, "当前筛选：0 个反馈组 · 关联 0 条源记录"],
+  [2, undefined, "当前筛选：2 个反馈组"],
+])("筛选结果区分反馈组和源记录：%s/%s", async (total, source_total, summary) => {
+  apiMock.classificationResultRecordGroups.mockResolvedValue({
+    items: [],
+    total,
+    source_total,
+  });
+  render(<RecordFiltersHarness />);
+  expect(await screen.findByText(summary)).toBeVisible();
+  if (source_total == null) expect(screen.queryByText(/关联 .* 条源记录/)).toBeNull();
+});
+
 test.each([true, false])("行内状态与重跑标记一致：%s", (rerun) => {
   render(
     <ResultRecordRow

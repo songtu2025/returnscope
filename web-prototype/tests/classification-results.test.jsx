@@ -508,7 +508,10 @@ test("同一反馈只显示一份结论并可展开两条源明细", async () =>
 
   render(<ClassificationResultsPage notify={vi.fn()} />);
   const section = (await screen.findByText("订单级分类记录")).closest("section");
-  expect(within(section).getByText("共 1 条")).toBeVisible();
+  expect(within(section).getByText("共 1 个记录组")).toBeVisible();
+  expect(
+    within(section).getByText("当前筛选：1 个记录组 · 关联 2 条源记录"),
+  ).toBeVisible();
   expect(within(section).getAllByText("ORDER-001")).toHaveLength(1);
   await user.click(within(section).getByRole("button", { name: "查看证据" }));
   const drawer = screen.getByRole("dialog", { name: "分类结果与证据" });
@@ -533,7 +536,8 @@ test("业务下钻按反馈组显示数量", async () => {
 
   expect(await screen.findByRole("button", { name: /偏小\s*1\s*组/ })).toBeVisible();
   expect(screen.getByRole("button", { name: /产品表权威名称\s*1\s*组/ })).toBeVisible();
-  expect(screen.getByText("共 1 条")).toBeVisible();
+  expect(screen.getByText("共 1 个记录组")).toBeVisible();
+  expect(screen.getByText("当前筛选：1 个记录组 · 关联 2 条源记录")).toBeVisible();
 });
 
 afterEach(() => {

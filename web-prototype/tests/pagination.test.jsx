@@ -8,6 +8,31 @@ import { PAGE_SIZES } from "../src/shared/pagination";
 afterEach(cleanup);
 
 describe("Pagination", () => {
+  it("反馈组总数和每页选项使用同一单位且保留分页回调", async () => {
+    const user = userEvent.setup();
+    const onPage = vi.fn();
+    const onPageSize = vi.fn();
+    render(
+      <Pagination
+        page={1}
+        pageSize={20}
+        total={4422}
+        totalPages={222}
+        unit="个反馈组"
+        onPage={onPage}
+        onPageSize={onPageSize}
+      />,
+    );
+    expect(screen.getByText("共 4,422 个反馈组")).toBeVisible();
+    const size = screen.getByRole("combobox", { name: "每页数量" });
+    expect(size.closest(".ant-select")).toHaveTextContent("20 个反馈组/页");
+    await user.click(screen.getByRole("button", { name: "下一页" }));
+    expect(onPage).toHaveBeenCalledWith(2);
+    await user.click(size);
+    await user.click(await screen.findByRole("option", { name: "50 个反馈组/页" }));
+    expect(onPageSize).toHaveBeenCalledWith(50);
+  });
+
   it("保持分页结构、选项和回调契约", async () => {
     const user = userEvent.setup();
     const onPage = vi.fn();
