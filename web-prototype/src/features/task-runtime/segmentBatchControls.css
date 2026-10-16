@@ -1,0 +1,35 @@
+.segment-batch-controls {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--green-pale);
+  font-size: 12px;
+}
+.segment-batch-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.segment-batch-controls ul {
+  max-height: 200px;
+  overflow-y: auto;
+  padding-left: 20px;
+}
+.segment-batch-controls p {
+  margin: 6px 0;
+}
+.listing-select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.listing-selection-checkbox {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--green);
+}

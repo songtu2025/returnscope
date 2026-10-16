@@ -1,6 +1,6 @@
 import { ArrowClockwise, Pause, Play } from "@phosphor-icons/react";
 import Button from "antd/es/button";
-import { canRetrySegment } from "./segmentBoardRowPolicy";
+import { canRetrySegment, segmentActionAvailable } from "./segmentBoardRowPolicy";
 import { SegmentRemovalControls } from "./SegmentRemovalControls";
 
 /** @typedef {import("./segmentBoardRowContracts").SegmentBoardRowProps} SegmentBoardRowProps */
@@ -11,7 +11,7 @@ function SegmentExecutionControls({ segment, actions, disabled }) {
   const { onAction } = actions;
   return (
     <>
-      {segment.status === "cancelled" && (
+      {segment.status === "cancelled" && segmentActionAvailable(segment, "resume") && (
         <Button
           className="secondary-button compact-button listing-resume-button"
           disabled={disabled}
@@ -20,7 +20,7 @@ function SegmentExecutionControls({ segment, actions, disabled }) {
           <ArrowClockwise size={14} /> 重新排队
         </Button>
       )}
-      {["queued", "retry_pending"].includes(segment.status) && (
+      {segment.status !== "running" && segmentActionAvailable(segment, "pause") && (
         <Button
           className="secondary-button compact-button"
           disabled={disabled}
@@ -29,7 +29,7 @@ function SegmentExecutionControls({ segment, actions, disabled }) {
           <Pause size={14} /> 暂停
         </Button>
       )}
-      {segment.status === "running" && !segment.requested_action && (
+      {segment.status === "running" && segmentActionAvailable(segment, "pause") && (
         <Button
           className="secondary-button compact-button"
           disabled={disabled}
@@ -38,7 +38,7 @@ function SegmentExecutionControls({ segment, actions, disabled }) {
           <Pause size={14} /> 暂停
         </Button>
       )}
-      {segment.status === "paused" && (
+      {segment.status === "paused" && segmentActionAvailable(segment, "resume") && (
         <Button
           className="secondary-button compact-button"
           disabled={disabled}

@@ -1,5 +1,28 @@
 import { WarningCircle } from "@phosphor-icons/react";
 
+/** @param {{keys: string[], selection?: ReturnType<typeof import("./useSegmentSelection").useSegmentSelection>, disabled: boolean}} props */
+export function SegmentSelectionHeading({ keys, selection, disabled }) {
+  const count = keys.filter((key) => selection?.keys.has(key)).length;
+  return (
+    <span className="listing-select-all">
+      {selection && (
+        <input
+          className="listing-selection-checkbox"
+          type="checkbox"
+          aria-label="选择当前页 Listing"
+          checked={keys.length > 0 && count === keys.length}
+          ref={(node) => {
+            if (node) node.indeterminate = count > 0 && count < keys.length;
+          }}
+          disabled={disabled || !keys.length}
+          onChange={() => selection.toggle(keys)}
+        />
+      )}
+      Listing
+    </span>
+  );
+}
+
 /** @param {{count: number}} props */
 export function SegmentBoardHeader({ count }) {
   return (

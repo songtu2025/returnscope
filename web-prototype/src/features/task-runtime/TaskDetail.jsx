@@ -32,6 +32,8 @@ import { taskSummary } from "./taskRegistryPolicy";
  * @property {(segmentKey: string, payload: TaskPayload) => Promise<boolean>} onRetrySegment
  * @property {(segmentId: string) => Promise<boolean>} onRetryResultPublish
  * @property {(segmentKey: string, action: SegmentAction, note?: string) => Promise<boolean>} onSegmentAction
+ * @property {import("./taskSegmentBatchActions").ApplySegmentBatch} [onBatchSegmentAction]
+ * @property {() => Promise<boolean>} [onRefreshSegments]
  * @property {(maxParallelSegments: number) => Promise<boolean>} onParallelism
  * @property {(segmentKeys: string[]) => Promise<boolean>} onReorderSegments
  * @property {(payload: TaskPayload) => Promise<TaskExecutionPlan>} onPreflightReplan
@@ -59,6 +61,8 @@ export function TaskDetail({
   onRetrySegment,
   onRetryResultPublish,
   onSegmentAction,
+  onBatchSegmentAction,
+  onRefreshSegments,
   onParallelism,
   onReorderSegments,
   onPreflightReplan,
@@ -66,6 +70,7 @@ export function TaskDetail({
 }) {
   const [resumeOpen, setResumeOpen] = useState(false);
   const [taskAction, setTaskAction] = useState("");
+  const [batchReadRequired, setBatchReadRequired] = useState(false);
   const actionRef = useRef("");
   const [taskActionError, setTaskActionError] = useState("");
   const runTaskAction = async (
@@ -136,7 +141,7 @@ export function TaskDetail({
           task={task}
           summary={summary}
           hasUnfinishedSegments={hasUnfinishedSegments}
-          taskAction={taskAction}
+          taskAction={taskAction || (batchReadRequired ? "read-required" : "")}
           onOpenReplan={() => setReplanOpen(true)}
           onOpenResume={() => setResumeOpen(true)}
           onTaskRenamed={onTaskRenamed}
@@ -166,6 +171,7 @@ export function TaskDetail({
               key={value}
               type="button"
               role="tab"
+              disabled={Boolean(taskAction)}
               id={`task-tab-${value}`}
               aria-controls="task-view-panel"
               aria-selected={activeTab === value}
@@ -191,6 +197,7 @@ export function TaskDetail({
               initialFilter={listingFilter}
               task={task}
               disabled={Boolean(taskAction)}
+              readRequired={batchReadRequired}
               focusSegmentId={listingFilter === "all" ? focusSegmentId : null}
               onRetry={(segment) => {
                 onClearActionError();
@@ -201,6 +208,36 @@ export function TaskDetail({
               }
               onAction={(key, action, note) =>
                 runTaskAction("segment", () => onSegmentAction(key, action, note))
+              }
+              onBatchAction={
+                onBatchSegmentAction
+                  ? async (keys, action) => {
+                      if (batchReadRequired) return false;
+                      const result = await runTaskAction("batch-segment", () =>
+                        onBatchSegmentAction(keys, action),
+                      );
+                      if (
+                        result &&
+                        typeof result === "object" &&
+                        "refreshRequired" in result
+                      )
+                        setBatchReadRequired(Boolean(result.refreshRequired));
+                      return /** @type {import("./taskSegmentBatchActions").SegmentBatchResult | false} */ (
+                        result
+                      );
+                    }
+                  : undefined
+              }
+              onRefresh={
+                onRefreshSegments
+                  ? async () => {
+                      const read = Boolean(
+                        await runTaskAction("refresh-segments", onRefreshSegments),
+                      );
+                      if (read) setBatchReadRequired(false);
+                      return read;
+                    }
+                  : undefined
               }
               onParallelism={(value) =>
                 runTaskAction("parallelism", () => onParallelism(value))

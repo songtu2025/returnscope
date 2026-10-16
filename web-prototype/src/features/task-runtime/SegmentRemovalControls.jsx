@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { DotsThreeVertical } from "@phosphor-icons/react";
 import { Modal } from "../../components/SharedUi";
 import { useDismissibleDetails } from "../../hooks/useDismissibleDetails";
+import { segmentActionAvailable } from "./segmentBoardRowPolicy";
 
 /** @param {Pick<import("./segmentBoardRowContracts").SegmentBoardRowProps, "segment" | "actions"> & {disabled?: boolean}} props */
 export function SegmentRemovalControls({ segment, actions, disabled = false }) {
@@ -34,7 +35,7 @@ export function SegmentRemovalControls({ segment, actions, disabled = false }) {
         <div>
           <button
             className="danger"
-            disabled={disabled}
+            disabled={disabled || !segmentActionAvailable(segment, "delete")}
             onClick={() => setConfirming(true)}
           >
             移除 Listing

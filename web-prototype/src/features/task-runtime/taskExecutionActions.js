@@ -1,5 +1,6 @@
 import { taskMonitorApi, errorMessage, errorStatus } from "./taskMonitorRequests";
 import { refreshServerState } from "../../shared/serverState";
+import { applySegmentBatch } from "./taskSegmentBatchActions";
 
 /** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
 /** @typedef {import("./taskRuntimeContracts").TaskPayload} TaskPayload */
@@ -7,15 +8,16 @@ import { refreshServerState } from "../../shared/serverState";
 /** @typedef {Pick<ReturnType<typeof import("./useTaskMonitorState").useTaskMonitorState>,"mutateCache"|"setSelected"|"setSelectedId"|"setEventStreamVersion"|"setActionError"|"loadTasks"|"loadSelected"|"updateListState"> & Pick<import("./taskMonitorContracts").TaskMonitorProps,"notify"|"onNavigate"|"onTaskFocus"> & {selected: AnalysisTask}} TaskActionContext */
 
 /** @param {TaskActionContext} context */
-export function taskExecutionActions({
-  notify,
-  selected,
-  setSelected,
-  setActionError,
-  loadTasks,
-  loadSelected,
-  mutateCache,
-}) {
+export function taskExecutionActions(context) {
+  const {
+    notify,
+    selected,
+    setSelected,
+    setActionError,
+    loadTasks,
+    loadSelected,
+    mutateCache,
+  } = context;
   /** @param {string[]} domains @param {string} message */
   const refreshAfterSuccess = async (domains, message) => {
     const results = await Promise.allSettled([
@@ -36,6 +38,11 @@ export function taskExecutionActions({
     }
   };
   return {
+    onBatchSegmentAction: (
+      /** @type {string[]} */ keys,
+      /** @type {import("./taskSegmentBatchActions").BatchSegmentAction} */ action,
+    ) => applySegmentBatch(context, keys, action),
+    onRefreshSegments: async () => Boolean(await loadSelected()),
     onRetrySegment: async (
       /** @type {string} */ segmentKey,
       /** @type {TaskPayload} */ payload,

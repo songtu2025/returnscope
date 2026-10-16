@@ -1,10 +1,16 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { SegmentBoardPagination } from "./SegmentBoardPagination";
 import { SegmentBoardToolbar } from "./SegmentBoardToolbar";
-import { SegmentBoardHeader, ExcludedListingsSummary } from "./SegmentBoardSummary";
+import {
+  SegmentBoardHeader,
+  ExcludedListingsSummary,
+  SegmentSelectionHeading,
+} from "./SegmentBoardSummary";
 import { SegmentBoardRow } from "./SegmentBoardRow";
 import { isLegacyResult, isPublishedResult } from "./taskSegmentPolicy";
 import { segmentNeedsAttention } from "./taskRegistryPolicy";
+import { useSegmentSelection } from "./useSegmentSelection";
+import { SegmentBatchControls } from "./SegmentBatchControls";
 
 /** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
 /** @typedef {import("./taskRuntimeContracts").TaskSegment} TaskSegment */
@@ -13,11 +19,14 @@ import { segmentNeedsAttention } from "./taskRegistryPolicy";
  * @typedef {Object} SegmentBoardProps
  * @property {AnalysisTask} task
  * @property {boolean} [disabled]
+ * @property {boolean} [readRequired]
  * @property {string | null} [focusSegmentId]
  * @property {string} [initialFilter]
  * @property {(segment: TaskSegment) => void} onRetry
  * @property {(segmentId: string) => Promise<unknown>} onRetryPublish
  * @property {(segmentKey: string, action: SegmentAction, note?: string) => Promise<unknown>} onAction
+ * @property {import("./taskSegmentBatchActions").ApplySegmentBatch} [onBatchAction]
+ * @property {() => Promise<boolean>} [onRefresh]
  * @property {(maxParallelSegments: number) => Promise<unknown>} onParallelism
  * @property {(segmentKeys: string[]) => Promise<unknown>} onReorder
  * @property {(segment: TaskSegment & {result_version_id: string}, qualityStatus?: string) => void} onViewClassification
@@ -51,11 +60,14 @@ function matchesStatusFilter(segment, filter) {
 export function SegmentBoard({
   task,
   disabled = false,
+  readRequired = false,
   focusSegmentId,
   initialFilter = "all",
   onRetry,
   onRetryPublish,
   onAction,
+  onBatchAction,
+  onRefresh,
   onParallelism,
   onReorder,
   onViewClassification,
@@ -91,6 +103,10 @@ export function SegmentBoard({
     () => (task.segments ?? []).filter((segment) => segment.agent_key === "unknown"),
     [task.segments],
   );
+  const selection = useSegmentSelection(
+    queueSegments,
+    JSON.stringify([task.id, query, statusFilter]),
+  );
   const excludedRecords = excludedSegments.reduce(
     (total, segment) => total + segment.record_count,
     0,
@@ -102,7 +118,7 @@ export function SegmentBoard({
   const maxParallelSegments = task.max_parallel_segments ?? 3;
   const ownerRunningSegments = task.owner_running_segments ?? 0;
   const canManageQueue =
-    !disabled && ["queued", "running", "paused"].includes(task.status);
+    !disabled && !readRequired && ["queued", "running", "paused"].includes(task.status);
   const orderableKeys = queueSegments
     .filter((segment) => ORDERABLE_SEGMENT_STATUSES.includes(segment.status))
     .map((segment) => segment.segment_key);
@@ -131,6 +147,8 @@ export function SegmentBoard({
     (page - 1) * PAGE_SIZE,
     page * PAGE_SIZE,
   );
+  const currentPageKeys = pageSegments.map((segment) => segment.segment_key);
+  const batchEnabled = Boolean(onBatchAction && onRefresh);
 
   useEffect(() => {
     setPage(1);
@@ -176,6 +194,7 @@ export function SegmentBoard({
         statusFilter={statusFilter}
         setQuery={setQuery}
         setStatusFilter={setStatusFilter}
+        disabled={disabled || selection.busy}
         parallelism={{
           changingParallelism,
           setChangingParallelism,
@@ -185,11 +204,24 @@ export function SegmentBoard({
           onParallelism,
         }}
       />
+      {onBatchAction && onRefresh && (
+        <SegmentBatchControls
+          selection={selection}
+          disabled={disabled}
+          onApply={onBatchAction}
+          onRefresh={onRefresh}
+          readRequired={readRequired}
+        />
+      )}
       {queueSegments.length > 0 && (
         <>
           <div className="listing-table" role="table">
             <div className="listing-table-head" role="row">
-              <span>Listing</span>
+              <SegmentSelectionHeading
+                keys={currentPageKeys}
+                selection={batchEnabled ? selection : undefined}
+                disabled={disabled || selection.busy}
+              />
               <span>分类标准</span>
               <span>执行状态</span>
               <span>结果</span>
@@ -207,10 +239,17 @@ export function SegmentBoard({
                   pageSize: PAGE_SIZE,
                   focusSegmentId,
                   focusedSegmentRef,
+                  selection: batchEnabled
+                    ? {
+                        selected: selection.keys.has(segment.segment_key),
+                        disabled: disabled || selection.busy,
+                        onToggle: () => selection.toggle([segment.segment_key]),
+                      }
+                    : undefined,
                 }}
                 queue={{ canManageQueue, orderableKeys, reordering, applyOrder }}
                 rowState={{
-                  disabled,
+                  disabled: disabled || readRequired || selection.busy,
                   expandedSegmentKey,
                   setExpandedSegmentKey,
                   retryingPublishId,

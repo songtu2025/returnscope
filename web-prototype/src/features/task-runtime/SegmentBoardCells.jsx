@@ -100,10 +100,20 @@ export function SegmentBoardCells({
   actions,
   rowState,
 }) {
-  const { segmentIndex, page, pageSize } = position;
+  const { segmentIndex, page, pageSize, selection } = position;
   return (
     <>
       <div className="listing-identity" role="cell">
+        {selection && (
+          <input
+            type="checkbox"
+            className="listing-selection-checkbox"
+            aria-label={`选择 Listing：${segment.scope?.listing || segment.segment_key}`}
+            checked={selection.selected}
+            disabled={selection.disabled}
+            onChange={selection.onToggle}
+          />
+        )}
         <b>
           {String(
             segment.execution_order || (page - 1) * pageSize + segmentIndex + 1,

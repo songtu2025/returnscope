@@ -3,6 +3,23 @@ import { isPublishedResult, resultPublishStatus } from "./taskSegmentPolicy";
 /** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
 /** @typedef {import("./taskRuntimeContracts").TaskSegment} TaskSegment */
 const RETRYABLE_SEGMENT_STATUSES = ["failed", "completed_with_errors", "not_started"];
+
+/** @param {TaskSegment} segment @param {"pause" | "resume" | "delete"} action */
+export function segmentActionAvailable(segment, action) {
+  if (
+    segment.agent_key === "unknown" ||
+    segment.status === "blocked" ||
+    segment.deleted_at ||
+    segment.removal_requested_at ||
+    segment.requested_action
+  )
+    return false;
+  if (action === "delete") return true;
+  if (segment.result_deleted_at) return false;
+  return action === "pause"
+    ? ["queued", "retry_pending", "running"].includes(segment.status)
+    : ["paused", "cancelled"].includes(segment.status);
+}
 export const SEGMENT_STATUS_LABELS = {
   remove_pending: "正在移除",
   ready: "可执行",

@@ -69,7 +69,7 @@ function ParallelismSettings({ task, parallelism }) {
  * @param {{task: AnalysisTask, query: string, statusFilter: string,
  * setQuery: import("react").Dispatch<import("react").SetStateAction<string>>,
  * setStatusFilter: import("react").Dispatch<import("react").SetStateAction<string>>,
- * parallelism: ParallelismState}} props
+ * parallelism: ParallelismState, disabled?: boolean}} props
  */
 export function SegmentBoardToolbar({
   task,
@@ -78,6 +78,7 @@ export function SegmentBoardToolbar({
   setQuery,
   setStatusFilter,
   parallelism,
+  disabled = false,
 }) {
   return (
     <div className="listing-queue-toolbar">
@@ -85,6 +86,7 @@ export function SegmentBoardToolbar({
         <label className="listing-queue-search">
           <MagnifyingGlass size={17} />
           <input
+            disabled={disabled}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="搜索 Listing（编号 / 站点 / 标准）"
@@ -92,6 +94,7 @@ export function SegmentBoardToolbar({
           />
         </label>
         <select
+          disabled={disabled}
           value={statusFilter}
           onChange={(event) => setStatusFilter(event.target.value)}
           aria-label="按 Listing 状态筛选"
