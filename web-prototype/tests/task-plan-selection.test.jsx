@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { NewTaskPage } from "../src/features/task-create/NewTaskPage";
 import { renderWithServerState as render } from "./renderWithServerState";
 
-function setup() {
+function setup(planSegments) {
   apiMock.dataVersions.mockResolvedValue([
     {
       kind: "products",
@@ -46,7 +46,13 @@ function setup() {
   apiMock.createTask.mockResolvedValue({ id: "created" });
   apiMock.preflightTask.mockResolvedValue({
     ...executionPlan,
-    segments: [
+    ...(planSegments
+      ? {
+          unique_comment_count: planSegments.length,
+          executable_count: planSegments.length,
+        }
+      : {}),
+    segments: planSegments ?? [
       { ...executionPlan.segments[0], unique_comments: 3, record_count: 5 },
       {
         ...executionPlan.segments[0],
@@ -81,7 +87,7 @@ test("默认全选、取消单项联动数量与启动参数，排序及模型�
   ).toBeVisible();
   await user.click(screen.getByRole("checkbox", { name: "参与分析：SK001" }));
   expect(screen.getByText("已选 1 / 2 个 Listing · 5 组待分析评论")).toBeVisible();
-  expect(screen.getByRole("checkbox", { name: "全部参与分析" }).indeterminate).toBe(
+  expect(screen.getByRole("checkbox", { name: "本页全部参与" }).indeterminate).toBe(
     true,
   );
   const launch = screen.getByRole("button", { name: "创建并启动" });
@@ -109,7 +115,7 @@ test("默认全选、取消单项联动数量与启动参数，排序及模型�
 test("取消全部禁用启动，重新全选恢复数量；提交中锁定选择", async () => {
   const user = userEvent.setup();
   setup();
-  const all = await screen.findByRole("checkbox", { name: "全部参与分析" });
+  const all = await screen.findByRole("checkbox", { name: "本页全部参与" });
   await user.click(all);
   expect(screen.getByText("已选 0 / 2 个 Listing · 0 组待分析评论")).toBeVisible();
   expect(screen.getByRole("button", { name: "没有可执行评论" })).toBeDisabled();
@@ -143,11 +149,11 @@ test("同一Listing不同品类作为整体选择；创建失败保留已选范�
       .getAllByRole("checkbox", { name: "参与分析：SK001" })
       .every((item) => !item.checked),
   ).toBe(true);
-  await user.click(screen.getByRole("checkbox", { name: "全部参与分析" }));
+  await user.click(screen.getByRole("checkbox", { name: "本页全部参与" }));
   apiMock.createTask.mockRejectedValue(new Error("合成失败"));
   await user.click(screen.getByRole("button", { name: "创建并启动" }));
   await screen.findByText("合成失败");
-  expect(screen.getByRole("checkbox", { name: "全部参与分析" })).toBeChecked();
+  expect(screen.getByRole("checkbox", { name: "本页全部参与" })).toBeChecked();
 });
 
 test("明细计划失效可重新检查，保留有效选择和顺序，不自动勾选新增Listing", async () => {
@@ -190,4 +196,37 @@ test("明细计划失效可重新检查，保留有效选择和顺序，不自�
   expect(document.querySelector(".plan-segments tbody h4")).toHaveTextContent("SK002");
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   expect(apiMock.createTask).not.toHaveBeenCalled();
+});
+
+test("跨页选择的全局范围与启动数量及创建参数一致", async () => {
+  const user = userEvent.setup();
+  const items = Array.from({ length: 21 }, (_, index) => ({
+    ...executionPlan.segments[0],
+    segment_key: `page-${index}`,
+    unique_comments: 1,
+    record_count: 1,
+    scope: { store: "合成店铺", listing: `PAGE-${index}` },
+  }));
+  const { onNavigate } = setup(items);
+  await user.click(await screen.findByRole("checkbox", { name: "本页全部参与" }));
+  await user.click(screen.getByRole("button", { name: "下一页" }));
+  expect(
+    screen.getByRole("checkbox", { name: "参与分析：PAGE-20", exact: true }),
+  ).toBeChecked();
+  await user.click(screen.getByRole("button", { name: "上一页" }));
+  await user.click(
+    screen.getByRole("checkbox", { name: "参与分析：PAGE-0", exact: true }),
+  );
+  expect(screen.getByText("本次分析 2 个 Listing · 2 组评论")).toBeVisible();
+  expect(screen.queryByLabelText(/我确认本次仅分析/)).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "创建并启动" }));
+  await waitFor(() =>
+    expect(apiMock.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selected_segment_keys: ["page-20", "page-0"],
+        segment_order: items.map((item) => item.segment_key),
+      }),
+    ),
+  );
+  expect(onNavigate).toHaveBeenCalledWith("tasks", { kind: "task", id: "created" });
 });

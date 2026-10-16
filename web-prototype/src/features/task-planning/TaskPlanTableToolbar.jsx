@@ -1,4 +1,4 @@
-/** @param {{segments: import("./taskPlanContracts").TaskPlanSegment[], filters: {query: string, category: string, status: string}, onFilter: (filters: {query: string, category: string, status: string}) => void, ordering: boolean, onToggleOrder?: () => void, onResetOrder?: () => void}} props */
+/** @param {{segments: import("./taskPlanContracts").TaskPlanSegment[], filters: {query: string, category: string, status: string}, onFilter: (filters: {query: string, category: string, status: string}) => void, ordering: boolean, onToggleOrder?: () => void, onResetOrder?: () => void, rangeSelection?: {total: number, filtered: boolean, onChange: (selected: boolean) => void}}} props */
 export function TaskPlanTableToolbar({
   segments,
   filters,
@@ -6,6 +6,7 @@ export function TaskPlanTableToolbar({
   ordering,
   onToggleOrder,
   onResetOrder,
+  rangeSelection,
 }) {
   const categories = [
     ...new Set(
@@ -76,6 +77,26 @@ export function TaskPlanTableToolbar({
         >
           恢复全部默认顺序
         </button>
+      )}
+      {rangeSelection && (
+        <div className="plan-range-actions" role="group" aria-label="跨页范围选择">
+          <button
+            type="button"
+            className="text-button"
+            disabled={!rangeSelection.total}
+            onClick={() => rangeSelection.onChange(true)}
+          >
+            {rangeSelection.filtered ? "全部筛选结果参与" : "全部范围参与"}
+          </button>
+          <button
+            type="button"
+            className="text-button"
+            disabled={!rangeSelection.total}
+            onClick={() => rangeSelection.onChange(false)}
+          >
+            {rangeSelection.filtered ? "全部筛选结果不参与" : "全部范围不参与"}
+          </button>
+        </div>
       )}
     </div>
   );

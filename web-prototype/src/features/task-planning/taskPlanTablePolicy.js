@@ -40,3 +40,27 @@ export function applyVisibleOrder(full, visible, next) {
     visible.includes(key) ? (replacements.next().value ?? key) : key,
   );
 }
+
+/** @param {TaskPlanSegment[]} segments @param {number} page @param {number} pageSize */
+export function paginatePlanListings(segments, page, pageSize) {
+  const listings = [...new Set(segments.map(listingKey))];
+  const totalPages = Math.max(1, Math.ceil(listings.length / pageSize));
+  const current = Math.min(page, totalPages);
+  const pageKeys = new Set(
+    listings.slice((current - 1) * pageSize, current * pageSize),
+  );
+  return {
+    page: current,
+    total: listings.length,
+    totalPages,
+    items: segments.filter((item) => pageKeys.has(listingKey(item))),
+  };
+}
+
+/** @param {string[]} current @param {TaskPlanSegment[]} candidates @param {boolean} selected */
+export function selectPlanSegments(current, candidates, selected) {
+  const keys = new Set(candidates.map((item) => item.segment_key));
+  return selected
+    ? [...new Set([...current, ...keys])]
+    : current.filter((key) => !keys.has(key));
+}

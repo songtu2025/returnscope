@@ -2,10 +2,13 @@ import { useState } from "react";
 import { TaskPlanSegmentRow } from "./TaskPlanSegmentRow";
 import { TaskPlanTableToolbar } from "./TaskPlanTableToolbar";
 import { PlanSegmentDataDialog } from "./PlanSegmentDataDialog";
+import { Pagination } from "../../components/Pagination";
 import {
   filterPlanSegments,
   applyVisibleOrder,
   listingKey,
+  paginatePlanListings,
+  selectPlanSegments,
 } from "./taskPlanTablePolicy";
 
 /** @typedef {import("./taskPlanContracts").TaskPlanSegment} TaskPlanSegment */
@@ -20,11 +23,18 @@ export function ExecutionPlanSegments({
   onRecheck,
 }) {
   const [ordering, setOrdering] = useState(!segmentSelection);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [filters, setFilters] = useState({ query: "", category: "", status: "" });
   const [previewSegment, setPreviewSegment] = useState(
     /** @type {TaskPlanSegment | null} */ (null),
   );
   const visible = filterPlanSegments(orderedSegments, filters);
+  const paginated = paginatePlanListings(
+    visible,
+    segmentSelection ? page : 1,
+    segmentSelection ? pageSize : visible.length || 1,
+  );
   const visibleKeys = visible
     .filter((item) => item.status !== "blocked")
     .map((item) => item.segment_key);
@@ -32,7 +42,11 @@ export function ExecutionPlanSegments({
   const selectable = orderedSegments.filter((item) =>
     visibleListingKeys.has(listingKey(item)),
   );
-  const visibleSelected = selectable.filter((item) =>
+  const pageListings = new Set(paginated.items.map(listingKey));
+  const pageSelectable = selectable.filter((item) =>
+    pageListings.has(listingKey(item)),
+  );
+  const pageSelected = pageSelectable.filter((item) =>
     segmentSelection?.keys.includes(item.segment_key),
   );
   const filtered = Boolean(filters.query || filters.category || filters.status);
@@ -61,7 +75,22 @@ export function ExecutionPlanSegments({
       <TaskPlanTableToolbar
         segments={orderedSegments}
         filters={filters}
-        onFilter={setFilters}
+        onFilter={(value) => {
+          setFilters(value);
+          setPage(1);
+        }}
+        rangeSelection={
+          segmentSelection
+            ? {
+                total: paginated.total,
+                filtered,
+                onChange: (selected) =>
+                  segmentSelection.onChange(
+                    selectPlanSegments(segmentSelection.keys, selectable, selected),
+                  ),
+              }
+            : undefined
+        }
         ordering={ordering}
         onToggleOrder={
           onSegmentOrderChange ? () => setOrdering((value) => !value) : undefined
@@ -73,7 +102,7 @@ export function ExecutionPlanSegments({
         }
       />
       <p className="plan-visible-count">
-        当前显示 {visible.length} / {orderedSegments.length} 个分组
+        当前筛选 {paginated.total} 个 Listing · 本页 {paginated.items.length} 个分组
       </p>
       <div
         className="plan-segments-scroll"
@@ -88,36 +117,30 @@ export function ExecutionPlanSegments({
                   <span>参与分析</span>
                   <label className="plan-selection-cell">
                     <input
-                      disabled={!selectable.length}
+                      disabled={!pageSelectable.length}
                       type="checkbox"
-                      aria-label={filtered ? "全选当前筛选范围" : "全部参与分析"}
+                      aria-label="本页全部参与"
                       checked={
-                        visibleSelected.length === selectable.length &&
-                        selectable.length > 0
+                        pageSelected.length === pageSelectable.length &&
+                        pageSelectable.length > 0
                       }
                       ref={(node) => {
                         if (node)
                           node.indeterminate =
-                            visibleSelected.length > 0 &&
-                            visibleSelected.length < selectable.length;
+                            pageSelected.length > 0 &&
+                            pageSelected.length < pageSelectable.length;
                       }}
                       onChange={() =>
                         segmentSelection.onChange(
-                          visibleSelected.length === selectable.length
-                            ? segmentSelection.keys.filter(
-                                (key) =>
-                                  !selectable.some((item) => item.segment_key === key),
-                              )
-                            : [
-                                ...new Set([
-                                  ...segmentSelection.keys,
-                                  ...selectable.map((item) => item.segment_key),
-                                ]),
-                              ],
+                          selectPlanSegments(
+                            segmentSelection.keys,
+                            pageSelectable,
+                            pageSelected.length !== pageSelectable.length,
+                          ),
                         )
                       }
                     />
-                    <span>{filtered ? "当前筛选" : "全部"}</span>
+                    <span>本页</span>
                   </label>
                 </th>
               )}
@@ -131,14 +154,14 @@ export function ExecutionPlanSegments({
             </tr>
           </thead>
           <tbody>
-            {visible.length === 0 && (
+            {paginated.items.length === 0 && (
               <tr>
                 <td colSpan={segmentSelection ? 8 : 7}>
                   未找到匹配分组，请调整筛选条件。
                 </td>
               </tr>
             )}
-            {visible.map((segment) => (
+            {paginated.items.map((segment) => (
               <TaskPlanSegmentRow
                 key={segment.segment_key}
                 segment={segment}
@@ -162,15 +185,15 @@ export function ExecutionPlanSegments({
                   segmentSelection && {
                     selected: segmentSelection.keys.includes(segment.segment_key),
                     toggle: () => {
-                      const sameListing = orderedSegments
-                        .filter((item) => listingKey(item) === listingKey(segment))
-                        .map((item) => item.segment_key);
+                      const sameListing = orderedSegments.filter(
+                        (item) => listingKey(item) === listingKey(segment),
+                      );
                       segmentSelection.onChange(
-                        segmentSelection.keys.includes(segment.segment_key)
-                          ? segmentSelection.keys.filter(
-                              (key) => !sameListing.includes(key),
-                            )
-                          : [...new Set([...segmentSelection.keys, ...sameListing])],
+                        selectPlanSegments(
+                          segmentSelection.keys,
+                          sameListing,
+                          !segmentSelection.keys.includes(segment.segment_key),
+                        ),
                       );
                     },
                   }
@@ -180,6 +203,20 @@ export function ExecutionPlanSegments({
           </tbody>
         </table>
       </div>
+      {segmentSelection && (
+        <Pagination
+          page={paginated.page}
+          pageSize={pageSize}
+          total={paginated.total}
+          totalPages={paginated.totalPages}
+          unit="个 Listing"
+          onPage={setPage}
+          onPageSize={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
+        />
+      )}
       {previewSegment && previewInput && (
         <PlanSegmentDataDialog
           input={previewInput}
