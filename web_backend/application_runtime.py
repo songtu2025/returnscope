@@ -115,17 +115,22 @@ def _create_lifespan(
     start_worker: bool,
     workers: tuple[TaskWorker | ServiceWorker, ...],
     validation_executor: ThreadPoolExecutor,
+    close_callbacks: tuple[Callable[[], None], ...] = (),
 ) -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         if start_worker:
             for worker in workers:
                 worker.start()
-        yield
-        if start_worker:
-            for worker in workers:
-                worker.stop()
-        validation_executor.shutdown(wait=False, cancel_futures=True)
+        try:
+            yield
+        finally:
+            if start_worker:
+                for worker in workers:
+                    worker.stop()
+            validation_executor.shutdown(wait=False, cancel_futures=True)
+            for close in close_callbacks:
+                close()
 
     return lifespan
 

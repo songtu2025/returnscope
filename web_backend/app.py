@@ -173,6 +173,7 @@ def create_app(
         start_worker,
         (worker, insight_report_worker, standard_validation_worker, export_worker),
         validation_executor,
+        (export_service.close,),
     )
     app = FastAPI(
         title="用户语义分析智能体",

@@ -17,7 +17,9 @@ from web_backend.routers.result_export_routes import create_result_export_router
 
 @pytest.fixture
 def exports(context, tmp_path):
-    return ResultExportService(context.service, tmp_path / "exports")
+    service = ResultExportService(context.service, tmp_path / "exports")
+    yield service
+    service.close()
 
 
 def test_concurrent_requests_reuse_one_job_and_completed_file(
@@ -64,11 +66,10 @@ def test_preparing_snapshot_does_not_block_existing_job_queries(
 
     versions = [context.version["version_id"]]
     existing = exports.create(versions)
-    if stage == "compress":
-        with context.database.transaction() as connection:
-            connection.execute(
-                "UPDATE classification_result_records SET comment='合成更新内容'"
-            )
+    with context.database.transaction() as connection:
+        connection.execute(
+            "UPDATE classification_result_records SET comment='合成更新内容'"
+        )
     entered, release = Event(), Event()
     target, name = (
         (exports.results, "capture_export")
@@ -93,7 +94,7 @@ def test_preparing_snapshot_does_not_block_existing_job_queries(
         finally:
             release.set()
         created = creating.result(timeout=3)
-        assert (created["id"] == existing["id"]) is (stage == "capture")
+        assert created["id"] != existing["id"]
 
 
 def test_snapshot_survives_edits_and_new_click_exports_latest(context, exports):
