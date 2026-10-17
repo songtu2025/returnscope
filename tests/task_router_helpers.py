@@ -1,3 +1,4 @@
+from operator import attrgetter
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Iterator
@@ -23,6 +24,7 @@ ROUTES = [
     "GET|/api/tasks|list_tasks|200",
     "POST|/api/tasks/preflight|preflight_task|200",
     "POST|/api/tasks|create_task|201",
+    "POST|/api/tasks/preflight/segment-data|preview_task_segment|200",
     "POST|/api/tasks/archive|archive_tasks|200",
     "POST|/api/tasks/{task_id}/replan/preflight|preflight_replan|200",
     "POST|/api/tasks/{task_id}/replan|replan_task|200",
@@ -47,6 +49,7 @@ ROUTES = [
 
 SERVICE_METHODS = {
     "preflight_task": "preflight",
+    "preview_task_segment": "plan_service.preview_segment",
     "create_task": "create",
     "archive_tasks": "set_archived",
     "preflight_replan": "replan_preflight",
@@ -66,6 +69,7 @@ SERVICE_METHODS = {
 
 CONFLICT_CASES = [
     ("create_task", TaskPlanConflict),
+    ("preview_task_segment", TaskPlanConflict),
     ("replan_task", TaskPlanConflict),
     ("replan_task", TaskRevisionConflict),
     ("retry_task_segment", TaskRevisionConflict),
@@ -93,6 +97,7 @@ def harness(tmp_path: Path) -> Iterator[SimpleNamespace]:
     result = tmp_path / "analysis.xlsx"
     result.write_bytes(b"synthetic-result")
     task = Mock(spec=TaskService)
+    task.plan_service = Mock()
     task.recycle = Mock()
     task.recycle.listings.return_value = {
         "items": [],
@@ -102,7 +107,7 @@ def harness(tmp_path: Path) -> Iterator[SimpleNamespace]:
     }
     task.list.return_value = [{"id": "task-1", "created_by": "another-user"}]
     for method in SERVICE_METHODS.values():
-        getattr(task, method).return_value = {"status": "queued"}
+        attrgetter(method)(task).return_value = {"status": "queued"}
     task.set_archived.return_value = [{"id": "task-1", "archived": True}]
     task.get.return_value = {
         "id": "task-1",
@@ -156,6 +161,7 @@ def _request(harness: SimpleNamespace, name: str) -> Response:
         "unresolved_policy": "run_ready",
         "task_ids": ["task-1"],
         "archived": True,
+        "segment_key": SEGMENT_KEY,
         "segment_keys": [SEGMENT_KEY],
         "max_parallel_segments": 2,
     }

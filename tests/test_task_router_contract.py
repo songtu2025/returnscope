@@ -1,5 +1,6 @@
 import hashlib
 import json
+from operator import attrgetter
 from types import SimpleNamespace
 
 import pytest
@@ -34,7 +35,7 @@ def test_task_router_registration_and_openapi_contract(
     assert all(
         route.dependant.dependencies[0].call is harness.current_user for route in routes
     )
-    # 固定当前完整接口定义，包含回收站分页及确认操作原因可选的契约。
+    # 固定完整接口定义，并显式核对分组明细、回收站及操作原因约束。
     contract = harness.app.openapi()
     recycle = contract["paths"]["/api/tasks/recycle"]["get"]
     parameters = {item["name"]: item["schema"] for item in recycle["parameters"]}
@@ -46,9 +47,33 @@ def test_task_router_registration_and_openapi_contract(
     assert (
         "410" in contract["paths"]["/api/tasks/{task_id}/download"]["get"]["responses"]
     )
+    creation = contract["components"]["schemas"]["TaskCreateRequest"]
+    assert "selected_segment_keys" not in creation["required"]
+    selection = creation["properties"]["selected_segment_keys"]
+    assert selection["anyOf"] == [
+        {"items": {"type": "string"}, "maxItems": 500, "type": "array"},
+        {"type": "null"},
+    ]
+    preview = contract["paths"]["/api/tasks/preflight/segment-data"]["post"]
+    assert set(preview["responses"]) == {"200", "422"}
+    assert preview["requestBody"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/TaskPlanPreviewRequest"
+    }
+    preview_schema = contract["components"]["schemas"]["TaskPlanPreviewRequest"]
+    assert set(preview_schema["required"]) == {
+        "dataset_version_id",
+        "product_version_id",
+        "plan_hash",
+        "segment_key",
+    }
+    fields = preview_schema["properties"]
+    assert fields["plan_hash"]["minLength"] == fields["plan_hash"]["maxLength"] == 64
+    assert fields["view"]["enum"] == ["groups", "records"]
+    assert fields["page"]["minimum"] == 1
+    assert fields["page_size"]["maximum"] == 50
     schema = json.dumps(contract, ensure_ascii=False, sort_keys=True)
     assert hashlib.sha256(schema.encode()).hexdigest() == (
-        "f7d4496b3d893b36a0ac173e01d92fdfc769b7af29cd34262286c11c48632e9a"
+        "c1a71d686132f425258d84df494559620420a7bc0ecba6dc237f66fb7b903ea8"
     )
 
 
@@ -79,7 +104,7 @@ def test_task_routes_remain_available_to_ordinary_users(
 def test_task_service_value_errors_remain_bad_requests(
     harness: SimpleNamespace, name: str
 ) -> None:
-    getattr(harness.task, SERVICE_METHODS[name]).side_effect = ValueError("合成错误")
+    attrgetter(SERVICE_METHODS[name])(harness.task).side_effect = ValueError("合成错误")
     response = _request(harness, name)
     assert response.status_code == 400
     assert response.json() == {"detail": "合成错误"}
@@ -99,7 +124,7 @@ def test_task_conflicts_preserve_status_and_message(
     harness: SimpleNamespace, name: str, error_type: type[Exception]
 ) -> None:
     error = error_type("合成冲突")
-    service_method = getattr(harness.task, SERVICE_METHODS[name])
+    service_method = attrgetter(SERVICE_METHODS[name])(harness.task)
     service_method.side_effect = error
     mapped = (name, error_type) in CONFLICT_CASES
     if mapped or isinstance(error, ValueError):
@@ -123,7 +148,7 @@ def test_unexpected_route_errors_are_propagated_once(
     method = SERVICE_METHODS.get(
         name, "get" if name == "get_task_analysis" else "export_filtered"
     )
-    service_method = getattr(service, method)
+    service_method = attrgetter(method)(service)
     error = RuntimeError("合成意外异常")
     service_method.side_effect = error
     with pytest.raises(RuntimeError) as raised:
@@ -217,3 +242,16 @@ def test_current_download_requires_background_export_and_legacy_file_stays_avail
     response = _request(harness, name)
     assert response.status_code == 410
     assert "后台生成" in response.json()["detail"]
+
+
+def test_preview_passes_validated_payload_and_preserves_response(harness) -> None:
+    response = _request(harness, "preview_task_segment")
+    preview = harness.task.plan_service.preview_segment
+    preview.assert_called_once()
+    payload = preview.call_args.args[0]
+    assert payload.dataset_version_id == "dataset-1"
+    assert payload.product_version_id == "product-1"
+    assert payload.segment_key == SEGMENT_KEY
+    assert payload.plan_hash == "a" * 64
+    assert (payload.view, payload.page, payload.page_size) == ("groups", 1, 20)
+    assert response.json() == preview.return_value
