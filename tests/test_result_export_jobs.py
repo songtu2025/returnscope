@@ -64,6 +64,11 @@ def test_preparing_snapshot_does_not_block_existing_job_queries(
 
     versions = [context.version["version_id"]]
     existing = exports.create(versions)
+    if stage == "compress":
+        with context.database.transaction() as connection:
+            connection.execute(
+                "UPDATE classification_result_records SET comment='合成更新内容'"
+            )
     entered, release = Event(), Event()
     target, name = (
         (exports.results, "capture_export")
@@ -87,7 +92,8 @@ def test_preparing_snapshot_does_not_block_existing_job_queries(
             assert querying.result(timeout=1)["id"] == existing["id"]
         finally:
             release.set()
-        assert creating.result(timeout=3)["id"] == existing["id"]
+        created = creating.result(timeout=3)
+        assert (created["id"] == existing["id"]) is (stage == "capture")
 
 
 def test_snapshot_survives_edits_and_new_click_exports_latest(context, exports):
@@ -239,3 +245,23 @@ def test_generation_crossing_expiration_finishes_and_can_retry(
     assert exports.claim_next() == retry["id"]
     exports.run(retry["id"])
     assert exports.get(retry["id"])["status"] == "ready"
+
+
+@pytest.mark.parametrize("status", ["queued", "running", "ready"])
+def test_existing_export_skips_compression(context, exports, monkeypatch, status):
+    from unittest.mock import Mock
+
+    from web_backend.classification_results import export_jobs
+
+    versions = [context.version["version_id"]]
+    existing = exports.create(versions)
+    if status in {"running", "ready"}:
+        assert exports.claim_next() == existing["id"]
+    if status == "ready":
+        exports.run(existing["id"])
+    compress = Mock(wraps=export_jobs.gzip.compress)
+    monkeypatch.setattr(export_jobs.gzip, "compress", compress)
+    repeated = exports.create(versions)
+    assert repeated["id"] == existing["id"]
+    assert repeated["status"] == status
+    compress.assert_not_called()

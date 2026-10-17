@@ -59,19 +59,16 @@ class ResultExportService:
             "utf-8"
         )
         job_id = hashlib.sha256(EXPORT_FORMAT.encode() + content).hexdigest()
-        compressed = gzip.compress(content)
-        # 读取、序列化和压缩不占状态锁；相同内容只在提交任务时合并。
         with self._lock:
-            try:
-                existing = self._load(job_id)
-            except FileNotFoundError:
-                existing = None
-            if existing and existing["status"] != "failed":
-                if (
-                    existing["status"] != "ready"
-                    or self._path(job_id, ".xlsx").is_file()
-                ):
-                    return self._public(existing)
+            existing = self._reusable_job(job_id)
+            if existing:
+                return self._public(existing)
+        # 压缩不占状态锁；提交前再次检查，合并并发创建的相同任务。
+        compressed = gzip.compress(content)
+        with self._lock:
+            existing = self._reusable_job(job_id)
+            if existing:
+                return self._public(existing)
             job = {
                 "id": job_id,
                 "status": "queued",
@@ -88,6 +85,17 @@ class ResultExportService:
             temporary.replace(path)
             self._save(job)
             return self._public(job)
+
+    def _reusable_job(self, job_id: str) -> dict[str, Any] | None:
+        try:
+            existing = self._load(job_id)
+        except FileNotFoundError:
+            return None
+        if existing["status"] == "failed":
+            return None
+        if existing["status"] == "ready" and not self._path(job_id, ".xlsx").is_file():
+            return None
+        return existing
 
     def get(self, job_id: str) -> dict[str, Any]:
         with self._lock:
