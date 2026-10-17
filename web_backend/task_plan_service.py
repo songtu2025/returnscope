@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import threading
+from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
@@ -57,6 +59,8 @@ class TaskPlanService(
         registry: CapabilityRegistry | None = None,
         standard_service: ClassificationStandardService | None = None,
     ) -> None:
+        self._preview_cache: OrderedDict[str, PreparedTaskPlan] = OrderedDict()
+        self._preview_lock = threading.RLock()
         self.database = database
         self.standard_service = standard_service or ClassificationStandardService(
             database
