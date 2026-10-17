@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterator
+from functools import lru_cache
 from io import BytesIO
 from typing import Any
 from unicodedata import east_asian_width
@@ -11,6 +12,7 @@ from unicodedata import east_asian_width
 from openpyxl import Workbook
 from openpyxl.cell import WriteOnlyCell
 from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.styles.cell_style import StyleArray
 from openpyxl.utils import get_column_letter
 
 from web_backend.classification_results.result_export import (
@@ -45,6 +47,8 @@ def result_workbook(
     alignment = Alignment(vertical="top", wrap_text=True)
     header_fill = PatternFill("solid", fgColor="176C57")
     stripe_fill = PatternFill("solid", fgColor="F0F7F4")
+    styles: dict[tuple[int, tuple[int, ...]], StyleArray] = {}
+    display_lines = lru_cache(maxsize=4096)(_display_lines)
     for title, columns, rows in (
         ("反馈汇总", SUMMARY_COLUMNS, summaries),
         ("语义明细", SEMANTIC_COLUMNS, semantics),
@@ -61,21 +65,28 @@ def result_workbook(
             )
         for row_index, values in enumerate(_sheet_values(columns, rows), 1):
             cells = []
+            kind = 0 if row_index == 1 else (1 if row_index % 2 == 0 else 2)
             for value in values:
-                cell = WriteOnlyCell(sheet, value=value)
+                cell: Any = WriteOnlyCell(sheet, value=value)
                 # 所有原文和标识均按文本处理，不能被 Excel 当作公式。
                 if isinstance(value, str):
                     cell.data_type = "s"
-                cell.font = header_font if row_index == 1 else font
-                cell.alignment = alignment
-                if row_index == 1:
-                    cell.fill = header_fill
-                elif row_index % 2 == 0:
-                    cell.fill = stripe_fill
+                # 保留值推导出的日期等格式；样式建成后只共享，不再修改。
+                initial_style = cell._style
+                key = (kind, tuple(initial_style) if initial_style else ())
+                style = styles.get(key)
+                if style is None:
+                    cell.font = header_font if kind == 0 else font
+                    cell.alignment = alignment
+                    if kind < 2:
+                        cell.fill = header_fill if kind == 0 else stripe_fill
+                    styles[key] = cell._style
+                else:
+                    cell._style = style
                 cells.append(cell)
             if row_index > 1:
                 lines = max(
-                    _display_lines(value, _WIDTHS.get(name, 20))
+                    display_lines(str(value or ""), _WIDTHS.get(name, 20))
                     for name, value in zip(columns, values, strict=True)
                 )
                 sheet.row_dimensions[row_index].height = min(
