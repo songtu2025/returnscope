@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import threading
 from collections import OrderedDict
+from concurrent.futures import Future
 from pathlib import Path
 from time import perf_counter
 
@@ -21,6 +22,7 @@ _DATASET_CACHE_CAPACITY = 8
 
 _cache: OrderedDict[tuple[str, ...], ReturnDataset] = OrderedDict()
 _lock = threading.RLock()
+_loading: dict[tuple[str, ...], Future[ReturnDataset]] = {}
 performance_logger = logging.getLogger("uvicorn.error.performance")
 
 
@@ -61,30 +63,50 @@ def load_cached_dataset(
         acquired = perf_counter()
         dataset = _cache.get(key)
         cache_hit = dataset is not None
-        if dataset is None:
-            product_source = (
-                load_product_frame(database, Path(product_file_path))
-                if database
-                else Path(product_file_path)
-            )
-            if automatic:
-                dataset = load_return_dataset_auto(
-                    Path(return_file_path),
-                    product_source,
-                    analysis_context=analysis_context,
+        pending = _loading.get(key)
+        owner = dataset is None and pending is None
+        if owner:
+            pending = Future()
+            _loading[key] = pending
+        if cache_hit:
+            _cache.move_to_end(key)
+    if dataset is None:
+        assert pending is not None
+        if owner:
+            try:
+                product_source = (
+                    load_product_frame(database, Path(product_file_path))
+                    if database
+                    else Path(product_file_path)
                 )
-            else:
-                dataset = load_return_dataset(
-                    Path(return_file_path),
-                    product_source,
-                    store=store,
-                    listing=listing,
-                    analysis_context=analysis_context,
-                )
-            _cache[key] = dataset
-        _cache.move_to_end(key)
-        while len(_cache) > _DATASET_CACHE_CAPACITY:
-            _cache.popitem(last=False)
+                if automatic:
+                    dataset = load_return_dataset_auto(
+                        Path(return_file_path),
+                        product_source,
+                        analysis_context=analysis_context,
+                    )
+                else:
+                    dataset = load_return_dataset(
+                        Path(return_file_path),
+                        product_source,
+                        store=store,
+                        listing=listing,
+                        analysis_context=analysis_context,
+                    )
+            except BaseException as error:
+                # 失败唤醒同键等待者，后续请求仍可重新加载。
+                with _lock:
+                    _loading.pop(key)
+                    pending.set_exception(error)
+                raise
+            with _lock:
+                _cache[key] = dataset
+                while len(_cache) > _DATASET_CACHE_CAPACITY:
+                    _cache.popitem(last=False)
+                _loading.pop(key)
+                pending.set_result(dataset)
+        else:
+            dataset = pending.result()
     performance_logger.info(
         "dataset_cache hit=%s wait_ms=%.2f load_ms=%.2f records=%s groups=%s",
         cache_hit,

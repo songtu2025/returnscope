@@ -1,6 +1,7 @@
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Event
 from unittest.mock import MagicMock
 
 import pytest
@@ -87,3 +88,66 @@ def test_dataset_cache_keeps_analysis_contexts_isolated(
     )
     assert dataset_cache.load_cached_dataset(*args) is datasets["returns"]
     assert loader.call_count == 3
+
+
+def test_cold_load_does_not_block_another_cached_dataset(tmp_path, monkeypatch):
+    returns, products = _write_inputs(tmp_path)
+    monkeypatch.setattr(dataset_cache, "_cache", OrderedDict())
+    args = (str(returns), str(products), "", None, "auto", "r", "p")
+    hot = dataset_cache.load_cached_dataset(*args)
+    entered, release = Event(), Event()
+    original = dataset_cache.load_return_dataset_auto
+
+    def slow_load(*values, **kwargs):
+        entered.set()
+        assert release.wait(3)
+        return original(*values, **kwargs)
+
+    monkeypatch.setattr(dataset_cache, "load_return_dataset_auto", slow_load)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        cold = executor.submit(dataset_cache.load_cached_dataset, *args[:-1], "new")
+        try:
+            assert entered.wait(2)
+            cached = executor.submit(dataset_cache.load_cached_dataset, *args)
+            assert cached.result(timeout=1) is hot
+        finally:
+            release.set()
+        assert cold.result(timeout=3) is not hot
+    assert not dataset_cache._loading
+
+
+def test_failed_load_releases_waiters_and_can_retry(tmp_path, monkeypatch):
+    returns, products = _write_inputs(tmp_path)
+    monkeypatch.setattr(dataset_cache, "_cache", OrderedDict())
+    args = (str(returns), str(products), "", None, "auto", "r", "p")
+    entered, release, waiting = Event(), Event(), Event()
+    original_loader = dataset_cache.load_return_dataset_auto
+    original_result = dataset_cache.Future.result
+
+    def fail(*values, **kwargs):
+        entered.set()
+        assert release.wait(3)
+        raise ValueError("合成加载失败")
+
+    def await_result(future, *values, **kwargs):
+        waiting.set()
+        return original_result(future, *values, **kwargs)
+
+    monkeypatch.setattr(dataset_cache, "load_return_dataset_auto", fail)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        owner = executor.submit(dataset_cache.load_cached_dataset, *args)
+        assert entered.wait(2)
+        with monkeypatch.context() as scoped:
+            scoped.setattr(dataset_cache.Future, "result", await_result)
+            follower = executor.submit(dataset_cache.load_cached_dataset, *args)
+            try:
+                assert waiting.wait(2)
+            finally:
+                release.set()
+            for future in (owner, follower):
+                with pytest.raises(ValueError, match="合成加载失败"):
+                    future.result(timeout=3)
+    assert not dataset_cache._loading
+    assert not dataset_cache._cache
+    monkeypatch.setattr(dataset_cache, "load_return_dataset_auto", original_loader)
+    assert dataset_cache.load_cached_dataset(*args) is not None
