@@ -33,6 +33,10 @@ beforeEach(() => {
 afterEach(cleanup);
 
 test("同 Listing 同版本结果可以区分，来源入口定位原任务和 Listing", async () => {
+  window.location.hash =
+    "#classification-results?page=3&page_size=50&q=合成&quality_status=review_required";
+  const beforeOpen = vi.fn();
+  const returnHash = window.location.hash;
   const rows = ["first", "second"].map((id) => ({
     ...result,
     version: 1,
@@ -52,6 +56,7 @@ test("同 Listing 同版本结果可以区分，来源入口定位原任务和 L
           onToggle={vi.fn()}
           onOpen={vi.fn()}
           onPrimary={vi.fn()}
+          onBeforeOpenSource={beforeOpen}
         />
       ))}
     </>,
@@ -74,9 +79,11 @@ test("同 Listing 同版本结果可以区分，来源入口定位原任务和 L
     query: {
       task_id: "task-first",
       segment_id: "segment-first",
+      result_pool_return: returnHash,
     },
   });
   expect(changeDeliveryLifecycle).not.toHaveBeenCalled();
+  expect(beforeOpen).toHaveBeenCalledOnce();
 });
 
 test("历史结果缺少来源任务时明确说明，不提供无效跳转", () => {

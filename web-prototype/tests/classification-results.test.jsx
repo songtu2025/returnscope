@@ -36,7 +36,7 @@ vi.mock("../src/shared/api/dashboardApi", () => ({
 
 import { ClassificationResultsPage } from "../src/pages/ClassificationResultsPage";
 import { AnalysisDashboardPage } from "../src/features/analysis-dashboards/AnalysisDashboardPage";
-import { useHashRoute } from "../src/app/hashRouter";
+import { buildHash, useHashRoute } from "../src/app/hashRouter";
 import {
   createDashboardSelection,
   readDashboardSelection,
@@ -226,6 +226,60 @@ beforeEach(() => {
       page: 1,
       page_size: 100,
     });
+  });
+});
+
+test("来源任务跳转保存父级位置，结果池卸载后仍恢复来源按钮焦点", async () => {
+  const sourceResult = {
+    ...resultVersion,
+    source_task_id: "source-task",
+    source_segment_id: "source-segment",
+  };
+  apiMock.classificationResults.mockResolvedValue({
+    items: [sourceResult],
+    total: 125,
+    page: 2,
+    page_size: 50,
+  });
+  const poolHash = buildHash("classification-results", {
+    page: 2,
+    page_size: 50,
+    q: "合成",
+    store_site: "STORE",
+    quality_status: "review_required",
+  });
+  window.location.hash = poolHash;
+  const returnPosition = { current: null };
+  const props = {
+    route: {
+      page: "classification-results",
+      query: Object.fromEntries(new URLSearchParams(poolHash.split("?")[1])),
+    },
+    notify: vi.fn(),
+    userId: "user-1",
+    returnPosition,
+  };
+  const view = render(<ClassificationResultsPage {...props} />);
+  const source = await screen.findByRole("button", { name: "来源任务 source-task" });
+  Object.defineProperty(window, "scrollY", { configurable: true, value: 460 });
+  await userEvent.click(source);
+  expect(returnPosition.current).toMatchObject({
+    id: `source:${resultVersion.version_id}`,
+    top: 460,
+  });
+  expect(
+    new URLSearchParams(window.location.hash.split("?")[1]).get("result_pool_return"),
+  ).toBe(poolHash);
+  view.unmount();
+  window.location.hash = poolHash;
+  render(<ClassificationResultsPage {...props} />);
+  expect(
+    await screen.findByRole("button", { name: "来源任务 source-task" }),
+  ).toHaveFocus();
+  expect(window.scrollTo).toHaveBeenLastCalledWith({
+    top: 460,
+    left: 0,
+    behavior: "auto",
   });
 });
 

@@ -1,6 +1,10 @@
 import { TaskRecyclePage } from "./TaskRecyclePage";
 import { TaskMonitor } from "./TaskMonitor";
-import { buildHash, navigateHash } from "../../app/hashRouter";
+import { buildHash, navigateHash, parseHash } from "../../app/hashRouter";
+import {
+  classificationResultPoolQuery,
+  classificationResultRouteState,
+} from "../classification-results/classificationResultRoute";
 import "../../styles/task-flow.css";
 
 /** @typedef {import("../../app/navigation").AppRoute} AppRoute */
@@ -21,6 +25,21 @@ export function TaskRuntimePage({
 }) {
   if (route.query.view === "recycle") return <TaskRecyclePage notify={notify} />;
   const query = route.query;
+  const resultPoolTarget = query.result_pool_return
+    ? parseHash(query.result_pool_return)
+    : null;
+  const resultPoolState =
+    resultPoolTarget?.page === "classification-results"
+      ? classificationResultRouteState(resultPoolTarget.query)
+      : null;
+  const onReturnResultPool =
+    resultPoolState && !resultPoolState.version && resultPoolState.view === "results"
+      ? () =>
+          navigateHash(
+            "classification-results",
+            classificationResultPoolQuery(resultPoolState),
+          )
+      : undefined;
   const filter =
     query.status === "active" ||
     query.status === "finished" ||
@@ -80,6 +99,7 @@ export function TaskRuntimePage({
       taskReturn={buildHash("analysis-tasks", query)}
       returnPosition={returnPosition}
       listingReturnState={listingReturnState}
+      onReturnResultPool={onReturnResultPool}
     />
   );
 }

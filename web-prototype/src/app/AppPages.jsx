@@ -33,6 +33,11 @@ export function AppPages({ route, user, notify, navigate, refreshSystem }) {
       null
     ),
   );
+  const resultReturnPosition = useRef(
+    /** @type {import("../hooks/useListReturnPosition").ListReturnPosition | null} */ (
+      null
+    ),
+  );
   const title =
     page === "task-create"
       ? "创建分析任务"
@@ -93,7 +98,12 @@ export function AppPages({ route, user, notify, navigate, refreshSystem }) {
             <LegacyResultsPage route={route} notify={notify} navigate={navigate} />
           )}
           {page === "classification-results" && (
-            <ClassificationResultsPage notify={notify} route={route} userId={user.id} />
+            <ClassificationResultsPage
+              notify={notify}
+              route={route}
+              userId={user.id}
+              returnPosition={resultReturnPosition}
+            />
           )}
           {page === "analysis-dashboards" && (
             <AnalysisDashboardPage route={route} notify={notify} userId={user.id} />

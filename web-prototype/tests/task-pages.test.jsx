@@ -150,6 +150,51 @@ test("任务来源随结果筛选和历史切换保留，返回任务及列表�
   expect(parseHash().query).toEqual(listQuery);
 });
 
+test("来源任务可返回原结果池，沿用原筛选和分页", () => {
+  const poolQuery = {
+    q: "合成",
+    store_site: "STORE",
+    listing: "DEMO",
+    quality_status: "review_required",
+    page: "3",
+    page_size: "50",
+  };
+  render(
+    <TaskRuntimePage
+      route={{
+        query: {
+          task_id: "task-1",
+          result_pool_return: buildHash("classification-results", poolQuery),
+        },
+      }}
+      notify={vi.fn()}
+      onNavigate={vi.fn()}
+      onChanged={vi.fn()}
+    />,
+  );
+  taskMonitorProbe.mock.calls.at(-1)[0].onReturnResultPool();
+  expect(parseHash()).toMatchObject({
+    page: "classification-results",
+    query: poolQuery,
+  });
+});
+
+test.each([
+  "#settings",
+  "#classification-results?result_version_id=detail",
+  "#classification-results?view=reviews",
+])("拒绝非结果池来源 %s", (resultPoolReturn) => {
+  render(
+    <TaskRuntimePage
+      route={{ query: { task_id: "task-1", result_pool_return: resultPoolReturn } }}
+      notify={vi.fn()}
+      onNavigate={vi.fn()}
+      onChanged={vi.fn()}
+    />,
+  );
+  expect(taskMonitorProbe.mock.calls.at(-1)[0].onReturnResultPool).toBeUndefined();
+});
+
 test("任务返回拒绝其他页面的来源条件，仍定位明确的任务和 Listing", () => {
   returnFromClassificationResult(
     {

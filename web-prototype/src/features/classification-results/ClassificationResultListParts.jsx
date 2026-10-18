@@ -3,7 +3,11 @@ import Checkbox from "antd/es/checkbox";
 import { ResultPoolActions } from "./ResultPoolActions";
 import { formatTime } from "../../lib/presentation";
 import { resultActionPolicy } from "./resultActionPolicy";
-import { navigateHash } from "../../app/hashRouter";
+import { buildHash, navigateHash, parseHash } from "../../app/hashRouter";
+import {
+  classificationResultPoolQuery,
+  classificationResultRouteState,
+} from "./classificationResultRoute";
 
 /**
  * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultVersionResponse & { product_name?: string | null }} ClassificationResultVersion
@@ -34,6 +38,7 @@ function productNames(result) {
  *   selectable: boolean,
  *   selected: boolean,
  *   onToggle: () => void,
+ *   onBeforeOpenSource?: () => void,
  *   onChanged?: () => void | Promise<void>
  * }} ResultPoolRowProps
  */
@@ -46,6 +51,7 @@ export function ResultPoolRow({
   selected,
   onToggle,
   onChanged,
+  onBeforeOpenSource,
 }) {
   const policy = resultActionPolicy(result);
   return (
@@ -57,7 +63,11 @@ export function ResultPoolRow({
         selected={selected}
         onToggle={onToggle}
       />
-      <ResultPoolMetadata result={result} onOpen={onOpen} />
+      <ResultPoolMetadata
+        result={result}
+        onOpen={onOpen}
+        onBeforeOpenSource={onBeforeOpenSource}
+      />
       <ResultPoolActions
         result={result}
         onOpen={onOpen}
@@ -94,8 +104,8 @@ function ResultPoolStatus({ result, policy, selectable, selected, onToggle }) {
   );
 }
 
-/** @param {Pick<ResultPoolRowProps, "result" | "onOpen">} props */
-function ResultPoolMetadata({ result, onOpen }) {
+/** @param {Pick<ResultPoolRowProps, "result" | "onOpen" | "onBeforeOpenSource">} props */
+function ResultPoolMetadata({ result, onOpen, onBeforeOpenSource }) {
   const names = productNames(result);
   return (
     <>
@@ -115,12 +125,20 @@ function ResultPoolMetadata({ result, onOpen }) {
           <button
             className="text-button result-source-link"
             title={`查看来源任务：${result.source_task_id}`}
-            onClick={() =>
+            data-list-return-id={`source:${result.version_id}`}
+            onClick={() => {
+              onBeforeOpenSource?.();
               navigateHash("analysis-tasks", {
                 task_id: result.source_task_id,
                 segment_id: result.source_segment_id,
-              })
-            }
+                result_pool_return: buildHash(
+                  "classification-results",
+                  classificationResultPoolQuery(
+                    classificationResultRouteState(parseHash().query),
+                  ),
+                ),
+              });
+            }}
           >
             来源任务 <code>{result.source_task_id}</code>
           </button>

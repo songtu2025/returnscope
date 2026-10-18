@@ -14,33 +14,50 @@ import "../styles/review-batches.css";
 
 /** @typedef {import("../app/navigation").AppRoute} AppRoute */
 /** @typedef {import("../features/classification-results/classificationResultRoute").ClassificationResultRoute} ClassificationResultRoute */
-/** @typedef {{notify: (message: string, tone?: string) => void, route?: AppRoute | null, userId: string}} ClassificationResultsPageProps */
+/** @typedef {{notify: (message: string, tone?: string) => void, route?: AppRoute | null, userId: string, returnPosition?: import("react").MutableRefObject<import("../hooks/useListReturnPosition").ListReturnPosition | null>}} ClassificationResultsPageProps */
 
 /** @param {ClassificationResultsPageProps} props */
-export function ClassificationResultsPage({ notify, route: appRoute, userId }) {
+export function ClassificationResultsPage({
+  notify,
+  route: appRoute,
+  userId,
+  returnPosition,
+}) {
   if (!appRoute) {
-    return <StandaloneClassificationResultsPage notify={notify} userId={userId} />;
+    return (
+      <StandaloneClassificationResultsPage
+        notify={notify}
+        userId={userId}
+        returnPosition={returnPosition}
+      />
+    );
   }
   return (
-    <ClassificationResultsContent notify={notify} appRoute={appRoute} userId={userId} />
+    <ClassificationResultsContent
+      notify={notify}
+      appRoute={appRoute}
+      userId={userId}
+      returnPosition={returnPosition}
+    />
   );
 }
 
-/** @param {Pick<ClassificationResultsPageProps, "notify" | "userId">} props */
-function StandaloneClassificationResultsPage({ notify, userId }) {
+/** @param {Pick<ClassificationResultsPageProps, "notify" | "userId" | "returnPosition">} props */
+function StandaloneClassificationResultsPage({ notify, userId, returnPosition }) {
   const { route: hashRoute } = useHashRoute();
   return (
     <ClassificationResultsContent
       notify={notify}
       appRoute={hashRoute}
       userId={userId}
+      returnPosition={returnPosition}
     />
   );
 }
 
-/** @param {{notify: ClassificationResultsPageProps["notify"], appRoute: AppRoute, userId: string}} props */
-function ClassificationResultsContent({ notify, appRoute, userId }) {
-  const returnPosition = useRef(
+/** @param {Omit<ClassificationResultsPageProps, "route"> & {appRoute: AppRoute}} props */
+function ClassificationResultsContent({ notify, appRoute, userId, returnPosition }) {
+  const localReturnPosition = useRef(
     /** @type {import("../hooks/useListReturnPosition").ListReturnPosition | null} */ (
       null
     ),
@@ -67,7 +84,7 @@ function ClassificationResultsContent({ notify, appRoute, userId }) {
         />
       ) : (
         <ClassificationResultList
-          returnPosition={returnPosition}
+          returnPosition={returnPosition || localReturnPosition}
           route={route}
           updateRoute={updateRoute}
           notify={notify}

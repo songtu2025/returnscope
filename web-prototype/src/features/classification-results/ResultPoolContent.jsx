@@ -56,6 +56,9 @@ export function ResultPoolContent(context) {
                 selected={selectedIds.has(resultVersionId(result))}
                 onToggle={() => toggleSelection(result)}
                 onPrimary={() => runPrimaryAction(result)}
+                onBeforeOpenSource={() =>
+                  context.rememberPosition?.(`source:${result.version_id}`)
+                }
                 onOpen={() => {
                   context.rememberPosition?.(result.version_id);
                   window.scrollTo({ top: 0, left: 0, behavior: "auto" });
