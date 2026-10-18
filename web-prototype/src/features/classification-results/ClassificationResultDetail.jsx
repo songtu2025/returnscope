@@ -7,7 +7,10 @@ import { createResultDashboard } from "./resultSelectionActions";
 import { ResultError } from "./ClassificationResultCommon";
 import { useClassificationResultDetailData } from "./useClassificationResultDetailData";
 import { useLatestResult } from "./useLatestResult";
-import { returnFromClassificationResult } from "./classificationResultRoute";
+import {
+  classificationResultReturnLabel,
+  returnFromClassificationResult,
+} from "./classificationResultRoute";
 
 /** @typedef {import("./classificationResultDetailContracts").ClassificationResultGroup} ClassificationResultGroup */
 /** @typedef {import("./classificationResultDetailContracts").ClassificationResultDetailProps} ClassificationResultDetailProps */
@@ -112,7 +115,7 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
           className="text-button result-back-button page-loading-navigation"
           onClick={() => returnFromClassificationResult(route, updateRoute)}
         >
-          <ArrowLeft size={17} /> {route.taskId ? "返回任务" : "返回分类结果池"}
+          <ArrowLeft size={17} /> {classificationResultReturnLabel(route)}
         </button>
         <PageLoadingState title="分类结果" label="正在读取分类结果详情…" />
       </div>
@@ -126,7 +129,7 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
           className="text-button result-back-button page-loading-navigation"
           onClick={() => returnFromClassificationResult(route, updateRoute)}
         >
-          <ArrowLeft size={17} /> {route.taskId ? "返回任务" : "返回分类结果池"}
+          <ArrowLeft size={17} /> {classificationResultReturnLabel(route)}
         </button>
         <ResultError message={error} onRetry={retry} />
       </div>

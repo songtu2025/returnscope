@@ -3008,75 +3008,88 @@ test("AI洞察报告按结论证据和行动路径展开", async () => {
   expect(window.location.hash).toContain("report=report-2");
 });
 
-test("数据来源与版本历史使用真实看板版本字段", async () => {
-  const user = userEvent.setup();
-  const versions = [
-    {
-      version_id: "dashboard-version-2",
-      version: 2,
-      dataset_version_id: "dataset-version-2",
-      reason: "替换 L001 分类结果",
-      created_by_name: "运营甲",
-      created_at: "2026-08-12T09:00:00Z",
-    },
-    {
-      version_id: "dashboard-version-1",
-      version: 1,
-      dataset_version_id: "dataset-version-1",
-      reason: "首次生成",
-      created_by_name: "运营乙",
-      created_at: "2026-08-11T09:00:00Z",
-    },
-  ];
-  dashboardApiMock.analysisDashboard.mockResolvedValue({
-    id: "dashboard-1",
-    name: "来源可追溯看板",
-    status: "active",
-    current_version_id: "dashboard-version-2",
-    revision: 2,
-    version: versions[0],
-  });
-  dashboardApiMock.analysisDashboardVersions.mockResolvedValue(versions);
-  dashboardApiMock.analysisDashboardSources.mockResolvedValue([
-    {
-      result_version_id: "result-version-8",
-      version_no: 8,
-      store_site: "SEEKWAY:US",
-      listing: "L001",
-      product_dataset_name: "SEEKWAY:US 商品目录",
-      product_version: 3,
-      record_count: 120,
-      quality_status: "ready",
-    },
-    {
-      result_version_id: "result-version-7",
-      version_no: 7,
-      store_site: "SEEKWAY:US",
-      listing: "L002",
-      record_count: 20,
-      quality_status: "ready",
-    },
-  ]);
-  window.location.hash =
-    "#analysis-dashboards?dashboard=dashboard-1&version=dashboard-version-2&tab=source";
-  render(<DashboardHarness />);
+test.each([false, true])(
+  "数据来源跳转保留版本与完整返回条件，历史=%s",
+  async (historical) => {
+    const user = userEvent.setup();
+    const versions = [
+      {
+        version_id: "dashboard-version-2",
+        version: 2,
+        dataset_version_id: "dataset-version-2",
+        reason: "替换 L001 分类结果",
+        created_by_name: "运营甲",
+        created_at: "2026-08-12T09:00:00Z",
+      },
+      {
+        version_id: "dashboard-version-1",
+        version: 1,
+        dataset_version_id: "dataset-version-1",
+        reason: "首次生成",
+        created_by_name: "运营乙",
+        created_at: "2026-08-11T09:00:00Z",
+      },
+    ];
+    dashboardApiMock.analysisDashboard.mockResolvedValue({
+      id: "dashboard-1",
+      name: "来源可追溯看板",
+      status: "active",
+      current_version_id: "dashboard-version-2",
+      revision: 2,
+      version: versions[0],
+    });
+    dashboardApiMock.analysisDashboardVersions.mockResolvedValue(versions);
+    dashboardApiMock.analysisDashboardSources.mockResolvedValue([
+      {
+        result_version_id: "result-version-8",
+        version_no: 8,
+        store_site: "SEEKWAY:US",
+        listing: "L001",
+        product_dataset_name: "SEEKWAY:US 商品目录",
+        product_version: 3,
+        record_count: 120,
+        quality_status: "ready",
+      },
+      {
+        result_version_id: "result-version-7",
+        version_no: 7,
+        store_site: "SEEKWAY:US",
+        listing: "L002",
+        record_count: 20,
+        quality_status: "ready",
+      },
+    ]);
+    window.location.hash = `#analysis-dashboards?dashboard=dashboard-1&version=${historical ? "dashboard-version-1" : "dashboard-version-2"}&tab=source&store_site=DEMO&page=3`;
+    render(<DashboardHarness />);
 
-  expect(await screen.findByText("数据来源与血缘")).toBeVisible();
-  expect(
-    screen.getByText(/看板 v2 → 看板数据集 v2 → Listing 分类结果版本/),
-  ).toBeVisible();
-  expect(screen.getByText("dataset-version-2")).toBeVisible();
-  expect(screen.getByText("v8")).toBeVisible();
-  expect(screen.getByText("SEEKWAY:US 商品目录")).toBeVisible();
-  expect(screen.getByText("未提供产品信息")).toBeVisible();
+    expect(await screen.findByText("数据来源与血缘")).toBeVisible();
+    expect(
+      screen.getByText(/看板 v[12] → 看板数据集 v[12] → Listing 分类结果版本/),
+    ).toBeVisible();
+    expect(
+      screen.getByText(historical ? "dataset-version-1" : "dataset-version-2"),
+    ).toBeVisible();
+    expect(screen.getByText("v8")).toBeVisible();
+    expect(screen.getByText("SEEKWAY:US 商品目录")).toBeVisible();
+    expect(screen.getByText("未提供产品信息")).toBeVisible();
 
-  await user.click(screen.getByRole("button", { name: "修改历史" }));
-  expect(await screen.findByText("看板版本历史")).toBeVisible();
-  expect(screen.getByText("看板数据集 v2")).toBeVisible();
-  expect(screen.getByText("替换 L001 分类结果")).toBeVisible();
-  expect(screen.getByText("首次生成")).toBeVisible();
-  expect(window.location.hash).toContain("tab=history");
-});
+    await user.click(screen.getByRole("button", { name: "修改历史" }));
+    expect(await screen.findByText("看板版本历史")).toBeVisible();
+    expect(screen.getByText("看板数据集 v2")).toBeVisible();
+    expect(screen.getByText("替换 L001 分类结果")).toBeVisible();
+    expect(screen.getByText("首次生成")).toBeVisible();
+    expect(window.location.hash).toContain("tab=history");
+    await user.click(screen.getByRole("button", { name: "数据来源" }));
+    const returnHash = window.location.hash;
+    await user.click(
+      (await screen.findAllByRole("button", { name: "查看来源结果" }))[0],
+    );
+    const query = new URLSearchParams(window.location.hash.split("?")[1]);
+    expect(query.get("result_version_id")).toBe("result-version-8");
+    expect(query.get("dashboard_return")).toBe(returnHash);
+    expect(query.get("tab")).toBe(historical ? "history" : null);
+  },
+);
 
 test("旧列表响应不能覆盖新筛选结果", async () => {
   let resolveOld;

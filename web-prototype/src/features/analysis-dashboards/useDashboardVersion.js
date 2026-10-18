@@ -34,7 +34,8 @@ export function useDashboardVersion({
   /** @type {import("react").RefObject<AbortController | null>} */
   const mainControllerRef = useRef(null);
 
-  const historyVersion = route.tab === "history" ? route.versionId : "";
+  const versionScoped = route.tab === "history" || route.tab === "source";
+  const historyVersion = versionScoped ? route.versionId : "";
   const loadMain = useCallback(
     async (background = false) => {
       const generation = mainGenerationRef.current + 1;
@@ -83,20 +84,17 @@ export function useDashboardVersion({
   const displayed = useProtectedData(
     main,
     protectedOperation,
-    JSON.stringify([
-      route.dashboardId,
-      route.tab === "history" ? route.versionId : "live",
-    ]),
+    JSON.stringify([route.dashboardId, versionScoped ? route.versionId : "live"]),
   );
   useDataRefresh(() => loadMain(true), {
-    enabled: route.tab !== "history",
+    enabled: !versionScoped,
     domains: ["analysis-dashboards"],
     identity: route.dashboardId,
   });
   const applyLatestVersion = useEffectEvent(() => {
     if (!displayed.dashboard) return;
     const id = initialDashboardVersion(
-      route.tab === "history" ? route.versionId : "",
+      versionScoped ? route.versionId : "",
       displayed.dashboard,
       displayed.versions,
     );
@@ -109,13 +107,13 @@ export function useDashboardVersion({
 
   const selectedVersion = useMemo(
     () =>
-      (route.tab === "history" &&
+      (versionScoped &&
         displayed.versions.find(
           (version) => dashboardVersionId(version) === route.versionId,
         )) ||
       displayed.dashboard?.version ||
       null,
-    [displayed.dashboard, displayed.versions, route.versionId, route.tab],
+    [displayed.dashboard, displayed.versions, route.versionId, versionScoped],
   );
   return { main: displayed, selectedVersion, loadMain };
 }

@@ -216,6 +216,15 @@
   font-weight: 700;
   background: #f5f7f5;
 }
+.dashboard-source-version {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.dashboard-source-version .text-button {
+  padding: 0;
+  font-size: inherit;
+}
 .dashboard-source-mapping span,
 .dashboard-source-mapping b {
   overflow: hidden;

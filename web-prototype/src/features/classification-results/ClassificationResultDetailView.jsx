@@ -12,7 +12,10 @@ import { ResultDetailMetrics } from "./ResultDetailMetrics";
 import { ResultDetailDrilldown } from "./ResultDetailDrilldown";
 import { ResultDetailRecords } from "./ResultDetailRecords";
 import { ResultError } from "./ClassificationResultCommon";
-import { returnFromClassificationResult } from "./classificationResultRoute";
+import {
+  classificationResultReturnLabel,
+  returnFromClassificationResult,
+} from "./classificationResultRoute";
 
 /** @typedef {import("./classificationResultDetailContracts").ResultDetailViewProps} ResultDetailViewProps */
 
@@ -78,10 +81,16 @@ export function ClassificationResultDetailView(props) {
         className="text-button result-back-button page-loading-navigation"
         onClick={() => returnFromClassificationResult(route, updateRoute)}
       >
-        <ArrowLeft size={17} /> {route.taskId ? "返回任务" : "返回分类结果池"}
+        <ArrowLeft size={17} /> {classificationResultReturnLabel(route)}
       </button>
 
       <ResultDetailHeader {...context} />
+
+      {route.dashboardReturn && (
+        <p role="status">
+          当前展示看板来源结果 v{result.version}，返回可继续查看原看板。
+        </p>
+      )}
 
       {props.error && (
         <ResultError message={props.error} onRetry={props.retry} hasData />

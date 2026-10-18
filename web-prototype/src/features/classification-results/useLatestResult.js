@@ -40,7 +40,7 @@ export function useLatestResult({
       ),
     [route.version],
   );
-  const enabled = Boolean(result) && route.tab !== "history";
+  const enabled = Boolean(result) && route.tab !== "history" && !route.dashboardReturn;
   const { data, error, mutate, isValidating } = useSWR(
     enabled ? ["classification-results", "versions", route.version] : null,
     load,

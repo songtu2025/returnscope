@@ -148,7 +148,7 @@ export function ResultVersionHistory({
     <div className="result-version-panel-body" aria-busy={loading}>
       <CardHeading
         title="修改历史"
-        note="此处查看历史修改记录；分类数据始终显示最新结果。"
+        note="此处查看历史修改记录，可选择版本查看对应分类数据。"
         action={
           <InlineLoading
             label="更新中…"

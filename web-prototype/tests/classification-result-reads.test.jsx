@@ -144,3 +144,23 @@ test.each(cases)("$name：切换后的读取失败提供错误信息", async (en
     );
   });
 });
+
+test("看板来源固定在所选结果版本，不自动切换最新版", () => {
+  const updateRoute = vi.fn();
+  renderHook(
+    () =>
+      useLatestResult({
+        route: route({
+          result_version_id: "source-v1",
+          dashboard_return: "#analysis-dashboards?dashboard=demo",
+        }),
+        result: { version_id: "source-v1", version: 1 },
+        protectedOperation: false,
+        updateRoute,
+        refreshAttempt: 0,
+      }),
+    { wrapper },
+  );
+  expect(apiMock.classificationResultVersions).not.toHaveBeenCalled();
+  expect(updateRoute).not.toHaveBeenCalled();
+});

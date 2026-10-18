@@ -1,4 +1,5 @@
 import { GitBranch } from "@phosphor-icons/react";
+import { navigateHash } from "../../app/hashRouter";
 
 import { InlineLoading } from "../../components/SharedUi";
 import { formatTime } from "../../lib/presentation";
@@ -161,6 +162,9 @@ export function DashboardDetailContent({
         <DashboardDetailSources
           data={/** @type {DashboardSourceData} */ (content.data)}
           version={selectedVersion}
+          historical={Boolean(
+            selectedVersion && dashboardVersionId(selectedVersion) !== currentVersionId,
+          )}
         />
       )}
       {route.tab === "history" && (
@@ -174,8 +178,8 @@ export function DashboardDetailContent({
   );
 }
 
-/** @param {{data: DashboardSourceData, version: DashboardVersion | null}} props */
-function DashboardDetailSources({ data, version }) {
+/** @param {{data: DashboardSourceData, version: DashboardVersion | null, historical: boolean}} props */
+function DashboardDetailSources({ data, version, historical }) {
   const sources = asItems(Array.isArray(data) ? data : (data.sources ?? data));
   return (
     <section className="dashboard-lineage-card">
@@ -205,7 +209,28 @@ function DashboardDetailSources({ data, version }) {
           <div key={source.result_version_id || source.version_id || index}>
             <span>{source.store_site || "未提供"}</span>
             <b>{source.listing || "未提供"}</b>
-            <span>v{resultSourceVersionNumber(source) || "-"}</span>
+            <span className="dashboard-source-version">
+              <span>v{resultSourceVersionNumber(source) || "-"}</span>
+              <button
+                type="button"
+                className="text-button"
+                disabled={!source.result_version_id && !source.version_id}
+                title={
+                  !source.result_version_id && !source.version_id
+                    ? "来源未提供结果版本"
+                    : undefined
+                }
+                onClick={() =>
+                  navigateHash("classification-results", {
+                    result_version_id: source.result_version_id || source.version_id,
+                    tab: historical ? "history" : "",
+                    dashboard_return: window.location.hash,
+                  })
+                }
+              >
+                查看来源结果
+              </button>
+            </span>
             <span title={productCatalogLabel(source)}>
               {productCatalogLabel(source)}
             </span>

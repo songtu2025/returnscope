@@ -250,3 +250,25 @@ test("语义退出保存失败保留输入，重试成功执行目标且不走�
   expect(saved).not.toHaveBeenCalled();
   expect(api.correctClassificationResult).toHaveBeenCalledTimes(2);
 });
+
+test.each([
+  "#analysis-dashboards?dashboard=demo&version=v1&tab=source&store_site=DEMO&page=3",
+  "#data-assets",
+])("看板来源恢复完整路由且拒绝其他页面：%s", (dashboardReturn) => {
+  const updateRoute = vi.fn();
+  render(
+    <ClassificationResultDetailView
+      route={{ tab: "records", dashboardReturn }}
+      result={{}}
+      policy={{}}
+      updateRoute={updateRoute}
+    />,
+  );
+  const valid = dashboardReturn.startsWith("#analysis-dashboards?");
+  fireEvent.click(
+    screen.getByRole("button", { name: valid ? "返回分析看板" : "返回分类结果池" }),
+  );
+  if (valid) expect(window.location.hash).toBe(dashboardReturn);
+  else
+    expect(updateRoute).toHaveBeenCalledWith(expect.objectContaining({ version: "" }));
+});

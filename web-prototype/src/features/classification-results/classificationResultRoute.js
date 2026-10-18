@@ -1,4 +1,4 @@
-import { navigateHash } from "../../app/hashRouter";
+import { navigateHash, parseHash } from "../../app/hashRouter";
 import { RESULT_PAGE_SIZES } from "./classificationResultConstants";
 
 /**
@@ -27,6 +27,7 @@ import { RESULT_PAGE_SIZES } from "./classificationResultConstants";
  * @property {"records" | "history"} tab
  * @property {string} selectionToken
  * @property {string} taskId
+ * @property {string} [dashboardReturn]
  * @property {string} segmentId
  * @property {string} reviewBatchId
  * @property {"" | "review"} action
@@ -70,6 +71,7 @@ export function classificationResultRouteState(query) {
     tab: query.tab === "history" ? "history" : "records",
     selectionToken: queryValue(query, "selection_token"),
     taskId: queryValue(query, "task_id"),
+    dashboardReturn: queryValue(query, "dashboard_return"),
     segmentId: queryValue(query, "segment_id"),
     reviewBatchId: queryValue(query, "review_batch_id"),
     action: query.action || "",
@@ -105,6 +107,7 @@ export function writeClassificationResultRoute(route) {
     tab: route.tab === "history" ? "history" : "",
     selection_token: route.selectionToken,
     task_id: route.taskId,
+    dashboard_return: route.dashboardReturn,
     segment_id: route.segmentId,
     review_batch_id: route.reviewBatchId,
     action: route.action,
@@ -113,6 +116,13 @@ export function writeClassificationResultRoute(route) {
 
 /** @param {ClassificationResultRoute} route @param {(changes: Partial<ClassificationResultRoute>) => void} updateRoute */
 export function returnFromClassificationResult(route, updateRoute) {
+  if (route.dashboardReturn) {
+    const target = parseHash(route.dashboardReturn);
+    if (target.page === "analysis-dashboards") {
+      navigateHash(target.page, target.query);
+      return;
+    }
+  }
   if (route.taskId) {
     navigateHash("analysis-tasks", {
       task_id: route.taskId,
@@ -132,4 +142,14 @@ export function returnFromClassificationResult(route, updateRoute) {
     commentStatus: "",
     systemRerunRequired: "",
   });
+}
+
+/** @param {ClassificationResultRoute} route */
+export function classificationResultReturnLabel(route) {
+  if (
+    route.dashboardReturn &&
+    parseHash(route.dashboardReturn).page === "analysis-dashboards"
+  )
+    return "返回分析看板";
+  return route.taskId ? "返回任务" : "返回分类结果池";
 }
