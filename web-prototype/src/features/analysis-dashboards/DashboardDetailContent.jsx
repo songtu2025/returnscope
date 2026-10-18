@@ -17,7 +17,6 @@ import { DashboardDetailLoadingBody } from "./DashboardDetailStateViews";
 /** @typedef {import("./analysisDashboardContracts").Dashboard} Dashboard */
 /** @typedef {import("./analysisDashboardContracts").DashboardContentState} DashboardContentState */
 /** @typedef {import("./analysisDashboardContracts").DashboardDecisionState} DashboardDecisionState */
-/** @typedef {import("./analysisDashboardContracts").DashboardRecord} DashboardRecord */
 /** @typedef {import("./analysisDashboardContracts").DashboardReportState} DashboardReportState */
 /** @typedef {import("./analysisDashboardContracts").DashboardRoute} DashboardRoute */
 /** @typedef {import("./analysisDashboardContracts").DashboardSource} DashboardSource */
@@ -45,7 +44,7 @@ import { DashboardDetailLoadingBody } from "./DashboardDetailStateViews";
  * @property {DashboardDecisionState} decisionState
  * @property {string} analysisContext
  * @property {() => void | Promise<void>} onReloadContent
- * @property {(record: DashboardRecord, trigger: HTMLElement | null) => void} onEvidence
+ * @property {(open: boolean) => void} onEvidenceOpenChange
  * @property {() => void | Promise<void>} onReloadReports
  * @property {() => void | Promise<void>} onOpenReportGeneration
  * @property {() => void | Promise<void>} onRetryReport
@@ -75,7 +74,7 @@ export function DashboardDetailContent({
   decisionState,
   analysisContext,
   onReloadContent,
-  onEvidence,
+  onEvidenceOpenChange,
   onReloadReports,
   onOpenReportGeneration,
   onRetryReport,
@@ -114,7 +113,7 @@ export function DashboardDetailContent({
           detailError={content.detailError}
           evidenceReady={dashboardEvidenceReady(content, route)}
           onRetry={onReloadContent}
-          onEvidence={onEvidence}
+          onEvidenceOpenChange={onEvidenceOpenChange}
           analysisContext={analysisContext}
         />
       )}

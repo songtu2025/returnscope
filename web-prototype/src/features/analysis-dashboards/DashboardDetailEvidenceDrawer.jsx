@@ -5,14 +5,16 @@ import { resultLabelText } from "../../lib/taxonomyPresentation";
 import { SemanticResultPanel } from "../classification-results/SemanticResultPanel";
 import { factLabelPaths } from "../classification-results/semanticResultFacts";
 import { analysisContextTerms } from "./analysisContextPresentation";
+import { EvidenceRecordNavigation } from "../classification-results/EvidenceRecordNavigation";
 
 /** @typedef {import("./analysisDashboardContracts").DashboardRecord} DashboardRecord */
-/** @param {{record: DashboardRecord, analysisContext: string, onClose: () => void, returnFocusRef: import("react").RefObject<HTMLElement | null>}} props */
+/** @param {{record: DashboardRecord, analysisContext: string, onClose: () => void, returnFocusRef: import("react").RefObject<HTMLElement | null>, navigation?: ReturnType<typeof import("./useDashboardEvidenceNavigation").useDashboardEvidenceNavigation>}} props */
 export function DashboardDetailEvidenceDrawer({
   record,
   analysisContext,
   onClose,
   returnFocusRef,
+  navigation,
 }) {
   const classification = record.classification ?? {};
   const labelPaths = factLabelPaths(record);
@@ -44,6 +46,13 @@ export function DashboardDetailEvidenceDrawer({
             <X size={19} />
           </button>
         </header>
+        {navigation && (
+          <EvidenceRecordNavigation
+            navigation={navigation}
+            saving={false}
+            onMove={navigation.move}
+          />
+        )}
         <section className="drawer-section">
           <b>业务信息</b>
           <DrawerField label="店铺/站点" value={record.store_site} />

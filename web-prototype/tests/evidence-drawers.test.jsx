@@ -162,3 +162,19 @@ test.each(drawers)(
     expect(latestOnClose).toHaveBeenCalledTimes(3);
   },
 );
+
+test.each(drawers)("%s证据跨页后关闭使用最新返回目标", (_, drawer) => {
+  render(
+    <>
+      <button>原页证据</button>
+      <button>新页证据</button>
+    </>,
+  );
+  const original = screen.getByRole("button", { name: "原页证据" });
+  const latest = screen.getByRole("button", { name: "新页证据" });
+  const returnFocusRef = { current: original };
+  const view = render(drawer({ onClose: vi.fn(), returnFocusRef }));
+  returnFocusRef.current = latest;
+  view.unmount();
+  expect(latest).toHaveFocus();
+});

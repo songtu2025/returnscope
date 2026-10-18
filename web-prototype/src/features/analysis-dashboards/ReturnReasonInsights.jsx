@@ -2,12 +2,13 @@ import { returnReasonInsightsPresentation } from "./returnReasonInsightsPresenta
 import { useReturnReasonEvidence } from "./useReturnReasonEvidence";
 import { ReturnReasonInsightsOverview } from "./ReturnReasonInsightsOverview";
 import { ReturnReasonInsightWorkbench } from "./ReturnReasonInsightWorkbench";
+import { useDashboardEvidenceNavigation } from "./useDashboardEvidenceNavigation";
+import { DashboardDetailEvidenceDrawer } from "./DashboardDetailEvidenceDrawer";
 
 /** @typedef {import("./analysisDashboardContracts").DashboardInsights} DashboardInsights */
-/** @typedef {import("./analysisDashboardContracts").DashboardRecord} DashboardRecord */
 /** @typedef {import("./analysisDashboardContracts").DashboardRoute} DashboardRoute */
 /** @typedef {import("./analysisDashboardContracts").UpdateDashboardRoute} UpdateDashboardRoute */
-/** @param {{route: DashboardRoute, updateRoute: UpdateDashboardRoute, data: DashboardInsights, loading: boolean, showDataInfo?: boolean, error?: string, detailLoading?: boolean, detailError?: string, evidenceReady?: boolean, analysisContext: string, onRetry: () => void | Promise<void>, onEvidence: (record: DashboardRecord, trigger: HTMLElement | null) => void}} props */
+/** @param {{route: DashboardRoute, updateRoute: UpdateDashboardRoute, data: DashboardInsights, loading: boolean, showDataInfo?: boolean, error?: string, detailLoading?: boolean, detailError?: string, evidenceReady?: boolean, analysisContext: string, onRetry: () => void | Promise<void>, onEvidenceOpenChange?: (open: boolean) => void}} props */
 export function ReturnReasonInsights(props) {
   const {
     route,
@@ -33,6 +34,13 @@ export function ReturnReasonInsights(props) {
       recordPage: 1,
       reasonPage: 0,
     });
+  const navigation = useDashboardEvidenceNavigation({
+    route,
+    reason: view.explorer.selected?.value,
+    evidenceView,
+    updateRoute,
+    onOpenChange: props.onEvidenceOpenChange,
+  });
   return (
     <div
       className="return-insight-content"
@@ -51,8 +59,18 @@ export function ReturnReasonInsights(props) {
           view={view}
           evidenceView={evidenceView}
           onUpdateRoute={updateRoute}
+          onEvidence={navigation.open}
         />
       </div>
+      {navigation.record && (
+        <DashboardDetailEvidenceDrawer
+          record={navigation.record}
+          analysisContext={props.analysisContext}
+          onClose={navigation.close}
+          returnFocusRef={navigation.returnFocusRef}
+          navigation={navigation}
+        />
+      )}
     </div>
   );
 }

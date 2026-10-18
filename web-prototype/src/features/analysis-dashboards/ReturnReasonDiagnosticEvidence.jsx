@@ -28,6 +28,7 @@ function EvidenceRow({ record, selected, terms, onEvidence }) {
       <span className="return-part-pill">{partLabel(unit.part)}</span>
       <button
         className="text-button"
+        data-dashboard-evidence-id={record.id || record.source_record_id}
         onClick={(event) => onEvidence(record, event.currentTarget)}
       >
         查看证据

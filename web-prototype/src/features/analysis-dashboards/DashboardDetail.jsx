@@ -1,11 +1,10 @@
 import { DashboardReportGeneration } from "./DashboardReportGeneration";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import "../../styles/insight-generation.css";
 import "../../styles/classification-results.css";
 import "../../styles/return-insights.css";
 import "../../styles/ai-insight-reports.css";
 import { DashboardDetailContent } from "./DashboardDetailContent";
-import { DashboardDetailEvidenceDrawer } from "./DashboardDetailEvidenceDrawer";
 import { DashboardDetailHeader } from "./DashboardDetailHeader";
 import { DashboardSettingsEditor } from "./DashboardSettingsEditor";
 import { ReportLifecyclePanel } from "./ReportLifecyclePanel";
@@ -22,15 +21,14 @@ import { useDashboardReportActions } from "./useDashboardReportActions";
 
 /** @typedef {import("./dashboardDetailContracts").Dashboard} Dashboard */
 /** @typedef {import("./dashboardDetailContracts").DashboardVersion} DashboardVersion */
-/** @typedef {import("./dashboardDetailContracts").DashboardRecord} DashboardRecord */
 /** @typedef {import("./dashboardDetailContracts").DashboardDetailProps} DashboardDetailProps */
 
 /** @param {DashboardDetailProps} props */
 export function DashboardDetail(props) {
   const [editingSettings, setEditingSettings] = useState(false);
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
   const { route, updateRoute } = props;
-  const { content, selectedRecord, setSelectedRecord, loadContent } =
-    useDashboardContent(props);
+  const { content, loadContent } = useDashboardContent(props);
   const reportState = useDashboardReports(props);
   const {
     reports,
@@ -59,15 +57,10 @@ export function DashboardDetail(props) {
   const { main, selectedVersion, loadMain } = useDashboardVersion({
     ...props,
     protectedOperation:
-      Boolean(selectedRecord) ||
-      generationOpen ||
-      decisionState.loading ||
-      editingSettings,
+      evidenceOpen || generationOpen || decisionState.loading || editingSettings,
   });
 
   const [showDataInfo, setShowDataInfo] = useState(false);
-  /** @type {import("react").RefObject<HTMLElement | null>} */
-  const evidenceTriggerRef = useRef(null);
 
   if (main.error && !main.dashboard) {
     return (
@@ -186,13 +179,7 @@ export function DashboardDetail(props) {
         decisionState={decisionState}
         analysisContext={analysisContext}
         onReloadContent={loadContent}
-        onEvidence={(
-          /** @type {DashboardRecord} */ record,
-          /** @type {HTMLElement | null} */ trigger,
-        ) => {
-          evidenceTriggerRef.current = trigger;
-          setSelectedRecord(record);
-        }}
+        onEvidenceOpenChange={setEvidenceOpen}
         onReloadReports={loadReports}
         onOpenReportGeneration={openReportGeneration}
         onRetryReport={retryReport}
@@ -213,14 +200,6 @@ export function DashboardDetail(props) {
         }
       />
 
-      {selectedRecord && (
-        <DashboardDetailEvidenceDrawer
-          record={selectedRecord}
-          onClose={() => setSelectedRecord(null)}
-          returnFocusRef={evidenceTriggerRef}
-          analysisContext={analysisContext}
-        />
-      )}
       {generationOpen && (
         <DashboardReportGeneration
           dashboard={dashboard}

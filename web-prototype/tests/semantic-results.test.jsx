@@ -712,7 +712,6 @@ test("看板以评论数展示互斥的评论级结论分布", () => {
       route={{}}
       updateRoute={vi.fn()}
       loading={false}
-      onEvidence={vi.fn()}
       data={{
         summary: {
           comment_count: 10,

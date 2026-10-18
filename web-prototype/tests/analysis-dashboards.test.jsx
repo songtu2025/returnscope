@@ -9,6 +9,7 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { renderWithServerState as render } from "./renderWithServerState";
 
 const { dashboardApiMock, resultApiMock } = vi.hoisted(() => ({
@@ -423,7 +424,6 @@ test("筛选更新时明确标记旧结果并在失败后保留结果", async ()
     },
     analysisContext: "user_feedback",
     onRetry,
-    onEvidence: vi.fn(),
   };
   const view = render(<ReturnReasonInsights {...props} loading />);
 
@@ -462,7 +462,6 @@ test.each([
       loading={false}
       analysisContext="returns"
       onRetry={vi.fn()}
-      onEvidence={vi.fn()}
     />,
   );
   const trust = screen.getByRole("region", { name: "数据可信度" });
@@ -513,7 +512,6 @@ test("语义证据按原因和筛选条件翻页，失败后可重试", async ()
     loading: false,
     analysisContext: "returns",
     onRetry: vi.fn(),
-    onEvidence: vi.fn(),
   };
   dashboardApiMock.analysisDashboardEvidence
     .mockRejectedValueOnce(new Error("网络中断"))
@@ -592,7 +590,6 @@ test("大量语义证据可直接跳到中间页并按原筛选条件加载", as
     loading: false,
     analysisContext: "returns",
     onRetry: vi.fn(),
-    onEvidence: vi.fn(),
   };
   dashboardApiMock.analysisDashboardEvidence.mockResolvedValueOnce({
     items: [
@@ -707,6 +704,188 @@ test("看板日期在整组离开时生效，外部日期变更同步且正常�
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
 
+test("看板抽屉连续查看复用证据分页，跨页失败可重试并返回当前证据焦点", async () => {
+  const user = userEvent.setup();
+  const records = Array.from({ length: 23 }, (_, index) => ({
+    id: `evidence-${index}`,
+    order_id: `ORDER-${index + 1}`,
+    comment: `合成反馈 ${index + 1}`,
+    classification: { semantic_units: [] },
+  }));
+  const page = (number) => ({
+    items: records.slice((number - 1) * 10, number * 10),
+    total: 23,
+    page: number,
+    page_size: 10,
+  });
+  const route = {
+    dashboardId: "dashboard-1",
+    versionId: "v1",
+    recordPage: 1,
+    problem: "FIT",
+    subject: "PRODUCT",
+    labelGroup: "尺码",
+    listing: "L001",
+    productName: "产品",
+    productSku: "SKU",
+    dateFrom: "2026-04-01",
+    dateTo: "2026-09-30",
+  };
+  const reason = { value: "FIT", label: "偏小", record_count: 23 };
+  const data = {
+    summary: { record_count: 23 },
+    date_range: {},
+    filter_options: {},
+    reasons: [reason],
+    selected_reason: reason,
+    evidence: page(1),
+  };
+  dashboardApiMock.analysisDashboardEvidence
+    .mockRejectedValueOnce(new Error("合成断网"))
+    .mockImplementation(async (_id, _version, filters) => page(filters.page));
+  function Flow() {
+    const [current, setCurrent] = useState(route);
+    return (
+      <ReturnReasonInsights
+        route={current}
+        updateRoute={(changes) => setCurrent((value) => ({ ...value, ...changes }))}
+        data={data}
+        loading={false}
+        analysisContext="user_feedback"
+        onRetry={vi.fn()}
+      />
+    );
+  }
+  const view = render(<Flow />);
+  const evidence = view.container.querySelector(".return-insight-evidence");
+  await user.click(within(evidence).getAllByRole("button", { name: "查看证据" })[9]);
+  const drawer = screen.getByRole("dialog", { name: "分类结果与证据" });
+  const nav = within(drawer).getByRole("region", { name: "连续查看反馈" });
+  expect(within(nav).getByRole("status")).toHaveTextContent("第 10 / 23 条");
+  await user.click(within(nav).getByRole("button", { name: "下一条" }));
+  expect(await within(drawer).findByRole("alert")).toHaveTextContent("合成断网");
+  expect(within(drawer).getByRole("heading", { name: "ORDER-10" })).toBeVisible();
+  expect(within(nav).getByRole("button", { name: "下一条" })).toBeDisabled();
+  await user.click(within(nav).getByRole("button", { name: "重试读取" }));
+  expect(
+    await within(drawer).findByRole("heading", { name: "ORDER-11" }),
+  ).toBeVisible();
+  expect(within(nav).getByRole("status")).toHaveTextContent("第 11 / 23 条");
+  expect(dashboardApiMock.analysisDashboardEvidence).toHaveBeenLastCalledWith(
+    "dashboard-1",
+    "v1",
+    expect.objectContaining({
+      problem: "FIT",
+      subject: "PRODUCT",
+      label_group: "尺码",
+      listing: "L001",
+      product_name: "产品",
+      product_sku: "SKU",
+      date_from: "2026-04-01",
+      date_to: "2026-09-30",
+      page: 2,
+    }),
+    expect.any(Object),
+  );
+  const calls = dashboardApiMock.analysisDashboardEvidence.mock.calls.length;
+  await user.click(within(nav).getByRole("button", { name: "下一条" }));
+  expect(within(drawer).getByRole("heading", { name: "ORDER-12" })).toBeVisible();
+  expect(dashboardApiMock.analysisDashboardEvidence).toHaveBeenCalledTimes(calls);
+  await user.keyboard("{Escape}");
+  expect(
+    within(evidence).getAllByRole("button", { name: "查看证据" })[1],
+  ).toHaveFocus();
+  await user.click(within(evidence).getAllByRole("button", { name: "查看证据" })[0]);
+  await user.click(screen.getByRole("button", { name: "上一条", exact: true }));
+  expect(await screen.findByRole("heading", { name: "ORDER-10" })).toBeVisible();
+  await user.keyboard("{Escape}");
+  await user.click(within(evidence).getAllByRole("button", { name: "查看证据" })[0]);
+  expect(screen.getByRole("button", { name: "上一条", exact: true })).toBeDisabled();
+  await user.keyboard("{Escape}");
+  await user.click(within(evidence).getByTitle("3"));
+  await waitFor(() =>
+    expect(within(evidence).getAllByRole("button", { name: "查看证据" })).toHaveLength(
+      3,
+    ),
+  );
+  await user.click(within(evidence).getAllByRole("button", { name: "查看证据" })[2]);
+  expect(screen.getByRole("button", { name: "下一条", exact: true })).toBeDisabled();
+  expect(screen.getByRole("region", { name: "连续查看反馈" })).toHaveTextContent(
+    "第 23 / 23 条",
+  );
+});
+
+test("看板筛选变化关闭旧抽屉，未完成跨页响应不能重新打开旧证据", async () => {
+  let finish;
+  dashboardApiMock.analysisDashboardEvidence.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const reason = { value: "FIT", label: "偏小", record_count: 11 };
+  const data = {
+    reasons: [reason],
+    selected_reason: reason,
+    evidence: {
+      items: Array.from({ length: 10 }, (_, index) => ({
+        id: `record-${index}`,
+        comment: "旧范围",
+        classification: {},
+      })),
+      total: 11,
+      page: 1,
+      page_size: 10,
+    },
+  };
+  const onOpenChange = vi.fn();
+  function Flow() {
+    const [route, update] = useState({
+      dashboardId: "d",
+      versionId: "v1",
+      recordPage: 1,
+      listing: "L1",
+    });
+    return (
+      <>
+        <button
+          onClick={() =>
+            update((value) => ({ ...value, listing: "L2", recordPage: 1 }))
+          }
+        >
+          切换合成范围
+        </button>
+        <ReturnReasonInsights
+          route={route}
+          updateRoute={(changes) => update((value) => ({ ...value, ...changes }))}
+          data={data}
+          loading={false}
+          onRetry={vi.fn()}
+          analysisContext="user_feedback"
+          onEvidenceOpenChange={onOpenChange}
+        />
+      </>
+    );
+  }
+  render(<Flow />);
+  fireEvent.click(screen.getAllByRole("button", { name: "查看证据" })[9]);
+  expect(onOpenChange).toHaveBeenLastCalledWith(true);
+  fireEvent.click(screen.getByRole("button", { name: "下一条", exact: true }));
+  fireEvent.click(screen.getByRole("button", { name: "切换合成范围" }));
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(onOpenChange).toHaveBeenLastCalledWith(false);
+  await act(async () =>
+    finish({
+      items: [{ id: "late", comment: "晚到旧证据" }],
+      total: 11,
+      page: 2,
+      page_size: 10,
+    }),
+  );
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(screen.queryByText("晚到旧证据")).not.toBeInTheDocument();
+});
+
 test("新看板显示反馈组单位，历史看板保留记录单位", () => {
   const props = {
     route: { listing: "", productName: "", productSku: "", dateFrom: "", dateTo: "" },
@@ -714,7 +893,6 @@ test("新看板显示反馈组单位，历史看板保留记录单位", () => {
     loading: false,
     analysisContext: "user_feedback",
     onRetry: vi.fn(),
-    onEvidence: vi.fn(),
   };
   const data = {
     summary: { record_count: 2, pending_review_comment_count: 1 },

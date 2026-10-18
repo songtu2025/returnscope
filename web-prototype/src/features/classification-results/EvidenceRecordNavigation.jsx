@@ -1,4 +1,4 @@
-/** @typedef {ReturnType<typeof import("./useEvidenceNavigation").useEvidenceNavigation>} Navigation */
+/** @typedef {Pick<ReturnType<typeof import("./useEvidenceNavigation").useEvidenceNavigation>, "busy" | "locked" | "position" | "total" | "error"> & {retry: () => void | Promise<void>}} Navigation */
 /** @param {{navigation: Navigation, saving: boolean, onMove: (direction: number) => void}} props */
 export function EvidenceRecordNavigation({ navigation, saving, onMove }) {
   const disabled = saving || navigation.busy || navigation.locked;

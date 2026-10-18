@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useEffectEvent, useRef } from "react";
 
 const DIALOG_CONTROL_SELECTOR =
   'button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), summary, [tabindex="0"]';
@@ -71,6 +71,7 @@ function constrainDialogFocus(event, dialog) {
 export function useDialogFocus({ open, onClose, returnFocusRef }) {
   const dialogRef = useRef(/** @type {HTMLElement | null} */ (null));
   const closeRef = useRef(onClose);
+  const currentReturnTarget = useEffectEvent(() => returnFocusRef?.current);
 
   useEffect(() => {
     closeRef.current = onClose;
@@ -116,12 +117,13 @@ export function useDialogFocus({ open, onClose, returnFocusRef }) {
       dialogs.splice(dialogs.indexOf(dialog), 1);
       if (!wasTop) return;
       const next = topDialog();
+      const returnTarget = currentReturnTarget() ?? previousFocus;
       if (
-        previousFocus instanceof HTMLElement &&
-        previousFocus.isConnected &&
-        (!next || next.contains(previousFocus))
+        returnTarget instanceof HTMLElement &&
+        returnTarget.isConnected &&
+        (!next || next.contains(returnTarget))
       ) {
-        previousFocus.focus();
+        returnTarget.focus();
       } else if (next) {
         (dialogControls(next)[0] ?? next).focus();
       }

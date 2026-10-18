@@ -9,7 +9,6 @@ import {
 import { errorName, errorMessage } from "./dashboardRequestErrors";
 
 /** @typedef {import("./dashboardDetailContracts").DashboardContentState} DashboardContentState */
-/** @typedef {import("./dashboardDetailContracts").DashboardRecord} DashboardRecord */
 /** @typedef {import("./dashboardDetailContracts").DashboardDetailProps} DashboardDetailProps */
 
 /** @param {DashboardDetailProps} props */
@@ -19,9 +18,6 @@ export function useDashboardContent({ route, updateRoute }) {
       ...completedDashboardContent(null),
       loading: true,
     }),
-  );
-  const [selectedRecord, setSelectedRecord] = useState(
-    /** @returns {DashboardRecord | null} */ () => null,
   );
   const contentGenerationRef = useRef(0);
   /** @type {import("react").RefObject<AbortController | null>} */
@@ -106,12 +102,11 @@ export function useDashboardContent({ route, updateRoute }) {
   }, [filters, route.dashboardId, route.tab, route.versionId, updateRoute]);
 
   useEffect(() => {
-    setSelectedRecord(null);
     loadContent();
     return () => {
       contentGenerationRef.current += 1;
       contentControllerRef.current?.abort();
     };
   }, [loadContent]);
-  return { content, selectedRecord, setSelectedRecord, loadContent };
+  return { content, loadContent };
 }
