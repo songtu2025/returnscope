@@ -1,23 +1,31 @@
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from collections import Counter
 from datetime import date, datetime
 from importlib.metadata import version
 from io import BytesIO
+from pathlib import Path
 from xml.etree import ElementTree
 from zipfile import ZipFile
 
 import pytest
 from openpyxl import Workbook, load_workbook
 from openpyxl.cell.cell import Cell
+from openpyxl.styles.cell_style import StyleArray
 from openpyxl.styles.styleable import StyleDescriptor
+from openpyxl.utils.indexed_list import IndexedList
 from openpyxl.worksheet._write_only import WriteOnlyWorksheet
 
 from web_backend.classification_results import result_workbook as renderer
 
 
-def assert_workbook_members_equal(left_content: bytes, right_content: bytes) -> None:
-    """逐项比较归档内容，仅排除工作簿创建和修改时间。"""
+def assert_workbook_members_equal(
+    left_content: bytes, right_content: bytes, *, xml_equivalence: bool = False
+) -> None:
+    """逐项比较归档内容，后端切换时额外允许等价的 XML 序列化。"""
     with ZipFile(BytesIO(left_content)) as new, ZipFile(BytesIO(right_content)) as old:
         assert new.namelist() == old.namelist()
         for name in new.namelist():
@@ -29,6 +37,16 @@ def assert_workbook_members_equal(left_content: bytes, right_content: bytes) -> 
                         if child.tag.rsplit("}", 1)[-1] in {"created", "modified"}:
                             tree.remove(child)
                 left, right = [ElementTree.tostring(tree) for tree in trees]
+            if xml_equivalence and name.endswith((".xml", ".rels")):
+                left, right = [
+                    ElementTree.canonicalize(
+                        ElementTree.tostring(
+                            ElementTree.fromstring(value), encoding="unicode"
+                        ),
+                        rewrite_prefixes=True,
+                    )
+                    for value in (left, right)
+                ]
             assert left == right, name
 
 
@@ -122,9 +140,7 @@ def test_height_cache_keeps_width_and_is_limited_to_one_export(monkeypatch):
     assert calls["中" * 30, 28] == calls["中" * 30, 54] == 2
 
 
-@pytest.mark.parametrize("empty", [False, True])
-def test_prepared_cells_keep_original_workbook_xml(monkeypatch, empty):
-    assert version("openpyxl") == "3.1.5"
+def _boundary_rows(empty):
     values = [
         None,
         "",
@@ -139,7 +155,7 @@ def test_prepared_cells_keep_original_workbook_xml(monkeypatch, empty):
         " 中文 English 😀 <>&\n第二行 ",
         "长" * 800,
     ]
-    rows = (
+    return (
         []
         if empty
         else [
@@ -148,10 +164,59 @@ def test_prepared_cells_keep_original_workbook_xml(monkeypatch, empty):
             for columns in [renderer.SUMMARY_COLUMNS, renderer.SOURCE_COLUMNS]
         ]
     )
+
+
+@pytest.mark.parametrize("empty", [False, True])
+def test_prepared_cells_keep_original_workbook_xml(monkeypatch, empty):
+    assert version("openpyxl") == "3.1.5"
+    rows = _boundary_rows(empty)
     contents = [renderer.result_workbook(rows, rows, rows)]
     monkeypatch.setattr(renderer, "_ResultWorksheet", WriteOnlyWorksheet)
     contents.append(renderer.result_workbook(rows, rows, rows))
     assert_workbook_members_equal(*contents)
+
+
+@pytest.mark.parametrize("empty", [False, True])
+def test_lxml_backend_preserves_all_workbook_members(empty):
+    assert version("lxml") == "6.1.3"
+    code = (
+        "import openpyxl, os, sys; "
+        "from test_classification_result_workbook import _boundary_rows; "
+        "from web_backend.classification_results.result_workbook "
+        "import result_workbook; "
+        "assert openpyxl.LXML == (os.environ['OPENPYXL_LXML'] == 'True'); "
+        f"rows = _boundary_rows({empty}); "
+        "sys.stdout.buffer.write(result_workbook(rows, rows, rows))"
+    )
+    contents = []
+    for backend in ("False", "True"):
+        environment = dict(os.environ, OPENPYXL_LXML=backend)
+        environment["PYTHONPATH"] = os.pathsep.join(
+            filter(
+                None,
+                [str(Path(__file__).parent), environment.get("PYTHONPATH")],
+            )
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            env=environment,
+            capture_output=True,
+            check=True,
+        )
+        contents.append(result.stdout)
+    assert_workbook_members_equal(*contents, xml_equivalence=True)
+
+
+def test_xml_equivalence_still_detects_data_and_format_changes(monkeypatch):
+    rows = [{"产品名称": "合成产品", "反馈正文": "原文"}]
+    original = renderer.result_workbook(rows, [], rows)
+    changed = renderer.result_workbook([{"产品名称": "另一产品"}], [], rows)
+    with pytest.raises(AssertionError, match="xl/worksheets"):
+        assert_workbook_members_equal(original, changed, xml_equivalence=True)
+    monkeypatch.setitem(renderer._WIDTHS, "产品名称", 35)
+    changed = renderer.result_workbook(rows, [], rows)
+    with pytest.raises(AssertionError, match="xl/worksheets"):
+        assert_workbook_members_equal(original, changed, xml_equivalence=True)
 
 
 def test_prepared_cells_bind_once_without_changing_other_workbooks(monkeypatch):
@@ -202,3 +267,24 @@ def test_streaming_allocates_one_cell_per_column(monkeypatch):
             renderer.SOURCE_COLUMNS,
         ]
     )
+
+
+def test_style_ids_register_once_and_keep_original_xml(monkeypatch):
+    registrations = []
+    original = IndexedList.add
+
+    def counted(index, value):
+        if isinstance(value, StyleArray) and any(value):
+            registrations.append(tuple(value))
+        return original(index, value)
+
+    monkeypatch.setattr(IndexedList, "add", counted)
+    rows = _boundary_rows(False) * 10
+    optimized = renderer.result_workbook(rows, rows, rows)
+    optimized_count = len(registrations)
+    registrations.clear()
+    monkeypatch.setattr(renderer._ResultCell, "style_id", Cell.style_id)
+    original_content = renderer.result_workbook(rows, rows, rows)
+    assert optimized_count == len(set(registrations))
+    assert len(registrations) > optimized_count * 100
+    assert_workbook_members_equal(optimized, original_content)

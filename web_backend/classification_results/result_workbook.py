@@ -10,7 +10,6 @@ from typing import Any, cast
 from unicodedata import east_asian_width
 
 from openpyxl import Workbook
-from openpyxl.cell import WriteOnlyCell
 from openpyxl.cell.cell import Cell
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.styles.cell_style import StyleArray
@@ -38,6 +37,18 @@ _WIDTHS = {
 }
 
 
+class _ResultCell(Cell):
+    """只供本导出器使用，编号由工作簿内首次出现的不可变样式确定。"""
+
+    __slots__ = ("export_style_id",)
+
+    export_style_id: int
+
+    @property
+    def style_id(self) -> int:
+        return self.export_style_id
+
+
 class _ResultWorksheet(WriteOnlyWorksheet):
     """仅接收本导出器已构建的单元格，省去通用值转换和临时对象。"""
 
@@ -60,7 +71,7 @@ def result_workbook(
     alignment = Alignment(vertical="top", wrap_text=True)
     header_fill = PatternFill("solid", fgColor="176C57")
     stripe_fill = PatternFill("solid", fgColor="F0F7F4")
-    styles: dict[tuple[int, tuple[int, ...]], StyleArray] = {}
+    styles: dict[tuple[int, tuple[int, ...]], tuple[StyleArray, int]] = {}
     display_lines = lru_cache(maxsize=4096)(_display_lines)
     for title, columns, rows in (
         ("反馈汇总", SUMMARY_COLUMNS, summaries),
@@ -77,7 +88,9 @@ def result_workbook(
             sheet.column_dimensions[get_column_letter(index)].width = _WIDTHS.get(
                 name, 20
             )
-        reusable_cells: list[Any] = [WriteOnlyCell(sheet) for _ in columns]
+        reusable_cells: list[Any] = [
+            _ResultCell(sheet, row=1, column=1) for _ in columns
+        ]
         for row_index, values in enumerate(_sheet_values(columns, rows), 1):
             cells = []
             kind = 0 if row_index == 1 else (1 if row_index % 2 == 0 else 2)
@@ -97,9 +110,14 @@ def result_workbook(
                     cell.alignment = alignment
                     if kind < 2:
                         cell.fill = header_fill if kind == 0 else stripe_fill
-                    styles[key] = cell._style
+                    style = (
+                        cell._style,
+                        cast(Any, workbook)._cell_styles.add(cell._style),
+                    )
+                    styles[key] = style
                 else:
-                    cell._style = style
+                    cell._style = style[0]
+                cell.export_style_id = style[1]
                 cells.append(cell)
             if row_index > 1:
                 lines = max(

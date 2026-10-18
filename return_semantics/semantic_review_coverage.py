@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
+from functools import lru_cache
 
 from return_semantics.semantic_review_items import (
     ANALYSIS_FAILURE,
@@ -12,13 +16,36 @@ from return_semantics.semantic_review_items import (
     _text,
 )
 
+_pattern_compiler: ContextVar[Callable[[str, int], re.Pattern[str]] | None] = (
+    ContextVar("evidence_pattern_compiler", default=None)
+)
+
+
+def _compile_evidence_pattern(span: str, flags: int) -> re.Pattern[str]:
+    """保留原有证据转义、变长空白和大小写匹配规则。"""
+    words = re.split(r"\s+", span)
+    pattern = r"\s+".join(re.escape(word) for word in words)
+    return re.compile(pattern, flags=flags)
+
+
+@contextmanager
+def reuse_evidence_patterns() -> Iterator[None]:
+    """仅在当前导出准备阶段复用编译结果，离开即释放证据文本。"""
+    compiler = lru_cache(maxsize=8192)(_compile_evidence_pattern)
+    token = _pattern_compiler.set(compiler)
+    try:
+        yield
+    finally:
+        _pattern_compiler.reset(token)
+        compiler.cache_clear()
+
 
 def _covered_source_mask(source_text: str, evidence: list[str]) -> list[bool]:
     covered = [False] * len(source_text)
+    compile_pattern = _pattern_compiler.get() or _compile_evidence_pattern
     for span in dict.fromkeys(item.strip() for item in evidence if item.strip()):
-        words = re.split(r"\s+", span)
-        pattern = r"\s+".join(re.escape(word) for word in words)
-        for match in re.finditer(pattern, source_text, flags=re.IGNORECASE):
+        pattern = compile_pattern(span, re.IGNORECASE)
+        for match in pattern.finditer(source_text):
             covered[match.start() : match.end()] = [True] * (
                 match.end() - match.start()
             )
