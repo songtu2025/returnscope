@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 import { ClassificationHierarchyEditor } from "../src/features/classification-standards/ClassificationHierarchyEditor";
@@ -81,6 +81,56 @@ test("层级标签工作台保留树目录并允许选择标签的父分类", as
     parent_code: "QUALITY",
     group: "质量",
   });
+});
+
+test("标签筛选只保留命中祖先，零命中直接显示重置且保留当前编辑对象", async () => {
+  const user = userEvent.setup();
+  const onChange = vi.fn();
+  const value = {
+    ...content,
+    labels: [
+      ...content.labels,
+      {
+        ...content.labels[0],
+        code: "QUALITY_FEEDBACK",
+        name: "质量反馈",
+        parent_code: "QUALITY",
+        group: "质量",
+      },
+    ],
+  };
+  render(
+    <ClassificationLabelWorkbench
+      content={value}
+      savedContent={value}
+      onChange={onChange}
+      editable
+      initiallyEditing
+      section="labels"
+    />,
+  );
+  const directoryElement = screen.getByRole("complementary", { name: "标签目录" });
+  const directory = within(directoryElement);
+  const search = directory.getByRole("searchbox", { name: "搜索标签" });
+  const definition = screen.getByRole("textbox", { name: /判定说明/ });
+  await user.type(search, "不保暖");
+  expect(directory.getByText("命中 1 / 2")).toBeVisible();
+  expect(directory.getByText("功能", { selector: "summary" })).toBeVisible();
+  expect(directory.getByText("保暖性", { selector: "summary" })).toBeVisible();
+  expect(directory.queryByText("质量", { selector: "summary" })).toBeNull();
+  await user.selectOptions(directory.getByLabelText("筛选标签分组"), "质量");
+  expect(directory.getByText("命中 0 / 2")).toBeVisible();
+  expect(directory.getByText("没有匹配的标签。")).toBeVisible();
+  expect(directoryElement.querySelector("summary")).toBeNull();
+  expect(definition).toHaveValue("保暖不足");
+  await user.click(directory.getByRole("button", { name: "重置筛选" }));
+  expect(search).toHaveValue("");
+  expect(directory.getByText("质量", { selector: "summary" })).toBeVisible();
+  expect(directory.getByRole("button", { name: /不保暖/ })).toHaveAttribute(
+    "aria-current",
+    "true",
+  );
+  expect(onChange).not.toHaveBeenCalled();
 });
 
 test("Excel先选工作表再确认映射，未知方向可采用草稿且保留发布提示", async () => {

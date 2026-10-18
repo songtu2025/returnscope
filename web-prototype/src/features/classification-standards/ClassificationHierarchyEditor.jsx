@@ -9,7 +9,7 @@ import { labelChanges } from "./labelDraftPolicy";
 /** @typedef {{label: ClassificationStandardEditableLabel, index: number, before?: ClassificationStandardEditableLabel, status: ClassificationLabelChangeStatus}} ClassificationLabelChange */
 /** @typedef {{content: ClassificationStandardEditableContent, baseContent: ClassificationStandardEditableContent | null}} ClassificationHierarchyChangesProps */
 /** @typedef {{content: ClassificationStandardEditableContent, onChange: (content: ClassificationStandardEditableContent) => void, disabled: boolean}} ClassificationHierarchyEditorProps */
-/** @typedef {{content: ClassificationStandardEditableContent, entries: ClassificationLabelChange[], renderLabel: (entry: ClassificationLabelChange) => import("react").ReactNode}} ClassificationHierarchyDirectoryProps */
+/** @typedef {{content: ClassificationStandardEditableContent, entries: ClassificationLabelChange[], renderLabel: (entry: ClassificationLabelChange) => import("react").ReactNode, hideEmpty?: boolean}} ClassificationHierarchyDirectoryProps */
 
 /** @param {ClassificationHierarchyChangesProps} props */
 export function ClassificationHierarchyChanges({ content, baseContent }) {
@@ -154,16 +154,25 @@ export function ClassificationHierarchyEditor({ content, onChange, disabled }) {
 }
 
 /** @param {ClassificationHierarchyDirectoryProps} props */
-export function ClassificationHierarchyDirectory({ content, entries, renderLabel }) {
+export function ClassificationHierarchyDirectory({
+  content,
+  entries,
+  renderLabel,
+  hideEmpty = false,
+}) {
   const categories = content.categories ?? [];
   /** @param {ClassificationStandardCategory} category */
   const renderBranch = (category) => {
-    const children = categories.filter((item) => item.parent_code === category.code);
+    const children = categories
+      .filter((item) => item.parent_code === category.code)
+      .map(renderBranch)
+      .filter(Boolean);
     const labels = entries.filter((item) => item.label.parent_code === category.code);
+    if (hideEmpty && !children.length && !labels.length) return null;
     return (
       <details key={category.code} open className="hierarchy-directory-branch">
         <summary>{category.name}</summary>
-        {children.map(renderBranch)}
+        {children}
         {labels.map(renderLabel)}
       </details>
     );

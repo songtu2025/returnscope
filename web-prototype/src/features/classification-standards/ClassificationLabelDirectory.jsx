@@ -30,6 +30,7 @@ export function ClassificationLabelDirectory({
   onGroupChange,
   onResetFilters,
 }) {
+  const filtered = Boolean(query.trim() || group);
   /** @param {ClassificationLabelChange} item */
   const renderLabel = (item) => {
     const value = item.index < 0 ? item.label.code : item.index;
@@ -65,7 +66,12 @@ export function ClassificationLabelDirectory({
     <aside className="label-directory" aria-label="标签目录">
       <header>
         <strong>
-          标签目录 <span>{content.labels.length}</span>
+          标签目录{" "}
+          <span aria-live="polite">
+            {filtered
+              ? `命中 ${matches.length} / ${content.labels.length}`
+              : content.labels.length}
+          </span>
         </strong>
         {editable && (
           <button
@@ -105,6 +111,7 @@ export function ClassificationLabelDirectory({
             content={content}
             entries={matches}
             renderLabel={renderLabel}
+            hideEmpty={filtered}
           />
         ) : (
           matches.map(renderLabel)
