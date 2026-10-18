@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { DownloadSimple } from "@phosphor-icons/react";
 import { resultExportApi } from "../../shared/api/resultExportApi";
+import { errorStatus } from "../../shared/api/requestErrors";
 
 /** @typedef {import("../../shared/api/resultExportApi").ResultExport} ResultExport */
 
@@ -18,9 +19,14 @@ export function ResultDownloadButton({
   const [submitting, setSubmitting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState("");
+  const [generationFailed, setGenerationFailed] = useState(false);
   const autoDownload = useRef(false);
   const { mutate } = useSWRConfig();
-  const { data: job, error } = useSWR(
+  const {
+    data: job,
+    error,
+    mutate: refreshJob,
+  } = useSWR(
     jobId ? ["result-export", jobId] : null,
     ([, id]) => resultExportApi.get(id),
     {
@@ -51,6 +57,7 @@ export function ResultDownloadButton({
   async function start() {
     setSubmitting(true);
     setFailure("");
+    setGenerationFailed(false);
     try {
       // 每次主动下载先核对当前数据；刷新页面只恢复已有任务，不重新生成。
       const next = await resultExportApi.create(versions);
@@ -60,14 +67,42 @@ export function ResultDownloadButton({
       await mutate(["result-export", next.id], next, { revalidate: true });
       if (next.status === "ready") await save(next);
     } catch (error) {
+      setGenerationFailed(true);
       setFailure(error instanceof Error ? error.message : "提交导出失败，请重试");
     } finally {
       setSubmitting(false);
     }
   }
 
+  async function retryQuery() {
+    setSubmitting(true);
+    setFailure("");
+    try {
+      await refreshJob();
+    } catch {
+      // 查询错误由 SWR 保留，用户可继续查询同一个导出任务。
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   const pending = !error && job && ["queued", "running"].includes(job.status);
-  const message = failure || (error ? "无法查询导出状态，请重试" : job?.error);
+  const expired = Boolean(error) && [404, 410].includes(Number(errorStatus(error)));
+  const queryFailed = Boolean(error) && !expired;
+  const message = error
+    ? expired
+      ? "导出任务已失效，请重新生成"
+      : "无法查询导出状态，请重新查询"
+    : failure ||
+      job?.error ||
+      (job?.status === "failed" ? "导出生成失败，请重新生成" : "");
+  const actionLabel = queryFailed
+    ? "重新查询状态"
+    : expired || job?.status === "failed" || generationFailed
+      ? "重新生成"
+      : failure
+        ? "重试下载"
+        : label;
   return (
     <span className="result-download-control">
       <button
@@ -75,7 +110,7 @@ export function ResultDownloadButton({
         className={`secondary-button ${compact ? "compact-button" : ""}`}
         disabled={submitting || saving || Boolean(pending)}
         aria-busy={submitting || saving || Boolean(pending)}
-        onClick={() => void start()}
+        onClick={() => void (queryFailed ? retryQuery() : start())}
       >
         <DownloadSimple size={compact ? 15 : 18} />
         <span className="result-download-label">
@@ -83,13 +118,7 @@ export function ResultDownloadButton({
             {label}
           </span>
           <span>
-            {submitting || saving
-              ? "正在处理"
-              : pending
-                ? "正在生成"
-                : message
-                  ? "重试下载"
-                  : label}
+            {submitting || saving ? "正在处理" : pending ? "正在生成" : actionLabel}
           </span>
         </span>
       </button>

@@ -66,9 +66,9 @@ test("生成失败后重试同一个任务可以重新进入生成状态", async
     error: "生成失败，请重试",
   });
   mount();
-  await screen.findByRole("button", { name: "重试下载" });
+  await screen.findByRole("button", { name: "重新生成" });
   exportsMock.get.mockResolvedValue(job);
-  fireEvent.click(screen.getByRole("button", { name: "重试下载" }));
+  fireEvent.click(screen.getByRole("button", { name: "重新生成" }));
   await screen.findByRole("button", { name: "正在生成" });
   expect(exportsMock.create).toHaveBeenCalledTimes(1);
 });
@@ -83,4 +83,48 @@ test("缓存文件可直接获取，下载失败可再次点击且保留页面",
   fireEvent.click(screen.getByRole("button", { name: "重试下载" }));
   await waitFor(() => expect(exportsMock.save).toHaveBeenCalledTimes(2));
   await screen.findByRole("button", { name: "下载" });
+  expect(exportsMock.create).toHaveBeenCalledTimes(2);
+});
+
+test.each([503, 403])("状态查询失败 %s 只重新查询已有任务", async (status) => {
+  localStorage.setItem("result-export:version-1", "job-1");
+  exportsMock.get.mockRejectedValueOnce(
+    Object.assign(new Error("查询失败"), { status }),
+  );
+  mount();
+  const button = await screen.findByRole("button", { name: "重新查询状态" });
+  exportsMock.get.mockResolvedValue({ ...job, status: "ready" });
+  fireEvent.click(button);
+  await screen.findByRole("button", { name: "下载" });
+  expect(exportsMock.get).toHaveBeenCalledTimes(2);
+  expect(exportsMock.get).toHaveBeenLastCalledWith("job-1");
+  expect(exportsMock.create).not.toHaveBeenCalled();
+  expect(exportsMock.save).not.toHaveBeenCalled();
+});
+
+test.each([404, 410])("失效任务 %s 可以重新生成并保存新任务", async (status) => {
+  localStorage.setItem("result-export:version-1", "job-1");
+  exportsMock.get.mockRejectedValueOnce(Object.assign(new Error("已失效"), { status }));
+  exportsMock.create.mockResolvedValue({ ...job, id: "job-new" });
+  mount();
+  fireEvent.click(await screen.findByRole("button", { name: "重新生成" }));
+  await screen.findByRole("button", { name: "正在生成" });
+  expect(exportsMock.create).toHaveBeenCalledTimes(1);
+  expect(localStorage.getItem("result-export:version-1")).toBe("job-new");
+});
+
+test("服务端未提供失败原因时仍可重新生成", async () => {
+  localStorage.setItem("result-export:version-1", "job-1");
+  exportsMock.get.mockResolvedValue({ ...job, status: "failed" });
+  mount();
+  await screen.findByRole("button", { name: "重新生成" });
+  expect(screen.getByRole("alert").textContent).toContain("导出生成失败");
+});
+
+test("提交生成失败显示重新生成", async () => {
+  exportsMock.create.mockRejectedValue(new Error("生成服务暂不可用"));
+  mount();
+  fireEvent.click(screen.getByRole("button", { name: "下载" }));
+  await screen.findByRole("button", { name: "重新生成" });
+  expect(screen.getByRole("alert").textContent).toContain("生成服务暂不可用");
 });
