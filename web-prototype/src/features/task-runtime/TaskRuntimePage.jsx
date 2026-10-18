@@ -7,7 +7,7 @@ import "../../styles/task-flow.css";
 /** @typedef {import("../../app/navigation").Navigate} Navigate */
 
 /**
- * @param {{route: AppRoute, userId?: string, notify: (message: string, type?: "success" | "error") => void, onNavigate: Navigate, onChanged: () => void | Promise<unknown>, returnPosition?: import("react").MutableRefObject<import("../../hooks/useListReturnPosition").ListReturnPosition | null>}} props
+ * @param {{route: AppRoute, userId?: string, notify: (message: string, type?: "success" | "error") => void, onNavigate: Navigate, onChanged: () => void | Promise<unknown>, returnPosition?: import("react").MutableRefObject<import("../../hooks/useListReturnPosition").ListReturnPosition | null>, listingReturnState?: import("./useSegmentBoardView").SegmentBoardReturnRef}} props
  */
 
 export function TaskRuntimePage({
@@ -17,6 +17,7 @@ export function TaskRuntimePage({
   onNavigate,
   onChanged,
   returnPosition,
+  listingReturnState,
 }) {
   if (route.query.view === "recycle") return <TaskRecyclePage notify={notify} />;
   const query = route.query;
@@ -78,6 +79,7 @@ export function TaskRuntimePage({
       onTaskFocus={focusTask}
       taskReturn={buildHash("analysis-tasks", query)}
       returnPosition={returnPosition}
+      listingReturnState={listingReturnState}
     />
   );
 }

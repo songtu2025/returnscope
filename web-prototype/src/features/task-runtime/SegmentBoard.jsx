@@ -1,4 +1,5 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSegmentBoardView } from "./useSegmentBoardView";
 import { SegmentBoardPagination } from "./SegmentBoardPagination";
 import { SegmentBoardToolbar } from "./SegmentBoardToolbar";
 import {
@@ -22,6 +23,7 @@ import { SegmentBatchControls } from "./SegmentBatchControls";
  * @property {boolean} [readRequired]
  * @property {string | null} [focusSegmentId]
  * @property {string} [initialFilter]
+ * @property {import("./useSegmentBoardView").SegmentBoardReturnRef} [returnState]
  * @property {(segment: TaskSegment) => void} onRetry
  * @property {(segmentId: string) => Promise<unknown>} onRetryPublish
  * @property {(segmentKey: string, action: SegmentAction, note?: string) => Promise<unknown>} onAction
@@ -63,6 +65,7 @@ export function SegmentBoard({
   readRequired = false,
   focusSegmentId,
   initialFilter = "all",
+  returnState,
   onRetry,
   onRetryPublish,
   onAction,
@@ -77,21 +80,6 @@ export function SegmentBoard({
   const [retryingPublishId, setRetryingPublishId] = useState(
     /** @type {string | null} */ (null),
   );
-  const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState(initialFilter);
-  const [page, setPage] = useState(1);
-  const [expandedSegmentKey, setExpandedSegmentKey] = useState(
-    /** @type {string | null} */ (null),
-  );
-  const deferredQuery = useDeferredValue(query.trim().toLocaleLowerCase());
-  const focusedSegmentRef = useRef(/** @type {HTMLElement | null} */ (null));
-  const handledFocus = useRef(/** @type {string | null} */ (null));
-
-  useEffect(() => {
-    if (!focusSegmentId || !focusedSegmentRef.current) return;
-    focusedSegmentRef.current.scrollIntoView({ block: "center" });
-  }, [focusSegmentId, page]);
-
   const queueSegments = useMemo(
     () =>
       (task.segments ?? []).filter(
@@ -99,6 +87,30 @@ export function SegmentBoard({
       ),
     [task.segments],
   );
+  const {
+    query,
+    setQuery,
+    deferredQuery,
+    statusFilter,
+    setStatusFilter,
+    page,
+    setPage,
+    expandedSegmentKey,
+    setExpandedSegmentKey,
+    remember,
+  } = useSegmentBoardView({
+    taskId: task.id,
+    segments: queueSegments,
+    pageSize: PAGE_SIZE,
+    focusSegmentId,
+    initialFilter,
+    returnState,
+  });
+  const focusedSegmentRef = useRef(/** @type {HTMLElement | null} */ (null));
+  useEffect(() => {
+    if (!focusSegmentId || !focusedSegmentRef.current) return;
+    focusedSegmentRef.current.scrollIntoView({ block: "center" });
+  }, [focusSegmentId, page]);
   const excludedSegments = useMemo(
     () => (task.segments ?? []).filter((segment) => segment.agent_key === "unknown"),
     [task.segments],
@@ -151,27 +163,8 @@ export function SegmentBoard({
   const batchEnabled = Boolean(onBatchAction && onRefresh);
 
   useEffect(() => {
-    setPage(1);
-  }, [deferredQuery, statusFilter]);
-
-  useEffect(() => {
     setPage((current) => Math.min(current, totalPages));
-  }, [totalPages]);
-
-  useEffect(() => {
-    if (!focusSegmentId || handledFocus.current === focusSegmentId) return;
-    const index = queueSegments.findIndex((segment) =>
-      [segment.id, segment.segment_key].some(
-        (value) => String(value) === String(focusSegmentId),
-      ),
-    );
-    if (index >= 0) {
-      handledFocus.current = focusSegmentId;
-      setQuery("");
-      setStatusFilter("all");
-      setPage(Math.floor(index / PAGE_SIZE) + 1);
-    }
-  }, [focusSegmentId, queueSegments]);
+  }, [totalPages, setPage]);
 
   if (!task.segments?.length) return null;
 
@@ -258,7 +251,14 @@ export function SegmentBoard({
                 actions={{
                   onAction,
                   onRetry,
-                  onViewClassification,
+                  onViewClassification: (
+                    segment,
+                    qualityStatus,
+                    systemRerunRequired,
+                  ) => {
+                    remember(segment);
+                    onViewClassification(segment, qualityStatus, systemRerunRequired);
+                  },
                   onRetryPublish,
                 }}
               />

@@ -19,6 +19,7 @@ import { taskSummary } from "./taskRegistryPolicy";
 /**
  * @typedef {Object} TaskDetailProps
  * @property {AnalysisTask} task
+ * @property {import("./useSegmentBoardView").SegmentBoardReturnRef} [listingReturnState]
  * @property {string | null} [focusSegmentId]
  * @property {TaskEvent[]} events
  * @property {(segment: TaskSegment & {result_version_id: string}, qualityStatus?: string, systemRerunRequired?: string) => void} onViewClassification
@@ -48,6 +49,7 @@ const DETAIL_TABS = [
 /** @param {TaskDetailProps} props */
 export function TaskDetail({
   task,
+  listingReturnState,
   focusSegmentId,
   events,
   onViewClassification,
@@ -195,6 +197,7 @@ export function TaskDetail({
             <SegmentBoard
               key={listingFilter}
               initialFilter={listingFilter}
+              returnState={listingReturnState}
               task={task}
               disabled={Boolean(taskAction)}
               readRequired={batchReadRequired}

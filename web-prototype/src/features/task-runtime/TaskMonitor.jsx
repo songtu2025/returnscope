@@ -145,6 +145,7 @@ export function TaskMonitor(props) {
             <TaskDetail
               key={selected.id}
               task={selected}
+              listingReturnState={props.listingReturnState}
               onTaskRenamed={onTaskRenamed}
               {...taskLifecycleActions({
                 ...state,

@@ -28,6 +28,11 @@ export function AppPages({ route, user, notify, navigate, refreshSystem }) {
     ),
   );
   const page = route.page;
+  const listingReturnState = useRef(
+    /** @type {import("../features/task-runtime/useSegmentBoardView").SegmentBoardReturnState | null} */ (
+      null
+    ),
+  );
   const title =
     page === "task-create"
       ? "创建分析任务"
@@ -59,6 +64,7 @@ export function AppPages({ route, user, notify, navigate, refreshSystem }) {
               userId={user.id}
               route={route}
               returnPosition={taskReturnPosition}
+              listingReturnState={listingReturnState}
               notify={notify}
               onNavigate={navigate}
               onChanged={refreshSystem}

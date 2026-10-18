@@ -241,3 +241,41 @@ test("没有执行片段时不渲染队列；搜索无结果保留条件及分�
   expect(screen.getByLabelText("搜索 Listing")).toHaveValue("不存在的合成Listing");
   expect(screen.getByText("共 0 条")).toBeVisible();
 });
+
+test("查看结果后返回保留 Listing 查询、筛选、第二页和展开详情", async () => {
+  const returnState = { current: null };
+  const props = propsFor(
+    Array.from({ length: 25 }, (_, index) =>
+      segment(index, {
+        status: "completed",
+        result_version_id: "synthetic-result",
+        result_publish_status: "published",
+      }),
+    ),
+  );
+  const view = render(<SegmentBoard {...props} returnState={returnState} />);
+  await userEvent.type(screen.getByLabelText("搜索 Listing"), "SYNTHETIC");
+  await userEvent.selectOptions(
+    screen.getByLabelText("按 Listing 状态筛选"),
+    "delivered",
+  );
+  await userEvent.click(screen.getByRole("button", { name: "下一页" }));
+  await userEvent.click(screen.getByRole("button", { name: "查看 SYNTHETIC-24 详情" }));
+  const row = screen.getByText("SYNTHETIC-24").closest("article");
+  await userEvent.click(within(row).getByRole("button", { name: "查看结果" }));
+  expect(props.onViewClassification).toHaveBeenCalledOnce();
+  view.unmount();
+  const returned = render(
+    <SegmentBoard {...props} returnState={returnState} focusSegmentId="synthetic-24" />,
+  );
+  expect(screen.getByLabelText("搜索 Listing")).toHaveValue("SYNTHETIC");
+  expect(screen.getByLabelText("按 Listing 状态筛选")).toHaveValue("delivered");
+  expect(screen.getByLabelText("第 2 页")).toBeVisible();
+  expect(
+    returned.container.querySelector(".listing-row.is-targeted"),
+  ).toHaveTextContent("SYNTHETIC-24");
+  expect(
+    screen.getByRole("button", { name: "查看 SYNTHETIC-24 详情" }),
+  ).toHaveAttribute("aria-expanded", "true");
+  expect(returnState.current).toBeNull();
+});
