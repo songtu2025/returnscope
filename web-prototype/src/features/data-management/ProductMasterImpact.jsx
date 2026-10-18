@@ -74,7 +74,7 @@ function ProductAuditEntry({ entry }) {
         <time>{formatTime(entry.created_at)}</time>
       </header>
       {category ? (
-        <p>店铺：{entry.after?.store || "--"} · 品类补充</p>
+        <CategoryCompletionDetails entry={entry} />
       ) : (
         <AuditDiff
           partialAfter={entry.action === "dimension_row_update"}
@@ -89,4 +89,69 @@ function ProductAuditEntry({ entry }) {
       )}
     </div>
   );
+}
+
+/** @typedef {{store?: string, msku?: string, category_a?: string, category_b?: string, rows?: number[]}} CategoryAuditItem */
+
+/** @param {{entry: NonNullable<DatasetRecord["audit"]>[number]}} props */
+function CategoryCompletionDetails({ entry }) {
+  const items = /** @type {CategoryAuditItem[]} */ (entry.after?.items ?? []);
+  const before = /** @type {CategoryAuditItem[]} */ (entry.before?.items ?? []);
+  return (
+    <>
+      <p>店铺：{entry.after?.store || "--"} · 品类补充</p>
+      {items.map((item, index) => {
+        const store = item.store || entry.after?.store;
+        // 审计按店铺与 MSKU 保存身份，不能按数组位置或仅按 MSKU 配对。
+        const previous =
+          item.msku && store
+            ? before.find((value) => value.store === store && value.msku === item.msku)
+            : undefined;
+        return (
+          <CategoryCompletionItem
+            key={`${store}-${item.msku}-${index}`}
+            item={item}
+            previous={previous}
+            store={store}
+          />
+        );
+      })}
+      {!items.length && <p className="muted-line">未记录商品明细。</p>}
+    </>
+  );
+}
+
+/** @param {{item: CategoryAuditItem, previous?: CategoryAuditItem, store?: string}} props */
+function CategoryCompletionItem({ item, previous, store }) {
+  const rows = previous?.rows;
+  const added = Array.isArray(rows) && rows.length === 0;
+  const hasDetails = [item.category_a, item.category_b].some(
+    (value) => value !== undefined,
+  );
+  return (
+    <details className="audit-unchanged">
+      <summary>
+        店铺：{store || "未记录"} · MSKU：{item.msku || "未记录"}
+        {added ? " · 新增商品" : ""}
+      </summary>
+      {hasDetails ? (
+        <AuditDiff
+          before={categoryValues(previous, added ? "新增商品" : "未记录")}
+          after={categoryValues(item)}
+        />
+      ) : (
+        <p className="muted-line">未记录品类明细，无法展示前后变化。</p>
+      )}
+      {rows && rows.length > 1 && (
+        <p className="muted-line">
+          本次关联 {rows.length} 行，修改前品类取审计记录保存的首行值。
+        </p>
+      )}
+    </details>
+  );
+}
+
+/** @param {CategoryAuditItem | undefined} item @param {string} [fallback] */
+function categoryValues(item, fallback = "未记录") {
+  return { 品类A: item?.category_a ?? fallback, 品类B: item?.category_b ?? fallback };
 }

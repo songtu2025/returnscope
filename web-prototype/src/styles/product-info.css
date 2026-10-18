@@ -251,6 +251,10 @@
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+.product-audit-entry > details > summary {
+  min-height: 24px;
+  overflow-wrap: anywhere;
+}
 .product-audit-entry .product-audit-reason {
   display: block;
   margin: 12px 0 0;
@@ -261,8 +265,7 @@
 .product-master-impact .card-heading h3 {
   font-size: 14px;
 }
-.product-master-impact .product-audit-entry > p,
-.product-master-impact .audit-diff > p {
+.product-master-impact .product-audit-entry p {
   display: block;
   font-size: 13px;
 }
