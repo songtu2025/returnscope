@@ -6,14 +6,16 @@ import math
 from collections.abc import Iterator
 from functools import lru_cache
 from io import BytesIO
-from typing import Any
+from typing import Any, cast
 from unicodedata import east_asian_width
 
 from openpyxl import Workbook
 from openpyxl.cell import WriteOnlyCell
+from openpyxl.cell.cell import Cell
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.styles.cell_style import StyleArray
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet._write_only import WriteOnlyWorksheet
 
 from web_backend.classification_results.result_export import (
     SEMANTIC_COLUMNS,
@@ -36,6 +38,17 @@ _WIDTHS = {
 }
 
 
+class _ResultWorksheet(WriteOnlyWorksheet):
+    """仅接收本导出器已构建的单元格，省去通用值转换和临时对象。"""
+
+    def _values_to_row(self, values: list[Cell], row_idx: int) -> Iterator[Cell]:
+        # 适配固定的 openpyxl 3.1.5 内部入口，原写入器仍负责全部 XML。
+        for col_idx, cell in enumerate(values, 1):
+            cell.column = col_idx
+            cell.row = row_idx
+            yield cell
+
+
 def result_workbook(
     summaries: list[dict[str, Any]],
     semantics: list[dict[str, Any]],
@@ -54,7 +67,8 @@ def result_workbook(
         ("语义明细", SEMANTIC_COLUMNS, semantics),
         ("源明细", SOURCE_COLUMNS, sources),
     ):
-        sheet = workbook.create_sheet(title)
+        sheet: Any = _ResultWorksheet(workbook, title)
+        cast(Any, workbook)._add_sheet(sheet)
         sheet.freeze_panes = "D2" if title == "反馈汇总" else "C2"
         sheet.sheet_view.showGridLines = False
         sheet.sheet_view.zoomScale = 85
