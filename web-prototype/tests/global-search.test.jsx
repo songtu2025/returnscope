@@ -83,6 +83,79 @@ describe("全局搜索输入法与键盘", () => {
   });
 });
 
+test("同名任务显示标识和创建时间，粘贴任务 ID 可定位并打开", async () => {
+  vi.mocked(api.tasks).mockResolvedValue([
+    {
+      id: "task-demo-first",
+      title: "同名任务",
+      created_at: "2026-10-01T00:00:00Z",
+      status: "done",
+      owner_name: "合成用户",
+    },
+    {
+      id: "task-demo-second",
+      title: "同名任务",
+      created_at: "2026-10-02T00:00:00Z",
+      status: "done",
+      owner_name: "合成用户",
+    },
+  ]);
+  const onSelect = vi.fn();
+  render(<GlobalSearch onSelect={onSelect} onClose={vi.fn()} />);
+  expect(
+    await screen.findByRole("button", {
+      name: /同名任务.*task-demo-first · 2026-10-01/,
+    }),
+  ).toBeVisible();
+  expect(
+    screen.getByRole("button", { name: /同名任务.*task-demo-second · 2026-10-02/ }),
+  ).toBeVisible();
+  const input = screen.getByRole("textbox");
+  fireEvent.change(input, { target: { value: "task-demo-second" } });
+  expect(
+    screen.queryByRole("button", { name: /task-demo-first/ }),
+  ).not.toBeInTheDocument();
+  expect(fireEvent.keyDown(input, { key: "Enter" })).toBe(false);
+  expect(onSelect).toHaveBeenCalledExactlyOnceWith("analysis-tasks", {
+    kind: "task",
+    id: "task-demo-second",
+  });
+});
+
+test("同订单反馈显示不同结果标识，选择第二条进入对应版本", async () => {
+  vi.mocked(api.searchClassificationFeedback).mockResolvedValue({
+    items: ["first001", "second02"].map((version) => ({
+      record: {
+        id: version,
+        result_version_id: `classification_version_${version}`,
+        comment: "相同反馈",
+        listing: "DEMO",
+        store_site: "合成店铺",
+        order_id: "DEMO-ORDER",
+      },
+    })),
+  });
+  const onSelect = vi.fn();
+  render(<GlobalSearch onSelect={onSelect} onClose={vi.fn()} />);
+  const input = screen.getByRole("textbox");
+  fireEvent.change(input, { target: { value: "DEMO-ORDER" } });
+  expect(
+    await screen.findByRole("button", { name: /相同反馈.*结果 first001 · 合成店铺/ }),
+  ).toBeVisible();
+  expect(
+    screen.getByTitle("结果版本 ID：classification_version_second02"),
+  ).toBeVisible();
+  await userEvent.click(
+    screen.getByRole("button", { name: /相同反馈.*结果 second02 · 合成店铺/ }),
+  );
+  expect(onSelect).toHaveBeenCalledExactlyOnceWith("classification-results", {
+    kind: "classification-result",
+    id: "classification_version_second02",
+    listing: "DEMO",
+    orderId: "DEMO-ORDER",
+  });
+});
+
 describe("全局搜索分类加载", () => {
   test("产品失败不影响已返回任务，独立重试不重拉任务", async () => {
     vi.mocked(api.datasets).mockRejectedValueOnce(new Error("合成产品失败"));

@@ -139,8 +139,10 @@ export function GlobalSearch({ onClose, onSelect }) {
                 event.keyCode === 229
               )
                 return;
-              if (event.key === "Enter" && matches[0])
+              if (event.key === "Enter" && matches[0]) {
+                event.preventDefault();
                 onSelect(matches[0].page, matches[0].focus);
+              }
               if (event.key === "ArrowDown" || event.key === "ArrowUp") {
                 event.preventDefault();
                 const buttons = [
@@ -220,7 +222,7 @@ export function GlobalSearch({ onClose, onSelect }) {
                 </span>
                 <div>
                   <b>{item.title}</b>
-                  <small>{item.meta}</small>
+                  <small title={item.metaTitle || item.meta}>{item.meta}</small>
                 </div>
                 <em>{item.type}</em>
                 <CaretRight size={16} />

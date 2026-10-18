@@ -1,12 +1,13 @@
 import { Database, ListChecks, PlayCircle } from "@phosphor-icons/react";
 import { STATUS_LABELS } from "../constants";
+import { formatTime } from "../lib/presentation";
 
 /** @typedef {import("./navigation").NavigationFocus} NavigationFocus */
-/** @typedef {{id: string, title: string, owner_name: string, status: keyof typeof STATUS_LABELS, store: string, listing?: string}} SearchTask */
+/** @typedef {{id: string, title: string, owner_name: string, status: keyof typeof STATUS_LABELS, store: string, listing?: string, created_at?: string}} SearchTask */
 /** @typedef {{id: string, kind: string, name: string, current_version: number, row_count: number, description?: string}} SearchDataset */
 /** @typedef {import("../shared/api/generated/classification-results/types.gen").ClassificationResultGroupResponse} SearchFeedback */
 /** @typedef {{tasks: SearchTask[], datasets: SearchDataset[], feedback: SearchFeedback[]}} SearchResources */
-/** @typedef {{id: string, type: string, icon: import("react").ElementType, title: string, meta: string, keywords: string, page: string, focus: NavigationFocus}} GlobalSearchItem */
+/** @typedef {{id: string, type: string, icon: import("react").ElementType, title: string, meta: string, metaTitle?: string, keywords: string, page: string, focus: NavigationFocus}} GlobalSearchItem */
 
 /** @param {SearchTask} task @returns {GlobalSearchItem} */
 const taskSearchItem = (task) => ({
@@ -14,8 +15,8 @@ const taskSearchItem = (task) => ({
   type: "任务",
   icon: PlayCircle,
   title: task.title,
-  meta: `${task.owner_name} · ${STATUS_LABELS[task.status] ?? task.status}`,
-  keywords: `${task.title} ${task.store} ${task.listing ?? ""} ${task.owner_name}`,
+  meta: `${task.id} · ${formatTime(task.created_at)} · ${task.owner_name} · ${STATUS_LABELS[task.status] ?? task.status}`,
+  keywords: `${task.id} ${task.title} ${task.store} ${task.listing ?? ""} ${task.owner_name}`,
   page: "analysis-tasks",
   focus: {
     kind: "task",
@@ -41,7 +42,8 @@ const feedbackSearchItem = ({ record }) => ({
   type: record.quality_status === "review_required" ? "待复核反馈" : "用户反馈",
   icon: ListChecks,
   title: record.comment || record.reason || record.order_id || "用户反馈",
-  meta: `${record.listing} · ${record.order_id || "无订单号"}`,
+  meta: `结果 ${record.result_version_id.slice(-8)} · ${record.store_site || "未提供店铺/站点"} · ${record.listing || "未提供 Listing"} · ${record.order_id || "无订单号"}`,
+  metaTitle: `结果版本 ID：${record.result_version_id}`,
   keywords: `${record.comment || ""} ${record.reason || ""} ${record.order_id || ""} ${record.listing || ""} ${record.product_name || ""}`,
   page: "classification-results",
   focus: {
