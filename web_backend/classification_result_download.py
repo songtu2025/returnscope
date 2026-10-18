@@ -4,6 +4,7 @@ import sqlite3
 from typing import TYPE_CHECKING, Any
 
 from return_semantics.schemas import TaxonomyConfig
+from return_semantics.taxonomy_hierarchy import reuse_taxonomy_paths
 from web_backend.classification_results.record_groups import assemble_record_groups
 from web_backend.classification_results.result_export import (
     feedback_export_row,
@@ -76,7 +77,8 @@ class _ClassificationResultDownload:
             ) -> dict[str, Any]:
                 return self._enrich_record(self._serialize_record(row), taxonomy)
 
-            groups = assemble_record_groups(rows, prepare_record)
+            with reuse_taxonomy_paths(taxonomy):
+                groups = assemble_record_groups(rows, prepare_record)
             for group in groups:
                 feedback_id = f"F{len(output) + 1:06d}"
                 details = semantic_export_rows(group["record"], feedback_id)

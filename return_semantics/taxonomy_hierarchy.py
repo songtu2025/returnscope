@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
+from functools import wraps
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -8,6 +12,40 @@ if TYPE_CHECKING:
         LabelDefinition,
         TaxonomyConfig,
     )
+
+
+_path_cache: ContextVar[
+    tuple[TaxonomyConfig | None, dict[tuple[str, str], tuple[str, ...]]] | None
+] = ContextVar("taxonomy_path_cache", default=None)
+
+
+@contextmanager
+def reuse_taxonomy_paths(taxonomy: TaxonomyConfig | None) -> Iterator[None]:
+    """仅在当前不可变标准快照的处理阶段复用路径，退出即释放。"""
+    token = _path_cache.set((taxonomy, {}))
+    try:
+        yield
+    finally:
+        _path_cache.reset(token)
+
+
+def _cached_path(
+    function: Callable[[TaxonomyConfig, str], list[str]],
+) -> Callable[[TaxonomyConfig, str], list[str]]:
+    @wraps(function)
+    def read(taxonomy: TaxonomyConfig, code: str) -> list[str]:
+        state = _path_cache.get()
+        if state is None or state[0] is not taxonomy:
+            return function(taxonomy, code)
+        key = (function.__name__, code)
+        cached = state[1].get(key)
+        if cached is None:
+            cached = tuple(function(taxonomy, code))
+            state[1][key] = cached
+        # 返回新列表，调用方修改路径时不会污染后续查询。
+        return list(cached)
+
+    return read
 
 
 def _category_chain(
@@ -45,6 +83,7 @@ def validate_hierarchy(taxonomy: TaxonomyConfig) -> None:
         label.group = categories[chain[0]].name
 
 
+@_cached_path
 def label_path_codes(taxonomy: TaxonomyConfig, code: str) -> list[str]:
     """返回分类或标签的完整编码路径，未知编码返回空列表。"""
     categories = {node.code: node for node in taxonomy.categories}
@@ -58,6 +97,7 @@ def label_path_codes(taxonomy: TaxonomyConfig, code: str) -> list[str]:
     return [*_category_chain(categories, label.parent_code), code]
 
 
+@_cached_path
 def label_path(taxonomy: TaxonomyConfig, code: str) -> list[str]:
     """依据当前版本还原名称路径，旧版本只保留原有分组信息。"""
     if taxonomy.structure_version == 2:

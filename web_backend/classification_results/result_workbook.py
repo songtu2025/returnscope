@@ -77,11 +77,14 @@ def result_workbook(
             sheet.column_dimensions[get_column_letter(index)].width = _WIDTHS.get(
                 name, 20
             )
+        reusable_cells: list[Any] = [WriteOnlyCell(sheet) for _ in columns]
         for row_index, values in enumerate(_sheet_values(columns, rows), 1):
             cells = []
             kind = 0 if row_index == 1 else (1 if row_index % 2 == 0 else 2)
-            for value in values:
-                cell: Any = WriteOnlyCell(sheet, value=value)
+            for cell, value in zip(reusable_cells, values, strict=True):
+                # 清空上一行样式，再按新值重新推导日期等数字格式。
+                cell._style = None
+                cell.value = value
                 # 所有原文和标识均按文本处理，不能被 Excel 当作公式。
                 if isinstance(value, str):
                     cell.data_type = "s"

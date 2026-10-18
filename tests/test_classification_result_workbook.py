@@ -16,6 +16,22 @@ from openpyxl.worksheet._write_only import WriteOnlyWorksheet
 from web_backend.classification_results import result_workbook as renderer
 
 
+def assert_workbook_members_equal(left_content: bytes, right_content: bytes) -> None:
+    """逐项比较归档内容，仅排除工作簿创建和修改时间。"""
+    with ZipFile(BytesIO(left_content)) as new, ZipFile(BytesIO(right_content)) as old:
+        assert new.namelist() == old.namelist()
+        for name in new.namelist():
+            left, right = new.read(name), old.read(name)
+            if name == "docProps/core.xml":
+                trees = [ElementTree.fromstring(left), ElementTree.fromstring(right)]
+                for tree in trees:
+                    for child in list(tree):
+                        if child.tag.rsplit("}", 1)[-1] in {"created", "modified"}:
+                            tree.remove(child)
+                left, right = [ElementTree.tostring(tree) for tree in trees]
+            assert left == right, name
+
+
 def test_styles_keep_text_dates_stripes_and_sheet_layout():
     values = [None, 0, False, date(2026, 10, 17), datetime(2026, 10, 17, 12, 30)]
     values += [
@@ -66,6 +82,8 @@ def test_styles_keep_text_dates_stripes_and_sheet_layout():
                 assert cell.number_format == (
                     "yyyy-mm-dd" if type(value) is date else "yyyy-mm-dd h:mm:ss"
                 )
+            else:
+                assert cell.number_format == "General"
         assert sheet.row_dimensions[9].height == 58
         assert sheet.row_dimensions[11].height == 180
     book.close()
@@ -133,18 +151,7 @@ def test_prepared_cells_keep_original_workbook_xml(monkeypatch, empty):
     contents = [renderer.result_workbook(rows, rows, rows)]
     monkeypatch.setattr(renderer, "_ResultWorksheet", WriteOnlyWorksheet)
     contents.append(renderer.result_workbook(rows, rows, rows))
-    with ZipFile(BytesIO(contents[0])) as new, ZipFile(BytesIO(contents[1])) as old:
-        assert new.namelist() == old.namelist()
-        for name in new.namelist():
-            left, right = new.read(name), old.read(name)
-            if name == "docProps/core.xml":
-                trees = [ElementTree.fromstring(left), ElementTree.fromstring(right)]
-                for tree in trees:
-                    for child in list(tree):
-                        if child.tag.rsplit("}", 1)[-1] in {"created", "modified"}:
-                            tree.remove(child)
-                left, right = [ElementTree.tostring(tree) for tree in trees]
-            assert left == right, name
+    assert_workbook_members_equal(*contents)
 
 
 def test_prepared_cells_bind_once_without_changing_other_workbooks(monkeypatch):
@@ -174,3 +181,24 @@ def test_prepared_cells_bind_once_without_changing_other_workbooks(monkeypatch):
     reopened = load_workbook(output, read_only=True)
     assert list(reopened.active.values) == [("普通文本", 42)]
     reopened.close()
+
+
+def test_streaming_allocates_one_cell_per_column(monkeypatch):
+    created = []
+    original = Cell.__init__
+
+    def counted(cell, *args, **kwargs):
+        created.append(1)
+        original(cell, *args, **kwargs)
+
+    monkeypatch.setattr(Cell, "__init__", counted)
+    rows = [{"产品名称": "合成产品", "反馈正文": "合成正文"}] * 100
+    renderer.result_workbook(rows, rows, rows)
+    assert len(created) == sum(
+        len(columns)
+        for columns in [
+            renderer.SUMMARY_COLUMNS,
+            renderer.SEMANTIC_COLUMNS,
+            renderer.SOURCE_COLUMNS,
+        ]
+    )
