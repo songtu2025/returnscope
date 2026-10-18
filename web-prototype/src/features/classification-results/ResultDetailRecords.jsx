@@ -26,7 +26,12 @@ export function ResultDetailRecords(context) {
   const regionRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   useLoadingHeight(recordsLoading, regionRef);
   return (
-    <section className="result-record-card" id="classification-order-records">
+    <section
+      className="result-record-card"
+      id="classification-order-records"
+      tabIndex={-1}
+      aria-label={isUserFeedback ? "用户反馈记录" : "订单级分类记录"}
+    >
       <ResultRecordHeading {...context} />
       <div ref={regionRef} className="loading-region" aria-busy={recordsLoading}>
         {recordsError && <ResultError message={recordsError} onRetry={retryRecords} />}

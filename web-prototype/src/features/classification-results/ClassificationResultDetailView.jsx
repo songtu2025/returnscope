@@ -1,4 +1,6 @@
 import { useSWRConfig } from "swr";
+import { useContext, useEffect, useRef } from "react";
+import { PageLoadingContext } from "../../hooks/usePageLoading";
 import { refreshServerState } from "../../shared/serverState";
 import { ArrowLeft, ListChecks, WarningCircle } from "@phosphor-icons/react";
 import { ResultVersionReviewPanel } from "../review-batches/ResultVersionReviewPanel";
@@ -34,6 +36,34 @@ export function ClassificationResultDetailView(props) {
     allNeedReviewWithoutProblems,
     selectVersion,
   } = context;
+  const loadingScope = useContext(PageLoadingContext);
+  const locateRecords = useRef(
+    Boolean(route.recordQualityStatus || route.systemRerunRequired),
+  );
+  useEffect(() => {
+    if (
+      !locateRecords.current ||
+      loadingScope?.initial ||
+      props.recordsLoading ||
+      props.recordsError ||
+      !props.records ||
+      route.tab !== "records" ||
+      selectedGroup
+    )
+      return;
+    const region = document.getElementById("classification-order-records");
+    if (!region) return;
+    region.scrollIntoView({ block: "start" });
+    region.focus({ preventScroll: true });
+    locateRecords.current = false;
+  }, [
+    loadingScope?.initial,
+    props.recordsLoading,
+    props.recordsError,
+    props.records,
+    route.tab,
+    selectedGroup,
+  ]);
   const refreshRelated = async () => {
     await refreshServerState(mutate, [
       "classification-results",

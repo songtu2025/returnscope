@@ -107,6 +107,9 @@
   margin-bottom: 14px;
   overflow: hidden;
 }
+.result-record-card {
+  scroll-margin-top: 84px;
+}
 .result-drilldown-card > header,
 .result-record-card > header {
   display: flex;

@@ -28,7 +28,13 @@ vi.mock("../src/features/classification-results/ResultDetailDrilldown", () => ({
   ResultDetailDrilldown: () => null,
 }));
 vi.mock("../src/features/classification-results/ResultDetailRecords", () => ({
-  ResultDetailRecords: () => null,
+  ResultDetailRecords: () => (
+    <section
+      id="classification-order-records"
+      tabIndex={-1}
+      aria-label="合成反馈记录"
+    />
+  ),
 }));
 const api = vi.hoisted(() => ({
   resultTaxonomy: vi.fn(),
@@ -62,6 +68,31 @@ beforeEach(() => {
   api.correctClassificationResult.mockResolvedValue({ version_id: "next" });
 });
 afterEach(cleanup);
+
+test.each(["review_required", ""])("仅待办入口在记录就绪后定位一次：%s", (status) => {
+  const props = {
+    route: { tab: "records", recordQualityStatus: status },
+    result: {},
+    policy: {},
+    records: { items: [] },
+    recordsLoading: true,
+  };
+  const view = render(<ClassificationResultDetailView {...props} />);
+  const region = screen.getByRole("region", { name: "合成反馈记录" });
+  const scroll = vi.spyOn(region, "scrollIntoView");
+  expect(region).not.toHaveFocus();
+  view.rerender(<ClassificationResultDetailView {...props} recordsLoading={false} />);
+  if (status) expect(region).toHaveFocus();
+  else expect(region).not.toHaveFocus();
+  view.rerender(
+    <ClassificationResultDetailView
+      {...props}
+      recordsLoading={false}
+      records={{ items: [] }}
+    />,
+  );
+  expect(scroll).toHaveBeenCalledTimes(status ? 1 : 0);
+});
 
 test.each([true, false])("结果详情按进入来源返回，任务来源=%s", (fromTask) => {
   const updateRoute = vi.fn();
