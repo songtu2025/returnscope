@@ -27,6 +27,7 @@ import { RESULT_PAGE_SIZES } from "./classificationResultConstants";
  * @property {"records" | "history"} tab
  * @property {string} selectionToken
  * @property {string} taskId
+ * @property {string} [taskReturn]
  * @property {string} [dashboardReturn]
  * @property {string} segmentId
  * @property {string} reviewBatchId
@@ -71,6 +72,7 @@ export function classificationResultRouteState(query) {
     tab: query.tab === "history" ? "history" : "records",
     selectionToken: queryValue(query, "selection_token"),
     taskId: queryValue(query, "task_id"),
+    taskReturn: queryValue(query, "task_return"),
     dashboardReturn: queryValue(query, "dashboard_return"),
     segmentId: queryValue(query, "segment_id"),
     reviewBatchId: queryValue(query, "review_batch_id"),
@@ -107,6 +109,7 @@ export function writeClassificationResultRoute(route) {
     tab: route.tab === "history" ? "history" : "",
     selection_token: route.selectionToken,
     task_id: route.taskId,
+    task_return: route.taskReturn,
     dashboard_return: route.dashboardReturn,
     segment_id: route.segmentId,
     review_batch_id: route.reviewBatchId,
@@ -124,7 +127,9 @@ export function returnFromClassificationResult(route, updateRoute) {
     }
   }
   if (route.taskId) {
+    const target = route.taskReturn ? parseHash(route.taskReturn) : null;
     navigateHash("analysis-tasks", {
+      ...(target?.page === "analysis-tasks" ? target.query : {}),
       task_id: route.taskId,
       segment_id: route.segmentId,
     });

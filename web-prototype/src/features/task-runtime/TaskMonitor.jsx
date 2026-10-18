@@ -44,6 +44,7 @@ export function TaskMonitor(props) {
     identity: JSON.stringify(listState),
     active: !showTaskDetail && !props.focusId,
     ready: !loading && (taskData !== undefined || Boolean(listError)),
+    snapshotRef: props.returnPosition,
   });
   return (
     <div className="standard-page task-page task-runtime-workspace">
@@ -171,6 +172,7 @@ export function TaskMonitor(props) {
                   kind: "classification-result",
                   id: segment.result_version_id,
                   taskId: selected.id,
+                  ...(props.taskReturn ? { taskReturn: props.taskReturn } : {}),
                   segmentId: segment.id || segment.segment_key,
                   listing: segment.scope?.listing,
                   recordQualityStatus: qualityStatus,

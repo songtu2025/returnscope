@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, useRef } from "react";
 import { PageLoadingState } from "../components/SharedUi";
 import { PageErrorBoundary } from "./PageErrorBoundary";
 import { PageLoadingScope } from "./PageLoadingScope";
@@ -22,6 +22,11 @@ import {
 
 /** @param {{route: AppRoute, user: CurrentUser, notify: Notify, navigate: Navigate, refreshSystem: () => Promise<void>}} props */
 export function AppPages({ route, user, notify, navigate, refreshSystem }) {
+  const taskReturnPosition = useRef(
+    /** @type {import("../hooks/useListReturnPosition").ListReturnPosition | null} */ (
+      null
+    ),
+  );
   const page = route.page;
   const title =
     page === "task-create"
@@ -53,6 +58,7 @@ export function AppPages({ route, user, notify, navigate, refreshSystem }) {
             <TaskRuntimePage
               userId={user.id}
               route={route}
+              returnPosition={taskReturnPosition}
               notify={notify}
               onNavigate={navigate}
               onChanged={refreshSystem}

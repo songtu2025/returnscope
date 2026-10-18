@@ -16,6 +16,13 @@ vi.mock("../src/features/task-runtime/TaskMonitor", () => ({
 import { TaskRuntimePage } from "../src/features/task-runtime/TaskRuntimePage";
 import { SegmentBoardRow } from "../src/features/task-runtime/SegmentBoardRow";
 import { renderWithServerState as render } from "./renderWithServerState";
+import { buildHash, parseHash } from "../src/app/hashRouter";
+import { routeForDestination } from "../src/app/navigation";
+import {
+  classificationResultRouteState,
+  returnFromClassificationResult,
+  writeClassificationResultRoute,
+} from "../src/features/classification-results/classificationResultRoute";
 
 afterEach(() => {
   cleanup();
@@ -100,6 +107,59 @@ test("任务列表筛选写入 URL 并保留任务焦点", () => {
   props.onTaskFocus(null);
   expect(window.location.hash).not.toContain("task_id");
   expect(window.location.hash).toContain("status=active");
+});
+
+test("任务来源随结果筛选和历史切换保留，返回任务及列表恢复完整条件", () => {
+  const query = {
+    task_id: "task-1",
+    q: "100条",
+    attention: "1",
+    scope: "mine",
+    status: "finished",
+    owner: "合成用户",
+    sort: "created_desc",
+  };
+  const returnPosition = { current: null };
+  const props = {
+    notify: vi.fn(),
+    onNavigate: vi.fn(),
+    onChanged: vi.fn(),
+    returnPosition,
+  };
+  const view = render(<TaskRuntimePage {...props} route={{ query }} />);
+  const monitor = taskMonitorProbe.mock.calls.at(-1)[0];
+  expect(monitor.returnPosition).toBe(returnPosition);
+  expect(monitor.taskReturn).toBe(buildHash("analysis-tasks", query));
+  const target = routeForDestination("classification-results", {
+    kind: "classification-result",
+    id: "result-1",
+    taskId: "task-1",
+    segmentId: "segment-2",
+    taskReturn: monitor.taskReturn,
+  });
+  const resultRoute = classificationResultRouteState(target.query);
+  writeClassificationResultRoute({ ...resultRoute, tab: "history", recordPage: 3 });
+  returnFromClassificationResult(
+    classificationResultRouteState(parseHash().query),
+    vi.fn(),
+  );
+  expect(parseHash().query).toEqual({ ...query, segment_id: "segment-2" });
+  view.rerender(<TaskRuntimePage {...props} route={parseHash()} />);
+  taskMonitorProbe.mock.calls.at(-1)[0].onTaskFocus(null);
+  const { task_id: _task, ...listQuery } = query;
+  expect(parseHash().query).toEqual(listQuery);
+});
+
+test("任务返回拒绝其他页面的来源条件，仍定位明确的任务和 Listing", () => {
+  returnFromClassificationResult(
+    {
+      taskId: "task-1",
+      segmentId: "segment-2",
+      taskReturn: "#settings?q=不应继承",
+    },
+    vi.fn(),
+  );
+  expect(parseHash().query).toEqual({ task_id: "task-1", segment_id: "segment-2" });
 });
 
 test("后端标记系统异常可重试时展示专用入口并复用 Listing 重试动作", async () => {

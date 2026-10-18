@@ -1,16 +1,23 @@
 import { TaskRecyclePage } from "./TaskRecyclePage";
 import { TaskMonitor } from "./TaskMonitor";
-import { navigateHash } from "../../app/hashRouter";
+import { buildHash, navigateHash } from "../../app/hashRouter";
 import "../../styles/task-flow.css";
 
 /** @typedef {import("../../app/navigation").AppRoute} AppRoute */
 /** @typedef {import("../../app/navigation").Navigate} Navigate */
 
 /**
- * @param {{route: AppRoute, userId?: string, notify: (message: string, type?: "success" | "error") => void, onNavigate: Navigate, onChanged: () => void | Promise<unknown>}} props
+ * @param {{route: AppRoute, userId?: string, notify: (message: string, type?: "success" | "error") => void, onNavigate: Navigate, onChanged: () => void | Promise<unknown>, returnPosition?: import("react").MutableRefObject<import("../../hooks/useListReturnPosition").ListReturnPosition | null>}} props
  */
 
-export function TaskRuntimePage({ route, userId, notify, onNavigate, onChanged }) {
+export function TaskRuntimePage({
+  route,
+  userId,
+  notify,
+  onNavigate,
+  onChanged,
+  returnPosition,
+}) {
   if (route.query.view === "recycle") return <TaskRecyclePage notify={notify} />;
   const query = route.query;
   const filter =
@@ -69,6 +76,8 @@ export function TaskRuntimePage({ route, userId, notify, onNavigate, onChanged }
       listState={listState}
       onListStateChange={updateListState}
       onTaskFocus={focusTask}
+      taskReturn={buildHash("analysis-tasks", query)}
+      returnPosition={returnPosition}
     />
   );
 }
