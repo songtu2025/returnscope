@@ -2102,12 +2102,12 @@ test("分类结果选择跨分页恢复且需复核版本也可纳入", async ()
   const view = render(<ResultsHarness />);
 
   const readyCheckbox = await screen.findByRole("checkbox", {
-    name: "选择 L001 结果 v1",
+    name: /^选择 L001 结果 v1 ·/,
   });
   await user.click(readyCheckbox);
   expect(screen.getByText("已选 1 个结果版本")).toBeVisible();
   const reviewCheckbox = screen.getByRole("checkbox", {
-    name: "选择 L002 结果 v1",
+    name: /^选择 L002 结果 v1 ·/,
   });
   expect(reviewCheckbox).toBeEnabled();
   await user.click(reviewCheckbox);
@@ -2117,7 +2117,7 @@ test("分类结果选择跨分页恢复且需复核版本也可纳入", async ()
   window.location.hash = `#classification-results?selection_token=${token}&page=2`;
   render(<ResultsHarness />);
   expect(
-    await screen.findByRole("checkbox", { name: "选择 L001 结果 v1" }),
+    await screen.findByRole("checkbox", { name: /^选择 L001 结果 v1 ·/ }),
   ).toBeChecked();
   expect(readDashboardSelection("user-1", token).selected).toHaveLength(2);
   expect(readDashboardSelection("user-2", token)).toBeNull();
@@ -2142,7 +2142,9 @@ test("分类结果可直接创建真实AI报告任务并进入报告页", async 
   window.location.hash = "#classification-results";
   render(<ResultsHarness />);
 
-  await user.click(await screen.findByRole("checkbox", { name: "选择 L001 结果 v1" }));
+  await user.click(
+    await screen.findByRole("checkbox", { name: /^选择 L001 结果 v1 ·/ }),
+  );
   await user.click(await screen.findByRole("button", { name: "生成 AI 洞察" }));
   expect(
     await screen.findByRole("heading", { name: "生成 AI 洞察报告" }),

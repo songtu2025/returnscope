@@ -62,6 +62,7 @@ export function ResultDetailRecords(context) {
               unit={isUserFeedback ? "个反馈组" : "个记录组"}
               onPage={changeRecordPage}
               onPageSize={changePageSize}
+              showQuickJumper
             />
           </>
         )}
