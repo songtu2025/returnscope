@@ -29,7 +29,7 @@ import { SegmentBatchControls } from "./SegmentBatchControls";
  * @property {() => Promise<boolean>} [onRefresh]
  * @property {(maxParallelSegments: number) => Promise<unknown>} onParallelism
  * @property {(segmentKeys: string[]) => Promise<unknown>} onReorder
- * @property {(segment: TaskSegment & {result_version_id: string}, qualityStatus?: string) => void} onViewClassification
+ * @property {(segment: TaskSegment & {result_version_id: string}, qualityStatus?: string, systemRerunRequired?: string) => void} onViewClassification
  */
 const ORDERABLE_SEGMENT_STATUSES = ["queued", "retry_pending", "paused"];
 const PAGE_SIZE = 20;

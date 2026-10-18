@@ -6,6 +6,23 @@ import { renderWithServerState as render } from "./renderWithServerState";
 
 afterEach(cleanup);
 
+test("失败项数量只打开需重跑记录，不提交重试", async () => {
+  const props = rowProps({
+    system_failure_count: 2,
+    result_version_id: "synthetic-result",
+    result_publish_status: "published",
+  });
+  render(<SegmentBoardRow {...props} />);
+  await userEvent.click(screen.getByRole("button", { name: "失败项 2 个" }));
+  expect(props.actions.onViewClassification).toHaveBeenCalledWith(
+    expect.objectContaining({ result_version_id: "synthetic-result" }),
+    undefined,
+    "true",
+  );
+  expect(props.actions.onRetry).not.toHaveBeenCalled();
+  expect(props.actions.onAction).not.toHaveBeenCalled();
+});
+
 function rowProps(fields = {}, status = "paused") {
   const segment = {
     id: "synthetic-segment",

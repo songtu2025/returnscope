@@ -8,7 +8,7 @@
  * @property {{segmentIndex: number, page: number, pageSize: number, focusSegmentId?: string | null, focusedSegmentRef: import("react").RefObject<HTMLElement | null>, selection?: {selected: boolean, disabled: boolean, onToggle: () => void}}} position
  * @property {{canManageQueue: boolean, orderableKeys: string[], reordering: boolean, applyOrder: (segmentKeys: string[]) => Promise<void>}} queue
  * @property {{disabled?: boolean, expandedSegmentKey: string | null, setExpandedSegmentKey: import("react").Dispatch<import("react").SetStateAction<string | null>>, retryingPublishId: string | null, setRetryingPublishId: import("react").Dispatch<import("react").SetStateAction<string | null>>}} rowState
- * @property {{onAction: (segmentKey: string, action: SegmentAction, note?: string) => Promise<unknown>, onRetry: (segment: TaskSegment) => void, onViewClassification: (segment: TaskSegment & {result_version_id: string}, qualityStatus?: string) => void, onRetryPublish: (segmentId: string) => Promise<unknown>}} actions
+ * @property {{onAction: (segmentKey: string, action: SegmentAction, note?: string) => Promise<unknown>, onRetry: (segment: TaskSegment) => void, onViewClassification: (segment: TaskSegment & {result_version_id: string}, qualityStatus?: string, systemRerunRequired?: string) => void, onRetryPublish: (segmentId: string) => Promise<unknown>}} actions
  */
 
 export {};

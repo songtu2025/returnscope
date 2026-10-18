@@ -165,6 +165,7 @@ export function TaskMonitor(props) {
               onViewClassification={(
                 /** @type {TaskSegment & {result_version_id: string}} */ segment,
                 /** @type {string | undefined} */ qualityStatus,
+                /** @type {string | undefined} */ systemRerunRequired,
               ) =>
                 onNavigate("classification-results", {
                   kind: "classification-result",
@@ -173,6 +174,7 @@ export function TaskMonitor(props) {
                   segmentId: segment.id || segment.segment_key,
                   listing: segment.scope?.listing,
                   recordQualityStatus: qualityStatus,
+                  systemRerunRequired,
                 })
               }
               actionError={actionError}

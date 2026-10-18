@@ -60,9 +60,23 @@ function SegmentResultCells({ segment, presentation, actions }) {
               待复核 {segment.pending_review_count} 条
             </button>
           )}
-        {Number(segment.system_failure_count || 0) > 0 && (
-          <small>失败项 {segment.system_failure_count} 个</small>
-        )}
+        {Number(segment.system_failure_count || 0) > 0 &&
+          (segment.result_version_id && !segment.result_deleted_at ? (
+            <button
+              className="text-button"
+              onClick={() =>
+                actions.onViewClassification(
+                  { ...segment, result_version_id: String(segment.result_version_id) },
+                  undefined,
+                  "true",
+                )
+              }
+            >
+              失败项 {segment.system_failure_count} 个
+            </button>
+          ) : (
+            <small>失败项 {segment.system_failure_count} 个</small>
+          ))}
         {publishStatus === "failed" && (
           <small className="result-publish-error">{stateDescription}</small>
         )}
