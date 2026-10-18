@@ -85,7 +85,9 @@ function ScopeDetails({ item, legacy }) {
     <dl className="semantic-review-fields">
       <div>
         <dt>对象 / 部位</dt>
-        <dd>{joinedDisplay([item.subjectLabel, item.partLabel], legacy)}</dd>
+        <dd title={item.part ? `部位编码：${item.part}` : undefined}>
+          {joinedDisplay([item.subjectLabel, item.partLabel], legacy)}
+        </dd>
       </div>
       <div>
         <dt>使用者 / 商品</dt>
@@ -108,7 +110,15 @@ function ScopeDetails({ item, legacy }) {
       </div>
       <div>
         <dt>因果归属</dt>
-        <dd>{display(item.causalAttribution, legacy)}</dd>
+        <dd
+          title={
+            item.causalAttribution
+              ? `因果归属编码：${item.causalAttribution}`
+              : undefined
+          }
+        >
+          {display(item.causalAttributionLabel, legacy)}
+        </dd>
       </div>
       <div>
         <dt>判定理由</dt>

@@ -7,6 +7,7 @@ import {
   coalescedText,
   normalizedFact,
 } from "./semanticResultFacts";
+import { partLabel } from "../../lib/semanticParts";
 
 export { semanticConclusions } from "./semanticConclusionProjection";
 export {
@@ -31,7 +32,8 @@ export {
  *   referenceBasisLabel: string,
  *   subjectLabel: string,
  *   productLabel: string,
- *   partLabel: string
+ *   partLabel: string,
+ *   causalAttributionLabel: string
  * }} PresentedFact
  * @typedef {{ id: string, type: string, reason: string, factIds: string[] }} SemanticRelation
  * @typedef {NormalizedFact & {
@@ -128,21 +130,15 @@ const PRODUCT_REFERENCE_LABELS = {
 };
 
 /** @type {Record<string, string>} */
-const PART_LABELS = {
-  WHOLE_PRODUCT: "商品整体",
-  PALM: "掌心",
-  BACK_OF_HAND: "手背",
-  FINGER: "手指",
-  FINGER_GUSSET: "指缝",
-  THUMB: "拇指",
-  THUMB_WEB: "虎口",
-  LINING: "内衬",
-  CLOSURE: "闭合结构",
-  CUFF: "袖口",
-  SEAM: "接缝",
-  PACKAGING: "包装",
-  ACCESSORY: "配件",
-  UNSPECIFIED: "未明确部位",
+const CAUSAL_ATTRIBUTION_LABELS = {
+  UNKNOWN: "未明确",
+  PRODUCT_INTRINSIC: "商品自身",
+  NORMAL_USE: "正常使用",
+  CUSTOMER_ACTION: "顾客行为",
+  DELIVERY: "配送",
+  ORDER: "订单",
+  SERVICE: "服务",
+  EXTERNAL_CONDITION: "外部条件",
 };
 
 /** @type {Record<string, string>} */
@@ -278,8 +274,10 @@ export function factPresentation(fact) {
     subjectLabel: SUBJECT_LABELS[normalized.subject] || normalized.subject,
     productLabel:
       PRODUCT_REFERENCE_LABELS[normalized.productRef] || normalized.productRef,
-    partLabel: PART_LABELS[normalized.part] || normalized.part,
+    partLabel: normalized.part ? partLabel(normalized.part) : "",
     causalAttribution,
+    causalAttributionLabel:
+      CAUSAL_ATTRIBUTION_LABELS[causalAttribution] || causalAttribution,
     decisionReason: normalized.decisionReason || normalized.mappingReason,
   };
 }

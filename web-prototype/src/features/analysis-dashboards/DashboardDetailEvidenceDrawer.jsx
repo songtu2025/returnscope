@@ -3,6 +3,7 @@ import { X } from "@phosphor-icons/react";
 import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { resultLabelText } from "../../lib/taxonomyPresentation";
 import { SemanticResultPanel } from "../classification-results/SemanticResultPanel";
+import { factLabelPaths } from "../classification-results/semanticResultFacts";
 import { analysisContextTerms } from "./analysisContextPresentation";
 
 /** @typedef {import("./analysisDashboardContracts").DashboardRecord} DashboardRecord */
@@ -14,6 +15,7 @@ export function DashboardDetailEvidenceDrawer({
   returnFocusRef,
 }) {
   const classification = record.classification ?? {};
+  const labelPaths = factLabelPaths(record);
   const terms = analysisContextTerms(analysisContext);
   const { dialogRef } = useDialogFocus({ open: true, onClose, returnFocusRef });
 
@@ -60,11 +62,21 @@ export function DashboardDetailEvidenceDrawer({
           <b>业务标签</b>
           <DrawerField
             label="主要问题"
-            value={resultLabelText(record, classification.primary_label_codes)}
+            value={resultLabelText(
+              record,
+              classification.primary_label_codes,
+              labelPaths,
+            )}
+            title={classification.primary_label_codes?.join("、")}
           />
           <DrawerField
             label="问题标签"
-            value={resultLabelText(record, classification.problem_label_codes)}
+            value={resultLabelText(
+              record,
+              classification.problem_label_codes,
+              labelPaths,
+            )}
+            title={classification.problem_label_codes?.join("、")}
           />
         </section>
         <section className="drawer-section">
@@ -82,12 +94,12 @@ export function DashboardDetailEvidenceDrawer({
   );
 }
 
-/** @param {{label: string, value?: unknown}} props */
-function DrawerField({ label, value }) {
+/** @param {{label: string, value?: unknown, title?: string}} props */
+function DrawerField({ label, value, title }) {
   return (
     <div className="drawer-field">
       <span>{label}</span>
-      <b>{value ? String(value) : "未提供"}</b>
+      <b title={title}>{value ? String(value) : "未提供"}</b>
     </div>
   );
 }

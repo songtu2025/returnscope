@@ -124,6 +124,15 @@ function sourceFacts(classification, record) {
   });
 }
 
+/** @param {SemanticRecord} record @returns {Record<string, string[]>} */
+export function factLabelPaths(record) {
+  return Object.fromEntries(
+    sourceFacts(classificationOf(record), object(record))
+      .filter((fact) => fact.labelCode && fact.labelPath.length)
+      .map((fact) => [fact.labelCode, fact.labelPath]),
+  );
+}
+
 export {
   object,
   array,

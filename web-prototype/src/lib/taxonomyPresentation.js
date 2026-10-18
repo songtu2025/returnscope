@@ -39,8 +39,8 @@ export function labelText(label) {
     : label.name || label.code;
 }
 
-/** @param {unknown} record @param {string[]} [codes] */
-export function resultLabelText(record, codes = []) {
+/** @param {unknown} record @param {string[]} [codes] @param {Record<string, string[]>} [fallbackPaths] */
+export function resultLabelText(record, codes = [], fallbackPaths = {}) {
   const paths =
     typeof record === "object" &&
     record !== null &&
@@ -49,5 +49,7 @@ export function resultLabelText(record, codes = []) {
     record.problem_label_paths !== null
       ? /** @type {Record<string, string[]>} */ (record.problem_label_paths)
       : {};
-  return codes.map((code) => paths[code]?.join(" → ") || code).join("、");
+  return codes
+    .map((code) => paths[code]?.join(" → ") || fallbackPaths[code]?.join(" → ") || code)
+    .join("、");
 }

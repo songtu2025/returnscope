@@ -4,6 +4,8 @@ import { afterEach, expect, test, vi } from "vitest";
 
 import { DashboardDetailEvidenceDrawer } from "../src/features/analysis-dashboards/DashboardDetailEvidenceDrawer";
 import { EvidenceDrawer } from "../src/features/classification-results/EvidenceDrawer";
+import { factPresentation } from "../src/features/classification-results/semanticResultPresentation";
+import { resultLabelText } from "../src/lib/taxonomyPresentation";
 
 afterEach(() => cleanup());
 
@@ -25,25 +27,86 @@ const record = {
 const drawers = [
   [
     "分类结果",
-    (props) => (
+    (props, source = record) => (
       <EvidenceDrawer
         {...props}
-        group={{ record, member_count: 1, members: [] }}
+        group={{ record: source, member_count: 1, members: [] }}
         analysisContext="user_feedback"
       />
     ),
   ],
   [
     "分析看板",
-    (props) => (
+    (props, source = record) => (
       <DashboardDetailEvidenceDrawer
         {...props}
-        record={record}
+        record={source}
         analysisContext="user_feedback"
       />
     ),
   ],
 ];
+
+test.each(drawers)("%s证据复用事实标签中文路径，保留编码供核对", async (_, drawer) => {
+  const path = ["尺码与适配", "不合脚", "偏小"];
+  const source = {
+    ...record,
+    comment_conclusions: [
+      {
+        topic_code: "TEST",
+        topic_path: ["尺码与适配"],
+        status: "NEGATIVE",
+        supporting_fact_ids: ["fact-1"],
+      },
+    ],
+    classification: {
+      primary_label_codes: ["TEST_FIT"],
+      problem_label_codes: ["TEST_FIT"],
+      semantic_units: [
+        {
+          fact_id: "fact-1",
+          label_code: "TEST_FIT",
+          full_label_path: path,
+          part: "WHOLE_SHOE",
+          causal_attribution: "UNKNOWN",
+          evaluation_direction: "NEGATIVE",
+          opinion: "尺寸偏小",
+          evidence: "Too small",
+        },
+      ],
+    },
+  };
+  render(drawer({ onClose: vi.fn(), returnFocusRef: { current: null } }, source));
+  const context = screen.queryByText("业务标签与记录状态", { exact: true });
+  if (context) await userEvent.click(context);
+  expect(screen.getAllByTitle("TEST_FIT")[0]).toHaveTextContent(path.join(" → "));
+  expect(screen.getByTitle("部位编码：WHOLE_SHOE")).toHaveTextContent("整鞋");
+  expect(screen.getByTitle("因果归属编码：UNKNOWN")).toHaveTextContent("未明确");
+});
+
+test.each([
+  ["WHOLE_SHOE", "整鞋"],
+  ["FRAME", "镜框"],
+  ["FINGER", "手指"],
+  ["UNRECOGNIZED_PART", "UNRECOGNIZED_PART"],
+])("不同品类及未知部位 %s 的中文展示不推断新含义", (part, label) => {
+  expect(
+    factPresentation({ part, causal_attribution: "UNRECOGNIZED_CAUSE" }),
+  ).toMatchObject({
+    partLabel: label,
+    causalAttributionLabel: "UNRECOGNIZED_CAUSE",
+  });
+});
+
+test("记录已有标签路径优先，未提供路径的编码保持原值", () => {
+  expect(
+    resultLabelText(
+      { problem_label_paths: { FIT: ["已有中文"] } },
+      ["FIT", "MISSING"],
+      { FIT: ["事实中文"] },
+    ),
+  ).toBe("已有中文、MISSING");
+});
 
 test.each(drawers)(
   "%s证据抽屉约束焦点，重渲染后保持焦点并恢复指定触发点",

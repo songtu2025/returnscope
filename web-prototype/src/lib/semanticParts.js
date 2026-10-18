@@ -1,0 +1,58 @@
+const PART_LABELS = {
+  WHOLE_PRODUCT: "商品整体",
+  WHOLE_SHOE: "整鞋",
+  TOE: "鞋头",
+  OPENING: "鞋口",
+  OUTSOLE: "外底",
+  INSOLE: "鞋垫",
+  UPPER: "鞋面",
+  HEEL: "后跟",
+  HEEL_TAB: "后跟提拉片",
+  SOLE_UPPER_SEAM: "鞋底与鞋面结合处",
+  ARCH: "足弓",
+  INSTEP: "脚背部位",
+  SEAM: "接缝",
+  DRAINAGE_HOLE: "排水孔",
+  FASTENER: "扣件",
+  CUFF: "袖口",
+  PALM: "掌心",
+  BACK_OF_HAND: "手背",
+  FINGER: "手指",
+  FINGER_GUSSET: "指缝",
+  THUMB: "拇指",
+  THUMB_WEB: "虎口",
+  LINING: "内衬",
+  CLOSURE: "闭合结构",
+  FRAME: "镜框",
+  LENS: "镜片",
+  NOSE_PAD: "鼻托",
+  NOSE_BRIDGE: "鼻梁",
+  TEMPLE: "镜腿",
+  EAR_SIDE: "耳侧",
+  HINGE: "铰链",
+  SCREW: "螺丝",
+  FACE_COVERAGE: "脸部覆盖",
+  LENS_FRAME_JOINT: "镜片与镜框连接处",
+  STRAP: "绑带",
+  COATING: "镀膜",
+  RUBBER_SLEEVE: "橡胶套",
+  CASE: "眼镜盒",
+  CLEANING_CLOTH: "清洁布",
+  PACKAGING: "包装",
+  EDGE: "边缘",
+  CONNECTION: "连接处",
+  ACCESSORY: "配件",
+  CROWN: "帽身",
+  BRIM: "帽檐",
+  CHIN_STRAP: "下巴带",
+  SIZE_ADJUSTER: "调节扣",
+  UNSPECIFIED: "未明确部位",
+};
+
+/** @param {unknown} value */
+export function partLabel(value) {
+  const key = String(value || "");
+  return (
+    /** @type {Record<string, string>} */ (PART_LABELS)[key] || key || "未明确部位"
+  );
+}

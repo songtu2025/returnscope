@@ -4,6 +4,7 @@ import { SemanticHistory } from "./SemanticHistory";
 
 import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { resultLabelText } from "../../lib/taxonomyPresentation";
+import { factLabelPaths } from "./semanticResultFacts";
 import { formatTime } from "../../lib/presentation";
 import { resultStateLabel } from "./resultActionPolicy";
 import { SemanticResultPanel } from "./SemanticResultPanel";
@@ -62,6 +63,9 @@ export function EvidenceDrawer({
   const record = group.record;
   const isUserFeedback = analysisContext === "user_feedback";
   const classification = record.classification ?? {};
+  const labelPaths = factLabelPaths(record);
+  const labelText = (/** @type {string[] | undefined} */ codes) =>
+    resultLabelText(record, codes, labelPaths);
   const { dialogRef } = useDialogFocus({
     open: true,
     onClose: requestClose,
@@ -236,16 +240,19 @@ export function EvidenceDrawer({
           <summary>业务标签与记录状态</summary>
           <DrawerField
             label={isUserFeedback ? "主要问题（如有）" : "主要问题"}
-            value={resultLabelText(record, classification.primary_label_codes)}
+            value={labelText(classification.primary_label_codes)}
+            title={classification.primary_label_codes?.join("、")}
           />
           <DrawerField
             label="问题标签"
-            value={resultLabelText(record, classification.problem_label_codes)}
+            value={labelText(classification.problem_label_codes)}
+            title={classification.problem_label_codes?.join("、")}
           />
           {isUserFeedback && (
             <DrawerField
               label="正向标签"
-              value={resultLabelText(record, classification.positive_label_codes)}
+              value={labelText(classification.positive_label_codes)}
+              title={classification.positive_label_codes?.join("、")}
             />
           )}
           <DrawerField label="记录状态" value={resultStateLabel(record)} />
@@ -278,13 +285,13 @@ export function EvidenceDrawer({
 }
 
 /**
- * @param {{ label: string, value: string | number | null | undefined }} props
+ * @param {{ label: string, value: string | number | null | undefined, title?: string }} props
  */
-function DrawerField({ label, value }) {
+function DrawerField({ label, value, title }) {
   return (
     <div className="drawer-field">
       <span>{label}</span>
-      <b>{value || "未提供"}</b>
+      <b title={title}>{value || "未提供"}</b>
     </div>
   );
 }
