@@ -1,4 +1,11 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { ManualSemanticEditor } from "../src/features/classification-results/ManualSemanticEditor";
 import { EvidenceDrawer } from "../src/features/classification-results/EvidenceDrawer";
@@ -70,6 +77,44 @@ test("直接保存语义不要求复核原因和批次，关联源明细由服�
     },
   );
   expect(screen.queryByText("复核原因")).not.toBeInTheDocument();
+});
+
+test("修正期间保留原结果的待复核事实、证据及未映射原因，并说明整组保存影响", async () => {
+  const reviewGroup = {
+    ...group,
+    record: {
+      ...group.record,
+      classification: {
+        ...group.record.classification,
+        unknown_semantics: [
+          {
+            opinion: "鞋带过长且无处收纳",
+            evidence: "The cord is too long.",
+            reason: "现有标签未覆盖鞋带收纳问题",
+            disposition: "TAXONOMY_GAP",
+          },
+        ],
+      },
+    },
+  };
+  render(<ManualSemanticEditor {...props} group={reviewGroup} />);
+  const reference = screen.getByRole("region", { name: "修正前结果核对" });
+  const review = within(reference).getByRole("region", { name: "需要复核" });
+  expect(review).toHaveTextContent("鞋带过长且无处收纳");
+  expect(review).toHaveTextContent("The cord is too long.");
+  expect(review).toHaveTextContent("现有标签未覆盖鞋带收纳问题");
+  expect(screen.getByText(/保存会将当前整组标记为人工已处理/)).toBeVisible();
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "保存修正" })).toBeEnabled(),
+  );
+  fireEvent.change(screen.getByLabelText("观点 1 用户观点"), {
+    target: { value: "人工草稿" },
+  });
+  expect(review).toHaveTextContent("鞋带过长且无处收纳");
+  expect(within(reference).queryByText("人工草稿")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "取消" }));
+  expect(props.onCancel).toHaveBeenCalled();
+  expect(mocks.correctClassificationResult).not.toHaveBeenCalled();
 });
 test("保存冲突保留用户输入并恢复保存按钮", async () => {
   mocks.correctClassificationResult.mockRejectedValue(

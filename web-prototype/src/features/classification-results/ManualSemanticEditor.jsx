@@ -146,11 +146,12 @@ export function ManualSemanticEditor({
       onSavingChange(false);
     }
   };
+  const canSave = !loading && !conflict && valid && Boolean(labels.length);
   const exit = useUnsavedNavigation({
     dirty,
     busy: dirty && (saving || recovering),
     save: () => save(false, false),
-    canSave: !loading && !conflict && valid && Boolean(labels.length),
+    canSave,
     onRequest: () => {
       leavingRef.current = true;
       onNavigationRequest?.();
@@ -215,12 +216,13 @@ export function ManualSemanticEditor({
             加载最新结果并保留输入
           </Button>
         )}
-        {recovered && (
-          <section aria-label="最新结果核对">
-            <p role="status">已保留你的输入，请核对最新结果后再保存。</p>
-            <SemanticResultPanel record={record} title="最新结果" />
-          </section>
-        )}
+        <section aria-label={recovered ? "最新结果核对" : "修正前结果核对"}>
+          {recovered && <p role="status">已保留你的输入，请核对最新结果后再保存。</p>}
+          <SemanticResultPanel
+            record={record}
+            title={recovered ? "最新结果" : "修正前结果"}
+          />
+        </section>
         <fieldset disabled={saving || loading || recovering}>
           <ManualSemanticFields
             items={items}
@@ -251,6 +253,9 @@ export function ManualSemanticEditor({
             补充观点
           </Button>
         </fieldset>
+        <p>
+          保存会将当前整组标记为人工已处理，并以此处观点替换原语义结果。请核对全部待复核事实，需要保留的事实请使用“补充观点”录入。
+        </p>
         <footer>
           <Button disabled={saving || recovering} onClick={onCancel}>
             取消
@@ -260,13 +265,7 @@ export function ManualSemanticEditor({
             type={canAdvance ? "default" : "primary"}
             loading={saving && !saveNext}
             disabled={
-              saving ||
-              Boolean(exit.pendingExit) ||
-              loading ||
-              recovering ||
-              conflict ||
-              !labels.length ||
-              !valid
+              saving || Boolean(exit.pendingExit) || loading || recovering || !canSave
             }
             onClick={() => save()}
           >
@@ -277,13 +276,7 @@ export function ManualSemanticEditor({
               type="primary"
               loading={saving && saveNext}
               disabled={
-                saving ||
-                Boolean(exit.pendingExit) ||
-                loading ||
-                recovering ||
-                conflict ||
-                !labels.length ||
-                !valid
+                saving || Boolean(exit.pendingExit) || loading || recovering || !canSave
               }
               onClick={() => save(true)}
             >
