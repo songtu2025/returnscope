@@ -10,6 +10,7 @@ import { ResultDetailMetrics } from "./ResultDetailMetrics";
 import { ResultDetailDrilldown } from "./ResultDetailDrilldown";
 import { ResultDetailRecords } from "./ResultDetailRecords";
 import { ResultError } from "./ClassificationResultCommon";
+import { returnFromClassificationResult } from "./classificationResultRoute";
 
 /** @typedef {import("./classificationResultDetailContracts").ResultDetailViewProps} ResultDetailViewProps */
 
@@ -45,22 +46,9 @@ export function ClassificationResultDetailView(props) {
     <div className="standard-page classification-results-page result-detail-page">
       <button
         className="text-button result-back-button page-loading-navigation"
-        onClick={() =>
-          updateRoute({
-            version: "",
-            tab: "records",
-            recordPage: 1,
-            problem: "",
-            productName: "",
-            productSku: "",
-            orderId: "",
-            recordQualityStatus: "",
-            commentStatus: "",
-            systemRerunRequired: "",
-          })
-        }
+        onClick={() => returnFromClassificationResult(route, updateRoute)}
       >
-        <ArrowLeft size={17} /> 返回分类结果池
+        <ArrowLeft size={17} /> {route.taskId ? "返回任务" : "返回分类结果池"}
       </button>
 
       <ResultDetailHeader {...context} />

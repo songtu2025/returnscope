@@ -63,6 +63,34 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+test.each([true, false])("结果详情按进入来源返回，任务来源=%s", (fromTask) => {
+  const updateRoute = vi.fn();
+  render(
+    <ClassificationResultDetailView
+      route={{
+        tab: "records",
+        taskId: fromTask ? "synthetic-task" : "",
+        segmentId: "synthetic-segment",
+      }}
+      result={{ analysis_context: "user_feedback" }}
+      policy={{}}
+      updateRoute={updateRoute}
+    />,
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: fromTask ? "返回任务" : "返回分类结果池" }),
+  );
+  if (fromTask) {
+    expect(window.location.hash).toContain("task_id=synthetic-task");
+    expect(window.location.hash).toContain("segment_id=synthetic-segment");
+    expect(updateRoute).not.toHaveBeenCalled();
+  } else {
+    expect(updateRoute).toHaveBeenCalledWith(
+      expect.objectContaining({ version: "", recordQualityStatus: "", recordPage: 1 }),
+    );
+  }
+});
+
 test("普通语义保存中请求离开，提交后优先原用户目标而非内部版本导航", async () => {
   let finish;
   api.correctClassificationResult.mockReturnValueOnce(

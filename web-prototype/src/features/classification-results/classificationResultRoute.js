@@ -110,3 +110,26 @@ export function writeClassificationResultRoute(route) {
     action: route.action,
   });
 }
+
+/** @param {ClassificationResultRoute} route @param {(changes: Partial<ClassificationResultRoute>) => void} updateRoute */
+export function returnFromClassificationResult(route, updateRoute) {
+  if (route.taskId) {
+    navigateHash("analysis-tasks", {
+      task_id: route.taskId,
+      segment_id: route.segmentId,
+    });
+    return;
+  }
+  updateRoute({
+    version: "",
+    tab: "records",
+    recordPage: 1,
+    problem: "",
+    productName: "",
+    productSku: "",
+    orderId: "",
+    recordQualityStatus: "",
+    commentStatus: "",
+    systemRerunRequired: "",
+  });
+}
