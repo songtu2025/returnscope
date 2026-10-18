@@ -1,9 +1,9 @@
-import { CaretLeft, CaretRight, CheckCircle } from "@phosphor-icons/react";
+import { CheckCircle } from "@phosphor-icons/react";
 
-/** @typedef {import("../../shared/api/dataManagementContracts").DatasetRecord} DatasetRecord */
+import { Pagination } from "../../components/Pagination";
+import { PRODUCT_PAGE_SIZES } from "../../shared/pagination";
 /** @typedef {import("../../shared/api/dataManagementContracts").DatasetRowsPage} DatasetRowsPage */
 /** @typedef {import("../../shared/api/dataManagementContracts").DatasetRow} DatasetRow */
-/** @typedef {import("react").Dispatch<import("react").SetStateAction<DatasetRow | null>>} SetEditing */
 /** @typedef {import("react").Dispatch<import("react").SetStateAction<number>>} SetPage */
 
 /** @param {{row: DatasetRow, onEdit: (row: DatasetRow) => void}} props */
@@ -69,82 +69,7 @@ function ProductRowsTable({ data, hasFilters, clearFilters, onEdit }) {
   );
 }
 
-/** @param {{page: number, pageStart: number, totalPages: number, visiblePages: number[], setPage: SetPage}} props */
-function ProductPageLinks({ page, pageStart, totalPages, visiblePages, setPage }) {
-  return (
-    <>
-      {pageStart > 1 && (
-        <>
-          <button type="button" onClick={() => setPage(1)}>
-            1
-          </button>
-          <span>…</span>
-        </>
-      )}
-      {visiblePages.map((value) => (
-        <button
-          type="button"
-          className={value === page ? "active" : ""}
-          key={value}
-          onClick={() => setPage(value)}
-        >
-          {value}
-        </button>
-      ))}
-      {(visiblePages.at(-1) ?? 0) < totalPages && (
-        <>
-          <span>…</span>
-          <button type="button" onClick={() => setPage(totalPages)}>
-            {totalPages}
-          </button>
-        </>
-      )}
-    </>
-  );
-}
-
-/** @param {{pageSize: number, page: number, pageStart: number, totalPages: number, visiblePages: number[], setPage: SetPage}} props */
-function ProductPagination({
-  page,
-  pageSize,
-  pageStart,
-  totalPages,
-  visiblePages,
-  setPage,
-}) {
-  return (
-    <footer className="dimension-pagination">
-      <span className="dimension-page-size">{pageSize} 条/页</span>
-      <div>
-        <button
-          type="button"
-          aria-label="上一页"
-          disabled={page === 1}
-          onClick={() => setPage((current) => current - 1)}
-        >
-          <CaretLeft size={15} />
-        </button>
-        <ProductPageLinks
-          page={page}
-          pageStart={pageStart}
-          totalPages={totalPages}
-          visiblePages={visiblePages}
-          setPage={setPage}
-        />
-        <button
-          type="button"
-          aria-label="下一页"
-          disabled={page === totalPages}
-          onClick={() => setPage((current) => current + 1)}
-        >
-          <CaretRight size={15} />
-        </button>
-      </div>
-    </footer>
-  );
-}
-
-/** @param {{data: DatasetRowsPage, hasFilters: boolean, clearFilters: () => void, onEdit: (row: DatasetRow) => void, pageSize: number, page: number, pageStart: number, totalPages: number, visiblePages: number[], setPage: SetPage}} props */
+/** @param {{data: DatasetRowsPage, hasFilters: boolean, clearFilters: () => void, onEdit: (row: DatasetRow) => void, pageSize: number, page: number, totalPages: number, setPage: SetPage, setPageSize: (pageSize: number) => void}} props */
 export function ProductDimensionTable({
   data,
   hasFilters,
@@ -152,10 +77,9 @@ export function ProductDimensionTable({
   onEdit,
   page,
   pageSize,
-  pageStart,
   totalPages,
-  visiblePages,
   setPage,
+  setPageSize,
 }) {
   return (
     <>
@@ -165,13 +89,15 @@ export function ProductDimensionTable({
         clearFilters={clearFilters}
         onEdit={onEdit}
       />
-      <ProductPagination
+      <Pagination
         page={page}
         pageSize={pageSize}
-        pageStart={pageStart}
+        total={data.total}
         totalPages={totalPages}
-        visiblePages={visiblePages}
-        setPage={setPage}
+        onPage={setPage}
+        onPageSize={setPageSize}
+        pageSizeOptions={PRODUCT_PAGE_SIZES}
+        showQuickJumper
       />
     </>
   );

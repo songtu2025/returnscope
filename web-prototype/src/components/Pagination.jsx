@@ -12,6 +12,7 @@ import { AntdProvider } from "./AntdProvider";
  *   totalPages: number,
  *   onPage: (page: number) => void,
  *   onPageSize?: (pageSize: number) => void,
+ *   pageSizeOptions?: number[],
  *   disabled?: boolean,
  *   showTotal?: boolean,
  *   showQuickJumper?: boolean,
@@ -26,6 +27,7 @@ export function Pagination({
   totalPages,
   onPage,
   onPageSize,
+  pageSizeOptions = PAGE_SIZES,
   disabled = false,
   showTotal = true,
   showQuickJumper = false,
@@ -42,7 +44,7 @@ export function Pagination({
         pageSize={pageSize}
         total={total}
         disabled={disabled}
-        pageSizeOptions={PAGE_SIZES}
+        pageSizeOptions={pageSizeOptions}
         locale={{ items_per_page: `${unit}/页` }}
         showLessItems
         showQuickJumper={showQuickJumper}

@@ -2,7 +2,7 @@ import { useProtectedData } from "../../hooks/useProtectedData";
 import { useLoadingHeight } from "../../hooks/useLoadingHeight";
 import { useDataRefresh } from "../../hooks/useDataRefresh";
 import { MANAGED_REFRESH_OPTIONS } from "../../shared/refreshPolicy";
-import { useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import useSWR from "swr";
 import { ProductDimensionToolbar } from "./ProductDimensionToolbar";
 import { api } from "../../api";
@@ -39,13 +39,14 @@ export function ProductDimensionRows({
     store,
     category,
     page,
+    pageSize,
     setDraftQuery,
     setQuery,
     setStore,
     setCategory,
     setPage,
+    setPageSize,
   } = useProductListState();
-  const pageSize = 15;
   const {
     data: fetchedData = null,
     error,
@@ -59,7 +60,7 @@ export function ProductDimensionRows({
       "rows",
       dataset.id,
       dataset.current_version,
-      { query, page, store, category },
+      { query, page, pageSize, store, category },
     ],
     () =>
       api.datasetRows(dataset.id, query, (page - 1) * pageSize, pageSize, {
@@ -73,6 +74,7 @@ export function ProductDimensionRows({
     dataset.current_version,
     query,
     page,
+    pageSize,
     store,
     category,
   ]);
@@ -84,11 +86,10 @@ export function ProductDimensionRows({
       ? onRefresh()
       : mutate((current) => current, { revalidate: true, throwOnError: false });
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize));
-  const pageStart = Math.min(Math.max(1, page - 2), Math.max(1, totalPages - 4));
-  const visiblePages = Array.from(
-    { length: Math.min(5, totalPages) },
-    (_, index) => pageStart + index,
-  );
+  useEffect(() => {
+    if (data && !isValidating && !error && !editing && page > totalPages)
+      setPage(totalPages);
+  }, [data, isValidating, error, editing, page, totalPages, setPage]);
   const clearFilters = () => {
     setDraftQuery("");
     setQuery("");
@@ -129,10 +130,9 @@ export function ProductDimensionRows({
             data={data}
             page={page}
             pageSize={pageSize}
-            pageStart={pageStart}
             totalPages={totalPages}
-            visiblePages={visiblePages}
             setPage={setPage}
+            setPageSize={setPageSize}
             hasFilters={hasFilters}
             clearFilters={clearFilters}
             onEdit={editor.open}

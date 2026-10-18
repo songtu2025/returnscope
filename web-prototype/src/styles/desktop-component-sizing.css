@@ -80,10 +80,6 @@
 .data-page .dimension-table .table-head {
   min-height: var(--desktop-table-head-height);
 }
-.dimension-pagination button {
-  min-width: var(--desktop-compact-height);
-  height: var(--desktop-compact-height);
-}
 
 /* 分析任务 */
 .progress-hero {

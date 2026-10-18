@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithServerState as render } from "./renderWithServerState";
 
@@ -207,4 +214,82 @@ test("保存中阻止重复提交及取消关闭", async () => {
   expect(within(dialog).getByLabelText("备注（可选）")).toBeDisabled();
   await act(async () => resolveSave({ ...dataset, current_version: 3 }));
   expect(onChanged).toHaveBeenCalledWith({ ...dataset, current_version: 3 });
+});
+
+test.each([50, 100])(
+  "切换每页 %s 条重置第一页，跳页及重新进入保留筛选与数量",
+  async (pageSize) => {
+    window.location.hash = "#data-assets?rows_q=shoe&rows_page=2";
+    api.datasetRows.mockResolvedValue({ records: [row], total: 500 });
+    const user = userEvent.setup();
+    const props = { dataset, notify: vi.fn(), onChanged: vi.fn() };
+    const view = render(<ProductDimensionRows {...props} />);
+    await screen.findByText(row.MSKU);
+    await user.click(screen.getByRole("combobox", { name: "每页数量" }));
+    expect(screen.queryByRole("option", { name: "20 条/页" })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole("option", { name: `${pageSize} 条/页` }));
+    await waitFor(() =>
+      expect(api.datasetRows).toHaveBeenLastCalledWith(
+        dataset.id,
+        "shoe",
+        0,
+        pageSize,
+        { store: "", category: "" },
+      ),
+    );
+    const jumper = view.container.querySelector(
+      ".ant-pagination-options-quick-jumper input",
+    );
+    await user.type(jumper, "3");
+    fireEvent.keyUp(jumper, { key: "Enter", keyCode: 13 });
+    await waitFor(() =>
+      expect(api.datasetRows).toHaveBeenLastCalledWith(
+        dataset.id,
+        "shoe",
+        2 * pageSize,
+        pageSize,
+        { store: "", category: "" },
+      ),
+    );
+    expect(window.location.hash).toContain(`rows_page_size=${pageSize}`);
+    expect(window.location.hash).toContain("rows_page=3");
+    view.unmount();
+    render(<ProductDimensionRows {...props} />);
+    await screen.findByText(row.MSKU);
+    expect(screen.getByRole("textbox", { name: "搜索产品信息" })).toHaveValue("shoe");
+    expect(
+      screen.getByRole("combobox", { name: "每页数量" }).closest(".ant-select"),
+    ).toHaveTextContent(`${pageSize} 条/页`);
+    fireEvent.change(screen.getByRole("textbox", { name: "搜索产品信息" }), {
+      target: { value: "boot" },
+    });
+    await user.click(screen.getByRole("button", { name: "搜索", exact: true }));
+    await waitFor(() =>
+      expect(api.datasetRows).toHaveBeenLastCalledWith(
+        dataset.id,
+        "boot",
+        0,
+        pageSize,
+        { store: "", category: "" },
+      ),
+    );
+    expect(window.location.hash).toContain("rows_page=1");
+  },
+);
+
+test("产品数据缩减后校正到最后一页，不沿用旧版本总数", async () => {
+  window.location.hash = "#data-assets?rows_page=8";
+  api.datasetRows.mockResolvedValue({ records: [row], total: 150 });
+  const props = { dataset, notify: vi.fn(), onChanged: vi.fn() };
+  const view = render(<ProductDimensionRows {...props} />);
+  await screen.findByText(row.MSKU);
+  api.datasetRows.mockResolvedValue({ records: [row], total: 16 });
+  view.rerender(
+    <ProductDimensionRows {...props} dataset={{ ...dataset, current_version: 3 }} />,
+  );
+  await waitFor(() => expect(window.location.hash).toContain("rows_page=2"));
+  expect(api.datasetRows).toHaveBeenLastCalledWith(dataset.id, "", 15, 15, {
+    store: "",
+    category: "",
+  });
 });
