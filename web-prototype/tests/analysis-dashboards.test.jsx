@@ -704,6 +704,83 @@ test("看板日期在整组离开时生效，外部日期变更同步且正常�
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
 
+test("看板旧链接保留不兼容筛选且提供清除入口，加载期间不误报", () => {
+  const onUpdateFilters = vi.fn();
+  const props = {
+    route: {
+      listing: "L1",
+      productName: "旧产品",
+      productSku: "旧SKU",
+      dateFrom: "",
+      dateTo: "",
+    },
+    dateRange: { date_from: "2026-04-01", date_to: "2026-09-30" },
+    options: { listings: ["L1"], product_names: ["新产品"], product_skus: [] },
+    terms: analysisContextTerms("user_feedback"),
+    onUpdateFilters,
+  };
+  const view = render(<ReturnReasonSummaryFilters {...props} ready={false} />);
+  expect(screen.getByRole("combobox", { name: "产品", exact: true })).toHaveValue(
+    "旧产品",
+  );
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  view.rerender(<ReturnReasonSummaryFilters {...props} ready />);
+  const product = screen.getByRole("combobox", { name: "产品", exact: true });
+  expect(product).toHaveValue("旧产品");
+  expect(product).toHaveAttribute("aria-invalid", "true");
+  expect(screen.getAllByRole("alert")).toHaveLength(2);
+  expect(onUpdateFilters).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "清除产品筛选" }));
+  expect(onUpdateFilters).toHaveBeenLastCalledWith({
+    productName: "",
+    productSku: "",
+    problem: "",
+  });
+  fireEvent.click(screen.getByRole("button", { name: "清除SKU筛选" }));
+  expect(onUpdateFilters).toHaveBeenLastCalledWith({ productSku: "", problem: "" });
+});
+
+test("看板切换上级复用清空下级行为，合法候选不显示错误", () => {
+  const onUpdateFilters = vi.fn();
+  render(
+    <ReturnReasonSummaryFilters
+      route={{
+        listing: "L1",
+        productName: "产品甲",
+        productSku: "SKU甲",
+        dateFrom: "",
+        dateTo: "",
+      }}
+      dateRange={{ date_from: "2026-04-01", date_to: "2026-09-30" }}
+      options={{
+        listings: ["L1", "L2"],
+        product_names: ["产品甲", "产品乙"],
+        product_skus: ["SKU甲"],
+      }}
+      terms={analysisContextTerms("user_feedback")}
+      onUpdateFilters={onUpdateFilters}
+    />,
+  );
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  fireEvent.change(screen.getByRole("combobox", { name: "Listing", exact: true }), {
+    target: { value: "L2" },
+  });
+  expect(onUpdateFilters).toHaveBeenLastCalledWith({
+    listing: "L2",
+    productName: "",
+    productSku: "",
+    problem: "",
+  });
+  fireEvent.change(screen.getByRole("combobox", { name: "产品", exact: true }), {
+    target: { value: "产品乙" },
+  });
+  expect(onUpdateFilters).toHaveBeenLastCalledWith({
+    productName: "产品乙",
+    productSku: "",
+    problem: "",
+  });
+});
+
 test("看板抽屉连续查看复用证据分页，跨页失败可重试并返回当前证据焦点", async () => {
   const user = userEvent.setup();
   const records = Array.from({ length: 23 }, (_, index) => ({

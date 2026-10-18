@@ -22,6 +22,7 @@ export function ReturnReasonInsightSummary(props) {
         options={props.options}
         onUpdateFilters={props.onUpdateFilters}
         terms={terms}
+        ready={!props.loading && !props.error}
       />
       <ReturnReasonSummaryTrust
         data={props.data}

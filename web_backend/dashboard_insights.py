@@ -8,6 +8,7 @@ from web_backend.dashboard_insight_details import (
     collect_reason_details,
     list_reason_evidence,
 )
+from web_backend.dashboard_insight_filter_options import _collect_filter_options
 from web_backend.dashboard_insight_overview import (
     collect_insight_overview,
 )
@@ -15,7 +16,6 @@ from web_backend.dashboard_insight_preparation import (
     InsightOptions as InsightOptions,
 )
 from web_backend.dashboard_insight_preparation import (
-    _collect_filter_options,
     _prepare_scope,
 )
 from web_backend.dashboard_insight_preparation import (
@@ -85,7 +85,12 @@ def build_insights(
             if part == "full"
             else None
         )
-        filter_options = _collect_filter_options(scope, reuse_option_records)
+        filter_options = _collect_filter_options(
+            scope,
+            reuse_option_records,
+            listing=options.listing,
+            product_name=options.product_name,
+        )
         content = OverviewContent(
             overview, summary, hierarchy_problems, details, filter_options
         )

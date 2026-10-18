@@ -9,8 +9,24 @@ from web_backend.dashboard_insights import _collect_filter_options
 
 
 @pytest.mark.parametrize("reuse_records", [False, True])
+@pytest.mark.parametrize(
+    ("listing", "product_name", "products", "skus"),
+    [
+        (None, None, ["Alpha", "zeta"], ["sku-a", "sku-b", "sku-other"]),
+        ("L1", None, ["Alpha"], ["sku-a", "sku-b"]),
+        ("L2", "zeta", ["Alpha", "zeta"], ["sku-b"]),
+        ("L2", "Alpha", ["Alpha", "zeta"], ["sku-other"]),
+        ("L1", "zeta", ["Alpha"], []),
+        (None, "Alpha", ["Alpha", "zeta"], ["sku-a", "sku-b", "sku-other"]),
+        ("L1' OR 1=1 --", None, [], []),
+    ],
+)
 def test_filter_options_share_scope_and_keep_independent_values(
     reuse_records: bool,
+    listing: str | None,
+    product_name: str | None,
+    products: list[str],
+    skus: list[str],
 ) -> None:
     with sqlite3.connect(":memory:") as connection:
         connection.row_factory = sqlite3.Row
@@ -24,6 +40,7 @@ def test_filter_options_share_scope_and_keep_independent_values(
                 ("L2", "zeta", "sku-b", 1),
                 ("L1", "Alpha", "sku-a", 1),
                 ("L1", "Alpha", "sku-b", 1),
+                ("L2", "Alpha", "sku-other", 1),
                 (None, " ", "", 1),
                 ("", None, None, 1),
                 ("outside", "Excluded", "sku-c", 0),
@@ -51,11 +68,13 @@ def test_filter_options_share_scope_and_keep_independent_values(
         connection.commit()
         statements: list[str] = []
         connection.set_trace_callback(statements.append)
-        options = _collect_filter_options(scope, reuse_records)
+        options = _collect_filter_options(
+            scope, reuse_records, listing=listing, product_name=product_name
+        )
 
     assert options == {
         "listings": ["L1", "L2"],
-        "product_names": ["Alpha", "zeta"],
-        "product_skus": ["sku-a", "sku-b"],
+        "product_names": products,
+        "product_skus": skus,
     }
     assert len(statements) == 1

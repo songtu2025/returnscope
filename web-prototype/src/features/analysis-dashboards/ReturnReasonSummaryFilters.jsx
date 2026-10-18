@@ -5,7 +5,7 @@ import { filterOptions } from "./returnReasonInsightPresentation";
 /** @typedef {import("./analysisDashboardContracts").DashboardRoute} DashboardRoute */
 /** @typedef {import("./analysisDashboardContracts").InsightDateRange} InsightDateRange */
 /** @typedef {import("./analysisDashboardContracts").InsightFilterOptions} InsightFilterOptions */
-/** @typedef {{route: DashboardRoute, dateRange: InsightDateRange, options: InsightFilterOptions, terms: AnalysisContextTerms, onUpdateFilters: (changes: Partial<DashboardRoute>) => void}} SummaryFilterProps */
+/** @typedef {{route: DashboardRoute, dateRange: InsightDateRange, options: InsightFilterOptions, terms: AnalysisContextTerms, ready?: boolean, onUpdateFilters: (changes: Partial<DashboardRoute>) => void}} SummaryFilterProps */
 
 /** @param {Pick<SummaryFilterProps, "route" | "dateRange" | "onUpdateFilters">} props */
 function DateFilter({ route, dateRange, onUpdateFilters }) {
@@ -80,12 +80,13 @@ function DateFilter({ route, dateRange, onUpdateFilters }) {
   );
 }
 
-/** @param {Pick<SummaryFilterProps, "route" | "options" | "onUpdateFilters">} props */
-function ProductFilters({ route, options, onUpdateFilters }) {
+/** @param {Pick<SummaryFilterProps, "route" | "options" | "onUpdateFilters" | "ready">} props */
+function ProductFilters({ route, options, onUpdateFilters, ready }) {
   return (
     <>
       <InsightSelect
         label="Listing"
+        ready={ready}
         value={route.listing}
         values={options.listings}
         allLabel="全部 Listing"
@@ -100,6 +101,7 @@ function ProductFilters({ route, options, onUpdateFilters }) {
       />
       <InsightSelect
         label="产品"
+        ready={ready}
         value={route.productName}
         values={options.product_names}
         allLabel="全部产品"
@@ -109,6 +111,7 @@ function ProductFilters({ route, options, onUpdateFilters }) {
       />
       <InsightSelect
         label="SKU"
+        ready={ready}
         value={route.productSku}
         values={options.product_skus}
         allLabel="全部 SKU"
@@ -131,24 +134,49 @@ export function ReturnReasonSummaryFilters(props) {
         route={props.route}
         options={props.options}
         onUpdateFilters={props.onUpdateFilters}
+        ready={props.ready}
       />
     </section>
   );
 }
 
-/** @param {{label: string, value: string, values?: string[], allLabel: string, onChange: (value: string) => void}} props */
-function InsightSelect({ label, value, values, allLabel, onChange }) {
+/** @param {{label: string, value: string, values?: string[], allLabel: string, ready?: boolean, onChange: (value: string) => void}} props */
+function InsightSelect({ label, value, values, allLabel, ready = true, onChange }) {
+  const id = useId();
+  const choices = filterOptions(values);
+  const missing = Boolean(value && !choices.includes(value));
+  const invalid = ready && Array.isArray(values) && missing;
   return (
-    <label className="return-insight-select">
-      <span>{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)}>
+    <div className="return-insight-select">
+      <label htmlFor={id}>{label}</label>
+      <select
+        id={id}
+        value={value}
+        aria-invalid={invalid}
+        aria-describedby={invalid ? `${id}-error` : undefined}
+        onChange={(event) => onChange(event.target.value)}
+      >
         <option value="">{allLabel}</option>
-        {filterOptions(values).map((item) => (
+        {missing && (
+          <option value={value} disabled>
+            {value}
+            {invalid ? "（不在当前范围）" : ""}
+          </option>
+        )}
+        {choices.map((item) => (
           <option key={item} value={item}>
             {item}
           </option>
         ))}
       </select>
-    </label>
+      {invalid && (
+        <div id={`${id}-error`} className="return-insight-select-error" role="alert">
+          当前{label}不在可选范围内。
+          <button type="button" className="text-button" onClick={() => onChange("")}>
+            清除{label}筛选
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

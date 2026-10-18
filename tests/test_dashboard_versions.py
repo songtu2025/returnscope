@@ -1049,6 +1049,19 @@ def test_dashboard_insights_are_derived_from_ready_records(tmp_path: Path) -> No
     assert insights["evidence"]["items"][0]["problem_labels"] == ["偏小"]
     assert insights["filter_options"]["listings"] == ["L1"]
 
+    selected = service.insights(
+        dashboard_id, dashboard_version_id, listing="L1", product_name=product_name
+    )
+    assert selected["filter_options"] == insights["filter_options"]
+    incompatible = service.insights(
+        dashboard_id, dashboard_version_id, listing="L1", product_name="不存在的产品"
+    )
+    assert (
+        incompatible["filter_options"]["product_names"]
+        == insights["filter_options"]["product_names"]
+    )
+    assert incompatible["filter_options"]["product_skus"] == []
+
     empty_insights = service.insights(
         dashboard_id,
         dashboard_version_id,
@@ -1932,6 +1945,18 @@ def test_dashboard_schema_upgrade_and_router_contract(tmp_path: Path) -> None:
     scoped = client.get(insight_path, params={"subject": "PRODUCT", "part": "overview"})
     assert scoped.status_code == 200
     assert scoped.json()["reasons"][0]["record_count"] == 2
+    base_options = scoped.json()["filter_options"]
+    invalid_product = client.get(
+        insight_path,
+        params={"listing": "L1", "product_name": "不兼容旧产品", "part": "overview"},
+    )
+    assert invalid_product.status_code == 200
+    assert (
+        invalid_product.json()["filter_options"]["product_names"]
+        == base_options["product_names"]
+    )
+    assert invalid_product.json()["filter_options"]["product_skus"] == []
+    assert invalid_product.json()["summary"]["total_comment_count"] == 0
     assert (
         client.get(
             evidence_path,
@@ -1954,6 +1979,7 @@ def test_dashboard_schema_upgrade_and_router_contract(tmp_path: Path) -> None:
     denied.include_router(create_dashboard_router(service, reject_user))
     assert TestClient(denied).get("/api/analysis-dashboards").status_code == 401
     assert TestClient(denied).get(evidence_path).status_code == 401
+    assert TestClient(denied).get(insight_path).status_code == 401
 
 
 def test_cross_version_group_mapping_deduplicates_records(tmp_path):
