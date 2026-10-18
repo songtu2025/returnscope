@@ -633,12 +633,16 @@ test("看板选择允许需复核版本并明确按可用范围统计", async ()
 
   expect(await screen.findByRole("button", { name: "新建分析看板" })).toBeDisabled();
   await userEvent.click(
-    await screen.findByRole("checkbox", { name: "选择 DERIVED 结果 v2" }),
+    await screen.findByRole("checkbox", { name: /^选择 DERIVED 结果 v2 ·/ }),
   );
-  expect(screen.getByRole("checkbox", { name: "选择 DERIVED 结果 v2" })).toBeEnabled();
-  expect(screen.getByRole("checkbox", { name: "选择 REVIEW 结果 v1" })).toBeEnabled();
+  expect(
+    screen.getByRole("checkbox", { name: /^选择 DERIVED 结果 v2 ·/ }),
+  ).toBeEnabled();
+  expect(
+    screen.getByRole("checkbox", { name: /^选择 REVIEW 结果 v1 ·/ }),
+  ).toBeEnabled();
   const blockedCheckbox = screen.getByRole("checkbox", {
-    name: "选择 BLOCKED 结果 v1",
+    name: /^选择 BLOCKED 结果 v1 ·/,
   });
   expect(blockedCheckbox).toBeEnabled();
   expect(screen.queryByText("分类结果不可用于看板")).not.toBeInTheDocument();
@@ -659,7 +663,7 @@ test("从分类结果快速确认并创建 AI 洞察报告任务", async () => {
   render(<ResultCreationHarness notify={notify} />);
 
   const selectionCheckbox = await screen.findByRole("checkbox", {
-    name: "选择 SR001 结果 v1",
+    name: /^选择 SR001 结果 v1 ·/,
   });
   const selectionCell = selectionCheckbox.closest("label.result-selection-cell");
   expect(selectionCell).toBeVisible();
@@ -710,7 +714,7 @@ test("从第二页首次勾选结果不改变当前页码", async () => {
   });
   render(<ResultCreationHarness />);
   await userEvent.click(
-    await screen.findByRole("checkbox", { name: "选择 SR001 结果 v1" }),
+    await screen.findByRole("checkbox", { name: /^选择 SR001 结果 v1 ·/ }),
   );
   expect(new URLSearchParams(window.location.hash.split("?")[1]).get("page")).toBe("2");
 });
@@ -728,7 +732,9 @@ test("两个创建入口共用跨页选择，取消后保留看板草稿", async
   render(<ResultCreationHarness />);
   expect(screen.getByRole("button", { name: "新建分析看板" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "生成 AI 洞察" })).toBeDisabled();
-  await user.click(await screen.findByRole("checkbox", { name: "选择 SR001 结果 v1" }));
+  await user.click(
+    await screen.findByRole("checkbox", { name: /^选择 SR001 结果 v1 ·/ }),
+  );
   const token = new URLSearchParams(window.location.hash.split("?")[1]).get(
     "selection_token",
   );
@@ -741,7 +747,9 @@ test("两个创建入口共用跨页选择，取消后保留看板草稿", async
     page_size: 20,
   });
   await user.click(screen.getByRole("button", { name: "下一页" }));
-  await user.click(await screen.findByRole("checkbox", { name: "选择 SR002 结果 v1" }));
+  await user.click(
+    await screen.findByRole("checkbox", { name: /^选择 SR002 结果 v1 ·/ }),
+  );
   expect(screen.getByText("已选 2 个结果版本")).toBeVisible();
   expect(screen.queryByRole("button", { name: "检查并生成" })).not.toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "新建分析看板" }));
@@ -819,8 +827,10 @@ test("AI 洞察处理版本冲突后仅提交选定版本，失败可重试", as
     new Error("暂时无法提交"),
   );
   render(<ResultCreationHarness />);
-  await user.click(await screen.findByRole("checkbox", { name: "选择 SR001 结果 v1" }));
-  await user.click(screen.getByRole("checkbox", { name: "选择 SR001 结果 v2" }));
+  await user.click(
+    await screen.findByRole("checkbox", { name: /^选择 SR001 结果 v1 ·/ }),
+  );
+  await user.click(screen.getByRole("checkbox", { name: /^选择 SR001 结果 v2 ·/ }));
   await user.click(screen.getByRole("button", { name: "生成 AI 洞察" }));
   expect(await screen.findByText("同一 Listing 选择了多个结果版本")).toBeVisible();
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -853,7 +863,7 @@ test.each(["empty", "missing"])(
         : "missing-token";
     window.location.hash = `#classification-results?selection_token=${token}`;
     render(<ResultCreationHarness />);
-    await screen.findByRole("checkbox", { name: "选择 SR001 结果 v1" });
+    await screen.findByRole("checkbox", { name: /^选择 SR001 结果 v1 ·/ });
     expect(
       screen.queryByRole("complementary", { name: "看板数据选择" }),
     ).not.toBeInTheDocument();
@@ -880,7 +890,7 @@ test.each(["checkbox", "remove", "clear"])(
     window.location.hash = `#classification-results?selection_token=${token}`;
     render(<ResultCreationHarness />);
     const checkbox = await screen.findByRole("checkbox", {
-      name: "选择 SR001 结果 v1",
+      name: /^选择 SR001 结果 v1 ·/,
     });
     await user.click(checkbox);
     expect(screen.getAllByRole("complementary", { name: "看板数据选择" })).toHaveLength(
@@ -933,7 +943,9 @@ test("旧看板选择会话恢复为当前创建流程，清空后禁用创建",
   window.location.hash = `#classification-results?selection_token=${token}`;
   const user = userEvent.setup();
   render(<ResultCreationHarness />);
-  await user.click(await screen.findByRole("checkbox", { name: "选择 SR001 结果 v1" }));
+  await user.click(
+    await screen.findByRole("checkbox", { name: /^选择 SR001 结果 v1 ·/ }),
+  );
   expect(screen.getByRole("button", { name: "生成 AI 洞察" })).toBeEnabled();
   expect(readDashboardSelection("user-1", token)).not.toHaveProperty(
     "target_dashboard_id",
@@ -972,7 +984,9 @@ test("AI 提交期间防止重复操作，计划过期后保留参数并再次�
       summary: { record_count: 3 },
     });
   render(<ResultCreationHarness />);
-  await user.click(await screen.findByRole("checkbox", { name: "选择 SR001 结果 v1" }));
+  await user.click(
+    await screen.findByRole("checkbox", { name: /^选择 SR001 结果 v1 ·/ }),
+  );
   await user.click(screen.getByRole("button", { name: "生成 AI 洞察" }));
   const dialog = await screen.findByRole("dialog", { name: "生成 AI 洞察报告" });
   await user.click(await within(dialog).findByRole("button", { name: "中" }));
@@ -1841,7 +1855,9 @@ test("完整结果池筛选外逐项取消同步计数、创建入口和选择�
     page_size: 20,
   }));
   render(<ResultCreationHarness />);
-  await user.click(await screen.findByRole("checkbox", { name: "选择 SR001 结果 v1" }));
+  await user.click(
+    await screen.findByRole("checkbox", { name: /^选择 SR001 结果 v1 ·/ }),
+  );
   const token = new URLSearchParams(window.location.hash.split("?")[1]).get(
     "selection_token",
   );

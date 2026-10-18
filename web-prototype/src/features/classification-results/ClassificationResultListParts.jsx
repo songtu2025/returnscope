@@ -3,6 +3,7 @@ import Checkbox from "antd/es/checkbox";
 import { ResultPoolActions } from "./ResultPoolActions";
 import { formatTime } from "../../lib/presentation";
 import { resultActionPolicy } from "./resultActionPolicy";
+import { navigateHash } from "../../app/hashRouter";
 
 /**
  * @typedef {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultVersionResponse & { product_name?: string | null }} ClassificationResultVersion
@@ -77,7 +78,7 @@ function ResultPoolStatus({ result, policy, selectable, selected, onToggle }) {
           <Checkbox
             className="result-selection-cell"
             title={disabledReason}
-            aria-label={`选择 ${result.listing || "未提供 Listing"} 结果 v${result.version}`}
+            aria-label={`选择 ${result.listing || "未提供 Listing"} 结果 v${result.version} · ${formatTime(result.published_at || result.created_at)} · ${result.version_id}`}
             checked={selected}
             disabled={Boolean(disabledReason)}
             onChange={onToggle}
@@ -107,7 +108,25 @@ function ResultPoolMetadata({ result, onOpen }) {
           {result.listing || "未提供 Listing"}
         </button>
         <span>{result.store_site || "未提供店铺/站点"}</span>
-        <small>结果 v{result.version}</small>
+        <small title={`结果版本 ID：${result.version_id}`}>
+          结果 v{result.version} · {result.version_id.slice(-8)}
+        </small>
+        {result.source_task_id ? (
+          <button
+            className="text-button result-source-link"
+            title={`查看来源任务：${result.source_task_id}`}
+            onClick={() =>
+              navigateHash("analysis-tasks", {
+                task_id: result.source_task_id,
+                segment_id: result.source_segment_id,
+              })
+            }
+          >
+            来源任务 <code>{result.source_task_id}</code>
+          </button>
+        ) : (
+          <small>来源任务未提供</small>
+        )}
       </div>
       <div className="result-product-cell" role="cell">
         <b title={names.join("、")}>{names[0] || "未提供"}</b>

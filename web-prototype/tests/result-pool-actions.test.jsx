@@ -3,6 +3,8 @@ import { cleanup, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithServerState as render } from "./renderWithServerState";
 import { ResultPoolActions } from "../src/features/classification-results/ResultPoolActions";
+import { ResultPoolRow } from "../src/features/classification-results/ClassificationResultListParts";
+import { parseHash } from "../src/app/hashRouter";
 import { resultExportApi } from "../src/shared/api/resultExportApi";
 import { changeDeliveryLifecycle } from "../src/shared/api/deliveryApi";
 
@@ -29,6 +31,68 @@ beforeEach(() => {
   changeDeliveryLifecycle.mockResolvedValue({ ok: true });
 });
 afterEach(cleanup);
+
+test("同 Listing 同版本结果可以区分，来源入口定位原任务和 Listing", async () => {
+  const rows = ["first", "second"].map((id) => ({
+    ...result,
+    version: 1,
+    version_id: `version-${id}`,
+    published_at: "2026-10-18T00:00:00Z",
+    source_task_id: `task-${id}`,
+    source_segment_id: `segment-${id}`,
+  }));
+  render(
+    <>
+      {rows.map((item) => (
+        <ResultPoolRow
+          key={item.version_id}
+          result={item}
+          selectable
+          selected={false}
+          onToggle={vi.fn()}
+          onOpen={vi.fn()}
+          onPrimary={vi.fn()}
+        />
+      ))}
+    </>,
+  );
+  const names = screen
+    .getAllByRole("checkbox")
+    .map((item) => item.getAttribute("aria-label"));
+  expect(new Set(names).size).toBe(2);
+  expect(names[0]).toContain("version-first");
+  expect(names[1]).toContain("version-second");
+  expect(screen.getByTitle("结果版本 ID：version-first")).toBeVisible();
+  const source = screen.getByRole("button", {
+    name: "来源任务 task-first",
+    exact: true,
+  });
+  source.focus();
+  await userEvent.keyboard("{Enter}");
+  expect(parseHash()).toMatchObject({
+    page: "analysis-tasks",
+    query: {
+      task_id: "task-first",
+      segment_id: "segment-first",
+    },
+  });
+  expect(changeDeliveryLifecycle).not.toHaveBeenCalled();
+});
+
+test("历史结果缺少来源任务时明确说明，不提供无效跳转", () => {
+  render(
+    <ResultPoolRow
+      result={{ ...result, version: 1 }}
+      selectable
+      selected={false}
+      onToggle={vi.fn()}
+      onOpen={vi.fn()}
+      onPrimary={vi.fn()}
+    />,
+  );
+  expect(screen.getByText("来源任务未提供")).toBeVisible();
+  expect(screen.queryByRole("button", { name: /^来源任务/ })).not.toBeInTheDocument();
+});
 
 test("当前结果按查看、下载、更多排列，创建看板收进菜单且支持键盘", async () => {
   const user = userEvent.setup();
