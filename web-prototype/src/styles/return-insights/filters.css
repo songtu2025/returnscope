@@ -207,3 +207,18 @@
   color: #8a958f;
   font-style: normal;
 }
+
+.return-insight-date-error {
+  color: var(--red);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.return-insight-filters:has(.return-insight-date-error) {
+  align-items: start;
+}
+
+.return-insight-date-filter:has([aria-invalid="true"]) > div {
+  border-color: var(--red);
+}

@@ -1,3 +1,4 @@
+import { useEffect, useId, useRef, useState } from "react";
 import { CalendarBlank } from "@phosphor-icons/react";
 import { filterOptions } from "./returnReasonInsightPresentation";
 /** @typedef {ReturnType<typeof import("./analysisContextPresentation").analysisContextTerms>} AnalysisContextTerms */
@@ -8,34 +9,74 @@ import { filterOptions } from "./returnReasonInsightPresentation";
 
 /** @param {Pick<SummaryFilterProps, "route" | "dateRange" | "onUpdateFilters">} props */
 function DateFilter({ route, dateRange, onUpdateFilters }) {
+  const from = route.dateFrom || dateRange.date_from || "";
+  const to = route.dateTo || dateRange.date_to || "";
+  const [draft, setDraft] = useState({ from, to });
+  const [invalid, setInvalid] = useState(false);
+  const errorId = useId();
+  const fieldRef = useRef(/** @type {HTMLDivElement | null} */ (null));
+  useEffect(() => {
+    setDraft({ from, to });
+    setInvalid(false);
+  }, [from, to]);
+  const apply = () => {
+    const fields = Array.from(fieldRef.current?.querySelectorAll("input") || []);
+    // 复用原生日期约束；不把未完成、倒置或越界的草稿发送给看板。
+    if (fields.some((field) => !field.value || !field.validity.valid)) {
+      setInvalid(true);
+      return;
+    }
+    setInvalid(false);
+    if (draft.from !== from || draft.to !== to) {
+      onUpdateFilters({ dateFrom: draft.from, dateTo: draft.to, problem: "" });
+    }
+  };
   return (
-    <label className="return-insight-date-filter">
+    <div
+      className="return-insight-date-filter"
+      ref={fieldRef}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) apply();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          apply();
+        }
+      }}
+    >
       <span>时间</span>
       <div>
         <CalendarBlank size={17} />
         <input
           aria-label="开始日期"
           type="date"
-          value={route.dateFrom || dateRange.date_from || ""}
+          value={draft.from}
           min={dateRange.date_from || undefined}
-          max={route.dateTo || dateRange.date_to || undefined}
-          onChange={(event) =>
-            onUpdateFilters({ dateFrom: event.target.value, problem: "" })
-          }
+          max={draft.to || dateRange.date_to || undefined}
+          aria-invalid={invalid}
+          aria-describedby={invalid ? errorId : undefined}
+          onChange={(event) => setDraft({ ...draft, from: event.target.value })}
         />
         <i>至</i>
         <input
           aria-label="结束日期"
           type="date"
-          value={route.dateTo || dateRange.date_to || ""}
-          min={route.dateFrom || dateRange.date_from || undefined}
+          value={draft.to}
+          min={draft.from || dateRange.date_from || undefined}
           max={dateRange.date_to || undefined}
-          onChange={(event) =>
-            onUpdateFilters({ dateTo: event.target.value, problem: "" })
-          }
+          aria-invalid={invalid}
+          aria-describedby={invalid ? errorId : undefined}
+          onChange={(event) => setDraft({ ...draft, to: event.target.value })}
         />
       </div>
-    </label>
+      {invalid && (
+        <span className="return-insight-date-error" id={errorId} role="alert">
+          请填写完整日期，开始日期不能晚于结束日期，且须在数据范围内。
+          当前图表仍使用上次有效范围：{from} 至 {to}。
+        </span>
+      )}
+    </div>
   );
 }
 

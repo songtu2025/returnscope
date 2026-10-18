@@ -49,6 +49,7 @@ import { DashboardReportGeneration } from "../src/features/analysis-dashboards/D
 import { DashboardDetailLoading } from "../src/features/analysis-dashboards/DashboardDetailStateViews";
 import { ReturnReasonInsightExplorer } from "../src/features/analysis-dashboards/ReturnReasonInsightExplorer";
 import { ReturnReasonInsights } from "../src/features/analysis-dashboards/ReturnReasonInsights";
+import { ReturnReasonSummaryFilters } from "../src/features/analysis-dashboards/ReturnReasonSummaryFilters";
 import { analysisContextTerms } from "../src/features/analysis-dashboards/analysisContextPresentation";
 import {
   createDashboardSelection,
@@ -634,6 +635,76 @@ test("大量语义证据可直接跳到中间页并按原筛选条件加载", as
     "aria-label",
     "分页，第 456 页，共 913 页",
   );
+});
+
+test.each([
+  ["2026-10-01", "2026-09-30"],
+  ["2026-03-31", "2026-09-30"],
+  ["2026-04-01", "2026-10-01"],
+  ["", "2026-09-30"],
+])("看板日期草稿 %s 至 %s 无效时保留已生效查询", (from, to) => {
+  const onUpdateFilters = vi.fn();
+  render(
+    <ReturnReasonSummaryFilters
+      route={{ dateFrom: "", dateTo: "", listing: "", productName: "", productSku: "" }}
+      dateRange={{ date_from: "2026-04-01", date_to: "2026-09-30" }}
+      options={{}}
+      terms={analysisContextTerms("user_feedback")}
+      onUpdateFilters={onUpdateFilters}
+    />,
+  );
+  const start = screen.getByLabelText("开始日期");
+  fireEvent.change(start, { target: { value: from } });
+  fireEvent.change(screen.getByLabelText("结束日期"), { target: { value: to } });
+  fireEvent.blur(start);
+  expect(onUpdateFilters).not.toHaveBeenCalled();
+  expect(start).toHaveAttribute("aria-invalid", "true");
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    "当前图表仍使用上次有效范围：2026-04-01 至 2026-09-30",
+  );
+  expect(start).toHaveAttribute("aria-describedby", screen.getByRole("alert").id);
+  fireEvent.change(start, { target: { value: "2026-05-01" } });
+  fireEvent.change(screen.getByLabelText("结束日期"), {
+    target: { value: "2026-08-31" },
+  });
+  fireEvent.keyDown(start, { key: "Enter" });
+  expect(onUpdateFilters).toHaveBeenCalledExactlyOnceWith({
+    dateFrom: "2026-05-01",
+    dateTo: "2026-08-31",
+    problem: "",
+  });
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
+
+test("看板日期在整组离开时生效，外部日期变更同步且正常空结果不报校验错误", () => {
+  const onUpdateFilters = vi.fn();
+  const props = {
+    route: { dateFrom: "", dateTo: "", listing: "", productName: "", productSku: "" },
+    dateRange: { date_from: "2026-04-01", date_to: "2026-09-30" },
+    options: {},
+    terms: analysisContextTerms("user_feedback"),
+    onUpdateFilters,
+  };
+  const view = render(<ReturnReasonSummaryFilters {...props} />);
+  const start = screen.getByLabelText("开始日期");
+  const end = screen.getByLabelText("结束日期");
+  fireEvent.change(start, { target: { value: "2026-05-01" } });
+  fireEvent.blur(start, { relatedTarget: end });
+  expect(onUpdateFilters).not.toHaveBeenCalled();
+  fireEvent.blur(end);
+  expect(onUpdateFilters).toHaveBeenCalledExactlyOnceWith({
+    dateFrom: "2026-05-01",
+    dateTo: "2026-09-30",
+    problem: "",
+  });
+  view.rerender(
+    <ReturnReasonSummaryFilters
+      {...props}
+      route={{ ...props.route, dateFrom: "2026-06-01" }}
+    />,
+  );
+  expect(start).toHaveValue("2026-06-01");
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
 
 test("新看板显示反馈组单位，历史看板保留记录单位", () => {
