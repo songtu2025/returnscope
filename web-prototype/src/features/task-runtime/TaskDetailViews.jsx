@@ -20,7 +20,7 @@ function TaskDetailEvents({ task, events }) {
           {isActive ? "实时更新" : "完整记录"}
         </span>
       </header>
-      <TaskEventList task={task} events={events} />
+      <TaskEventList task={task} events={events} filterable />
     </section>
   );
 }

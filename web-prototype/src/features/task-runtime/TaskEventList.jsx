@@ -4,6 +4,7 @@ import Button from "antd/es/button";
 import { STATUS_LABELS } from "../../constants";
 import { classNames, formatTime } from "../../lib/presentation";
 import { SEGMENT_STATUS_LABELS } from "./segmentBoardRowPolicy";
+import { TaskEventFilters } from "./TaskEventFilters";
 
 /** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
 /** @typedef {import("./taskRuntimeContracts").TaskEvent} TaskEvent */
@@ -35,15 +36,15 @@ function taskStageLabel(stage) {
 }
 
 /** @param {AnalysisTask} task @param {TaskEvent} event */
-function eventListing(task, event) {
-  const segmentId = event.data?.segment_id;
-  const segmentKey = event.data?.segment_key;
-  const segment = task.segments?.find(
-    (item) =>
-      (segmentId && item.id === segmentId) ||
-      (segmentKey && item.segment_key === segmentKey),
-  );
-  return segment?.scope?.listing || segmentKey || segmentId || "";
+function eventTarget(task, event) {
+  const { segment_id = "", segment_key = "" } = event.data ?? {};
+  const segments = task.segments ?? [];
+  const segment =
+    segments.find((item) => item.id === segment_id) ??
+    segments.find((item) => item.segment_key === segment_key);
+  const { id, segment_key: knownKey, scope = {} } = segment ?? {};
+  const key = knownKey || id || segment_key || segment_id;
+  return { key, label: scope.listing || key, store: scope.store };
 }
 
 /** @param {string | undefined} status */
@@ -53,59 +54,121 @@ function eventStatusLabel(status) {
   return EVENT_STATUS_LABELS[pendingStatus] ?? status;
 }
 
-/** @param {{task: AnalysisTask, events: TaskEvent[]}} props */
-export function TaskEventList({ task, events }) {
-  const [visibleCount, setVisibleCount] = useState(100);
-  const values = events.slice(-visibleCount).reverse();
+/** @param {{event: TaskEvent, listing: string}} props */
+function TaskEventRow({ event, listing }) {
+  const { data = {} } = event;
+  const { before = {}, after = {}, before_status, after_status, note } = data;
+  const beforeStatus = before.status ?? before_status;
+  const afterStatus = after.status ?? after_status;
+  const message = listing ? event.message.replace(/^Listing\s*/, "") : event.message;
   return (
-    <div className="event-log">
-      {values.length === 0 && <p className="muted-line">暂无运行动态。</p>}
-      {values.map((event) => {
-        const listing = eventListing(task, event);
-        const beforeStatus = event.data?.before?.status ?? event.data?.before_status;
-        const afterStatus = event.data?.after?.status ?? event.data?.after_status;
-        const message = listing
-          ? event.message.replace(/^Listing\s*/, "")
-          : event.message;
-        return (
-          <div key={event.id}>
-            <time>{formatTime(event.created_at)}</time>
-            <span className={classNames("event-dot", event.event_type)} />
-            <p>
-              <b>
-                {listing
-                  ? `${listing} · ${taskStageLabel(event.stage)}`
-                  : taskStageLabel(event.stage)}
-              </b>
-              {message}
-              {event.data?.before?.title && (
-                <small>
-                  原值：{event.data.before.title}
-                  <br />
-                  新值：{event.data.after?.title}
-                </small>
-              )}
-              {(beforeStatus || afterStatus) && (
-                <small>
-                  原状态：{eventStatusLabel(beforeStatus)}
-                  <br />
-                  新状态：{eventStatusLabel(afterStatus)}
-                </small>
-              )}
-              {event.data?.note && <small>原因：{event.data.note}</small>}
-              {event.actor_name && <small>操作人：{event.actor_name}</small>}
-            </p>
-          </div>
-        );
-      })}
-      {events.length > visibleCount && (
-        <Button
-          className="secondary-button"
-          onClick={() => setVisibleCount((count) => count + 100)}
-        >
-          加载更早日志（已显示 {values.length} / {events.length} 条）
-        </Button>
-      )}
+    <div>
+      <time>{formatTime(event.created_at)}</time>
+      <span className={classNames("event-dot", event.event_type)} />
+      <p>
+        <b>
+          {listing
+            ? `${listing} · ${taskStageLabel(event.stage)}`
+            : taskStageLabel(event.stage)}
+        </b>
+        {message}
+        {before.title && (
+          <small>
+            原值：{before.title}
+            <br />
+            新值：{after.title}
+          </small>
+        )}
+        {(beforeStatus || afterStatus) && (
+          <small>
+            原状态：{eventStatusLabel(beforeStatus)}
+            <br />
+            新状态：{eventStatusLabel(afterStatus)}
+          </small>
+        )}
+        {note && <small>原因：{note}</small>}
+        {event.actor_name && <small>操作人：{event.actor_name}</small>}
+      </p>
     </div>
+  );
+}
+
+/** @param {{task: AnalysisTask, events: TaskEvent[], filterable?: boolean}} props */
+export function TaskEventList({ task, events, filterable = false }) {
+  const [visibleCount, setVisibleCount] = useState(100);
+  const [filters, setFilters] = useState({ query: "", listing: "", type: "" });
+  const keyword = filters.query.trim().toLowerCase();
+  const filtered = Boolean(keyword || filters.listing || filters.type);
+  const entries = events.map((event) => ({ event, target: eventTarget(task, event) }));
+  const matches = entries.filter(({ event, target }) => {
+    if (filters.listing && target.key !== filters.listing) return false;
+    if (filters.type && event.event_type !== filters.type) return false;
+    if (!keyword) return true;
+    const {
+      before = {},
+      after = {},
+      before_status,
+      after_status,
+      note,
+    } = event.data ?? {};
+    const text = [
+      target.label,
+      target.key,
+      target.store,
+      taskStageLabel(event.stage),
+      event.message,
+      event.actor_name,
+      note,
+      before.title,
+      after.title,
+      eventStatusLabel(before.status ?? before_status),
+      eventStatusLabel(after.status ?? after_status),
+    ]
+      .join(" ")
+      .toLowerCase();
+    return text.includes(keyword);
+  });
+  const values = matches.slice(-visibleCount).reverse();
+  return (
+    <>
+      {filterable && (
+        <TaskEventFilters
+          filters={filters}
+          listings={[
+            ...new Map(
+              entries
+                .filter(({ target }) => target.key)
+                .map(({ target }) => [target.key, target]),
+            ).values(),
+          ]}
+          types={[...new Set(events.map((event) => event.event_type).filter(Boolean))]}
+          onChange={(next) => {
+            setFilters(next);
+            setVisibleCount(100);
+          }}
+          filtered={filtered}
+          count={matches.length}
+          total={events.length}
+        />
+      )}
+      <div className="event-log">
+        {values.length === 0 && (
+          <p className="muted-line">
+            {filtered ? "没有匹配的日志。" : "暂无运行动态。"}
+          </p>
+        )}
+        {values.map(({ event, target }) => (
+          <TaskEventRow key={event.id} event={event} listing={target.label} />
+        ))}
+        {matches.length > visibleCount && (
+          <Button
+            className="secondary-button"
+            onClick={() => setVisibleCount((count) => count + 100)}
+          >
+            加载更早日志（已显示 {values.length} / {matches.length} 条）
+          </Button>
+        )}
+      </div>
+    </>
   );
 }

@@ -116,6 +116,7 @@ test.each(["发布分类版本", "生成结果", "生成分类结果"])(
     ];
     render(<TaskDetail {...props} />);
     await userEvent.click(screen.getByRole("tab", { name: "运行日志" }));
+    expect(screen.getByRole("searchbox", { name: "搜索运行日志" })).toBeEnabled();
     expect(screen.getByText("SYNTHETIC · 生成分类结果")).toBeVisible();
     expect(screen.getByText("合成结果已生成", { exact: false })).toBeVisible();
     expect(props.events[0].stage).toBe(stage);
