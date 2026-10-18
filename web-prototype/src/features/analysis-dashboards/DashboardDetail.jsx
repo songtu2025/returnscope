@@ -87,6 +87,14 @@ export function DashboardDetail(props) {
   const isCurrentVersion = !currentVersionId || currentVersionId === route.versionId;
   const showReport = route.tab === "report";
   const analysisContext = dashboardAnalysisContext(content.data, selectedReport);
+  /** @param {"overview" | "report"} tab */
+  const showLatestView = (tab) =>
+    updateRoute({
+      tab,
+      versionId: currentVersionId || route.versionId,
+      ...(!isCurrentVersion ? { reportId: "", issueId: "" } : {}),
+      ...(tab === "report" ? { problem: "", labelGroup: "", recordPage: 1 } : {}),
+    });
 
   return (
     <div className="standard-page analysis-dashboard-page dashboard-detail-page return-insight-page">
@@ -114,14 +122,7 @@ export function DashboardDetail(props) {
         onBack={() => updateRoute({ dashboardId: "", versionId: "", tab: "overview" })}
         onOpenReportGeneration={openReportGeneration}
         onExport={() => window.print()}
-        onOpenReport={() =>
-          updateRoute({
-            tab: "report",
-            problem: "",
-            labelGroup: "",
-            recordPage: 1,
-          })
-        }
+        onOpenReport={() => showLatestView("report")}
         onToggleDataInfo={() => setShowDataInfo((visible) => !visible)}
         onSelectVersion={
           /** @param {string} versionId */ (versionId) =>
@@ -145,8 +146,8 @@ export function DashboardDetail(props) {
         }
         onShowSources={() => updateRoute({ tab: "source" })}
         onShowHistory={() => updateRoute({ tab: "history" })}
-        onShowOverview={() => updateRoute({ tab: "overview" })}
-        onShowReport={() => updateRoute({ tab: "report", problem: "", labelGroup: "" })}
+        onShowOverview={() => showLatestView("overview")}
+        onShowReport={() => showLatestView("report")}
       />
 
       {editingSettings && (

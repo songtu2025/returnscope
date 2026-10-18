@@ -70,6 +70,7 @@ export function DashboardDetailHeader({
   onEdit,
 }) {
   const terms = analysisContextTerms(analysisContext);
+  const reportLinkLabel = isCurrentVersion ? "AI 洞察报告" : "查看最新 AI 报告";
   return (
     <>
       <header className="return-insight-page-header">
@@ -120,7 +121,7 @@ export function DashboardDetailHeader({
               icon={<Sparkle size={17} />}
               onClick={onOpenReport}
             >
-              AI 洞察报告
+              {reportLinkLabel}
             </Button>
           )}
           <Button
@@ -180,12 +181,14 @@ export function DashboardDetailHeader({
           className="result-detail-tabs return-insight-secondary-tabs"
           aria-label="分析看板详情"
         >
-          <button onClick={onShowOverview}>洞察看板</button>
+          <button onClick={onShowOverview}>
+            {isCurrentVersion ? "洞察看板" : "返回最新洞察看板"}
+          </button>
           <button
             className={activeTab === "report" ? "active" : ""}
             onClick={onShowReport}
           >
-            AI 洞察报告
+            {reportLinkLabel}
           </button>
           <button
             className={activeTab === "source" ? "active" : ""}

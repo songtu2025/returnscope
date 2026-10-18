@@ -1938,6 +1938,48 @@ test("看板修改历史保留指定版本，不随焦点刷新跳转", async ()
   expect(updateRoute).not.toHaveBeenCalled();
 });
 
+test.each(["报告按钮", "报告页签", "洞察看板"])(
+  "历史版本通过%s一次进入最新视图且不会被版本同步覆盖",
+  async (entry) => {
+    const user = userEvent.setup();
+    const versions = [
+      { version_id: "history-2", version: 2 },
+      { version_id: "history-1", version: 1 },
+    ];
+    dashboardApiMock.analysisDashboard.mockImplementation(async (_id, version) => ({
+      id: "history",
+      name: "合成历史看板",
+      current_version_id: "history-2",
+      version: versions[version === "history-1" ? 1 : 0],
+    }));
+    dashboardApiMock.analysisDashboardVersions.mockResolvedValue(versions);
+    window.location.hash =
+      "#analysis-dashboards?dashboard=history&version=history-1&tab=history&report=old-report&issue=old-issue";
+    render(<DashboardHarness />);
+    expect(await screen.findByRole("status")).toHaveTextContent("历史版本 v1");
+    const button =
+      entry === "洞察看板"
+        ? screen.getByRole("button", { name: "返回最新洞察看板" })
+        : screen.getAllByRole("button", { name: "查看最新 AI 报告" })[
+            entry === "报告按钮" ? 0 : 1
+          ];
+    await user.click(button);
+    if (entry === "洞察看板") {
+      expect(await screen.findByRole("region", { name: "语义洞察结果" })).toBeVisible();
+    } else {
+      expect(
+        await screen.findByRole("heading", { name: "AI 用户反馈语义洞察报告" }),
+      ).toBeVisible();
+    }
+    const query = new URLSearchParams(window.location.hash.split("?")[1]);
+    expect(query.get("version")).toBe("history-2");
+    expect(query.get("tab")).toBe(entry === "洞察看板" ? null : "report");
+    expect(query.has("report")).toBe(false);
+    expect(query.has("issue")).toBe(false);
+    expect(screen.queryByText(/当前查看历史版本/)).not.toBeInTheDocument();
+  },
+);
+
 test("证据操作中继续读看板新数据，关闭后应用且不重复读取元数据", async () => {
   const updateRoute = vi.fn();
   const old = { version_id: "protected-1", version: 1 };
