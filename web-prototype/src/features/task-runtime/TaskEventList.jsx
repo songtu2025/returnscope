@@ -3,11 +3,14 @@ import Button from "antd/es/button";
 
 import { STATUS_LABELS } from "../../constants";
 import { classNames, formatTime } from "../../lib/presentation";
+import { SEGMENT_STATUS_LABELS } from "./segmentBoardRowPolicy";
 
 /** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
 /** @typedef {import("./taskRuntimeContracts").TaskEvent} TaskEvent */
 
 const TASK_STAGES = ["准备数据", "Listing 分类", "生成分类结果", "任务结束"];
+/** @type {Record<string, string>} */
+const EVENT_STATUS_LABELS = { ...SEGMENT_STATUS_LABELS, ...STATUS_LABELS };
 /** @type {Record<string, number>} */
 const TASK_STAGE_INDEX = {
   准备数据: 0,
@@ -34,9 +37,20 @@ function taskStageLabel(stage) {
 /** @param {AnalysisTask} task @param {TaskEvent} event */
 function eventListing(task, event) {
   const segmentId = event.data?.segment_id;
-  if (!segmentId) return "";
-  const segment = task.segments?.find((item) => item.id === segmentId);
-  return segment?.scope?.listing ?? "";
+  const segmentKey = event.data?.segment_key;
+  const segment = task.segments?.find(
+    (item) =>
+      (segmentId && item.id === segmentId) ||
+      (segmentKey && item.segment_key === segmentKey),
+  );
+  return segment?.scope?.listing || segmentKey || segmentId || "";
+}
+
+/** @param {string | undefined} status */
+function eventStatusLabel(status) {
+  if (!status) return "—";
+  const pendingStatus = status.replace(/_requested$/, "_pending");
+  return EVENT_STATUS_LABELS[pendingStatus] ?? status;
 }
 
 /** @param {{task: AnalysisTask, events: TaskEvent[]}} props */
@@ -48,6 +62,8 @@ export function TaskEventList({ task, events }) {
       {values.length === 0 && <p className="muted-line">暂无运行动态。</p>}
       {values.map((event) => {
         const listing = eventListing(task, event);
+        const beforeStatus = event.data?.before?.status ?? event.data?.before_status;
+        const afterStatus = event.data?.after?.status ?? event.data?.after_status;
         const message = listing
           ? event.message.replace(/^Listing\s*/, "")
           : event.message;
@@ -67,28 +83,16 @@ export function TaskEventList({ task, events }) {
                   原值：{event.data.before.title}
                   <br />
                   新值：{event.data.after?.title}
-                  <br />
-                  原因：{event.data.note}
                 </small>
               )}
-              {event.data?.before?.status && (
+              {(beforeStatus || afterStatus) && (
                 <small>
-                  原状态：
-                  {STATUS_LABELS[event.data.before.status] ?? event.data.before.status}
+                  原状态：{eventStatusLabel(beforeStatus)}
                   <br />
-                  新状态：
-                  {event.data.after?.status
-                    ? (STATUS_LABELS[event.data.after.status] ??
-                      event.data.after.status)
-                    : "—"}
-                  {event.data.note && (
-                    <>
-                      <br />
-                      原因：{event.data.note}
-                    </>
-                  )}
+                  新状态：{eventStatusLabel(afterStatus)}
                 </small>
               )}
+              {event.data?.note && <small>原因：{event.data.note}</small>}
               {event.actor_name && <small>操作人：{event.actor_name}</small>}
             </p>
           </div>

@@ -103,7 +103,7 @@
  * @property {string} created_at
  * @property {string} event_type
  * @property {string} [actor_name]
- * @property {{segment_id?: string, before?: TaskEventChange, after?: TaskEventChange, note?: string}} [data]
+ * @property {{segment_id?: string, segment_key?: string, before?: TaskEventChange, after?: TaskEventChange, before_status?: string, after_status?: string, note?: string}} [data]
  *
  * @typedef {Record<string, unknown>} TaskPayload
  */
