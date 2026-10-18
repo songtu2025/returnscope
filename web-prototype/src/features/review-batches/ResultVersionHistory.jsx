@@ -133,7 +133,7 @@ function ResultVersionChain({ history, resultVersionId, onSelectVersion }) {
 
 /**
  * @param {{history: ResultVersion[], resultVersionId: string, loading: boolean,
- *   error: string, onReload: () => void, onSelectVersion: (versionId: string) => void}} props
+ *   error: string, onReload: () => void, onSelectVersion: (versionId: string) => void, pinnedVersion?: boolean}} props
  */
 export function ResultVersionHistory({
   history,
@@ -142,13 +142,18 @@ export function ResultVersionHistory({
   error,
   onReload,
   onSelectVersion,
+  pinnedVersion = false,
 }) {
   const ready = !loading && !error;
   return (
     <div className="result-version-panel-body" aria-busy={loading}>
       <CardHeading
         title="修改历史"
-        note="此处查看历史修改记录，可选择版本查看对应分类数据。"
+        note={
+          pinnedVersion
+            ? "此处查看所选版本的修改记录；切回分类数据仍显示所选版本。"
+            : "此处仅查看所选版本的修改记录和下载历史结果；返回最新分类数据后显示最新发布版本。"
+        }
         action={
           <InlineLoading
             label="更新中…"

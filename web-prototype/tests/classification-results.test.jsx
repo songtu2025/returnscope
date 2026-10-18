@@ -1388,49 +1388,68 @@ test("旧筛选刷新晚返回不会覆盖当前列表", async () => {
   }
 });
 
-test("版本历史显示真实派生链且历史版本主动作进入最新版本", async () => {
-  const derived = {
-    ...resultVersion,
-    version_id: "classification-version-2",
-    version: 2,
-    created_by_name: "复核员乙",
-    parent_version_id: resultVersion.version_id,
-    parent_version_no: 1,
-    source_review_batch_id: "review-batch-1",
-    changed_unit_count: 2,
-    inherited_unit_count: 1,
-    version_reason: "人工复核后发布",
-    created_at: "2026-08-12T10:00:00Z",
-  };
-  apiMock.classificationResultVersions.mockResolvedValue([
-    {
+test.each([false, true])(
+  "版本历史说明切回数据的版本语境，看板来源=%s",
+  async (pinned) => {
+    const derived = {
       ...resultVersion,
-      created_by_name: null,
-      version_reason: "首次分类发布",
-    },
-    derived,
-  ]);
-  window.location.hash =
-    "classification-results?result_version_id=classification-version-1&tab=history";
+      version_id: "classification-version-2",
+      version: 2,
+      created_by_name: "复核员乙",
+      parent_version_id: resultVersion.version_id,
+      parent_version_no: 1,
+      source_review_batch_id: "review-batch-1",
+      changed_unit_count: 2,
+      inherited_unit_count: 1,
+      version_reason: "人工复核后发布",
+      created_at: "2026-08-12T10:00:00Z",
+    };
+    apiMock.classificationResultVersions.mockResolvedValue([
+      {
+        ...resultVersion,
+        created_by_name: null,
+        version_reason: "首次分类发布",
+      },
+      derived,
+    ]);
+    window.location.hash =
+      "classification-results?result_version_id=classification-version-1&tab=history" +
+      (pinned ? "&dashboard_return=%23analysis-dashboards%3Fdashboard%3Ddemo" : "");
 
-  render(<ClassificationResultsPage notify={vi.fn()} />);
+    render(<ClassificationResultsPage notify={vi.fn()} />);
 
-  expect(await screen.findByText("v1 · 原始分类")).toBeVisible();
-  expect(screen.getByText("v2 · 历史批次复核")).toBeVisible();
-  expect(screen.getByText("人工复核后发布")).toBeVisible();
-  expect(screen.getByText("操作者信息未提供", { exact: false })).toBeVisible();
-  expect(screen.getByText("复核员乙", { exact: false })).toBeVisible();
-  expect(
-    screen.getByText("基于 v1 修改 2 个分类单元，其余 1 个沿用来源版本"),
-  ).toBeVisible();
-  expect(screen.getByText("复核批次：review-batch-1")).toBeInTheDocument();
-  expect(apiMock.classificationResultRecordGroups).not.toHaveBeenCalled();
-  expect(apiMock.classificationResultDrilldown).not.toHaveBeenCalled();
+    expect(await screen.findByText("v1 · 原始分类")).toBeVisible();
+    expect(screen.getByText("v2 · 历史批次复核")).toBeVisible();
+    expect(screen.getByText("人工复核后发布")).toBeVisible();
+    expect(screen.getByText("操作者信息未提供", { exact: false })).toBeVisible();
+    expect(screen.getByText("复核员乙", { exact: false })).toBeVisible();
+    expect(
+      screen.getByText("基于 v1 修改 2 个分类单元，其余 1 个沿用来源版本"),
+    ).toBeVisible();
+    expect(screen.getByText("复核批次：review-batch-1")).toBeInTheDocument();
+    expect(apiMock.classificationResultRecordGroups).not.toHaveBeenCalled();
+    expect(apiMock.classificationResultDrilldown).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", {
+        name: pinned ? "分类数据" : "返回最新分类数据",
+        exact: true,
+      }),
+    ).toBeVisible();
+    expect(
+      screen.getByText(
+        pinned
+          ? "此处查看所选版本的修改记录；切回分类数据仍显示所选版本。"
+          : "此处仅查看所选版本的修改记录和下载历史结果；返回最新分类数据后显示最新发布版本。",
+      ),
+    ).toBeVisible();
 
-  await userEvent.click(screen.getByRole("button", { name: "查看修改记录" }));
-  expect(window.location.hash).toContain("result_version_id=classification-version-2");
-  expect(window.location.hash).toContain("tab=history");
-});
+    await userEvent.click(screen.getByRole("button", { name: "查看修改记录" }));
+    expect(window.location.hash).toContain(
+      "result_version_id=classification-version-2",
+    );
+    expect(window.location.hash).toContain("tab=history");
+  },
+);
 
 test("派生统计字段缺失时只显示已有记录与分类单元摘要", async () => {
   const derived = {

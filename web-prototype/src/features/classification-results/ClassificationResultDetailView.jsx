@@ -119,7 +119,9 @@ export function ClassificationResultDetailView(props) {
           className={route.tab === "records" ? "active" : ""}
           onClick={() => updateRoute({ tab: "records" })}
         >
-          分类数据
+          {route.tab === "history" && !route.dashboardReturn
+            ? "返回最新分类数据"
+            : "分类数据"}
         </button>
         <button
           className={route.tab === "history" ? "active" : ""}
@@ -130,7 +132,11 @@ export function ClassificationResultDetailView(props) {
       </nav>
 
       {route.tab === "history" ? (
-        <ResultVersionReviewPanel result={result} onSelectVersion={selectVersion} />
+        <ResultVersionReviewPanel
+          result={result}
+          onSelectVersion={selectVersion}
+          pinnedVersion={Boolean(route.dashboardReturn)}
+        />
       ) : (
         <>
           <ResultDetailMetrics {...context} />

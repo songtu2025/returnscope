@@ -5,8 +5,12 @@ import { ResultVersionHistory } from "./ResultVersionHistory";
 import { errorMessage } from "../analysis-dashboards/dashboardRequestErrors";
 
 /** @typedef {import("../../shared/api/reviewBatchContracts").ResultVersion} ResultVersion */
-/** @param {{result: {version_id: string}, onSelectVersion: (versionId: string) => void}} props */
-export function ResultVersionReviewPanel({ result, onSelectVersion }) {
+/** @param {{result: {version_id: string}, onSelectVersion: (versionId: string) => void, pinnedVersion?: boolean}} props */
+export function ResultVersionReviewPanel({
+  result,
+  onSelectVersion,
+  pinnedVersion = false,
+}) {
   const controllerRef = useRef(/** @type {AbortController | null} */ (null));
   const [state, setState] = useState({
     id: result.version_id,
@@ -49,6 +53,7 @@ export function ResultVersionReviewPanel({ result, onSelectVersion }) {
       <ResultVersionHistory
         history={current ? state.history : []}
         resultVersionId={result.version_id}
+        pinnedVersion={pinnedVersion}
         loading={!current || state.loading}
         error={current ? state.error : ""}
         onReload={load}
