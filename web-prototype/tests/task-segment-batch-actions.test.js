@@ -1,8 +1,13 @@
 import { beforeEach, expect, test, vi } from "vitest";
 import { taskExecutionActions } from "../src/features/task-runtime/taskExecutionActions";
 import { segmentActionAvailable } from "../src/features/task-runtime/segmentBoardRowPolicy";
+import { runSegmentBatch } from "../src/features/task-runtime/taskSegmentBatchActions";
 
-const api = vi.hoisted(() => ({ controlTaskSegment: vi.fn(), refresh: vi.fn() }));
+const api = vi.hoisted(() => ({
+  controlTaskSegment: vi.fn(),
+  refresh: vi.fn(),
+  task: vi.fn(),
+}));
 vi.mock("../src/api", () => ({ api }));
 vi.mock("../src/shared/serverState", () => ({ refreshServerState: api.refresh }));
 const segment = (key, status = "paused", extra = {}) => ({
@@ -138,4 +143,73 @@ test("结果已删除的项不能继续执行，但仍允许移除任务引用",
   const item = segment("a", "paused", { result_deleted_at: "today" });
   expect(segmentActionAvailable(item, "resume")).toBe(false);
   expect(segmentActionAvailable(item, "delete")).toBe(true);
+});
+
+test.each(["restore", "purge"])(
+  "回收站跨任务 %s 复用串行执行，按任务缓存最新修订且区分同名键",
+  async (action) => {
+    const targets = [
+      { id: "row-a", taskId: "task-a", key: "same" },
+      { id: "row-b", taskId: "task-b", key: "same" },
+      { id: "row-c", taskId: "task-a", key: "other" },
+    ];
+    const revisions = { "task-a": 7, "task-b": 12 };
+    const snapshot = (id) => ({
+      id,
+      revision: revisions[id],
+      segments: [
+        segment("same", "paused", { deleted_at: "today" }),
+        segment("other", "paused", { deleted_at: "today" }),
+      ],
+    });
+    api.task.mockImplementation(async (id) => snapshot(id));
+    api.controlTaskSegment.mockImplementation(async (id) => {
+      revisions[id]++;
+      return snapshot(id);
+    });
+    const result = await runSegmentBatch([...targets, targets[0]], action);
+    expect(result.succeeded).toEqual(["row-a", "row-b", "row-c"]);
+    expect(api.task.mock.calls.map(([id]) => id)).toEqual(["task-a", "task-b"]);
+    expect(
+      api.controlTaskSegment.mock.calls.map(([id, key, kind, payload]) => [
+        id,
+        key,
+        kind,
+        payload.expected_revision,
+      ]),
+    ).toEqual([
+      ["task-a", "same", action, 7],
+      ["task-b", "same", action, 12],
+      ["task-a", "other", action, 8],
+    ]);
+  },
+);
+
+test("回收站写入结果不明时停止后项，保留成功、失败和未处理身份", async () => {
+  const current = task(
+    3,
+    ["a", "b", "c"].map((key) => segment(key, "paused", { deleted_at: "today" })),
+  );
+  api.task.mockResolvedValue(current);
+  api.controlTaskSegment
+    .mockResolvedValueOnce({ ...current, revision: 4 })
+    .mockRejectedValueOnce(Object.assign(new Error("合成网络中断"), { status: 503 }));
+  const result = await runSegmentBatch(
+    ["a", "b", "c"].map((key) => ({ id: key, key, taskId: current.id })),
+    "purge",
+  );
+  expect(api.controlTaskSegment).toHaveBeenCalledTimes(2);
+  expect(result.succeeded).toEqual(["a"]);
+  expect(result.failed).toEqual({ key: "b", message: "合成网络中断", uncertain: true });
+  expect(result.pending).toEqual(["c"]);
+});
+
+test("读取最新任务失败时未发生写入，不误报写入结果不明", async () => {
+  api.task.mockRejectedValue(new Error("合成读取中断"));
+  const result = await runSegmentBatch(
+    [{ id: "a", key: "a", taskId: "task-a" }],
+    "restore",
+  );
+  expect(api.controlTaskSegment).not.toHaveBeenCalled();
+  expect(result.failed.uncertain).toBe(false);
 });

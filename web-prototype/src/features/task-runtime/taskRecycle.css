@@ -24,7 +24,7 @@
   color: var(--muted);
   margin-top: 4px;
 }
-.recycle-table td:nth-child(2) {
+.recycle-table td:nth-child(3) {
   max-width: 300px;
   overflow-wrap: anywhere;
 }
@@ -149,4 +149,53 @@
 }
 .recycle-table-wrap .listing-table-empty > span {
   display: block;
+}
+
+.recycle-selection {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+}
+.recycle-selection .danger {
+  color: var(--red);
+}
+.recycle-table input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--green-dark);
+  cursor: pointer;
+}
+.recycle-table th:first-child,
+.recycle-table td:first-child {
+  width: 40px;
+  padding-right: 0;
+}
+.recycle-confirm-dialog {
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+}
+.recycle-confirm-items {
+  max-height: min(32vh, 300px);
+  overflow-y: auto;
+  padding: 2px;
+}
+.recycle-confirm-items > dl + dl {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.recycle-batch-result {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+.recycle-batch-result p {
+  margin: 0 0 8px;
+}
+.recycle-batch-result summary {
+  cursor: pointer;
 }

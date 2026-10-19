@@ -2,7 +2,6 @@ import { api } from "../../api";
 
 /** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
 /** @typedef {import("./taskRuntimeContracts").TaskPayload} TaskPayload */
-/** @typedef {import("./taskRuntimeContracts").SegmentAction} SegmentAction */
 
 /**
  * 当前组件使用的任务 API 响应契约。静态类型集中在消费边界，不改变请求行为。
@@ -18,7 +17,7 @@ import { api } from "../../api";
  *   retryTask: (id: string) => Promise<AnalysisTask>,
  *   retryTaskSegment: (id: string, segmentKey: string, payload: TaskPayload) => Promise<AnalysisTask>,
  *   retrySegmentResultPublish: (id: string, segmentId: string, payload: TaskPayload) => Promise<AnalysisTask>,
- *   controlTaskSegment: (id: string, segmentKey: string, action: SegmentAction, payload: TaskPayload) => Promise<AnalysisTask>,
+ *   controlTaskSegment: (id: string, segmentKey: string, action: import("../../shared/api/taskApi").TaskControlAction, payload: TaskPayload) => Promise<AnalysisTask>,
  *   setTaskParallelism: (id: string, payload: TaskPayload) => Promise<AnalysisTask>,
  *   reorderTaskSegments: (id: string, payload: TaskPayload) => Promise<AnalysisTask>,
  *   preflightTaskReplan: (id: string, payload: TaskPayload) => Promise<import("../task-planning/taskPlanContracts").TaskExecutionPlan>,

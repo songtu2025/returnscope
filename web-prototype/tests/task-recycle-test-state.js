@@ -3,6 +3,7 @@ import { cleanup } from "@testing-library/react";
 const mocks = vi.hoisted(() => ({
   request: vi.fn(),
   control: vi.fn(),
+  task: vi.fn(),
   refresh: vi.fn(),
 }));
 export { mocks };
@@ -11,7 +12,11 @@ vi.mock("../src/shared/api/request", async (load) => ({
   request: mocks.request,
 }));
 vi.mock("../src/shared/api/taskApi", async (load) => ({
-  taskApi: { ...(await load()).taskApi, controlTaskSegment: mocks.control },
+  taskApi: {
+    ...(await load()).taskApi,
+    controlTaskSegment: mocks.control,
+    task: mocks.task,
+  },
 }));
 vi.mock("../src/shared/serverState", async (load) => ({
   ...(await load()),
@@ -31,6 +36,11 @@ export const item = {
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.request.mockResolvedValue({ items: [item], total: 1 });
+  mocks.task.mockResolvedValue({
+    id: item.task_id,
+    revision: 3,
+    segments: [{ ...item, status: "paused" }],
+  });
   mocks.control.mockResolvedValue({});
   mocks.refresh.mockResolvedValue(undefined);
 });

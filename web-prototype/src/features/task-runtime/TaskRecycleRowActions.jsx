@@ -1,7 +1,7 @@
 import { DotsThreeVertical } from "@phosphor-icons/react";
 import { useDismissibleDetails } from "../../hooks/useDismissibleDetails";
 
-/** @param {{item: import("./TaskRecyclePage").RecycledListing, disabled: boolean, onRestore: () => void, onPurge: () => void}} props */
+/** @param {{item: import("./taskRecycleContracts").RecycledListing, disabled: boolean, onRestore: () => void, onPurge: () => void}} props */
 export function TaskRecycleRowActions({ item, disabled, onRestore, onPurge }) {
   const { detailsProps, summaryProps } = useDismissibleDetails({
     menu: true,

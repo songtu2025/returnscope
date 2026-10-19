@@ -3,6 +3,9 @@ import { segmentActionAvailable } from "./segmentBoardRowPolicy";
 import { refreshServerState } from "../../shared/serverState";
 
 /** @typedef {"pause" | "resume" | "delete"} BatchSegmentAction */
+/** @typedef {BatchSegmentAction | "restore" | "purge"} SerialSegmentAction */
+/** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
+/** @typedef {{id: string, taskId: string, key: string}} SegmentActionTarget */
 /** @typedef {{succeeded: string[], skipped: string[], pending: string[], failed: {key: string, message: string, uncertain: boolean} | null, refreshRequired: boolean}} SegmentBatchResult */
 /** @typedef {(keys: string[], action: BatchSegmentAction) => Promise<SegmentBatchResult | false>} ApplySegmentBatch */
 
@@ -14,42 +17,11 @@ import { refreshServerState } from "../../shared/serverState";
  */
 export async function applySegmentBatch(context, keys, action) {
   const { setSelected, loadSelected, loadTasks, mutateCache, notify } = context;
-  let current = context.selected;
-  const targets = [...new Set(keys)];
-  /** @type {SegmentBatchResult} */
-  const result = {
-    succeeded: [],
-    skipped: [],
-    pending: [],
-    failed: null,
-    refreshRequired: false,
-  };
-  for (const [index, key] of targets.entries()) {
-    const segment = current.segments?.find((item) => item.segment_key === key);
-    if (!segment || !segmentActionAvailable(segment, action)) {
-      result.skipped.push(key);
-      continue;
-    }
-    try {
-      // 每次使用服务端刚返回的任务修订号，不能并发提交同一旧修订。
-      current = await taskMonitorApi.controlTaskSegment(current.id, key, action, {
-        expected_revision: current.revision,
-        note: "",
-      });
-    } catch (failure) {
-      const status = Number(errorStatus(failure));
-      result.failed = {
-        key,
-        message: errorMessage(failure),
-        uncertain: !status || status >= 500,
-      };
-      result.pending = targets.slice(index + 1);
-      result.refreshRequired = true;
-      break;
-    }
-    result.succeeded.push(key);
-    setSelected(current);
-  }
+  const result = await runSegmentBatch(
+    keys.map((key) => ({ id: key, taskId: context.selected.id, key })),
+    action,
+    { initialTask: context.selected, onTaskUpdated: setSelected },
+  );
   if (result.failed) {
     try {
       const latest = await loadSelected();
@@ -65,6 +37,74 @@ export async function applySegmentBatch(context, keys, action) {
     ]);
     if (reads.some((read) => read.status === "rejected" || read.value === false)) {
       notify("Listing 操作结果已保留，关联列表刷新失败，可重试读取", "error");
+    }
+  }
+  return result;
+}
+
+/** @param {import("./taskRuntimeContracts").TaskSegment} segment @param {SerialSegmentAction} action */
+function available(segment, action) {
+  if (action === "restore" || action === "purge") {
+    return Boolean(
+      segment.deleted_at &&
+      !segment.removal_requested_at &&
+      (action === "restore" || segment.status !== "running"),
+    );
+  }
+  return segmentActionAvailable(segment, action);
+}
+
+/** @param {SegmentActionTarget[]} values @param {SerialSegmentAction} action @param {{initialTask?: AnalysisTask, onTaskUpdated?: (task: AnalysisTask) => void}} [options] @returns {Promise<SegmentBatchResult>} */
+export async function runSegmentBatch(
+  values,
+  action,
+  { initialTask, onTaskUpdated } = {},
+) {
+  const targets = [...new Map(values.map((target) => [target.id, target])).values()];
+  const tasks = new Map(initialTask ? [[initialTask.id, initialTask]] : []);
+  /** @type {SegmentBatchResult} */
+  const result = {
+    succeeded: [],
+    skipped: [],
+    pending: [],
+    failed: null,
+    refreshRequired: false,
+  };
+  for (const [index, target] of targets.entries()) {
+    let submitted = false;
+    try {
+      const current =
+        tasks.get(target.taskId) ?? (await taskMonitorApi.task(target.taskId));
+      tasks.set(target.taskId, current);
+      const segment = current.segments?.find((item) => item.segment_key === target.key);
+      if (!segment || !available(segment, action)) {
+        result.skipped.push(target.id);
+        continue;
+      }
+      // 每次使用服务端刚返回的任务修订号，不能并发提交同一旧修订。
+      submitted = true;
+      const updated = await taskMonitorApi.controlTaskSegment(
+        current.id,
+        target.key,
+        action,
+        {
+          expected_revision: current.revision,
+          ...(action === "restore" || action === "purge" ? {} : { note: "" }),
+        },
+      );
+      tasks.set(current.id, updated);
+      result.succeeded.push(target.id);
+      onTaskUpdated?.(updated);
+    } catch (failure) {
+      const status = Number(errorStatus(failure));
+      result.failed = {
+        key: target.id,
+        message: errorMessage(failure),
+        uncertain: submitted && (!status || status >= 500),
+      };
+      result.pending = targets.slice(index + 1).map((item) => item.id);
+      result.refreshRequired = true;
+      break;
     }
   }
   return result;
