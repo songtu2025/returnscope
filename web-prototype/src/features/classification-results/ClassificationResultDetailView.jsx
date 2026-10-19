@@ -1,5 +1,5 @@
 import { useSWRConfig } from "swr";
-import { useContext, useEffect, useRef } from "react";
+import { useContext, useEffect, useState } from "react";
 import { PageLoadingContext } from "../../hooks/usePageLoading";
 import { refreshServerState } from "../../shared/serverState";
 import { ArrowLeft, ListChecks, WarningCircle } from "@phosphor-icons/react";
@@ -12,6 +12,7 @@ import { ResultDetailMetrics } from "./ResultDetailMetrics";
 import { ResultDetailDrilldown } from "./ResultDetailDrilldown";
 import { ResultDetailRecords } from "./ResultDetailRecords";
 import { ResultError } from "./ClassificationResultCommon";
+import { clearResultRecordConditions } from "./resultRecordConditions";
 import {
   classificationResultReturnLabel,
   returnFromClassificationResult,
@@ -40,12 +41,12 @@ export function ClassificationResultDetailView(props) {
     selectVersion,
   } = context;
   const loadingScope = useContext(PageLoadingContext);
-  const locateRecords = useRef(
+  const [locateRecords, setLocateRecords] = useState(
     Boolean(route.recordQualityStatus || route.systemRerunRequired),
   );
   useEffect(() => {
     if (
-      !locateRecords.current ||
+      !locateRecords ||
       loadingScope?.initial ||
       props.recordsLoading ||
       props.recordsError ||
@@ -58,7 +59,7 @@ export function ClassificationResultDetailView(props) {
     if (!region) return;
     region.scrollIntoView({ block: "start" });
     region.focus({ preventScroll: true });
-    locateRecords.current = false;
+    setLocateRecords(false);
   }, [
     loadingScope?.initial,
     props.recordsLoading,
@@ -66,6 +67,7 @@ export function ClassificationResultDetailView(props) {
     props.records,
     route.tab,
     selectedGroup,
+    locateRecords,
   ]);
   const refreshRelated = async () => {
     await refreshServerState(mutate, [
@@ -139,7 +141,16 @@ export function ClassificationResultDetailView(props) {
         />
       ) : (
         <>
-          <ResultDetailMetrics {...context} />
+          <ResultDetailMetrics
+            {...context}
+            onReview={() => {
+              setLocateRecords(true);
+              clearResultRecordConditions(updateRoute, {
+                tab: "records",
+                recordQualityStatus: "review_required",
+              });
+            }}
+          />
 
           <ResultDetailDrilldown {...context} />
 

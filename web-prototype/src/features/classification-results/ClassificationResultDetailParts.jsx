@@ -12,14 +12,38 @@ import { formatTime } from "../../lib/presentation";
  */
 
 /**
- * @param {{ label: string, value: number, note?: string, tone?: string }} props
+ * @param {{ label: string, value: number, note?: string, tone?: string, onClick?: () => void, actionLabel?: string }} props
  */
-export function SummaryMetric({ label, value, note = "", tone = "" }) {
-  return (
-    <div className={tone ? `is-${tone}` : ""}>
+export function SummaryMetric({
+  label,
+  value,
+  note = "",
+  tone = "",
+  onClick,
+  actionLabel,
+}) {
+  const content = (
+    <>
       <span>{label}</span>
       <b>{Number(value || 0).toLocaleString()}</b>
       {note && <small>{note}</small>}
+    </>
+  );
+  return (
+    <div className={tone ? `is-${tone}` : ""}>
+      {onClick ? (
+        <button
+          type="button"
+          className="summary-metric-action"
+          onClick={onClick}
+          aria-label={actionLabel}
+          disabled={!value}
+        >
+          {content}
+        </button>
+      ) : (
+        content
+      )}
     </div>
   );
 }

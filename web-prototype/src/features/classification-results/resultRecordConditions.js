@@ -44,7 +44,7 @@ export function resultRecordConditions(route) {
     .map(([label, value]) => `${label}：${value}`);
 }
 
-/** @param {(changes: Partial<import("./classificationResultRoute").ClassificationResultRoute>) => void} updateRoute */
-export function clearResultRecordConditions(updateRoute) {
-  updateRoute({ ...EMPTY_CONDITIONS, recordPage: 1 });
+/** @param {(changes: Partial<import("./classificationResultRoute").ClassificationResultRoute>) => void} updateRoute @param {Partial<import("./classificationResultRoute").ClassificationResultRoute>} [changes] */
+export function clearResultRecordConditions(updateRoute, changes = {}) {
+  updateRoute({ ...EMPTY_CONDITIONS, ...changes, recordPage: 1 });
 }

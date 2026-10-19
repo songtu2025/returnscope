@@ -90,6 +90,21 @@
   margin-top: 7px;
   font-size: 24px;
 }
+.result-summary-grid .summary-metric-action {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.result-summary-grid .summary-metric-action small {
+  color: var(--green-dark);
+  font-size: 12px;
+  text-decoration: underline;
+}
 .result-summary-grid .is-green {
   border-color: #b9d9ce;
   background: #f4faf7;
