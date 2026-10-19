@@ -130,62 +130,6 @@
   color: var(--muted);
   font-size: 11px;
 }
-.drilldown-columns {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0;
-}
-.drilldown-column {
-  min-width: 0;
-  padding: 14px;
-  border-right: 1px solid var(--line);
-}
-.drilldown-column:last-child {
-  border-right: 0;
-}
-.drilldown-column > b {
-  display: block;
-  margin-bottom: 9px;
-  font-size: 12px;
-}
-.drilldown-column > div {
-  display: grid;
-  gap: 5px;
-  max-height: 218px;
-  overflow-y: auto;
-}
-.drilldown-column button {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-width: 0;
-  padding: 7px 8px;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  background: transparent;
-  cursor: pointer;
-  text-align: left;
-}
-.drilldown-column button:hover,
-.drilldown-column button.active {
-  border-color: #b8d8cc;
-  background: var(--green-pale);
-}
-.drilldown-column button span {
-  overflow: hidden;
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.drilldown-column button b {
-  color: var(--green-dark);
-  font-size: 11px;
-}
-.drilldown-empty {
-  color: var(--muted);
-  font-size: 12px;
-}
 .record-order-search {
   display: flex;
   flex: 1 1 220px;

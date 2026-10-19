@@ -39,7 +39,7 @@ export async function readResultRecords(version, query, options = {}) {
     api.classificationResultDrilldown(
       version,
       "product_name",
-      { page: 1, page_size: 100, problem: query.problem },
+      { page: 1, page_size: 12, problem: query.problem },
       options,
     ),
     api.classificationResultDrilldown(
@@ -47,7 +47,7 @@ export async function readResultRecords(version, query, options = {}) {
       "product_sku",
       {
         page: 1,
-        page_size: 100,
+        page_size: 12,
         problem: query.problem,
         product_name: query.product_name,
       },
@@ -60,6 +60,7 @@ export async function readResultRecords(version, query, options = {}) {
       problem: problems.items ?? [],
       product_name: names.items ?? [],
       product_sku: skus.items ?? [],
+      totals: { product_name: names.total, product_sku: skus.total },
     },
   };
 }

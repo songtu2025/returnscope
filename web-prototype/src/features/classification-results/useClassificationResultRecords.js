@@ -8,7 +8,12 @@ import { errorMessage } from "../../shared/api/requestErrors";
 import { serverStateKeys } from "../../shared/serverState";
 import { runResultRequest } from "../../shared/api/requestLifecycle";
 
-const EMPTY_DRILLDOWNS = { problem: [], product_name: [], product_sku: [] };
+const EMPTY_DRILLDOWNS = {
+  problem: [],
+  product_name: [],
+  product_sku: [],
+  totals: { product_name: 0, product_sku: 0 },
+};
 
 /** @typedef {import("./classificationResultRoute").ClassificationResultRoute} ClassificationResultRoute */
 /** @param {{ route: ClassificationResultRoute, notify: (message: string, type: "error") => void, keepPreviousData?: boolean }} options */

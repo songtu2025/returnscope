@@ -33,7 +33,9 @@ export function SummaryMetric({ label, value, note = "", tone = "" }) {
  *   emptyLabel?: string,
  *   emptyTitle?: string,
  *   emptyDescription?: string,
- *   limit?: number
+ *   limit?: number,
+ *   status?: import("react").ReactNode,
+ *   children?: import("react").ReactNode
  * }} props
  */
 export function DrilldownColumn({
@@ -45,12 +47,15 @@ export function DrilldownColumn({
   emptyTitle = "暂无数据",
   emptyDescription = "",
   limit = 12,
+  status,
+  children,
 }) {
   return (
     <div className="drilldown-column">
       <b>{title}</b>
-      <div>
-        {items.length === 0 && (
+      <div className="drilldown-items">
+        {status}
+        {!status && items.length === 0 && (
           <span className="drilldown-empty">
             <b>{emptyTitle}</b>
             {emptyDescription && (
@@ -61,22 +66,24 @@ export function DrilldownColumn({
             )}
           </span>
         )}
-        {items.slice(0, limit).map((item) => {
-          const value = item.value ?? "";
-          const label =
-            item.label_path?.join(" → ") || item.label_name || value || emptyLabel;
-          return (
-            <button
-              key={`${title}-${value || "empty"}`}
-              className={selected === value ? "active" : ""}
-              onClick={() => onSelect(value)}
-            >
-              <span title={label}>{label}</span>
-              <b>{Number(item.record_count || 0).toLocaleString()} 组</b>
-            </button>
-          );
-        })}
+        {!status &&
+          items.slice(0, limit).map((item) => {
+            const value = item.value ?? "";
+            const label =
+              item.label_path?.join(" → ") || item.label_name || value || emptyLabel;
+            return (
+              <button
+                key={`${title}-${value || "empty"}`}
+                className={selected === value ? "active" : ""}
+                onClick={() => onSelect(value)}
+              >
+                <span title={label}>{label}</span>
+                <b>{Number(item.record_count || 0).toLocaleString()} 组</b>
+              </button>
+            );
+          })}
       </div>
+      {children}
     </div>
   );
 }

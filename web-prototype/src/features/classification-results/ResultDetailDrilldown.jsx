@@ -1,4 +1,6 @@
 import { DrilldownColumn } from "./ClassificationResultDetailParts";
+import { ResultProductDrilldown } from "./ResultProductDrilldown";
+import "./resultDrilldown.css";
 
 /** @param {import("./classificationResultDetailContracts").ResultDetailContext} context */
 export function ResultDetailDrilldown(context) {
@@ -29,18 +31,22 @@ export function ResultDetailDrilldown(context) {
       </header>
       <div className="drilldown-columns">
         <ResultProblemDrilldown {...context} />
-        <DrilldownColumn
+        <ResultProductDrilldown
+          route={route}
+          groupBy="product_name"
           title="产品名称"
           items={drilldowns.product_name}
+          total={drilldowns.totals?.product_name}
           selected={route.productName}
-          emptyLabel="未提供"
           onSelect={selectProductName}
         />
-        <DrilldownColumn
+        <ResultProductDrilldown
+          route={route}
+          groupBy="product_sku"
           title="产品SKU"
           items={drilldowns.product_sku}
+          total={drilldowns.totals?.product_sku}
           selected={route.productSku}
-          emptyLabel="未提供"
           onSelect={selectProductSku}
         />
       </div>
