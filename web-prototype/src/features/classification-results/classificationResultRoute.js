@@ -102,8 +102,8 @@ export function classificationResultPoolReturnQuery(route) {
 }
 
 /** @param {ClassificationResultRoute} route */
-export function writeClassificationResultRoute(route) {
-  navigateHash("classification-results", {
+export function classificationResultQuery(route) {
+  return {
     ...classificationResultPoolReturnQuery(route),
     result_version_id: route.version,
     record_page: route.recordPage > 1 ? route.recordPage : "",
@@ -121,7 +121,12 @@ export function writeClassificationResultRoute(route) {
     segment_id: route.segmentId,
     review_batch_id: route.reviewBatchId,
     action: route.action,
-  });
+  };
+}
+
+/** @param {ClassificationResultRoute} route */
+export function writeClassificationResultRoute(route) {
+  navigateHash("classification-results", classificationResultQuery(route));
 }
 
 /** @param {ClassificationResultRoute} route @param {(changes: Partial<ClassificationResultRoute>) => void} updateRoute */

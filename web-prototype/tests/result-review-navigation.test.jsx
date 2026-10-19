@@ -3,7 +3,13 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { api } from "../src/api";
 import { ClassificationResultsPage } from "../src/pages/ClassificationResultsPage";
-import { buildHash, parseHash } from "../src/app/hashRouter";
+import { buildHash, parseHash, useHashRoute } from "../src/app/hashRouter";
+import { AnalysisDashboardPage } from "../src/features/analysis-dashboards/AnalysisDashboardPage";
+import { dashboardApi } from "../src/shared/api/dashboardApi";
+import {
+  createDashboardSelection,
+  readDashboardSelection,
+} from "../src/features/analysis-dashboards/dashboardSelectionStorage";
 import { classificationResultRouteState } from "../src/features/classification-results/classificationResultRoute";
 import { renderWithServerState as render } from "./renderWithServerState";
 
@@ -56,6 +62,7 @@ const query = {
   record_page: 4,
 };
 beforeEach(() => {
+  sessionStorage.clear();
   window.history.replaceState({}, "", "/" + buildHash("classification-results", query));
   vi.spyOn(api, "classificationResult").mockResolvedValue(result);
   vi.spyOn(api, "classificationResultSummary").mockResolvedValue(summary);
@@ -67,6 +74,108 @@ beforeEach(() => {
   vi.spyOn(api, "classificationResultVersions").mockResolvedValue([result]);
   vi.spyOn(api, "correctClassificationResult");
 });
+
+function CreationFlow() {
+  const { route } = useHashRoute();
+  return route.page === "analysis-dashboards" ? (
+    <AnalysisDashboardPage route={route} userId="proof-user" notify={vi.fn()} />
+  ) : (
+    <ClassificationResultsPage userId="proof-user" notify={vi.fn()} />
+  );
+}
+
+test.each(["取消", "关闭"])(
+  "详情生成洞察复用原确认，%s返回原详情且保留结果池选择和草稿",
+  async (exit) => {
+    const token = createDashboardSelection("proof-user", {
+      selected: [{ result_version_id: "other-result" }],
+      dashboard_form: { name: "已有看板草稿" },
+      insight_form: { modelId: "old-model", effort: "medium" },
+    });
+    const original = readDashboardSelection("proof-user", token);
+    window.history.replaceState(
+      {},
+      "",
+      buildHash("classification-results", {
+        ...query,
+        tab: "history",
+        selection_token: token,
+      }),
+    );
+    const returnHash = window.location.hash;
+    const preflight = vi.spyOn(dashboardApi, "dashboardPreflight").mockResolvedValue({
+      plan_hash: "synthetic-plan",
+      ready: true,
+      conflicts: [],
+      blockers: [],
+      sources: [
+        {
+          result_version_id: result.version_id,
+          listing: result.listing,
+          record_count: 1,
+        },
+      ],
+      summary: { source_count: 1, record_count: 1, unit_count: 1 },
+    });
+    vi.spyOn(api, "configs").mockResolvedValue([
+      {
+        id: "connection",
+        models: [
+          {
+            id: "model",
+            active: true,
+            validation_status: "validated",
+            supported_efforts: ["high"],
+          },
+        ],
+      },
+    ]);
+    vi.spyOn(api, "modelPreference").mockResolvedValue(null);
+    const submit = vi.spyOn(dashboardApi, "createInsightReportFromResults");
+    render(<CreationFlow />);
+    const entry = await screen.findByRole("button", {
+      name: "生成 AI 洞察",
+      exact: true,
+    });
+    entry.focus();
+    await userEvent.keyboard("{Enter}");
+    const confirm = await screen.findByRole("button", {
+      name: "开始生成",
+      exact: true,
+    });
+    await waitFor(() => expect(confirm).toBeEnabled());
+    expect(preflight).toHaveBeenCalledWith(
+      { result_version_ids: [result.version_id], filters: {} },
+      expect.any(Object),
+    );
+    const nextToken = parseHash().query.selection_token;
+    expect(nextToken).not.toBe(token);
+    expect(readDashboardSelection("proof-user", nextToken)).toMatchObject({
+      selected: [{ result_version_id: result.version_id }],
+      intent: "insight",
+    });
+    expect(
+      parseHash(readDashboardSelection("proof-user", nextToken).result_return).query,
+    ).toEqual(parseHash(returnHash).query);
+    expect(readDashboardSelection("other-user", nextToken)).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: exit, exact: true }));
+    await screen.findByRole("button", { name: "生成 AI 洞察", exact: true });
+    expect(parseHash().query).toEqual(parseHash(returnHash).query);
+    expect(readDashboardSelection("proof-user", token)).toEqual(original);
+    expect(submit).not.toHaveBeenCalled();
+  },
+);
+
+test.each([{ deleted_at: "2026-10-20" }, { publish_status: "pending" }])(
+  "失效或未发布详情禁用洞察入口",
+  async (changes) => {
+    vi.mocked(api.classificationResult).mockResolvedValue({ ...result, ...changes });
+    open();
+    expect(
+      await screen.findByRole("button", { name: "生成 AI 洞察", exact: true }),
+    ).toBeDisabled();
+  },
+);
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();

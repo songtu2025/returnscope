@@ -41,6 +41,7 @@ export function readDashboardSelection(userId, token) {
       intent: value.intent,
       result_pool_query: value.result_pool_query,
       task_return: value.task_return,
+      result_return: value.result_return,
       dashboard_form: value.dashboard_form
         ? { name: value.dashboard_form.name || "" }
         : undefined,

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useEvidenceNavigation } from "./useEvidenceNavigation";
 import { ArrowLeft } from "@phosphor-icons/react";
 import { PageLoadingState } from "../../components/SharedUi";
-import { createResultDashboard } from "./resultSelectionActions";
+import { createResultSelection } from "./resultSelectionActions";
 import { ResultError } from "./ClassificationResultCommon";
 import { useClassificationResultDetailData } from "./useClassificationResultDetailData";
 import { useLatestResult } from "./useLatestResult";
@@ -24,9 +24,10 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
   const [refreshAttempt, setRefreshAttempt] = useState(0);
   const evidenceTriggerRef = useRef(/** @type {HTMLButtonElement | null} */ (null));
 
-  const createDashboardFromResult = () => {
+  /** @param {"dashboard" | "insight"} [intent] */
+  const createFromResult = (intent = "dashboard") => {
     if (!result) return;
-    createResultDashboard(userId, result, route);
+    createResultSelection(userId, result, route, intent);
   };
 
   const openOrderRecords = () => {
@@ -167,7 +168,7 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
       closeEvidence={closeEvidence}
       openEvidence={openEvidence}
       evidenceTriggerRef={evidenceTriggerRef}
-      createDashboardFromResult={createDashboardFromResult}
+      createFromResult={createFromResult}
       openOrderRecords={openOrderRecords}
       loading={loading}
       error={error || versionRefreshError}

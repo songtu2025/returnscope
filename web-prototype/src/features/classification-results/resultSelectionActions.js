@@ -1,19 +1,33 @@
-import { navigateHash } from "../../app/hashRouter";
+import { buildHash, navigateHash } from "../../app/hashRouter";
 import {
   createDashboardSelection,
   selectionItem,
 } from "../analysis-dashboards/dashboardSelectionStorage";
 import { isDashboardSelectable } from "./resultActionPolicy";
-import { classificationResultPoolQuery } from "./classificationResultRoute";
+import {
+  classificationResultPoolQuery,
+  classificationResultQuery,
+} from "./classificationResultRoute";
 
 /**
  * @param {string} userId
- * @param {Parameters<typeof import("../analysis-dashboards/dashboardSelectionStorage").selectionItem>[0]} result
+ * @param {Parameters<typeof import("../analysis-dashboards/dashboardSelectionStorage").selectionItem>[0] & import("./resultActionPolicy").ResultPolicyInput} result
  * @param {import("./classificationResultRoute").ClassificationResultRoute} route
+ * @param {"dashboard" | "insight"} [intent]
  */
-export function createResultDashboard(userId, result, route) {
+export function createResultSelection(userId, result, route, intent = "dashboard") {
+  if (!isDashboardSelectable(result)) return;
   const token = createDashboardSelection(userId, {
     selected: [selectionItem(result)],
+    intent,
+    ...(intent === "insight"
+      ? {
+          result_return: buildHash(
+            "classification-results",
+            classificationResultQuery(route),
+          ),
+        }
+      : {}),
     result_pool_query: classificationResultPoolQuery(route),
   });
   navigateHash("analysis-dashboards", { selection_token: token, step: "check" });
@@ -24,5 +38,5 @@ export function createResultDashboard(userId, result, route) {
  * @param {{userId: string, route: import("./classificationResultRoute").ClassificationResultRoute}} context
  */
 export function runResultPrimaryAction(result, { userId, route }) {
-  if (isDashboardSelectable(result)) createResultDashboard(userId, result, route);
+  createResultSelection(userId, result, route);
 }

@@ -1,6 +1,7 @@
 import { dashboardCreationStage } from "./dashboardCreatePolicy";
 import { ArrowLeft } from "@phosphor-icons/react";
-import { navigateHash, parseHash } from "../../app/hashRouter";
+import { navigateHash } from "../../app/hashRouter";
+import { dashboardCreationReturn } from "./dashboardCreationRequests";
 import { InlineLoading, PageHeading } from "../../components/SharedUi";
 import { DashboardPlanSources } from "./DashboardPlanSources";
 import { DashboardCreateConfirmation } from "./DashboardCreateConfirmation";
@@ -16,8 +17,7 @@ export function DashboardCreateFlow(props) {
   const context = { ...props, ...useDashboardCreation(props) };
   const { route, selection, state, resultVersionIds, runPreflight } = context;
   const isInsightCreation = selection?.intent === "insight";
-  const taskTarget = selection?.task_return ? parseHash(selection.task_return) : null;
-  const returnTask = taskTarget?.page === "analysis-tasks" && taskTarget.query.task_id;
+  const returnTarget = dashboardCreationReturn(selection, route.selectionToken);
   const insight = useDashboardInsightCreation({ ...context, isInsightCreation });
 
   const stage = dashboardCreationStage(state, route, selection, resultVersionIds);
@@ -41,16 +41,9 @@ export function DashboardCreateFlow(props) {
       <button
         className="text-button result-back-button page-loading-navigation"
         disabled={context.submitting || insight.insightState.submitting}
-        onClick={() =>
-          returnTask
-            ? navigateHash("analysis-tasks", taskTarget.query)
-            : navigateHash("classification-results", {
-                ...selection?.result_pool_query,
-                selection_token: route.selectionToken,
-              })
-        }
+        onClick={() => navigateHash(returnTarget.page, returnTarget.query)}
       >
-        <ArrowLeft size={17} /> {returnTask ? "返回来源任务" : "返回选择分类结果"}
+        <ArrowLeft size={17} /> {returnTarget.label}
       </button>
       <PageHeading title={isInsightCreation ? "生成 AI 洞察" : "创建分析看板"} />
 

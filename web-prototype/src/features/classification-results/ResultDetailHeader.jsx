@@ -1,5 +1,5 @@
 import Button from "antd/es/button";
-import { ChartBar } from "@phosphor-icons/react";
+import { ChartBar, Sparkle } from "@phosphor-icons/react";
 import { ResultDownloadButton } from "./ResultDownloadButton";
 import { DeliveryLifecycleControls } from "../../components/DeliveryLifecycleControls";
 import { formatTime } from "../../lib/presentation";
@@ -52,6 +52,18 @@ function ResultDetailActions(context) {
         onClick={runPrimaryAction}
       >
         {policy.primary.label}
+      </Button>
+      <Button
+        disabled={policy.primary.disabled}
+        title={
+          policy.primary.disabled
+            ? policy.blockingReason
+            : "使用当前查看的结果版本生成 AI 洞察，下一步核对范围"
+        }
+        icon={<Sparkle size={18} />}
+        onClick={context.createInsight}
+      >
+        生成 AI 洞察
       </Button>
       <ResultDownloadButton
         key={result.version_id}

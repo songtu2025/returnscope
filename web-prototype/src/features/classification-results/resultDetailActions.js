@@ -1,8 +1,9 @@
 /** @typedef {import("./classificationResultDetailContracts").ResultDetailViewProps} ResultDetailViewProps */
 
-/** @param {Pick<ResultDetailViewProps,"updateRoute"|"createDashboardFromResult">} props */
-export function resultDetailActions({ updateRoute, createDashboardFromResult }) {
-  const runPrimaryAction = createDashboardFromResult;
+/** @param {Pick<ResultDetailViewProps,"updateRoute"|"createFromResult">} props */
+export function resultDetailActions({ updateRoute, createFromResult }) {
+  const runPrimaryAction = () => createFromResult("dashboard");
+  const createInsight = () => createFromResult("insight");
 
   /** @param {string} version */
   const selectVersion = (version) =>
@@ -35,6 +36,7 @@ export function resultDetailActions({ updateRoute, createDashboardFromResult }) 
 
   return {
     runPrimaryAction,
+    createInsight,
     selectVersion,
     selectProblem,
     selectProductName,

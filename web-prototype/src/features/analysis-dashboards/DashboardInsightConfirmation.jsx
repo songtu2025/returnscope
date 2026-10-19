@@ -2,6 +2,7 @@ import { InsightGenerationModal } from "./InsightGenerationModal";
 import { dashboardAnalysisContext } from "./analysisContextPresentation";
 import { navigateHash } from "../../app/hashRouter";
 import { DashboardQualityScope } from "./DashboardQualityScope";
+import { dashboardCreationReturn } from "./dashboardCreationRequests";
 
 /** @param {import("./dashboardCreateContracts").DashboardCreateContext & ReturnType<typeof import("./useDashboardInsightCreation").useDashboardInsightCreation>} context */
 export function DashboardInsightConfirmation(context) {
@@ -25,11 +26,10 @@ export function DashboardInsightConfirmation(context) {
       form={insightForm}
       onChange={setInsightForm}
       onClose={() => {
-        if (!insightState.submitting)
-          navigateHash("classification-results", {
-            ...selection?.result_pool_query,
-            selection_token: route.selectionToken,
-          });
+        if (!insightState.submitting) {
+          const target = dashboardCreationReturn(selection, route.selectionToken);
+          navigateHash(target.page, target.query);
+        }
       }}
       onSubmit={submitInsight}
       models={insightState.models}

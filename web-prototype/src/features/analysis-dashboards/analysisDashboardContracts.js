@@ -130,6 +130,7 @@
  *
  * @typedef {Object} DashboardSelection
  * @property {string} [task_return]
+ * @property {string} [result_return]
  * @property {DashboardSelectionItem[]} selected
  * @property {string[]} [resolved_result_version_ids]
  * @property {Record<string, string | string[] | null>} [filters]
