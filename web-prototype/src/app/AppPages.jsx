@@ -38,6 +38,11 @@ export function AppPages({ route, user, notify, navigate, refreshSystem }) {
       null
     ),
   );
+  const productReturnPosition = useRef(
+    /** @type {import("../hooks/useListReturnPosition").ListReturnPosition | null} */ (
+      null
+    ),
+  );
   const title =
     page === "task-create"
       ? "创建分析任务"
@@ -85,6 +90,7 @@ export function AppPages({ route, user, notify, navigate, refreshSystem }) {
           )}
           {page === "data-assets" && (
             <DataAssetsPage
+              returnPosition={productReturnPosition}
               route={route}
               notify={notify}
               onNavigate={navigate}

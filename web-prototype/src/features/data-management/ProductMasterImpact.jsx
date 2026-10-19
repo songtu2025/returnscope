@@ -9,7 +9,7 @@ import { restoreProductChange } from "../../shared/api/historyRestore";
 /** @typedef {import("./productMasterContracts").ProductMasterProps} ProductMasterProps */
 /** @typedef {ReturnType<typeof import("./useProductMasterState").useProductMasterState>} ProductMasterState */
 
-/** @param {Pick<ProductMasterState,"dimensionAudit"|"currentVersionId"|"onProductChanged"> & Pick<ProductMasterProps,"routeReferencePage"|"onReferenceRouteChange"|"onNavigate"> & {selected: DatasetRecord}} props */
+/** @param {Pick<ProductMasterState,"dimensionAudit"|"currentVersionId"|"onProductChanged"> & Pick<ProductMasterProps,"routeReferencePage"|"onReferenceRouteChange"|"onNavigate"|"returnPosition"> & {selected: DatasetRecord}} props */
 export function ProductMasterImpact({
   dimensionAudit,
   currentVersionId,
@@ -18,6 +18,7 @@ export function ProductMasterImpact({
   onNavigate,
   selected,
   onProductChanged,
+  returnPosition,
 }) {
   return (
     <div className="product-master-impact">
@@ -47,6 +48,7 @@ export function ProductMasterImpact({
         </div>
       </section>
       <DatasetReferences
+        returnPosition={returnPosition}
         currentVersionId={currentVersionId}
         page={Number(routeReferencePage) || 1}
         onRouteChange={onReferenceRouteChange}

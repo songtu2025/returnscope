@@ -10,6 +10,7 @@ import Button from "antd/es/button";
 import { api } from "../../api";
 import { CardHeading, EmptyState, InlineLoading } from "../../components/SharedUi";
 import { DatasetReferenceTable } from "./DatasetReferenceTable";
+import { useListReturnPosition } from "../../hooks/useListReturnPosition";
 
 /** @typedef {import("../../app/navigation").Navigate} Navigate */
 
@@ -19,6 +20,7 @@ import { DatasetReferenceTable } from "./DatasetReferenceTable";
  *   page: number,
  *   onRouteChange?: (changes: Record<string, string | number>) => void,
  *   onNavigate?: Navigate,
+ *   returnPosition?: import("react").MutableRefObject<import("../../hooks/useListReturnPosition").ListReturnPosition | null>,
  * }} props
  */
 export function DatasetReferences({
@@ -26,6 +28,7 @@ export function DatasetReferences({
   page,
   onRouteChange,
   onNavigate,
+  returnPosition,
 }) {
   const selectedVersionId = currentVersionId ?? "";
   const controllerRef = useRef(/** @type {AbortController | null} */ (null));
@@ -69,13 +72,20 @@ export function DatasetReferences({
 
   const total = Number(state.data?.total ?? 0);
   const pages = Math.max(Math.ceil(total / 20), 1);
+  const { containerRef, titleRef, remember } = useListReturnPosition({
+    identity: JSON.stringify([selectedVersionId, page]),
+    ready: Boolean(data || error),
+    snapshotRef: returnPosition,
+  });
 
   return (
     <section
+      ref={containerRef}
       className="dataset-view-panel dataset-reference-panel"
       aria-busy={state.loading}
     >
       <CardHeading
+        titleRef={titleRef}
         title="任务引用"
         action={
           <InlineLoading
@@ -111,7 +121,11 @@ export function DatasetReferences({
         )}
         {data && data.items.length > 0 && (
           <>
-            <DatasetReferenceTable items={data.items} onNavigate={onNavigate} />
+            <DatasetReferenceTable
+              items={data.items}
+              onNavigate={onNavigate}
+              onBeforeOpen={remember}
+            />
             <footer className="quality-pagination">
               <span>
                 共 {total.toLocaleString()} 条 · 第 {page}/{pages} 页

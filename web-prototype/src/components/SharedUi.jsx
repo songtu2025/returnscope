@@ -27,12 +27,14 @@ export function PageHeading({ title, action, titleRef }) {
   );
 }
 
-/** @param {{title: import("react").ReactNode, note?: import("react").ReactNode, action?: import("react").ReactNode}} props */
-export function CardHeading({ title, note, action }) {
+/** @param {{title: import("react").ReactNode, note?: import("react").ReactNode, action?: import("react").ReactNode, titleRef?: import("react").Ref<HTMLHeadingElement>}} props */
+export function CardHeading({ title, note, action, titleRef }) {
   return (
     <div className="card-heading">
       <div>
-        <h3>{title}</h3>
+        <h3 ref={titleRef} tabIndex={titleRef ? -1 : undefined}>
+          {title}
+        </h3>
         {note && <p>{note}</p>}
       </div>
       {action}

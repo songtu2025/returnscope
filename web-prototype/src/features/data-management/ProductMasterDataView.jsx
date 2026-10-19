@@ -50,6 +50,7 @@ export function ProductMasterDataView({ state, selected, props }) {
         )}
         {detailTab === "impact" && (
           <ProductMasterImpact
+            returnPosition={props.returnPosition}
             selected={selected}
             onProductChanged={onProductChanged}
             dimensionAudit={state.dimensionAudit}

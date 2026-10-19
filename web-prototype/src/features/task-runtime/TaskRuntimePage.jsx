@@ -8,6 +8,7 @@ import {
   classificationResultRouteState,
 } from "../classification-results/classificationResultRoute";
 import "../../styles/task-flow.css";
+import { productReferenceReturnQuery } from "../data-management/productReferenceRoute";
 
 /** @typedef {import("../../app/navigation").AppRoute} AppRoute */
 /** @typedef {import("../../app/navigation").Navigate} Navigate */
@@ -39,6 +40,9 @@ export function TaskRuntimePage({
       />
     );
   const query = route.query;
+  const productTarget = query.product_return
+    ? productReferenceReturnQuery(parseHash(query.product_return))
+    : null;
   const recycleTarget = query.recycle_return ? parseHash(query.recycle_return) : null;
   const onReturnRecycle =
     recycleTarget?.page === "analysis-tasks" && recycleTarget.query.view === "recycle"
@@ -124,6 +128,9 @@ export function TaskRuntimePage({
       listingReturnState={listingReturnState}
       onReturnResultPool={onReturnResultPool}
       onReturnRecycle={onReturnRecycle}
+      onReturnProducts={
+        productTarget ? () => navigateHash("data-assets", productTarget) : undefined
+      }
     />
   );
 }

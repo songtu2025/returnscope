@@ -8,6 +8,7 @@
  * @typedef {{
  *   notify: (message: string, tone?: string) => void,
  *   onNavigate: Navigate,
+ *   returnPosition?: import("react").MutableRefObject<import("../../hooks/useListReturnPosition").ListReturnPosition | null>,
  *   focus?: TaskRepairContext | null,
  *   taskDraft?: TaskDraft | null,
  *   onReturnToTask?: (productVersionId: string) => void,

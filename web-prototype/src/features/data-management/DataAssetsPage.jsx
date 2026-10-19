@@ -12,9 +12,9 @@ import { ImportRulesPage } from "./ImportRulesPage";
 /** @typedef {{query: {view?: string, dataset?: string, return_to?: string, tab?: string, reference_version?: string, reference_page?: string | number}}} DataAssetsRoute */
 
 /**
- * @param {{route: DataAssetsRoute, notify: (message: string, tone?: string) => void, onNavigate: Navigate, userId: string}} props
+ * @param {{route: DataAssetsRoute, notify: (message: string, tone?: string) => void, onNavigate: Navigate, userId: string, returnPosition?: import("react").MutableRefObject<import("../../hooks/useListReturnPosition").ListReturnPosition | null>}} props
  */
-export function DataAssetsPage({ route, notify, onNavigate, userId }) {
+export function DataAssetsPage({ route, notify, onNavigate, userId, returnPosition }) {
   const requestedView = route.query.view || "products";
   const view = ["quality", "returns"].includes(requestedView)
     ? "products"
@@ -61,6 +61,7 @@ export function DataAssetsPage({ route, notify, onNavigate, userId }) {
   return (
     <AntdProvider>
       <ProductMasterWorkspace
+        returnPosition={returnPosition}
         notify={notify}
         onNavigate={onNavigate}
         focus={focus}

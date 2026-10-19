@@ -2,12 +2,14 @@ import { useId, useState } from "react";
 import { ArrowRight } from "@phosphor-icons/react";
 import { STATUS_LABELS } from "../../constants";
 import { formatTime } from "../../lib/presentation";
+import { buildHash, parseHash } from "../../app/hashRouter";
+import { productReferenceReturnQuery } from "./productReferenceRoute";
 
 /** @typedef {import("../../shared/api/dataManagementContracts").DatasetReference} DatasetReference */
 /** @typedef {import("../../app/navigation").Navigate} Navigate */
 
-/** @param {{items: DatasetReference[], onNavigate?: Navigate}} props */
-export function DatasetReferenceTable({ items, onNavigate }) {
+/** @param {{items: DatasetReference[], onNavigate?: Navigate, onBeforeOpen?: (id:string)=>void}} props */
+export function DatasetReferenceTable({ items, onNavigate, onBeforeOpen }) {
   return (
     <div className="dataset-reference-table-wrap">
       <table className="dataset-reference-table" aria-label="任务引用列表">
@@ -27,6 +29,7 @@ export function DatasetReferenceTable({ items, onNavigate }) {
               key={`${item.task_id}-${item.reference_type}`}
               item={item}
               onNavigate={onNavigate}
+              onBeforeOpen={onBeforeOpen}
             />
           ))}
         </tbody>
@@ -35,10 +38,11 @@ export function DatasetReferenceTable({ items, onNavigate }) {
   );
 }
 
-/** @param {{item: DatasetReference, onNavigate?: Navigate}} props */
-function ReferenceRow({ item, onNavigate }) {
+/** @param {{item: DatasetReference, onNavigate?: Navigate, onBeforeOpen?: (id:string)=>void}} props */
+function ReferenceRow({ item, onNavigate, onBeforeOpen }) {
   const [expanded, setExpanded] = useState(false);
   const detailId = useId();
+  const returnId = `${item.task_id}:${item.reference_type}`;
   return (
     <>
       <tr>
@@ -60,9 +64,16 @@ function ReferenceRow({ item, onNavigate }) {
         <td className="dataset-reference-actions">
           <button
             className="text-button"
-            onClick={() =>
-              onNavigate?.("analysis-tasks", { kind: "task", id: item.task_id })
-            }
+            data-list-return-id={returnId}
+            onClick={() => {
+              const query = productReferenceReturnQuery(parseHash());
+              onBeforeOpen?.(returnId);
+              onNavigate?.("analysis-tasks", {
+                kind: "task",
+                id: item.task_id,
+                ...(query ? { productReturn: buildHash("data-assets", query) } : {}),
+              });
+            }}
           >
             查看任务 <ArrowRight size={14} />
           </button>
