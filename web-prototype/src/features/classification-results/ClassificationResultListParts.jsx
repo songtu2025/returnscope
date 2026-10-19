@@ -5,7 +5,7 @@ import { formatTime } from "../../lib/presentation";
 import { resultActionPolicy } from "./resultActionPolicy";
 import { buildHash, navigateHash, parseHash } from "../../app/hashRouter";
 import {
-  classificationResultPoolQuery,
+  classificationResultPoolReturnQuery,
   classificationResultRouteState,
 } from "./classificationResultRoute";
 
@@ -133,7 +133,7 @@ function ResultPoolMetadata({ result, onOpen, onBeforeOpenSource }) {
                 segment_id: result.source_segment_id,
                 result_pool_return: buildHash(
                   "classification-results",
-                  classificationResultPoolQuery(
+                  classificationResultPoolReturnQuery(
                     classificationResultRouteState(parseHash().query),
                   ),
                 ),

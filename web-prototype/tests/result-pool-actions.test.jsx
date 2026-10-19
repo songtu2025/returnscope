@@ -34,7 +34,7 @@ afterEach(cleanup);
 
 test("同 Listing 同版本结果可以区分，来源入口定位原任务和 Listing", async () => {
   window.location.hash =
-    "#classification-results?page=3&page_size=50&q=合成&quality_status=review_required";
+    "#classification-results?page=3&page_size=50&q=合成&quality_status=review_required&selection_token=selected-session";
   const beforeOpen = vi.fn();
   const returnHash = window.location.hash;
   const rows = ["first", "second"].map((id) => ({

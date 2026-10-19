@@ -4,7 +4,7 @@ import { recycleViewState, recycleViewQuery } from "./useTaskRecycleView";
 import { TaskMonitor } from "./TaskMonitor";
 import { buildHash, navigateHash, parseHash } from "../../app/hashRouter";
 import {
-  classificationResultPoolQuery,
+  classificationResultPoolReturnQuery,
   classificationResultRouteState,
 } from "../classification-results/classificationResultRoute";
 import "../../styles/task-flow.css";
@@ -60,7 +60,7 @@ export function TaskRuntimePage({
       ? () =>
           navigateHash(
             "classification-results",
-            classificationResultPoolQuery(resultPoolState),
+            classificationResultPoolReturnQuery(resultPoolState),
           )
       : undefined;
   const filter =

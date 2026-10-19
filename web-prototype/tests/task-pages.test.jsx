@@ -150,7 +150,7 @@ test("任务来源随结果筛选和历史切换保留，返回任务及列表�
   expect(parseHash().query).toEqual(listQuery);
 });
 
-test("来源任务可返回原结果池，沿用原筛选和分页", () => {
+test.each(["", "selected-session"])("来源任务可返回原结果池，保留选择 %s", (token) => {
   const poolQuery = {
     q: "合成",
     store_site: "STORE",
@@ -158,6 +158,7 @@ test("来源任务可返回原结果池，沿用原筛选和分页", () => {
     quality_status: "review_required",
     page: "3",
     page_size: "50",
+    ...(token ? { selection_token: token } : {}),
   };
   render(
     <TaskRuntimePage

@@ -4,7 +4,11 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { TaskRegistry } from "../src/features/task-runtime/TaskRegistry";
 import { DashboardSelectionBar } from "../src/features/classification-results/ClassificationResultListParts";
 import { useResultSelection } from "../src/features/classification-results/useResultSelection";
-import { classificationResultRouteState } from "../src/features/classification-results/classificationResultRoute";
+import {
+  classificationResultRouteState,
+  classificationResultPoolQuery,
+  classificationResultPoolReturnQuery,
+} from "../src/features/classification-results/classificationResultRoute";
 import {
   createDashboardSelection,
   readDashboardSelection,
@@ -153,6 +157,27 @@ test("结果跨页选择保持全部创建范围，不额外读取记录", async
     userEvent.click(screen.getByRole("button", { name: "创建", exact: true })),
   );
   expect(readDashboardSelection("user", token).selected).toEqual(selected);
+});
+
+test("来源返回恢复原用户的全部跨页选择，令牌不改变列表位置标识", async () => {
+  const token = createDashboardSelection("user", { selected });
+  const route = classificationResultRouteState({
+    page: "3",
+    q: "筛选外",
+    selection_token: token,
+  });
+  const query = classificationResultPoolReturnQuery(route);
+  expect(classificationResultPoolQuery(route)).toEqual(
+    classificationResultPoolQuery({ ...route, selectionToken: "其他会话" }),
+  );
+  expect(readDashboardSelection("other-user", token)).toBeNull();
+  expect(readDashboardSelection("user", "missing-session")).toBeNull();
+  const returned = classificationResultRouteState(query);
+  render(<ResultHarness token={returned.selectionToken} pageIds={[]} />);
+  expect(screen.getByText("已选 2 个结果版本")).toBeVisible();
+  expect(screen.getByText("当前页 0 个 · 其他页或筛选外 2 个")).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "清空" }));
+  expect(readDashboardSelection("user", token).selected).toEqual([]);
 });
 
 test("已选任务变为运行中时属于当前不可操作，不冒充筛选外", async () => {

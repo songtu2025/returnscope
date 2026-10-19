@@ -94,9 +94,17 @@ export function classificationResultPoolQuery(route) {
 }
 
 /** @param {ClassificationResultRoute} route */
+export function classificationResultPoolReturnQuery(route) {
+  return {
+    ...classificationResultPoolQuery(route),
+    selection_token: route.selectionToken,
+  };
+}
+
+/** @param {ClassificationResultRoute} route */
 export function writeClassificationResultRoute(route) {
   navigateHash("classification-results", {
-    ...classificationResultPoolQuery(route),
+    ...classificationResultPoolReturnQuery(route),
     result_version_id: route.version,
     record_page: route.recordPage > 1 ? route.recordPage : "",
     record_quality_status: route.recordQualityStatus,
@@ -107,7 +115,6 @@ export function writeClassificationResultRoute(route) {
     product_sku: route.productSku,
     order_id: route.orderId,
     tab: route.tab === "history" ? "history" : "",
-    selection_token: route.selectionToken,
     task_id: route.taskId,
     task_return: route.taskReturn,
     dashboard_return: route.dashboardReturn,
