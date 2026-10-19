@@ -10,6 +10,7 @@ import { API_BASE, queryString, request } from "./request";
 /**
  * @type {{
  *   tasks: (filters?: TaskQuery, options?: RequestInit) => TaskRequest,
+ *   recycledListings: (filters?: TaskQuery) => TaskRequest,
  *   task: (id: string, options?: RequestInit) => TaskRequest,
  *   preflightTask: (payload: TaskPayload) => TaskRequest,
  *   previewTaskSegment: (payload: TaskPayload) => TaskRequest,
@@ -35,6 +36,8 @@ import { API_BASE, queryString, request } from "./request";
  * }}
  */
 export const taskApi = {
+  recycledListings: (filters = {}) =>
+    request(`/api/tasks/recycle${queryString(filters)}`),
   previewTaskSegment: (payload) =>
     request("/api/tasks/preflight/segment-data", {
       method: "POST",

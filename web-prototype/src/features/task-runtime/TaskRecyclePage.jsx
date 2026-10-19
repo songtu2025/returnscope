@@ -5,11 +5,12 @@ import { useDataRefresh } from "../../hooks/useDataRefresh";
 import { refreshServerState } from "../../shared/serverState";
 import { ArrowLeft } from "@phosphor-icons/react";
 import { taskApi } from "../../shared/api/taskApi";
-import { request } from "../../shared/api/request";
 import { errorMessage } from "../../shared/api/requestErrors";
 import { PageHeading, PageLoadingState } from "../../components/SharedUi";
 import { TaskRecycleRowActions } from "./TaskRecycleRowActions";
 import { TaskRecyclePurgeDialog } from "./TaskRecycleDialogs";
+import { TaskRecycleToolbar } from "./TaskRecycleToolbar";
+import { Pagination } from "../../components/Pagination";
 import { formatTime } from "../../lib/presentation";
 import { MANAGED_REFRESH_OPTIONS } from "../../shared/refreshPolicy";
 import { navigateHash } from "../../app/hashRouter";
@@ -21,6 +22,7 @@ export function TaskRecyclePage({ notify }) {
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [busy, setBusy] = useState("");
   const [restored, setRestored] = useState(
     /** @type {RecycledListing | null} */ (null),
@@ -29,17 +31,30 @@ export function TaskRecyclePage({ notify }) {
   const [purging, setPurging] = useState(/** @type {RecycledListing | null} */ (null));
   const readRecycle = async () =>
     /** @type {{items: RecycledListing[], total: number}} */ (
-      await request(`/api/tasks/recycle?q=${encodeURIComponent(search)}&page=${page}`)
+      await taskApi.recycledListings({ q: search, page, page_size: pageSize })
     );
   const { data, error, mutate } = useSWR(
-    ["task-recycle", search, page],
+    ["task-recycle", search, page, pageSize],
     readRecycle,
+    MANAGED_REFRESH_OPTIONS,
+  );
+  const {
+    data: totalData,
+    error: totalError,
+    mutate: refreshTotal,
+  } = useSWR(
+    search ? ["task-recycle-total"] : null,
+    async () =>
+      /** @type {{total: number}} */ (
+        await taskApi.recycledListings({ page: 1, page_size: 1 })
+      ),
     MANAGED_REFRESH_OPTIONS,
   );
   const refresh = async () => {
     const next = await mutate(readRecycle, { revalidate: false });
-    if (next && page > Math.max(1, Math.ceil(next.total / 20)))
-      setPage(Math.max(1, Math.ceil(next.total / 20)));
+    if (search) await refreshTotal();
+    if (next && page > Math.max(1, Math.ceil(next.total / pageSize)))
+      setPage(Math.max(1, Math.ceil(next.total / pageSize)));
   };
   const refreshAfterAction = async () => {
     setRefreshError(false);
@@ -52,8 +67,26 @@ export function TaskRecyclePage({ notify }) {
   useDataRefresh(refresh, {
     domains: ["task-recycle"],
     loading: Boolean(busy),
-    identity: `${search}:${page}`,
+    identity: `${search}:${page}:${pageSize}`,
   });
+  const applySearch = (/** @type {string} */ value) => {
+    setQuery(value);
+    setSearch(value);
+    setPage(1);
+  };
+  const pagination = {
+    page,
+    pageSize,
+    total: data?.total ?? 0,
+    totalPages: Math.max(1, Math.ceil((data?.total ?? 0) / pageSize)),
+    disabled: Boolean(busy) || !data,
+    onPage: setPage,
+    onPageSize: (/** @type {number} */ size) => {
+      setPageSize(size);
+      setPage(1);
+    },
+    showQuickJumper: true,
+  };
   /** @param {RecycledListing} item @param {"restore" | "purge"} action */
   const act = async (item, action) => {
     setBusy(item.id);
@@ -99,7 +132,7 @@ export function TaskRecyclePage({ notify }) {
       </button>
       <PageHeading title="Listing 回收站" />
       {restored && (
-        <div className="recycle-restore-result" role="status">
+        <div className="recycle-restore-result" role="status" aria-label="恢复结果">
           <span>{restored.scope.listing || "Listing"} 已恢复，不会自动执行</span>
           <button
             className="text-button"
@@ -126,27 +159,18 @@ export function TaskRecyclePage({ notify }) {
           </button>
         </div>
       )}
-      <form
-        className="listing-queue-toolbar recycle-search-form"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (busy) return;
-          setSearch(query.trim());
-          setPage(1);
-        }}
-      >
-        <label className="listing-queue-search">
-          <input
-            aria-label="搜索回收站"
-            placeholder="搜索 Listing、店铺或所属任务"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </label>
-        <button className="secondary-button" disabled={Boolean(busy)}>
-          搜索
-        </button>
-      </form>
+      <TaskRecycleToolbar
+        query={query}
+        search={search}
+        total={search ? totalData?.total : data?.total}
+        countError={Boolean(totalError)}
+        matches={data?.total ?? 0}
+        disabled={Boolean(busy)}
+        onQuery={setQuery}
+        onSearch={applySearch}
+        onRefresh={refreshAfterAction}
+        pagination={pagination}
+      />
       {error && !refreshError && !busy && (
         <div role="alert">
           回收站读取失败{" "}
@@ -203,29 +227,27 @@ export function TaskRecyclePage({ notify }) {
             </table>
             {!data.items.length && (
               <p className="listing-table-empty">
-                {search ? "没有匹配的移除记录" : "回收站为空"}
+                <span>{search ? "没有匹配的移除记录" : "回收站为空"}</span>
+                {search && (
+                  <button
+                    className="text-button"
+                    disabled={Boolean(busy)}
+                    onClick={() => applySearch("")}
+                  >
+                    清除搜索，查看全部
+                  </button>
+                )}
               </p>
             )}
           </div>
-          <div className="recycle-pagination">
-            <span>
-              共 {data.total} 条 · 第 {page} 页
-            </span>
-            <button
-              className="secondary-button compact-button"
-              disabled={Boolean(busy) || page <= 1}
-              onClick={() => setPage(page - 1)}
-            >
-              上一页
-            </button>
-            <button
-              className="secondary-button compact-button"
-              disabled={Boolean(busy) || page * 20 >= data.total}
-              onClick={() => setPage(page + 1)}
-            >
-              下一页
-            </button>
-          </div>
+          <fieldset
+            className="recycle-pagination recycle-pager"
+            disabled={pagination.disabled}
+            role="group"
+            aria-label="回收站底部分页"
+          >
+            <Pagination {...pagination} showTotal={false} />
+          </fieldset>
         </>
       ) : null}
       {purging && (

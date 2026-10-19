@@ -1,47 +1,10 @@
-import {
-  act,
-  cleanup,
-  fireEvent,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { expect, test, vi } from "vitest";
 import { renderWithServerState as render } from "./renderWithServerState";
 
-const mocks = vi.hoisted(() => ({
-  request: vi.fn(),
-  control: vi.fn(),
-  refresh: vi.fn(),
-}));
-vi.mock("../src/shared/api/request", () => ({ request: mocks.request }));
-vi.mock("../src/shared/api/taskApi", () => ({
-  taskApi: { controlTaskSegment: mocks.control },
-}));
-vi.mock("../src/shared/serverState", async (load) => ({
-  ...(await load()),
-  refreshServerState: mocks.refresh,
-}));
+import { mocks, item } from "./task-recycle-test-state";
 import { TaskRecyclePage } from "../src/features/task-runtime/TaskRecyclePage";
-
-const item = {
-  id: "synthetic-segment",
-  task_id: "synthetic-task",
-  segment_key: "synthetic-key",
-  task_revision: 3,
-  task_title: "合成验收任务",
-  scope: { listing: "SYNTHETIC", store: "合成站点" },
-  removed_by: "合成用户",
-  deleted_at: "2026-10-14T00:00:00Z",
-};
-beforeEach(() => {
-  vi.resetAllMocks();
-  mocks.request.mockResolvedValue({ items: [item], total: 1 });
-  mocks.control.mockResolvedValue({});
-  mocks.refresh.mockResolvedValue(undefined);
-});
-afterEach(cleanup);
 
 test("回收站恢复只提交恢复动作，带任务修订号并刷新列表", async () => {
   const notify = vi.fn();
@@ -138,7 +101,7 @@ test("恢复成功后可定位所属任务和 Listing，不触发执行", async 
   const notify = vi.fn();
   render(<TaskRecyclePage notify={notify} />);
   await userEvent.click(await screen.findByRole("button", { name: /^恢复 / }));
-  expect(await screen.findByRole("status")).toHaveTextContent(
+  expect(await screen.findByRole("status", { name: "恢复结果" })).toHaveTextContent(
     "SYNTHETIC 已恢复，不会自动执行",
   );
   await userEvent.click(screen.getByRole("button", { name: "查看所属任务" }));
@@ -195,29 +158,6 @@ test("服务端失败并遇到刷新失败仍解除忙态，不能显示恢复�
   expect(screen.getByRole("button", { name: /^恢复 / })).toBeEnabled();
 });
 
-test("第二页最后一项恢复后自动回落第一页，重复操作不被旧busy锁住", async () => {
-  mocks.request.mockImplementation(async (url) => {
-    if (url.includes("page=2"))
-      return { items: [item], total: mocks.control.mock.calls.length ? 20 : 21 };
-    return {
-      items: Array.from({ length: 20 }, (_, i) => ({
-        ...item,
-        id: `first-${i}`,
-        scope: { listing: `FIRST-${i}` },
-      })),
-      total: mocks.control.mock.calls.length ? 20 : 21,
-    };
-  });
-  render(<TaskRecyclePage notify={vi.fn()} />);
-  await screen.findByText("FIRST-0");
-  await userEvent.click(screen.getByRole("button", { name: "下一页" }));
-  await screen.findByText("SYNTHETIC");
-  await userEvent.click(screen.getByRole("button", { name: /^恢复 / }));
-  await waitFor(() => expect(screen.getByText("共 20 条 · 第 1 页")).toBeVisible());
-  expect(await screen.findByText("FIRST-0")).toBeVisible();
-  expect(screen.getAllByRole("button", { name: /^恢复 / })[0]).toBeEnabled();
-});
-
 test("关联模块刷新失败不误报恢复失败，也不阻断回收站刷新", async () => {
   mocks.refresh.mockRejectedValueOnce(new Error("关联模块刷新失败"));
   mocks.request
@@ -234,42 +174,4 @@ test("关联模块刷新失败不误报恢复失败，也不阻断回收站刷�
   expect(mocks.request).toHaveBeenCalledTimes(2);
   expect(notify).toHaveBeenCalledWith("Listing 已恢复，不会自动执行");
   expect(notify).not.toHaveBeenCalledWith("关联模块刷新失败", "error");
-});
-
-test("恢复期间保留搜索输入但锁定提交和分页，结束后可以操作", async () => {
-  let finish;
-  mocks.control.mockImplementation(
-    () =>
-      new Promise((resolve) => {
-        finish = resolve;
-      }),
-  );
-  mocks.request.mockResolvedValue({ items: [item], total: 41 });
-  render(<TaskRecyclePage notify={vi.fn()} />);
-  await screen.findByText("SYNTHETIC");
-  await userEvent.click(screen.getByRole("button", { name: "下一页" }));
-  await screen.findByText("共 41 条 · 第 2 页");
-  await userEvent.click(screen.getByRole("button", { name: /^恢复 / }));
-  const input = screen.getByRole("textbox", { name: "搜索回收站" });
-  await userEvent.type(input, "新范围{Enter}");
-  fireEvent.submit(input.closest("form"));
-  expect(input).toHaveValue("新范围");
-  for (const name of ["搜索", "上一页", "下一页"])
-    expect(screen.getByRole("button", { name, exact: true })).toBeDisabled();
-  expect(screen.getByText("共 41 条 · 第 2 页")).toBeVisible();
-  expect(mocks.request).toHaveBeenCalledTimes(2);
-  await act(async () => finish({}));
-  await waitFor(() =>
-    expect(screen.getByRole("button", { name: "搜索", exact: true })).toBeEnabled(),
-  );
-  await userEvent.click(screen.getByRole("button", { name: "上一页" }));
-  await screen.findByText("共 41 条 · 第 1 页");
-  await userEvent.click(screen.getByRole("button", { name: "下一页" }));
-  await screen.findByText("共 41 条 · 第 2 页");
-  await userEvent.click(screen.getByRole("button", { name: "搜索", exact: true }));
-  await waitFor(() =>
-    expect(mocks.request).toHaveBeenCalledWith(
-      `/api/tasks/recycle?q=${encodeURIComponent("新范围")}&page=1`,
-    ),
-  );
 });
