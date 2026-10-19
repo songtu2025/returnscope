@@ -130,7 +130,7 @@ test("三个筛选器提供与记录标签相同的完整状态选项", async ()
       .map((el) => el.textContent),
   ).toEqual(["全部", "需重跑", "无需重跑"]);
   await user.keyboard("{Escape}");
-  expect(screen.getByRole("button", { name: "清除结果筛选" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "清除记录条件" })).toBeDisabled();
 });
 
 test("URL 恢复组合条件且版本质量筛选不会污染记录状态", async () => {
@@ -168,7 +168,7 @@ test("URL 恢复组合条件且版本质量筛选不会污染记录状态", asyn
   );
 });
 
-test("筛选立即查询、重置页码且清除时保留其他条件", async () => {
+test("筛选立即查询、重置页码且清除全部记录条件", async () => {
   const user = userEvent.setup();
   window.location.hash =
     "classification-results?result_version_id=synthetic-version&record_page=3&order_id=ORDER&product_sku=SKU";
@@ -194,7 +194,7 @@ test("筛选立即查询、重置页码且清除时保留其他条件", async ()
       expect.any(Object),
     ),
   );
-  await user.click(screen.getByRole("button", { name: "清除结果筛选" }));
+  await user.click(screen.getByRole("button", { name: "清除记录条件" }));
   await waitFor(() =>
     expect(apiMock.classificationResultRecordGroups).toHaveBeenLastCalledWith(
       "synthetic-version",
@@ -202,8 +202,8 @@ test("筛选立即查询、重置页码且清除时保留其他条件", async ()
         page: 1,
         quality_status: "",
         comment_status: "",
-        product_sku: "SKU",
-        order_id: "ORDER",
+        product_sku: "",
+        order_id: "",
       }),
       expect.any(Object),
     ),

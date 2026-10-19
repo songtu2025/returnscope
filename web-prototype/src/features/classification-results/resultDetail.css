@@ -207,6 +207,15 @@
   flex-wrap: wrap;
   gap: 12px;
 }
+.result-record-conditions {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  color: var(--ink);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
 .result-record-field {
   display: flex;
   flex-direction: column;

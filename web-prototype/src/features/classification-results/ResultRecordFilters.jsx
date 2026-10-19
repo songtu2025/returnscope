@@ -3,13 +3,15 @@ import Select from "antd/es/select";
 import { useId } from "react";
 import { SEMANTIC_STATUS_LABELS } from "./semanticStatusPresentation";
 import { RESULT_STATE_LABELS } from "./resultStatePolicy";
+import {
+  clearResultRecordConditions,
+  resultRecordConditions,
+} from "./resultRecordConditions";
 
 /** @param {Pick<import("./classificationResultDetailContracts").ResultDetailContext, "route" | "updateRoute"> & {children: import("react").ReactNode}} props */
 export function ResultRecordFilters({ route, updateRoute, children }) {
   const id = useId();
-  const filtered = Boolean(
-    route.recordQualityStatus || route.commentStatus || route.systemRerunRequired,
-  );
+  const conditions = resultRecordConditions(route);
   return (
     <div className="result-record-filters" role="group" aria-label="结果筛选">
       <div className="result-record-field">
@@ -67,18 +69,19 @@ export function ResultRecordFilters({ route, updateRoute, children }) {
       </div>
       {children}
       <Button
-        disabled={!filtered}
-        onClick={() =>
-          updateRoute({
-            recordQualityStatus: "",
-            commentStatus: "",
-            systemRerunRequired: "",
-            recordPage: 1,
-          })
-        }
+        disabled={!conditions.length}
+        onClick={() => clearResultRecordConditions(updateRoute)}
       >
-        清除结果筛选
+        清除记录条件
       </Button>
+      {conditions.length > 0 && (
+        <div className="result-record-conditions" aria-label="生效记录条件">
+          <b>生效条件</b>
+          {conditions.map((condition) => (
+            <span key={condition}>{condition}</span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

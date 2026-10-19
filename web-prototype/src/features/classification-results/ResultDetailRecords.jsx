@@ -7,6 +7,10 @@ import { EmptyState, InlineLoading } from "../../components/SharedUi";
 import { Pagination, ResultError } from "./ClassificationResultCommon";
 import { ResultRecordRow } from "./ClassificationResultDetailParts";
 import { ResultRecordFilters } from "./ResultRecordFilters";
+import {
+  clearResultRecordConditions,
+  resultRecordConditions,
+} from "./resultRecordConditions";
 
 /** @param {import("./classificationResultDetailContracts").ResultDetailContext} context */
 export function ResultDetailRecords(context) {
@@ -39,7 +43,7 @@ export function ResultDetailRecords(context) {
           <InlineLoading scope="page" label="正在读取订单记录…" />
         )}
         {!recordsError && !recordsLoading && records?.items?.length === 0 && (
-          <ResultRecordEmpty isUserFeedback={isUserFeedback} />
+          <ResultRecordEmpty {...context} />
         )}
         {records && records.items.length > 0 && (
           <>
@@ -71,13 +75,30 @@ export function ResultDetailRecords(context) {
   );
 }
 
-/** @param {{isUserFeedback: boolean}} props */
-function ResultRecordEmpty({ isUserFeedback }) {
+/** @param {import("./classificationResultDetailContracts").ResultDetailContext} context */
+function ResultRecordEmpty({ isUserFeedback, route, updateRoute }) {
+  const filtered = resultRecordConditions(route).length > 0;
   return (
     <EmptyState
       icon={MagnifyingGlass}
       title={isUserFeedback ? "当前条件没有反馈记录" : "当前条件没有订单记录"}
-      description="调整筛选条件后重试，也可清除上方的结果筛选。"
+      description={
+        filtered ? "清除记录条件可查看此结果版本的全部记录。" : "此结果版本暂无记录。"
+      }
+      action={
+        filtered && (
+          <Button
+            onClick={() => {
+              clearResultRecordConditions(updateRoute);
+              requestAnimationFrame(() =>
+                document.getElementById("classification-order-records")?.focus(),
+              );
+            }}
+          >
+            清除条件并显示全部记录
+          </Button>
+        )
+      }
     />
   );
 }
