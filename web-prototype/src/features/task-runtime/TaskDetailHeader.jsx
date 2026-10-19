@@ -30,7 +30,7 @@ import { FINAL_TASK_STATUSES } from "./taskRegistryPolicy";
  * @property {() => void | Promise<unknown>} onPause
  * @property {() => void | Promise<unknown>} onRetry
  * @property {() => void | Promise<unknown>} onArchive
- * @property {(filter: string) => void} showListings
+ * @property {() => void} onViewResults
  */
 
 /** @param {Pick<TaskDetailHeaderProps, "task" | "taskAction" | "summary" | "hasUnfinishedSegments" | "onOpenReplan" | "onOpenResume">} props */
@@ -71,14 +71,14 @@ function TaskRecoveryActions({
   );
 }
 
-/** @param {Pick<TaskDetailHeaderProps, "task" | "taskAction" | "summary" | "onPause" | "onRetry" | "showListings">} props */
+/** @param {Pick<TaskDetailHeaderProps, "task" | "taskAction" | "summary" | "onPause" | "onRetry" | "onViewResults">} props */
 function TaskExecutionActions({
   task,
   taskAction,
   summary,
   onPause,
   onRetry,
-  showListings,
+  onViewResults,
 }) {
   return (
     <>
@@ -109,7 +109,7 @@ function TaskExecutionActions({
           className={
             task.status === "completed" ? "primary-button" : "secondary-button"
           }
-          onClick={() => showListings("delivered")}
+          onClick={onViewResults}
         >
           <ChartBar size={17} /> 查看已有结果
         </Button>
@@ -172,7 +172,7 @@ export function TaskDetailHeader({
   onPause,
   onRetry,
   onArchive,
-  showListings,
+  onViewResults,
 }) {
   return (
     <header className="task-command-header">
@@ -209,7 +209,7 @@ export function TaskDetailHeader({
           summary={summary}
           onPause={onPause}
           onRetry={onRetry}
-          showListings={showListings}
+          onViewResults={onViewResults}
         />
         <TaskMoreActions
           task={task}

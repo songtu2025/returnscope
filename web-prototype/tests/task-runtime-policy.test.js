@@ -1,4 +1,5 @@
 import { expect, test } from "vitest";
+import { publishedTaskResults } from "../src/features/task-runtime/taskSegmentPolicy";
 import {
   canArchiveTask,
   matchesQuery,
@@ -6,6 +7,24 @@ import {
   taskFilterGroup,
   taskSummary,
 } from "../src/features/task-runtime/taskRegistryPolicy";
+
+test("任务有效结果复用发布状态判断，排除移除/删除/未发布/缺ID，按版本去重且保留待复核", () => {
+  const valid = { result_version_id: "same", result_quality_status: "needs_review" };
+  expect(
+    publishedTaskResults({
+      segments: [
+        { ...valid },
+        valid,
+        { result_version_id: "removed", deleted_at: "2026-10-20" },
+        { result_version_id: "deleted", result_deleted_at: "2026-10-20" },
+        { result_version_id: "pending", result_publish_status: "pending" },
+        { result_publish_status: "published" },
+        { result_file_path: "legacy.xlsx" },
+      ],
+    }),
+  ).toEqual([valid]);
+  expect(publishedTaskResults({})).toEqual([]);
+});
 
 test("按发布情况统计结果，发布失败仍提示需处理", () => {
   const summary = taskSummary({

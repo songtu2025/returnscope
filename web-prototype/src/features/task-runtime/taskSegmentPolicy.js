@@ -15,6 +15,18 @@ export function isPublishedResult(segment) {
   return resultPublishStatus(segment) === "published" && !segment.result_deleted_at;
 }
 
+/** @param {import("./taskRuntimeContracts").AnalysisTask} task */
+export function publishedTaskResults(task) {
+  const published = (task.segments ?? [])
+    .filter((segment) => !segment.deleted_at && Boolean(segment.result_version_id))
+    .filter(isPublishedResult);
+  return [
+    ...new Map(
+      published.map((segment) => [segment.result_version_id, segment]),
+    ).values(),
+  ];
+}
+
 /** @param {TaskSegment} segment */
 export function isLegacyResult(segment) {
   return (

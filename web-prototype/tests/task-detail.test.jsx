@@ -145,25 +145,22 @@ test("历史任务配置回退到基础字段，并保留默认并行数与空�
 });
 
 test("总览展示评论进度和发布情况，并通过需处理入口切换 Listing", async () => {
-  render(
-    <TaskDetail
-      {...detailProps({
-        progress_percent: 49.6,
-        progress_current: 1000,
-        progress_total: 2000,
-        segments: [
-          {
-            agent_key: "footwear",
-            status: "completed",
-            result_version_id: "synthetic-result",
-            result_publish_status: "published",
-            result_quality_status: "ready",
-          },
-          { agent_key: "footwear", status: "failed" },
-        ],
-      })}
-    />,
-  );
+  const props = detailProps({
+    progress_percent: 49.6,
+    progress_current: 1000,
+    progress_total: 2000,
+    segments: [
+      {
+        agent_key: "footwear",
+        status: "completed",
+        result_version_id: "synthetic-result",
+        result_publish_status: "published",
+        result_quality_status: "ready",
+      },
+      { agent_key: "footwear", status: "failed" },
+    ],
+  });
+  render(<TaskDetail {...props} />);
   const overview = screen.getByRole("region", { name: "任务运行总览" });
   expect(within(overview).getByText("50%")).toBeVisible();
   expect(within(overview).getByText("1,000 / 2,000 组评论")).toBeVisible();
@@ -173,10 +170,33 @@ test("总览展示评论进度和发布情况，并通过需处理入口切换 L
     within(screen.getByLabelText("合成 Listing 面板")).getByText("attention"),
   ).toBeVisible();
   await userEvent.click(screen.getByRole("button", { name: "查看已有结果" }));
-  expect(
-    within(screen.getByLabelText("合成 Listing 面板")).getByText("delivered"),
-  ).toBeVisible();
+  expect(props.onViewClassification).toHaveBeenCalledExactlyOnceWith(
+    props.task.segments[0],
+  );
 });
+
+test.each([
+  [{ result_version_id: "first" }, { result_version_id: "second" }],
+  [{ result_file_path: "legacy.xlsx" }],
+])(
+  "多个有效结果或仅旧文件时显示已生成列表供选择，不自动打开结果：%j",
+  async (...segments) => {
+    const props = detailProps({
+      segments: segments.map((segment) => ({
+        ...segment,
+        agent_key: "footwear",
+        status: "completed",
+      })),
+    });
+    render(<TaskDetail {...props} />);
+    await userEvent.click(screen.getByRole("tab", { name: "任务配置" }));
+    await userEvent.click(screen.getByRole("button", { name: "查看已有结果" }));
+    expect(
+      within(screen.getByLabelText("合成 Listing 面板")).getByText("delivered"),
+    ).toBeVisible();
+    expect(props.onViewClassification).not.toHaveBeenCalled();
+  },
+);
 
 test.each([
   ["paused", 1, "模型服务异常，任务已自动暂停"],

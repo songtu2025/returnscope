@@ -70,6 +70,7 @@ export function TaskDetailViews({
       className="task-detail-tab-panel"
       id="task-view-panel"
       role="tabpanel"
+      tabIndex={-1}
       aria-labelledby={`task-tab-${activeTab}`}
     >
       {activeTab === "execution" && execution}

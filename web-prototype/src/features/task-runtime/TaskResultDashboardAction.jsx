@@ -5,30 +5,21 @@ import {
   createDashboardSelection,
   selectionItem,
 } from "../analysis-dashboards/dashboardSelectionStorage";
-import { isPublishedResult } from "./taskSegmentPolicy";
+import { publishedTaskResults } from "./taskSegmentPolicy";
 
 /** @param {{task: import("./taskRuntimeContracts").AnalysisTask, userId: string, taskReturn?: string, disabled?: boolean}} props */
 export function TaskResultDashboardAction({ task, userId, taskReturn, disabled }) {
-  const segments = (task.segments ?? []).filter(
-    (segment) =>
-      !segment.deleted_at && segment.result_version_id && isPublishedResult(segment),
+  const selected = publishedTaskResults(task).map((segment) =>
+    selectionItem({
+      result_version_id: segment.result_version_id,
+      version: segment.result_version,
+      store_site: segment.scope?.store,
+      listing: segment.scope?.listing,
+      quality_status: segment.result_quality_status,
+      record_count: segment.record_count,
+      unit_count: segment.unique_comments,
+    }),
   );
-  const selected = [
-    ...new Map(
-      segments.map((segment) => [
-        segment.result_version_id,
-        selectionItem({
-          result_version_id: segment.result_version_id,
-          version: segment.result_version,
-          store_site: segment.scope?.store,
-          listing: segment.scope?.listing,
-          quality_status: segment.result_quality_status,
-          record_count: segment.record_count,
-          unit_count: segment.unique_comments,
-        }),
-      ]),
-    ).values(),
-  ];
   if (!selected.length) return null;
   return (
     <Button

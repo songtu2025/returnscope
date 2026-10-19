@@ -9,6 +9,7 @@ import { TaskDetailTabs, TaskDetailViews } from "./TaskDetailViews";
 import { TaskReplanDialog } from "./TaskReplanDialog";
 
 import { taskSummary } from "./taskRegistryPolicy";
+import { publishedTaskResults } from "./taskSegmentPolicy";
 
 /** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
 /** @typedef {import("./taskRuntimeContracts").TaskEvent} TaskEvent */
@@ -110,6 +111,18 @@ export function TaskDetail({
     setListingFilter(filter);
     setActiveTab("execution");
   };
+  const viewResults = () => {
+    const results = publishedTaskResults(task);
+    if (results.length === 1) onViewClassification(results[0]);
+    else {
+      showListings("delivered");
+      requestAnimationFrame(() => {
+        const panel = document.getElementById("task-view-panel");
+        panel?.scrollIntoView({ block: "start" });
+        panel?.focus({ preventScroll: true });
+      });
+    }
+  };
   const hasUnfinishedSegments = task.segments?.some(
     (segment) =>
       !segment.deleted_at &&
@@ -148,7 +161,7 @@ export function TaskDetail({
           onPause={() => runTaskAction("pause", onPause)}
           onRetry={() => runTaskAction("retry", onRetry)}
           onArchive={() => runTaskAction("archive", onArchive)}
-          showListings={showListings}
+          onViewResults={viewResults}
         />
 
         <TaskDetailAlerts
