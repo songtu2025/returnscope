@@ -1,4 +1,6 @@
 import { TaskRecyclePage } from "./TaskRecyclePage";
+import { useRef } from "react";
+import { recycleViewState, recycleViewQuery } from "./useTaskRecycleView";
 import { TaskMonitor } from "./TaskMonitor";
 import { buildHash, navigateHash, parseHash } from "../../app/hashRouter";
 import {
@@ -23,8 +25,29 @@ export function TaskRuntimePage({
   returnPosition,
   listingReturnState,
 }) {
-  if (route.query.view === "recycle") return <TaskRecyclePage notify={notify} />;
+  const recyclePosition = useRef(
+    /** @type {import("../../hooks/useListReturnPosition").ListReturnPosition | null} */ (
+      null
+    ),
+  );
+  if (route.query.view === "recycle")
+    return (
+      <TaskRecyclePage
+        notify={notify}
+        routeQuery={route.query}
+        returnPosition={recyclePosition}
+      />
+    );
   const query = route.query;
+  const recycleTarget = query.recycle_return ? parseHash(query.recycle_return) : null;
+  const onReturnRecycle =
+    recycleTarget?.page === "analysis-tasks" && recycleTarget.query.view === "recycle"
+      ? () =>
+          navigateHash(
+            "analysis-tasks",
+            recycleViewQuery(recycleViewState(recycleTarget.query)),
+          )
+      : undefined;
   const resultPoolTarget = query.result_pool_return
     ? parseHash(query.result_pool_return)
     : null;
@@ -100,6 +123,7 @@ export function TaskRuntimePage({
       returnPosition={returnPosition}
       listingReturnState={listingReturnState}
       onReturnResultPool={onReturnResultPool}
+      onReturnRecycle={onReturnRecycle}
     />
   );
 }

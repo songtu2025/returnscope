@@ -10,6 +10,7 @@
  * @property {(taskId: string | null) => void} [onTaskFocus]
  * @property {string} [taskReturn]
  * @property {() => void} [onReturnResultPool]
+ * @property {() => void} [onReturnRecycle]
  * @property {import("./useSegmentBoardView").SegmentBoardReturnRef} [listingReturnState]
  * @property {import("react").MutableRefObject<import("../../hooks/useListReturnPosition").ListReturnPosition | null>} [returnPosition]
  */

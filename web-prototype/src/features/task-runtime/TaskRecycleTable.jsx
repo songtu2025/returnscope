@@ -41,7 +41,7 @@ export function TaskRecycleTable({
         </thead>
         <tbody>
           {items.map((item) => (
-            <tr key={item.id} data-list-return-id={item.id}>
+            <tr key={item.id}>
               <td>
                 <input
                   type="checkbox"
@@ -64,6 +64,7 @@ export function TaskRecycleTable({
               <td>
                 <button
                   className="text-button"
+                  data-list-return-id={item.id}
                   disabled={disabled}
                   onClick={() => onTask(item)}
                 >

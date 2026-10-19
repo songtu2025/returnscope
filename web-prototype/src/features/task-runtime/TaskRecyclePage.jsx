@@ -1,5 +1,5 @@
 import "./taskRecycle.css";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useDataRefresh } from "../../hooks/useDataRefresh";
 import { ArrowLeft } from "@phosphor-icons/react";
 import { PageHeading, PageLoadingState } from "../../components/SharedUi";
@@ -12,14 +12,18 @@ import { TaskRecycleToolbar } from "./TaskRecycleToolbar";
 import { Pagination } from "../../components/Pagination";
 import { navigateHash } from "../../app/hashRouter";
 import { useUnsavedNavigation } from "../../hooks/useUnsavedNavigation";
+import { useListReturnPosition } from "../../hooks/useListReturnPosition";
+import { useTaskRecycleView } from "./useTaskRecycleView";
 
-/** @param {{notify: (message: string, type?: "success" | "error") => void}} props */
-export function TaskRecyclePage({ notify }) {
-  const [query, setQuery] = useState("");
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+/** @param {{notify: (message: string, type?: "success" | "error") => void, routeQuery?: Record<string, string | undefined>, returnPosition?: import("react").MutableRefObject<import("../../hooks/useListReturnPosition").ListReturnPosition | null>}} props */
+export function TaskRecyclePage({ notify, routeQuery, returnPosition }) {
+  const { query, setQuery, search, page, pageSize, update, returnHash } =
+    useTaskRecycleView(routeQuery);
+  const setPage = (/** @type {number} */ value) => update({ page: value });
   const [selected, setSelected] = useState(/** @type {string[]} */ ([]));
+  useEffect(() => {
+    setSelected([]);
+  }, [returnHash]);
   const dataState = useTaskRecycleData({ search, page, pageSize, setPage });
   const {
     data,
@@ -30,6 +34,22 @@ export function TaskRecyclePage({ notify }) {
     refresh,
     refreshAfterAction,
   } = dataState;
+  const { containerRef, titleRef, remember } = useListReturnPosition({
+    identity: returnHash,
+    ready: Boolean(data || error),
+    snapshotRef: returnPosition,
+  });
+  const openTask = (
+    /** @type {import("./taskRecycleContracts").RecycledListing} */ item,
+    segment = false,
+  ) => {
+    remember(item.id);
+    navigateHash("analysis-tasks", {
+      task_id: item.task_id,
+      segment_id: segment ? item.id : "",
+      recycle_return: returnHash,
+    });
+  };
   const actions = useTaskRecycleActions({
     notify,
     ...dataState,
@@ -69,8 +89,7 @@ export function TaskRecyclePage({ notify }) {
   const applySearch = (/** @type {string} */ value) => {
     setSelected([]);
     setQuery(value);
-    setSearch(value);
-    setPage(1);
+    update({ search: value, page: 1 });
   };
   const pagination = {
     page,
@@ -81,13 +100,12 @@ export function TaskRecyclePage({ notify }) {
     onPage: changePage,
     onPageSize: (/** @type {number} */ size) => {
       setSelected([]);
-      setPageSize(size);
-      setPage(1);
+      update({ pageSize: size, page: 1 });
     },
     showQuickJumper: true,
   };
   return (
-    <div className="standard-page task-page task-runtime-workspace">
+    <div className="standard-page task-page task-runtime-workspace" ref={containerRef}>
       <button
         className="task-back-button"
         disabled={busy}
@@ -96,19 +114,14 @@ export function TaskRecyclePage({ notify }) {
         <ArrowLeft size={17} />
         全部任务
       </button>
-      <PageHeading title="Listing 回收站" />
+      <PageHeading title="Listing 回收站" titleRef={titleRef} />
       {restored && (
         <div className="recycle-restore-result" role="status" aria-label="恢复结果">
           <span>{restored.scope.listing || "Listing"} 已恢复，不会自动执行</span>
           <button
             className="text-button"
             disabled={busy}
-            onClick={() =>
-              navigateHash("analysis-tasks", {
-                task_id: restored.task_id,
-                segment_id: restored.id,
-              })
-            }
+            onClick={() => openTask(restored, true)}
           >
             查看所属任务
           </button>
@@ -164,7 +177,7 @@ export function TaskRecyclePage({ notify }) {
             selected={visibleSelection}
             disabled={blocked}
             onSelect={setSelected}
-            onTask={(item) => navigateHash("analysis-tasks", { task_id: item.task_id })}
+            onTask={openTask}
             onRestore={(item) => execute([item], "restore")}
             onPurge={(item) => setConfirmation({ items: [item], action: "purge" })}
           />

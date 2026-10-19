@@ -92,14 +92,16 @@ export function TaskMonitor(props) {
         <section className="task-detail-panel">
           <button
             className="task-back-button page-loading-navigation"
-            onClick={props.onReturnResultPool || returnToList}
+            onClick={props.onReturnRecycle || props.onReturnResultPool || returnToList}
           >
             <ArrowLeft size={17} />{" "}
-            {props.onReturnResultPool
-              ? "返回分类结果池"
-              : listState.ownerId === undefined
-                ? "全部任务"
-                : "返回我的任务"}
+            {props.onReturnRecycle
+              ? "返回 Listing 回收站"
+              : props.onReturnResultPool
+                ? "返回分类结果池"
+                : listState.ownerId === undefined
+                  ? "全部任务"
+                  : "返回我的任务"}
           </button>
           {listRefreshError && (
             <div className="task-action-error" role="alert">
