@@ -40,24 +40,32 @@ export function useResultSelection({ route, updateRoute, userId }) {
     setSelection(next);
   };
 
-  /** @param {ClassificationResultVersion} result */
-  const toggleSelection = (result) => {
-    if (!isDashboardSelectable(result)) return;
+  /** @param {ClassificationResultVersion[]} results */
+  const toggleSelections = (results) => {
+    const eligible = results.filter(isDashboardSelectable);
+    if (!eligible.length) return;
+    const ids = new Set(eligible.map(resultVersionId));
+    const allSelected = [...ids].every((id) => selectedIds.has(id));
+    /** @param {DashboardSelection["selected"]} selected */
+    const update = (selected) => {
+      if (allSelected)
+        return selected.filter((item) => !ids.has(item.result_version_id));
+      const next = new Map(selected.map((item) => [item.result_version_id, item]));
+      eligible.forEach((item) => next.set(resultVersionId(item), selectionItem(item)));
+      return [...next.values()];
+    };
     if (!route.selectionToken) {
       const token = createDashboardSelection(userId, {
-        selected: [selectionItem(result)],
+        selected: update([]),
       });
       setSelection(readDashboardSelection(userId, token));
       updateRoute({ selectionToken: token });
       return;
     }
-    const id = resultVersionId(result);
-    updateSelectedResults((selected) =>
-      selected.some((item) => item.result_version_id === id)
-        ? selected.filter((item) => item.result_version_id !== id)
-        : [...selected, selectionItem(result)],
-    );
+    updateSelectedResults(update);
   };
+  /** @param {ClassificationResultVersion} result */
+  const toggleSelection = (result) => toggleSelections([result]);
 
   const clearSelection = () => {
     updateSelectedResults(() => []);
@@ -74,6 +82,7 @@ export function useResultSelection({ route, updateRoute, userId }) {
     const next = updateDashboardSelection(userId, route.selectionToken, (current) => ({
       ...current,
       intent,
+      task_return: undefined,
       result_pool_query: classificationResultPoolQuery(route),
     }));
     setSelection(next);
@@ -91,6 +100,7 @@ export function useResultSelection({ route, updateRoute, userId }) {
     selectedResults,
     selectedIds,
     toggleSelection,
+    toggleSelections,
     clearSelection,
     removeSelection,
     continueToDashboard: () => continueToCreation("dashboard"),

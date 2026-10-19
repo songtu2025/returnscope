@@ -1,11 +1,46 @@
 import { ResultPoolStatus } from "./ResultPoolStatus";
 import { Pagination } from "./ClassificationResultCommon";
 import { ResultPoolRow } from "./ClassificationResultListParts";
-import { resultVersionId } from "./resultActionPolicy";
+import { isDashboardSelectable, resultVersionId } from "./resultActionPolicy";
+import Checkbox from "antd/es/checkbox";
 import { useRef } from "react";
 import { useLoadingHeight } from "../../hooks/useLoadingHeight";
 
 /** @typedef {import("./classificationResultListContracts").ResultPoolContext} ResultPoolContext */
+
+/** @param {{items: import("./classificationResultListContracts").ClassificationResultVersion[], selectedIds: Set<string>, loading: boolean, error: string, onToggle: (items: import("./classificationResultListContracts").ClassificationResultVersion[]) => void}} props */
+function ResultPageSelection({ items, selectedIds, loading, error, onToggle }) {
+  const unavailable = loading || Boolean(error);
+  const eligible = items.filter(isDashboardSelectable);
+  const selectedCount = eligible.filter((result) =>
+    selectedIds.has(resultVersionId(result)),
+  ).length;
+  return (
+    <div className="result-page-selection">
+      <Checkbox
+        aria-label="选择当前页可选结果"
+        title="仅选择当前页已发布且未删除的结果"
+        checked={
+          !unavailable && eligible.length > 0 && selectedCount === eligible.length
+        }
+        indeterminate={
+          !unavailable && selectedCount > 0 && selectedCount < eligible.length
+        }
+        disabled={unavailable || !eligible.length}
+        onChange={() => onToggle(eligible)}
+      >
+        {unavailable ? "选择当前页结果" : `选择当前页 ${eligible.length} 个可选结果`}
+      </Checkbox>
+      <span role="status">
+        {loading
+          ? "正在更新当前页范围…"
+          : error
+            ? "当前页范围读取失败"
+            : `当前页已选 ${selectedCount} 个`}
+      </span>
+    </div>
+  );
+}
 
 /** @param {ResultPoolContext & {rememberPosition?: (id: string) => void}} context */
 export function ResultPoolContent(context) {
@@ -32,6 +67,13 @@ export function ResultPoolContent(context) {
       <ResultPoolStatus {...context} />{" "}
       {data && data.items.length > 0 && (
         <>
+          <ResultPageSelection
+            items={data.items}
+            selectedIds={selectedIds}
+            loading={loading}
+            error={context.error}
+            onToggle={context.toggleSelections}
+          />
           <div
             className={`result-pool-table is-selecting ${route.lifecycle === "deleted" ? "is-deleted" : "is-current"}`}
             role="table"

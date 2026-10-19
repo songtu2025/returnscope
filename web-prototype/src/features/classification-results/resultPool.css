@@ -71,6 +71,24 @@
   min-width: 0;
   transition: opacity 160ms ease;
 }
+.result-page-selection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+.result-page-selection .ant-checkbox-wrapper {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  min-height: 24px;
+  gap: 0;
+  font-size: 12px;
+}
 .result-pool-table.is-loading,
 .result-record-table.is-loading {
   opacity: 0.58;
