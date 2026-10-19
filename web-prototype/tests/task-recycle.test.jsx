@@ -46,9 +46,7 @@ afterEach(cleanup);
 test("回收站恢复只提交恢复动作，带任务修订号并刷新列表", async () => {
   const notify = vi.fn();
   render(<TaskRecyclePage notify={notify} />);
-  await userEvent.click(
-    await screen.findByRole("button", { name: "恢复", exact: true }),
-  );
+  await userEvent.click(await screen.findByRole("button", { name: /^恢复 / }));
   expect(mocks.control).toHaveBeenCalledExactlyOnceWith(
     "synthetic-task",
     "synthetic-key",
@@ -68,12 +66,17 @@ test("永久删除必须确认，提交期间不可重复操作", async () => {
       }),
   );
   render(<TaskRecyclePage notify={vi.fn()} />);
+  await userEvent.click(await screen.findByLabelText(/更多回收站操作/));
   await userEvent.click(
     await screen.findByRole("button", { name: "永久删除", exact: true }),
   );
   expect(screen.getByRole("dialog")).toHaveTextContent(
     "已有分类结果、看板和必要来源信息保留",
   );
+  const dialog = within(screen.getByRole("dialog"));
+  for (const value of [item.task_title, item.task_id, item.scope.store])
+    expect(dialog.getByText(value, { exact: true })).toBeVisible();
+  expect(dialog.getByText("移除时间", { exact: true })).toBeVisible();
   expect(mocks.control).not.toHaveBeenCalled();
   await userEvent.click(screen.getByRole("button", { name: "确认永久删除" }));
   expect(screen.getByRole("button", { name: "正在删除…" })).toBeDisabled();
@@ -87,13 +90,38 @@ test("永久删除必须确认，提交期间不可重复操作", async () => {
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 });
 
+test("同名 Listing 的删除确认保留对应任务身份，取消后返回菜单焦点", async () => {
+  const other = {
+    ...item,
+    id: "other",
+    task_id: "other-task",
+    task_title: "另一合成任务",
+  };
+  mocks.request.mockResolvedValue({ items: [item, other], total: 2 });
+  render(<TaskRecyclePage notify={vi.fn()} />);
+  const row = (await screen.findByText("另一合成任务")).closest("tr");
+  const menu = within(row).getByLabelText(/更多回收站操作/);
+  expect(
+    screen.queryByRole("button", { name: "永久删除", exact: true }),
+  ).not.toBeInTheDocument();
+  await userEvent.click(menu);
+  await userEvent.click(
+    within(row).getByRole("button", { name: "永久删除", exact: true }),
+  );
+  expect(within(screen.getByRole("dialog")).getByText("other-task")).toBeVisible();
+  expect(
+    within(screen.getByRole("dialog")).queryByText(item.task_id),
+  ).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "返回", exact: true }));
+  expect(menu).toHaveFocus();
+  expect(mocks.control).not.toHaveBeenCalled();
+});
+
 test("版本冲突保留记录并刷新修订号，搜索提交后生效", async () => {
   mocks.control.mockRejectedValue(new Error("任务已更新"));
   const notify = vi.fn();
   render(<TaskRecyclePage notify={notify} />);
-  await userEvent.click(
-    await screen.findByRole("button", { name: "恢复", exact: true }),
-  );
+  await userEvent.click(await screen.findByRole("button", { name: /^恢复 / }));
   expect(notify).toHaveBeenCalledWith("任务已更新", "error");
   expect(screen.getByText("SYNTHETIC")).toBeVisible();
   await userEvent.type(screen.getByRole("textbox", { name: "搜索回收站" }), "不存在");
@@ -109,9 +137,7 @@ test("恢复成功后可定位所属任务和 Listing，不触发执行", async 
   window.location.hash = "#task-recycle";
   const notify = vi.fn();
   render(<TaskRecyclePage notify={notify} />);
-  await userEvent.click(
-    await screen.findByRole("button", { name: "恢复", exact: true }),
-  );
+  await userEvent.click(await screen.findByRole("button", { name: /^恢复 / }));
   expect(await screen.findByRole("status")).toHaveTextContent(
     "SYNTHETIC 已恢复，不会自动执行",
   );
@@ -137,14 +163,12 @@ test("恢复已成功但刷新失败时保留入口和剩余列表，解除忙�
   const notify = vi.fn();
   render(<TaskRecyclePage notify={notify} />);
   const firstRow = (await screen.findByText("SYNTHETIC")).closest("tr");
-  await userEvent.click(
-    within(firstRow).getByRole("button", { name: "恢复", exact: true }),
-  );
+  await userEvent.click(within(firstRow).getByRole("button", { name: /^恢复 / }));
   await waitFor(() =>
     expect(screen.getByRole("alert")).toHaveTextContent("列表刷新失败"),
   );
   expect(screen.getByRole("button", { name: "查看所属任务" })).toBeEnabled();
-  expect(screen.getByRole("button", { name: "恢复", exact: true })).toBeEnabled();
+  expect(screen.getByRole("button", { name: /^恢复 / })).toBeEnabled();
   expect(screen.getByText("SECOND")).toBeVisible();
   expect(screen.queryByText("SYNTHETIC", { selector: "b" })).not.toBeInTheDocument();
   expect(notify).toHaveBeenCalledWith("Listing 已恢复，不会自动执行");
@@ -162,15 +186,13 @@ test("服务端失败并遇到刷新失败仍解除忙态，不能显示恢复�
     .mockRejectedValueOnce(new Error("刷新失败"));
   const notify = vi.fn();
   render(<TaskRecyclePage notify={notify} />);
-  await userEvent.click(
-    await screen.findByRole("button", { name: "恢复", exact: true }),
-  );
+  await userEvent.click(await screen.findByRole("button", { name: /^恢复 / }));
   await screen.findByRole("alert");
   expect(notify).toHaveBeenCalledWith("恢复被拒绝", "error");
   expect(
     screen.queryByRole("button", { name: "查看所属任务" }),
   ).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "恢复", exact: true })).toBeEnabled();
+  expect(screen.getByRole("button", { name: /^恢复 / })).toBeEnabled();
 });
 
 test("第二页最后一项恢复后自动回落第一页，重复操作不被旧busy锁住", async () => {
@@ -190,10 +212,10 @@ test("第二页最后一项恢复后自动回落第一页，重复操作不被�
   await screen.findByText("FIRST-0");
   await userEvent.click(screen.getByRole("button", { name: "下一页" }));
   await screen.findByText("SYNTHETIC");
-  await userEvent.click(screen.getByRole("button", { name: "恢复", exact: true }));
+  await userEvent.click(screen.getByRole("button", { name: /^恢复 / }));
   await waitFor(() => expect(screen.getByText("共 20 条 · 第 1 页")).toBeVisible());
   expect(await screen.findByText("FIRST-0")).toBeVisible();
-  expect(screen.getAllByRole("button", { name: "恢复", exact: true })[0]).toBeEnabled();
+  expect(screen.getAllByRole("button", { name: /^恢复 / })[0]).toBeEnabled();
 });
 
 test("关联模块刷新失败不误报恢复失败，也不阻断回收站刷新", async () => {
@@ -203,9 +225,7 @@ test("关联模块刷新失败不误报恢复失败，也不阻断回收站刷�
     .mockResolvedValue({ items: [], total: 0 });
   const notify = vi.fn();
   render(<TaskRecyclePage notify={notify} />);
-  await userEvent.click(
-    await screen.findByRole("button", { name: "恢复", exact: true }),
-  );
+  await userEvent.click(await screen.findByRole("button", { name: /^恢复 / }));
   await waitFor(() =>
     expect(screen.getByRole("alert")).toHaveTextContent("列表刷新失败"),
   );
@@ -229,7 +249,7 @@ test("恢复期间保留搜索输入但锁定提交和分页，结束后可以�
   await screen.findByText("SYNTHETIC");
   await userEvent.click(screen.getByRole("button", { name: "下一页" }));
   await screen.findByText("共 41 条 · 第 2 页");
-  await userEvent.click(screen.getByRole("button", { name: "恢复", exact: true }));
+  await userEvent.click(screen.getByRole("button", { name: /^恢复 / }));
   const input = screen.getByRole("textbox", { name: "搜索回收站" });
   await userEvent.type(input, "新范围{Enter}");
   fireEvent.submit(input.closest("form"));

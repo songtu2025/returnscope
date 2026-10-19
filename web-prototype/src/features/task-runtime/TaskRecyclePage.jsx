@@ -7,7 +7,9 @@ import { ArrowLeft } from "@phosphor-icons/react";
 import { taskApi } from "../../shared/api/taskApi";
 import { request } from "../../shared/api/request";
 import { errorMessage } from "../../shared/api/requestErrors";
-import { Modal, PageHeading, PageLoadingState } from "../../components/SharedUi";
+import { PageHeading, PageLoadingState } from "../../components/SharedUi";
+import { TaskRecycleRowActions } from "./TaskRecycleRowActions";
+import { TaskRecyclePurgeDialog } from "./TaskRecycleDialogs";
 import { formatTime } from "../../lib/presentation";
 import { MANAGED_REFRESH_OPTIONS } from "../../shared/refreshPolicy";
 import { navigateHash } from "../../app/hashRouter";
@@ -188,22 +190,12 @@ export function TaskRecyclePage({ notify }) {
                     <td>{item.removed_by}</td>
                     <td>{formatTime(item.deleted_at)}</td>
                     <td>
-                      <div className="recycle-actions">
-                        <button
-                          className="secondary-button compact-button"
-                          disabled={Boolean(busy)}
-                          onClick={() => act(item, "restore")}
-                        >
-                          恢复
-                        </button>
-                        <button
-                          className="text-button danger"
-                          disabled={Boolean(busy)}
-                          onClick={() => setPurging(item)}
-                        >
-                          永久删除
-                        </button>
-                      </div>
+                      <TaskRecycleRowActions
+                        item={item}
+                        disabled={Boolean(busy)}
+                        onRestore={() => act(item, "restore")}
+                        onPurge={() => setPurging(item)}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -237,30 +229,12 @@ export function TaskRecyclePage({ notify }) {
         </>
       ) : null}
       {purging && (
-        <Modal
-          title={`永久删除 ${purging.scope.listing || "Listing"}`}
-          onClose={() => !busy && setPurging(null)}
-        >
-          <p>
-            执行项及其独占检查点、旧导出文件将永久清理，无法恢复。已有分类结果、看板和必要来源信息保留。
-          </p>
-          <div className="modal-actions">
-            <button
-              className="secondary-button"
-              disabled={Boolean(busy)}
-              onClick={() => setPurging(null)}
-            >
-              返回
-            </button>
-            <button
-              className="danger-button"
-              disabled={Boolean(busy)}
-              onClick={() => act(purging, "purge")}
-            >
-              {busy ? "正在删除…" : "确认永久删除"}
-            </button>
-          </div>
-        </Modal>
+        <TaskRecyclePurgeDialog
+          item={purging}
+          busy={Boolean(busy)}
+          onClose={() => setPurging(null)}
+          onConfirm={() => act(purging, "purge")}
+        />
       )}
     </div>
   );
