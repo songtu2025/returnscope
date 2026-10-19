@@ -20,6 +20,7 @@ import { FINAL_TASK_STATUSES } from "./taskRegistryPolicy";
 /**
  * @typedef {Object} TaskDetailHeaderProps
  * @property {AnalysisTask} task
+ * @property {(disabled: boolean) => import("react").ReactNode} [headerAction]
  * @property {string} [taskAction]
  * @property {TaskSummary} summary
  * @property {boolean | undefined} hasUnfinishedSegments
@@ -161,6 +162,7 @@ function TaskMoreActions({ task, taskAction, onRetry, onArchive }) {
 /** @param {TaskDetailHeaderProps} props */
 export function TaskDetailHeader({
   task,
+  headerAction,
   taskAction = "",
   summary,
   hasUnfinishedSegments,
@@ -192,6 +194,7 @@ export function TaskDetailHeader({
         </p>
       </div>
       <div className="detail-actions">
+        {headerAction?.(Boolean(taskAction))}
         <TaskRecoveryActions
           task={task}
           taskAction={taskAction}

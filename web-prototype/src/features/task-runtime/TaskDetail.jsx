@@ -5,7 +5,7 @@ import { SegmentBoard } from "./SegmentBoard";
 import { TaskDetailAlerts } from "./TaskDetailAlerts";
 import { TaskDetailHeader } from "./TaskDetailHeader";
 import { TaskDetailOverview } from "./TaskDetailOverview";
-import { TaskDetailViews } from "./TaskDetailViews";
+import { TaskDetailTabs, TaskDetailViews } from "./TaskDetailViews";
 import { TaskReplanDialog } from "./TaskReplanDialog";
 
 import { taskSummary } from "./taskRegistryPolicy";
@@ -19,6 +19,7 @@ import { taskSummary } from "./taskRegistryPolicy";
 /**
  * @typedef {Object} TaskDetailProps
  * @property {AnalysisTask} task
+ * @property {(disabled: boolean) => import("react").ReactNode} [headerAction]
  * @property {import("./useSegmentBoardView").SegmentBoardReturnRef} [listingReturnState]
  * @property {string | null} [focusSegmentId]
  * @property {TaskEvent[]} events
@@ -41,14 +42,10 @@ import { taskSummary } from "./taskRegistryPolicy";
  * @property {(payload: TaskPayload) => Promise<boolean>} onReplan
  */
 
-const DETAIL_TABS = [
-  ["execution", "Listing"],
-  ["events", "运行日志"],
-  ["config", "任务配置"],
-];
 /** @param {TaskDetailProps} props */
 export function TaskDetail({
   task,
+  headerAction,
   listingReturnState,
   focusSegmentId,
   events,
@@ -141,6 +138,7 @@ export function TaskDetail({
       <>
         <TaskDetailHeader
           task={task}
+          headerAction={headerAction}
           summary={summary}
           hasUnfinishedSegments={hasUnfinishedSegments}
           taskAction={taskAction || (batchReadRequired ? "read-required" : "")}
@@ -167,26 +165,14 @@ export function TaskDetail({
 
         <TaskDetailOverview task={task} summary={summary} showListings={showListings} />
 
-        <div className="task-detail-tabs" role="tablist" aria-label="任务详情视图">
-          {DETAIL_TABS.map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              role="tab"
-              disabled={Boolean(taskAction)}
-              id={`task-tab-${value}`}
-              aria-controls="task-view-panel"
-              aria-selected={activeTab === value}
-              className={activeTab === value ? "active" : ""}
-              onClick={() => {
-                setActiveTab(value);
-                if (value === "execution") setListingFilter("all");
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <TaskDetailTabs
+          activeTab={activeTab}
+          disabled={Boolean(taskAction)}
+          onSelect={(value) => {
+            setActiveTab(value);
+            if (value === "execution") setListingFilter("all");
+          }}
+        />
 
         <TaskDetailViews
           task={task}

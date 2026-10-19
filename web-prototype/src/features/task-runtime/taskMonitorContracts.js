@@ -1,5 +1,6 @@
 /**
  * @typedef {Object} TaskMonitorProps
+ * @property {string} [userId]
  * @property {(message: string, type?: "success" | "error") => void} notify
  * @property {import("../../app/navigation").Navigate} onNavigate
  * @property {() => void | Promise<unknown>} onChanged

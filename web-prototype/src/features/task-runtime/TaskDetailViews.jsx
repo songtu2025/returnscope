@@ -1,6 +1,35 @@
 import { TaskDetailConfig } from "./TaskDetailConfig";
 import { TaskEventList } from "./TaskEventList";
 
+const DETAIL_TABS = [
+  ["execution", "Listing"],
+  ["events", "运行日志"],
+  ["config", "任务配置"],
+];
+
+/** @param {{activeTab: string, disabled: boolean, onSelect: (value: string) => void}} props */
+export function TaskDetailTabs({ activeTab, disabled, onSelect }) {
+  return (
+    <div className="task-detail-tabs" role="tablist" aria-label="任务详情视图">
+      {DETAIL_TABS.map(([value, label]) => (
+        <button
+          key={value}
+          type="button"
+          role="tab"
+          disabled={disabled}
+          id={`task-tab-${value}`}
+          aria-controls="task-view-panel"
+          aria-selected={activeTab === value}
+          className={activeTab === value ? "active" : ""}
+          onClick={() => onSelect(value)}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
 /** @typedef {import("./taskRuntimeContracts").TaskEvent} TaskEvent */
 /** @typedef {import("./taskRuntimeContracts").TaskSegment} TaskSegment */

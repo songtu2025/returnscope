@@ -2,6 +2,7 @@ import { ArrowLeft, Plus, Pulse } from "@phosphor-icons/react";
 import { EmptyState, PageHeading, PageLoadingState } from "../../components/SharedUi";
 import { navigateHash } from "../../app/hashRouter";
 import { TaskDetail } from "./TaskDetail";
+import { TaskResultDashboardAction } from "./TaskResultDashboardAction";
 import { TaskRegistry } from "./TaskRegistry";
 import { useTaskMonitorState } from "./useTaskMonitorState";
 import { taskLifecycleActions } from "./taskLifecycleActions";
@@ -158,6 +159,14 @@ export function TaskMonitor(props) {
             <TaskDetail
               key={selected.id}
               task={selected}
+              headerAction={(disabled) => (
+                <TaskResultDashboardAction
+                  task={selected}
+                  userId={props.userId || ""}
+                  taskReturn={props.taskReturn}
+                  disabled={disabled}
+                />
+              )}
               listingReturnState={props.listingReturnState}
               onTaskRenamed={onTaskRenamed}
               {...taskLifecycleActions({

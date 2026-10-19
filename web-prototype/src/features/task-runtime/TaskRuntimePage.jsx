@@ -115,6 +115,7 @@ export function TaskRuntimePage({
 
   return (
     <TaskMonitor
+      userId={userId}
       notify={notify}
       onNavigate={onNavigate}
       onChanged={onChanged}
