@@ -1,4 +1,38 @@
-import { WarningCircle } from "@phosphor-icons/react";
+import { ListBullets, WarningCircle } from "@phosphor-icons/react";
+import { EmptyState } from "../../components/SharedUi";
+import { navigateHash } from "../../app/hashRouter";
+
+/** @param {{task: import("./taskRuntimeContracts").AnalysisTask, excludedCount: number}} props */
+export function EmptyListingsSummary({ task, excludedCount }) {
+  const removedCount = (task.segments ?? []).filter(
+    (segment) => segment.deleted_at,
+  ).length;
+  const description = removedCount
+    ? `本任务有 ${removedCount} 个 Listing 已移至回收站。入口按任务名称搜索，可能包含同名任务，请核对所属任务。`
+    : excludedCount
+      ? "当前数据均未纳入 Listing 执行，请查看下方的品类配置说明。"
+      : "本任务尚无 Listing 执行项，可在“任务配置”页签核对分析范围。";
+  return (
+    <EmptyState
+      icon={ListBullets}
+      title="暂无可执行 Listing"
+      description={description}
+      action={
+        removedCount > 0 && (
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() =>
+              navigateHash("analysis-tasks", { view: "recycle", q: task.title })
+            }
+          >
+            查看回收站
+          </button>
+        )
+      }
+    />
+  );
+}
 
 /** @param {{keys: string[], selection?: ReturnType<typeof import("./useSegmentSelection").useSegmentSelection>, disabled: boolean}} props */
 export function SegmentSelectionHeading({ keys, selection, disabled }) {

@@ -6,6 +6,7 @@ import {
   SegmentBoardHeader,
   ExcludedListingsSummary,
   SegmentSelectionHeading,
+  EmptyListingsSummary,
 } from "./SegmentBoardSummary";
 import { SegmentBoardRow } from "./SegmentBoardRow";
 import { isLegacyResult, isPublishedResult } from "./taskSegmentPolicy";
@@ -112,7 +113,10 @@ export function SegmentBoard({
     focusedSegmentRef.current.scrollIntoView({ block: "center" });
   }, [focusSegmentId, page]);
   const excludedSegments = useMemo(
-    () => (task.segments ?? []).filter((segment) => segment.agent_key === "unknown"),
+    () =>
+      (task.segments ?? []).filter(
+        (segment) => segment.agent_key === "unknown" && !segment.deleted_at,
+      ),
     [task.segments],
   );
   const selection = useSegmentSelection(
@@ -166,8 +170,6 @@ export function SegmentBoard({
     setPage((current) => Math.min(current, totalPages));
   }, [totalPages, setPage]);
 
-  if (!task.segments?.length) return null;
-
   /** @param {string[]} segmentKeys */
   const applyOrder = async (segmentKeys) => {
     if (reordering || !onReorder || segmentKeys.join("|") === orderableKeys.join("|")) {
@@ -205,6 +207,9 @@ export function SegmentBoard({
           onRefresh={onRefresh}
           readRequired={readRequired}
         />
+      )}
+      {queueSegments.length === 0 && (
+        <EmptyListingsSummary task={task} excludedCount={excludedSegments.length} />
       )}
       {queueSegments.length > 0 && (
         <>

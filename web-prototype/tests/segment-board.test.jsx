@@ -227,12 +227,10 @@ test("展开后拖拽排序只提交可排序片段，提交期间阻止重复�
   );
 });
 
-test("没有执行片段时不渲染队列；搜索无结果保留条件及分页说明", async () => {
+test("没有执行片段时显示原因；搜索无结果保留条件及分页说明", async () => {
   const props = propsFor([]);
   const view = render(<SegmentBoard {...props} />);
-  expect(
-    screen.queryByRole("region", { name: "Listing 执行队列" }),
-  ).not.toBeInTheDocument();
+  expect(screen.getByText(/本任务尚无 Listing 执行项/)).toBeVisible();
   view.rerender(
     <SegmentBoard {...props} task={{ ...props.task, segments: [segment(0)] }} />,
   );
