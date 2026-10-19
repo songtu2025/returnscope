@@ -159,7 +159,7 @@ test("未发布结果仍可查看，创建看板保持禁用", async () => {
 
 test.each([
   ["queued", "正在生成"],
-  ["failed", "重新生成"],
+  ["failed", "重试导出"],
 ])("导出%s不影响查看和菜单，保留真实下载反馈", async (status, label) => {
   localStorage.setItem(`result-export:${result.version_id}`, "export-synthetic");
   resultExportApi.get.mockResolvedValue({

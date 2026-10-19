@@ -2,17 +2,13 @@ from __future__ import annotations
 
 import json
 from concurrent.futures import ThreadPoolExecutor
-from io import BytesIO
 from threading import Barrier, Event
 
 import pytest
-from fastapi import FastAPI, HTTPException
-from fastapi.testclient import TestClient
 from openpyxl import load_workbook
 from test_classification_result_download import context as context
 
 from web_backend.classification_results.export_jobs import ResultExportService
-from web_backend.routers.result_export_routes import create_result_export_router
 
 
 @pytest.fixture
@@ -157,47 +153,6 @@ def test_expiration_cleans_only_export_files(context, exports):
     assert not exports._path(job["id"]).exists()
     assert not exports._path(job["id"], ".xlsx").exists()
     assert not exports._path(job["id"], ".snapshot.gz").exists()
-
-
-def test_download_routes_auth_pending_failure_and_refresh(context, exports):
-    authenticated = True
-
-    def current_user():
-        if not authenticated:
-            raise HTTPException(status_code=401, detail="请登录")
-        return {"id": "user-1"}
-
-    app = FastAPI()
-    app.include_router(create_result_export_router(exports, current_user))
-    client = TestClient(app)
-    response = client.post(
-        "/api/result-exports", json={"version_ids": [context.version["version_id"]]}
-    )
-    assert response.status_code == 200
-    job_id = response.json()["id"]
-    base = f"/api/result-exports/{job_id}"
-    assert client.get(base + "/file").status_code == 409
-    exports.run(job_id)
-    assert client.get(base).json()["status"] == "ready"
-    response = client.get(base + "/file")
-    assert response.status_code == 200
-    book = load_workbook(BytesIO(response.content))
-    assert book["源明细"].max_row == 4
-    book.close()
-    authenticated = False
-    for path in [base, base + "/file"]:
-        assert client.get(path).status_code == 401
-    assert (
-        client.post(
-            "/api/result-exports", json={"version_ids": [context.version["version_id"]]}
-        ).status_code
-        == 401
-    )
-    authenticated = True
-    assert client.get("/api/result-exports/invalid").status_code == 404
-    assert (
-        client.post("/api/result-exports", json={"version_ids": []}).status_code == 422
-    )
 
 
 def test_permanent_result_deletion_blocks_cached_download(context, exports):

@@ -189,6 +189,8 @@ class ResultExportService:
             # 与原下载入口一样要求结果仍然存在，永久删除后不能从缓存取回。
             for version_id in job["version_ids"]:
                 self.results.get(version_id)
+            if job["status"] == "ready" and not self._path(job_id, ".xlsx").is_file():
+                raise FileNotFoundError("导出文件已清理，请重新下载")
             return self._public(job)
 
     def file(self, job_id: str) -> tuple[Path, str]:
@@ -196,8 +198,6 @@ class ResultExportService:
         if job["status"] != "ready":
             raise ValueError("文件尚未生成，请稍后重试")
         path = self._path(job_id, ".xlsx")
-        if not path.is_file():
-            raise FileNotFoundError("导出文件已过期，请重新下载")
         return path, job["filename"]
 
     def recover(self) -> None:

@@ -35,11 +35,19 @@ def create_result_export_router(
         except ClassificationResultNotFound as error:
             raise HTTPException(status_code=404, detail=str(error)) from error
 
-    @router.get("/api/result-exports/{job_id}")
+    @router.get(
+        "/api/result-exports/{job_id}",
+        responses={
+            404: {"description": "Result version not found"},
+            410: {"description": "Export cache unavailable; prepare download again"},
+        },
+    )
     def get_export(job_id: str) -> ResultExportResponse:
         try:
             return ResultExportResponse(**service.get(job_id))
-        except (FileNotFoundError, ClassificationResultNotFound) as error:
+        except FileNotFoundError as error:
+            raise HTTPException(status_code=410, detail=str(error)) from error
+        except ClassificationResultNotFound as error:
             raise HTTPException(status_code=404, detail=str(error)) from error
 
     @router.get(
@@ -50,13 +58,17 @@ def create_result_export_router(
                 "content": {
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
                 }
-            }
+            },
+            404: {"description": "Result version not found"},
+            410: {"description": "Export cache unavailable; prepare download again"},
         },
     )
     def download_export(job_id: str) -> FileResponse:
         try:
             path, filename = service.file(job_id)
-        except (FileNotFoundError, ClassificationResultNotFound) as error:
+        except FileNotFoundError as error:
+            raise HTTPException(status_code=410, detail=str(error)) from error
+        except ClassificationResultNotFound as error:
             raise HTTPException(status_code=404, detail=str(error)) from error
         except ValueError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error

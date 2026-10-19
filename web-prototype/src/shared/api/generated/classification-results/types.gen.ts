@@ -2435,6 +2435,14 @@ export type GetExportApiResultExportsJobIdGetData = {
 
 export type GetExportApiResultExportsJobIdGetErrors = {
   /**
+   * Result version not found
+   */
+  404: unknown;
+  /**
+   * Export cache unavailable; prepare download again
+   */
+  410: unknown;
+  /**
    * Validation Error
    */
   422: HttpValidationError;
@@ -2466,6 +2474,14 @@ export type DownloadExportApiResultExportsJobIdFileGetData = {
 };
 
 export type DownloadExportApiResultExportsJobIdFileGetErrors = {
+  /**
+   * Result version not found
+   */
+  404: unknown;
+  /**
+   * Export cache unavailable; prepare download again
+   */
+  410: unknown;
   /**
    * Validation Error
    */
