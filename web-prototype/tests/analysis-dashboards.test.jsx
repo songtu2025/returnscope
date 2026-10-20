@@ -43,7 +43,7 @@ const { dashboardApiMock, resultApiMock } = vi.hoisted(() => ({
 vi.mock("../src/shared/api/dashboardApi", () => ({ dashboardApi: dashboardApiMock }));
 vi.mock("../src/api", () => ({ api: resultApiMock }));
 
-import { useHashRoute } from "../src/app/hashRouter";
+import { buildHash, parseHash, useHashRoute } from "../src/app/hashRouter";
 import { AiInsightReport } from "../src/features/analysis-dashboards/AiInsightReport";
 import { AnalysisDashboardPage } from "../src/features/analysis-dashboards/AnalysisDashboardPage";
 import { DashboardReportGeneration } from "../src/features/analysis-dashboards/DashboardReportGeneration";
@@ -2420,6 +2420,90 @@ test.each(["报告按钮", "报告页签", "洞察看板"])(
     expect(screen.queryByText(/当前查看历史版本/)).not.toBeInTheDocument();
   },
 );
+
+test.each(["empty", "published", "error"])(
+  "同一版本看板与报告往返保留诊断条件和分页，报告读取范围不变：%s",
+  async (state) => {
+    const source = {
+      dashboard: "dashboard-default",
+      version: "dashboard-version-default",
+      problem: "FIT",
+      label_group: "尺码与适配",
+      record_page: "3",
+      reason_page: "2",
+      subject: "PRODUCT",
+      listing: "L001",
+      product_name: "合成产品",
+      product_sku: "合成SKU",
+      date_from: "2026-01-01",
+      date_to: "2026-09-30",
+    };
+    if (state === "error")
+      dashboardApiMock.analysisDashboardInsightReports.mockRejectedValue(
+        new Error("合成读取失败"),
+      );
+    if (state === "published")
+      dashboardApiMock.analysisDashboardInsightReports.mockResolvedValue([
+        {
+          id: "published-report",
+          status: "completed",
+          version_no: 1,
+          content: { title: "合成已发布报告" },
+        },
+      ]);
+    window.location.hash = buildHash("analysis-dashboards", source);
+    const user = userEvent.setup();
+    render(<DashboardHarness />);
+    await screen.findByRole("region", { name: "语义洞察结果" });
+    await user.click(screen.getByRole("button", { name: "AI 洞察报告", exact: true }));
+    await screen.findByRole("heading", { name: "AI 用户反馈语义洞察报告" });
+    await waitFor(() =>
+      expect(dashboardApiMock.analysisDashboardInsightReports).toHaveBeenCalled(),
+    );
+    expect(parseHash().query).toMatchObject({ ...source, tab: "report" });
+    expect(dashboardApiMock.analysisDashboardInsightReports).toHaveBeenLastCalledWith(
+      source.dashboard,
+      source.version,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    if (state === "empty")
+      await screen.findByRole("heading", { name: "当前数据版本还没有 AI 洞察报告" });
+    if (state === "error") await screen.findByText("AI 洞察报告读取失败");
+    if (state === "published")
+      await waitFor(() => expect(parseHash().query.report).toBe("published-report"));
+    await user.click(screen.getByRole("button", { name: "洞察看板", exact: true }));
+    await screen.findByRole("region", { name: "语义洞察结果" });
+    expect(parseHash().query).toMatchObject(source);
+    expect(parseHash().query.tab).toBeUndefined();
+    expect(
+      dashboardApiMock.createAnalysisDashboardInsightReport,
+    ).not.toHaveBeenCalled();
+  },
+);
+
+test("历史版本进入最新报告时清除旧诊断位置，不影响最新版本入口", async () => {
+  dashboardApiMock.analysisDashboard.mockResolvedValue({
+    id: "history",
+    name: "合成看板",
+    current_version_id: "v2",
+    version: { version_id: "v1", version: 1 },
+  });
+  dashboardApiMock.analysisDashboardVersions.mockResolvedValue([
+    { version_id: "v2", version: 2 },
+    { version_id: "v1", version: 1 },
+  ]);
+  window.location.hash =
+    "#analysis-dashboards?dashboard=history&version=v1&tab=history&problem=OLD&label_group=OLD&record_page=3&reason_page=2";
+  render(<DashboardHarness />);
+  await userEvent.click(
+    await screen
+      .findAllByRole("button", { name: "查看最新 AI 报告" })
+      .then((buttons) => buttons[0]),
+  );
+  await waitFor(() => expect(parseHash().query.version).toBe("v2"));
+  for (const key of ["problem", "label_group", "record_page", "reason_page"])
+    expect(parseHash().query[key]).toBeUndefined();
+});
 
 test("证据操作中继续读看板新数据，关闭后应用且不重复读取元数据", async () => {
   const updateRoute = vi.fn();

@@ -85,8 +85,16 @@ export function DashboardDetail(props) {
     updateRoute({
       tab,
       versionId: currentVersionId || route.versionId,
-      ...(!isCurrentVersion ? { reportId: "", issueId: "" } : {}),
-      ...(tab === "report" ? { problem: "", labelGroup: "", recordPage: 1 } : {}),
+      ...(!isCurrentVersion
+        ? {
+            reportId: "",
+            issueId: "",
+            problem: "",
+            labelGroup: "",
+            recordPage: 1,
+            reasonPage: 0,
+          }
+        : {}),
     });
 
   return (
