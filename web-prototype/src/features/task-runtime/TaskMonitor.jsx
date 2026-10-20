@@ -2,7 +2,7 @@ import { ArrowLeft, Plus, Pulse } from "@phosphor-icons/react";
 import { EmptyState, PageHeading, PageLoadingState } from "../../components/SharedUi";
 import { navigateHash } from "../../app/hashRouter";
 import { TaskDetail } from "./TaskDetail";
-import { TaskResultDashboardAction } from "./TaskResultDashboardAction";
+import { TaskResultActions } from "./TaskResultActions";
 import { TaskRegistry } from "./TaskRegistry";
 import { useTaskMonitorState } from "./useTaskMonitorState";
 import { taskLifecycleActions } from "./taskLifecycleActions";
@@ -160,7 +160,7 @@ export function TaskMonitor(props) {
               key={selected.id}
               task={selected}
               headerAction={(disabled) => (
-                <TaskResultDashboardAction
+                <TaskResultActions
                   task={selected}
                   userId={props.userId || ""}
                   taskReturn={props.taskReturn}
