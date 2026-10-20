@@ -34,8 +34,8 @@ export function TaskDetailTabs({ activeTab, disabled, onSelect }) {
 /** @typedef {import("./taskRuntimeContracts").TaskEvent} TaskEvent */
 /** @typedef {import("./taskRuntimeContracts").TaskSegment} TaskSegment */
 
-/** @param {{task: AnalysisTask, events: TaskEvent[]}} props */
-function TaskDetailEvents({ task, events }) {
+/** @param {{task: AnalysisTask, events: TaskEvent[], focusListing: import("./TaskEventList").LogListingTarget | null}} props */
+function TaskDetailEvents({ task, events, focusListing }) {
   const isActive = ["queued", "running", "paused"].includes(task.status);
   return (
     <section className="task-secondary-section full-event-section">
@@ -49,14 +49,20 @@ function TaskDetailEvents({ task, events }) {
           {isActive ? "实时更新" : "完整记录"}
         </span>
       </header>
-      <TaskEventList task={task} events={events} filterable />
+      <TaskEventList
+        task={task}
+        events={events}
+        filterable
+        focusListing={focusListing}
+      />
     </section>
   );
 }
 
 /**
  * @param {{task: AnalysisTask, events: TaskEvent[], executableSegments: TaskSegment[],
- * activeTab: string, execution: import("react").ReactNode}} props
+ * activeTab: string, execution: import("react").ReactNode,
+ * focusListing: import("./TaskEventList").LogListingTarget | null}} props
  */
 export function TaskDetailViews({
   task,
@@ -64,6 +70,7 @@ export function TaskDetailViews({
   executableSegments,
   activeTab,
   execution,
+  focusListing,
 }) {
   return (
     <section
@@ -73,8 +80,11 @@ export function TaskDetailViews({
       tabIndex={-1}
       aria-labelledby={`task-tab-${activeTab}`}
     >
-      {activeTab === "execution" && execution}
-      {activeTab === "events" && <TaskDetailEvents task={task} events={events} />}
+      {/* 页签往返保留明细与日志的临时状态，任务切换由上层 key 隔离。 */}
+      <div hidden={activeTab !== "execution"}>{execution}</div>
+      <div hidden={activeTab !== "events"}>
+        <TaskDetailEvents task={task} events={events} focusListing={focusListing} />
+      </div>
       {activeTab === "config" && (
         <TaskDetailConfig task={task} executableSegments={executableSegments} />
       )}

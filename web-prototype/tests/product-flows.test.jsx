@@ -2363,7 +2363,7 @@ describe("关键用户流程", () => {
       });
       expect(apiMock.tasks).toHaveBeenCalledTimes(2);
       expect(apiMock.task).toHaveBeenCalledTimes(2);
-      expect(screen.queryByText("已完成 12 组评论")).not.toBeInTheDocument();
+      expect(screen.getByText("已完成 12 组评论")).not.toBeVisible();
       await user.click(screen.getByRole("tab", { name: "运行日志" }));
       expect(screen.getAllByText("KP006 · Listing 分类")).toHaveLength(12);
       expect(

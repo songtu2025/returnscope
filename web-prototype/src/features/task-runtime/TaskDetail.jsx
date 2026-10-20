@@ -10,6 +10,7 @@ import { TaskReplanDialog } from "./TaskReplanDialog";
 
 import { taskSummary } from "./taskRegistryPolicy";
 import { publishedTaskResults } from "./taskSegmentPolicy";
+import { useTaskLogNavigation } from "./useTaskLogNavigation";
 
 /** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
 /** @typedef {import("./taskRuntimeContracts").TaskEvent} TaskEvent */
@@ -98,6 +99,7 @@ export function TaskDetail({
   );
   const [replanOpen, setReplanOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("execution");
+  const logs = useTaskLogNavigation(setActiveTab);
   const [listingFilter, setListingFilter] = useState("all");
   const summary = taskSummary(task);
   useEffect(() => {
@@ -183,7 +185,6 @@ export function TaskDetail({
           disabled={Boolean(taskAction)}
           onSelect={(value) => {
             setActiveTab(value);
-            if (value === "execution") setListingFilter("all");
           }}
         />
 
@@ -192,6 +193,7 @@ export function TaskDetail({
           events={events}
           executableSegments={executableSegments}
           activeTab={activeTab}
+          focusListing={logs.listing}
           execution={
             <SegmentBoard
               key={listingFilter}
@@ -248,6 +250,7 @@ export function TaskDetail({
                 runTaskAction("order", () => onReorderSegments(keys))
               }
               onViewClassification={onViewClassification}
+              onViewLogs={logs.open}
             />
           }
         />

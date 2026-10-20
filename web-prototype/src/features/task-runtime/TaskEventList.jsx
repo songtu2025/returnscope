@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Button from "antd/es/button";
 
 import { STATUS_LABELS } from "../../constants";
@@ -8,6 +8,7 @@ import { TaskEventFilters } from "./TaskEventFilters";
 
 /** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
 /** @typedef {import("./taskRuntimeContracts").TaskEvent} TaskEvent */
+/** @typedef {{key: string, label: string, store?: string}} LogListingTarget */
 
 const TASK_STAGES = ["准备数据", "Listing 分类", "生成分类结果", "任务结束"];
 /** @type {Record<string, string>} */
@@ -93,10 +94,15 @@ function TaskEventRow({ event, listing }) {
   );
 }
 
-/** @param {{task: AnalysisTask, events: TaskEvent[], filterable?: boolean}} props */
-export function TaskEventList({ task, events, filterable = false }) {
+/** @param {{task: AnalysisTask, events: TaskEvent[], filterable?: boolean, focusListing?: LogListingTarget | null}} props */
+export function TaskEventList({ task, events, filterable = false, focusListing }) {
   const [visibleCount, setVisibleCount] = useState(100);
   const [filters, setFilters] = useState({ query: "", listing: "", type: "" });
+  useEffect(() => {
+    if (!focusListing) return;
+    setFilters({ query: "", listing: focusListing.key, type: "" });
+    setVisibleCount(100);
+  }, [focusListing]);
   const keyword = filters.query.trim().toLowerCase();
   const filtered = Boolean(keyword || filters.listing || filters.type);
   const entries = events.map((event) => ({ event, target: eventTarget(task, event) }));
@@ -136,7 +142,7 @@ export function TaskEventList({ task, events, filterable = false }) {
           filters={filters}
           listings={[
             ...new Map(
-              entries
+              [...(focusListing ? [{ target: focusListing }] : []), ...entries]
                 .filter(({ target }) => target.key)
                 .map(({ target }) => [target.key, target]),
             ).values(),

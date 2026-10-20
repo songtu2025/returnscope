@@ -26,6 +26,7 @@ import { SegmentBatchControls } from "./SegmentBatchControls";
  * @property {string} [initialFilter]
  * @property {import("./useSegmentBoardView").SegmentBoardReturnRef} [returnState]
  * @property {(segment: TaskSegment) => void} onRetry
+ * @property {(segment: TaskSegment) => void} [onViewLogs]
  * @property {(segmentId: string) => Promise<unknown>} onRetryPublish
  * @property {(segmentKey: string, action: SegmentAction, note?: string) => Promise<unknown>} onAction
  * @property {import("./taskSegmentBatchActions").ApplySegmentBatch} [onBatchAction]
@@ -75,6 +76,7 @@ export function SegmentBoard({
   onParallelism,
   onReorder,
   onViewClassification,
+  onViewLogs,
 }) {
   const [reordering, setReordering] = useState(false);
   const [changingParallelism, setChangingParallelism] = useState(false);
@@ -254,6 +256,7 @@ export function SegmentBoard({
                   setRetryingPublishId,
                 }}
                 actions={{
+                  onViewLogs,
                   onAction,
                   onRetry,
                   onViewClassification: (

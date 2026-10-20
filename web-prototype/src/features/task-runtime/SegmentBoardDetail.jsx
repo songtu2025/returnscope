@@ -5,7 +5,7 @@ import { formatTime } from "../../lib/presentation";
 import { isPublishedResult, isLegacyResult, moveSegmentKey } from "./taskSegmentPolicy";
 
 /** @typedef {import("./taskRuntimeContracts").TaskSegment} TaskSegment */
-/** @typedef {Pick<import("./segmentBoardRowContracts").SegmentBoardRowProps, "task" | "segment" | "queue"> & {canOrder: boolean, orderableIndex: number, stateLabel: string, stateDescription: string | undefined}} SegmentDetailProps */
+/** @typedef {Pick<import("./segmentBoardRowContracts").SegmentBoardRowProps, "task" | "segment" | "queue"> & {canOrder: boolean, orderableIndex: number, stateLabel: string, stateDescription: string | undefined, onViewLogs?: (segment: TaskSegment) => void}} SegmentDetailProps */
 
 /** @param {{segment: TaskSegment}} props */
 function SegmentModelMetrics({ segment }) {
@@ -122,10 +122,26 @@ function SegmentOrderControls({ segment, orderableIndex, queue }) {
   );
 }
 
-/** @param {Pick<SegmentDetailProps, "task" | "segment" | "canOrder" | "orderableIndex" | "queue">} props */
-function SegmentSecondaryActions({ task, segment, canOrder, orderableIndex, queue }) {
+/** @param {Pick<SegmentDetailProps, "task" | "segment" | "canOrder" | "orderableIndex" | "queue" | "onViewLogs">} props */
+function SegmentSecondaryActions({
+  task,
+  segment,
+  canOrder,
+  orderableIndex,
+  queue,
+  onViewLogs,
+}) {
   return (
     <div className="listing-secondary-actions">
+      {onViewLogs && (
+        <button
+          type="button"
+          className="secondary-button compact-button"
+          onClick={() => onViewLogs(segment)}
+        >
+          查看此 Listing 日志
+        </button>
+      )}
       {canOrder && (
         <SegmentOrderControls
           segment={segment}
@@ -163,6 +179,7 @@ export function SegmentBoardDetail({
   queue,
   stateDescription,
   stateLabel,
+  onViewLogs,
 }) {
   return (
     <div className="listing-row-detail" role="cell">
@@ -180,6 +197,7 @@ export function SegmentBoardDetail({
         canOrder={canOrder}
         orderableIndex={orderableIndex}
         queue={queue}
+        onViewLogs={onViewLogs}
       />
     </div>
   );

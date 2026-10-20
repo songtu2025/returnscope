@@ -73,6 +73,7 @@ export function SegmentBoardRow({ task, segment, position, queue, rowState, acti
           canOrder={canOrder}
           orderableIndex={orderableIndex}
           queue={queue}
+          onViewLogs={actions.onViewLogs}
           stateDescription={presentation.stateDescription}
           stateLabel={presentation.stateLabel}
         />
