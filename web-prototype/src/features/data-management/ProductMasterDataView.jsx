@@ -48,17 +48,20 @@ export function ProductMasterDataView({ state, selected, props }) {
             parentError={Boolean(state.error)}
           />
         )}
-        {detailTab === "impact" && (
-          <ProductMasterImpact
-            returnPosition={props.returnPosition}
-            selected={selected}
-            onProductChanged={onProductChanged}
-            dimensionAudit={state.dimensionAudit}
-            currentVersionId={currentVersionId}
-            routeReferencePage={props.routeReferencePage}
-            onReferenceRouteChange={onReferenceRouteChange}
-            onNavigate={props.onNavigate}
-          />
+        {(detailTab === "impact" || props.onReturnAudit) && (
+          <div hidden={detailTab !== "impact"}>
+            <ProductMasterImpact
+              active={detailTab === "impact"}
+              returnPosition={props.returnPosition}
+              selected={selected}
+              onProductChanged={onProductChanged}
+              dimensionAudit={state.dimensionAudit}
+              currentVersionId={currentVersionId}
+              routeReferencePage={props.routeReferencePage}
+              onReferenceRouteChange={onReferenceRouteChange}
+              onNavigate={props.onNavigate}
+            />
+          </div>
         )}
       </div>{" "}
     </>

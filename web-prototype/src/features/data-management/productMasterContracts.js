@@ -13,6 +13,7 @@
  *   taskDraft?: TaskDraft | null,
  *   onReturnToTask?: (productVersionId: string) => void,
  *   onReturnResult?: () => void,
+ *   onReturnAudit?: () => void,
  *   routeDetailTab?: string,
  *   onDetailTabChange?: (tab: string) => void,
  *   routeReferencePage?: string | number,

@@ -14,13 +14,15 @@ import {
 /** @typedef {import("./productMasterContracts").UploadDialog} UploadDialog */
 /** @typedef {import("./productMasterContracts").ProductMasterProps} ProductMasterProps */
 
-/** @param {Pick<ProductMasterProps,"focus"|"routeDetailTab">} props */
-export function useProductMasterState({ focus, routeDetailTab = "" }) {
+/** @param {Pick<ProductMasterProps,"focus"|"routeDetailTab"|"onReturnAudit">} props */
+export function useProductMasterState({ focus, routeDetailTab = "", onReturnAudit }) {
   const { mutate: mutateCache } = useSWRConfig();
   const [selectedId, setSelectedId] = useState(/** @type {string | null} */ (null));
   const [dialog, setDialog] = useState(/** @type {UploadDialog | null} */ (null));
   const [protectedOperation, setProtectedOperation] = useState(false);
-  const [detailTab, setDetailTab] = useState("rows");
+  const [storedDetailTab, setDetailTab] = useState("rows");
+  // 路由指定的页签立即生效，避免旧列表在副作用同步前校正返回页码。
+  const detailTab = productDetailTab(routeDetailTab, storedDetailTab);
 
   const {
     data: datasets = [],
@@ -32,7 +34,7 @@ export function useProductMasterState({ focus, routeDetailTab = "" }) {
     () => api.datasets("products"),
     MANAGED_REFRESH_OPTIONS,
   );
-  const detailInclude = detailTab === "impact" ? "audit" : "";
+  const detailInclude = detailTab === "impact" || onReturnAudit ? "audit" : "";
   const {
     data: fetchedSelected = null,
     error: detailError,
@@ -70,13 +72,7 @@ export function useProductMasterState({ focus, routeDetailTab = "" }) {
     );
   }, [datasets, focusedId, protectedOperation, dialog]);
   useEffect(() => {
-    if (["rows", "impact"].includes(routeDetailTab)) {
-      setDetailTab(routeDetailTab);
-    } else if (["audit", "references"].includes(routeDetailTab)) {
-      setDetailTab("impact");
-    } else {
-      setDetailTab("rows");
-    }
+    setDetailTab(productDetailTab(routeDetailTab, "rows"));
   }, [routeDetailTab, focusedId]);
   const { dimensionAudit, currentVersionId } = productMasterSelection(selected);
   const loadState = productMasterLoadState({
@@ -113,6 +109,17 @@ export function useProductMasterState({ focus, routeDetailTab = "" }) {
     dimensionAudit,
     currentVersionId,
   };
+}
+
+/** @param {string} routeTab @param {string} fallback */
+function productDetailTab(routeTab, fallback) {
+  const tabs = /** @type {Record<string, string>} */ ({
+    rows: "rows",
+    impact: "impact",
+    audit: "impact",
+    references: "impact",
+  });
+  return tabs[routeTab] ?? fallback;
 }
 
 /** @param {{datasetsLoading: boolean, datasets: DatasetRecord[], selectedId: string | null, detailLoading: boolean, datasetsError: unknown, detailError: unknown}} state */

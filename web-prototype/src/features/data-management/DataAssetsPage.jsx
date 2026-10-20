@@ -1,16 +1,17 @@
 import { useEffect, useMemo } from "react";
 import "../../styles/operations.css";
 import "../../styles/product-info.css";
-import { navigateHash } from "../../app/hashRouter";
+import { navigateHash, parseHash } from "../../app/hashRouter";
 import { AntdProvider } from "../../components/AntdProvider";
 import { ProductMasterWorkspace } from "./ProductMasterWorkspace";
 import { readTaskDraft, updateTaskDraft } from "../task-create/taskDraftStorage";
 import { ImportRulesPage } from "./ImportRulesPage";
 import { productResultReturnQuery } from "../classification-results/classificationResultRoute";
+import { productAuditReturnQuery } from "./productAuditRoute";
 
 /** @typedef {import("./productMasterContracts").Navigate} Navigate */
 /** @typedef {import("./productMasterContracts").TaskRepairContext} TaskRepairContext */
-/** @typedef {{query: {view?: string, dataset?: string, return_to?: string, tab?: string, reference_version?: string, reference_page?: string | number, result_return?: string}}} DataAssetsRoute */
+/** @typedef {{query: {view?: string, dataset?: string, return_to?: string, tab?: string, reference_version?: string, reference_page?: string | number, result_return?: string, audit_return?: string}}} DataAssetsRoute */
 
 /**
  * @param {{route: DataAssetsRoute, notify: (message: string, tone?: string) => void, onNavigate: Navigate, userId: string, returnPosition?: import("react").MutableRefObject<import("../../hooks/useListReturnPosition").ListReturnPosition | null>}} props
@@ -22,6 +23,9 @@ export function DataAssetsPage({ route, notify, onNavigate, userId, returnPositi
     : requestedView;
   const taskDraft = readTaskDraft(userId);
   const resultReturn = productResultReturnQuery(route.query.result_return);
+  const auditReturn = route.query.audit_return
+    ? productAuditReturnQuery(parseHash(route.query.audit_return))
+    : null;
 
   useEffect(() => {
     if (["quality", "returns"].includes(requestedView)) {
@@ -63,6 +67,9 @@ export function DataAssetsPage({ route, notify, onNavigate, userId, returnPositi
   return (
     <AntdProvider>
       <ProductMasterWorkspace
+        onReturnAudit={
+          auditReturn ? () => navigateHash("data-assets", auditReturn) : undefined
+        }
         onReturnResult={
           resultReturn
             ? () => navigateHash("classification-results", resultReturn)

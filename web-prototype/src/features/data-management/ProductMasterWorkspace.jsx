@@ -22,14 +22,13 @@ export function ProductMasterWorkspace(props) {
     onReturnToTask,
     onAssetViewChange = () => {},
   } = props;
+  const onReturn = props.onReturnAudit || props.onReturnResult;
   return (
     <div className="standard-page data-page product-master-page">
-      {props.onReturnResult && (
-        <button
-          className="text-button page-loading-navigation"
-          onClick={props.onReturnResult}
-        >
-          <ArrowLeft size={16} /> 返回分类结果
+      {onReturn && (
+        <button className="text-button page-loading-navigation" onClick={onReturn}>
+          <ArrowLeft size={16} />{" "}
+          {props.onReturnAudit ? "返回修改记录" : "返回分类结果"}
         </button>
       )}
       <PageHeading
