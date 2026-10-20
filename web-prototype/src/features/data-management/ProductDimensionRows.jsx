@@ -137,7 +137,7 @@ export function ProductDimensionRows({
             setPageSize={setPageSize}
             hasFilters={hasFilters}
             clearFilters={clearFilters}
-            onEdit={editor.open}
+            onEdit={(row) => editor.open(row, data.records)}
           />
         )}
       </div>

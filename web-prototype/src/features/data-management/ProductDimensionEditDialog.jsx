@@ -107,8 +107,15 @@ function ProductChangeNote({ changeNote, setChangeNote }) {
   );
 }
 
-/** @param {{saving: boolean, pendingExit: boolean, conflict?: boolean, onClose: () => void}} props */
-function ProductEditActions({ saving, pendingExit, conflict, onClose }) {
+/** @param {{saving: boolean, pendingExit: boolean, conflict?: boolean, hasNext: boolean, saveNext: () => Promise<boolean>, onClose: () => void}} props */
+function ProductEditActions({
+  saving,
+  pendingExit,
+  conflict,
+  hasNext,
+  saveNext,
+  onClose,
+}) {
   return (
     <div className="modal-actions">
       <Button
@@ -117,6 +124,13 @@ function ProductEditActions({ saving, pendingExit, conflict, onClose }) {
         onClick={onClose}
       >
         取消
+      </Button>
+      <Button
+        disabled={saving || pendingExit || conflict || !hasNext}
+        title={!hasNext ? "已到当前页最后一条，可保存后翻页继续" : undefined}
+        onClick={saveNext}
+      >
+        保存并编辑下一条
       </Button>
       <Button
         type="primary"
@@ -137,6 +151,8 @@ export function ProductDimensionEditDialog({
   changeNote,
   setChangeNote,
   saving,
+  hasNext,
+  saveNext,
   formRef,
   navigationExit: exit,
   conflict = false,
@@ -254,6 +270,8 @@ export function ProductDimensionEditDialog({
         </fieldset>
         <ProductEditActions
           saving={saving}
+          hasNext={hasNext}
+          saveNext={saveNext}
           pendingExit={Boolean(exit.pendingExit)}
           conflict={conflict}
           onClose={close}

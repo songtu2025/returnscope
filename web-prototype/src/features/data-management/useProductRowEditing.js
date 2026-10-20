@@ -27,6 +27,7 @@ export function useProductRowEditing({ dataset, notify, onChanged }) {
     /** @type {{row: DatasetRow, dataset: DatasetRecord} | null} */ (null),
   );
   const [error, setError] = useState("");
+  const [followingRows, setFollowingRows] = useState(/** @type {DatasetRow[]} */ ([]));
   const [resolutions, setResolutions] = useState(
     /** @type {Record<string, {choice: "mine" | "latest", value: unknown}>} */ ({}),
   );
@@ -52,6 +53,19 @@ export function useProductRowEditing({ dataset, notify, onChanged }) {
     if (dirty) setConfirmClose(true);
     else setEditing(null);
   };
+  const readCurrentRow = async (/** @type {DatasetRow} */ identity) => {
+    const current = await api.dataset(dataset.id, { include: "" });
+    const rows = await api.datasetRows(dataset.id, identity.MSKU, 0, 100, {
+      store: identity["店铺/站点"],
+      version: current.current_version,
+    });
+    const matches = rows.records.filter(
+      (row) => row.MSKU === identity.MSKU && row["店铺/站点"] === identity["店铺/站点"],
+    );
+    if (matches.length !== 1)
+      throw new Error("最新资料中无法唯一定位此产品，请核对产品标识。");
+    return { row: matches[0], dataset: current };
+  };
   const loadLatest = async () => {
     if (!original) return;
     setLatest(null);
@@ -59,22 +73,39 @@ export function useProductRowEditing({ dataset, notify, onChanged }) {
     setSaving(true);
     setError("");
     try {
-      const current = await api.dataset(dataset.id, { include: "" });
-      const rows = await api.datasetRows(dataset.id, original.MSKU, 0, 100, {
-        store: original["店铺/站点"],
-        version: current.current_version,
-      });
-      const matches = rows.records.filter(
-        (row) =>
-          row.MSKU === original.MSKU && row["店铺/站点"] === original["店铺/站点"],
-      );
-      if (matches.length !== 1)
-        throw new Error("最新资料中无法唯一定位此产品，输入已保留，请核对产品标识。");
-      setLatest({ row: matches[0], dataset: current });
+      setLatest(await readCurrentRow(original));
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "最新资料读取失败，请重试");
     } finally {
       setSaving(false);
+    }
+  };
+  const startEditing = (
+    /** @type {DatasetRow} */ row,
+    /** @type {number} */ currentVersion,
+  ) => {
+    setResolutions({});
+    setOriginal(row);
+    setEditing(row);
+    setVersion(currentVersion);
+    setChangeNote("");
+    setConflict(false);
+    setLatest(null);
+    setError("");
+    setConfirmClose(false);
+  };
+  const editNext = async () => {
+    try {
+      const current = await readCurrentRow(followingRows[0]);
+      startEditing(current.row, current.dataset.current_version);
+      setFollowingRows((rows) => rows.slice(1));
+      onChanged(current.dataset);
+    } catch (failure) {
+      setEditing(null);
+      notify(
+        `当前产品已保存，下一条读取失败：${failure instanceof Error ? failure.message : "请在列表中重新打开下一条"}`,
+        "error",
+      );
     }
   };
   const acceptLatest = () => {
@@ -98,6 +129,7 @@ export function useProductRowEditing({ dataset, notify, onChanged }) {
   };
   const save = async (
     /** @type {import("react").FormEvent<HTMLFormElement> | undefined} */ event,
+    advance = false,
   ) => {
     event?.preventDefault();
     if (!editing || saving || saveLock.current || conflict) return false;
@@ -117,9 +149,10 @@ export function useProductRowEditing({ dataset, notify, onChanged }) {
         changes,
         change_note: changeNote,
       });
-      setEditing(null);
       onChanged(updated);
       notify("产品信息已更新");
+      if (advance && followingRows.length) await editNext();
+      else setEditing(null);
       return true;
     } catch (failure) {
       const message = failure instanceof Error ? failure.message : "请求失败";
@@ -179,20 +212,20 @@ export function useProductRowEditing({ dataset, notify, onChanged }) {
     confirmClose,
     close,
     save,
+    hasNext: followingRows.length > 0,
+    saveNext: async () =>
+      formRef.current?.reportValidity() ? save(undefined, true) : false,
     loadLatest,
     acceptLatest,
     continueEditing: () => setConfirmClose(false),
     discard,
-    open: (/** @type {DatasetRow} */ row) => {
-      setResolutions({});
-      setOriginal(row);
-      setEditing(row);
-      setVersion(dataset.current_version);
-      setChangeNote("");
-      setConflict(false);
-      setLatest(null);
-      setError("");
-      setConfirmClose(false);
+    open: (
+      /** @type {DatasetRow} */ row,
+      /** @type {DatasetRow[]} */ pageRows = [],
+    ) => {
+      const index = pageRows.findIndex((item) => item._row_index === row._row_index);
+      setFollowingRows(index < 0 ? [] : pageRows.slice(index + 1));
+      startEditing(row, dataset.current_version);
     },
   };
 }
