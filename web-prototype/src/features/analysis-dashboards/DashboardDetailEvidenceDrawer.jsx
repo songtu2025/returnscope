@@ -1,3 +1,4 @@
+import { EvidenceDrawerField as DrawerField } from "../classification-results/EvidenceDrawerField";
 import { X } from "@phosphor-icons/react";
 import { navigateHash } from "../../app/hashRouter";
 
@@ -121,16 +122,6 @@ export function DashboardDetailEvidenceDrawer({
           <DrawerField label="classification_key" value={record.classification_key} />
         </section>
       </aside>
-    </div>
-  );
-}
-
-/** @param {{label: string, value?: unknown, title?: string}} props */
-function DrawerField({ label, value, title }) {
-  return (
-    <div className="drawer-field">
-      <span>{label}</span>
-      <b title={title}>{value ? String(value) : "未提供"}</b>
     </div>
   );
 }

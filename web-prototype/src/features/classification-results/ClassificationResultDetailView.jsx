@@ -15,8 +15,10 @@ import { ResultError } from "./ClassificationResultCommon";
 import { clearResultRecordConditions } from "./resultRecordConditions";
 import {
   classificationResultReturnLabel,
+  evidenceProductQuery,
   returnFromClassificationResult,
 } from "./classificationResultRoute";
+import { navigateHash } from "../../app/hashRouter";
 
 /** @typedef {import("./classificationResultDetailContracts").ResultDetailViewProps} ResultDetailViewProps */
 
@@ -81,6 +83,8 @@ export function ClassificationResultDetailView(props) {
       "workbench",
     ]).catch(() => notify("人工修正已保存，部分关联数据更新失败，可重试", "error"));
   };
+  const productQuery =
+    selectedGroup && evidenceProductQuery(selectedGroup.record, route);
   return (
     <div className="standard-page classification-results-page result-detail-page">
       <button
@@ -167,6 +171,11 @@ export function ClassificationResultDetailView(props) {
               disabled={Boolean(result.deleted_at)}
               analysisContext={result.analysis_context}
               onClose={closeEvidence}
+              onViewProduct={
+                productQuery
+                  ? () => navigateHash("data-assets", productQuery)
+                  : undefined
+              }
               onSavedBeforeExit={refreshRelated}
               onSaved={async (version, advance) => {
                 await evidenceNavigation.saved(version, advance);

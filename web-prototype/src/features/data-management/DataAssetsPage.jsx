@@ -6,10 +6,11 @@ import { AntdProvider } from "../../components/AntdProvider";
 import { ProductMasterWorkspace } from "./ProductMasterWorkspace";
 import { readTaskDraft, updateTaskDraft } from "../task-create/taskDraftStorage";
 import { ImportRulesPage } from "./ImportRulesPage";
+import { productResultReturnQuery } from "../classification-results/classificationResultRoute";
 
 /** @typedef {import("./productMasterContracts").Navigate} Navigate */
 /** @typedef {import("./productMasterContracts").TaskRepairContext} TaskRepairContext */
-/** @typedef {{query: {view?: string, dataset?: string, return_to?: string, tab?: string, reference_version?: string, reference_page?: string | number}}} DataAssetsRoute */
+/** @typedef {{query: {view?: string, dataset?: string, return_to?: string, tab?: string, reference_version?: string, reference_page?: string | number, result_return?: string}}} DataAssetsRoute */
 
 /**
  * @param {{route: DataAssetsRoute, notify: (message: string, tone?: string) => void, onNavigate: Navigate, userId: string, returnPosition?: import("react").MutableRefObject<import("../../hooks/useListReturnPosition").ListReturnPosition | null>}} props
@@ -20,6 +21,7 @@ export function DataAssetsPage({ route, notify, onNavigate, userId, returnPositi
     ? "products"
     : requestedView;
   const taskDraft = readTaskDraft(userId);
+  const resultReturn = productResultReturnQuery(route.query.result_return);
 
   useEffect(() => {
     if (["quality", "returns"].includes(requestedView)) {
@@ -61,6 +63,11 @@ export function DataAssetsPage({ route, notify, onNavigate, userId, returnPositi
   return (
     <AntdProvider>
       <ProductMasterWorkspace
+        onReturnResult={
+          resultReturn
+            ? () => navigateHash("classification-results", resultReturn)
+            : undefined
+        }
         returnPosition={returnPosition}
         notify={notify}
         onNavigate={onNavigate}

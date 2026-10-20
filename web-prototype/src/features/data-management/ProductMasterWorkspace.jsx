@@ -1,4 +1,4 @@
-import { Database, UploadSimple } from "@phosphor-icons/react";
+import { ArrowLeft, Database, UploadSimple } from "@phosphor-icons/react";
 import Button from "antd/es/button";
 import { DatasetUploadDialog } from "../../components/DatasetUploadDialog";
 import { EmptyState, PageHeading } from "../../components/SharedUi";
@@ -24,6 +24,14 @@ export function ProductMasterWorkspace(props) {
   } = props;
   return (
     <div className="standard-page data-page product-master-page">
+      {props.onReturnResult && (
+        <button
+          className="text-button page-loading-navigation"
+          onClick={props.onReturnResult}
+        >
+          <ArrowLeft size={16} /> 返回分类结果
+        </button>
+      )}
       <PageHeading
         title="产品信息管理"
         action={

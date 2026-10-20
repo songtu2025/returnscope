@@ -1,4 +1,4 @@
-import { navigateHash, parseHash } from "../../app/hashRouter";
+import { buildHash, navigateHash, parseHash } from "../../app/hashRouter";
 import { RESULT_PAGE_SIZES } from "./classificationResultConstants";
 
 /**
@@ -173,4 +173,36 @@ export function classificationResultReturnLabel(route) {
   )
     return "返回分析看板";
   return route.taskId ? "返回任务" : "返回分类结果池";
+}
+
+/** @param {import("../../shared/api/generated/classification-results/types.gen").ClassificationResultGroupResponse["record"]} record @param {ClassificationResultRoute} route */
+export function evidenceProductQuery(record, route) {
+  if (
+    record.product_match_status !== "matched" ||
+    !record.matched_msku ||
+    !record.store_site
+  )
+    return null;
+  return {
+    rows_q: record.matched_msku,
+    rows_store: record.store_site,
+    result_return: buildHash(
+      "classification-results",
+      classificationResultQuery(route),
+    ),
+  };
+}
+
+/** @param {string | undefined} hash */
+export function productResultReturnQuery(hash) {
+  if (!hash) return null;
+  const target = parseHash(hash);
+  const route = classificationResultRouteState(target.query);
+  if (
+    target.page !== "classification-results" ||
+    !route.version ||
+    route.view !== "results"
+  )
+    return null;
+  return { ...classificationResultQuery(route), action: "" };
 }

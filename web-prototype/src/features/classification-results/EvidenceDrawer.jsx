@@ -1,3 +1,4 @@
+import { EvidenceDrawerField as DrawerField } from "./EvidenceDrawerField";
 import { X } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SemanticHistory } from "./SemanticHistory";
@@ -20,6 +21,7 @@ import { EvidenceRecordNavigation } from "./EvidenceRecordNavigation";
  *   group: ClassificationResultGroup,
  *   analysisContext: string,
  *   onClose: () => void,
+ *   onViewProduct?: () => void,
  *   onSaved?: (versionId: string, advance?: boolean) => void | Promise<void>,
  *   onSavedBeforeExit?: () => void | Promise<void>,
  *   navigation?: ReturnType<typeof import("./useEvidenceNavigation").useEvidenceNavigation>,
@@ -31,6 +33,7 @@ export function EvidenceDrawer({
   group,
   analysisContext,
   onClose,
+  onViewProduct,
   onSaved,
   onSavedBeforeExit,
   disabled,
@@ -202,6 +205,15 @@ export function EvidenceDrawer({
 
         <details className="drawer-section drawer-context">
           <summary>业务信息</summary>
+          {onViewProduct && (
+            <button
+              className="secondary-button compact-button"
+              disabled={saving || navigation?.busy}
+              onClick={onViewProduct}
+            >
+              查看产品资料
+            </button>
+          )}
           <DrawerField label="店铺/站点" value={record.store_site} />
           <DrawerField label="Listing" value={record.listing} />
           <DrawerField label="产品名称" value={record.product_name} />
@@ -280,18 +292,6 @@ export function EvidenceDrawer({
           )}
         </details>
       </aside>
-    </div>
-  );
-}
-
-/**
- * @param {{ label: string, value: string | number | null | undefined, title?: string }} props
- */
-function DrawerField({ label, value, title }) {
-  return (
-    <div className="drawer-field">
-      <span>{label}</span>
-      <b title={title}>{value || "未提供"}</b>
     </div>
   );
 }
