@@ -16,6 +16,9 @@ import { useListReturnPosition } from "../../hooks/useListReturnPosition";
 export function TaskMonitor(props) {
   const state = useTaskMonitorState(props);
   const { notify, onNavigate, onTaskFocus, focusSegmentId = null } = props;
+  /** @param {AnalysisTask} task */
+  const createSimilarTask = (task) =>
+    onNavigate("new", { kind: "task-template", id: task.id });
   const {
     listState,
     selectedId,
@@ -83,9 +86,7 @@ export function TaskMonitor(props) {
             openTask(task);
           }}
           onTaskRenamed={onTaskRenamed}
-          onCreateSimilar={(/** @type {AnalysisTask} */ task) =>
-            onNavigate("new", { kind: "task-template", id: task.id })
-          }
+          onCreateSimilar={createSimilarTask}
           onArchive={archiveTasks}
         />
       </div>
@@ -169,6 +170,7 @@ export function TaskMonitor(props) {
               )}
               listingReturnState={props.listingReturnState}
               onTaskRenamed={onTaskRenamed}
+              onCreateSimilar={() => createSimilarTask(selected)}
               {...taskLifecycleActions({
                 ...state,
                 notify,

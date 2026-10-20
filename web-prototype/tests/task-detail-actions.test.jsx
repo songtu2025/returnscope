@@ -21,6 +21,7 @@ function propsFor(status) {
       [
         "onClearActionError",
         "onTaskRenamed",
+        "onCreateSimilar",
         "onArchive",
         "onPause",
         "onResume",
@@ -68,6 +69,7 @@ test.each([
     ).toBeDisabled();
     expect(screen.getByText(pending, { selector: "span[role=status]" })).toBeVisible();
     await userEvent.click(screen.getByLabelText("更多任务操作"));
+    expect(screen.getByRole("button", { name: "创建类似任务" })).toBeDisabled();
     if (status === "completed") {
       expect(screen.getByRole("button", { name: "再次运行" })).toBeDisabled();
       expect(screen.getByRole("button", { name: "归档任务" })).toBeDisabled();
@@ -78,6 +80,22 @@ test.each([
     );
     expect(props[key]).toHaveBeenCalledOnce();
     expect(screen.getByRole("button", { name: label })).toBeEnabled();
+  },
+);
+
+test.each(["partial", "cancelled", "completed"])(
+  "%s任务详情可从更多菜单创建类似任务，不触发运行或归档",
+  async (status) => {
+    const props = propsFor(status);
+    render(<TaskDetail {...props} />);
+    await userEvent.click(screen.getByLabelText("更多任务操作"));
+    screen.getByRole("button", { name: "创建类似任务" }).focus();
+    await userEvent.keyboard("{Enter}");
+    expect(props.onCreateSimilar).toHaveBeenCalledOnce();
+    expect(props.onRetry).not.toHaveBeenCalled();
+    expect(props.onArchive).not.toHaveBeenCalled();
+    expect(props.onResume).not.toHaveBeenCalled();
+    expect(props.onReplan).not.toHaveBeenCalled();
   },
 );
 

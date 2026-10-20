@@ -4534,6 +4534,21 @@ describe("关键用户流程", () => {
         true,
       ),
     );
+    const secondTaskRow = screen.getByRole("row", { name: /已结束任务 B/ });
+    await user.click(within(secondTaskRow).getByRole("button", { name: "查看" }));
+    expect(await screen.findByRole("heading", { name: "已结束任务 B" })).toBeVisible();
+    await user.click(screen.getByLabelText("更多任务操作"));
+    await user.click(screen.getByRole("button", { name: "创建类似任务" }));
+    expect(
+      onNavigate.mock.calls.filter(([destination]) => destination === "new"),
+    ).toEqual([
+      ["new", { kind: "task-template", id: "task-manage-a" }],
+      ["new", { kind: "task-template", id: "task-manage-b" }],
+    ]);
+    expect(onNavigate).toHaveBeenLastCalledWith("new", {
+      kind: "task-template",
+      id: "task-manage-b",
+    });
   });
 
   test("任务列表读取失败后显示错误并允许重新加载", async () => {

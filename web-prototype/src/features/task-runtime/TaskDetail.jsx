@@ -12,38 +12,8 @@ import { taskSummary } from "./taskRegistryPolicy";
 import { publishedTaskResults } from "./taskSegmentPolicy";
 import { useTaskLogNavigation } from "./useTaskLogNavigation";
 
-/** @typedef {import("./taskRuntimeContracts").AnalysisTask} AnalysisTask */
-/** @typedef {import("./taskRuntimeContracts").TaskEvent} TaskEvent */
-/** @typedef {import("./taskRuntimeContracts").TaskPayload} TaskPayload */
 /** @typedef {import("./taskRuntimeContracts").TaskSegment} TaskSegment */
-/** @typedef {import("./taskRuntimeContracts").SegmentAction} SegmentAction */
-/** @typedef {import("../task-planning/taskPlanContracts").TaskExecutionPlan} TaskExecutionPlan */
-/**
- * @typedef {Object} TaskDetailProps
- * @property {AnalysisTask} task
- * @property {(disabled: boolean) => import("react").ReactNode} [headerAction]
- * @property {import("./useSegmentBoardView").SegmentBoardReturnRef} [listingReturnState]
- * @property {string | null} [focusSegmentId]
- * @property {TaskEvent[]} events
- * @property {(segment: TaskSegment & {result_version_id: string}, qualityStatus?: string, systemRerunRequired?: string) => void} onViewClassification
- * @property {string} actionError
- * @property {() => void} onClearActionError
- * @property {(task: AnalysisTask) => Promise<unknown>} onTaskRenamed
- * @property {() => void | Promise<unknown>} onArchive
- * @property {() => void | Promise<unknown>} onPause
- * @property {(payload: TaskPayload) => Promise<boolean>} onResume
- * @property {() => void | Promise<unknown>} onRetry
- * @property {(segmentKey: string, payload: TaskPayload) => Promise<boolean>} onRetrySegment
- * @property {(segmentId: string) => Promise<boolean>} onRetryResultPublish
- * @property {(segmentKey: string, action: SegmentAction, note?: string) => Promise<boolean>} onSegmentAction
- * @property {import("./taskSegmentBatchActions").ApplySegmentBatch} [onBatchSegmentAction]
- * @property {() => Promise<boolean>} [onRefreshSegments]
- * @property {(maxParallelSegments: number) => Promise<boolean>} onParallelism
- * @property {(segmentKeys: string[]) => Promise<boolean>} onReorderSegments
- * @property {(payload: TaskPayload) => Promise<TaskExecutionPlan>} onPreflightReplan
- * @property {(payload: TaskPayload) => Promise<boolean>} onReplan
- */
-
+/** @typedef {import("./taskMonitorContracts").TaskDetailProps} TaskDetailProps */
 /** @param {TaskDetailProps} props */
 export function TaskDetail({
   task,
@@ -55,6 +25,7 @@ export function TaskDetail({
   actionError,
   onClearActionError,
   onTaskRenamed,
+  onCreateSimilar,
   onArchive,
   onPause,
   onResume,
@@ -160,6 +131,7 @@ export function TaskDetail({
           onOpenReplan={() => setReplanOpen(true)}
           onOpenResume={() => setResumeOpen(true)}
           onTaskRenamed={onTaskRenamed}
+          onCreateSimilar={onCreateSimilar}
           onPause={() => runTaskAction("pause", onPause)}
           onRetry={() => runTaskAction("retry", onRetry)}
           onArchive={() => runTaskAction("archive", onArchive)}
@@ -183,9 +155,7 @@ export function TaskDetail({
         <TaskDetailTabs
           activeTab={activeTab}
           disabled={Boolean(taskAction)}
-          onSelect={(value) => {
-            setActiveTab(value);
-          }}
+          onSelect={setActiveTab}
         />
 
         <TaskDetailViews

@@ -5,6 +5,7 @@ import {
   Archive,
   ArrowClockwise,
   ChartBar,
+  CopySimple,
   DotsThreeVertical,
   DownloadSimple,
   Pause,
@@ -27,6 +28,7 @@ import { FINAL_TASK_STATUSES } from "./taskRegistryPolicy";
  * @property {() => void} onOpenReplan
  * @property {() => void} onOpenResume
  * @property {(task: AnalysisTask) => Promise<unknown>} onTaskRenamed
+ * @property {() => void} [onCreateSimilar]
  * @property {() => void | Promise<unknown>} onPause
  * @property {() => void | Promise<unknown>} onRetry
  * @property {() => void | Promise<unknown>} onArchive
@@ -118,8 +120,8 @@ function TaskExecutionActions({
   );
 }
 
-/** @param {Pick<TaskDetailHeaderProps, "task" | "taskAction" | "onRetry" | "onArchive">} props */
-function TaskMoreActions({ task, taskAction, onRetry, onArchive }) {
+/** @param {Pick<TaskDetailHeaderProps, "task" | "taskAction" | "onRetry" | "onArchive" | "onCreateSimilar">} props */
+function TaskMoreActions({ task, taskAction, onRetry, onArchive, onCreateSimilar }) {
   const { detailsProps, summaryProps } = useDismissibleDetails({ menu: true });
   const versionIds = (task.segments ?? [])
     .filter((item) => !item.deleted_at && item.result_version_id)
@@ -130,6 +132,11 @@ function TaskMoreActions({ task, taskAction, onRetry, onArchive }) {
         <DotsThreeVertical size={19} />
       </summary>
       <div>
+        {onCreateSimilar && (
+          <button disabled={Boolean(taskAction)} onClick={onCreateSimilar}>
+            <CopySimple size={16} /> 创建类似任务
+          </button>
+        )}
         {versionIds.length > 0 && (
           <ResultDownloadButton
             key={versionIds.join(":")}
@@ -169,6 +176,7 @@ export function TaskDetailHeader({
   onOpenReplan,
   onOpenResume,
   onTaskRenamed,
+  onCreateSimilar,
   onPause,
   onRetry,
   onArchive,
@@ -216,6 +224,7 @@ export function TaskDetailHeader({
           taskAction={taskAction}
           onRetry={onRetry}
           onArchive={onArchive}
+          onCreateSimilar={onCreateSimilar}
         />
         {taskAction && (
           <span role="status">
