@@ -42,7 +42,11 @@ export function ClassificationResultDetailView(props) {
   } = context;
   const loadingScope = useContext(PageLoadingContext);
   const [locateRecords, setLocateRecords] = useState(
-    Boolean(route.recordQualityStatus || route.systemRerunRequired),
+    Boolean(
+      route.recordQualityStatus ||
+      route.systemRerunRequired ||
+      route.feedbackSourceRecordId,
+    ),
   );
   useEffect(() => {
     if (

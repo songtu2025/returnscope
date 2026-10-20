@@ -18,6 +18,9 @@ export function resultRecordQuery(route) {
     product_name: route.productName,
     product_sku: route.productSku,
     order_id: route.orderId,
+    ...(route.feedbackSourceRecordId
+      ? { feedback_source_record_id: route.feedbackSourceRecordId }
+      : {}),
     quality_status: route.recordQualityStatus,
     comment_status: route.commentStatus,
     ...(route.systemRerunRequired

@@ -6,6 +6,7 @@ const EMPTY_CONDITIONS = {
   productName: "",
   productSku: "",
   orderId: "",
+  feedbackSourceRecordId: "",
   recordQualityStatus: "",
   commentStatus: "",
   systemRerunRequired: "",
@@ -24,6 +25,7 @@ export function resultRecordConditions(route) {
     ["产品名称", route.productName],
     ["产品SKU", route.productSku],
     ["订单号", route.orderId],
+    ["来源定位", route.feedbackSourceRecordId && "看板中的反馈组"],
     [
       "结果状态",
       route.recordQualityStatus &&

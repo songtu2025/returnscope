@@ -115,6 +115,7 @@ export function ResultPoolContent(context) {
                     productName: "",
                     productSku: "",
                     orderId: "",
+                    feedbackSourceRecordId: "",
                   });
                 }}
               />

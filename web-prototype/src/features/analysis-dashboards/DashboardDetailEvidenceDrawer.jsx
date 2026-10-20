@@ -1,4 +1,5 @@
 import { X } from "@phosphor-icons/react";
+import { navigateHash } from "../../app/hashRouter";
 
 import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { resultLabelText } from "../../lib/taxonomyPresentation";
@@ -19,6 +20,7 @@ export function DashboardDetailEvidenceDrawer({
   const classification = record.classification ?? {};
   const labelPaths = factLabelPaths(record);
   const terms = analysisContextTerms(analysisContext);
+  const hasSource = Boolean(record.result_version_id && record.source_record_id);
   const { dialogRef } = useDialogFocus({ open: true, onClose, returnFocusRef });
 
   return (
@@ -53,6 +55,26 @@ export function DashboardDetailEvidenceDrawer({
             onMove={navigation.move}
           />
         )}
+        <section className="drawer-section">
+          <button
+            className="secondary-button"
+            disabled={!hasSource}
+            title={
+              !hasSource
+                ? "来源版本或记录标识未提供"
+                : "查看此证据对应版本中的原分类反馈组"
+            }
+            onClick={() =>
+              navigateHash("classification-results", {
+                result_version_id: record.result_version_id,
+                feedback_source_record_id: record.source_record_id,
+                dashboard_return: window.location.hash,
+              })
+            }
+          >
+            查看原分类记录
+          </button>
+        </section>
         <section className="drawer-section">
           <b>业务信息</b>
           <DrawerField label="店铺/站点" value={record.store_site} />

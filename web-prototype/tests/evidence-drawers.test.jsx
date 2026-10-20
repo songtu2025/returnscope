@@ -6,8 +6,54 @@ import { DashboardDetailEvidenceDrawer } from "../src/features/analysis-dashboar
 import { EvidenceDrawer } from "../src/features/classification-results/EvidenceDrawer";
 import { factPresentation } from "../src/features/classification-results/semanticResultPresentation";
 import { resultLabelText } from "../src/lib/taxonomyPresentation";
+import { parseHash } from "../src/app/hashRouter";
 
 afterEach(() => cleanup());
+
+test("看板证据按来源版本和源记录定位，不用订单号代替标识，并保留原看板范围", async () => {
+  window.history.replaceState(
+    {},
+    "",
+    "#analysis-dashboards?dashboard=board&version=old-board&problem=FIT&record_page=3&product_sku=synthetic",
+  );
+  const original = window.location.hash;
+  render(
+    <DashboardDetailEvidenceDrawer
+      record={{ ...record, result_version_id: "old-result" }}
+      analysisContext="user_feedback"
+      onClose={vi.fn()}
+      returnFocusRef={{ current: null }}
+    />,
+  );
+  const button = screen.getByRole("button", { name: "查看原分类记录" });
+  button.focus();
+  await userEvent.keyboard("{Enter}");
+  expect(parseHash()).toMatchObject({
+    page: "classification-results",
+    query: {
+      result_version_id: "old-result",
+      feedback_source_record_id: record.source_record_id,
+      dashboard_return: original,
+    },
+  });
+  expect(parseHash().query.order_id).toBeUndefined();
+});
+
+test.each([{ result_version_id: "version" }, { source_record_id: "source" }, {}])(
+  "缺少来源标识时原分类入口禁用，不影响证据阅读：%j",
+  (source) => {
+    render(
+      <DashboardDetailEvidenceDrawer
+        record={{ ...source, comment: "合成原文", classification: {} }}
+        analysisContext="user_feedback"
+        onClose={vi.fn()}
+        returnFocusRef={{ current: null }}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "查看原分类记录" })).toBeDisabled();
+    expect(screen.getByText("合成原文")).toBeVisible();
+  },
+);
 
 const record = {
   source_record_id: "test-record-1",

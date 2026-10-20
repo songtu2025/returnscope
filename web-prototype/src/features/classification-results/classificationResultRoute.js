@@ -23,6 +23,7 @@ import { RESULT_PAGE_SIZES } from "./classificationResultConstants";
  * @property {string} productName
  * @property {string} productSku
  * @property {string} orderId
+ * @property {string} [feedbackSourceRecordId]
  * @property {"results" | "reviews"} view
  * @property {"records" | "history"} tab
  * @property {string} selectionToken
@@ -68,6 +69,7 @@ export function classificationResultRouteState(query) {
     productName: queryValue(query, "product_name"),
     productSku: queryValue(query, "product_sku"),
     orderId: queryValue(query, "order_id"),
+    feedbackSourceRecordId: queryValue(query, "feedback_source_record_id"),
     view: query.view === "reviews" ? "reviews" : "results",
     tab: query.tab === "history" ? "history" : "records",
     selectionToken: queryValue(query, "selection_token"),
@@ -114,6 +116,7 @@ export function classificationResultQuery(route) {
     product_name: route.productName,
     product_sku: route.productSku,
     order_id: route.orderId,
+    feedback_source_record_id: route.feedbackSourceRecordId,
     tab: route.tab === "history" ? "history" : "",
     task_id: route.taskId,
     task_return: route.taskReturn,
@@ -155,6 +158,7 @@ export function returnFromClassificationResult(route, updateRoute) {
     productName: "",
     productSku: "",
     orderId: "",
+    feedbackSourceRecordId: "",
     recordQualityStatus: "",
     commentStatus: "",
     systemRerunRequired: "",

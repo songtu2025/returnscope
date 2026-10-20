@@ -15,6 +15,7 @@ export function resultDetailActions({ updateRoute, createFromResult }) {
       productName: "",
       productSku: "",
       orderId: "",
+      feedbackSourceRecordId: "",
     });
   /** @param {string} problem */
   const selectProblem = (problem) =>

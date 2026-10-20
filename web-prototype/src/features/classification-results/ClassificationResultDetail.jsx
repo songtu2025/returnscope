@@ -43,6 +43,7 @@ export function ClassificationResultDetail({ route, updateRoute, notify, userId 
     () => setSelectedGroup(null),
     [
       route.orderId,
+      route.feedbackSourceRecordId,
       route.problem,
       route.productName,
       route.productSku,
