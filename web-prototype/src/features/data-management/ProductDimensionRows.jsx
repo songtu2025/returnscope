@@ -113,6 +113,8 @@ export function ProductDimensionRows({
         setCategory={setCategory}
         load={load}
         loading={isValidating}
+        hasFilters={hasFilters}
+        clearFilters={clearFilters}
       />
       <div
         ref={regionRef}

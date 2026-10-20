@@ -62,6 +62,78 @@ describe("商品页面和旧任务草稿的恢复", () => {
     apiMock.dataVersionReferences.mockResolvedValue({ items: [], total: 0 });
   });
 
+  test.each([false, true])(
+    "产品列表有无结果均可清除组合筛选与草稿，保留资料和返回上下文：%s",
+    async (empty) => {
+      apiMock.datasetRows.mockResolvedValue({
+        ...rows,
+        records: empty ? [] : rows.records,
+        total: empty ? 0 : 120,
+        facets: { stores: ["DEMO:US"], categories: ["水鞋 > 厚底水鞋"] },
+      });
+      window.history.replaceState(
+        {},
+        "",
+        "/#data-assets?view=products&dataset=synthetic-products&return_to=task-create&tab=rows&reference_page=3&rows_q=DEMO&rows_store=DEMO%3AUS&rows_category=水鞋%20%3E%20厚底水鞋&rows_page=2&rows_page_size=50",
+      );
+      const changed = vi.fn();
+      render(
+        <ProductDimensionRows dataset={product} notify={vi.fn()} onChanged={changed} />,
+      );
+      if (empty) await screen.findByText("没有匹配的产品信息。");
+      else await screen.findByText("SYNTHETIC-1");
+      const input = screen.getByRole("textbox", { name: "搜索产品信息" });
+      const user = userEvent.setup();
+      await user.clear(input);
+      await user.type(input, "未提交的草稿");
+      const clear = screen.getByRole("button", { name: "清除全部筛选" });
+      clear.focus();
+      await user.keyboard("{Enter}");
+      expect(input).toHaveValue("");
+      expect(screen.getByRole("combobox", { name: "店铺/站点" })).toHaveValue("");
+      expect(screen.getByRole("combobox", { name: "品类" })).toHaveValue("");
+      await waitFor(() =>
+        expect(apiMock.datasetRows).toHaveBeenLastCalledWith(product.id, "", 0, 50, {
+          store: "",
+          category: "",
+        }),
+      );
+      const query = new URLSearchParams(window.location.hash.split("?")[1]);
+      expect(Object.fromEntries(query)).toEqual({
+        view: "products",
+        dataset: product.id,
+        return_to: "task-create",
+        tab: "rows",
+        reference_page: "3",
+        rows_page: "1",
+        rows_page_size: "50",
+      });
+      expect(clear).toBeDisabled();
+      expect(changed).not.toHaveBeenCalled();
+      expect(apiMock.updateDatasetRow).not.toHaveBeenCalled();
+      expect(apiMock.updateDatasetContent).not.toHaveBeenCalled();
+    },
+  );
+
+  test("仅有未提交搜索草稿时也能清除，不提交搜索或改写产品资料", async () => {
+    window.history.replaceState({}, "", "/#data-assets");
+    render(<ProductMasterWorkspace {...props} />);
+    await screen.findByText("SYNTHETIC-1");
+    const clear = screen.getByRole("button", { name: "清除全部筛选" });
+    expect(clear).toBeDisabled();
+    const requests = apiMock.datasetRows.mock.calls.length;
+    const input = screen.getByRole("textbox", { name: "搜索产品信息" });
+    const user = userEvent.setup();
+    await user.type(input, "仅草稿");
+    expect(clear).toBeEnabled();
+    expect(apiMock.datasetRows).toHaveBeenCalledTimes(requests);
+    await user.click(clear);
+    expect(input).toHaveValue("");
+    expect(clear).toBeDisabled();
+    expect(apiMock.datasetRows).toHaveBeenCalledTimes(requests);
+    expect(apiMock.updateDatasetRow).not.toHaveBeenCalled();
+  });
+
   test("真实任务创建子组件保存迁移草稿后仍提示一次", async () => {
     const userId = "synthetic-draft-user";
     const notify = vi.fn();

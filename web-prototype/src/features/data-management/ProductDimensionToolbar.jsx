@@ -78,7 +78,7 @@ function ProductDimensionFilters({
   );
 }
 
-/** @param {{data: DatasetRowsPage | null, dataset: DatasetRecord, draftQuery: string, setDraftQuery: (value: string) => void, setPage: (value: number) => void, setQuery: (value: string) => void, store: string, setStore: (value: string) => void, category: string, setCategory: (value: string) => void, load: () => Promise<unknown>, loading: boolean}} props */
+/** @param {{data: DatasetRowsPage | null, dataset: DatasetRecord, draftQuery: string, setDraftQuery: (value: string) => void, setPage: (value: number) => void, setQuery: (value: string) => void, store: string, setStore: (value: string) => void, category: string, setCategory: (value: string) => void, load: () => Promise<unknown>, loading: boolean, hasFilters: boolean, clearFilters: () => void}} props */
 export function ProductDimensionToolbar({
   data,
   dataset,
@@ -92,6 +92,8 @@ export function ProductDimensionToolbar({
   setCategory,
   load,
   loading,
+  hasFilters,
+  clearFilters,
 }) {
   return (
     <div className="dimension-table-toolbar">
@@ -111,6 +113,9 @@ export function ProductDimensionToolbar({
       />
       <div>
         <span>共 {(data?.total ?? dataset.row_count).toLocaleString()} 条产品</span>
+        <Button disabled={!hasFilters && !draftQuery} onClick={clearFilters}>
+          清除全部筛选
+        </Button>
         <Button
           autoInsertSpace={false}
           icon={<ArrowClockwise size={15} />}
