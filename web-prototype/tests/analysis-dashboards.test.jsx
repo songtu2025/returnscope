@@ -673,6 +673,121 @@ test.each([
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
 
+test.each(["", "2026-10-01", "2026-03-01"])(
+  "清除全部筛选同时清理未生效日期草稿 %s，保留日期校验和键盘入口",
+  async (date) => {
+    const onUpdateFilters = vi.fn();
+    render(
+      <ReturnReasonSummaryFilters
+        route={{
+          dateFrom: "",
+          dateTo: "",
+          listing: "",
+          productName: "",
+          productSku: "",
+        }}
+        dateRange={{ date_from: "2026-04-01", date_to: "2026-09-30" }}
+        options={{}}
+        terms={analysisContextTerms("user_feedback")}
+        onUpdateFilters={onUpdateFilters}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("开始日期"), { target: { value: date } });
+    fireEvent.blur(screen.getByLabelText("开始日期"));
+    expect(screen.getByRole("alert")).toBeVisible();
+    const clear = screen.getByRole("button", { name: "清除全部筛选" });
+    clear.focus();
+    await userEvent.keyboard("{Enter}");
+    expect(screen.getByLabelText("开始日期")).toHaveValue("2026-04-01");
+    expect(screen.getByLabelText("结束日期")).toHaveValue("2026-09-30");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(clear).toHaveFocus();
+    expect(onUpdateFilters).toHaveBeenCalledTimes(1);
+  },
+);
+
+test("看板一键清除临时条件和分页，保留当前版本、持久范围与列表返回查询", async () => {
+  const version = {
+    version_id: "dashboard-version-default",
+    version: 1,
+    filters: { listing: "持久范围", quality_status: ["ready", "review_required"] },
+    source_snapshot: [{ result_version_id: "source-result" }],
+  };
+  dashboardApiMock.analysisDashboardVersions.mockResolvedValue([version]);
+  window.location.hash =
+    "#analysis-dashboards?dashboard=dashboard-default&version=dashboard-version-default&q=kept&status=active&page=2&page_size=50&date_from=2026-05-01&date_to=2026-08-31&listing=L1&product_name=P1&product_sku=S1&subject=PRODUCT&label_group=SIZE&problem=FIT&record_page=3&reason_page=2";
+  render(<DashboardHarness />);
+  const clear = await screen.findByRole("button", { name: "清除全部筛选" });
+  const reasonReset = screen.getByRole("button", { name: "重置原因", exact: true });
+  reasonReset.focus();
+  await userEvent.keyboard("{Enter}");
+  await waitFor(() => {
+    const query = new URLSearchParams(window.location.hash.split("?")[1]);
+    for (const key of [
+      "subject",
+      "label_group",
+      "problem",
+      "record_page",
+      "reason_page",
+    ])
+      expect(query.has(key)).toBe(false);
+    expect(query.get("date_from")).toBe("2026-05-01");
+    expect(query.get("listing")).toBe("L1");
+    expect(query.get("product_name")).toBe("P1");
+    expect(query.get("product_sku")).toBe("S1");
+  });
+  clear.focus();
+  await userEvent.keyboard("{Enter}");
+  await waitFor(() => {
+    const query = new URLSearchParams(window.location.hash.split("?")[1]);
+    for (const key of [
+      "date_from",
+      "date_to",
+      "listing",
+      "product_name",
+      "product_sku",
+      "subject",
+      "label_group",
+      "problem",
+      "record_page",
+      "reason_page",
+    ])
+      expect(query.has(key)).toBe(false);
+    expect(Object.fromEntries(query)).toEqual({
+      dashboard: "dashboard-default",
+      version: "dashboard-version-default",
+      q: "kept",
+      status: "active",
+      page: "2",
+      page_size: "50",
+    });
+  });
+  await waitFor(() =>
+    expect(dashboardApiMock.analysisDashboardInsights).toHaveBeenLastCalledWith(
+      "dashboard-default",
+      "dashboard-version-default",
+      expect.objectContaining({
+        date_from: "",
+        date_to: "",
+        listing: "",
+        product_name: "",
+        product_sku: "",
+        subject: "",
+        label_group: "",
+        problem: "",
+      }),
+      expect.any(Object),
+    ),
+  );
+  expect(version.filters).toEqual({
+    listing: "持久范围",
+    quality_status: ["ready", "review_required"],
+  });
+  expect(dashboardApiMock.createAnalysisDashboardVersion).not.toHaveBeenCalled();
+  expect(dashboardApiMock.createAnalysisDashboard).not.toHaveBeenCalled();
+  expect(dashboardApiMock.createAnalysisDashboardInsightReport).not.toHaveBeenCalled();
+});
+
 test("看板日期在整组离开时生效，外部日期变更同步且正常空结果不报校验错误", () => {
   const onUpdateFilters = vi.fn();
   const props = {
@@ -1106,7 +1221,7 @@ test("移除层级入口后原因分页、选择、刷新和重置正常", async
   expect(
     within(restored).getByRole("button", { name: /合成标签31.*9 · 1\.0%/ }),
   ).toHaveClass("active");
-  await user.click(screen.getByRole("button", { name: "重置", exact: true }));
+  await user.click(screen.getByRole("button", { name: "重置原因", exact: true }));
   await waitFor(() => expect(window.location.hash).not.toContain("problem="));
   expect(
     within(restored).getByRole("navigation", { name: "分页，第 1 页，共 4 页" }),

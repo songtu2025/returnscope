@@ -123,9 +123,25 @@ function ProductFilters({ route, options, onUpdateFilters, ready }) {
 
 /** @param {SummaryFilterProps} props */
 export function ReturnReasonSummaryFilters(props) {
+  const [dateReset, setDateReset] = useState(0);
+  const clearFilters = () => {
+    props.onUpdateFilters({
+      dateFrom: "",
+      dateTo: "",
+      listing: "",
+      productName: "",
+      productSku: "",
+      subject: "",
+      labelGroup: "",
+      problem: "",
+    });
+    // 日期可能只有未生效的草稿；即使路由未变，也恢复当前版本的完整日期范围。
+    setDateReset((value) => value + 1);
+  };
   return (
     <section className="return-insight-filters" aria-label={props.terms.filterAria}>
       <DateFilter
+        key={dateReset}
         route={props.route}
         dateRange={props.dateRange}
         onUpdateFilters={props.onUpdateFilters}
@@ -136,6 +152,13 @@ export function ReturnReasonSummaryFilters(props) {
         onUpdateFilters={props.onUpdateFilters}
         ready={props.ready}
       />
+      <button
+        type="button"
+        className="text-button return-insight-clear-filters"
+        onClick={clearFilters}
+      >
+        清除全部筛选
+      </button>
     </section>
   );
 }

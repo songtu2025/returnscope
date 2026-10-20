@@ -24,7 +24,7 @@ function ExplorerHeader({ onUpdateRoute }) {
         </div>
       </div>
       <button onClick={resetReasonFilters}>
-        <ArrowCounterClockwise size={15} /> 重置
+        <ArrowCounterClockwise size={15} /> 重置原因
       </button>
     </header>
   );

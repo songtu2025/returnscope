@@ -163,6 +163,11 @@
   font-size: 11px;
 }
 
+.return-insight-clear-filters {
+  grid-column: 1 / -1;
+  justify-self: end;
+}
+
 .return-insight-select select {
   width: 100%;
   height: var(--desktop-control-height);
