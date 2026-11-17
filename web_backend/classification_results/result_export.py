@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from web_backend.common import json_value
+
 QUALITY_LABELS = {
     "ready": "可用",
     "review_required": "需复核",
@@ -24,6 +26,11 @@ DISPOSITION_LABELS = {
     "TRUE_AMBIGUITY": "原文含义不明确",
     "ANALYSIS_FAILURE": "系统处理失败",
     "UNEXPLAINED": "未解释原文片段",
+}
+SENTIMENT_LABELS = {
+    "POSITIVE": "正向",
+    "NEGATIVE": "负向",
+    "NEUTRAL": "中性",
 }
 
 SUMMARY_COLUMNS = [
@@ -46,6 +53,7 @@ SUMMARY_COLUMNS = [
     "产品SKU",
     "反馈日期",
     "反馈标题 / 原因",
+    "问题标签代码",
 ]
 SEMANTIC_COLUMNS = [
     "反馈编号",
@@ -56,6 +64,7 @@ SEMANTIC_COLUMNS = [
     "处置状态",
     "判断说明",
     "标签代码",
+    "评价方向",
 ]
 SOURCE_FIELDS = {
     "源记录编号": "source_record_id",
@@ -107,6 +116,7 @@ def semantic_export_rows(
             "处置状态": DISPOSITION_LABELS.get(str(unit.get("disposition")), "待判断"),
             "判断说明": unit.get("reason") or "",
             "标签代码": unit.get("label_code") or "",
+            "评价方向": SENTIMENT_LABELS.get(str(unit.get("sentiment")), ""),
         }
         for index, unit in enumerate(items, 1)
     ]
@@ -139,6 +149,9 @@ def feedback_export_row(
         "Listing": item.get("listing"),
         "来源SKU（MSKU）": item.get("source_sku"),
         "产品SKU": item.get("product_sku"),
+        "问题标签代码": "\n".join(
+            json_value(item.get("export_problem_labels_json"), item["problem_labels"])
+        ),
     }
 
 

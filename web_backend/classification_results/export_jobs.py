@@ -16,7 +16,7 @@ from typing import Any
 
 from web_backend.classification_result_service import ClassificationResultService
 
-EXPORT_FORMAT = "readable-feedback-v2"
+EXPORT_FORMAT = "readable-feedback-v3"
 EXPORT_TTL_SECONDS = 24 * 60 * 60
 _LOGGER = logging.getLogger(__name__)
 

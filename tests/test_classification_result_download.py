@@ -48,6 +48,16 @@ def _rows(sheet):
 
 def test_workbook_groups_match_page_and_preserve_all_sources(context):
     with context.database.transaction() as connection:
+        problem_codes: dict[str, list[str]] = {}
+        for row in connection.execute(
+            "SELECT classification_key, label_code FROM classification_unit_labels "
+            "WHERE label_kind = 'problem' ORDER BY label_code"
+        ):
+            problem_codes.setdefault(row["classification_key"], []).append(
+                row["label_code"]
+            )
+        assert problem_codes
+        connection.execute("UPDATE classification_units SET problem_labels_json = '[]'")
         connection.execute(
             "UPDATE classification_result_records SET fnsku='FIRST-FNSKU' WHERE source_row=2"
         )
@@ -73,6 +83,9 @@ def test_workbook_groups_match_page_and_preserve_all_sources(context):
         assert row["反馈正文"] == record["comment"]
         assert row["结果状态"] == "可用"
         assert row["是否需重跑"] == "否"
+        assert row["问题标签代码"] == (
+            "\n".join(problem_codes.get(record["classification_key"], [])) or None
+        )
         details = [item for item in semantics if item["反馈编号"] == row["反馈编号"]]
         assert len(details) == len(
             record["classification"]["semantic_review"]["semantic_items"]
@@ -127,6 +140,7 @@ def test_semantic_rows_keep_multiple_opinions_evidence_and_review_reasons():
                         "label_path": ["尺码", "偏小"],
                         "evidence_text": "too small",
                         "disposition": "MAPPED",
+                        "sentiment": "NEGATIVE",
                     },
                     {
                         "opinion": "另一条待判断语义",
@@ -134,12 +148,21 @@ def test_semantic_rows_keep_multiple_opinions_evidence_and_review_reasons():
                         "disposition": "TRUE_AMBIGUITY",
                         "reason": "含义存在歧义",
                     },
+                    {
+                        "opinion": "鞋底防滑",
+                        "sentiment": "POSITIVE",
+                    },
+                    {
+                        "opinion": "想换一个尺码",
+                        "sentiment": "NEUTRAL",
+                    },
                 ]
             }
         }
     }
     rows = semantic_export_rows(item, "F000001")
-    assert [row["语义序号"] for row in rows] == [1, 2]
+    assert [row["语义序号"] for row in rows] == [1, 2, 3, 4]
+    assert [row["评价方向"] for row in rows] == ["负向", "", "正向", "中性"]
     assert rows[0]["分类路径"] == "尺码 → 偏小"
     assert rows[0]["原文证据"] == "too small"
     assert rows[1]["处置状态"] == "原文含义不明确"
@@ -155,6 +178,7 @@ def test_semantic_rows_keep_multiple_opinions_evidence_and_review_reasons():
     )
     assert unexplained[0]["原文证据"] == "剩余原文"
     assert unexplained[0]["处置状态"] == "未解释原文片段"
+    assert unexplained[0]["评价方向"] == ""
 
 
 def test_download_keeps_three_reads_without_member_queries(context, monkeypatch):

@@ -102,7 +102,18 @@ class _ClassificationResultDownload:
         return connection.execute(
             f"""
                 SELECT item.*, {feedback_group_key_sql("item")} AS display_key,
-                       COUNT(*) OVER (PARTITION BY {feedback_group_key_sql("item")}) AS member_count
+                       COUNT(*) OVER (PARTITION BY {feedback_group_key_sql("item")}) AS member_count,
+                       (
+                           SELECT json_group_array(label_code)
+                           FROM (
+                               SELECT label_code
+                               FROM classification_unit_labels
+                               WHERE result_version_id = item.result_version_id
+                                 AND classification_key = item.classification_key
+                                 AND label_kind = 'problem'
+                               ORDER BY label_code
+                           )
+                       ) AS export_problem_labels_json
                 FROM ({self._records_select()} WHERE r.result_version_id = ?) item
                 ORDER BY item.source_row ASC, item.id ASC
                 """,
