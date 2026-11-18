@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from return_semantics.pipeline_routing_policy import uses_footwear_semantic_revision
 from return_semantics.schemas import (
     AssertionCode,
     ClaimDefinition,
@@ -87,9 +88,13 @@ def _claim_error(
 
 def _record_unit_signature(
     unit: SemanticUnit,
-    recognition_profile: str,
+    taxonomy: TaxonomyConfig,
     seen_units: set[str],
 ) -> bool:
+    preserve_event = (
+        taxonomy.recognition_profile == "fact_v2"
+        or uses_footwear_semantic_revision(taxonomy)
+    )
     signature = unit.model_dump_json(
         exclude=(
             {
@@ -107,11 +112,11 @@ def _record_unit_signature(
                 "condition",
                 "evidence_source",
             }
-            if recognition_profile != "fact_v2"
+            if not preserve_event
             else None
         )
     )
-    if recognition_profile != "fact_v2" and signature in seen_units:
+    if taxonomy.recognition_profile != "fact_v2" and signature in seen_units:
         return False
     seen_units.add(signature)
     return True
@@ -168,7 +173,7 @@ def _process_unit(
 ) -> None:
     if not _record_unit_signature(
         unit,
-        context.taxonomy.recognition_profile,
+        context.taxonomy,
         seen_units,
     ):
         return

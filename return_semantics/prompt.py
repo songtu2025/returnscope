@@ -9,6 +9,7 @@ from return_semantics.analysis_context import (
     USER_FEEDBACK_CONTEXT,
     validate_analysis_context,
 )
+from return_semantics.pipeline_routing_policy import uses_footwear_semantic_revision
 from return_semantics.schemas import (
     LabelDefinition,
     ListingClaimsConfig,
@@ -21,6 +22,8 @@ PROMPT_VERSION = "category-semantic-v5"
 
 
 def prompt_version(taxonomy: TaxonomyConfig) -> str:
+    if uses_footwear_semantic_revision(taxonomy):
+        return "category-semantic-evidence-v3-footwear-first-pass-v5"
     return {
         "legacy_v3": PROMPT_VERSION,
         "keyword_free_v1": "category-keyword-free-v3",

@@ -52,13 +52,13 @@ class CorrectionClient:
         return ModelCallResult(value, model, {"input_tokens": 10}, {"attempts": 1})
 
 
-def run(client, cache, taxonomy, claims):
+def run(client, cache, taxonomy, claims, comment="Too small", **options):
     return classify_comments(
         pd.DataFrame(
             [
                 {
                     "classification_key": "sample",
-                    "comment_normalized": "Too small",
+                    "comment_normalized": comment,
                     "reason": "",
                     "category_a": "水鞋",
                     "category_b": "水鞋",
@@ -69,6 +69,7 @@ def run(client, cache, taxonomy, claims):
         claims,
         client,
         cache,
+        **options,
     )
 
 
@@ -149,3 +150,151 @@ def test_cancellation_skips_correction_and_preserves_completed_usage(taxonomy, c
     )
     assert result is original
     assert client.messages == []
+
+
+@pytest.fixture
+def footwear_taxonomy(taxonomy):
+    return taxonomy.model_copy(
+        update={
+            "agent_family": "鞋履智能体",
+            "recognition_profile": "semantic_v1",
+            "version": "footwear-taxonomy-v6",
+        }
+    )
+
+
+def test_footwear_restores_unique_evidence_without_extra_call(
+    tmp_path, footwear_taxonomy, claims
+):
+    client = CorrectionClient([classification(evidence="too small")])
+    result = run(client, JsonlCache(tmp_path / "shoe.jsonl"), footwear_taxonomy, claims)
+    assert len(client.messages) == result.model_calls == 1
+    assert result.classifications["sample"].semantic_units[0].evidence == "Too small"
+    assert result.classifications["sample"].status == ProcessingStatus.AUTO_APPROVED
+
+
+def test_footwear_deduplication_preserves_distinct_events(
+    tmp_path, footwear_taxonomy, claims
+):
+    payload = classification()
+    first = payload.semantic_units[0]
+    payload.semantic_units += [
+        first.model_copy(update={"opinion": "偏小"}),
+        first.model_copy(
+            update={"event_ref": "other", "condition": "with thick socks"}
+        ),
+    ]
+    client = CorrectionClient([payload])
+    result = run(client, JsonlCache(tmp_path / "shoe.jsonl"), footwear_taxonomy, claims)
+    normalized = result.classifications["sample"]
+    assert [unit.opinion for unit in normalized.semantic_units] == [
+        "尺码偏小",
+        "尺码偏小",
+    ]
+    assert normalized.semantic_units[-1].condition == "with thick socks"
+
+
+@pytest.mark.parametrize("qualifies", [False, True])
+def test_footwear_keeps_existing_review_without_targeting_omitted_fragments(
+    tmp_path, footwear_taxonomy, claims, qualifies
+):
+    original = classification()
+    original.needs_review = qualifies
+    corrected = classification()
+    corrected.semantic_units.extend(
+        classification(
+            "EXPERIENCE_COMFORT", "They felt comfortable", "POSITIVE"
+        ).semantic_units
+    )
+    client = CorrectionClient([original, corrected])
+    result = run(
+        client,
+        JsonlCache(tmp_path / "shoe.jsonl"),
+        footwear_taxonomy,
+        claims,
+        "Too small. They felt comfortable.",
+        secondary_model="risk-model",
+    )
+    assert len(client.messages) == result.model_calls == 1 + qualifies
+    if qualifies:
+        assert "鞋履首轮判定补充" in client.messages[0][0]["content"]
+        assert client.messages[0][1:] == client.messages[1][1:]
+
+
+def test_footwear_invalid_cheap_result_and_secondary_share_one_call(
+    tmp_path, footwear_taxonomy, claims
+):
+    corrected = classification()
+    corrected.needs_review = True
+    client = CorrectionClient([classification("TYPO"), corrected])
+    client.settings.cheap_model = "cheap"
+    result = run(
+        client,
+        JsonlCache(tmp_path / "shoe.jsonl"),
+        footwear_taxonomy,
+        claims,
+        secondary_model="risk-model",
+    )
+    assert len(client.messages) == result.model_calls == 2
+    assert result.classifications["sample"].semantic_units == corrected.semantic_units
+
+
+def test_footwear_output_repair_cannot_add_independent_opinions(
+    tmp_path, footwear_taxonomy, claims
+):
+    original = classification("TYPO")
+    corrected = classification()
+    corrected.semantic_units.extend(
+        classification(
+            "EXPERIENCE_COMFORT", "They felt comfortable", "POSITIVE"
+        ).semantic_units
+    )
+    client = CorrectionClient([original, corrected])
+    result = run(
+        client,
+        JsonlCache(tmp_path / "shoe.jsonl"),
+        footwear_taxonomy,
+        claims,
+        "Too small. They felt comfortable.",
+    )
+    validated = result.classifications["sample"]
+    assert len(client.messages) == result.model_calls == 2
+    assert "只修复错误单元" in client.messages[1][-1]["content"]
+    assert validated.status == ProcessingStatus.MANUAL_REVIEW
+    assert not validated.semantic_units
+
+
+def test_footwear_cheap_failure_leaves_no_further_call(
+    tmp_path, footwear_taxonomy, claims
+):
+    client = CorrectionClient([RuntimeError("failed"), classification("TYPO")])
+    client.settings.cheap_model = "cheap"
+    result = run(
+        client,
+        JsonlCache(tmp_path / "shoe.jsonl"),
+        footwear_taxonomy,
+        claims,
+        secondary_model="risk-model",
+    )
+    assert len(client.messages) == 2
+    assert result.classifications["sample"].status == ProcessingStatus.MANUAL_REVIEW
+
+
+def test_footwear_existing_secondary_timeout_routes_to_rerun(
+    tmp_path, footwear_taxonomy, claims
+):
+    original = classification()
+    original.needs_review = True
+    client = CorrectionClient([original, TimeoutError()])
+    result = run(
+        client,
+        JsonlCache(tmp_path / "shoe.jsonl"),
+        footwear_taxonomy,
+        claims,
+        "Too small. They felt comfortable.",
+        secondary_model="risk-model",
+    )
+    validated = result.classifications["sample"]
+    assert len(client.messages) == 2
+    assert validated.semantic_units == original.semantic_units
+    assert validated.review_diagnostics[-1].action == "SYSTEM_RERUN"

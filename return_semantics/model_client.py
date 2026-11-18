@@ -18,6 +18,10 @@ from return_semantics.model_payload import (
     normalize_model_payload as normalize_model_payload,
 )
 from return_semantics.model_payload import parse_json_object as parse_json_object
+from return_semantics.model_request_limit import (
+    claim_model_request,
+    has_model_request_budget,
+)
 from return_semantics.model_results import JsonModelCallResult as JsonModelCallResult
 from return_semantics.model_results import ModelCallResult as ModelCallResult
 from return_semantics.model_results import ModelClient as ModelClient
@@ -129,6 +133,7 @@ class Sub2APIClient:
         for attempt in range(self.settings.retries + 1):
             if self.checkpoint:
                 self.checkpoint()
+            claim_model_request()
             try:
                 response = self._post(payload)
                 return self._response_result(response, model_name, attempt, started_at)
@@ -143,7 +148,9 @@ class Sub2APIClient:
                 last_error = exc
                 if isinstance(exc, TimeoutError):
                     timeout_failures += 1
-                if not self._can_retry(exc, attempt, timeout_failures):
+                if not has_model_request_budget() or not self._can_retry(
+                    exc, attempt, timeout_failures
+                ):
                     break
                 delay = self._retry_delay(exc, attempt)
                 if self.checkpoint is None:

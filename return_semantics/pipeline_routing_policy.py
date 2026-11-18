@@ -6,8 +6,18 @@ import re
 from return_semantics.schemas import (
     ClaimRelation,
     ProcessingStatus,
+    TaxonomyConfig,
     ValidatedClassification,
 )
+
+
+def uses_footwear_semantic_revision(taxonomy: TaxonomyConfig) -> bool:
+    return (
+        taxonomy.agent_family == "鞋履智能体"
+        and taxonomy.recognition_profile == "semantic_v1"
+        and taxonomy.version == "footwear-taxonomy-v6"
+    )
+
 
 _SEMANTIC_RISK_PATTERNS = (
     re.compile(r"[|;/?&,]"),

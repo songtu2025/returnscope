@@ -1,13 +1,45 @@
 import json
 import urllib.request
 
+import pytest
 from model_client_helpers import _payload
 
 from return_semantics.model_client import (
+    ModelHTTPError,
     Sub2APIClient,
     Sub2APISettings,
     create_model_client,
 )
+from return_semantics.model_request_limit import model_request_limit
+
+
+def test_request_limit_counts_retries_and_resets_after_feedback(monkeypatch) -> None:
+    client = Sub2APIClient(
+        Sub2APISettings(
+            api_key="test-key",
+            model="test-model",
+            base_url="https://example.invalid/v1",
+            retries=2,
+            retry_base_seconds=0,
+        )
+    )
+    requests = []
+
+    def fail(payload):
+        requests.append(payload)
+        raise ModelHTTPError("测试服务", 500, "")
+
+    monkeypatch.setattr(client, "_post", fail)
+    with model_request_limit(2):
+        with pytest.raises(RuntimeError, match="500"):
+            client.generate_json([])
+        with pytest.raises(RuntimeError, match="已用完模型请求额度"):
+            client.generate_json([])
+    assert len(requests) == 2
+
+    with pytest.raises(RuntimeError, match="500"):
+        client.generate_json([])
+    assert len(requests) == 5
 
 
 def test_sub2api_settings_from_env(monkeypatch) -> None:

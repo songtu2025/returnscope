@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import re
-
+from return_semantics.evidence_location import restore_unique_source_excerpt
 from return_semantics.schemas import (
     AssertionCode,
     DimensionContract,
@@ -50,14 +49,9 @@ def _restore_evidence_spans(
     for fact in facts:
         spans = []
         for span in fact.evidence_spans:
-            if span.text in comment:
-                spans.append(span)
-                continue
-            matches = list(re.finditer(re.escape(span.text), comment, re.IGNORECASE))
+            text = restore_unique_source_excerpt(span.text, comment)
             spans.append(
-                span.model_copy(update={"text": matches[0].group(0)})
-                if len(matches) == 1
-                else span
+                span.model_copy(update={"text": text}) if text != span.text else span
             )
         restored.append(fact.model_copy(update={"evidence_spans": spans}))
     return restored

@@ -60,20 +60,19 @@ class _CommentClassifier:
         self._raise_if_cancelled()
         row_context = self._build_row_context(row)
         try:
-            call_result, used_cheap_model = self._call_initial_model(row_context)
-            validated = self._validate(row_context, call_result)
-            if used_cheap_model:
-                validated = self._resolve_cheap_result(
-                    row_context,
-                    call_result,
-                    validated,
-                )
-            validated = self._resolve_secondary(row_context, validated)
+            validated = self._classify_row(row_context)
         except (PipelineCancelled, ModelServiceUnavailable):
             raise
         except Exception as exc:
             validated = _model_error(self.context, row_context.classification_key, exc)
         return row_context.classification_key, validated
+
+    def _classify_row(self, row: _RowContext) -> ValidatedClassification:
+        call_result, used_cheap_model = self._call_initial_model(row)
+        validated = self._validate(row, call_result)
+        if used_cheap_model:
+            validated = self._resolve_cheap_result(row, call_result, validated)
+        return self._resolve_secondary(row, validated)
 
     def _raise_if_cancelled(self) -> None:
         if self.context.should_cancel is not None and self.context.should_cancel():

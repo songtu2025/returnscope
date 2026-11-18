@@ -9,6 +9,7 @@ from return_semantics.analysis_context import (
     validate_analysis_context,
 )
 from return_semantics.fact_pipeline import FactPipelineCancelled, classify_facts
+from return_semantics.footwear_classifier import _FootwearClassifier
 from return_semantics.model_client import (
     JsonlCache,
     ModelCallResult,
@@ -52,6 +53,7 @@ from return_semantics.pipeline_routing_policy import (
 from return_semantics.pipeline_routing_policy import (
     should_audit_cheap_model as should_audit_cheap_model,
 )
+from return_semantics.pipeline_routing_policy import uses_footwear_semantic_revision
 from return_semantics.schemas import (
     ListingClaimsConfig,
     TaxonomyConfig,
@@ -84,6 +86,8 @@ def _classify_uncached(
         model=model_name,
         thinking=thinking,
     )
+    if uses_footwear_semantic_revision(context.taxonomy):
+        return result
     return correct_invalid_output(
         result,
         comment=row.comment,
@@ -138,7 +142,12 @@ def classify_comments(
         int(getattr(client.settings, "max_workers", 1)),
     )
     tracker = _RunTracker(on_model_degraded)
-    classifier = _CommentClassifier(
+    classifier_type = (
+        _FootwearClassifier
+        if uses_footwear_semantic_revision(taxonomy)
+        else _CommentClassifier
+    )
+    classifier = classifier_type(
         _PipelineContext(
             taxonomy=taxonomy,
             claims=claims,
