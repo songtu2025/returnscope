@@ -19,6 +19,12 @@ from return_semantics.semantic_review_items import (
 _pattern_compiler: ContextVar[Callable[[str, int], re.Pattern[str]] | None] = (
     ContextVar("evidence_pattern_compiler", default=None)
 )
+_FRAGMENT_BOUNDARY = re.compile(r"[\x00\r\n.!?;,:。！？；，：]+")
+_FRAGMENT_CONNECTORS = frozenset(
+    "and but or also that however then therefore consequently so while "
+    "because since with y o pero también aunque".split()
+)
+_HTML_FRAGMENT = re.compile(r"(?:(?:<br\s*/?>|&(?:amp|nbsp);?)\s*)+", re.IGNORECASE)
 
 
 def _compile_evidence_pattern(span: str, flags: int) -> re.Pattern[str]:
@@ -56,15 +62,21 @@ def _unexplained_fragments(source_text: str, evidence: list[str]) -> list[str]:
     if not source_text.strip():
         return []
     covered = _covered_source_mask(source_text, evidence)
+    # 已覆盖的字符是边界，不能把证据两侧的原文合成一个片段。
     remainder = "".join(
-        " " if is_covered else char
+        "\x00" if is_covered else char
         for char, is_covered in zip(source_text, covered, strict=True)
     )
     fragments = []
-    for fragment in re.split(r"[\r\n.!?;,:。！？；，：]+", remainder):
-        normalized = " ".join(fragment.split()).strip("-_/|()[]{}'“”‘’")
-        if normalized and any(character.isalnum() for character in normalized):
-            fragments.append(normalized)
+    for value in _FRAGMENT_BOUNDARY.split(remainder):
+        fragment = value.strip().strip("-_/|()[]{}'“”‘’").strip()
+        if not any(character.isalnum() for character in fragment):
+            continue
+        if _HTML_FRAGMENT.fullmatch(fragment):
+            continue
+        if set(fragment.casefold().split()) <= _FRAGMENT_CONNECTORS:
+            continue
+        fragments.append(fragment)
     return fragments
 
 

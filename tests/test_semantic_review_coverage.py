@@ -66,3 +66,28 @@ def test_changed_text_is_rematched_and_new_export_has_no_old_cache():
         assert compiler.cache_info().hits == 1
     with coverage.reuse_evidence_patterns():
         assert coverage._pattern_compiler.get().cache_info().currsize == 0
+
+
+@pytest.mark.parametrize(
+    "text,evidence,expected",
+    [
+        (
+            "The fit was good but the seams opened and it dried  slowly.",
+            ["but the seams opened"],
+            ["The fit was good", "and it dried  slowly"],
+        ),
+        (
+            "Comfortable and also light. <br /> &amp; Pero y. Also slid off.",
+            ["Comfortable", "light"],
+            ["Also slid off"],
+        ),
+        ("Sure? No. But not for rocks.", [], ["Sure", "No", "But not for rocks"]),
+        ("Very small.\nVery small.", ["Very small"], []),
+    ],
+)
+def test_unexplained_fragments_preserve_consecutive_source_text(
+    text, evidence, expected
+):
+    fragments = coverage._unexplained_fragments(text, evidence)
+    assert fragments == expected
+    assert all(fragment in text for fragment in fragments)
