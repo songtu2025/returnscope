@@ -4,7 +4,6 @@ from typing import Any
 
 import pandas as pd
 
-from return_semantics.exporter import REVIEW_STATUSES
 from return_semantics.schemas import (
     ProcessingStatus,
     TaxonomyConfig,
@@ -94,8 +93,6 @@ def _classification_quality(
         "OUT_OF_SCOPE",
     }:
         return "ready"
-    if result.status.value in REVIEW_STATUSES:
-        return "review_required"
     return "ready"
 
 

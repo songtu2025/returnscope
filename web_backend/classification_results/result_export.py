@@ -113,13 +113,22 @@ def semantic_export_rows(
             "分类路径": " → ".join(unit.get("label_path") or [])
             or ("分类路径未提供" if unit.get("label_code") else "未归类"),
             "原文证据": unit.get("evidence_text") or "",
-            "处置状态": DISPOSITION_LABELS.get(str(unit.get("disposition")), "待判断"),
+            "处置状态": _disposition_label(unit),
             "判断说明": unit.get("reason") or "",
             "标签代码": unit.get("label_code") or "",
             "评价方向": SENTIMENT_LABELS.get(str(unit.get("sentiment")), ""),
         }
         for index, unit in enumerate(items, 1)
     ]
+
+
+def _disposition_label(unit: dict[str, Any]) -> str:
+    if (
+        unit.get("disposition") == "ANALYSIS_FAILURE"
+        and unit.get("business_review_required") is True
+    ):
+        return "业务复核"
+    return DISPOSITION_LABELS.get(str(unit.get("disposition")), "待判断")
 
 
 def feedback_export_row(

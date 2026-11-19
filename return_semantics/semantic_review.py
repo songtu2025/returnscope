@@ -125,6 +125,15 @@ SYSTEM_RERUN_REQUIRED = "SYSTEM_RERUN_REQUIRED"
 
 _NON_BLOCKING_DIAGNOSTIC_CODES = {"SECONDARY_MODEL_MISSING"}
 
+_LEGACY_LISTING_CLAIM_REVIEW_REASON = (
+    "fact_v2尚未完成Listing承诺关系核验，需人工确认；未推断承诺关系"
+)
+
+_LEGACY_LISTING_CLAIM_REVIEW_REASONS = {
+    _LEGACY_LISTING_CLAIM_REVIEW_REASON,
+    "模型要求复核",
+}
+
 _BUSINESS_REVIEW_STATUSES = {
     ProcessingStatus.SECONDARY_REVIEW.value,
     ProcessingStatus.MANUAL_REVIEW.value,
@@ -218,9 +227,19 @@ def review_route(
         needs_status_review = any(
             item.get("disposition") != NO_TAG_NEEDED for item in items
         )
-    if needs_status_review:
+    if needs_status_review and not _legacy_listing_claim_review_only(result):
         return BUSINESS_REVIEW_REQUIRED
     return READY
+
+
+def _legacy_listing_claim_review_only(result: object) -> bool:
+    reasons = {
+        _text(reason) for reason in _list(result, "review_reasons") if _text(reason)
+    }
+    return (
+        _LEGACY_LISTING_CLAIM_REVIEW_REASON in reasons
+        and reasons <= _LEGACY_LISTING_CLAIM_REVIEW_REASONS
+    )
 
 
 def _has_system_rerun_diagnostic(items: list[dict[str, object]]) -> bool:

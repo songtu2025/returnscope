@@ -1,5 +1,6 @@
 import pytest
 
+from return_semantics.schemas import ValidatedClassification
 from return_semantics.semantic_review import (
     BUSINESS_REVIEW_REQUIRED,
     READY,
@@ -9,6 +10,7 @@ from return_semantics.semantic_review import (
     requires_system_rerun,
     review_route,
 )
+from web_backend.classification_result_payload import _classification_quality
 
 
 def test_builds_review_items_from_facts_and_mappings(taxonomy) -> None:
@@ -380,6 +382,7 @@ def test_semantic_disagreement_without_details_always_requires_human_review(
     [
         "MODEL_RUN_TIMEOUT",
         "MODEL_RUN_FAILED",
+        "COVERAGE_AUDIT_RUN_FAILED",
         "SECONDARY_MODEL_TIMEOUT",
         "SECONDARY_MODEL_CALL_FAILED",
         "SECONDARY_RESULT_INVALID",
@@ -398,6 +401,42 @@ def test_unknown_diagnostic_does_not_assume_request_failure() -> None:
     result = {
         "review_diagnostics": [{"code": "UNRECOGNIZED", "action": "SYSTEM_RERUN"}]
     }
+    assert review_route(result, "Too small") == BUSINESS_REVIEW_REQUIRED
+
+
+def test_legacy_coverage_runtime_failure_requires_system_rerun() -> None:
+    result = {
+        "review_diagnostics": [
+            {
+                "code": "COVERAGE_AUDIT_FAILED",
+                "detail": "覆盖审计未完成：模型服务 HTTP 429",
+                "action": "SYSTEM_RERUN",
+            }
+        ]
+    }
+
+    diagnostic = build_semantic_review_view(result, "Too small")["semantic_items"][0]
+
+    assert diagnostic["diagnostic_code"] == "COVERAGE_AUDIT_RUN_FAILED"
+    assert diagnostic["diagnostic_domain"] == "TECHNICAL_RUNTIME"
+    assert review_route(result, "Too small") == SYSTEM_RERUN_REQUIRED
+
+
+def test_invalid_coverage_candidate_remains_business_review() -> None:
+    result = {
+        "review_diagnostics": [
+            {
+                "code": "COVERAGE_AUDIT_FAILED",
+                "detail": "覆盖审计候选事实未通过校验：部位不适用",
+                "action": "SYSTEM_RERUN",
+            }
+        ]
+    }
+
+    diagnostic = build_semantic_review_view(result, "Too small")["semantic_items"][0]
+
+    assert diagnostic["diagnostic_code"] == "COVERAGE_AUDIT_FAILED"
+    assert diagnostic["diagnostic_domain"] == "SEMANTIC_ANALYSIS_QUALITY"
     assert review_route(result, "Too small") == BUSINESS_REVIEW_REQUIRED
 
 
@@ -539,6 +578,79 @@ def test_review_route_returns_ready_without_actionable_findings() -> None:
 
     assert review_route(result, "Too small") == READY
     assert requires_system_rerun(result, "Too small") is False
+
+
+def test_legacy_listing_claim_review_is_non_blocking_without_other_work() -> None:
+    result = {
+        "status": "SECONDARY_REVIEW",
+        "semantic_units": [
+            {
+                "opinion": "尺码偏小",
+                "label_code": "FIT_TOO_SMALL",
+                "evidence": "Too small",
+            }
+        ],
+        "review_reasons": [
+            "fact_v2尚未完成Listing承诺关系核验，需人工确认；未推断承诺关系",
+            "模型要求复核",
+        ],
+    }
+
+    assert review_route(result, "Too small") == READY
+
+
+def test_legacy_listing_claim_review_is_ready_in_published_quality() -> None:
+    result = ValidatedClassification.model_validate(
+        {
+            "classification_key": "legacy-claim-review",
+            "semantic_units": [
+                {
+                    "subject": "PRODUCT",
+                    "opinion": "尺码偏小",
+                    "label_code": "FIT_TOO_SMALL",
+                    "sentiment": "NEGATIVE",
+                    "assertion": "AFFIRMED",
+                    "part": "WHOLE_SHOE",
+                    "evidence": "Too small",
+                    "implicit": False,
+                }
+            ],
+            "unknown_semantics": [],
+            "problem_label_codes": ["FIT_TOO_SMALL"],
+            "positive_label_codes": [],
+            "primary_label_codes": ["FIT_TOO_SMALL"],
+            "status": "SECONDARY_REVIEW",
+            "review_reasons": [
+                "fact_v2尚未完成Listing承诺关系核验，需人工确认；未推断承诺关系",
+                "模型要求复核",
+            ],
+            "model_name": "test",
+            "prompt_version": "test",
+            "taxonomy_version": "test",
+        }
+    )
+
+    assert _classification_quality(result, "MAPPED", source_text="Too small") == "ready"
+
+
+def test_legacy_listing_claim_review_keeps_other_review_reasons() -> None:
+    result = {
+        "status": "SECONDARY_REVIEW",
+        "semantic_units": [
+            {
+                "opinion": "尺码偏小",
+                "label_code": "FIT_TOO_SMALL",
+                "evidence": "Too small",
+            }
+        ],
+        "review_reasons": [
+            "fact_v2尚未完成Listing承诺关系核验，需人工确认；未推断承诺关系",
+            "模型要求复核",
+            "只有正面信息，无法确认退货原因",
+        ],
+    }
+
+    assert review_route(result, "Too small") == BUSINESS_REVIEW_REQUIRED
 
 
 def test_successful_secondary_fallback_is_non_blocking_configuration_notice() -> None:

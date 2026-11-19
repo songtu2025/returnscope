@@ -156,17 +156,29 @@ def test_semantic_rows_keep_multiple_opinions_evidence_and_review_reasons():
                         "opinion": "想换一个尺码",
                         "sentiment": "NEUTRAL",
                     },
+                    {
+                        "opinion": "标签规则要求人工判断",
+                        "disposition": "ANALYSIS_FAILURE",
+                        "business_review_required": True,
+                    },
+                    {
+                        "opinion": "模型调用超时",
+                        "disposition": "ANALYSIS_FAILURE",
+                        "business_review_required": False,
+                    },
                 ]
             }
         }
     }
     rows = semantic_export_rows(item, "F000001")
-    assert [row["语义序号"] for row in rows] == [1, 2, 3, 4]
-    assert [row["评价方向"] for row in rows] == ["负向", "", "正向", "中性"]
+    assert [row["语义序号"] for row in rows] == [1, 2, 3, 4, 5, 6]
+    assert [row["评价方向"] for row in rows] == ["负向", "", "正向", "中性", "", ""]
     assert rows[0]["分类路径"] == "尺码 → 偏小"
     assert rows[0]["原文证据"] == "too small"
     assert rows[1]["处置状态"] == "原文含义不明确"
     assert rows[1]["判断说明"] == "含义存在歧义"
+    assert rows[4]["处置状态"] == "业务复核"
+    assert rows[5]["处置状态"] == "系统处理失败"
     assert semantic_export_rows({"classification": {}}, "F000002") == []
     unexplained = semantic_export_rows(
         {

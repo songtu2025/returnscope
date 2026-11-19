@@ -21,6 +21,7 @@ SYSTEM_RETRY_DIAGNOSTIC_CODES = frozenset(
     {
         "MODEL_RUN_TIMEOUT",
         "MODEL_RUN_FAILED",
+        "COVERAGE_AUDIT_RUN_FAILED",
         "SECONDARY_MODEL_TIMEOUT",
         "SECONDARY_MODEL_CALL_FAILED",
         "SECONDARY_RESULT_INVALID",
@@ -33,6 +34,11 @@ _DIAGNOSTIC_METADATA = {
         "SEMANTIC_ANALYSIS_QUALITY",
         "可能存在用户反馈漏抽",
         "请核对原文与现有观点，补充遗漏语义；缺少定位片段时仍可人工核对。",
+    ),
+    "COVERAGE_AUDIT_RUN_FAILED": (
+        "TECHNICAL_RUNTIME",
+        "覆盖审计未完成",
+        "无需业务员核验；请系统重新执行覆盖审计。",
     ),
     "MODEL_RESULT_MISMATCH": (
         "SEMANTIC_ANALYSIS_QUALITY",
@@ -143,6 +149,8 @@ def _structured_failure_diagnostic(value: object) -> dict[str, object]:
     secondary_result = _text(_get(value, "secondary_result"))
     detail = _text(_get(value, "detail"))
     action = _text(_get(value, "action"))
+    if code == "COVERAGE_AUDIT_FAILED" and detail.startswith("覆盖审计未完成"):
+        code = "COVERAGE_AUDIT_RUN_FAILED"
 
     domain, title, default_action = _DIAGNOSTIC_METADATA.get(
         code,
