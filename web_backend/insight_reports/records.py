@@ -6,7 +6,7 @@ from typing import Any, Callable
 from web_backend.common import json_text, json_value, new_id
 from web_backend.dashboard_service import DashboardService
 from web_backend.database import Database
-from web_backend.insight_report_contracts import PROMPT_VERSION
+from web_backend.insight_report_contracts import V6_PROMPT_VERSION, V7_PROMPT_VERSION
 from web_backend.insight_reports.lifecycle_contracts import (
     InsightReportConflict,
     InsightReportNotFound,
@@ -193,11 +193,11 @@ class _InsightReportRecords:
             raise InsightReportNotFound("AI 洞察报告不存在")
         if report["deleted_at"]:
             raise InsightReportConflict("请先恢复报告记录")
-        if (
-            report["status"] != "completed"
-            or report["prompt_version"] != PROMPT_VERSION
-        ):
-            raise InsightReportConflict("只有已完成的 V6 报告支持问题决策")
+        if report["status"] != "completed" or report["prompt_version"] not in {
+            V6_PROMPT_VERSION,
+            V7_PROMPT_VERSION,
+        }:
+            raise InsightReportConflict("只有已完成的洞察决策报告支持问题决策")
         content = json_value(report["content_json"], {})
         issue_ids = {
             str(issue.get("id") or "")

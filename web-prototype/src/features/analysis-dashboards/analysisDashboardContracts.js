@@ -95,7 +95,7 @@
  * @property {number | null} [version_no]
  * @property {number} [attempt_no]
  * @property {string} [prompt_version]
- * @property {LegacyInsightReportContent | InsightDecisionReportContent | null} [content]
+ * @property {LegacyInsightReportContent | InsightDecisionReportContent | SemanticInsightReportContent | null} [content]
  * @property {ReportDecision[]} [decisions]
  * @property {InsightReportEvidence | null} [evidence]
  * @property {string} [stage]
@@ -214,6 +214,10 @@
  * @property {string[]} evidence_ids
  * @typedef {{report_type?: "problem_decision", title?: string, issues?: DecisionReportIssue[], caveats?: string[]}} InsightDecisionReportContent
  *
+ * @typedef {"risk" | "polarization" | "opportunity" | "data_gap"} SemanticInsightKind
+ * @typedef {{total: number, labeled: number, label_coverage: number, positive: number, negative: number, mixed: number, unclear: number}} SemanticInsightOverview
+ * @typedef {DecisionReportIssue & {kind: SemanticInsightKind}} SemanticInsightIssue
+ * @typedef {{report_type: "semantic_insight", title: string, overview: SemanticInsightOverview, executive_summary: ReportSummaryItem[], issues: SemanticInsightIssue[], caveats: string[]}} SemanticInsightReportContent
  * @typedef {{value: string, label: string, record_count: number, percentage: number, primary_rate?: number, subjects?: string[], lift?: number, baseline_record_count?: number}} InsightReason
  * @typedef {InsightReason & {label_path?: string[], label_name?: string, parent_code?: string | null}} InsightHierarchyNode
  * @typedef {{value: string, record_count: number, total_record_count: number, product_reason_rate: number, lift: number}} InsightProduct

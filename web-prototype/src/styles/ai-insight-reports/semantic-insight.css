@@ -1,0 +1,284 @@
+.semantic-insight-report {
+  display: block;
+  width: min(100%, 980px);
+  margin: 0 auto;
+  padding: clamp(26px, 4vw, 48px);
+  border: 1px solid #dfe6e2;
+  border-radius: 12px;
+  color: #1e2b25;
+  background: #fff;
+  box-shadow: 0 12px 32px rgb(27 55 44 / 7%);
+}
+
+.semantic-report-header {
+  padding-bottom: 24px;
+  border-bottom: 1px solid #dfe6e2;
+}
+
+.semantic-report-header > div {
+  min-width: 0;
+}
+
+.semantic-report-header span,
+.semantic-report-header p {
+  color: #6b7771;
+  font-size: 12px;
+}
+
+.semantic-report-header > div > span {
+  color: #167257;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.semantic-report-header h2 {
+  margin: 7px 0 8px;
+  color: #17231e;
+  font-size: clamp(24px, 3vw, 32px);
+  line-height: 1.25;
+}
+
+.semantic-report-header p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.semantic-report-scope,
+.semantic-report-limits {
+  padding: 26px 0;
+}
+
+.semantic-report-scope h3,
+.semantic-report-limits h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.semantic-report-scope p {
+  max-width: 800px;
+  margin: 0;
+  color: #3f4d46;
+  font-size: 15px;
+  line-height: 1.85;
+}
+
+.semantic-report-scope p + p {
+  margin-top: 6px;
+}
+
+.semantic-report-scope strong {
+  color: #126e53;
+  font-size: 17px;
+}
+
+.semantic-report-scope .semantic-report-scope-note {
+  color: #8c5d1b;
+  font-size: 13px;
+}
+
+.semantic-report-insights {
+  padding-top: 26px;
+  border-top: 2px solid #26362f;
+}
+
+.semantic-report-insights > h3 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+.semantic-report-insight {
+  padding: 34px 0;
+  border-bottom: 1px solid #dfe6e2;
+  scroll-margin-top: 16px;
+}
+
+.semantic-report-insight > header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.semantic-report-number {
+  flex: 0 0 20px;
+  color: #167257;
+  font-size: 19px;
+  font-weight: 750;
+  line-height: 1.4;
+}
+
+.semantic-report-insight header p {
+  margin: 0 0 5px;
+  color: #64716b;
+  font-size: 12px;
+}
+
+.semantic-report-insight h3 {
+  margin: 0;
+  color: #15221c;
+  font-size: 20px;
+  line-height: 1.4;
+}
+
+.semantic-report-lead,
+.semantic-report-metrics,
+.semantic-report-location {
+  margin: 15px 0 0 30px;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.semantic-report-lead {
+  max-width: 790px;
+  color: #34423b;
+  font-size: 15px;
+}
+
+.semantic-report-metrics {
+  padding: 10px 13px;
+  border-left: 3px solid #6da990;
+  color: #365047;
+  background: #f4f8f6;
+  font-variant-numeric: tabular-nums;
+}
+
+.semantic-report-facts,
+.semantic-report-validation,
+.semantic-report-evidence {
+  margin: 18px 0 0 30px;
+}
+
+.semantic-report-facts > strong,
+.semantic-report-validation > strong {
+  font-size: 13px;
+}
+
+.semantic-report-facts ul,
+.semantic-report-validation ul {
+  display: grid;
+  gap: 5px;
+  margin: 8px 0 0;
+  padding-left: 20px;
+  color: #45534c;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.semantic-report-location {
+  color: #5e6b64;
+  font-size: 13px;
+}
+
+.semantic-report-validation {
+  padding: 13px 15px;
+  border-left: 3px solid #16805f;
+  background: #edf6f2;
+}
+
+.semantic-report-validation p {
+  margin: 5px 0 0;
+  color: #23352d;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.semantic-report-validation details {
+  margin-top: 9px;
+  color: #68756f;
+  font-size: 12px;
+}
+
+.semantic-report-validation summary,
+.semantic-report-evidence summary {
+  cursor: pointer;
+}
+
+.semantic-report-evidence > footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 0;
+  border: 0;
+  color: #6b7771;
+  font-size: 12px;
+}
+
+.semantic-report-evidence details {
+  color: #167257;
+}
+
+.semantic-report-evidence .ai-evidence-collapse-label {
+  display: none;
+}
+
+.semantic-report-evidence details[open] .ai-evidence-expand-label {
+  display: none;
+}
+
+.semantic-report-evidence details[open] .ai-evidence-collapse-label {
+  display: inline;
+}
+
+.semantic-report-evidence details[open] {
+  flex: 1 0 100%;
+}
+
+.semantic-report-evidence summary {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 700;
+}
+
+.semantic-report-evidence details ul {
+  display: grid;
+  gap: 7px;
+  width: 100%;
+  margin: 10px 0 2px;
+  padding: 12px;
+  border: 1px solid #d2ddd7;
+  border-radius: 8px;
+  background: #fafcfb;
+  list-style: none;
+}
+
+.semantic-report-evidence details li {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.8fr) minmax(0, 1.2fr);
+  gap: 12px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid #e4e9e6;
+}
+
+.semantic-report-evidence details li:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.semantic-report-evidence details li span {
+  color: #6b7771;
+  font-weight: 400;
+}
+
+.semantic-report-limits {
+  margin-top: 8px;
+  padding: 20px;
+  border-left: 3px solid #c18836;
+  background: #fff9ef;
+}
+
+.semantic-report-limits ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: #6f592f;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.semantic-report-empty {
+  padding: 32px 0;
+  color: #68756f;
+}

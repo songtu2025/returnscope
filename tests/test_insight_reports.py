@@ -13,9 +13,9 @@ from return_semantics.model_client import JsonModelCallResult, Sub2APISettings
 from web_backend import dashboard_insights
 from web_backend.common import json_text
 from web_backend.dashboard_service import DashboardService
+from web_backend.insight_report_contracts import V6_PROMPT_VERSION
 from web_backend.insight_report_profiles import resolve_insight_report_profile
 from web_backend.insight_report_service import (
-    PROMPT_VERSION,
     V5_PROMPT_VERSION,
     InsightReportService,
 )
@@ -141,7 +141,7 @@ def _service_context(tmp_path, client_payload=None, client_error=None, filters=N
     return context, dashboard, service, captured
 
 
-def _complete_report(dashboard, service):
+def _complete_report(dashboard, service, *, prompt_version=None):
     queued = service.create_for_dashboard(
         str(dashboard["id"]),
         str(dashboard["version"]["version_id"]),
@@ -149,10 +149,20 @@ def _complete_report(dashboard, service):
         reasoning_effort="high",
         actor_id="user-1",
     )
+    if prompt_version:
+        _set_queued_prompt_version(service, queued["id"], prompt_version)
     report_id = service.claim_next()
     assert report_id == queued["id"]
     service.run(str(report_id))
     return service.get(str(report_id))
+
+
+def _set_queued_prompt_version(service, report_id, prompt_version):
+    with service.database.transaction() as connection:
+        connection.execute(
+            "UPDATE ai_insight_reports SET prompt_version = ? WHERE id = ?",
+            (prompt_version, report_id),
+        )
 
 
 def test_report_generation_is_versioned_and_evidence_backed(tmp_path) -> None:
@@ -172,6 +182,7 @@ def test_report_generation_is_versioned_and_evidence_backed(tmp_path) -> None:
     assert queued["attempt_no"] == 1
     assert queued["kind"] == "generation_job"
 
+    _set_queued_prompt_version(service, queued["id"], V6_PROMPT_VERSION)
     report_id = service.claim_next()
     assert report_id == queued["id"]
     service.run(str(report_id))
@@ -180,7 +191,7 @@ def test_report_generation_is_versioned_and_evidence_backed(tmp_path) -> None:
     assert completed["status"] == "completed"
     assert completed["version_no"] == 1
     assert completed["kind"] == "report"
-    assert completed["prompt_version"] == PROMPT_VERSION
+    assert completed["prompt_version"] == V6_PROMPT_VERSION
     assert completed["content"]["title"] == "L1 退货问题判断报告"
     assert completed["content"]["report_type"] == "problem_decision"
     issue = completed["content"]["issues"][0]
@@ -250,8 +261,8 @@ def test_v6_keeps_numbers_and_ranking_deterministic(tmp_path) -> None:
         client_payload=payload,
     )
 
-    first = _complete_report(dashboard, service)
-    second = _complete_report(dashboard, service)
+    first = _complete_report(dashboard, service, prompt_version=V6_PROMPT_VERSION)
+    second = _complete_report(dashboard, service, prompt_version=V6_PROMPT_VERSION)
     first_issue = first["content"]["issues"][0]
 
     assert first_issue["rank"] == 1
@@ -266,9 +277,10 @@ def test_v6_keeps_numbers_and_ranking_deterministic(tmp_path) -> None:
     assert first["evidence_hash"] == second["evidence_hash"]
 
 
-def test_issue_decision_put_is_idempotent_and_audited(tmp_path) -> None:
+@pytest.mark.parametrize("prompt_version", [None, V6_PROMPT_VERSION])
+def test_issue_decision_put_is_idempotent_and_audited(tmp_path, prompt_version) -> None:
     context, dashboard, service, _captured = _service_context(tmp_path)
-    report = _complete_report(dashboard, service)
+    report = _complete_report(dashboard, service, prompt_version=prompt_version)
     issue_id = report["content"]["issues"][0]["id"]
     app = FastAPI()
     app.include_router(create_insight_report_router(service, lambda: {"id": "user-1"}))
@@ -386,7 +398,7 @@ def test_v6_blueprint_keeps_same_category_multi_listing_scope_generic() -> None:
                 "anomaly_record_count": 0,
             },
         },
-        prompt_version=PROMPT_VERSION,
+        prompt_version=V6_PROMPT_VERSION,
     )
 
     issue = evidence["blueprint"]["issues"][0]
@@ -419,7 +431,7 @@ def test_v6_user_feedback_context_uses_generic_report_language() -> None:
                 "anomaly_record_count": 0,
             },
         },
-        prompt_version=PROMPT_VERSION,
+        prompt_version=V6_PROMPT_VERSION,
     )
 
     assert evidence["source"]["analysis_context"] == "user_feedback"
@@ -485,7 +497,7 @@ def test_v6_blueprint_generic_fallback_has_only_common_scope_fields() -> None:
                 "anomaly_record_count": 0,
             },
         },
-        prompt_version=PROMPT_VERSION,
+        prompt_version=V6_PROMPT_VERSION,
     )
 
     issue_scope = evidence["blueprint"]["issues"][0]["scope"]
@@ -784,10 +796,11 @@ def test_report_diagnostics_share_overview_without_changing_evidence(
         dashboard_id, version_id, reason_codes
     )
     old_evidence = service._build_evidence(
-        {**deepcopy(analysis), "diagnostics": expected}, prompt_version=PROMPT_VERSION
+        {**deepcopy(analysis), "diagnostics": expected},
+        prompt_version=V6_PROMPT_VERSION,
     )
     new_evidence = service._build_evidence(
-        {**deepcopy(analysis), "diagnostics": actual}, prompt_version=PROMPT_VERSION
+        {**deepcopy(analysis), "diagnostics": actual}, prompt_version=V6_PROMPT_VERSION
     )
     assert json_text(new_evidence) == json_text(old_evidence)
 
@@ -1101,7 +1114,7 @@ def test_untrusted_quality_signals_preserve_all_report_caveats() -> None:
 
     decision_evidence = InsightReportService._build_evidence(
         analysis,
-        prompt_version=PROMPT_VERSION,
+        prompt_version=V6_PROMPT_VERSION,
     )
     decision_content = InsightReportService._assemble_content_v6(
         decision_evidence,

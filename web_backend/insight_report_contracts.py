@@ -5,7 +5,9 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 V5_PROMPT_VERSION = "ai-return-insight-v5"
-PROMPT_VERSION = "ai-return-insight-v6"
+V6_PROMPT_VERSION = "ai-return-insight-v6"
+V7_PROMPT_VERSION = "ai-semantic-insight-v7"
+PROMPT_VERSION = V7_PROMPT_VERSION
 
 
 class ReportSummaryItem(BaseModel):
@@ -93,6 +95,29 @@ class InsightDecisionReportContent(BaseModel):
     report_type: Literal["problem_decision"] = "problem_decision"
     title: str = Field(min_length=1, max_length=120)
     issues: list[ReportIssue] = Field(min_length=1, max_length=8)
+    caveats: list[str] = Field(min_length=1, max_length=8)
+
+
+class SemanticReportIssue(ReportIssue):
+    kind: Literal["risk", "polarization", "opportunity", "data_gap"]
+
+
+class SemanticReportOverview(BaseModel):
+    total: int = Field(ge=0)
+    labeled: int = Field(ge=0)
+    label_coverage: float = Field(ge=0, le=100)
+    positive: int = Field(ge=0)
+    negative: int = Field(ge=0)
+    mixed: int = Field(ge=0)
+    unclear: int = Field(ge=0)
+
+
+class SemanticInsightReportContent(BaseModel):
+    report_type: Literal["semantic_insight"] = "semantic_insight"
+    title: str = Field(min_length=1, max_length=120)
+    overview: SemanticReportOverview
+    executive_summary: list[ReportSummaryItem] = Field(min_length=3, max_length=5)
+    issues: list[SemanticReportIssue] = Field(max_length=8)
     caveats: list[str] = Field(min_length=1, max_length=8)
 
 

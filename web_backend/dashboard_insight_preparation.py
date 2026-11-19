@@ -32,6 +32,7 @@ class InsightOptions:
     date_from: str | None = None
     date_to: str | None = None
     report_mode: bool = False
+    include_report_signals: bool = False
 
 
 @dataclass(frozen=True)

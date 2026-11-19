@@ -39,6 +39,8 @@ from web_backend.dashboards.insight_queries import (
     materialize_insight_records,
 )
 from web_backend.database import Database
+from web_backend.insight_report_profiles import resolve_insight_report_profile
+from web_backend.insight_reports.v7_statistics import collect_report_signals
 from web_backend.request_timing import timed_stage
 
 INSIGHT_PAGE_CACHE_KIB = 64 * 1024
@@ -94,7 +96,18 @@ def build_insights(
         content = OverviewContent(
             overview, summary, hierarchy_problems, details, filter_options
         )
-    return overview_payload(dashboard_id, version_id, context, prepared, content)
+        report_signals = (
+            collect_report_signals(
+                scope,
+                resolve_insight_report_profile(context["sources"]).polarization_pairs,
+            )
+            if options.include_report_signals
+            else None
+        )
+    payload = overview_payload(dashboard_id, version_id, context, prepared, content)
+    if report_signals is not None:
+        payload["report_signals"] = report_signals
+    return payload
 
 
 def build_evidence_page(

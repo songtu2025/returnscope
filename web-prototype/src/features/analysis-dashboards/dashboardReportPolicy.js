@@ -1,6 +1,8 @@
 /** @typedef {import("./dashboardDetailContracts").DashboardVersion} DashboardVersion */
 /** @typedef {import("./dashboardDetailContracts").InsightReport} InsightReport */
 
+export const SEMANTIC_INSIGHT_VERSION = "ai-semantic-insight-v7";
+
 /** @param {InsightReport} report */
 function decisionIssues(report) {
   const content = report.content;
@@ -12,7 +14,9 @@ function decisionIssues(report) {
 /** @param {InsightReport} report @param {string} selectedId */
 export function selectedDashboardIssue(report, selectedId) {
   const issues =
-    report.prompt_version === "ai-return-insight-v6" && report.status === "completed"
+    ["ai-return-insight-v6", SEMANTIC_INSIGHT_VERSION].includes(
+      report.prompt_version || "",
+    ) && report.status === "completed"
       ? decisionIssues(report)
       : [];
   return issues.find((issue) => issue.id === selectedId)?.id || issues[0]?.id || "";

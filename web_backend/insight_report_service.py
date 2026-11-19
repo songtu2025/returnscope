@@ -25,6 +25,7 @@ from web_backend.insight_reports.lifecycle_contracts import (
 from web_backend.insight_reports.lifecycle_contracts import (
     _ReportCreationTarget,
 )
+from web_backend.insight_reports.v7_quality import evaluate_semantic_quality
 
 V5_PROMPT_VERSION = insight_report_contracts.V5_PROMPT_VERSION
 
@@ -178,10 +179,12 @@ class InsightReportService(_InsightReportCreation, _InsightReportExecution):
         value["metrics"] = json_value(value.pop("metrics_json"), {})
         value["decisions"] = decisions or []
         if value["content"] and value["evidence"] and text_quality is not None:
-            evaluator = (
-                InsightReportService._evaluate_live_quality_v6
-                if value.get("prompt_version") == PROMPT_VERSION
-                else InsightReportService._evaluate_live_quality
+            evaluator = {
+                insight_report_contracts.V6_PROMPT_VERSION: InsightReportService._evaluate_live_quality_v6,
+                insight_report_contracts.V7_PROMPT_VERSION: evaluate_semantic_quality,
+            }.get(
+                str(value.get("prompt_version")),
+                InsightReportService._evaluate_live_quality,
             )
             evaluated = evaluator(value["content"], value["evidence"], text_quality)
             value.update(evaluated)

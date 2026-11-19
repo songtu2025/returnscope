@@ -1,4 +1,10 @@
 import { number, percentage, percentagePoints } from "./decisionReportPresentation";
+
+const trendLabels = /** @type {Record<string, string>} */ ({
+  rising: "上升",
+  stable: "稳定",
+  falling: "下降",
+});
 /** @typedef {import("./analysisDashboardContracts").ReportIssueMetrics} ReportIssueMetrics */
 /** @typedef {ReturnType<typeof import("./analysisContextPresentation").analysisContextTerms>} AnalysisContextTerms */
 
@@ -39,9 +45,9 @@ export function DecisionMetrics({ metrics, terms }) {
         label="近期变化"
         value={percentagePoints(metrics.recent_change_percentage_points)}
         note={
-          metrics.trend_direction === "insufficient"
+          !trendLabels[metrics.trend_direction || ""]
             ? "趋势样本不足"
-            : `趋势 ${metrics.trend_direction}`
+            : `趋势 ${trendLabels[metrics.trend_direction || ""]}`
         }
         tone={number(metrics.recent_change_percentage_points) > 0 ? "risk" : "neutral"}
       />

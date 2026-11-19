@@ -75,30 +75,40 @@ def _assemble_content_v6(
         raise ValueError("模型返回的报告解释不是 JSON 对象")
     blueprint = evidence["blueprint"]
     generated_by_id = _items_by_id(payload.get("issues"))
+    return InsightDecisionReportContent.model_validate(
+        {
+            "report_type": blueprint["report_type"],
+            "title": blueprint["title"],
+            "issues": _assemble_issue_explanations(
+                blueprint["issues"], generated_by_id
+            ),
+            "caveats": blueprint["caveats"],
+        }
+    )
+
+
+def _assemble_issue_explanations(
+    items: list[dict[str, Any]], generated_by_id: dict[str, dict[str, Any]]
+) -> list[dict[str, Any]]:
     issues = []
-    for item in blueprint["issues"]:
+    for item in items:
         generated = generated_by_id.get(item["id"], {})
         fallback_recommendation = item["fallback_recommendation"]
         unknown = [
             text
-            for value in generated.get("unknown", [])
+            for value in _generated_list(generated.get("unknown"))
             if isinstance(value, str) and value.strip()
             if (text := _narrative_text(value, "", 300))
         ][:5]
         suggested_evidence = [
             text
-            for value in generated.get("suggested_evidence", [])
+            for value in _generated_list(generated.get("suggested_evidence"))
             if isinstance(value, str) and value.strip()
             if (text := _narrative_text(value, "", 200))
         ][:5]
         issues.append(
             {
-                "id": item["id"],
-                "rank": item["rank"],
-                "title": item["title"],
-                "scope": item["scope"],
-                "metrics": item["metrics"],
-                "known": item["known"],
+                **item,
                 "evidence_explanation": _narrative_text(
                     generated.get("evidence_explanation"),
                     item["fallback_evidence_explanation"],
@@ -122,15 +132,10 @@ def _assemble_content_v6(
                         or fallback_recommendation["suggested_evidence"]
                     ),
                 },
-                "readiness": item["readiness"],
-                "evidence_ids": item["evidence_ids"],
             }
         )
-    return InsightDecisionReportContent.model_validate(
-        {
-            "report_type": blueprint["report_type"],
-            "title": blueprint["title"],
-            "issues": issues,
-            "caveats": blueprint["caveats"],
-        }
-    )
+    return issues
+
+
+def _generated_list(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []

@@ -3,7 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from web_backend.insight_report_contracts import PROMPT_VERSION, V5_PROMPT_VERSION
+from web_backend.insight_report_contracts import V5_PROMPT_VERSION, V6_PROMPT_VERSION
 from web_backend.insight_report_decision_blueprint import _build_decision_blueprint
 from web_backend.insight_report_diagnostics import (
     _build_business_issues,
@@ -43,7 +43,7 @@ def _build_evidence(
     }
     evidence["blueprint"] = (
         _build_decision_blueprint(evidence)
-        if prompt_version == PROMPT_VERSION
+        if prompt_version == V6_PROMPT_VERSION
         else _build_blueprint(evidence)
     )
     return evidence

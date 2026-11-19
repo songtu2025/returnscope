@@ -14,3 +14,5 @@
 @import "./ai-insight-reports/decision-context.css";
 @import "./ai-insight-reports/decision-evidence.css";
 @import "./ai-insight-reports/decision-actions.css";
+@import "./ai-insight-reports/semantic-insight.css";
+@import "./ai-insight-reports/semantic-insight-responsive.css";

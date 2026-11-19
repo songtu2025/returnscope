@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+PolarizationPair = tuple[tuple[str, ...], tuple[str, ...]]
+
 
 @dataclass(frozen=True)
 class InsightReportProfile:
@@ -17,6 +19,7 @@ class InsightReportProfile:
     diagnostic_rationale: str
     diagnostic_success_signal: str
     further_questions: tuple[str, ...]
+    polarization_pairs: tuple[PolarizationPair, ...] = ()
 
     def snapshot(self) -> dict[str, Any]:
         return {
@@ -25,6 +28,10 @@ class InsightReportProfile:
             "category_name": self.category_name,
             "preferred_reason_codes": list(self.preferred_reason_codes),
             "variant_label": self.variant_label,
+            "polarization_pairs": [
+                [list(direction) for direction in pair]
+                for pair in self.polarization_pairs
+            ],
         }
 
 
@@ -57,6 +64,12 @@ PROFILES = {
             "FIT_TOO_LARGE",
             "OTHER_BUYER_CHANGED_MIND",
         ),
+        polarization_pairs=(
+            (
+                ("FIT_TOO_SMALL", "FIT_TOO_SMALL_U1"),
+                ("FIT_TOO_LARGE", "FIT_TOO_LARGE_U1"),
+            ),
+        ),
         diagnostic_title="偏小与偏大信号需要按鞋款和尺码段分别验证",
         diagnostic_empty="尺码与合脚问题需要按鞋款、尺码段和时间继续拆解。",
         variant_label="鞋款尺码",
@@ -83,6 +96,12 @@ PROFILES = {
             "GLOVE_SIZE_SMALL",
             "GLOVE_SIZE_LARGE",
             "GLOVE_WARMTH",
+        ),
+        polarization_pairs=(
+            (
+                ("GLOVE_SIZE_SMALL", "GLOVE_SIZE_SMALL_U1"),
+                ("GLOVE_SIZE_LARGE", "GLOVE_SIZE_LARGE_U1"),
+            ),
         ),
         diagnostic_title="尺码适配与保暖表现需要按手套尺码和场景分别验证",
         diagnostic_empty="手套问题需要按尺码、手部部位、功能和使用场景继续拆解。",

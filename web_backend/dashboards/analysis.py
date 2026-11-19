@@ -60,6 +60,7 @@ class _DashboardAnalysis:
         date_from: str | None = None,
         date_to: str | None = None,
         report_mode: bool = False,
+        include_report_signals: bool = False,
         part: str = "full",
     ) -> dict[str, Any]:
         options = InsightOptions(
@@ -72,6 +73,7 @@ class _DashboardAnalysis:
             date_from=date_from,
             date_to=date_to,
             report_mode=report_mode,
+            include_report_signals=include_report_signals,
         )
         key = (dashboard_id, version_id, options, part)
         with self._insights_lock:

@@ -14,8 +14,13 @@ import { number, percentage, READINESS_LABELS } from "./decisionReportPresentati
 /** @typedef {import("./analysisDashboardContracts").DecisionReportIssue} DecisionReportIssue */
 /** @typedef {ReturnType<typeof import("./analysisContextPresentation").analysisContextTerms>} AnalysisContextTerms */
 
-/** @param {{report: InsightReport, source: InsightReportSource, readiness: ReportReadiness}} props */
-export function DecisionEvidenceTrust({ report, source, readiness }) {
+/** @param {{report: InsightReport, source: InsightReportSource, readiness: ReportReadiness, pendingReviewNote?: string}} props */
+export function DecisionEvidenceTrust({
+  report,
+  source,
+  readiness,
+  pendingReviewNote = "条待审核未纳入统计",
+}) {
   const pendingReviewCount = number(source.pending_review_record_count);
   return (
     <section
@@ -37,7 +42,7 @@ export function DecisionEvidenceTrust({ report, source, readiness }) {
         </li>
         {pendingReviewCount > 0 && (
           <li className="warning">
-            <WarningCircle size={15} /> {pendingReviewCount} 条待审核未纳入统计
+            <WarningCircle size={15} /> {pendingReviewCount} {pendingReviewNote}
           </li>
         )}
       </ul>
@@ -82,7 +87,7 @@ function DecisionEvidenceColumns({ selectedIssue }) {
 }
 
 /** @param {{selectedIssue: DecisionReportIssue, catalog: InsightEvidenceCatalog, terms: AnalysisContextTerms}} props */
-function DecisionEvidenceDetails({ selectedIssue, catalog, terms }) {
+export function DecisionEvidenceDetails({ selectedIssue, catalog, terms }) {
   return (
     <footer>
       <span>口径：多标签占比不可直接相加，也{terms.rateBoundary}。</span>

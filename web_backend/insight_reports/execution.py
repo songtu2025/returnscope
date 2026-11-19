@@ -13,8 +13,13 @@ from web_backend import (
 )
 from web_backend.common import json_text
 from web_backend.config_service import ConfigService
-from web_backend.insight_report_contracts import PROMPT_VERSION
+from web_backend.insight_report_contracts import V6_PROMPT_VERSION, V7_PROMPT_VERSION
 from web_backend.insight_reports.execution_publication import _InsightReportPublication
+from web_backend.insight_reports.v7_content import (
+    assemble_semantic_content,
+    semantic_messages,
+)
+from web_backend.insight_reports.v7_evidence import build_semantic_evidence
 from web_backend.security import utc_now
 
 
@@ -99,9 +104,10 @@ class _InsightReportExecution(_InsightReportPublication):
         try:
             analysis = self._report_analysis(report)
             prompt_version = str(report["prompt_version"])
-            evidence = self._build_evidence(
-                analysis,
-                prompt_version=prompt_version,
+            evidence = (
+                build_semantic_evidence(self.dashboard_service, analysis)
+                if prompt_version == V7_PROMPT_VERSION
+                else self._build_evidence(analysis, prompt_version=prompt_version)
             )
             evidence_hash = hashlib.sha256(
                 json_text(evidence).encode("utf-8")
@@ -126,10 +132,12 @@ class _InsightReportExecution(_InsightReportPublication):
             raise RuntimeError("生成已取消，停止后续处理")
 
     def _report_analysis(self, report: dict[str, Any]) -> dict[str, Any]:
+        semantic = report["prompt_version"] == V7_PROMPT_VERSION
         analysis = self.dashboard_service.insights(
             str(report["dashboard_id"]),
             str(report["dashboard_version_id"]),
             report_mode=True,
+            include_report_signals=semantic,
         )
         analysis["review_bias"] = self.dashboard_service.review_bias(
             str(report["dashboard_id"]),
@@ -143,6 +151,8 @@ class _InsightReportExecution(_InsightReportPublication):
             str(report["dashboard_id"]),
             str(report["dashboard_version_id"]),
         )
+        if semantic:
+            return analysis
         reason_codes = self._diagnostic_reason_codes(analysis)
         analysis["diagnostics"] = [
             self._compact_diagnostic(diagnostic)
@@ -188,11 +198,11 @@ class _InsightReportExecution(_InsightReportPublication):
         )
         client = self.client_factory(settings)
         client.checkpoint = lambda: self._ensure_report_running(str(report["id"]))
-        messages = (
-            self._messages_v6(evidence)
-            if prompt_version == PROMPT_VERSION
-            else self._messages(evidence)
-        )
+        message_builder = {
+            V6_PROMPT_VERSION: self._messages_v6,
+            V7_PROMPT_VERSION: semantic_messages,
+        }.get(prompt_version, self._messages)
+        messages = message_builder(evidence)
         result = client.generate_json(
             messages,
             model=str(report["model_key"]),
@@ -215,7 +225,9 @@ class _InsightReportExecution(_InsightReportPublication):
                     """,
                 (report_id,),
             )
-        if prompt_version == PROMPT_VERSION:
+        if prompt_version == V7_PROMPT_VERSION:
+            return assemble_semantic_content(evidence, result.payload).model_dump_json()
+        if prompt_version == V6_PROMPT_VERSION:
             decision_content = self._assemble_content_v6(evidence, result.payload)
             self._validate_issue_evidence_refs(
                 decision_content,

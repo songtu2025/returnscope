@@ -1,0 +1,34 @@
+@media (max-width: 1040px) {
+  .semantic-insight-report {
+    padding: 24px;
+  }
+}
+
+@media (max-width: 720px) {
+  .semantic-insight-report {
+    padding: 20px 16px;
+    border-radius: 8px;
+  }
+
+  .semantic-report-lead,
+  .semantic-report-metrics,
+  .semantic-report-location,
+  .semantic-report-facts,
+  .semantic-report-validation,
+  .semantic-report-evidence {
+    margin-left: 0;
+  }
+}
+
+@media print {
+  .semantic-insight-report {
+    width: 100%;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .semantic-report-insight {
+    break-inside: avoid;
+  }
+}

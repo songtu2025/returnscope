@@ -5,7 +5,7 @@ from copy import deepcopy
 import pytest
 from insight_report_helpers import analysis as _analysis
 
-from web_backend.insight_report_contracts import PROMPT_VERSION, V5_PROMPT_VERSION
+from web_backend.insight_report_contracts import V5_PROMPT_VERSION, V6_PROMPT_VERSION
 from web_backend.insight_report_evidence import _build_evidence
 from web_backend.insight_reports.business_issue_context import _BusinessIssueContext
 from web_backend.insight_reports.business_issue_details import _business_issue_evidence
@@ -15,7 +15,7 @@ from web_backend.insight_reports.evidence_catalog import (
 )
 
 
-@pytest.mark.parametrize("prompt_version", [V5_PROMPT_VERSION, PROMPT_VERSION])
+@pytest.mark.parametrize("prompt_version", [V5_PROMPT_VERSION, V6_PROMPT_VERSION])
 @pytest.mark.parametrize("context", ["returns", "user_feedback"])
 @pytest.mark.parametrize(
     "mapping_issue,text_issue",
@@ -76,7 +76,7 @@ def test_evidence_preserves_quality_filters_and_input(
         )
 
 
-@pytest.mark.parametrize("prompt_version", [V5_PROMPT_VERSION, PROMPT_VERSION])
+@pytest.mark.parametrize("prompt_version", [V5_PROMPT_VERSION, V6_PROMPT_VERSION])
 def test_empty_evidence_preserves_default_scope(prompt_version: str) -> None:
     evidence = _build_evidence({}, prompt_version=prompt_version)
     source = evidence["source"]
@@ -97,7 +97,7 @@ def test_empty_evidence_preserves_default_scope(prompt_version: str) -> None:
     ]
 
 
-@pytest.mark.parametrize("prompt_version", [V5_PROMPT_VERSION, PROMPT_VERSION])
+@pytest.mark.parametrize("prompt_version", [V5_PROMPT_VERSION, V6_PROMPT_VERSION])
 def test_evidence_preserves_limits_and_sample_order(prompt_version: str) -> None:
     analysis = _analysis()
     for key in (

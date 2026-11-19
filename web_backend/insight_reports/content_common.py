@@ -6,6 +6,7 @@ from typing import Any
 from web_backend.insight_report_contracts import (
     InsightDecisionReportContent,
     InsightReportContent,
+    SemanticInsightReportContent,
 )
 
 
@@ -56,7 +57,7 @@ def _validate_evidence_refs(
 
 
 def _validate_issue_evidence_refs(
-    content: InsightDecisionReportContent,
+    content: InsightDecisionReportContent | SemanticInsightReportContent,
     known_ids: set[str],
 ) -> None:
     references = [
