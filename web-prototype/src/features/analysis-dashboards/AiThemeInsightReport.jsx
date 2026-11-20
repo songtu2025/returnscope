@@ -78,23 +78,9 @@ export function AiThemeInsightReport({ report, reports, version, onSelect }) {
   return (
     <article className="theme-insight-report" aria-labelledby="theme-report-title">
       <header className="theme-report-masthead">
-        <div>
-          <p>AI 洞察报告 / {reportLabel(report)}</p>
+        <div className="theme-report-heading">
           <h2 id="theme-report-title">{content.title}</h2>
-          <dl>
-            <div>
-              <dt>数据版本</dt>
-              <dd>{versionNumber ? `V${versionNumber}` : "--"}</dd>
-            </div>
-            <div>
-              <dt>反馈日期</dt>
-              <dd>{dateRange}</dd>
-            </div>
-            <div>
-              <dt>生成时间</dt>
-              <dd>{finishedAt ? `${finishedAt} UTC` : "--"}</dd>
-            </div>
-          </dl>
+          <p>{reportLabel(report)} · AI 用户反馈语义洞察报告</p>
         </div>
         <InsightReportVersionSelect
           report={report}
@@ -102,6 +88,28 @@ export function AiThemeInsightReport({ report, reports, version, onSelect }) {
           onSelect={onSelect}
           optionLabel={reportLabel}
         />
+        <dl className="theme-report-metadata">
+          <div>
+            <dt>数据版本</dt>
+            <dd>{versionNumber ? `V${versionNumber}` : "--"}</dd>
+          </div>
+          <div>
+            <dt>反馈日期</dt>
+            <dd>{dateRange}</dd>
+          </div>
+          <div>
+            <dt>纳入反馈</dt>
+            <dd>
+              {source?.included_record_count == null
+                ? "--"
+                : `${source.included_record_count} 条`}
+            </dd>
+          </div>
+          <div>
+            <dt>生成时间</dt>
+            <dd>{finishedAt ? `${finishedAt} UTC` : "--"}</dd>
+          </div>
+        </dl>
       </header>
 
       {content.report_type === "verifiable_insight" ? (

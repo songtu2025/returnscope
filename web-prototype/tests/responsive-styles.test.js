@@ -60,6 +60,24 @@ test("business pages use tiered desktop work widths", () => {
   expect(styles).not.toMatch(/\.classification-standard-page\s*{[^}]*max-width:/s);
 });
 
+test("可验证洞察报告在常规桌面、2K 和 4K 视口保持阅读宽度与语义色", () => {
+  expect(styles).toMatch(
+    /\.theme-insight-report\s*{[^}]*--report-green:\s*#0f6b50;[^}]*--report-blue:\s*#3266a8;[^}]*--report-amber:\s*#986418;[^}]*width:\s*min\(100%, 1180px\);/s,
+  );
+  expect(styles).toMatch(
+    /@media \(min-width:\s*1920px\)[\s\S]*?\.theme-insight-report\s*{[^}]*width:\s*min\(100%, 1440px\);/s,
+  );
+  expect(styles).toMatch(
+    /@media \(min-width:\s*2560px\)[\s\S]*?\.theme-insight-report\s*{[^}]*width:\s*min\(100%, 1560px\);/s,
+  );
+  expect(styles).toMatch(
+    /\.verifiable-summary dl\s*{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);/s,
+  );
+  expect(styles).toMatch(
+    /\.verifiable-metrics:not\(\.verifiable-actions\) td:is\(:nth-child\(2\), :nth-child\(3\)\)\s*{[^}]*text-align:\s*end;/s,
+  );
+});
+
 test("模型服务默认使用摘要布局，高级编辑不保留常驻三栏", () => {
   expect(styles).toMatch(
     /\.model-service-summary\s*{[^}]*grid-template-columns:\s*minmax\(0, 3fr\) minmax\(0, 2fr\);[^}]*gap:\s*var\(--desktop-section-gap\);/s,

@@ -1,45 +1,95 @@
 .theme-insight-report {
-  max-width: 1000px;
-  margin: 0 auto;
-  padding: 16px 24px 36px;
-  color: var(--ink);
+  --report-paper: #fff;
+  --report-canvas: #f1f5f3;
+  --report-ink: #16261f;
+  --report-muted: #61726b;
+  --report-line: #d7e2dc;
+  --report-green: #0f6b50;
+  --report-green-soft: #e7f3ee;
+  --report-blue: #3266a8;
+  --report-blue-soft: #edf3fb;
+  --report-amber: #986418;
+  --report-amber-soft: #fff5e3;
+
+  width: min(100%, 1180px);
+  margin: 16px auto 40px;
+  padding: 32px 36px 48px;
+  border: 1px solid var(--report-line);
+  border-radius: 12px;
+  color: var(--report-ink);
+  background: var(--report-paper);
   overflow-wrap: anywhere;
   line-height: 1.65;
 }
 
+.theme-insight-report ::selection {
+  color: var(--report-ink);
+  background: #cfe6dc;
+}
+
 .theme-report-masthead {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
+  gap: 22px 32px;
+  padding-bottom: 26px;
+  border-bottom: 1px solid var(--report-line);
 }
 
-.theme-report-masthead h2 {
-  max-width: 30ch;
-  margin: 6px 0 14px;
-  font-size: clamp(22px, 2.4vw, 32px);
-  line-height: 1.3;
+.theme-report-heading {
+  min-width: 0;
 }
 
-.theme-report-masthead p,
-.theme-report-masthead dt,
-.theme-report-masthead label {
-  color: var(--muted);
+.theme-report-heading h2 {
+  max-width: 28ch;
+  margin: 0;
+  color: var(--report-ink);
+  font-size: clamp(26px, 2.2vw, 36px);
+  line-height: 1.24;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+.theme-report-heading p {
+  margin: 10px 0 0;
+  color: var(--report-muted);
   font-size: 12px;
 }
 
-.theme-report-masthead dl {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 20px;
+.theme-report-metadata {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 0.7fr 1.35fr 0.8fr 1.35fr;
   margin: 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--line-soft);
 }
 
-.theme-report-masthead dl div {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
+.theme-report-metadata > div {
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  min-width: 0;
+  padding-inline: 18px;
+  border-inline-start: 1px solid var(--report-line);
+}
+
+.theme-report-metadata > div:first-child {
+  padding-inline-start: 0;
+  border-inline-start: 0;
+}
+
+.theme-report-metadata dt,
+.theme-report-masthead label {
+  color: var(--report-muted);
+  font-size: 12px;
+}
+
+.theme-report-metadata dd {
+  color: var(--report-ink);
+  font-size: 13px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
 }
 
 .theme-insight-report dd {
@@ -49,13 +99,15 @@
 .theme-report-masthead label {
   display: grid;
   gap: 4px;
+  justify-items: start;
 }
 
 .theme-report-summary {
-  margin-top: 24px;
-  padding: 14px 20px;
-  border-inline-start: 3px solid var(--green);
-  background: var(--green-pale);
+  margin-top: 28px;
+  padding: 18px 20px;
+  border: 1px solid #cfe2d9;
+  border-radius: 9px;
+  background: var(--report-green-soft);
 }
 
 .theme-report-summary h3,
@@ -71,9 +123,9 @@
 
 .theme-report-chapter,
 .theme-report-boundaries {
-  margin-top: 28px;
-  padding-top: 20px;
-  border-top: 1px solid var(--line);
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--report-line);
 }
 
 .theme-report-chapter header {
@@ -90,7 +142,7 @@
 
 .theme-report-chapter header span.high-priority,
 .theme-report-boundaries h3 {
-  color: var(--amber);
+  color: var(--report-amber);
 }
 
 .theme-report-chapter h4 {
@@ -106,7 +158,7 @@
 .theme-report-chapter details {
   margin-top: 12px;
   padding-block: 8px;
-  border-top: 1px solid var(--line-soft);
+  border-top: 1px solid var(--report-line);
 }
 
 .theme-report-chapter summary {
@@ -163,4 +215,49 @@
 .concise-insight-evidence summary {
   cursor: pointer;
   font-weight: 600;
+}
+
+@media (min-width: 1920px) {
+  .theme-insight-report {
+    width: min(100%, 1440px);
+    padding: 40px 52px 56px;
+  }
+}
+
+@media (min-width: 2560px) {
+  .theme-insight-report {
+    width: min(100%, 1560px);
+    padding-inline: 60px;
+  }
+}
+
+@media (max-width: 1279px) {
+  .theme-insight-report {
+    margin-top: 8px;
+    padding: 26px 28px 40px;
+  }
+
+  .theme-report-metadata {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 0;
+  }
+
+  .theme-report-metadata > div:nth-child(3) {
+    padding-inline-start: 0;
+    border-inline-start: 0;
+  }
+}
+
+@media (max-width: 1100px) {
+  .theme-insight-report {
+    padding: 22px 20px 34px;
+  }
+
+  .theme-report-masthead {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .theme-report-masthead label {
+    width: fit-content;
+  }
 }
