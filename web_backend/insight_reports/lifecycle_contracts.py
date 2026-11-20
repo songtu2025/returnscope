@@ -18,3 +18,4 @@ class _ReportCreationTarget:
     dashboard_id: str
     dashboard_version_id: str
     parent_job_id: str | None = None
+    prompt_version: str | None = None

@@ -30,7 +30,7 @@ def test_v7_current_generation_uses_dashboard_scope_and_fixed_metrics(tmp_path) 
         ]
     }
     _, dashboard, service, captured = _service_context(tmp_path, client_payload=payload)
-    report = _complete_report(dashboard, service)
+    report = _complete_report(dashboard, service, prompt_version=V7_PROMPT_VERSION)
     overview = report["content"]["overview"]
     stats = service.dashboard_service.insights(
         dashboard["id"], dashboard["version"]["version_id"]
@@ -119,7 +119,7 @@ def test_v7_scans_all_labels_before_selecting_each_kind() -> None:
 
 def test_v7_quality_masks_product_conclusions_and_live_text(tmp_path) -> None:
     _, dashboard, service, _ = _service_context(tmp_path)
-    report = _complete_report(dashboard, service)
+    report = _complete_report(dashboard, service, prompt_version=V7_PROMPT_VERSION)
     analysis = service._report_analysis(report)
     analysis["summary"]["product_unmatched_count"] = 1
     safe = build_semantic_evidence(service.dashboard_service, analysis)
@@ -145,7 +145,7 @@ def test_v7_quality_masks_product_conclusions_and_live_text(tmp_path) -> None:
 )
 def test_v7_category_profile_is_metadata(agent_key, category, tmp_path) -> None:
     _, dashboard, service, _ = _service_context(tmp_path)
-    report = _complete_report(dashboard, service)
+    report = _complete_report(dashboard, service, prompt_version=V7_PROMPT_VERSION)
     analysis = service._report_analysis(report)
     analysis["sources"] = [{"agent_key": agent_key}]
     evidence = build_semantic_evidence(service.dashboard_service, analysis)
@@ -213,9 +213,14 @@ def test_v7_opposing_labels_use_weighted_union(
     category: str, left_code: str, right_code: str, shared_weight: int
 ) -> None:
     profile = get_insight_report_profile(category)
-    assert profile.snapshot()["polarization_pairs"] == [
-        [[left_code, f"{left_code}_U1"], [right_code, f"{right_code}_U1"]]
-    ]
+    [[left, right]] = profile.snapshot()["polarization_pairs"]
+    assert left[:2] == [left_code, f"{left_code}_U1"]
+    assert right[:2] == [right_code, f"{right_code}_U1"]
+    if category == "footwear":
+        assert "FIT_TOO_TIGHT_NARROW_U1" in left and "FIT_TOO_SHORT_U1" in left
+        assert "FIT_TOO_LOOSE_WIDE_U1" in right and "FIT_TOO_LONG_U1" in right
+    else:
+        assert len(left) == len(right) == 2
     with sqlite3.connect(":memory:") as connection:
         connection.row_factory = sqlite3.Row
         connection.executescript(

@@ -1,6 +1,7 @@
 import { Sparkle } from "@phosphor-icons/react";
 import { ReportStatus } from "./AiInsightReportCommon";
 import { AiInsightDecisionReport } from "./AiInsightDecisionReport";
+import { AiThemeInsightReport } from "./AiThemeInsightReport";
 import { AiSemanticInsightReport } from "./AiSemanticInsightReport";
 import { SEMANTIC_INSIGHT_VERSION } from "./dashboardReportPolicy";
 import { AiInsightLegacyReport } from "./AiInsightLegacyReport";
@@ -41,7 +42,11 @@ export function AiInsightReport(props) {
     );
   }
   const content =
-    report.prompt_version === SEMANTIC_INSIGHT_VERSION ? (
+    report.prompt_version === "ai-semantic-insight-v8" ||
+    report.prompt_version === "ai-semantic-insight-v9" ||
+    report.prompt_version === "ai-semantic-insight-v10" ? (
+      <AiThemeInsightReport {...props} report={report} />
+    ) : report.prompt_version === SEMANTIC_INSIGHT_VERSION ? (
       <AiSemanticInsightReport {...props} report={report} />
     ) : report.prompt_version === "ai-return-insight-v6" ? (
       <AiInsightDecisionReport

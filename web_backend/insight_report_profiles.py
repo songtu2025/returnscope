@@ -66,8 +66,22 @@ PROFILES = {
         ),
         polarization_pairs=(
             (
-                ("FIT_TOO_SMALL", "FIT_TOO_SMALL_U1"),
-                ("FIT_TOO_LARGE", "FIT_TOO_LARGE_U1"),
+                (
+                    "FIT_TOO_SMALL",
+                    "FIT_TOO_SMALL_U1",
+                    "FIT_TOO_TIGHT_NARROW",
+                    "FIT_TOO_TIGHT_NARROW_U1",
+                    "FIT_TOO_SHORT",
+                    "FIT_TOO_SHORT_U1",
+                ),
+                (
+                    "FIT_TOO_LARGE",
+                    "FIT_TOO_LARGE_U1",
+                    "FIT_TOO_LOOSE_WIDE",
+                    "FIT_TOO_LOOSE_WIDE_U1",
+                    "FIT_TOO_LONG",
+                    "FIT_TOO_LONG_U1",
+                ),
             ),
         ),
         diagnostic_title="偏小与偏大信号需要按鞋款和尺码段分别验证",

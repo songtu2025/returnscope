@@ -13,13 +13,34 @@ from web_backend import (
 )
 from web_backend.common import json_text
 from web_backend.config_service import ConfigService
-from web_backend.insight_report_contracts import V6_PROMPT_VERSION, V7_PROMPT_VERSION
+from web_backend.insight_report_contracts import (
+    V6_PROMPT_VERSION,
+    V7_PROMPT_VERSION,
+    V8_PROMPT_VERSION,
+    V9_PROMPT_VERSION,
+    V10_PROMPT_VERSION,
+)
 from web_backend.insight_reports.execution_publication import _InsightReportPublication
 from web_backend.insight_reports.v7_content import (
     assemble_semantic_content,
     semantic_messages,
 )
 from web_backend.insight_reports.v7_evidence import build_semantic_evidence
+from web_backend.insight_reports.v8_content import (
+    assemble_theme_content,
+    theme_messages,
+)
+from web_backend.insight_reports.v8_evidence import build_theme_evidence
+from web_backend.insight_reports.v9_content import (
+    assemble_concise_content,
+    concise_messages,
+)
+from web_backend.insight_reports.v9_evidence import prepare_concise_evidence
+from web_backend.insight_reports.v10_content import (
+    assemble_verifiable,
+    verifiable_messages,
+)
+from web_backend.insight_reports.v10_evidence import build_verifiable_report
 from web_backend.security import utc_now
 
 
@@ -104,11 +125,7 @@ class _InsightReportExecution(_InsightReportPublication):
         try:
             analysis = self._report_analysis(report)
             prompt_version = str(report["prompt_version"])
-            evidence = (
-                build_semantic_evidence(self.dashboard_service, analysis)
-                if prompt_version == V7_PROMPT_VERSION
-                else self._build_evidence(analysis, prompt_version=prompt_version)
-            )
+            evidence = self._prepare_report_evidence(analysis, prompt_version)
             evidence_hash = hashlib.sha256(
                 json_text(evidence).encode("utf-8")
             ).hexdigest()
@@ -123,6 +140,20 @@ class _InsightReportExecution(_InsightReportPublication):
         except Exception as exc:
             self._fail_report(report_id, exc)
 
+    def _prepare_report_evidence(
+        self, analysis: dict[str, Any], prompt_version: str
+    ) -> dict[str, Any]:
+        if prompt_version in {V8_PROMPT_VERSION, V9_PROMPT_VERSION, V10_PROMPT_VERSION}:
+            evidence = build_theme_evidence(analysis)
+            if prompt_version == V10_PROMPT_VERSION:
+                return build_verifiable_report(evidence, analysis["report_themes"])
+            if prompt_version == V9_PROMPT_VERSION:
+                return prepare_concise_evidence(evidence, analysis["report_themes"])
+            return evidence
+        if prompt_version == V7_PROMPT_VERSION:
+            return build_semantic_evidence(self.dashboard_service, analysis)
+        return self._build_evidence(analysis, prompt_version=prompt_version)
+
     def _ensure_report_running(self, report_id: str) -> None:
         with self.database.connect() as connection:
             row = connection.execute(
@@ -132,12 +163,14 @@ class _InsightReportExecution(_InsightReportPublication):
             raise RuntimeError("生成已取消，停止后续处理")
 
     def _report_analysis(self, report: dict[str, Any]) -> dict[str, Any]:
-        semantic = report["prompt_version"] == V7_PROMPT_VERSION
+        version = report["prompt_version"]
         analysis = self.dashboard_service.insights(
             str(report["dashboard_id"]),
             str(report["dashboard_version_id"]),
             report_mode=True,
-            include_report_signals=semantic,
+            include_report_signals=version == V7_PROMPT_VERSION,
+            include_report_themes=version
+            in {V8_PROMPT_VERSION, V9_PROMPT_VERSION, V10_PROMPT_VERSION},
         )
         analysis["review_bias"] = self.dashboard_service.review_bias(
             str(report["dashboard_id"]),
@@ -151,7 +184,12 @@ class _InsightReportExecution(_InsightReportPublication):
             str(report["dashboard_id"]),
             str(report["dashboard_version_id"]),
         )
-        if semantic:
+        if version in {
+            V7_PROMPT_VERSION,
+            V8_PROMPT_VERSION,
+            V9_PROMPT_VERSION,
+            V10_PROMPT_VERSION,
+        }:
             return analysis
         reason_codes = self._diagnostic_reason_codes(analysis)
         analysis["diagnostics"] = [
@@ -201,6 +239,9 @@ class _InsightReportExecution(_InsightReportPublication):
         message_builder = {
             V6_PROMPT_VERSION: self._messages_v6,
             V7_PROMPT_VERSION: semantic_messages,
+            V8_PROMPT_VERSION: theme_messages,
+            V9_PROMPT_VERSION: concise_messages,
+            V10_PROMPT_VERSION: verifiable_messages,
         }.get(prompt_version, self._messages)
         messages = message_builder(evidence)
         result = client.generate_json(
@@ -225,6 +266,12 @@ class _InsightReportExecution(_InsightReportPublication):
                     """,
                 (report_id,),
             )
+        if prompt_version == V10_PROMPT_VERSION:
+            return assemble_verifiable(evidence, result.payload).model_dump_json()
+        if prompt_version == V9_PROMPT_VERSION:
+            return assemble_concise_content(evidence, result.payload).model_dump_json()
+        if prompt_version == V8_PROMPT_VERSION:
+            return assemble_theme_content(evidence, result.payload).model_dump_json()
         if prompt_version == V7_PROMPT_VERSION:
             return assemble_semantic_content(evidence, result.payload).model_dump_json()
         if prompt_version == V6_PROMPT_VERSION:

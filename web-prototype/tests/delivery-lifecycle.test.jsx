@@ -5,12 +5,32 @@ import { renderWithServerState as render } from "./renderWithServerState";
 import { DeliveryLifecycleControls } from "../src/components/DeliveryLifecycleControls";
 import { DashboardRow } from "../src/features/analysis-dashboards/DashboardRow";
 import { ReportStatus } from "../src/features/analysis-dashboards/AiInsightReportCommon";
+import { ReportLifecyclePanel } from "../src/features/analysis-dashboards/ReportLifecyclePanel";
 import { changeDeliveryLifecycle } from "../src/shared/api/deliveryApi";
 
 vi.mock("../src/shared/api/deliveryApi", () => ({ changeDeliveryLifecycle: vi.fn() }));
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
+});
+
+test("报告顶部操作菜单使用独立作用域并保留删除确认", async () => {
+  const user = userEvent.setup();
+  render(
+    <ReportLifecyclePanel
+      dashboardId="dashboard-local"
+      versionId="version-local"
+      report={{ id: "report-local", status: "completed", version_no: 1 }}
+      onChanged={vi.fn()}
+    />,
+  );
+  const trigger = screen.getByLabelText("更多报告操作：报告 1");
+  const panel = trigger.closest("section.report-lifecycle-panel");
+  expect(panel).not.toBeNull();
+  await user.click(trigger);
+  await user.click(within(panel).getByRole("button", { name: "删除报告" }));
+  expect(screen.getByRole("dialog")).toHaveAccessibleName("删除报告：报告 1");
+  expect(changeDeliveryLifecycle).not.toHaveBeenCalled();
 });
 
 test.each([

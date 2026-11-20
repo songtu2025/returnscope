@@ -4,7 +4,13 @@ import json
 from typing import Any
 
 from web_backend.common import json_text, new_id
-from web_backend.insight_report_contracts import PROMPT_VERSION
+from web_backend.insight_report_contracts import (
+    PROMPT_VERSION,
+    V7_PROMPT_VERSION,
+    V8_PROMPT_VERSION,
+    V9_PROMPT_VERSION,
+    V10_PROMPT_VERSION,
+)
 from web_backend.insight_reports.lifecycle_contracts import (
     InsightReportConflict,
     InsightReportNotFound,
@@ -34,6 +40,15 @@ class _InsightReportCreation(_InsightReportRecords):
                 dashboard_id=str(source["dashboard_id"]),
                 dashboard_version_id=str(source["dashboard_version_id"]),
                 parent_job_id=report_id,
+                prompt_version=source["prompt_version"]
+                if source["prompt_version"]
+                in {
+                    V7_PROMPT_VERSION,
+                    V8_PROMPT_VERSION,
+                    V9_PROMPT_VERSION,
+                    V10_PROMPT_VERSION,
+                }
+                else None,
             ),
             model={
                 "id": source["model_id"],
@@ -118,7 +133,7 @@ class _InsightReportCreation(_InsightReportRecords):
                     model["model_key"],
                     model["config_version_id"],
                     reasoning_effort,
-                    PROMPT_VERSION,
+                    target.prompt_version or PROMPT_VERSION,
                     parent_job_id,
                     actor_id,
                     now,

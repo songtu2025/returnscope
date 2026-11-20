@@ -13,7 +13,7 @@ from return_semantics.model_client import JsonModelCallResult, Sub2APISettings
 from web_backend import dashboard_insights
 from web_backend.common import json_text
 from web_backend.dashboard_service import DashboardService
-from web_backend.insight_report_contracts import V6_PROMPT_VERSION
+from web_backend.insight_report_contracts import V6_PROMPT_VERSION, V7_PROMPT_VERSION
 from web_backend.insight_report_profiles import resolve_insight_report_profile
 from web_backend.insight_report_service import (
     V5_PROMPT_VERSION,
@@ -106,24 +106,37 @@ def _service_context(tmp_path, client_payload=None, client_error=None, filters=N
             payload = client_payload
             if payload is None:
                 request = json.loads(messages[1]["content"])
-                payload = {
-                    "issues": [
-                        {
-                            "id": issue["id"],
-                            "evidence_explanation": (
-                                "当前退货样本形成了可追溯的问题信号，"
-                                "但仍不能证明真实发生率或因果。"
-                            ),
-                            "unknown": ["该问题是否在相同条件下重复出现？"],
-                            "validation_question": "是否需要进一步验证该问题？",
-                            "recommendation_rationale": (
-                                "需要结合商品信息与业务分母核对现有解释。"
-                            ),
-                            "suggested_evidence": ["复核原始评论与商品信息"],
-                        }
-                        for issue in request["fixed_blueprint"]["issues"]
-                    ]
-                }
+                if isinstance(request, list):
+                    payload = {
+                        "chapters": [
+                            {
+                                "id": chapter["id"],
+                                "explanation": chapter["explanation"],
+                                "action": chapter["action"],
+                                "evidence_ids": [chapter["id"]],
+                            }
+                            for chapter in request
+                        ]
+                    }
+                else:
+                    payload = {
+                        "issues": [
+                            {
+                                "id": issue["id"],
+                                "evidence_explanation": (
+                                    "当前退货样本形成了可追溯的问题信号，"
+                                    "但仍不能证明真实发生率或因果。"
+                                ),
+                                "unknown": ["该问题是否在相同条件下重复出现？"],
+                                "validation_question": "是否需要进一步验证该问题？",
+                                "recommendation_rationale": (
+                                    "需要结合商品信息与业务分母核对现有解释。"
+                                ),
+                                "suggested_evidence": ["复核原始评论与商品信息"],
+                            }
+                            for issue in request["fixed_blueprint"].get("issues", [])
+                        ]
+                    }
             return JsonModelCallResult(
                 payload=payload,
                 model_name="model-primary-20260815",
@@ -277,7 +290,7 @@ def test_v6_keeps_numbers_and_ranking_deterministic(tmp_path) -> None:
     assert first["evidence_hash"] == second["evidence_hash"]
 
 
-@pytest.mark.parametrize("prompt_version", [None, V6_PROMPT_VERSION])
+@pytest.mark.parametrize("prompt_version", [V7_PROMPT_VERSION, V6_PROMPT_VERSION])
 def test_issue_decision_put_is_idempotent_and_audited(tmp_path, prompt_version) -> None:
     context, dashboard, service, _captured = _service_context(tmp_path)
     report = _complete_report(dashboard, service, prompt_version=prompt_version)
@@ -315,7 +328,7 @@ def test_issue_decision_put_is_idempotent_and_audited(tmp_path, prompt_version) 
 
 def test_v5_report_is_serialized_without_v6_conversion(tmp_path) -> None:
     context, dashboard, service, _captured = _service_context(tmp_path)
-    report = _complete_report(dashboard, service)
+    report = _complete_report(dashboard, service, prompt_version=V6_PROMPT_VERSION)
     legacy_content = {
         "title": "历史 V5 报告",
         "executive_summary": [],

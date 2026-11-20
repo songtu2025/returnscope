@@ -1,0 +1,148 @@
+.verifiable-report {
+  color: #20382f;
+  overflow-wrap: anywhere;
+}
+
+.verifiable-summary {
+  border-inline-start: 3px solid var(--green);
+  background: var(--green-pale);
+  padding: 0.9rem 1.2rem;
+}
+
+.verifiable-summary p,
+.verifiable-summary h3,
+.verifiable-summary dl {
+  margin-block: 0.2rem 0.6rem;
+}
+
+.verifiable-summary dl > div {
+  display: grid;
+  grid-template-columns: 5rem 1fr;
+  gap: 0.6rem;
+}
+
+.verifiable-summary dt {
+  font-weight: 700;
+}
+
+.verifiable-summary dd {
+  margin: 0;
+}
+
+.verifiable-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 1.25rem;
+  align-items: start;
+  margin-top: 1rem;
+}
+
+.verifiable-nav {
+  grid-column: 2;
+  grid-row: 1;
+  display: grid;
+  justify-items: start;
+  border-inline-start: 1px solid #c9dbd3;
+  padding-inline-start: 0.75rem;
+}
+
+.verifiable-main {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+}
+
+.verifiable-nav button,
+.verifiable-actions button {
+  border: 0;
+  background: transparent;
+  color: #235942;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  padding: 0.35rem;
+  text-align: start;
+  cursor: pointer;
+}
+
+.verifiable-chapter {
+  border-block-end: 1px solid #c9dbd3;
+  padding: 1rem 0;
+}
+
+.verifiable-chapter h3 {
+  margin: 0 0 0.7rem;
+  scroll-margin-top: 5rem;
+}
+
+.verifiable-chapter p {
+  max-width: 54ch;
+}
+
+.verifiable-chapter-name {
+  font-weight: 700;
+  color: #32664e;
+  margin: 0 0 0.2rem;
+}
+
+.verifiable-metrics {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.verifiable-metrics :is(th, td) {
+  text-align: start;
+  padding: 0.3rem 0.4rem;
+  border-block-end: 1px solid #c9dbd3;
+}
+
+.verifiable-metrics:not(.verifiable-actions) td:is(:nth-child(2), :nth-child(3)) {
+  text-align: end;
+  white-space: nowrap;
+}
+
+.verifiable-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.verifiable-boundary {
+  background: #fcf4e1;
+  border-inline-start: 3px solid #a16d26;
+  padding: 0.45rem 0.65rem;
+}
+
+.verifiable-evidence {
+  margin-block-start: 0.65rem;
+  padding: 0.25rem 0.85rem 0.85rem;
+  background: #edf7f4;
+}
+
+.verifiable-record {
+  border-block-end: 1px solid #c9dbd3;
+}
+
+.verifiable-record blockquote {
+  margin-inline: 0;
+}
+
+@media (max-width: 1279px) {
+  .verifiable-grid {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .verifiable-main {
+    width: 100%;
+  }
+
+  .verifiable-nav {
+    display: flex;
+    flex-wrap: wrap;
+    border-inline-start: 0;
+    padding-inline-start: 0;
+  }
+}

@@ -26,6 +26,8 @@ from web_backend.insight_reports.lifecycle_contracts import (
     _ReportCreationTarget,
 )
 from web_backend.insight_reports.v7_quality import evaluate_semantic_quality
+from web_backend.insight_reports.v8_content import evaluate_theme_quality
+from web_backend.insight_reports.v9_content import evaluate_concise_quality
 
 V5_PROMPT_VERSION = insight_report_contracts.V5_PROMPT_VERSION
 
@@ -182,6 +184,9 @@ class InsightReportService(_InsightReportCreation, _InsightReportExecution):
             evaluator = {
                 insight_report_contracts.V6_PROMPT_VERSION: InsightReportService._evaluate_live_quality_v6,
                 insight_report_contracts.V7_PROMPT_VERSION: evaluate_semantic_quality,
+                insight_report_contracts.V8_PROMPT_VERSION: evaluate_theme_quality,
+                insight_report_contracts.V9_PROMPT_VERSION: evaluate_concise_quality,
+                insight_report_contracts.V10_PROMPT_VERSION: evaluate_theme_quality,
             }.get(
                 str(value.get("prompt_version")),
                 InsightReportService._evaluate_live_quality,

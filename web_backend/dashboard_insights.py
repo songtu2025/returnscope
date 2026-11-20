@@ -41,6 +41,7 @@ from web_backend.dashboards.insight_queries import (
 from web_backend.database import Database
 from web_backend.insight_report_profiles import resolve_insight_report_profile
 from web_backend.insight_reports.v7_statistics import collect_report_signals
+from web_backend.insight_reports.v8_statistics import collect_report_themes
 from web_backend.request_timing import timed_stage
 
 INSIGHT_PAGE_CACHE_KIB = 64 * 1024
@@ -104,9 +105,20 @@ def build_insights(
             if options.include_report_signals
             else None
         )
+        report_themes = (
+            collect_report_themes(
+                scope,
+                prepared.taxonomy.labels if prepared.taxonomy else [],
+                resolve_insight_report_profile(context["sources"]),
+            )
+            if options.include_report_themes
+            else None
+        )
     payload = overview_payload(dashboard_id, version_id, context, prepared, content)
     if report_signals is not None:
         payload["report_signals"] = report_signals
+    if report_themes is not None:
+        payload["report_themes"] = report_themes
     return payload
 
 

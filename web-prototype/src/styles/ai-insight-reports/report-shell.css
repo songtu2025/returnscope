@@ -11,6 +11,11 @@
   padding-inline: 11px;
 }
 
+.report-lifecycle-panel .task-more-actions > div {
+  left: 0;
+  right: auto;
+}
+
 .ai-insight-report {
   display: grid;
   gap: 10px;

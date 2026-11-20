@@ -24,7 +24,7 @@ export function ReportLifecyclePanel({ dashboardId, versionId, report, onChanged
     }
   };
   return (
-    <section className="result-action-guidance">
+    <section className="result-action-guidance report-lifecycle-panel">
       {report && !["queued", "running"].includes(report.status) && (
         <DeliveryLifecycleControls
           kind="report"

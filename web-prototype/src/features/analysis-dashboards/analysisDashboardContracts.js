@@ -95,7 +95,7 @@
  * @property {number | null} [version_no]
  * @property {number} [attempt_no]
  * @property {string} [prompt_version]
- * @property {LegacyInsightReportContent | InsightDecisionReportContent | SemanticInsightReportContent | null} [content]
+ * @property {LegacyInsightReportContent | InsightDecisionReportContent | SemanticInsightReportContent | ThemeInsightReportContent | ConciseInsightReportContent | VerifiableInsightReportContent | null} [content]
  * @property {ReportDecision[]} [decisions]
  * @property {InsightReportEvidence | null} [evidence]
  * @property {string} [stage]
@@ -162,7 +162,7 @@
  * @typedef {{loading: boolean, error: string, items: InsightReport[]}} DashboardReportState
  * @typedef {{issueId: string, loading: boolean, error: string}} DashboardDecisionState
  * @typedef {{modelId: string, effort: string}} InsightGenerationForm
- * @typedef {{label: string, value: string | number}} InsightEvidenceItem
+ * @typedef {{label: string, value: string | number, data?: unknown}} InsightEvidenceItem
  * @typedef {Record<string, InsightEvidenceItem>} InsightEvidenceCatalog
  * @typedef {{title: string, statement: string, tone?: "primary" | "neutral" | "warning", evidence_ids?: string[]}} ReportSummaryItem
  * @typedef {{id: string, kind: "structure" | "diagnostic" | "information", title: string, conclusion: string, interpretation: string, implication: string, evidence_ids: string[]}} ReportFinding
@@ -218,6 +218,12 @@
  * @typedef {{total: number, labeled: number, label_coverage: number, positive: number, negative: number, mixed: number, unclear: number}} SemanticInsightOverview
  * @typedef {DecisionReportIssue & {kind: SemanticInsightKind}} SemanticInsightIssue
  * @typedef {{report_type: "semantic_insight", title: string, overview: SemanticInsightOverview, executive_summary: ReportSummaryItem[], issues: SemanticInsightIssue[], caveats: string[]}} SemanticInsightReportContent
+ * @typedef {{id: string, name: string, title: string, priority: "P0" | "P1", facts: string[], evidence_ids: string[], diagnosis: string, hypothesis: string, impact: string, action: string, metric: string}} ReportTheme
+ * @typedef {{report_type: "theme_insight", title: string, executive_summary: ReportSummaryItem[], themes: ReportTheme[], boundaries: string[]}} ThemeInsightReportContent
+ * @typedef {{label: string, numerator: number, denominator: number, unit: "条", percent: number | null, scope: string}} ReportMetric
+ * @typedef {{record_id: string, source_record_id?: string | null, result_version_id: string, source_row?: number | null, excerpt: string, date?: string | null, product?: string | null, mapping_status?: string | null, review_status?: string | null, reason: string}} ReportRepresentativeRecord
+ * @typedef {{id: string, name: string, title: string, metrics: ReportMetric[], breakdown: ReportMetric[], boundary: string, definition: string, explanation: string, action: string, records: ReportRepresentativeRecord[]}} VerifiableChapter
+ * @typedef {{report_type: "verifiable_insight", title: string, summary: {label: string, text: string}[], chapters: VerifiableChapter[], actions: {chapter_id: string, priority: "P0" | "P1", output: string, decision: string}[], boundaries: string[]}} VerifiableInsightReportContent
  * @typedef {{value: string, label: string, record_count: number, percentage: number, primary_rate?: number, subjects?: string[], lift?: number, baseline_record_count?: number}} InsightReason
  * @typedef {InsightReason & {label_path?: string[], label_name?: string, parent_code?: string | null}} InsightHierarchyNode
  * @typedef {{value: string, record_count: number, total_record_count: number, product_reason_rate: number, lift: number}} InsightProduct
@@ -254,3 +260,9 @@
  */
 
 export {};
+
+/**
+ * @typedef {{id: string, title: string, fact: string, meaning: string, evidence_ids: string[]}} ConciseReportInsight
+ * @typedef {{id: string, priority: "P0" | "P1", title: string, action: string, evidence_ids: string[]}} ConciseReportAction
+ * @typedef {{report_type: "concise_insight", title: string, judgment: string, insights: ConciseReportInsight[], actions: ConciseReportAction[], closing: string, boundaries: string[]}} ConciseInsightReportContent
+ */

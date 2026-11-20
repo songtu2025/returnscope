@@ -7,7 +7,10 @@ from pydantic import BaseModel, Field
 V5_PROMPT_VERSION = "ai-return-insight-v5"
 V6_PROMPT_VERSION = "ai-return-insight-v6"
 V7_PROMPT_VERSION = "ai-semantic-insight-v7"
-PROMPT_VERSION = V7_PROMPT_VERSION
+V8_PROMPT_VERSION = "ai-semantic-insight-v8"
+V9_PROMPT_VERSION = "ai-semantic-insight-v9"
+V10_PROMPT_VERSION = "ai-semantic-insight-v10"
+PROMPT_VERSION = V10_PROMPT_VERSION
 
 
 class ReportSummaryItem(BaseModel):
@@ -119,6 +122,54 @@ class SemanticInsightReportContent(BaseModel):
     executive_summary: list[ReportSummaryItem] = Field(min_length=3, max_length=5)
     issues: list[SemanticReportIssue] = Field(max_length=8)
     caveats: list[str] = Field(min_length=1, max_length=8)
+
+
+class ReportTheme(BaseModel):
+    id: str
+    name: str
+    title: str
+    priority: Literal["P0", "P1"]
+    facts: list[str] = Field(min_length=1)
+    evidence_ids: list[str] = Field(min_length=1)
+    diagnosis: str
+    hypothesis: str
+    impact: str
+    action: str
+    metric: str
+
+
+class ThemeInsightReportContent(BaseModel):
+    report_type: Literal["theme_insight"] = "theme_insight"
+    title: str
+    executive_summary: list[ReportSummaryItem] = Field(max_length=4)
+    themes: list[ReportTheme] = Field(max_length=6)
+    boundaries: list[str] = Field(min_length=1)
+
+
+class ConciseReportInsight(BaseModel):
+    id: str
+    title: str
+    fact: str
+    meaning: str
+    evidence_ids: list[str] = Field(min_length=1)
+
+
+class ConciseReportAction(BaseModel):
+    id: str
+    priority: Literal["P0", "P1"]
+    title: str
+    action: str
+    evidence_ids: list[str] = Field(min_length=1)
+
+
+class ConciseInsightReportContent(BaseModel):
+    report_type: Literal["concise_insight"] = "concise_insight"
+    title: str
+    judgment: str
+    insights: list[ConciseReportInsight] = Field(max_length=7)
+    actions: list[ConciseReportAction] = Field(max_length=6)
+    closing: str
+    boundaries: list[str] = Field(min_length=1)
 
 
 class ReportQualityIssue(BaseModel):

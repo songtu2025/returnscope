@@ -33,6 +33,7 @@ class InsightOptions:
     date_to: str | None = None
     report_mode: bool = False
     include_report_signals: bool = False
+    include_report_themes: bool = False
 
 
 @dataclass(frozen=True)
